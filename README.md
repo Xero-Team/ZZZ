@@ -90,7 +90,7 @@ This project would not exist without that precedent.
 
 ## Sponsoring
 
-If you’d like to support the project, please give it a star. :)
+If you’d like to support the project, please give it a star. : )
 
 ---
 
