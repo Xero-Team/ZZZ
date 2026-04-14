@@ -150,11 +150,15 @@ fn infer_prompt_format(model: &str) -> Option<EditPredictionPromptFormat> {
     Some(match model_base {
         "codellama" | "code-llama" => EditPredictionPromptFormat::CodeLlama,
         "starcoder" | "starcoder2" | "starcoderbase" => EditPredictionPromptFormat::StarCoder,
-        "deepseek-coder" | "deepseek-coder-v2" => EditPredictionPromptFormat::DeepseekCoder,
-        "qwen2.5-coder" | "qwen-coder" | "qwen" => EditPredictionPromptFormat::Qwen,
-        "codegemma" => EditPredictionPromptFormat::CodeGemma,
+        "deepseek-coder" | "deepseek-coder-v2" | "deepseek-v3" | "deepseek-v3-0324" => {
+            EditPredictionPromptFormat::DeepseekCoder
+        }
+        "qwen2.5-coder" | "qwen-coder" | "qwen" | "qwen2.5" | "qwen3" | "qwen3-coder"
+        | "qwen3-coder-next" => EditPredictionPromptFormat::Qwen,
+        "codegemma" | "gemma3" | "gemma3n" => EditPredictionPromptFormat::CodeGemma,
         "codestral" | "mistral" => EditPredictionPromptFormat::Codestral,
-        "glm" | "glm-4" | "glm-4.5" => EditPredictionPromptFormat::Glm,
+        "glm" | "glm-4" | "glm-4.5" | "glm-4.5-air" | "glm-4.6" | "glm-4.7" | "glm-4.7-flash"
+        | "glm-5" | "glm-5.1" => EditPredictionPromptFormat::Glm,
         _ => {
             return None;
         }
