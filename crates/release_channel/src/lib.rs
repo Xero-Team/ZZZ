@@ -7,8 +7,8 @@ use std::{env, str::FromStr, sync::LazyLock};
 use gpui::{App, Global};
 use semver::Version;
 
-/// stable | dev | nightly | preview
-pub static RELEASE_CHANNEL_NAME: LazyLock<String> = LazyLock::new(|| {
+/// The raw release channel name from the environment or embedded build metadata.
+static RAW_RELEASE_CHANNEL_NAME: LazyLock<String> = LazyLock::new(|| {
     if cfg!(debug_assertions) {
         env::var("ZED_RELEASE_CHANNEL")
             .unwrap_or_else(|_| include_str!("../../zed/RELEASE_CHANNEL").trim().to_string())
@@ -17,11 +17,14 @@ pub static RELEASE_CHANNEL_NAME: LazyLock<String> = LazyLock::new(|| {
     }
 });
 
+/// stable | dev
+pub static RELEASE_CHANNEL_NAME: LazyLock<String> = LazyLock::new(|| RELEASE_CHANNEL.dev_name().to_string());
+
 #[doc(hidden)]
 pub static RELEASE_CHANNEL: LazyLock<ReleaseChannel> =
-    LazyLock::new(|| match ReleaseChannel::from_str(&RELEASE_CHANNEL_NAME) {
+    LazyLock::new(|| match ReleaseChannel::from_str(&RAW_RELEASE_CHANNEL_NAME) {
         Ok(channel) => channel,
-        _ => panic!("invalid release channel {}", *RELEASE_CHANNEL_NAME),
+        _ => panic!("invalid release channel {}", *RAW_RELEASE_CHANNEL_NAME),
     });
 
 /// The app identifier for the current release channel, Windows only.
@@ -29,8 +32,6 @@ pub static RELEASE_CHANNEL: LazyLock<ReleaseChannel> =
 pub fn app_identifier() -> &'static str {
     match *RELEASE_CHANNEL {
         ReleaseChannel::Dev => "Zed-Editor-Dev",
-        ReleaseChannel::Nightly => "Zed-Editor-Nightly",
-        ReleaseChannel::Preview => "Zed-Editor-Preview",
         ReleaseChannel::Stable => "Zed-Editor-Stable",
     }
 }
@@ -127,12 +128,6 @@ pub enum ReleaseChannel {
     #[default]
     Dev,
 
-    /// The Nightly release channel.
-    Nightly,
-
-    /// The Preview release channel.
-    Preview,
-
     /// The Stable release channel.
     Stable,
 }
@@ -182,8 +177,6 @@ impl ReleaseChannel {
     pub fn display_name(&self) -> &'static str {
         match self {
             ReleaseChannel::Dev => "Zed Dev",
-            ReleaseChannel::Nightly => "Zed Nightly",
-            ReleaseChannel::Preview => "Zed Preview",
             ReleaseChannel::Stable => "Zed",
         }
     }
@@ -192,8 +185,6 @@ impl ReleaseChannel {
     pub fn dev_name(&self) -> &'static str {
         match self {
             ReleaseChannel::Dev => "dev",
-            ReleaseChannel::Nightly => "nightly",
-            ReleaseChannel::Preview => "preview",
             ReleaseChannel::Stable => "stable",
         }
     }
@@ -204,8 +195,6 @@ impl ReleaseChannel {
     pub fn app_id(&self) -> &'static str {
         match self {
             ReleaseChannel::Dev => "dev.zed.Zed-Dev",
-            ReleaseChannel::Nightly => "dev.zed.Zed-Nightly",
-            ReleaseChannel::Preview => "dev.zed.Zed-Preview",
             ReleaseChannel::Stable => "dev.zed.Zed",
         }
     }
@@ -214,8 +203,6 @@ impl ReleaseChannel {
     pub fn release_query_param(&self) -> Option<&'static str> {
         match self {
             Self::Dev => None,
-            Self::Nightly => Some("nightly=1"),
-            Self::Preview => Some("preview=1"),
             Self::Stable => None,
         }
     }
@@ -231,9 +218,7 @@ impl FromStr for ReleaseChannel {
     fn from_str(channel: &str) -> Result<Self, Self::Err> {
         Ok(match channel {
             "dev" => ReleaseChannel::Dev,
-            "nightly" => ReleaseChannel::Nightly,
-            "preview" => ReleaseChannel::Preview,
-            "stable" => ReleaseChannel::Stable,
+            "nightly" | "preview" | "stable" => ReleaseChannel::Stable,
             _ => return Err(InvalidReleaseChannel),
         })
     }

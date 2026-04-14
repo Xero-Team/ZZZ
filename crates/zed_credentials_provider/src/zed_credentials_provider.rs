@@ -53,9 +53,7 @@ fn new(cx: &App) -> Arc<dyn CredentialsProvider> {
             // variable is set, we will use the actual keychain.
             !*ZED_DEVELOPMENT_USE_KEYCHAIN
         }
-        Some(ReleaseChannel::Nightly | ReleaseChannel::Preview | ReleaseChannel::Stable) | None => {
-            false
-        }
+        Some(ReleaseChannel::Stable) | None => false,
     };
 
     if use_development_provider {
