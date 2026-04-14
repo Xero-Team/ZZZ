@@ -406,15 +406,6 @@ impl InlineAssistant {
             codegen_ranges.push(anchor_range);
 
             if let Some(model) = LanguageModelRegistry::read_global(cx).inline_assistant_model() {
-                telemetry::event!(
-                    "Assistant Invoked",
-                    kind = "inline",
-                    phase = "invoked",
-                    model = model.model.telemetry_id(),
-                    model_provider = model.provider.id().to_string(),
-                    language_name = buffer.language().map(|language| language.name().to_proto())
-                );
-
                 report_anthropic_event(
                     &model.model,
                     AnthropicEventData {
@@ -994,36 +985,13 @@ impl InlineAssistant {
                         .map(|language| language.name().0.to_string())
                 });
 
-                let codegen = assist.codegen.read(cx);
-                let session_id = codegen.session_id();
                 let message_id = active_alternative.read(cx).message_id.clone();
-                let model_telemetry_id = model.model.telemetry_id();
-                let model_provider_id = model.model.provider_id().to_string();
 
-                let (phase, event_type, anthropic_event_type) = if undo {
-                    (
-                        "rejected",
-                        "Assistant Response Rejected",
-                        AnthropicEventType::Reject,
-                    )
+                let anthropic_event_type = if undo {
+                    AnthropicEventType::Reject
                 } else {
-                    (
-                        "accepted",
-                        "Assistant Response Accepted",
-                        AnthropicEventType::Accept,
-                    )
+                    AnthropicEventType::Accept
                 };
-
-                telemetry::event!(
-                    event_type,
-                    phase,
-                    session_id = session_id.to_string(),
-                    kind = "inline",
-                    model = model_telemetry_id,
-                    model_provider = model_provider_id,
-                    language_name = language_name,
-                    message_id = message_id.as_deref(),
-                );
 
                 report_anthropic_event(
                     &model.model,

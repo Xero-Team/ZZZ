@@ -33,13 +33,16 @@ pub fn init(cx: &mut App) {
     cx.observe_new(CommandPalette::register).detach();
 }
 
-impl ModalView for CommandPalette {}
-
 pub struct CommandPalette {
     picker: Entity<Picker<CommandPaletteDelegate>>,
 }
 
-/// Removes subsequent whitespace characters and double colons from the query, and converts
+impl ModalView for CommandPalette {
+    fn is_command_palette(&self) -> bool {
+        true
+    }
+}
+
 /// underscores to spaces.
 ///
 /// This improves the likelihood of a match by either humanized name or keymap-style name.
@@ -586,11 +589,6 @@ impl PickerDelegate for CommandPaletteDelegate {
 
         let action_ix = self.matches[self.selected_ix].candidate_id;
         let command = self.commands.swap_remove(action_ix);
-        telemetry::event!(
-            "Action Invoked",
-            source = "command palette",
-            action = command.name
-        );
         self.matches.clear();
         self.commands.clear();
         let command_name = command.name.clone();

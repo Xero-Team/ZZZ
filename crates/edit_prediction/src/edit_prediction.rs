@@ -92,8 +92,15 @@ pub use crate::prediction::EditPredictionId;
 use crate::prediction::EditPredictionResult;
 pub use capture_example::capture_example;
 pub use language_model::ApiKeyState;
-pub use telemetry_events::EditPredictionRating;
 pub use zed_edit_prediction_delegate::ZedEditPredictionDelegate;
+
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+pub enum EditPredictionRating {
+    Positive,
+    Negative,
+}
 
 actions!(
     edit_prediction,
@@ -113,7 +120,6 @@ const COLLABORATOR_EDIT_LOCALITY_CONTEXT_TOKENS: usize = 512;
 const LAST_CHANGE_GROUPING_TIME: Duration = Duration::from_secs(1);
 const ZED_PREDICT_DATA_COLLECTION_CHOICE: &str = "zed_predict_data_collection_choice";
 const REJECT_REQUEST_DEBOUNCE: Duration = Duration::from_secs(15);
-const EDIT_PREDICTION_SETTLED_EVENT: &str = "Edit Prediction Settled";
 const EDIT_PREDICTION_SETTLED_TTL: Duration = Duration::from_secs(60 * 5);
 const EDIT_PREDICTION_SETTLED_QUIESCENCE: Duration = Duration::from_secs(10);
 
@@ -488,16 +494,11 @@ impl std::ops::Deref for BufferEditPrediction<'_> {
 
 #[derive(Clone)]
 struct PendingSettledPrediction {
+    #[cfg(test)]
     request_id: EditPredictionId,
     editable_anchor_range: Range<Anchor>,
-    editable_region_before_prediction: String,
-    predicted_editable_region: String,
-    ts_error_count_before_prediction: usize,
-    ts_error_count_after_prediction: usize,
-    example: Option<ExampleSpec>,
     enqueued_at: Instant,
     last_edit_at: Instant,
-    e2e_latency: std::time::Duration,
 }
 
 struct RegisteredBuffer {
@@ -1657,58 +1658,17 @@ impl EditPredictionStore {
                 }
             });
 
-            for (pending_prediction, settled_editable_region) in ready_predictions {
-                let PendingSettledPrediction {
-                    request_id,
-                    editable_region_before_prediction,
-                    predicted_editable_region,
-                    ts_error_count_before_prediction,
-                    ts_error_count_after_prediction,
-                    example,
-                    e2e_latency,
-                    ..
-                } = pending_prediction;
-                let settled_editable_region_for_metrics = settled_editable_region.clone();
-                let kept_rate_result = cx
-                    .background_spawn(async move {
-                        compute_kept_rate(
-                            &editable_region_before_prediction,
-                            &predicted_editable_region,
-                            &settled_editable_region_for_metrics,
-                        )
-                    })
-                    .await;
-
+            for (_pending_prediction, _settled_editable_region) in ready_predictions {
                 #[cfg(test)]
                 {
-                    let request_id = request_id.clone();
-                    let settled_editable_region = settled_editable_region.clone();
+                    let request_id = _pending_prediction.request_id.clone();
+                    let settled_editable_region = _settled_editable_region.clone();
                     this.update(cx, |this, _| {
                         if let Some(callback) = &this.settled_event_callback {
                             callback(request_id, settled_editable_region);
                         }
                     });
                 }
-
-                telemetry::event!(
-                    EDIT_PREDICTION_SETTLED_EVENT,
-                    request_id = request_id.0.clone(),
-                    settled_editable_region,
-                    ts_error_count_before_prediction,
-                    ts_error_count_after_prediction,
-                    edit_bytes_candidate_new = kept_rate_result.candidate_new_chars,
-                    edit_bytes_reference_new = kept_rate_result.reference_new_chars,
-                    edit_bytes_candidate_deleted = kept_rate_result.candidate_deleted_chars,
-                    edit_bytes_reference_deleted = kept_rate_result.reference_deleted_chars,
-                    edit_bytes_kept = kept_rate_result.kept_chars,
-                    edit_bytes_correctly_deleted = kept_rate_result.correctly_deleted_chars,
-                    edit_bytes_discarded = kept_rate_result.discarded_chars,
-                    edit_bytes_context = kept_rate_result.context_chars,
-                    edit_bytes_kept_rate = kept_rate_result.kept_rate,
-                    edit_bytes_recall_rate = kept_rate_result.recall_rate,
-                    example,
-                    e2e_latency = e2e_latency.as_millis(),
-                );
             }
 
             next_wake_time = oldest_edited_at.map(|time| time + EDIT_PREDICTION_SETTLED_QUIESCENCE);
@@ -1722,11 +1682,14 @@ impl EditPredictionStore {
         edited_buffer: &Entity<Buffer>,
         edited_buffer_snapshot: &BufferSnapshot,
         editable_offset_range: Range<usize>,
-        edit_preview: &EditPreview,
+        _edit_preview: &EditPreview,
         example: Option<ExampleSpec>,
         e2e_latency: std::time::Duration,
         cx: &mut Context<Self>,
     ) {
+        #[cfg(not(test))]
+        let _ = (&request_id, &example, e2e_latency);
+
         let this = &mut *self;
         let project_state = this.get_or_init_project(project, cx);
         let Some(registered_buffer) = project_state
@@ -1735,41 +1698,15 @@ impl EditPredictionStore {
         else {
             return;
         };
-
-        let editable_region_before_prediction = edited_buffer_snapshot
-            .text_for_range(editable_offset_range.clone())
-            .collect::<String>();
-        let editable_anchor_range_for_result =
-            edited_buffer_snapshot.anchor_range_inside(editable_offset_range.clone());
-        let predicted_editable_region = edit_preview
-            .result_text_snapshot()
-            .text_for_range(editable_anchor_range_for_result.clone())
-            .collect();
-        let ts_error_count_before_prediction = crate::metrics::count_tree_sitter_errors(
-            edited_buffer_snapshot
-                .syntax_layers_for_range(editable_anchor_range_for_result.clone(), true),
-        );
-        let ts_error_count_after_prediction = crate::metrics::count_tree_sitter_errors(
-            edit_preview.result_syntax_snapshot().layers_for_range(
-                editable_anchor_range_for_result,
-                edit_preview.result_text_snapshot(),
-                true,
-            ),
-        );
         let editable_anchor_range =
             edited_buffer_snapshot.anchor_range_inside(editable_offset_range);
         let now = cx.background_executor().now();
         registered_buffer
             .pending_predictions
             .push(PendingSettledPrediction {
+                #[cfg(test)]
                 request_id,
                 editable_anchor_range,
-                editable_region_before_prediction,
-                predicted_editable_region,
-                ts_error_count_before_prediction,
-                ts_error_count_after_prediction,
-                example,
-                e2e_latency,
                 enqueued_at: now,
                 last_edit_at: now,
             });

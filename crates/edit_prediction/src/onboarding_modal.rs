@@ -14,16 +14,6 @@ use settings::update_settings_file;
 use ui::prelude::*;
 use workspace::{ModalView, Workspace};
 
-#[macro_export]
-macro_rules! onboarding_event {
-    ($name:expr) => {
-        telemetry::event!($name, source = "Edit Prediction Onboarding");
-    };
-    ($name:expr, $($key:ident $(= $value:expr)?),+ $(,)?) => {
-        telemetry::event!($name, source = "Edit Prediction Onboarding", $($key $(= $value)?),+);
-    };
-}
-
 /// Introduces user to Zed's Edit Prediction feature
 pub struct ZedPredictModal {
     onboarding: Entity<EditPredictionOnboarding>,
@@ -135,7 +125,6 @@ impl Render for ZedPredictModal {
             .overflow_hidden()
             .on_action(cx.listener(Self::cancel))
             .on_action(cx.listener(|_, _: &menu::Cancel, _window, cx| {
-                onboarding_event!("Cancelled", trigger = "Action");
                 cx.emit(DismissEvent);
             }))
             .on_any_mouse_down(cx.listener(|this, _: &MouseDownEvent, window, cx| {
@@ -158,7 +147,6 @@ impl Render for ZedPredictModal {
             .child(h_flex().absolute().top_3().right_3().child(
                 IconButton::new("cancel", IconName::Close).on_click(cx.listener(
                     |_, _: &ClickEvent, _window, cx| {
-                        onboarding_event!("Cancelled", trigger = "X click");
                         cx.emit(DismissEvent);
                     },
                 )),

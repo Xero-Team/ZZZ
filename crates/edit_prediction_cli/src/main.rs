@@ -729,7 +729,7 @@ async fn load_examples(
     let mut rejected_after_timestamps = Vec::new();
     let mut requested_after_timestamps = Vec::new();
     let mut settled_after_timestamps = Vec::new();
-    let mut rated_after_inputs: Vec<(String, Option<telemetry_events::EditPredictionRating>)> =
+    let mut rated_after_inputs: Vec<(String, Option<edit_prediction::EditPredictionRating>)> =
         Vec::new();
     let mut file_inputs = Vec::new();
 

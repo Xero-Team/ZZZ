@@ -1,102 +1,55 @@
-mod event_coalescer;
-
 use crate::TelemetrySettings;
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use clock::SystemClock;
 use fs::Fs;
-use futures::channel::mpsc;
-use futures::{Future, StreamExt};
-use gpui::{App, AppContext as _, BackgroundExecutor, Task};
-use http_client::{self, AsyncBody, HttpClient, HttpClientWithUrl, Method, Request};
+use futures::{Future, channel::mpsc};
+use gpui::{App, Task};
+use http_client::HttpClientWithUrl;
 use parking_lot::Mutex;
+#[cfg(test)]
 use regex::Regex;
-use release_channel::ReleaseChannel;
 use settings::{Settings, SettingsStore};
-use sha2::{Digest, Sha256};
+#[cfg(test)]
 use std::collections::HashSet;
-use std::fs::File;
-use std::io::Write;
-use std::sync::LazyLock;
-use std::time::Instant;
-use std::{env, mem, path::PathBuf, sync::Arc, time::Duration};
-use telemetry_events::{AssistantEventData, AssistantPhase, Event, EventRequestBody, EventWrapper};
+use std::sync::Arc;
+use worktree::{UpdatedEntriesSet, WorktreeId};
 
 pub struct TelemetrySubscription {
     pub historical_events: Result<HistoricalEvents>,
-    pub queued_events: Vec<EventWrapper>,
-    pub live_events: mpsc::UnboundedReceiver<EventWrapper>,
+    pub queued_events: Vec<LoggedTelemetryEvent>,
+    pub live_events: mpsc::UnboundedReceiver<LoggedTelemetryEvent>,
 }
 
 pub struct HistoricalEvents {
-    pub events: Vec<EventWrapper>,
+    pub events: Vec<LoggedTelemetryEvent>,
     pub parse_error_count: usize,
 }
-use util::ResultExt as _;
-use worktree::{UpdatedEntriesSet, WorktreeId};
 
-use self::event_coalescer::EventCoalescer;
+#[derive(Clone, Debug, Default)]
+pub struct LoggedTelemetryEvent;
+
+#[derive(Clone, Debug, Default)]
+pub struct AssistantEventData;
 
 pub struct Telemetry {
-    clock: Arc<dyn SystemClock>,
-    http_client: Arc<HttpClientWithUrl>,
-    executor: BackgroundExecutor,
     state: Arc<Mutex<TelemetryState>>,
 }
 
 struct TelemetryState {
     settings: TelemetrySettings,
-    system_id: Option<Arc<str>>,       // Per system
-    installation_id: Option<Arc<str>>, // Per app installation (different for dev, nightly, preview, and stable)
-    session_id: Option<String>,        // Per app launch
-    metrics_id: Option<Arc<str>>,      // Per logged-in user
-    release_channel: Option<ReleaseChannel>,
-    architecture: &'static str,
-    events_queue: Vec<EventWrapper>,
-    flush_events_task: Option<Task<()>>,
-
-    log_file: Option<File>,
+    system_id: Option<Arc<str>>,
+    installation_id: Option<Arc<str>>,
+    session_id: Option<String>,
+    metrics_id: Option<Arc<str>>,
     is_staff: Option<bool>,
-    first_event_date_time: Option<Instant>,
-    event_coalescer: EventCoalescer,
-    max_queue_size: usize,
+    #[cfg(test)]
     worktrees_with_project_type_events_sent: HashSet<WorktreeId>,
-
-    os_name: String,
-    app_version: String,
-    os_version: Option<String>,
-
-    subscribers: Vec<mpsc::UnboundedSender<EventWrapper>>,
 }
 
-#[cfg(debug_assertions)]
-const MAX_QUEUE_LEN: usize = 5;
-
-#[cfg(not(debug_assertions))]
-const MAX_QUEUE_LEN: usize = 50;
-
-#[cfg(debug_assertions)]
-const FLUSH_INTERVAL: Duration = Duration::from_secs(1);
-
-#[cfg(not(debug_assertions))]
-const FLUSH_INTERVAL: Duration = Duration::from_secs(60 * 5);
-static ZED_CLIENT_CHECKSUM_SEED: LazyLock<Option<Vec<u8>>> = LazyLock::new(|| {
-    option_env!("ZED_CLIENT_CHECKSUM_SEED")
-        .map(|s| s.as_bytes().into())
-        .or_else(|| {
-            env::var("ZED_CLIENT_CHECKSUM_SEED")
-                .ok()
-                .map(|s| s.as_bytes().into())
-        })
-});
-
-pub static MINIDUMP_ENDPOINT: LazyLock<Option<String>> = LazyLock::new(|| {
-    option_env!("ZED_MINIDUMP_ENDPOINT")
-        .map(str::to_string)
-        .or_else(|| env::var("ZED_MINIDUMP_ENDPOINT").ok())
-});
-
+#[cfg(test)]
 static DOTNET_PROJECT_FILES_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(global\.json|Directory\.Build\.props|.*\.(csproj|fsproj|vbproj|sln))$").unwrap()
+    Regex::new(r"^(global\.json|Directory\.Build\.props|.*\.(csproj|fsproj|vbproj|sln))$")
+        .unwrap()
 });
 
 #[cfg(target_os = "macos")]
@@ -123,17 +76,13 @@ pub fn os_name() -> String {
     }
 }
 
-/// Note: This might do blocking IO! Only call from background threads
 pub fn os_version() -> String {
     #[cfg(target_os = "macos")]
     {
         use objc2_foundation::NSProcessInfo;
         let process_info = NSProcessInfo::processInfo();
         let version_nsstring = process_info.operatingSystemVersionString();
-        // "Version 15.6.1 (Build 24G90)" -> "15.6.1 (Build 24G90)"
         let version_string = version_nsstring.to_string().replace("Version ", "");
-        // "15.6.1 (Build 24G90)" -> "15.6.1"
-        // "26.0.0 (Build 25A5349a)" -> unchanged (Beta or Rapid Security Response; ends with letter)
         MACOS_VERSION_REGEX
             .replace_all(&version_string, "")
             .to_string()
@@ -187,48 +136,23 @@ pub fn os_version() -> String {
 
 impl Telemetry {
     pub fn new(
-        clock: Arc<dyn SystemClock>,
-        client: Arc<HttpClientWithUrl>,
+        _clock: Arc<dyn SystemClock>,
+        _client: Arc<HttpClientWithUrl>,
         cx: &mut App,
     ) -> Arc<Self> {
         let state = Arc::new(Mutex::new(TelemetryState {
             settings: *TelemetrySettings::get_global(cx),
-            architecture: env::consts::ARCH,
-            release_channel: ReleaseChannel::try_global(cx),
             system_id: None,
             installation_id: None,
             session_id: None,
             metrics_id: None,
-            events_queue: Vec::new(),
-            flush_events_task: None,
-            log_file: None,
             is_staff: None,
-            first_event_date_time: None,
-            event_coalescer: EventCoalescer::new(clock.clone()),
-            max_queue_size: MAX_QUEUE_LEN,
+            #[cfg(test)]
             worktrees_with_project_type_events_sent: HashSet::new(),
-
-            os_version: None,
-            os_name: os_name(),
-            app_version: release_channel::AppVersion::global(cx).to_string(),
-            subscribers: Vec::new(),
         }));
-
-        cx.background_spawn({
-            let state = state.clone();
-            let os_version = os_version();
-            state.lock().os_version = Some(os_version);
-            async move {
-                if let Some(tempfile) = File::create(Self::log_file_path()).ok() {
-                    state.lock().log_file = Some(tempfile);
-                }
-            }
-        })
-        .detach();
 
         cx.observe_global::<SettingsStore>({
             let state = state.clone();
-
             move |cx| {
                 let mut state = state.lock();
                 state.settings = *TelemetrySettings::get_global(cx);
@@ -236,32 +160,8 @@ impl Telemetry {
         })
         .detach();
 
-        let this = Arc::new(Self {
-            clock,
-            http_client: client,
-            executor: cx.background_executor().clone(),
-            state,
-        });
+        let this = Arc::new(Self { state });
 
-        let (tx, mut rx) = mpsc::unbounded();
-        ::telemetry::init(tx);
-
-        cx.background_spawn({
-            let this = Arc::downgrade(&this);
-            async move {
-                if cfg!(feature = "test-support") {
-                    return;
-                }
-                while let Some(event) = rx.next().await {
-                    let Some(state) = this.upgrade() else { break };
-                    state.report_event(Event::Flexible(event))
-                }
-            }
-        })
-        .detach();
-
-        // We should only ever have one instance of Telemetry, leak the subscription to keep it alive
-        // rather than store in TelemetryState, complicating spawn as subscriptions are not Send
         std::mem::forget(cx.on_app_quit({
             let this = this.clone();
             move |_| this.shutdown_telemetry()
@@ -275,85 +175,26 @@ impl Telemetry {
         Task::ready(())
     }
 
-    // Skip calling this function in tests.
-    // TestAppContext ends up calling this function on shutdown and it panics when trying to find the TelemetrySettings
     #[cfg(not(any(test, feature = "test-support")))]
     fn shutdown_telemetry(self: &Arc<Self>) -> impl Future<Output = ()> + use<> {
-        telemetry::event!("App Closed");
-        // TODO: close final edit period and make sure it's sent
         Task::ready(())
-    }
-
-    pub fn log_file_path() -> PathBuf {
-        paths::logs_dir().join("telemetry.log")
     }
 
     pub async fn subscribe_with_history(
         self: &Arc<Self>,
-        fs: Arc<dyn Fs>,
+        _fs: Arc<dyn Fs>,
     ) -> TelemetrySubscription {
-        let historical_events = self.read_log_file(fs).await;
-
-        let mut state = self.state.lock();
-        let queued_events: Vec<EventWrapper> = state.events_queue.clone();
-
         let (tx, rx) = mpsc::unbounded();
-        state.subscribers.push(tx);
-
-        drop(state);
+        drop(tx);
 
         TelemetrySubscription {
-            historical_events,
-            queued_events,
+            historical_events: Ok(HistoricalEvents {
+                events: Vec::new(),
+                parse_error_count: 0,
+            }),
+            queued_events: Vec::new(),
             live_events: rx,
         }
-    }
-
-    async fn read_log_file(self: &Arc<Self>, fs: Arc<dyn Fs>) -> anyhow::Result<HistoricalEvents> {
-        const MAX_LOG_READ: usize = 5 * 1024 * 1024;
-
-        let path = Self::log_file_path();
-
-        let content = fs
-            .load_bytes(&path)
-            .await
-            .with_context(|| format!("failed to load telemetry log from {:?}", path))?;
-
-        let start_offset = if content.len() > MAX_LOG_READ {
-            let skip = content.len() - MAX_LOG_READ;
-            content[skip..]
-                .iter()
-                .position(|&b| b == b'\n')
-                .map(|pos| skip + pos + 1)
-                .unwrap_or(skip)
-        } else {
-            0
-        };
-
-        let content_str = std::str::from_utf8(&content[start_offset..])
-            .context("telemetry log file contains invalid UTF-8")?;
-
-        let mut events = Vec::new();
-        let mut parse_error_count = 0;
-
-        for line in content_str.lines() {
-            if line.trim().is_empty() {
-                continue;
-            }
-            match serde_json::from_str::<EventWrapper>(line) {
-                Ok(event) => events.push(event),
-                Err(_) => parse_error_count += 1,
-            }
-        }
-
-        Ok(HistoricalEvents {
-            events,
-            parse_error_count,
-        })
-    }
-
-    pub fn has_checksum_seed(&self) -> bool {
-        ZED_CLIENT_CHECKSUM_SEED.is_some()
     }
 
     pub fn start(
@@ -361,22 +202,16 @@ impl Telemetry {
         system_id: Option<String>,
         installation_id: Option<String>,
         session_id: String,
-        cx: &App,
+        _cx: &App,
     ) {
         let mut state = self.state.lock();
         state.system_id = system_id.map(|id| id.into());
         state.installation_id = installation_id.map(|id| id.into());
         state.session_id = Some(session_id);
-        state.app_version = release_channel::AppVersion::global(cx).to_string();
-        state.os_name = os_name();
     }
 
     pub fn metrics_enabled(self: &Arc<Self>) -> bool {
         self.state.lock().settings.metrics
-    }
-
-    pub fn diagnostics_enabled(self: &Arc<Self>) -> bool {
-        self.state.lock().settings.diagnostics
     }
 
     pub fn set_authenticated_user_info(
@@ -385,70 +220,20 @@ impl Telemetry {
         is_staff: bool,
     ) {
         let mut state = self.state.lock();
-
         if !state.settings.metrics {
             return;
         }
 
-        let metrics_id: Option<Arc<str>> = metrics_id.map(|id| id.into());
-        state.metrics_id.clone_from(&metrics_id);
+        state.metrics_id = metrics_id.map(Into::into);
         state.is_staff = Some(is_staff);
-        drop(state);
     }
 
     pub fn report_assistant_event(self: &Arc<Self>, event: AssistantEventData) {
-        let event_type = match event.phase {
-            AssistantPhase::Response => "Assistant Responded",
-            AssistantPhase::Invoked => "Assistant Invoked",
-            AssistantPhase::Accepted => "Assistant Response Accepted",
-            AssistantPhase::Rejected => "Assistant Response Rejected",
-        };
-
-        telemetry::event!(
-            event_type,
-            conversation_id = event.conversation_id,
-            kind = event.kind,
-            phase = event.phase,
-            message_id = event.message_id,
-            model = event.model,
-            model_provider = event.model_provider,
-            response_latency = event.response_latency,
-            error_message = event.error_message,
-            language_name = event.language_name,
-        );
+        let _ = (self, event);
     }
 
     pub fn log_edit_event(self: &Arc<Self>, environment: &'static str, is_via_ssh: bool) {
-        static LAST_EVENT_TIME: Mutex<Option<Instant>> = Mutex::new(None);
-
-        let mut state = self.state.lock();
-        let period_data = state.event_coalescer.log_event(environment);
-        drop(state);
-
-        if let Some(mut last_event) = LAST_EVENT_TIME.try_lock() {
-            let current_time = std::time::Instant::now();
-            let last_time = last_event.get_or_insert(current_time);
-
-            if current_time.duration_since(*last_time) > Duration::from_secs(60 * 10) {
-                *last_time = current_time;
-            } else {
-                return;
-            }
-
-            if let Some((start, end, environment)) = period_data {
-                let duration = end
-                    .saturating_duration_since(start)
-                    .min(Duration::from_secs(60 * 60 * 24))
-                    .as_millis() as i64;
-
-                telemetry::event!(
-                    "Editor Edited",
-                    duration = duration,
-                    environment = environment,
-                    is_via_ssh = is_via_ssh
-                );
-            }
-        }
+        let _ = (self, environment, is_via_ssh);
     }
 
     pub fn report_discovered_project_type_events(
@@ -456,16 +241,10 @@ impl Telemetry {
         worktree_id: WorktreeId,
         updated_entries_set: &UpdatedEntriesSet,
     ) {
-        let Some(project_types) = self.detect_project_types(worktree_id, updated_entries_set)
-        else {
-            return;
-        };
-
-        for project_type in project_types {
-            telemetry::event!("Project Opened", project_type = project_type);
-        }
+        let _ = (self, worktree_id, updated_entries_set);
     }
 
+    #[cfg(test)]
     fn detect_project_types(
         self: &Arc<Self>,
         worktree_id: WorktreeId,
@@ -497,7 +276,7 @@ impl Telemetry {
 
             if let Some(project_type) = project_type {
                 project_types.insert(project_type);
-            };
+            }
         }
 
         if !project_types.is_empty() {
@@ -509,61 +288,6 @@ impl Telemetry {
         let mut project_types: Vec<_> = project_types.into_iter().map(String::from).collect();
         project_types.sort();
         Some(project_types)
-    }
-
-    fn report_event(self: &Arc<Self>, mut event: Event) {
-        let mut state = self.state.lock();
-        // RUST_LOG=telemetry=trace to debug telemetry events
-        log::trace!(target: "telemetry", "{:?}", event);
-
-        if !state.settings.metrics {
-            return;
-        }
-
-        match &mut event {
-            Event::Flexible(event) => event
-                .event_properties
-                .insert("event_source".into(), "zed".into()),
-        };
-
-        if state.flush_events_task.is_none() {
-            let this = self.clone();
-            state.flush_events_task = Some(self.executor.spawn(async move {
-                this.executor.timer(FLUSH_INTERVAL).await;
-                this.flush_events().detach();
-            }));
-        }
-
-        let date_time = self.clock.utc_now();
-
-        let milliseconds_since_first_event = match state.first_event_date_time {
-            Some(first_event_date_time) => date_time
-                .saturating_duration_since(first_event_date_time)
-                .min(Duration::from_secs(60 * 60 * 24))
-                .as_millis() as i64,
-            None => {
-                state.first_event_date_time = Some(date_time);
-                0
-            }
-        };
-
-        let signed_in = state.metrics_id.is_some();
-        let event_wrapper = EventWrapper {
-            signed_in,
-            milliseconds_since_first_event,
-            event,
-        };
-
-        state
-            .subscribers
-            .retain(|tx| tx.unbounded_send(event_wrapper.clone()).is_ok());
-
-        state.events_queue.push(event_wrapper);
-
-        if state.installation_id.is_some() && state.events_queue.len() >= state.max_queue_size {
-            drop(state);
-            self.flush_events().detach();
-        }
     }
 
     pub fn metrics_id(self: &Arc<Self>) -> Option<Arc<str>> {
@@ -581,245 +305,16 @@ impl Telemetry {
     pub fn is_staff(self: &Arc<Self>) -> Option<bool> {
         self.state.lock().is_staff
     }
-
-    fn build_request(
-        self: &Arc<Self>,
-        // We take in the JSON bytes buffer so we can reuse the existing allocation.
-        mut json_bytes: Vec<u8>,
-        event_request: &EventRequestBody,
-    ) -> Result<Request<AsyncBody>> {
-        json_bytes.clear();
-        serde_json::to_writer(&mut json_bytes, event_request)?;
-
-        let checksum = calculate_json_checksum(&json_bytes).unwrap_or_default();
-
-        Ok(Request::builder()
-            .method(Method::POST)
-            .uri(
-                self.http_client
-                    .build_zed_api_url("/telemetry/events", &[])?
-                    .as_ref(),
-            )
-            .header("Content-Type", "application/json")
-            .header("x-zed-checksum", checksum)
-            .body(json_bytes.into())?)
-    }
-
-    pub async fn flush_events_inner(self: &Arc<Self>) -> Result<()> {
-        let (json_bytes, request_body) = {
-            let mut state = self.state.lock();
-            state.first_event_date_time = None;
-            let events = mem::take(&mut state.events_queue);
-            state.flush_events_task.take();
-            if events.is_empty() {
-                return Ok(());
-            }
-
-            let mut json_bytes = Vec::new();
-
-            if let Some(file) = &mut state.log_file {
-                for event in &events {
-                    json_bytes.clear();
-                    serde_json::to_writer(&mut json_bytes, event)?;
-                    file.write_all(&json_bytes)?;
-                    file.write_all(b"\n")?;
-                }
-            }
-
-            (
-                json_bytes,
-                EventRequestBody {
-                    system_id: state.system_id.as_deref().map(Into::into),
-                    installation_id: state.installation_id.as_deref().map(Into::into),
-                    session_id: state.session_id.clone(),
-                    metrics_id: state.metrics_id.as_deref().map(Into::into),
-                    is_staff: state.is_staff,
-                    app_version: state.app_version.clone(),
-                    os_name: state.os_name.clone(),
-                    os_version: state.os_version.clone(),
-                    architecture: state.architecture.to_string(),
-
-                    release_channel: state
-                        .release_channel
-                        .map(|channel| channel.display_name().to_owned()),
-                    events,
-                },
-            )
-        };
-
-        let request = self.build_request(json_bytes, &request_body)?;
-        let response = self.http_client.send(request).await?;
-        if response.status() != 200 {
-            log::error!("Failed to send events: HTTP {:?}", response.status());
-        }
-
-        anyhow::Ok(())
-    }
-
-    pub fn flush_events(self: &Arc<Self>) -> Task<()> {
-        let this = self.clone();
-        self.executor.spawn(async move {
-            this.flush_events_inner().await.log_err();
-        })
-    }
-}
-
-pub fn calculate_json_checksum(json: &impl AsRef<[u8]>) -> Option<String> {
-    let checksum_seed = ZED_CLIENT_CHECKSUM_SEED.as_ref()?;
-
-    let mut summer = Sha256::new();
-    summer.update(checksum_seed);
-    summer.update(json);
-    summer.update(checksum_seed);
-    let mut checksum = String::new();
-    for byte in summer.finalize().as_slice() {
-        use std::fmt::Write;
-        write!(&mut checksum, "{:02x}", byte).unwrap();
-    }
-
-    Some(checksum)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use clock::FakeSystemClock;
-
     use gpui::TestAppContext;
     use http_client::FakeHttpClient;
-    use std::collections::HashMap;
-    use telemetry_events::FlexibleEvent;
     use util::rel_path::RelPath;
     use worktree::{PathChange, ProjectEntryId, WorktreeId};
-
-    #[gpui::test]
-    async fn test_telemetry_flush_on_max_queue_size(
-        executor: BackgroundExecutor,
-        cx: &mut TestAppContext,
-    ) {
-        init_test(cx);
-        let clock = Arc::new(FakeSystemClock::new());
-        let http = FakeHttpClient::with_200_response();
-        let system_id = Some("system_id".to_string());
-        let installation_id = Some("installation_id".to_string());
-        let session_id = "session_id".to_string();
-
-        let (telemetry, first_date_time, event) = cx.update(|cx| {
-            let telemetry = Telemetry::new(clock.clone(), http, cx);
-
-            telemetry.state.lock().max_queue_size = 4;
-            telemetry.start(system_id, installation_id, session_id, cx);
-
-            assert!(is_empty_state(&telemetry));
-
-            let first_date_time = clock.utc_now();
-            let event_properties = HashMap::from_iter([(
-                "test_key".to_string(),
-                serde_json::Value::String("test_value".to_string()),
-            )]);
-
-            let event = FlexibleEvent {
-                event_type: "test".to_string(),
-                event_properties,
-            };
-
-            (telemetry, first_date_time, event)
-        });
-
-        cx.update(|_cx| {
-            telemetry.report_event(Event::Flexible(event.clone()));
-            assert_eq!(telemetry.state.lock().events_queue.len(), 1);
-            assert!(telemetry.state.lock().flush_events_task.is_some());
-            assert_eq!(
-                telemetry.state.lock().first_event_date_time,
-                Some(first_date_time)
-            );
-
-            clock.advance(Duration::from_millis(100));
-
-            telemetry.report_event(Event::Flexible(event.clone()));
-            assert_eq!(telemetry.state.lock().events_queue.len(), 2);
-            assert!(telemetry.state.lock().flush_events_task.is_some());
-            assert_eq!(
-                telemetry.state.lock().first_event_date_time,
-                Some(first_date_time)
-            );
-
-            clock.advance(Duration::from_millis(100));
-
-            telemetry.report_event(Event::Flexible(event.clone()));
-            assert_eq!(telemetry.state.lock().events_queue.len(), 3);
-            assert!(telemetry.state.lock().flush_events_task.is_some());
-            assert_eq!(
-                telemetry.state.lock().first_event_date_time,
-                Some(first_date_time)
-            );
-
-            clock.advance(Duration::from_millis(100));
-
-            // Adding a 4th event should cause a flush
-            telemetry.report_event(Event::Flexible(event));
-        });
-
-        // Run the spawned flush task to completion
-        executor.run_until_parked();
-
-        cx.update(|_cx| {
-            assert!(is_empty_state(&telemetry));
-        });
-    }
-
-    #[gpui::test]
-    async fn test_telemetry_flush_on_flush_interval(
-        executor: BackgroundExecutor,
-        cx: &mut TestAppContext,
-    ) {
-        init_test(cx);
-        let clock = Arc::new(FakeSystemClock::new());
-        let http = FakeHttpClient::with_200_response();
-        let system_id = Some("system_id".to_string());
-        let installation_id = Some("installation_id".to_string());
-        let session_id = "session_id".to_string();
-
-        cx.update(|cx| {
-            let telemetry = Telemetry::new(clock.clone(), http, cx);
-            telemetry.state.lock().max_queue_size = 4;
-            telemetry.start(system_id, installation_id, session_id, cx);
-
-            assert!(is_empty_state(&telemetry));
-            let first_date_time = clock.utc_now();
-
-            let event_properties = HashMap::from_iter([(
-                "test_key".to_string(),
-                serde_json::Value::String("test_value".to_string()),
-            )]);
-
-            let event = FlexibleEvent {
-                event_type: "test".to_string(),
-                event_properties,
-            };
-
-            telemetry.report_event(Event::Flexible(event));
-            assert_eq!(telemetry.state.lock().events_queue.len(), 1);
-            assert!(telemetry.state.lock().flush_events_task.is_some());
-            assert_eq!(
-                telemetry.state.lock().first_event_date_time,
-                Some(first_date_time)
-            );
-
-            let duration = Duration::from_millis(1);
-
-            // Test 1 millisecond before the flush interval limit is met
-            executor.advance_clock(FLUSH_INTERVAL - duration);
-
-            assert!(!is_empty_state(&telemetry));
-
-            // Test the exact moment the flush interval limit is met
-            executor.advance_clock(duration);
-
-            assert!(is_empty_state(&telemetry));
-        });
-    }
 
     #[gpui::test]
     fn test_project_discovery_does_not_double_report(cx: &mut gpui::TestAppContext) {
@@ -830,18 +325,13 @@ mod tests {
         let telemetry = cx.update(|cx| Telemetry::new(clock.clone(), http, cx));
         let worktree_id = 1;
 
-        // Scan of empty worktree finds nothing
         test_project_discovery_helper(telemetry.clone(), vec![], Some(vec![]), worktree_id);
-
-        // Files added, second scan of worktree 1 finds project type
         test_project_discovery_helper(
             telemetry.clone(),
             vec!["package.json"],
             Some(vec!["node"]),
             worktree_id,
         );
-
-        // Third scan of worktree does not double report, as we already reported
         test_project_discovery_helper(telemetry, vec!["package.json"], None, worktree_id);
     }
 
@@ -885,43 +375,17 @@ mod tests {
         let http = FakeHttpClient::with_200_response();
         let telemetry = cx.update(|cx| Telemetry::new(clock.clone(), http, cx));
 
-        // Using different worktrees, as production code blocks from reporting a
-        // project type for the same worktree multiple times
-
-        test_project_discovery_helper(
-            telemetry.clone(),
-            vec!["global.json"],
-            Some(vec!["dotnet"]),
-            1,
-        );
+        test_project_discovery_helper(telemetry.clone(), vec!["global.json"], Some(vec!["dotnet"]), 1);
         test_project_discovery_helper(
             telemetry.clone(),
             vec!["Directory.Build.props"],
             Some(vec!["dotnet"]),
             2,
         );
-        test_project_discovery_helper(
-            telemetry.clone(),
-            vec!["file.csproj"],
-            Some(vec!["dotnet"]),
-            3,
-        );
-        test_project_discovery_helper(
-            telemetry.clone(),
-            vec!["file.fsproj"],
-            Some(vec!["dotnet"]),
-            4,
-        );
-        test_project_discovery_helper(
-            telemetry.clone(),
-            vec!["file.vbproj"],
-            Some(vec!["dotnet"]),
-            5,
-        );
+        test_project_discovery_helper(telemetry.clone(), vec!["file.csproj"], Some(vec!["dotnet"]), 3);
+        test_project_discovery_helper(telemetry.clone(), vec!["file.fsproj"], Some(vec!["dotnet"]), 4);
+        test_project_discovery_helper(telemetry.clone(), vec!["file.vbproj"], Some(vec!["dotnet"]), 5);
         test_project_discovery_helper(telemetry.clone(), vec!["file.sln"], Some(vec!["dotnet"]), 6);
-
-        // Each worktree should only send a single project type event, even when
-        // encountering multiple files associated with that project type
         test_project_discovery_helper(
             telemetry,
             vec!["global.json", "Directory.Build.props"],
@@ -930,21 +394,11 @@ mod tests {
         );
     }
 
-    // TODO:
-    // Test settings
-    // Update FakeHTTPClient to keep track of the number of requests and assert on it
-
     fn init_test(cx: &mut TestAppContext) {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
         });
-    }
-
-    fn is_empty_state(telemetry: &Telemetry) -> bool {
-        telemetry.state.lock().events_queue.is_empty()
-            && telemetry.state.lock().flush_events_task.is_none()
-            && telemetry.state.lock().first_event_date_time.is_none()
     }
 
     fn test_project_discovery_helper(
@@ -968,7 +422,6 @@ mod tests {
         let updated_entries: UpdatedEntriesSet = Arc::from(entries.as_slice());
 
         let detected_project_types = telemetry.detect_project_types(worktree_id, &updated_entries);
-
         let expected_project_types =
             expected_project_types.map(|types| types.iter().map(|&t| t.to_string()).collect());
 

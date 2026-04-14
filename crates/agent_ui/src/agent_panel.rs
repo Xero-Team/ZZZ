@@ -2881,6 +2881,44 @@ impl AgentPanel {
             })
     }
 
+    fn render_recent_entries_menu(
+        &self,
+        icon: IconName,
+        corner: Corner,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let focus_handle = self.focus_handle(cx);
+
+        PopoverMenu::new("agent-nav-menu")
+            .trigger_with_tooltip(
+                IconButton::new("agent-nav-menu", icon).icon_size(IconSize::Small),
+                {
+                    move |_window, cx| {
+                        Tooltip::for_action_in(
+                            "Toggle Recently Updated Threads",
+                            &ToggleNavigationMenu,
+                            &focus_handle,
+                            cx,
+                        )
+                    }
+                },
+            )
+            .anchor(corner)
+            .with_handle(self.agent_navigation_menu_handle.clone())
+            .menu({
+                let menu = self.agent_navigation_menu.clone();
+                move |window, cx| {
+                    if let Some(menu) = menu.as_ref() {
+                        menu.update(cx, |_, cx| {
+                            cx.defer_in(window, |menu, window, cx| {
+                                menu.rebuild(window, cx);
+                            });
+                        })
+                    }
+                    menu.clone()
+                }
+            })
+    }
     fn render_toolbar_back_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let focus_handle = self.focus_handle(cx);
 

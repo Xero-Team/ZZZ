@@ -7,7 +7,6 @@ use language_models::provider::anthropic::telemetry::{
 };
 use std::time::Instant;
 use terminal::Terminal;
-use uuid::Uuid;
 
 pub struct TerminalCodegen {
     pub status: CodegenStatus,
@@ -15,25 +14,19 @@ pub struct TerminalCodegen {
     generation: Task<()>,
     pub message_id: Option<String>,
     transaction: Option<TerminalTransaction>,
-    session_id: Uuid,
 }
 
 impl EventEmitter<CodegenEvent> for TerminalCodegen {}
 
 impl TerminalCodegen {
-    pub fn new(terminal: Entity<Terminal>, session_id: Uuid) -> Self {
+    pub fn new(terminal: Entity<Terminal>, _session_id: uuid::Uuid) -> Self {
         Self {
             terminal,
             status: CodegenStatus::Idle,
             generation: Task::ready(()),
             message_id: None,
             transaction: None,
-            session_id,
         }
-    }
-
-    pub fn session_id(&self) -> Uuid {
-        self.session_id
     }
 
     pub fn start(&mut self, prompt_task: Task<LanguageModelRequest>, cx: &mut Context<Self>) {
@@ -44,9 +37,6 @@ impl TerminalCodegen {
         };
 
         let anthropic_reporter = AnthropicEventReporter::new(&model, cx);
-        let session_id = self.session_id;
-        let model_telemetry_id = model.telemetry_id();
-        let model_provider_id = model.provider_id().to_string();
 
         self.status = CodegenStatus::Pending;
         self.transaction = Some(TerminalTransaction::start(self.terminal.clone()));
@@ -81,21 +71,6 @@ impl TerminalCodegen {
                         };
 
                         let result = task.await;
-
-                        let error_message = result.as_ref().err().map(|error| error.to_string());
-
-                        telemetry::event!(
-                            "Assistant Responded",
-                            session_id = session_id.to_string(),
-                            kind = "inline_terminal",
-                            phase = "response",
-                            model = model_telemetry_id,
-                            model_provider = model_provider_id,
-                            language_name = Option::<&str>::None,
-                            message_id = message_id,
-                            response_latency = response_latency,
-                            error_message = error_message,
-                        );
 
                         anthropic_reporter.report(AnthropicEventData {
                             completion_type: AnthropicCompletionType::Terminal,

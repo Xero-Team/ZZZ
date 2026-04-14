@@ -280,19 +280,9 @@ pub type RenderDiffHunkControlsFn = Arc<
 >;
 
 enum ReportEditorEvent {
-    Saved { auto_saved: bool },
+    Saved,
     EditorOpened,
     Closed,
-}
-
-impl ReportEditorEvent {
-    pub fn event_type(&self) -> &'static str {
-        match self {
-            Self::Saved { .. } => "Editor Saved",
-            Self::EditorOpened => "Editor Opened",
-            Self::Closed => "Editor Closed",
-        }
-    }
 }
 
 pub enum ActiveDebugLine {}
@@ -8647,38 +8637,7 @@ impl Editor {
         self.take_active_edit_prediction(reason == EditPredictionDiscardReason::Ignored, cx)
     }
 
-    fn report_edit_prediction_event(&self, id: Option<SharedString>, accepted: bool, cx: &App) {
-        let Some(provider) = self.edit_prediction_provider() else {
-            return;
-        };
-
-        let buffer_snapshot = self.buffer.read(cx).snapshot(cx);
-        let Some((position, _)) =
-            buffer_snapshot.anchor_to_buffer_anchor(self.selections.newest_anchor().head())
-        else {
-            return;
-        };
-        let Some(buffer) = self.buffer.read(cx).buffer(position.buffer_id) else {
-            return;
-        };
-
-        let extension = buffer
-            .read(cx)
-            .file()
-            .and_then(|file| Some(file.path().extension()?.to_string()));
-
-        let event_type = match accepted {
-            true => "Edit Prediction Accepted",
-            false => "Edit Prediction Discarded",
-        };
-        telemetry::event!(
-            event_type,
-            provider = provider.name(),
-            prediction_id = id,
-            suggestion_accepted = accepted,
-            file_extension = extension,
-        );
-    }
+    fn report_edit_prediction_event(&self, _id: Option<SharedString>, _accepted: bool, _cx: &App) {}
 
     fn open_editor_at_anchor(
         snapshot: &language::BufferSnapshot,
@@ -25111,14 +25070,9 @@ impl Editor {
                 cx.emit(EditorEvent::BufferEdited);
                 cx.emit(SearchEvent::MatchesInvalidated);
 
-                let Some(project) = &self.project else { return };
-                let (telemetry, is_via_ssh) = {
-                    let project = project.read(cx);
-                    let telemetry = project.client().telemetry().clone();
-                    let is_via_ssh = project.is_via_remote_server();
-                    (telemetry, is_via_ssh)
+                let Some(_project) = &self.project else {
+                    return;
                 };
-                telemetry.log_edit_event("editor", is_via_ssh);
             }
             multi_buffer::Event::BufferRangesUpdated {
                 buffer,
@@ -25809,30 +25763,15 @@ impl Editor {
             .show_edit_predictions;
 
         let project = project.read(cx);
-        let event_type = reported_event.event_type();
-
-        if let ReportEditorEvent::Saved { auto_saved } = reported_event {
-            telemetry::event!(
-                event_type,
-                type = if auto_saved {"autosave"} else {"manual"},
-                file_extension,
-                vim_mode,
-                copilot_enabled,
-                copilot_enabled_for_language,
-                edit_predictions_provider,
-                is_via_ssh = project.is_via_remote_server(),
-            );
-        } else {
-            telemetry::event!(
-                event_type,
-                file_extension,
-                vim_mode,
-                copilot_enabled,
-                copilot_enabled_for_language,
-                edit_predictions_provider,
-                is_via_ssh = project.is_via_remote_server(),
-            );
-        };
+        let _ = (
+            reported_event,
+            file_extension,
+            vim_mode,
+            copilot_enabled,
+            copilot_enabled_for_language,
+            edit_predictions_provider,
+            project.is_via_remote_server(),
+        );
     }
 
     /// Copy the highlighted chunks to the clipboard as JSON. The format is an array of lines,

@@ -37,7 +37,6 @@ impl RenderOnce for EndTrialUpsell {
                     .full_width()
                     .style(ButtonStyle::Tinted(ui::TintColor::Accent))
                     .on_click(move |_, _window, cx| {
-                        telemetry::event!("Upgrade To Pro Clicked", state = "end-of-trial");
                         cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx))
                     }),
             );
@@ -80,10 +79,7 @@ impl RenderOnce for EndTrialUpsell {
                         .tooltip(Tooltip::text("Dismiss"))
                         .on_click({
                             let callback = self.dismiss_upsell.clone();
-                            move |_, window, cx| {
-                                telemetry::event!("Banner Dismissed", source = "AI Onboarding");
-                                callback(window, cx)
-                            }
+                            move |_, window, cx| callback(window, cx)
                         }),
                 ),
             )

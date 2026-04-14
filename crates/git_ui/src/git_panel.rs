@@ -2111,9 +2111,7 @@ impl GitPanel {
     }
 
     fn on_commit(&mut self, _: &git::Commit, window: &mut Window, cx: &mut Context<Self>) {
-        if self.commit(&self.commit_editor.focus_handle(cx), window, cx) {
-            telemetry::event!("Git Committed", source = "Git Panel");
-        }
+        if self.commit(&self.commit_editor.focus_handle(cx), window, cx) {}
     }
 
     /// Commits staged changes with the current commit message.
@@ -2147,9 +2145,7 @@ impl GitPanel {
     }
 
     fn on_amend(&mut self, _: &git::Amend, window: &mut Window, cx: &mut Context<Self>) {
-        if self.amend(&self.commit_editor.focus_handle(cx), window, cx) {
-            telemetry::event!("Git Amended", source = "Git Panel");
-        }
+        if self.amend(&self.commit_editor.focus_handle(cx), window, cx) {}
     }
 
     /// Amends the most recent commit with staged changes and/or an updated commit message.
@@ -2371,7 +2367,6 @@ impl GitPanel {
         let Some(repo) = self.active_repository.clone() else {
             return;
         };
-        telemetry::event!("Git Uncommitted");
 
         let confirmation = self.check_for_pushed_commits(window, cx);
         let prior_head = self.load_commit_details("HEAD".to_string(), cx);
@@ -2665,8 +2660,6 @@ impl GitPanel {
             return;
         };
 
-        telemetry::event!("Git Commit Message Generated");
-
         let diff = repo.update(cx, |repo, cx| {
             if self.has_staged_changes() {
                 repo.diff(DiffType::HeadToIndex, cx)
@@ -2848,7 +2841,6 @@ impl GitPanel {
         let Some(repo) = self.active_repository.clone() else {
             return;
         };
-        telemetry::event!("Git Fetched");
         let askpass = self.askpass_delegate("git fetch", window, cx);
         let this = cx.weak_entity();
 
@@ -2993,7 +2985,6 @@ impl GitPanel {
         let Some(branch) = repo.read(cx).branch.as_ref() else {
             return;
         };
-        telemetry::event!("Git Pulled");
         let branch = branch.clone();
         let remote = self.get_remote(false, false, window, cx);
         cx.spawn_in(window, async move |this, cx| {
@@ -3056,7 +3047,6 @@ impl GitPanel {
         let Some(branch) = repo.read(cx).branch.as_ref() else {
             return;
         };
-        telemetry::event!("Git Pushed");
         let branch = branch.clone();
 
         let options = if force_push {
@@ -4634,7 +4624,6 @@ impl GitPanel {
                 .on_click({
                     let git_panel = cx.weak_entity();
                     move |_, window, cx| {
-                        telemetry::event!("Git Committed", source = "Git Panel");
                         git_panel
                             .update(cx, |git_panel, cx| {
                                 git_panel.commit_changes(

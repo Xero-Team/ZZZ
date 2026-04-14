@@ -10,13 +10,13 @@ use std::fmt::Write as _;
 use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
-use telemetry_events::EditPredictionRating;
 
 use zeta_prompt::{ZetaFormat, ZetaPromptInput, excerpt_range_for_format};
 
 use crate::PredictionProvider;
 use crate::example::{Example, ExamplePrompt};
 use crate::progress::{InfoStyle, Progress, Step};
+use edit_prediction::EditPredictionRating;
 use edit_prediction::example_spec::{ExampleSpec, TelemetrySource};
 
 pub(crate) const SNOWFLAKE_SUCCESS_CODE: &str = "090001";

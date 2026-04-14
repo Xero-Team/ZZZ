@@ -87,8 +87,6 @@ impl RatePredictionsModal {
             workspace.toggle_modal(window, cx, |window, cx| {
                 RatePredictionsModal::new(ep_store, language_registry, window, cx)
             });
-
-            telemetry::event!("Rate Prediction Modal Open", source = "Edit Prediction");
         }
     }
 

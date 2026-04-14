@@ -75,12 +75,6 @@ fn render_theme_section(tab_index: &mut isize, cx: &mut App) -> impl IntoElement
                             MODE_NAMES[mode as usize].clone(),
                             move |_, _, cx| {
                                 write_mode_change(mode, cx);
-
-                                telemetry::event!(
-                                    "Welcome Theme mode Changed",
-                                    from = theme_mode,
-                                    to = mode
-                                );
                             },
                         )
                     }),
@@ -163,15 +157,9 @@ fn render_theme_section(tab_index: &mut isize, cx: &mut App) -> impl IntoElement
                         })
                         .on_click({
                             let theme_name = theme.name.clone();
-                            let current_theme_name = current_theme_name.clone();
 
                             move |_, _, cx| {
                                 write_theme_change(theme_name.clone(), theme_mode, cx);
-                                telemetry::event!(
-                                    "Welcome Theme Changed",
-                                    from = current_theme_name,
-                                    to = theme_name
-                                );
                             }
                         })
                         .map(|this| {
@@ -270,13 +258,6 @@ fn render_telemetry_section(tab_index: &mut isize, cx: &App) -> impl IntoElement
                         update_settings_file(fs.clone(), cx, move |setting, _| {
                             setting.telemetry.get_or_insert_default().metrics = Some(enabled);
                         });
-
-                        // This telemetry event shouldn't fire when it's off. If it does we'll be alerted
-                        // and can fix it in a timely manner to respect a user's choice.
-                        telemetry::event!(
-                            "Welcome Page Telemetry Metrics Toggled",
-                            options = if enabled { "on" } else { "off" }
-                        );
                     }
                 },
             )
@@ -312,13 +293,6 @@ fn render_telemetry_section(tab_index: &mut isize, cx: &App) -> impl IntoElement
                         update_settings_file(fs.clone(), cx, move |setting, _| {
                             setting.telemetry.get_or_insert_default().diagnostics = Some(enabled);
                         });
-
-                        // This telemetry event shouldn't fire when it's off. If it does we'll be alerted
-                        // and can fix it in a timely manner to respect a user's choice.
-                        telemetry::event!(
-                            "Welcome Page Telemetry Diagnostics Toggled",
-                            options = if enabled { "on" } else { "off" }
-                        );
                     }
                 },
             )
@@ -381,8 +355,6 @@ fn render_base_keymap_section(tab_index: &mut isize, cx: &mut App) -> impl IntoE
         update_settings_file(fs, cx, move |setting, _| {
             setting.base_keymap = Some(keymap_base.into());
         });
-
-        telemetry::event!("Welcome Keymap Changed", keymap = keymap_base);
     }
 }
 
@@ -410,11 +382,6 @@ fn render_vim_mode_switch(tab_index: &mut isize, cx: &mut App) -> impl IntoEleme
                 update_settings_file(fs.clone(), cx, move |setting, _| {
                     setting.vim_mode = Some(vim_mode);
                 });
-
-                telemetry::event!(
-                    "Welcome Vim Mode Toggled",
-                    options = if vim_mode { "on" } else { "off" },
-                );
             }
         },
     )
@@ -451,11 +418,6 @@ fn render_worktree_auto_trust_switch(tab_index: &mut isize, cx: &mut App) -> imp
                 update_settings_file(fs.clone(), cx, move |setting, _| {
                     setting.session.get_or_insert_default().trust_all_worktrees = Some(trust);
                 });
-
-                telemetry::event!(
-                    "Welcome Page Worktree Auto Trust Toggled",
-                    options = if trust { "on" } else { "off" }
-                );
             }
         },
     )
@@ -486,7 +448,6 @@ fn render_setting_import_button(
                 .color(Color::Success)
         })
         .on_click(move |_, window, cx| {
-            telemetry::event!("Welcome Import Settings", import_source = label,);
             window.dispatch_action(action.boxed_clone(), cx);
         })
 }
@@ -641,10 +602,7 @@ fn render_zed_agent_button(user_store: &Entity<UserStore>, cx: &mut App) -> impl
         .disabled(is_trial || is_pro)
         .map(|this| {
             if is_signed_in && is_free {
-                this.on_click(move |_, _window, cx| {
-                    telemetry::event!("Start Trial Clicked", state = "post-sign-in");
-                    cx.open_url(&zed_urls::start_trial_url(cx))
-                })
+                this.on_click(move |_, _window, cx| cx.open_url(&zed_urls::start_trial_url(cx)))
             } else {
                 this.on_click(move |_, _, cx| {
                     telemetry::event!("Welcome Zed Agent Sign In Clicked");

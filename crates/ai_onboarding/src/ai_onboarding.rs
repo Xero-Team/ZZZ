@@ -138,10 +138,7 @@ impl ZedAiOnboarding {
                     IconButton::new("dismiss_onboarding", IconName::Close)
                         .icon_size(IconSize::Small)
                         .tooltip(Tooltip::text("Dismiss"))
-                        .on_click(move |_, window, cx| {
-                            telemetry::event!("Banner Dismissed", source = "AI Onboarding",);
-                            callback(window, cx)
-                        }),
+                        .on_click(move |_, window, cx| callback(window, cx)),
                 )
                 .into_any_element()
         })
@@ -168,10 +165,7 @@ impl ZedAiOnboarding {
                     .style(ButtonStyle::Tinted(ui::TintColor::Accent))
                     .on_click({
                         let callback = self.sign_in.clone();
-                        move |_, window, cx| {
-                            telemetry::event!("Start Trial Clicked", state = "pre-sign-in");
-                            callback(window, cx)
-                        }
+                        move |_, window, cx| callback(window, cx)
                     }),
             )
             .children(self.render_dismiss_button())
@@ -207,10 +201,6 @@ impl ZedAiOnboarding {
                                 .full_width()
                                 .style(ButtonStyle::Tinted(ui::TintColor::Accent))
                                 .on_click(move |_, _window, cx| {
-                                    telemetry::event!(
-                                        "Upgrade To Pro Clicked",
-                                        state = "young-account"
-                                    );
                                     cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx))
                                 }),
                         ),
@@ -269,10 +259,6 @@ impl ZedAiOnboarding {
                                 .full_width()
                                 .style(ButtonStyle::Tinted(ui::TintColor::Accent))
                                 .on_click(move |_, _window, cx| {
-                                    telemetry::event!(
-                                        "Start Trial Clicked",
-                                        state = "post-sign-in"
-                                    );
                                     cx.open_url(&zed_urls::start_trial_url(cx))
                                 }),
                         ),
@@ -436,6 +422,129 @@ impl Component for ZedAiOnboarding {
                         onboarding(SignInStatus::SignedIn, Some(Plan::ZedStudent), false),
                     ),
                 ])
+                .into_any_element(),
+        )
+    }
+}
+
+#[derive(RegisterComponent)]
+pub struct AgentLayoutOnboarding {
+    pub use_agent_layout: Arc<dyn Fn(&mut Window, &mut App)>,
+    pub revert_to_editor_layout: Arc<dyn Fn(&mut Window, &mut App)>,
+    pub dismissed: Arc<dyn Fn(&mut Window, &mut App)>,
+    pub is_agent_layout: bool,
+}
+
+impl Render for AgentLayoutOnboarding {
+    fn render(&mut self, _window: &mut ui::Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let description = "With the new Threads Sidebar, you can manage multiple agents across several projects, all in one window.";
+
+        let dismiss_button = div().absolute().top_0().right_0().child(
+            IconButton::new("dismiss", IconName::Close)
+                .icon_size(IconSize::Small)
+                .on_click({
+                    let dismiss = self.dismissed.clone();
+                    move |_, window, cx| dismiss(window, cx)
+                }),
+        );
+
+        let primary_button = if self.is_agent_layout {
+            Button::new("revert", "Use Previous Layout")
+                .label_size(LabelSize::Small)
+                .style(ButtonStyle::Outlined)
+                .on_click({
+                    let revert = self.revert_to_editor_layout.clone();
+                    let dismiss = self.dismissed.clone();
+                    move |_, window, cx| {
+                        revert(window, cx);
+                        dismiss(window, cx);
+                    }
+                })
+        } else {
+            Button::new("start", "Use New Layout")
+                .label_size(LabelSize::Small)
+                .style(ButtonStyle::Outlined)
+                .on_click({
+                    let use_layout = self.use_agent_layout.clone();
+                    let dismiss = self.dismissed.clone();
+                    move |_, window, cx| {
+                        use_layout(window, cx);
+                        dismiss(window, cx);
+                    }
+                })
+        };
+
+        let content = v_flex()
+            .min_w_0()
+            .w_full()
+            .relative()
+            .gap_1()
+            .child(Label::new("A new workspace layout for agentic workflows"))
+            .child(Label::new(description).color(Color::Muted).mb_2())
+            .child(
+                List::new()
+                    .child(ListBulletItem::new(
+                        "The Sidebar and Agent Panel are on the left by default",
+                    ))
+                    .child(ListBulletItem::new(
+                        "The Project Panel and all other panels shift to the right",
+                    ))
+                    .child(ListBulletItem::new(
+                        "You can always customize your workspace layout in your Settings",
+                    )),
+            )
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap_1()
+                    .flex_wrap()
+                    .justify_end()
+                    .child(
+                        Button::new("learn", "Learn More")
+                            .label_size(LabelSize::Small)
+                            .style(ButtonStyle::OutlinedGhost)
+                            .on_click(move |_, _, cx| {
+                                cx.open_url(&zed_urls::parallel_agents_blog(cx))
+                            }),
+                    )
+                    .child(primary_button),
+            )
+            .child(dismiss_button);
+
+        AgentPanelOnboardingCard::new().child(content)
+    }
+}
+
+impl Component for AgentLayoutOnboarding {
+    fn scope() -> ComponentScope {
+        ComponentScope::Onboarding
+    }
+
+    fn name() -> &'static str {
+        "Agent Layout Onboarding"
+    }
+
+    fn preview(_window: &mut Window, cx: &mut App) -> Option<AnyElement> {
+        let onboarding = cx.new(|_cx| AgentLayoutOnboarding {
+            use_agent_layout: Arc::new(|_, _| {}),
+            revert_to_editor_layout: Arc::new(|_, _| {}),
+            dismissed: Arc::new(|_, _| {}),
+            is_agent_layout: false,
+        });
+
+        Some(
+            v_flex()
+                .min_w_0()
+                .gap_4()
+                .child(single_example(
+                    "Agent Layout Onboarding",
+                    div()
+                        .w_full()
+                        .min_w_40()
+                        .max_w(px(1100.))
+                        .child(onboarding)
+                        .into_any_element(),
+                ))
                 .into_any_element(),
         )
     }

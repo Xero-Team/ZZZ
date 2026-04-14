@@ -874,9 +874,9 @@ impl Item for Editor {
     ) -> Task<Result<()>> {
         // Add meta data tracking # of auto saves
         if options.autosave {
-            self.report_editor_event(ReportEditorEvent::Saved { auto_saved: true }, None, cx);
+            self.report_editor_event(ReportEditorEvent::Saved, None, cx);
         } else {
-            self.report_editor_event(ReportEditorEvent::Saved { auto_saved: false }, None, cx);
+            self.report_editor_event(ReportEditorEvent::Saved, None, cx);
         }
 
         let buffers = self.buffer().clone().read(cx).all_buffers();
@@ -940,11 +940,7 @@ impl Item for Editor {
             .expect("cannot call save_as on an excerpt list");
 
         let file_extension = path.path.extension().map(|a| a.to_string());
-        self.report_editor_event(
-            ReportEditorEvent::Saved { auto_saved: false },
-            file_extension,
-            cx,
-        );
+        self.report_editor_event(ReportEditorEvent::Saved, file_extension, cx);
 
         project.update(cx, |project, cx| project.save_buffer_as(buffer, path, cx))
     }

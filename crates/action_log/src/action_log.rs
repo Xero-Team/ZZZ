@@ -1096,13 +1096,11 @@ pub struct ActionLogTelemetry {
 struct ActionLogMetrics {
     lines_removed: u32,
     lines_added: u32,
-    language: Option<SharedString>,
 }
 
 impl ActionLogMetrics {
-    fn for_buffer(buffer: &Buffer) -> Self {
+    fn for_buffer(_buffer: &Buffer) -> Self {
         Self {
-            language: buffer.language().map(|l| l.name().0),
             lines_removed: 0,
             lines_added: 0,
         }
@@ -1120,27 +1118,9 @@ impl ActionLogMetrics {
     }
 }
 
-fn telemetry_report_accepted_edits(telemetry: &ActionLogTelemetry, metrics: ActionLogMetrics) {
-    telemetry::event!(
-        "Agent Edits Accepted",
-        agent = telemetry.agent_telemetry_id,
-        session = telemetry.session_id,
-        language = metrics.language,
-        lines_added = metrics.lines_added,
-        lines_removed = metrics.lines_removed
-    );
-}
+fn telemetry_report_accepted_edits(_telemetry: &ActionLogTelemetry, _metrics: ActionLogMetrics) {}
 
-fn telemetry_report_rejected_edits(telemetry: &ActionLogTelemetry, metrics: ActionLogMetrics) {
-    telemetry::event!(
-        "Agent Edits Rejected",
-        agent = telemetry.agent_telemetry_id,
-        session = telemetry.session_id,
-        language = metrics.language,
-        lines_added = metrics.lines_added,
-        lines_removed = metrics.lines_removed
-    );
-}
+fn telemetry_report_rejected_edits(_telemetry: &ActionLogTelemetry, _metrics: ActionLogMetrics) {}
 
 fn apply_non_conflicting_edits(
     patch: &Patch<u32>,

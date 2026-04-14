@@ -392,15 +392,6 @@ impl Conversation {
         let Some(thread) = self.threads.get(&session_id) else {
             return;
         };
-        let agent_telemetry_id = thread.read(cx).connection().telemetry_id();
-        let session_id = thread.read(cx).session_id().clone();
-
-        telemetry::event!(
-            "Agent Tool Call Authorized",
-            agent = agent_telemetry_id,
-            session = session_id,
-            option = outcome.option_kind
-        );
 
         thread.update(cx, |thread, cx| {
             thread.authorize_tool_call(tool_call_id, outcome, cx);
@@ -879,14 +870,6 @@ impl ConversationView {
                     return;
                 }
             };
-
-            telemetry::event!(
-                "Agent Thread Started",
-                agent = connection.telemetry_id(),
-                source = source,
-                side = side,
-                thread_location = thread_location
-            );
 
             let mut resumed_without_history = false;
             let result = if let Some(session_id) = resume_session_id.clone() {
@@ -1700,8 +1683,6 @@ impl ConversationView {
             return;
         };
 
-        let agent_telemetry_id = connection.telemetry_id();
-
         if let Some(login_task) = connection.terminal_auth_task(&method, cx) {
             configuration_view.take();
             pending_auth_method.replace(method.clone());
@@ -1726,19 +1707,6 @@ impl ConversationView {
                         .await
                     }
                     .await;
-
-                    match &result {
-                        Ok(_) => telemetry::event!(
-                            "Authenticate Agent Succeeded",
-                            agent = agent_telemetry_id
-                        ),
-                        Err(_) => {
-                            telemetry::event!(
-                                "Authenticate Agent Failed",
-                                agent = agent_telemetry_id,
-                            )
-                        }
-                    }
 
                     this.update_in(cx, |this, window, cx| {
                         if let Err(err) = result {
@@ -1777,16 +1745,6 @@ impl ConversationView {
         self.auth_task = Some(cx.spawn_in(window, {
             async move |this, cx| {
                 let result = authenticate.await;
-
-                match &result {
-                    Ok(_) => telemetry::event!(
-                        "Authenticate Agent Succeeded",
-                        agent = agent_telemetry_id
-                    ),
-                    Err(_) => {
-                        telemetry::event!("Authenticate Agent Failed", agent = agent_telemetry_id,)
-                    }
-                }
 
                 this.update_in(cx, |this, window, cx| {
                     if let Err(err) = result {
@@ -2042,7 +2000,6 @@ impl ConversationView {
                     .rev()
                     .map(|(ix, method)| {
                         let (method_id, name) = (method.id().0.clone(), method.name().to_string());
-                        let agent_telemetry_id = connection.telemetry_id();
 
                         Button::new(method_id.clone(), name)
                             .label_size(LabelSize::Small)
@@ -2058,12 +2015,6 @@ impl ConversationView {
                             })
                             .on_click({
                                 cx.listener(move |this, _, window, cx| {
-                                    telemetry::event!(
-                                        "Authenticate Agent Started",
-                                        agent = agent_telemetry_id,
-                                        method = method_id
-                                    );
-
                                     this.authenticate(
                                         acp::AuthMethodId::new(method_id.clone()),
                                         window,
@@ -2126,22 +2077,48 @@ impl ConversationView {
             .into_any_element()
     }
 
-    fn emit_load_error_telemetry(&self, error: &LoadError) {
-        let error_kind = match error {
-            LoadError::Unsupported { .. } => "unsupported",
-            LoadError::FailedToInstall(_) => "failed_to_install",
-            LoadError::Exited { .. } => "exited",
-            LoadError::Other(_) => "other",
+    fn emit_token_limit_telemetry_if_needed(
+        &mut self,
+        thread: &Entity<AcpThread>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(active_thread) = self.active_thread() else {
+            return;
         };
 
-        let agent_name = self.agent.agent_id();
+        let ratio = {
+            let thread_data = thread.read(cx);
+            let Some(token_usage) = thread_data.token_usage() else {
+                return;
+            };
+            token_usage.ratio()
+        };
 
-        telemetry::event!(
-            "Agent Panel Error Shown",
-            agent = agent_name,
-            kind = error_kind,
-            message = error.to_string(),
-        );
+        match ratio {
+            acp_thread::TokenUsageRatio::Normal => {
+                active_thread.update(cx, |active, _cx| {
+                    active.last_token_limit_telemetry = None;
+                });
+                return;
+            }
+            acp_thread::TokenUsageRatio::Warning | acp_thread::TokenUsageRatio::Exceeded => {}
+        };
+
+        let should_skip = active_thread
+            .read(cx)
+            .last_token_limit_telemetry
+            .as_ref()
+            .is_some_and(|last| *last >= ratio);
+        if should_skip {
+            return;
+        }
+
+        active_thread.update(cx, |active, _cx| {
+            active.last_token_limit_telemetry = Some(ratio);
+        });
+    }
+    fn emit_load_error_telemetry(&self, error: &LoadError) {
+        let _ = error;
     }
 
     fn render_load_error(

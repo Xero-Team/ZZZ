@@ -619,7 +619,6 @@ impl ActiveCall {
             .borrow_mut()
             .take()
             .context("no incoming call")?;
-        telemetry::event!("Incoming Call Declined", room_id = call.room_id);
         self.client.send(proto::DeclineCall {
             room_id: call.room_id,
         })?;
@@ -764,12 +763,7 @@ impl ActiveCall {
 
     pub fn report_call_event(&self, operation: &'static str, cx: &mut App) {
         if let Some(room) = self.room() {
-            let room = room.read(cx);
-            telemetry::event!(
-                operation,
-                room_id = room.id(),
-                channel_id = room.channel_id()
-            )
+            let _ = (operation, room.read(cx));
         }
     }
 }

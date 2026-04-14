@@ -316,23 +316,9 @@ fn general_page(cx: &App) -> SettingsPage {
         ]
     }
 
-    fn scoped_settings_section() -> [SettingsPageItem; 3] {
+    fn scoped_settings_section() -> [SettingsPageItem; 2] {
         [
             SettingsPageItem::SectionHeader("Scoped Settings"),
-            SettingsPageItem::SettingItem(SettingItem {
-                files: USER,
-                title: "Preview Channel",
-                description: "Which settings should be activated only in Preview build of Zed.",
-                field: Box::new(
-                    SettingField {
-                        json_path: Some("preview_channel_settings"),
-                        pick: |settings_content| Some(settings_content),
-                        write: |_settings_content, _value, _| {},
-                    }
-                    .unimplemented(),
-                ),
-                metadata: None,
-            }),
             SettingsPageItem::SettingItem(SettingItem {
                 files: USER,
                 title: "Settings Profiles",
@@ -350,70 +336,6 @@ fn general_page(cx: &App) -> SettingsPage {
         ]
     }
 
-    fn privacy_section() -> [SettingsPageItem; 3] {
-        [
-            SettingsPageItem::SectionHeader("Privacy"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Telemetry Diagnostics",
-                description: "Send debug information like crash reports.",
-                field: Box::new(SettingField {
-                    json_path: Some("telemetry.diagnostics"),
-                    pick: |settings_content| {
-                        settings_content
-                            .telemetry
-                            .as_ref()
-                            .and_then(|telemetry| telemetry.diagnostics.as_ref())
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .telemetry
-                            .get_or_insert_default()
-                            .diagnostics = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Telemetry Metrics",
-                description: "Send anonymized usage data like what languages you're using Zed with.",
-                field: Box::new(SettingField {
-                    json_path: Some("telemetry.metrics"),
-                    pick: |settings_content| {
-                        settings_content
-                            .telemetry
-                            .as_ref()
-                            .and_then(|telemetry| telemetry.metrics.as_ref())
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.telemetry.get_or_insert_default().metrics = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
-    fn auto_update_section() -> [SettingsPageItem; 2] {
-        [
-            SettingsPageItem::SectionHeader("Auto Update"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Auto Update",
-                description: "Whether or not to automatically check for updates.",
-                field: Box::new(SettingField {
-                    json_path: Some("auto_update"),
-                    pick: |settings_content| settings_content.auto_update.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.auto_update = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
     SettingsPage {
         title: "General",
         items: concat_sections!(
@@ -422,10 +344,7 @@ fn general_page(cx: &App) -> SettingsPage {
             security_section(),
             workspace_restoration_section(),
             scoped_settings_section(),
-            privacy_section(),
-            auto_update_section(),
-        )
-        .into(),
+        ),
     }
 }
 

@@ -12,7 +12,7 @@ use futures::{
     stream::BoxStream,
 };
 use gpui::{App, AppContext as _, AsyncApp, Context, Entity, EventEmitter, Subscription, Task};
-use language::{Buffer, IndentKind, LanguageName, Point, TransactionId, line_diff};
+use language::{Buffer, IndentKind, Point, TransactionId, line_diff};
 use language_model::{
     CompletionIntent, LanguageModel, LanguageModelCompletionError, LanguageModelCompletionEvent,
     LanguageModelRegistry, LanguageModelRequest, LanguageModelRequestMessage,
@@ -128,10 +128,6 @@ impl BufferCodegen {
 
     pub fn active_alternative(&self) -> &Entity<CodegenAlternative> {
         &self.alternatives[self.active_alternative]
-    }
-
-    pub fn language_name(&self, cx: &App) -> Option<LanguageName> {
-        self.active_alternative().read(cx).language_name(cx)
     }
 
     pub fn status<'a>(&self, cx: &'a App) -> &'a CodegenStatus {
@@ -252,14 +248,6 @@ impl BufferCodegen {
     pub fn last_equal_ranges<'a>(&self, cx: &'a App) -> &'a [Range<Anchor>] {
         self.active_alternative().read(cx).last_equal_ranges()
     }
-
-    pub fn selected_text<'a>(&self, cx: &'a App) -> Option<&'a str> {
-        self.active_alternative().read(cx).selected_text()
-    }
-
-    pub fn session_id(&self) -> Uuid {
-        self.session_id
-    }
 }
 
 impl EventEmitter<CodegenEvent> for BufferCodegen {}
@@ -284,7 +272,6 @@ pub struct CodegenAlternative {
     completion: Option<String>,
     selected_text: Option<String>,
     pub message_id: Option<String>,
-    session_id: Uuid,
     pub description: Option<String>,
     pub failure: Option<String>,
 }
@@ -297,7 +284,7 @@ impl CodegenAlternative {
         range: Range<Anchor>,
         active: bool,
         builder: Arc<PromptBuilder>,
-        session_id: Uuid,
+        _session_id: Uuid,
         cx: &mut Context<Self>,
     ) -> Self {
         let snapshot = buffer.read(cx).snapshot(cx);
@@ -344,18 +331,10 @@ impl CodegenAlternative {
             elapsed_time: None,
             completion: None,
             selected_text: None,
-            session_id,
             description: None,
             failure: None,
             _subscription: cx.subscribe(&buffer, Self::handle_buffer_event),
         }
-    }
-
-    pub fn language_name(&self, cx: &App) -> Option<LanguageName> {
-        self.old_buffer
-            .read(cx)
-            .language()
-            .map(|language| language.name())
     }
 
     pub fn set_active(&mut self, active: bool, cx: &mut Context<Self>) {
@@ -641,9 +620,6 @@ impl CodegenAlternative {
         cx: &mut Context<Self>,
     ) -> Task<()> {
         let anthropic_reporter = AnthropicEventReporter::new(&model, cx);
-        let session_id = self.session_id;
-        let model_telemetry_id = model.telemetry_id();
-        let model_provider_id = model.provider_id().to_string();
         let start_time = Instant::now();
 
         // Make a new snapshot and re-resolve anchor in case the document was modified.
@@ -710,8 +686,6 @@ impl CodegenAlternative {
                 .ok()
                 .and_then(|stream| stream.message_id.clone());
             let generate = async {
-                let model_telemetry_id = model_telemetry_id.clone();
-                let model_provider_id = model_provider_id.clone();
                 let (mut diff_tx, mut diff_rx) = mpsc::channel(1);
                 let message_id = message_id.clone();
                 let line_based_stream_diff: Task<anyhow::Result<()>> = cx.background_spawn({
@@ -819,20 +793,6 @@ impl CodegenAlternative {
 
                         let result = diff.await;
 
-                        let error_message = result.as_ref().err().map(|error| error.to_string());
-                        telemetry::event!(
-                            "Assistant Responded",
-                            kind = "inline",
-                            phase = "response",
-                            session_id = session_id.to_string(),
-                            model = model_telemetry_id,
-                            model_provider = model_provider_id,
-                            language_name = language_name.as_ref().map(|n| n.to_string()),
-                            message_id = message_id.as_deref(),
-                            response_latency = response_latency,
-                            error_message = error_message.as_deref(),
-                        );
-
                         anthropic_reporter.report(AnthropicEventData {
                             completion_type: AnthropicCompletionType::Editor,
                             event: AnthropicEventType::Response,
@@ -912,14 +872,7 @@ impl CodegenAlternative {
                     this.elapsed_time = Some(elapsed_time);
                     this.completion = Some(completion.lock().clone());
                     if let Some(usage) = token_usage {
-                        let usage = usage.lock();
-                        telemetry::event!(
-                            "Inline Assistant Completion",
-                            model = model_telemetry_id,
-                            model_provider = model_provider_id,
-                            input_tokens = usage.input_tokens,
-                            output_tokens = usage.output_tokens,
-                        )
+                        let _usage = usage.lock();
                     }
 
                     cx.emit(CodegenEvent::Finished);
@@ -941,10 +894,6 @@ impl CodegenAlternative {
     #[cfg(any(test, feature = "test-support"))]
     pub fn current_failure(&self) -> Option<String> {
         self.failure.clone()
-    }
-
-    pub fn selected_text(&self) -> Option<&str> {
-        self.selected_text.as_deref()
     }
 
     pub fn stop(&mut self, cx: &mut Context<Self>) {

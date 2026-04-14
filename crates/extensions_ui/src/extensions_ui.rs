@@ -1060,7 +1060,6 @@ impl ExtensionsPage {
                 .on_click({
                     let extension_id = extension.id.clone();
                     move |_, _, cx| {
-                        telemetry::event!("Extension Installed");
                         ExtensionStore::global(cx).update(cx, |store, cx| {
                             store.install_latest_extension(extension_id.clone(), cx)
                         });
@@ -1115,7 +1114,6 @@ impl ExtensionsPage {
                 .on_click({
                     let extension_id = extension.id.clone();
                     move |_, _, cx| {
-                        telemetry::event!("Extension Uninstalled", extension_id);
                         ExtensionStore::global(cx).update(cx, |store, cx| {
                             store
                                 .uninstall_extension(extension_id.clone(), cx)
@@ -1172,7 +1170,6 @@ impl ExtensionsPage {
                                 let extension_id = extension.id.clone();
                                 let version = extension.manifest.version.clone();
                                 move |_, _, cx| {
-                                    telemetry::event!("Extension Installed", extension_id, version);
                                     ExtensionStore::global(cx).update(cx, |store, cx| {
                                         store
                                             .upgrade_extension(
@@ -1466,15 +1463,7 @@ impl ExtensionsPage {
         let view_registry = Button::new("view_registry", "View Registry")
             .style(ButtonStyle::Tinted(ui::TintColor::Warning))
             .on_click({
-                let registry_url = registry_url.clone();
-                move |_, window, cx| {
-                    telemetry::event!(
-                        "ACP Registry Opened from Extensions",
-                        source = "ACP Registry Upsell",
-                        url = registry_url,
-                    );
-                    window.dispatch_action(Box::new(zed_actions::AcpRegistry), cx)
-                }
+                move |_, window, cx| window.dispatch_action(Box::new(zed_actions::AcpRegistry), cx)
             });
         let open_registry_button = Button::new("open_registry", "Learn More")
             .end_icon(
@@ -1482,16 +1471,7 @@ impl ExtensionsPage {
                     .size(IconSize::Small)
                     .color(Color::Muted),
             )
-            .on_click({
-                move |_event, _window, cx| {
-                    telemetry::event!(
-                        "ACP Registry Viewed",
-                        source = "ACP Registry Upsell",
-                        url = registry_url,
-                    );
-                    cx.open_url(&registry_url)
-                }
-            });
+            .on_click({ move |_event, _window, cx| cx.open_url(&registry_url) });
 
         div().pt_4().px_4().child(
             Banner::new()
@@ -1520,16 +1500,7 @@ impl ExtensionsPage {
     ) -> impl IntoElement {
         let docs_url_button = Button::new("open_docs", "View Documentation")
             .end_icon(Icon::new(IconName::ArrowUpRight).size(IconSize::Small))
-            .on_click({
-                move |_event, _window, cx| {
-                    telemetry::event!(
-                        "Documentation Viewed",
-                        source = "Feature Upsell",
-                        url = docs_url,
-                    );
-                    cx.open_url(&docs_url)
-                }
-            });
+            .on_click({ move |_event, _window, cx| cx.open_url(&docs_url) });
 
         div()
             .pt_4()
@@ -1561,10 +1532,6 @@ impl ExtensionsPage {
                                                 )
                                                 .on_click(cx.listener(
                                                     move |this, selection, _, cx| {
-                                                        telemetry::event!(
-                                                            "Vim Mode Toggled",
-                                                            source = "Feature Upsell"
-                                                        );
                                                         this.update_settings(
                                                             selection,
                                                             cx,

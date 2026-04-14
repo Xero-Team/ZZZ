@@ -1,4 +1,3 @@
-use auto_update::DismissMessage;
 use editor::Editor;
 use extension_host::{ExtensionOperation, ExtensionStore};
 use futures::StreamExt;
@@ -31,6 +30,7 @@ const GIT_OPERATION_DELAY: Duration = Duration::from_millis(0);
 actions!(
     activity_indicator,
     [
+        DismissMessage,
         /// Displays error messages from language servers in the status bar.
         ShowErrorMessage
     ]

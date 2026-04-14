@@ -90,4 +90,3 @@ pretty_assertions.workspace = true
 project = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
 workspace = { workspace = true, features = ["test-support"] }
-
