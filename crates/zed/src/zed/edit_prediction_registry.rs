@@ -85,12 +85,6 @@ pub fn init(client: Arc<Client>, user_store: Entity<UserStore>, cx: &mut App) {
             let new_provider_config = edit_prediction_provider_config_for_settings(cx);
 
             if new_provider_config != previous_config {
-                telemetry::event!(
-                    "Edit Prediction Provider Changed",
-                    from = previous_config.map(|config| config.name()),
-                    to = new_provider_config.map(|config| config.name())
-                );
-
                 previous_config = new_provider_config;
                 assign_edit_prediction_providers(
                     &editors,
@@ -172,20 +166,6 @@ enum EditPredictionProviderConfig {
     Copilot,
     Codestral,
     Zed(EditPredictionModel),
-}
-
-impl EditPredictionProviderConfig {
-    fn name(&self) -> &'static str {
-        match self {
-            EditPredictionProviderConfig::Copilot => "Copilot",
-            EditPredictionProviderConfig::Codestral => "Codestral",
-            EditPredictionProviderConfig::Zed(model) => match model {
-                EditPredictionModel::Zeta => "Zeta",
-                EditPredictionModel::Fim { .. } => "FIM",
-                EditPredictionModel::Mercury => "Mercury",
-            },
-        }
-    }
 }
 
 fn clear_edit_prediction_store_edit_history(_: &edit_prediction::ClearHistory, cx: &mut App) {
