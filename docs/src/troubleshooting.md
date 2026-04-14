@@ -72,9 +72,9 @@ Zed creates local SQLite databases to persist data relating to its workspace and
 The naming convention of these databases takes on the form of `0-<zed_channel>`:
 
 - Stable: `0-stable`
-- Preview: `0-preview`
-- Nightly: `0-nightly`
 - Dev: `0-dev`
+
+Older installs may still contain databases created by legacy `preview` or `nightly` builds.
 
 While rare, we've seen a few cases where workspace databases became corrupted, which prevented Zed from starting.
 If you're experiencing startup issues, you can test whether it's workspace-related by temporarily moving the database from its location, then trying to start Zed again.

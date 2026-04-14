@@ -13,12 +13,6 @@ The installation script on the [download](https://zed.dev/download) page is the 
 curl -f https://zed.dev/install.sh | sh
 ```
 
-We also offer a preview build of Zed which receives updates about a week ahead of stable. You can install it with:
-
-```sh
-curl -f https://zed.dev/install.sh | ZED_CHANNEL=preview sh
-```
-
 The Zed installed by the script works best on systems that:
 
 - have a Vulkan compatible GPU available (for example Linux on an M-series macBook)

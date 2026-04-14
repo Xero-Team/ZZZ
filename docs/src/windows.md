@@ -1,13 +1,13 @@
 ---
 title: Zed on Windows
-description: "Get the latest stable builds via the download page. If you want to download our preview build, you can find it on its [releases p..."
+description: "Get the latest stable builds via the download page and install Zed on Windows."
 ---
 
 # Zed on Windows
 
 ## Installing Zed
 
-Get the latest stable builds via [the download page](https://zed.dev/download). If you want to download our preview build, you can find it on its [releases page](https://zed.dev/releases/preview). After the first manual installation, Zed will periodically check for install updates.
+Get the latest stable builds via [the download page](https://zed.dev/download). After the first manual installation, Zed will periodically check for install updates.
 
 You can also build zed from source, see [these docs](https://zed.dev/docs/development/windows) for instructions.
 

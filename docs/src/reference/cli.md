@@ -172,15 +172,16 @@ export VISUAL="zed --wait"
 
 Add these lines to your shell configuration file (e.g., `~/.bashrc`, `~/.zshrc`).
 
-## macOS: Switching Release Channels
+## macOS: Switching Installed Channels
 
-On macOS, you can launch a specific release channel by passing the channel name as the first argument:
+On macOS, you can launch a specific installed channel by passing the channel name as the first argument:
 
 ```sh
 zed --stable myfile.txt
-zed --preview myfile.txt
-zed --nightly myfile.txt
+zed --dev myfile.txt
 ```
+
+Legacy `--preview` and `--nightly` channel selectors are no longer supported.
 
 ## WSL Integration (Windows)
 

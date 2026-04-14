@@ -473,11 +473,22 @@ fn main() -> Result<()> {
     // Intercept version designators
     #[cfg(target_os = "macos")]
     if let Some(channel) = std::env::args().nth(1).filter(|arg| arg.starts_with("--")) {
-        // When the first argument is a name of a release channel, we're going to spawn off the CLI of that version, with trailing args passed along.
-        use std::str::FromStr as _;
+        // When the first argument is a supported release channel, spawn that installed app.
+        match &channel[2..] {
+            "stable" | "dev" => {
+                use std::str::FromStr as _;
 
-        if let Ok(channel) = release_channel::ReleaseChannel::from_str(&channel[2..]) {
-            return mac_os::spawn_channel_cli(channel, std::env::args().skip(2).collect());
+                let channel = release_channel::ReleaseChannel::from_str(&channel[2..])
+                    .expect("supported release channels must parse");
+                return mac_os::spawn_channel_cli(channel, std::env::args().skip(2).collect());
+            }
+            "preview" | "nightly" => {
+                anyhow::bail!(
+                    "The '{}' release channel is no longer supported. Use '--stable' or '--dev' instead.",
+                    &channel[2..]
+                );
+            }
+            _ => {}
         }
     }
     let args = Args::parse();

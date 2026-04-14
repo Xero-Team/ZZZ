@@ -26,12 +26,6 @@ If you installed Zed using Homebrew, use the following command:
 brew uninstall --cask zed
 ```
 
-Or for the preview version:
-
-```sh
-brew uninstall --cask zed@preview
-```
-
 ### Removing User Data (Optional)
 
 To completely remove all Zed configuration files and data:

@@ -9,7 +9,7 @@ description: Download and install Zed on macOS, Linux, or Windows. Includes Home
 
 ### macOS
 
-Get the latest stable builds via [the download page](https://zed.dev/download). If you want to download our preview build, you can find it on its [releases page](https://zed.dev/releases/preview). After the first manual installation, Zed will periodically check for install updates.
+Get the latest stable builds via [the download page](https://zed.dev/download). After the first manual installation, Zed will periodically check for install updates.
 
 You can also install Zed stable via Homebrew:
 
@@ -17,15 +17,9 @@ You can also install Zed stable via Homebrew:
 brew install --cask zed
 ```
 
-As well as Zed preview:
-
-```sh
-brew install --cask zed@preview
-```
-
 ### Windows
 
-Get the latest stable builds via [the download page](https://zed.dev/download). If you want to download our preview build, you can find it on its [releases page](https://zed.dev/releases/preview). After the first manual installation, Zed will periodically check for install updates.
+Get the latest stable builds via [the download page](https://zed.dev/download). After the first manual installation, Zed will periodically check for install updates.
 
 Additionally, you can install Zed using winget:
 
@@ -49,12 +43,6 @@ curl -f https://zed.dev/install.sh | sh
 
 # Install a specific version
 curl -f https://zed.dev/install.sh | ZED_VERSION=0.216.0 sh
-```
-
-To install the preview build, which receives updates about a week ahead of stable:
-
-```sh
-curl -f https://zed.dev/install.sh | ZED_CHANNEL=preview sh
 ```
 
 This script supports `x86_64` and `AArch64`, as well as common Linux distributions: Ubuntu, Arch, Debian, RedHat, CentOS, Fedora, and more.
