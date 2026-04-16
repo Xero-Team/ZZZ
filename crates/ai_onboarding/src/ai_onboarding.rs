@@ -426,7 +426,6 @@ impl Component for ZedAiOnboarding {
         )
     }
 }
-
 #[derive(RegisterComponent)]
 pub struct AgentLayoutOnboarding {
     pub use_agent_layout: Arc<dyn Fn(&mut Window, &mut App)>,

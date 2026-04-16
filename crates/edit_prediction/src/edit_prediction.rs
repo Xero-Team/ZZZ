@@ -2546,6 +2546,7 @@ impl EditPredictionStore {
                 let builder = builder
                     .uri(url.as_ref())
                     .header("Content-Encoding", "zstd")
+<<<<<<< HEAD
                     .header(PREDICT_EDITS_MODE_HEADER_NAME, mode.as_ref());
                 let builder = if let Some(preferred_experiment) = preferred_experiment.as_deref() {
                     builder.header(PREFERRED_EXPERIMENT_HEADER_NAME, preferred_experiment)
@@ -2553,6 +2554,10 @@ impl EditPredictionStore {
                     builder
                 };
                 let req = builder.body(compressed.clone().into());
+=======
+                    .header(PREDICT_EDITS_MODE_HEADER_NAME, mode.as_ref())
+                    .body(compressed.clone().into());
+>>>>>>> 43b5679cb6 (Remove collaboration and telemetry settings)
                 Ok(req?)
             },
             client,

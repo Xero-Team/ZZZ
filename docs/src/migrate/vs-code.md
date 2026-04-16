@@ -155,14 +155,13 @@ The following VS Code settings are automatically imported when you use **Import 
 
 **Other**
 
-| VS Code Setting            | Zed Setting                                              |
-| -------------------------- | -------------------------------------------------------- |
-| `http.proxy`               | `proxy`                                                  |
-| `npm.packageManager`       | `node.npm_path`                                          |
-| `telemetry.telemetryLevel` | `telemetry.metrics`, `telemetry.diagnostics`             |
-| `outline.icons`            | `outline_panel.file_icons`, `outline_panel.folder_icons` |
-| `chat.agent.enabled`       | `agent.enabled`                                          |
-| `mcp`                      | `context_servers`                                        |
+| VS Code Setting      | Zed Setting                                              |
+| -------------------- | -------------------------------------------------------- |
+| `http.proxy`         | `proxy`                                                  |
+| `npm.packageManager` | `node.npm_path`                                          |
+| `outline.icons`      | `outline_panel.file_icons`, `outline_panel.folder_icons` |
+| `chat.agent.enabled` | `agent.enabled`                                          |
+| `mcp`                | `context_servers`                                        |
 
 Zed doesn’t import extensions or keybindings, but this import gets core editor behavior close to your VS Code setup. If you skip that step during setup, you can still import settings manually later via the command palette:
 
@@ -193,7 +192,7 @@ To start a new project, create a directory using your terminal or file manager, 
 You can also launch Zed from the terminal inside any folder with:
 `zed .`
 
-Once inside a project, use `Cmd+P` to jump between files quickly. `Cmd+Shift+P` (`Ctrl+Shift+P` on Linux) opens the command palette for running actions / tasks, toggling settings, or starting a collaboration session.
+Once inside a project, use `Cmd+P` to jump between files quickly. `Cmd+Shift+P` (`Ctrl+Shift+P` on Linux) opens the command palette for running actions, tasks, and settings.
 
 Open buffers appear as tabs across the top. The Project Panel shows your file tree and Git status. Collapse it with `Cmd+B` for a distraction-free view.
 
@@ -292,7 +291,6 @@ Zed does not offer as many extensions as VS Code. The available extensions are f
 
 Several features that typically require extensions in VS Code are built into Zed:
 
-- Real-time collaboration with voice and cursor sharing (no Live Share required)
 - AI coding assistance (no Copilot extension needed)
 - Built-in terminal panel
 - Project-wide fuzzy search
@@ -300,18 +298,6 @@ Several features that typically require extensions in VS Code are built into Zed
 - Inline diagnostics and code actions via LSP
 
 You won’t find one-to-one replacements for every VS Code extension, especially if you rely on tools for DevOps, containers, or test runners. Zed's extension catalog is still growing and remains smaller.
-
-### Collaboration in Zed vs. VS Code
-
-Unlike VS Code, Zed doesn’t require an extension to collaborate. It’s built into the core experience.
-
-- Open the Collab Panel in the left dock.
-- Create a channel and [invite your collaborators](https://zed.dev/docs/collaboration#inviting-a-collaborator) to join.
-- [Share your screen or your codebase](https://zed.dev/docs/collaboration#share-a-project) directly.
-
-Once connected, you’ll see each other's cursors, selections, and edits in real time. Voice chat is included, so you can talk as you work. There’s no need for separate tools or third-party logins.
-
-Learn how [Zed uses Zed](https://zed.dev/blog/zed-is-our-office) to plan work and collaborate.
 
 ### Using AI in Zed
 

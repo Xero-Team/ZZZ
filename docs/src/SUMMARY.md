@@ -48,12 +48,6 @@
 - [Git](./git.md)
 - [Modelines](./modelines.md)
 
-# Collaboration
-
-- [Overview](./collaboration/overview.md)
-  - [Channels](./collaboration/channels.md)
-  - [Contacts and Private Calls](./collaboration/contacts-and-private-calls.md)
-
 # Remote Development
 
 - [Overview](./remote-development.md)
@@ -188,7 +182,6 @@
 - [Privacy and Security](./ai/privacy-and-security.md)
   - [Worktree Trust](./worktree-trust.md)
   - [AI Improvement](./ai/ai-improvement.md)
-- [Telemetry](./telemetry.md)
 
 # Developing Zed
 

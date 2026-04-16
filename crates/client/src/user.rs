@@ -851,11 +851,6 @@ impl UserStore {
     ) {
         let staff = response.user.is_staff && !*feature_flags::ZED_DISABLE_STAFF;
         cx.update_flags(staff, response.feature_flags);
-        if let Some(client) = self.client.upgrade() {
-            client
-                .telemetry
-                .set_authenticated_user_info(Some(response.user.metrics_id.clone()), staff);
-        }
 
         self.organizations = response.organizations.into_iter().map(Arc::new).collect();
         let persisted_org_id = KeyValueStore::global(cx)

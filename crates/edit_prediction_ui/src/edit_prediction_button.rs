@@ -587,10 +587,6 @@ impl EditPredictionButton {
                 .icon_position(IconPosition::Start)
                 .icon_color(Color::Muted)
                 .handler(move |window, cx| {
-                    telemetry::event!(
-                        "Edit Prediction Menu Action",
-                        action = "configure_providers",
-                    );
                     window.dispatch_action(
                         OpenSettingsAt {
                             path: "edit_predictions.providers".to_string(),

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use client::{Client, TelemetrySettings, UserStore, zed_urls};
+use client::{Client, UserStore, zed_urls};
 use cloud_api_types::Plan;
 use collections::HashMap;
 use fs::Fs;
@@ -15,9 +15,8 @@ use settings::{
 use theme::{Appearance, SystemAppearance, ThemeRegistry};
 use theme_settings::{ThemeAppearanceMode, ThemeName, ThemeSelection, ThemeSettings};
 use ui::{
-    AgentSetupButton, Divider, StatefulInteractiveElement, SwitchField, TintColor,
-    ToggleButtonGroup, ToggleButtonGroupSize, ToggleButtonSimple, ToggleButtonWithIcon, Tooltip,
-    prelude::*,
+    AgentSetupButton, StatefulInteractiveElement, SwitchField, TintColor, ToggleButtonGroup,
+    ToggleButtonGroupSize, ToggleButtonSimple, ToggleButtonWithIcon, Tooltip, prelude::*,
 };
 use vim_mode_setting::VimModeSetting;
 
@@ -227,80 +226,6 @@ fn render_theme_section(tab_index: &mut isize, cx: &mut App) -> impl IntoElement
             ),
         });
     }
-}
-
-fn render_telemetry_section(tab_index: &mut isize, cx: &App) -> impl IntoElement {
-    let fs = <dyn Fs>::global(cx);
-
-    v_flex()
-        .gap_4()
-        .child(
-            SwitchField::new(
-                "onboarding-telemetry-metrics",
-                None::<&str>,
-                Some("Help improve Zed by sending anonymous usage data".into()),
-                if TelemetrySettings::get_global(cx).metrics {
-                    ui::ToggleState::Selected
-                } else {
-                    ui::ToggleState::Unselected
-                },
-                {
-                    let fs = fs.clone();
-                    move |selection, _, cx| {
-                        let enabled = match selection {
-                            ToggleState::Selected => true,
-                            ToggleState::Unselected => false,
-                            ToggleState::Indeterminate => {
-                                return;
-                            }
-                        };
-
-                        update_settings_file(fs.clone(), cx, move |setting, _| {
-                            setting.telemetry.get_or_insert_default().metrics = Some(enabled);
-                        });
-                    }
-                },
-            )
-            .tab_index({
-                *tab_index += 1;
-                *tab_index
-            }),
-        )
-        .child(
-            SwitchField::new(
-                "onboarding-telemetry-crash-reports",
-                None::<&str>,
-                Some(
-                    "Help fix Zed by sending crash reports so we can fix critical issues fast"
-                        .into(),
-                ),
-                if TelemetrySettings::get_global(cx).diagnostics {
-                    ui::ToggleState::Selected
-                } else {
-                    ui::ToggleState::Unselected
-                },
-                {
-                    let fs = fs.clone();
-                    move |selection, _, cx| {
-                        let enabled = match selection {
-                            ToggleState::Selected => true,
-                            ToggleState::Unselected => false,
-                            ToggleState::Indeterminate => {
-                                return;
-                            }
-                        };
-
-                        update_settings_file(fs.clone(), cx, move |setting, _| {
-                            setting.telemetry.get_or_insert_default().diagnostics = Some(enabled);
-                        });
-                    }
-                },
-            )
-            .tab_index({
-                *tab_index += 1;
-                *tab_index
-            }),
-        )
 }
 
 fn render_base_keymap_section(tab_index: &mut isize, cx: &mut App) -> impl IntoElement {
@@ -668,6 +593,4 @@ pub(crate) fn render_basics_page(user_store: &Entity<UserStore>, cx: &mut App) -
         .child(render_import_settings_section(&mut tab_index, cx))
         .child(render_vim_mode_switch(&mut tab_index, cx))
         .child(render_worktree_auto_trust_switch(&mut tab_index, cx))
-        .child(Divider::horizontal().color(ui::DividerColor::BorderVariant))
-        .child(render_telemetry_section(&mut tab_index, cx))
 }

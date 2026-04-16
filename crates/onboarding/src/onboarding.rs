@@ -9,7 +9,6 @@ use gpui::{
     Subscription, Task, WeakEntity, Window, actions,
 };
 use notifications::status_toast::StatusToast;
-use project::agent_server_store::AllAgentServersSettings;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use settings::{SettingsStore, VsCodeSettingsSource};
@@ -217,10 +216,6 @@ impl Onboarding {
     fn new(workspace: &Workspace, cx: &mut App) -> Entity<Self> {
         let font_family_cache = theme::FontFamilyCache::global(cx);
 
-        let installed_agents = cx
-            .global::<SettingsStore>()
-            .get::<AllAgentServersSettings>(None)
-            .clone();
         let client = Client::global(cx);
         let status = *client.status().borrow();
         let plan = workspace.user_store().read(cx).plan();
@@ -241,17 +236,6 @@ impl Onboarding {
                 Some(Plan::ZedFree) | None => "free",
             }
         };
-        let agents_installed = basics_page::FEATURED_AGENT_IDS
-            .iter()
-            .filter(|id| installed_agents.contains_key(**id))
-            .copied()
-            .collect::<Vec<_>>();
-        telemetry::event!(
-            "Welcome Agent Setup Viewed",
-            zed_agent = zed_agent_state,
-            agents_installed = agents_installed,
-        );
-
         cx.new(|cx| {
             cx.spawn(async move |this, cx| {
                 font_family_cache.prefetch(cx).await;

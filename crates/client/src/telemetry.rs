@@ -1,14 +1,15 @@
-use crate::TelemetrySettings;
 use anyhow::Result;
 use clock::SystemClock;
 use fs::Fs;
-use futures::{Future, channel::mpsc};
-use gpui::{App, Task};
+use futures::channel::mpsc;
+use gpui::App;
 use http_client::HttpClientWithUrl;
+#[cfg(test)]
 use parking_lot::Mutex;
 #[cfg(test)]
 use regex::Regex;
-use settings::{Settings, SettingsStore};
+#[cfg(test)]
+use settings::SettingsStore;
 #[cfg(test)]
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -32,29 +33,24 @@ pub struct LoggedTelemetryEvent;
 pub struct AssistantEventData;
 
 pub struct Telemetry {
+    #[cfg(test)]
     state: Arc<Mutex<TelemetryState>>,
 }
 
+#[cfg(test)]
 struct TelemetryState {
-    settings: TelemetrySettings,
-    system_id: Option<Arc<str>>,
-    installation_id: Option<Arc<str>>,
-    session_id: Option<String>,
-    metrics_id: Option<Arc<str>>,
-    is_staff: Option<bool>,
     #[cfg(test)]
     worktrees_with_project_type_events_sent: HashSet<WorktreeId>,
 }
 
 #[cfg(test)]
-static DOTNET_PROJECT_FILES_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(global\.json|Directory\.Build\.props|.*\.(csproj|fsproj|vbproj|sln))$")
-        .unwrap()
+static DOTNET_PROJECT_FILES_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+    Regex::new(r"^(global\.json|Directory\.Build\.props|.*\.(csproj|fsproj|vbproj|sln))$").unwrap()
 });
 
 #[cfg(target_os = "macos")]
-static MACOS_VERSION_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(\s*\(Build [^)]*[0-9]\))").unwrap());
+static MACOS_VERSION_REGEX: std::sync::LazyLock<Regex> =
+    std::sync::LazyLock::new(|| Regex::new(r"(\s*\(Build [^)]*[0-9]\))").unwrap());
 
 pub fn os_name() -> String {
     #[cfg(target_os = "macos")]
@@ -138,46 +134,20 @@ impl Telemetry {
     pub fn new(
         _clock: Arc<dyn SystemClock>,
         _client: Arc<HttpClientWithUrl>,
-        cx: &mut App,
+        _cx: &mut App,
     ) -> Arc<Self> {
+        #[cfg(test)]
         let state = Arc::new(Mutex::new(TelemetryState {
-            settings: *TelemetrySettings::get_global(cx),
-            system_id: None,
-            installation_id: None,
-            session_id: None,
-            metrics_id: None,
-            is_staff: None,
             #[cfg(test)]
             worktrees_with_project_type_events_sent: HashSet::new(),
         }));
 
-        cx.observe_global::<SettingsStore>({
-            let state = state.clone();
-            move |cx| {
-                let mut state = state.lock();
-                state.settings = *TelemetrySettings::get_global(cx);
-            }
-        })
-        .detach();
-
-        let this = Arc::new(Self { state });
-
-        std::mem::forget(cx.on_app_quit({
-            let this = this.clone();
-            move |_| this.shutdown_telemetry()
-        }));
+        let this = Arc::new(Self {
+            #[cfg(test)]
+            state,
+        });
 
         this
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    fn shutdown_telemetry(self: &Arc<Self>) -> impl Future<Output = ()> + use<> {
-        Task::ready(())
-    }
-
-    #[cfg(not(any(test, feature = "test-support")))]
-    fn shutdown_telemetry(self: &Arc<Self>) -> impl Future<Output = ()> + use<> {
-        Task::ready(())
     }
 
     pub async fn subscribe_with_history(
@@ -195,37 +165,6 @@ impl Telemetry {
             queued_events: Vec::new(),
             live_events: rx,
         }
-    }
-
-    pub fn start(
-        self: &Arc<Self>,
-        system_id: Option<String>,
-        installation_id: Option<String>,
-        session_id: String,
-        _cx: &App,
-    ) {
-        let mut state = self.state.lock();
-        state.system_id = system_id.map(|id| id.into());
-        state.installation_id = installation_id.map(|id| id.into());
-        state.session_id = Some(session_id);
-    }
-
-    pub fn metrics_enabled(self: &Arc<Self>) -> bool {
-        self.state.lock().settings.metrics
-    }
-
-    pub fn set_authenticated_user_info(
-        self: &Arc<Self>,
-        metrics_id: Option<String>,
-        is_staff: bool,
-    ) {
-        let mut state = self.state.lock();
-        if !state.settings.metrics {
-            return;
-        }
-
-        state.metrics_id = metrics_id.map(Into::into);
-        state.is_staff = Some(is_staff);
     }
 
     pub fn report_assistant_event(self: &Arc<Self>, event: AssistantEventData) {
@@ -288,22 +227,6 @@ impl Telemetry {
         let mut project_types: Vec<_> = project_types.into_iter().map(String::from).collect();
         project_types.sort();
         Some(project_types)
-    }
-
-    pub fn metrics_id(self: &Arc<Self>) -> Option<Arc<str>> {
-        self.state.lock().metrics_id.clone()
-    }
-
-    pub fn system_id(self: &Arc<Self>) -> Option<Arc<str>> {
-        self.state.lock().system_id.clone()
-    }
-
-    pub fn installation_id(self: &Arc<Self>) -> Option<Arc<str>> {
-        self.state.lock().installation_id.clone()
-    }
-
-    pub fn is_staff(self: &Arc<Self>) -> Option<bool> {
-        self.state.lock().is_staff
     }
 }
 
@@ -375,16 +298,36 @@ mod tests {
         let http = FakeHttpClient::with_200_response();
         let telemetry = cx.update(|cx| Telemetry::new(clock.clone(), http, cx));
 
-        test_project_discovery_helper(telemetry.clone(), vec!["global.json"], Some(vec!["dotnet"]), 1);
+        test_project_discovery_helper(
+            telemetry.clone(),
+            vec!["global.json"],
+            Some(vec!["dotnet"]),
+            1,
+        );
         test_project_discovery_helper(
             telemetry.clone(),
             vec!["Directory.Build.props"],
             Some(vec!["dotnet"]),
             2,
         );
-        test_project_discovery_helper(telemetry.clone(), vec!["file.csproj"], Some(vec!["dotnet"]), 3);
-        test_project_discovery_helper(telemetry.clone(), vec!["file.fsproj"], Some(vec!["dotnet"]), 4);
-        test_project_discovery_helper(telemetry.clone(), vec!["file.vbproj"], Some(vec!["dotnet"]), 5);
+        test_project_discovery_helper(
+            telemetry.clone(),
+            vec!["file.csproj"],
+            Some(vec!["dotnet"]),
+            3,
+        );
+        test_project_discovery_helper(
+            telemetry.clone(),
+            vec!["file.fsproj"],
+            Some(vec!["dotnet"]),
+            4,
+        );
+        test_project_discovery_helper(
+            telemetry.clone(),
+            vec!["file.vbproj"],
+            Some(vec!["dotnet"]),
+            5,
+        );
         test_project_discovery_helper(telemetry.clone(), vec!["file.sln"], Some(vec!["dotnet"]), 6);
         test_project_discovery_helper(
             telemetry,

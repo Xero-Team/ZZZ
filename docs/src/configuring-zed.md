@@ -93,7 +93,7 @@ With this configuration:
 - **Stable** uses One Dark with vim mode off
 - **Dev** uses Rosé Pine with vim mode on
 
-Changes made in the Settings Editor apply across all channels.
+Changes made in the Settings Editor apply across your settings profile.
 
 ## Settings Deep Links
 

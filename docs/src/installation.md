@@ -67,7 +67,7 @@ Zed supports the follow macOS releases:
 | macOS 11.x    | Big Sur  | EOL 2023-09-26 | Partially Supported |
 | macOS 10.15.x | Catalina | EOL 2022-09-12 | Partially Supported |
 
-The macOS releases labelled "Partially Supported" (Big Sur and Catalina) do not support screen sharing via Zed Collaboration. These features use the [LiveKit SDK](https://livekit.io) which relies upon [ScreenCaptureKit.framework](https://developer.apple.com/documentation/screencapturekit/) only available on macOS 12 (Monterey) and newer.
+The macOS releases labelled "Partially Supported" (Big Sur and Catalina) do not support screen capture features that rely on the [LiveKit SDK](https://livekit.io). That SDK depends on [ScreenCaptureKit.framework](https://developer.apple.com/documentation/screencapturekit/), which is only available on macOS 12 (Monterey) and newer.
 
 #### Mac Hardware
 

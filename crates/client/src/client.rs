@@ -34,7 +34,9 @@ use rand::prelude::*;
 use release_channel::{AppVersion, ReleaseChannel};
 use rpc::proto::{AnyTypedEnvelope, EnvelopedMessage, PeerId, RequestMessage};
 use serde::{Deserialize, Serialize};
-use settings::{RegisterSetting, Settings, SettingsContent};
+#[cfg(test)]
+use settings::SettingsContent;
+use settings::{RegisterSetting, Settings};
 use std::{
     any::TypeId,
     convert::TryFrom,
@@ -528,21 +530,6 @@ impl<T: 'static> Drop for PendingEntitySubscription<T> {
     }
 }
 
-#[derive(Copy, Clone, Deserialize, Debug, RegisterSetting)]
-pub struct TelemetrySettings {
-    pub diagnostics: bool,
-    pub metrics: bool,
-}
-
-impl settings::Settings for TelemetrySettings {
-    fn from_settings(content: &SettingsContent) -> Self {
-        Self {
-            diagnostics: content.telemetry.as_ref().unwrap().diagnostics.unwrap(),
-            metrics: content.telemetry.as_ref().unwrap().metrics.unwrap(),
-        }
-    }
-}
-
 impl Client {
     pub fn new(
         clock: Arc<dyn SystemClock>,
@@ -720,7 +707,6 @@ impl Client {
                 }));
             }
             Status::SignedOut | Status::UpgradeRequired => {
-                self.telemetry.set_authenticated_user_info(None, false);
                 state._reconnect_task.take();
             }
             _ => {}
@@ -1281,8 +1267,6 @@ impl Client {
         let user_agent = http.user_agent().cloned();
         let credentials = credentials.clone();
         let rpc_url = self.rpc_url(http, release_channel);
-        let system_id = self.telemetry.system_id();
-        let metrics_id = self.telemetry.metrics_id();
         cx.spawn(async move |cx| {
             use HttpOrHttps::*;
 
@@ -1346,12 +1330,6 @@ impl Client {
             );
             if let Some(user_agent) = user_agent {
                 request_headers.insert(http::header::USER_AGENT, user_agent);
-            }
-            if let Some(system_id) = system_id {
-                request_headers.insert("x-zed-system-id", HeaderValue::from_str(&system_id)?);
-            }
-            if let Some(metrics_id) = metrics_id {
-                request_headers.insert("x-zed-metrics-id", HeaderValue::from_str(&metrics_id)?);
             }
 
             let (stream, _) = async_tungstenite::tokio::client_async_tls_with_connector_and_config(
@@ -1542,10 +1520,9 @@ impl Client {
         llm_token: &LlmApiToken,
         organization_id: Option<OrganizationId>,
     ) -> Result<String> {
-        let system_id = self.telemetry().system_id().map(|x| x.to_string());
         let cloud_client = self.cloud_client();
         match llm_token
-            .acquire(&cloud_client, system_id, organization_id)
+            .acquire(&cloud_client, None, organization_id)
             .await
         {
             Ok(token) => Ok(token),
@@ -1562,10 +1539,9 @@ impl Client {
         llm_token: &LlmApiToken,
         organization_id: Option<OrganizationId>,
     ) -> Result<String> {
-        let system_id = self.telemetry().system_id().map(|x| x.to_string());
         let cloud_client = self.cloud_client();
         match llm_token
-            .refresh(&cloud_client, system_id, organization_id)
+            .refresh(&cloud_client, None, organization_id)
             .await
         {
             Ok(token) => Ok(token),
@@ -1582,10 +1558,9 @@ impl Client {
         llm_token: &LlmApiToken,
         organization_id: Option<OrganizationId>,
     ) -> Result<String> {
-        let system_id = self.telemetry().system_id().map(|x| x.to_string());
         let cloud_client = self.cloud_client();
         match llm_token
-            .clear_and_refresh(&cloud_client, system_id, organization_id)
+            .clear_and_refresh(&cloud_client, None, organization_id)
             .await
         {
             Ok(token) => Ok(token),

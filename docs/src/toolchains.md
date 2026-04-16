@@ -11,9 +11,8 @@ For example, in Python projects, virtual environments define dependencies and in
 With the toolchain selector, you can pick the right virtual environment from a dropdown instead of configuring language server paths manually.
 
 You can even select different toolchains for different subprojects within your Zed project. A definition of a subproject is language-specific.
-In collaborative scenarios, only the project owner can see and modify an active toolchain.
 
-In [remote projects](./remote-development.md), you can use the toolchain selector to control the active toolchain on the SSH host. When [sharing your project](./collaboration/overview.md), the toolchain selector is not available to guests.
+In [remote projects](./remote-development.md), you can use the toolchain selector to control the active toolchain on the SSH host.
 
 ## Why do we need toolchains?
 

@@ -949,7 +949,7 @@ List of `string` values
 - Setting: `cursors`
 - Default: `true`
 
-Cursor indicators appear as small marks on the scrollbar showing where other collaborators' cursors are positioned in the file.
+Cursor indicators appear as small marks on the scrollbar showing where cursors are positioned in the file.
 
 **Options**
 
@@ -3779,16 +3779,6 @@ Examples:
 - Searching for "function" would match "function", "Function", "FUNCTION", etc.
 - Searching for "Function" would only match "Function", not "function" or "FUNCTION"
 
-## Show Call Status Icon
-
-- Description: Whether or not to show the call status icon in the status bar.
-- Setting: `show_call_status_icon`
-- Default: `true`
-
-**Options**
-
-`boolean` values
-
 ## Completions
 
 - Description: Controls how completions are processed for this language.
@@ -4025,43 +4015,6 @@ List of `integer` column numbers
 - `variables`: Custom variables for task configuration
 - `enabled`: Whether tasks are enabled
 - `prefer_lsp`: Whether to prefer LSP-provided tasks over Zed language extension ones
-
-## Telemetry
-
-- Description: Control what info is collected by Zed.
-- Setting: `telemetry`
-- Default:
-
-```json [settings]
-{
-  "telemetry": {
-    "diagnostics": true,
-    "metrics": true
-  }
-}
-```
-
-**Options**
-
-### Diagnostics
-
-- Description: Setting for sending debug-related data, such as crash reports.
-- Setting: `diagnostics`
-- Default: `true`
-
-**Options**
-
-`boolean` values
-
-### Metrics
-
-- Description: Setting for sending anonymized usage data, such what languages you're using Zed with.
-- Setting: `metrics`
-- Default: `true`
-
-**Options**
-
-`boolean` values
 
 ## Terminal
 
@@ -4800,7 +4753,6 @@ Run the {#action theme_selector::Toggle} action in the command palette to see a 
     "show_onboarding_banner": true,
     "show_user_picture": true,
     "show_user_menu": true,
-    "show_sign_in": true,
     "show_menus": false,
     "button_layout": "platform_default"
   }
@@ -4815,7 +4767,6 @@ Run the {#action theme_selector::Toggle} action in the command palette to see a 
 - `show_onboarding_banner`: Whether to show onboarding banners in the titlebar
 - `show_user_picture`: Whether to show user picture in the titlebar
 - `show_user_menu`: Whether to show the user menu button in the titlebar (the one that displays your avatar by default and contains options like Settings, Keymap, Themes, etc.)
-- `show_sign_in`: Whether to show the sign in button in the titlebar
 - `show_menus`: Whether to show the menus in the titlebar
 - `button_layout`: The layout of window control buttons in the title bar (Linux only). Can be set to `"platform_default"` to follow the system setting, `"standard"` to use Zed's built-in layout, or a custom format like `"close:minimize,maximize"`
 
@@ -5262,28 +5213,6 @@ Run the {#action theme_selector::Toggle} action in the command palette to see a 
 
 Visit [the Configuration page](../ai/configuration.md) under the AI section to learn more about all the agent-related settings.
 
-## Collaboration Panel
-
-- Description: Customizations for the collaboration panel.
-- Setting: `collaboration_panel`
-- Default:
-
-```json [settings]
-{
-  "collaboration_panel": {
-    "button": true,
-    "dock": "left",
-    "default_width": 240
-  }
-}
-```
-
-**Options**
-
-- `button`: Whether to show the collaboration panel button in the status bar
-- `dock`: Where to dock the collaboration panel. Can be `left` or `right`
-- `default_width`: Default width of the collaboration panel
-
 ## Debugger
 
 - Description: Configuration for debugger panel and settings
@@ -5417,23 +5346,6 @@ You can define these in user or project settings; project settings are merged on
     "scrollbar": {
       "show": null
     }
-  }
-}
-```
-
-## Calls
-
-- Description: Customize behavior when participating in a call
-- Setting: `calls`
-- Default:
-
-```json [settings]
-{
-  "calls": {
-    // Join calls with the microphone live by default
-    "mute_on_join": false,
-    // Share your project when you are the first to join a channel
-    "share_on_join": false
   }
 }
 ```
