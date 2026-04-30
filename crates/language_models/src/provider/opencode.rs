@@ -829,21 +829,19 @@ impl Render for ConfigurationView {
         let api_key_section = if self.should_render_editor(cx) {
             v_flex()
                 .on_action(cx.listener(Self::save_api_key))
-                .child(Label::new(
-                    "To use OpenCode models in Zed, you need an API key:",
-                ))
+                .child(Label::new("Add an OpenCode API key to enable this provider:"))
                 .child(
                     List::new()
                         .child(
                             ListBulletItem::new("")
-                                .child(Label::new("Sign in and get your key at"))
+                                .child(Label::new("Get or manage your key at"))
                                 .child(ButtonLink::new(
                                     "OpenCode Console",
                                     "https://opencode.ai/auth",
                                 )),
                         )
                         .child(ListBulletItem::new(
-                            "Paste your API key below and hit enter to start using OpenCode",
+                            "Paste your API key below and press Enter",
                         )),
                 )
                 .child(self.api_key_editor.clone())
@@ -877,7 +875,7 @@ impl Render for ConfigurationView {
 
             let subscription_toggles = v_flex()
                 .gap_1()
-                .child(Label::new("Subscriptions:").color(Color::Muted))
+                .child(Label::new("Model groups:").color(Color::Muted))
                 .child(
                     Switch::new("opencode-show-zen-models", show_zen.into())
                         .label("Show Zen models")
@@ -920,7 +918,7 @@ impl Render for ConfigurationView {
 
             let no_subscriptions_warning = if !show_zen && !show_go && !show_free {
                 Some(Banner::new().severity(Severity::Warning).child(Label::new(
-                    "No subscriptions enabled. Enable at least one subscription to use OpenCode.",
+                    "No model groups enabled. Enable at least one to use OpenCode.",
                 )))
             } else {
                 None

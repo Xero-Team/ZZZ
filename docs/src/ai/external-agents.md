@@ -251,11 +251,15 @@ This lets you see the messages being sent and received between Zed and the agent
 
 ![The debug view for ACP logs.](https://zed.dev/img/acp/acp-logs.webp)
 
-It's helpful to attach data from this view if you're opening issues about problems with external agents like Claude Agent, Codex, OpenCode, etc.
+It's helpful to attach data from this view if you're opening issues about
+problems with external agents.
 
 ## Configuration Boundaries {#configuration-boundaries}
 
-External agents run as separate processes that communicate with Zed via the [Agent Client Protocol (ACP)](https://agentclientprotocol.com). This creates important boundaries between Zed's configuration and the agent's native configuration.
+External agents run as separate processes that communicate with Zed via the
+[Agent Client Protocol (ACP)](https://agentclientprotocol.com). This creates
+important boundaries between Zed's configuration and the agent's native
+configuration.
 
 ### What Zed Forwards to External Agents
 
@@ -333,6 +337,7 @@ External agents can access MCP servers from two sources: Zed's `context_servers`
 
 For more on configuring MCP servers, see [Model Context Protocol](./mcp.md).
 
+
 ### Troubleshooting {#troubleshooting}
 
 **"I enabled MCP tools in Zed but the agent can't see them"**
@@ -351,4 +356,6 @@ External agents read their own config files, but authentication is handled separ
 
 **"Profiles don't affect my external agent"**
 
-Correct — [profiles](./agent-panel.md#profiles) only apply to Zed's first-party agent. External agents have their own tool sets and don't use Zed's profile system.
+Correct. [Profiles](./agent-panel.md#profiles) only apply to Zed's first-party
+agent. External agents have their own tool sets and don't use Zed's profile
+system.
