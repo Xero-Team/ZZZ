@@ -2955,7 +2955,7 @@ impl ReferenceMultibuffer {
                     })
                     .collect::<Vec<_>>();
 
-            new_ranges.sort_by_key(|nr| nr.context.start);
+            new_ranges.sort_by_key(|range| range.context.start);
 
             self.set_excerpts(
                 path.unwrap(),
@@ -3899,7 +3899,7 @@ fn mutate_excerpt_ranges(
     }
 
     existing_ranges.extend(ranges_to_add);
-    existing_ranges.sort_by_key(|r| r.start);
+    existing_ranges.sort_by_key(|range| range.start);
 }
 
 fn check_multibuffer(

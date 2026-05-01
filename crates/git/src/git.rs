@@ -11,6 +11,8 @@ pub use crate::remote::*;
 use anyhow::{Context as _, Result};
 pub use git2 as libgit;
 use gpui::{Action, actions};
+#[cfg(any(test, feature = "test-support"))]
+use rand::RngExt;
 pub use repository::RemoteCommandOutput;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

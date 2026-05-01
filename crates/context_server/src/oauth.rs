@@ -23,7 +23,7 @@ use futures::AsyncReadExt as _;
 use futures::channel::mpsc;
 use http_client::{AsyncBody, HttpClient, Request};
 use parking_lot::Mutex as SyncMutex;
-use rand::Rng as _;
+use rand::RngExt as _;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 

@@ -2451,7 +2451,7 @@ impl EditPredictionStore {
                     .collect()
             });
 
-            candidates.sort_by_key(|c| std::cmp::Reverse(c.1));
+            candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.1));
 
             for (path, _) in candidates {
                 let candidate_buffer = project

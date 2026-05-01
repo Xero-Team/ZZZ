@@ -2,7 +2,8 @@ pub mod events;
 pub mod extensions;
 
 use crate::Result;
-use axum::{headers::Header, http::HeaderName};
+use axum::http::HeaderName;
+use axum_extra::headers::{Error, Header};
 use std::sync::OnceLock;
 
 pub use extensions::fetch_extensions_from_blob_store_periodically;
@@ -15,16 +16,16 @@ impl Header for CloudflareIpCountryHeader {
         CLOUDFLARE_IP_COUNTRY_HEADER.get_or_init(|| HeaderName::from_static("cf-ipcountry"))
     }
 
-    fn decode<'i, I>(values: &mut I) -> Result<Self, axum::headers::Error>
+    fn decode<'i, I>(values: &mut I) -> Result<Self, Error>
     where
         Self: Sized,
         I: Iterator<Item = &'i axum::http::HeaderValue>,
     {
         let country_code = values
             .next()
-            .ok_or_else(axum::headers::Error::invalid)?
+            .ok_or_else(Error::invalid)?
             .to_str()
-            .map_err(|_| axum::headers::Error::invalid())?;
+            .map_err(|_| Error::invalid())?;
 
         Ok(Self(country_code.to_string()))
     }
@@ -48,16 +49,16 @@ impl Header for SystemIdHeader {
         SYSTEM_ID_HEADER.get_or_init(|| HeaderName::from_static("x-zed-system-id"))
     }
 
-    fn decode<'i, I>(values: &mut I) -> Result<Self, axum::headers::Error>
+    fn decode<'i, I>(values: &mut I) -> Result<Self, Error>
     where
         Self: Sized,
         I: Iterator<Item = &'i axum::http::HeaderValue>,
     {
         let system_id = values
             .next()
-            .ok_or_else(axum::headers::Error::invalid)?
+            .ok_or_else(Error::invalid)?
             .to_str()
-            .map_err(|_| axum::headers::Error::invalid())?;
+            .map_err(|_| Error::invalid())?;
 
         Ok(Self(system_id.to_string()))
     }

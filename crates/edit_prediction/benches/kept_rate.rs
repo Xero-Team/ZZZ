@@ -1,4 +1,6 @@
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use std::hint::black_box;
+
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use edit_prediction::metrics::compute_kept_rate;
 
 fn repeated_function_lines(line_count: usize) -> String {

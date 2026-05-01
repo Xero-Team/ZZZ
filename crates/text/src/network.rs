@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use clock::ReplicaId;
 use collections::{BTreeMap, HashSet};
+use rand::RngExt;
 
 pub struct Network<T: Clone, R: rand::Rng> {
     inboxes: BTreeMap<ReplicaId, Vec<Envelope<T>>>,

@@ -2592,7 +2592,7 @@ mod tests {
         Point, TestAppContext, bounds, point, size,
     };
     use parking_lot::Mutex;
-    use rand::{Rng, distr, rngs::StdRng};
+    use rand::{RngExt, distr, rngs::StdRng};
     use task::{Shell, ShellBuilder};
 
     #[cfg(not(target_os = "windows"))]

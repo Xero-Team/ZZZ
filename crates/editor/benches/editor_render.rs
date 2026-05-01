@@ -4,7 +4,7 @@ use editor::{
     actions::{DeleteToPreviousWordStart, SelectAll, SplitSelectionIntoLines},
 };
 use gpui::{AppContext, Focusable as _, TestAppContext, TestDispatcher};
-use rand::{Rng as _, SeedableRng as _, rngs::StdRng};
+use rand::{RngExt, SeedableRng as _, rngs::StdRng};
 use settings::SettingsStore;
 use ui::IntoElement;
 use util::RandomCharIter;

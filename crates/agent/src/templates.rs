@@ -57,10 +57,12 @@ fn contains(
         .param(0)
         .and_then(|v| v.value().as_array())
         .ok_or_else(|| {
-            handlebars::RenderError::new("contains: missing or invalid list parameter")
+            handlebars::RenderErrorReason::Other(
+                "contains: missing or invalid list parameter".into(),
+            )
         })?;
     let query = h.param(1).map(|v| v.value()).ok_or_else(|| {
-        handlebars::RenderError::new("contains: missing or invalid query parameter")
+        handlebars::RenderErrorReason::Other("contains: missing or invalid query parameter".into())
     })?;
 
     if list.contains(query) {

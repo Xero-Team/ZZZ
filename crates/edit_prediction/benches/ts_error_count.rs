@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::{hint::black_box, sync::Arc};
 
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use edit_prediction::metrics::count_tree_sitter_errors;
 use fs::FakeFs;
 use gpui::{AppContext as _, TestAppContext};

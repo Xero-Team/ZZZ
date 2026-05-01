@@ -67,7 +67,7 @@ use project::{
     task_store::{TaskSettingsLocation, TaskStore},
     *,
 };
-use rand::{Rng as _, rngs::StdRng};
+use rand::{RngExt, rngs::StdRng};
 use serde_json::json;
 use settings::SettingsStore;
 #[cfg(not(windows))]
@@ -10520,7 +10520,7 @@ fn merge_pending_ops_snapshots(
                     t_ops.ops.push(s_op);
                 }
             }
-            t_ops.ops.sort_by_key(|op| op.id);
+            t_ops.ops.sort_by_key(|operation| operation.id);
         } else {
             target.push(s_ops);
         }

@@ -665,7 +665,7 @@ impl Client {
                     #[cfg(any(test, feature = "test-support"))]
                     let mut rng = StdRng::seed_from_u64(0);
                     #[cfg(not(any(test, feature = "test-support")))]
-                    let mut rng = StdRng::from_os_rng();
+                    let mut rng = StdRng::from_rng(&mut rand::rng());
 
                     let mut delay = INITIAL_RECONNECTION_DELAY;
                     loop {
@@ -1335,7 +1335,7 @@ impl Client {
             let (stream, _) = async_tungstenite::tokio::client_async_tls_with_connector_and_config(
                 request,
                 stream,
-                Some(Arc::new(http_client_tls::tls_config()).into()),
+                Some(Arc::new(http_client_tls::tls_config()?).into()),
                 None,
             )
             .await?;

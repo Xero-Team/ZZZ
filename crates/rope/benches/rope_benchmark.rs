@@ -1,8 +1,7 @@
+use std::hint::black_box;
 use std::ops::Range;
 
-use criterion::{
-    BatchSize, BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main,
-};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rand::prelude::*;
 use rand::rngs::StdRng;
 use rope::{Point, Rope};

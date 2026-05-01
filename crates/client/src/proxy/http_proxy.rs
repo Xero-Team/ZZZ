@@ -92,7 +92,7 @@ where
     let proxy_domain = rustls_pki_types::ServerName::try_from(proxy_domain)
         .context("Address resolution failed")?
         .to_owned();
-    let tls_connector = TlsConnector::from(std::sync::Arc::new(http_client_tls::tls_config()));
+    let tls_connector = TlsConnector::from(std::sync::Arc::new(http_client_tls::tls_config()?));
     let stream = tls_connector.connect(proxy_domain, stream).await?;
     http_connect(stream, target, auth).await
 }

@@ -12764,7 +12764,7 @@ mod tests {
     use gpui::{TestAppContext, VisualTestContext};
     use language::{Buffer, language_settings, tree_sitter_python};
     use log::info;
-    use rand::{RngCore, rngs::StdRng};
+    use rand::{Rng, rngs::StdRng};
     use std::num::NonZeroU32;
     use util::test::sample_text;
 

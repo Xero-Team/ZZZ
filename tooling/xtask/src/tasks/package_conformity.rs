@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{Context as _, Result};
-use cargo_toml::{Dependency, Manifest};
+use cargo_toml::{Dependency, Inheritable, Manifest};
 use clap::Parser;
 
 use crate::workspace::load_workspace;
@@ -25,7 +25,7 @@ pub fn run_package_conformity(_args: PackageConformityArgs) -> Result<()> {
 
         let cargo_toml = read_cargo_toml(&package.manifest_path)?;
 
-        let is_using_workspace_lints = cargo_toml.lints.is_some_and(|lints| lints.workspace);
+        let is_using_workspace_lints = matches!(cargo_toml.lints, Inheritable::Inherited);
         if !is_using_workspace_lints {
             eprintln!(
                 "{package:?} is not using workspace lints",

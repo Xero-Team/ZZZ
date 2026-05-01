@@ -3995,7 +3995,7 @@ mod tests {
                     let block_count = rng.random_range(1..=4.min(block_map.custom_blocks.len()));
                     let block_ids_to_remove = block_map
                         .custom_blocks
-                        .choose_multiple(&mut rng, block_count)
+                        .sample(&mut rng, block_count)
                         .map(|block| block.id)
                         .collect::<HashSet<_>>();
 
@@ -4398,7 +4398,9 @@ mod tests {
                 let mut expected_longest_rows_in_range = vec![];
                 let mut longest_line_len_in_range = 0;
 
-                for (row, line) in (start_row as u32..).zip(&expected_lines[start_row..end_row]) {
+                for (row, line) in
+                    ((start_row as u32)..).zip(expected_lines[start_row..end_row].iter())
+                {
                     let line_char_count = line.chars().count() as isize;
                     match line_char_count.cmp(&longest_line_len_in_range) {
                         Ordering::Less => {}

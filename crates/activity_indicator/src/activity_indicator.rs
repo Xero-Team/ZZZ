@@ -133,8 +133,8 @@ impl ActivityIndicator {
                             };
                             let status = match &status_update.status {
                                 Some(proto::status_update::Status::Binary(binary_status)) => {
-                                    if let Some(binary_status) =
-                                        proto::ServerBinaryStatus::from_i32(*binary_status)
+                                    if let Ok(binary_status) =
+                                        proto::ServerBinaryStatus::try_from(*binary_status)
                                     {
                                         let binary_status = match binary_status {
                                             proto::ServerBinaryStatus::None => BinaryStatus::None,
@@ -167,8 +167,8 @@ impl ActivityIndicator {
                                     }
                                 }
                                 Some(proto::status_update::Status::Health(health_status)) => {
-                                    if let Some(health) =
-                                        proto::ServerHealth::from_i32(*health_status)
+                                    if let Ok(health) =
+                                        proto::ServerHealth::try_from(*health_status)
                                     {
                                         let health = match health {
                                             proto::ServerHealth::Ok => ServerHealth::Ok,

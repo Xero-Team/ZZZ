@@ -3,7 +3,7 @@ use editor::MultiBuffer;
 use gpui::TestDispatcher;
 use itertools::Itertools;
 use multi_buffer::MultiBufferOffset;
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{RngExt, SeedableRng, rngs::StdRng};
 use std::num::NonZeroU32;
 use text::Bias;
 use util::RandomCharIter;

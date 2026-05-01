@@ -63,7 +63,7 @@ impl LiveKitClient {
         let client = self.http.clone();
         let token = token::create(&self.key, &self.secret, None, grant);
         let url = format!("{}/{}", self.url, path);
-        log::info!("Request {}: {:?}", url, body);
+        log::info!("Request {}", url);
         async move {
             let token = token?;
             let response = client

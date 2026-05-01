@@ -1101,7 +1101,7 @@ mod tests {
                 .as_str(),
         );
 
-        let mut newline_ixs = (0..buffer_initial_text_len).choose_multiple(&mut rng, 5);
+        let mut newline_ixs = (0..buffer_initial_text_len).sample(&mut rng, 5);
         newline_ixs.sort_unstable();
         for newline_ix in newline_ixs.into_iter().rev() {
             let newline_ix = buffer_initial_text.clip_offset(newline_ix, Bias::Right);

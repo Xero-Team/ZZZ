@@ -2583,7 +2583,7 @@ pub mod tests {
     use lsp::LanguageServerId;
 
     use futures::stream::StreamExt;
-    use rand::{Rng, prelude::*};
+    use rand::{RngExt, prelude::*};
     use settings::{SettingsContent, SettingsStore};
     use std::{env, sync::Arc};
     use text::PointUtf16;

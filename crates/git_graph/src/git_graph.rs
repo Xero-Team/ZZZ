@@ -826,8 +826,28 @@ pub fn init(cx: &mut App) {
                                     );
                                 })
                                 .ok();
-                        },
-                    )
+                        }
+                    })
+                    .on_action({
+                        move |_: &git::FileHistory, window, cx| {
+                            workspace
+                                .update(cx, |workspace, cx| {
+                                    let project = workspace.project();
+                                    let git_store = project.read(cx).git_store().clone();
+
+                                    let Some((repo_id, log_source)) =
+                                        resolve_file_history_target(workspace, window, cx)
+                                    else {
+                                        return;
+                                    };
+
+                                    open_or_reuse_graph(
+                                        workspace, repo_id, git_store, log_source, None, window, cx,
+                                    );
+                                })
+                                .ok();
+                        }
+                    })
                 },
             )
         });

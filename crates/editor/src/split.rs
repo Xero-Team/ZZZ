@@ -2383,8 +2383,7 @@ mod tests {
                     let excerpts = snapshot.excerpts().collect::<Vec<_>>();
                     if !excerpts.is_empty() {
                         let count = rng.random_range(1..=excerpts.len().min(3));
-                        let chosen: Vec<_> =
-                            excerpts.choose_multiple(rng, count).cloned().collect();
+                        let chosen: Vec<_> = excerpts.sample(rng, count).cloned().collect();
                         let line_count = rng.random_range(1..5);
                         log::info!("expanding {count} excerpts by {line_count} lines");
                         editor.update(cx, |editor, cx| {

@@ -1381,7 +1381,7 @@ mod tests {
     use git::repository::{CommitSummary, Remote};
     use gpui::{AppContext, TestAppContext, VisualTestContext};
     use project::{FakeFs, Project};
-    use rand::{Rng, rngs::StdRng};
+    use rand::{RngExt, rngs::StdRng};
     use serde_json::json;
     use settings::SettingsStore;
     use util::path;

@@ -1,10 +1,11 @@
 fn main() {
     println!("cargo:rerun-if-changed=proto");
+    let protoc_path = protoc_bin_vendored::protoc_bin_path().unwrap();
+
     let mut build = prost_build::Config::new();
     build
+        .protoc_executable(protoc_path)
         .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]")
-        .type_attribute("ProjectPath", "#[derive(Hash, Eq)]")
-        .type_attribute("Anchor", "#[derive(Hash, Eq)]")
         .compile_protos(&["proto/zed.proto"], &["proto"])
         .unwrap();
 }

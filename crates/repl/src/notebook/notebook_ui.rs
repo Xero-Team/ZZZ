@@ -1537,6 +1537,7 @@ impl project::ProjectItem for NotebookItem {
                         nbformat::Notebook::V3(v3_notebook) => {
                             nbformat::upgrade_v3_notebook(v3_notebook)?
                         }
+                        _ => anyhow::bail!("Unsupported notebook format"),
                     }
                 };
 
@@ -1817,6 +1818,7 @@ impl Item for NotebookEditor {
                 Ok(nbformat::Notebook::V3(v3_notebook)) => {
                     nbformat::upgrade_v3_notebook(v3_notebook)?
                 }
+                Ok(_) => anyhow::bail!("Unsupported notebook format"),
                 Err(e) => {
                     anyhow::bail!("Failed to parse notebook: {:?}", e);
                 }

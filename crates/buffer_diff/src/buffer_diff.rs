@@ -2185,7 +2185,7 @@ mod tests {
     use super::*;
     use gpui::TestAppContext;
     use pretty_assertions::{assert_eq, assert_ne};
-    use rand::{Rng as _, rngs::StdRng};
+    use rand::{RngExt, rngs::StdRng};
     use text::{Buffer, BufferId, ReplicaId, Rope};
     use unindent::Unindent as _;
     use util::test::marked_text_ranges;

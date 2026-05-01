@@ -1411,7 +1411,7 @@ impl RegistersView {
                 })
             }
         });
-        matches.sort_by_key(|m| m.name);
+        matches.sort_by_key(|entry| entry.name);
         let delegate = RegistersViewDelegate {
             selected_index: 0,
             matches,

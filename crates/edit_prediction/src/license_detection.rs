@@ -404,7 +404,7 @@ mod tests {
     use fs::FakeFs;
     use gpui::TestAppContext;
     use project::WorktreeId;
-    use rand::Rng as _;
+    use rand::RngExt;
     use serde_json::json;
     use settings::SettingsStore;
 

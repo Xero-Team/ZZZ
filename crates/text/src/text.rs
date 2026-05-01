@@ -19,6 +19,8 @@ use locator::Locator;
 use operation_queue::OperationQueue;
 pub use patch::Patch;
 use postage::{oneshot, prelude::*};
+#[cfg(any(test, feature = "test-support"))]
+use rand::RngExt;
 
 use regex::Regex;
 pub use rope::*;
@@ -1934,12 +1936,14 @@ impl Buffer {
         assert!(!self.text().contains("\r\n"));
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     pub fn random_byte_range(&self, start_offset: usize, rng: &mut impl rand::Rng) -> Range<usize> {
         let end = self.clip_offset(rng.random_range(start_offset..=self.len()), Bias::Right);
         let start = self.clip_offset(rng.random_range(start_offset..=end), Bias::Right);
         start..end
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     pub fn get_random_edits<T>(
         &self,
         rng: &mut T,

@@ -280,7 +280,7 @@ pub fn run_split(args: &SplitArgs, inputs: &[PathBuf]) -> Result<()> {
 
     let mut rng = match args.seed {
         Some(seed) => rand::rngs::StdRng::seed_from_u64(seed),
-        None => rand::rngs::StdRng::from_os_rng(),
+        None => rand::rngs::StdRng::from_rng(&mut rand::rng()),
     };
 
     grouped_lines.shuffle(&mut rng);

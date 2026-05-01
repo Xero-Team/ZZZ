@@ -872,7 +872,7 @@ mod tests {
     #[gpui::test(iterations = 1000)]
     fn test_nth_set_bit_random(mut rng: StdRng) {
         let set_count = rng.random_range(0..=128);
-        let mut set_bits = (0..128).choose_multiple(&mut rng, set_count);
+        let mut set_bits = (0..128).sample(&mut rng, set_count);
         set_bits.sort();
         let mut n = 0;
         for ix in set_bits.iter().copied() {

@@ -2539,11 +2539,11 @@ async fn randomly_mutate_fs(
             .collect::<Vec<_>>();
         let files_to_ignore = {
             let len = rng.random_range(0..=subfiles.len());
-            subfiles.choose_multiple(rng, len)
+            subfiles.sample(rng, len)
         };
         let dirs_to_ignore = {
             let len = rng.random_range(0..subdirs.len());
-            subdirs.choose_multiple(rng, len)
+            subdirs.sample(rng, len)
         };
 
         let mut ignore_contents = String::new();

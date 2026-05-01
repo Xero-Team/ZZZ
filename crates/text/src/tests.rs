@@ -806,7 +806,7 @@ fn test_random_concurrent_edits(mut rng: StdRng) {
         .collect::<String>();
     let mut replica_ids = Vec::new();
     let mut buffers = Vec::new();
-    let mut network = Network::new(rng.clone());
+    let mut network = Network::new(StdRng::seed_from_u64(rng.random()));
 
     for i in 0..peers {
         let mut buffer = Buffer::new(

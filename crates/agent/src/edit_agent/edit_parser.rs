@@ -1046,7 +1046,7 @@ mod tests {
 
     fn parse_random_chunks(input: &str, parser: &mut EditParser, rng: &mut StdRng) -> Vec<Edit> {
         let chunk_count = rng.random_range(1..=cmp::min(input.len(), 50));
-        let mut chunk_indices = (0..input.len()).choose_multiple(rng, chunk_count);
+        let mut chunk_indices = (0..input.len()).sample(rng, chunk_count);
         chunk_indices.sort();
         chunk_indices.push(input.len());
 

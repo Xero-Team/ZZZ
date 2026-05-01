@@ -18,7 +18,7 @@ use project::{
     FakeFs,
     project_settings::{GoToDiagnosticSeverity, GoToDiagnosticSeverityFilter},
 };
-use rand::{Rng, rngs::StdRng, seq::IteratorRandom as _};
+use rand::{Rng, RngExt, rngs::StdRng, seq::IteratorRandom as _};
 use serde_json::json;
 use settings::SettingsStore;
 use std::{

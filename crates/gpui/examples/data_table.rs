@@ -8,6 +8,7 @@ use gpui::{
     prelude::*, px, rgb, size, uniform_list,
 };
 use gpui_platform::application;
+use rand::RngExt;
 
 const TOTAL_ITEMS: usize = 10000;
 const SCROLLBAR_THUMB_WIDTH: Pixels = px(8.);
@@ -40,7 +41,6 @@ pub struct Quote {
 
 impl Quote {
     pub fn random() -> Self {
-        use rand::Rng;
         let mut rng = rand::rng();
         // simulate a base price in a realistic range
         let prev_close = rng.random_range(100.0..200.0);

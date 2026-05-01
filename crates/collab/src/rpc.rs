@@ -16,19 +16,21 @@ use anyhow::{Context as _, anyhow, bail};
 use async_tungstenite::tungstenite::{
     Message as TungsteniteMessage, protocol::CloseFrame as TungsteniteCloseFrame,
 };
-use axum::headers::UserAgent;
 use axum::{
-    Extension, Router, TypedHeader,
-    body::Body,
+    Extension, Router,
     extract::{
         ConnectInfo, WebSocketUpgrade,
         ws::{CloseFrame as AxumCloseFrame, Message as AxumMessage},
     },
-    headers::{Header, HeaderName},
+    http::HeaderName,
     http::StatusCode,
     middleware,
     response::IntoResponse,
     routing::get,
+};
+use axum_extra::{
+    TypedHeader,
+    headers::{Error as HeaderError, Header, UserAgent},
 };
 use collections::{HashMap, HashSet};
 pub use connection_pool::{ConnectionPool, ZedVersion};
@@ -577,7 +579,7 @@ impl Server {
                                             peer.send(
                                                 contact_conn_id,
                                                 proto::UpdateContacts {
-                                                    contacts: vec![updated_contact.clone()],
+                                                    contacts: vec![updated_contact],
                                                     remove_contacts: Default::default(),
                                                     incoming_requests: Default::default(),
                                                     remove_incoming_requests: Default::default(),
@@ -1007,18 +1009,18 @@ impl Header for ProtocolVersion {
         ZED_PROTOCOL_VERSION.get_or_init(|| HeaderName::from_static("x-zed-protocol-version"))
     }
 
-    fn decode<'i, I>(values: &mut I) -> Result<Self, axum::headers::Error>
+    fn decode<'i, I>(values: &mut I) -> std::result::Result<Self, HeaderError>
     where
         Self: Sized,
         I: Iterator<Item = &'i axum::http::HeaderValue>,
     {
         let version = values
             .next()
-            .ok_or_else(axum::headers::Error::invalid)?
+            .ok_or_else(HeaderError::invalid)?
             .to_str()
-            .map_err(|_| axum::headers::Error::invalid())?
+            .map_err(|_| HeaderError::invalid())?
             .parse()
-            .map_err(|_| axum::headers::Error::invalid())?;
+            .map_err(|_| HeaderError::invalid())?;
         Ok(Self(version))
     }
 
@@ -1034,18 +1036,18 @@ impl Header for AppVersionHeader {
         ZED_APP_VERSION.get_or_init(|| HeaderName::from_static("x-zed-app-version"))
     }
 
-    fn decode<'i, I>(values: &mut I) -> Result<Self, axum::headers::Error>
+    fn decode<'i, I>(values: &mut I) -> std::result::Result<Self, HeaderError>
     where
         Self: Sized,
         I: Iterator<Item = &'i axum::http::HeaderValue>,
     {
         let version = values
             .next()
-            .ok_or_else(axum::headers::Error::invalid)?
+            .ok_or_else(HeaderError::invalid)?
             .to_str()
-            .map_err(|_| axum::headers::Error::invalid())?
+            .map_err(|_| HeaderError::invalid())?
             .parse()
-            .map_err(|_| axum::headers::Error::invalid())?;
+            .map_err(|_| HeaderError::invalid())?;
         Ok(Self(version))
     }
 
@@ -1063,7 +1065,7 @@ impl Header for ReleaseChannelHeader {
         ZED_RELEASE_CHANNEL.get_or_init(|| HeaderName::from_static("x-zed-release-channel"))
     }
 
-    fn decode<'i, I>(values: &mut I) -> Result<Self, axum::headers::Error>
+    fn decode<'i, I>(values: &mut I) -> std::result::Result<Self, HeaderError>
     where
         Self: Sized,
         I: Iterator<Item = &'i axum::http::HeaderValue>,
@@ -1071,9 +1073,9 @@ impl Header for ReleaseChannelHeader {
         Ok(Self(
             values
                 .next()
-                .ok_or_else(axum::headers::Error::invalid)?
+                .ok_or_else(HeaderError::invalid)?
                 .to_str()
-                .map_err(|_| axum::headers::Error::invalid())?
+                .map_err(|_| HeaderError::invalid())?
                 .to_owned(),
         ))
     }
@@ -1083,7 +1085,7 @@ impl Header for ReleaseChannelHeader {
     }
 }
 
-pub fn routes(server: Arc<Server>) -> Router<(), Body> {
+pub fn routes(server: Arc<Server>) -> Router<()> {
     Router::new()
         .route("/rpc", get(handle_websocket_request))
         .layer(
@@ -1817,7 +1819,7 @@ async fn unshare_project_internal(
         broadcast(
             Some(connection_id),
             guest_connection_ids.iter().copied(),
-            |conn_id| session.peer.send(conn_id, message.clone()),
+            |conn_id| session.peer.send(conn_id, message),
         );
         if let Some(room) = room {
             room_updated(room, &session.peer);
@@ -2044,6 +2046,7 @@ async fn update_project(
         .await
         .update_project(project_id, session.connection_id, &request.worktrees)
         .await?;
+    let request = request.clone();
     broadcast(
         Some(session.connection_id),
         guest_connection_ids.iter().copied(),
@@ -3640,10 +3643,10 @@ async fn mark_notification_as_read(
 
 fn to_axum_message(message: TungsteniteMessage) -> anyhow::Result<AxumMessage> {
     let message = match message {
-        TungsteniteMessage::Text(payload) => AxumMessage::Text(payload.as_str().to_string()),
-        TungsteniteMessage::Binary(payload) => AxumMessage::Binary(payload.into()),
-        TungsteniteMessage::Ping(payload) => AxumMessage::Ping(payload.into()),
-        TungsteniteMessage::Pong(payload) => AxumMessage::Pong(payload.into()),
+        TungsteniteMessage::Text(payload) => AxumMessage::Text(payload.as_str().to_string().into()),
+        TungsteniteMessage::Binary(payload) => AxumMessage::Binary(payload),
+        TungsteniteMessage::Ping(payload) => AxumMessage::Ping(payload),
+        TungsteniteMessage::Pong(payload) => AxumMessage::Pong(payload),
         TungsteniteMessage::Close(frame) => AxumMessage::Close(frame.map(|frame| AxumCloseFrame {
             code: frame.code.into(),
             reason: frame.reason.as_str().to_owned().into(),
@@ -3666,14 +3669,14 @@ fn to_axum_message(message: TungsteniteMessage) -> anyhow::Result<AxumMessage> {
 
 fn to_tungstenite_message(message: AxumMessage) -> TungsteniteMessage {
     match message {
-        AxumMessage::Text(payload) => TungsteniteMessage::Text(payload.into()),
-        AxumMessage::Binary(payload) => TungsteniteMessage::Binary(payload.into()),
-        AxumMessage::Ping(payload) => TungsteniteMessage::Ping(payload.into()),
-        AxumMessage::Pong(payload) => TungsteniteMessage::Pong(payload.into()),
+        AxumMessage::Text(payload) => TungsteniteMessage::Text(payload.to_string().into()),
+        AxumMessage::Binary(payload) => TungsteniteMessage::Binary(payload),
+        AxumMessage::Ping(payload) => TungsteniteMessage::Ping(payload),
+        AxumMessage::Pong(payload) => TungsteniteMessage::Pong(payload),
         AxumMessage::Close(frame) => {
             TungsteniteMessage::Close(frame.map(|frame| TungsteniteCloseFrame {
                 code: frame.code.into(),
-                reason: frame.reason.as_ref().into(),
+                reason: frame.reason.to_string().into(),
             }))
         }
     }
@@ -3863,7 +3866,7 @@ async fn update_user_contacts(user_id: UserId, session: &Session) -> Result<()> 
                     .send(
                         contact_conn_id,
                         proto::UpdateContacts {
-                            contacts: vec![updated_contact.clone()],
+                            contacts: vec![updated_contact],
                             remove_contacts: Default::default(),
                             incoming_requests: Default::default(),
                             remove_incoming_requests: Default::default(),

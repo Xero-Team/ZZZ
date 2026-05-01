@@ -55,7 +55,7 @@ impl Room {
         cx: &mut AsyncApp,
     ) -> Result<(Self, mpsc::UnboundedReceiver<RoomEvent>)> {
         let mut config = livekit::RoomOptions::default();
-        config.tls_config = livekit::TlsConfig(Some(http_client_tls::tls_config()));
+        config.tls_config = livekit::TlsConfig(Some(http_client_tls::tls_config()?));
         let (room, mut events) = Tokio::spawn(cx, async move {
             livekit::Room::connect(&url, &token, config).await
         })

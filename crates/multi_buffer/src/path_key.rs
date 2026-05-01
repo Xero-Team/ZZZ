@@ -311,7 +311,7 @@ impl MultiBuffer {
                 cursor.next();
             }
 
-            ranges.sort_by_key(|r| r.context.start);
+            ranges.sort_by_key(|range| range.context.start);
 
             self.set_excerpt_ranges_for_path(path.clone(), buffer, buffer_snapshot, ranges, cx);
         }

@@ -22,13 +22,56 @@ pub fn sql(tokens: TokenStream) -> TokenStream {
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     let error: Option<(String, usize)> = None;
 
-    let formatted_sql = sqlformat::format(&sql, &sqlformat::QueryParams::None, Default::default());
+    let formatted_sql = repair_sqlite_numbered_placeholders(sqlformat::format(
+        &sql,
+        &sqlformat::QueryParams::None,
+        &Default::default(),
+    ));
 
     if let Some((error, error_offset)) = error {
         create_error(spans, error_offset, error, &formatted_sql)
     } else {
         format!("r#\"{}\"#", &formatted_sql).parse().unwrap()
     }
+}
+
+fn repair_sqlite_numbered_placeholders(formatted_sql: String) -> String {
+    let mut repaired_sql = String::with_capacity(formatted_sql.len());
+    let mut chars = formatted_sql.chars().peekable();
+
+    while let Some(character) = chars.next() {
+        if character == '?' {
+            let mut spaces = 0;
+            while matches!(chars.peek(), Some(' ')) {
+                chars.next();
+                spaces += 1;
+            }
+
+            let mut digits = String::new();
+            while let Some(next_character) = chars.peek() {
+                if next_character.is_ascii_digit() {
+                    digits.push(*next_character);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+
+            repaired_sql.push('?');
+            if digits.is_empty() {
+                for _ in 0..spaces {
+                    repaired_sql.push(' ');
+                }
+            } else {
+                repaired_sql.push_str(&digits);
+            }
+            continue;
+        }
+
+        repaired_sql.push(character);
+    }
+
+    repaired_sql
 }
 
 fn create_error(

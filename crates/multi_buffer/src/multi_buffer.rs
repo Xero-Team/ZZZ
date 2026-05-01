@@ -30,7 +30,8 @@ use language::{
 
 #[cfg(any(test, feature = "test-support"))]
 use gpui::AppContext as _;
-
+#[cfg(any(test, feature = "test-support"))]
+use rand::RngExt;
 use rope::DimensionPair;
 use settings::Settings;
 use smallvec::SmallVec;

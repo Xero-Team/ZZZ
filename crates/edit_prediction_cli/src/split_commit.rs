@@ -25,7 +25,7 @@ fn floor_char_boundary(s: &str, index: usize) -> usize {
 use anyhow::{Context as _, Result};
 use clap::Args;
 use edit_prediction::example_spec::ExampleSpec;
-use rand::Rng;
+use rand::RngExt;
 use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 use similar::{DiffTag, TextDiff};
@@ -274,11 +274,6 @@ pub fn generate_evaluation_example_from_ordered_commit(
     seed: Option<u64>,
     sample_num: Option<usize>,
 ) -> Result<ExampleSpec> {
-    let mut rng: Box<dyn rand::RngCore> = match seed {
-        Some(seed) => Box::new(rand::rngs::StdRng::seed_from_u64(seed)),
-        None => Box::new(rand::rngs::ThreadRng::default()),
-    };
-
     // Parse and normalize the commit
     let mut patch = Patch::parse_unified_diff(commit);
 
@@ -302,7 +297,10 @@ pub fn generate_evaluation_example_from_ordered_commit(
     anyhow::ensure!(num_edits != 0, "no edits found in commit");
 
     let split = match split_point {
-        None => rng.random_range(1..=num_edits),
+        None => match seed {
+            Some(seed) => rand::rngs::StdRng::seed_from_u64(seed).random_range(1..=num_edits),
+            None => rand::rng().random_range(1..=num_edits),
+        },
         Some(SplitPoint::Fraction(f)) => {
             let v = (f * num_edits as f64).floor() as usize;
             v.min(num_edits)
@@ -319,7 +317,12 @@ pub fn generate_evaluation_example_from_ordered_commit(
     };
 
     // Imitate human edits
-    let human_edit_seed = rng.random_range(1..=10000u64);
+    let human_edit_seed = match seed {
+        Some(seed) => {
+            rand::rngs::StdRng::seed_from_u64(seed.wrapping_add(1)).random_range(1..=10000u64)
+        }
+        None => rand::rng().random_range(1..=10000u64),
+    };
     let (src_patch, tgt_patch, cursor_opt) = imitate_human_edits(
         &split_commit.source_patch,
         &split_commit.target_patch,

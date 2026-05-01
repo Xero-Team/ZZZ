@@ -924,7 +924,7 @@ mod tests {
         },
     };
     use multi_buffer::MultiBufferOffset;
-    use rand::{Rng, prelude::StdRng};
+    use rand::{RngExt, prelude::StdRng};
     use util;
 
     impl TabSnapshot {
@@ -1576,12 +1576,7 @@ mod tests {
         // First, collect all expected tab positions
         let mut all_tab_stops = Vec::new();
         let mut byte_offset = 1;
-        let mut char_offset = 1;
-        #[expect(
-            clippy::explicit_counter_loop,
-            reason = "Lint does not account for char_offset being needed after the loop"
-        )]
-        for ch in buffer_snapshot.text().chars() {
+        for (char_offset, ch) in (1..).zip(buffer_snapshot.text().chars()) {
             if ch == '\t' {
                 all_tab_stops.push(TabStop {
                     byte_offset,
@@ -1589,7 +1584,6 @@ mod tests {
                 });
             }
             byte_offset += ch.len_utf8() as u32;
-            char_offset += 1;
         }
 
         // Test with various distances

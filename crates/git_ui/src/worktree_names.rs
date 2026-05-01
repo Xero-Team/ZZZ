@@ -1,5 +1,5 @@
 use collections::HashSet;
-use rand::Rng;
+use rand::{Rng, RngExt};
 
 const ADJECTIVES: &[&str] = &[
     "able", "agate", "airy", "alpine", "amber", "ample", "aqua", "arctic", "arid", "ashen",
