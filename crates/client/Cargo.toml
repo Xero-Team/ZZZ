@@ -83,5 +83,5 @@ objc2-foundation.workspace = true
 tokio-native-tls = "0.3"
 
 [target.'cfg(not(any(target_os = "windows", target_os = "macos")))'.dependencies]
-rustls-pki-types = "1.12"
+rustls-pki-types = "1.14"
 tokio-rustls = { version = "0.26", features = ["tls12", "ring"], default-features = false }

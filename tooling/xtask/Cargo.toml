@@ -9,7 +9,7 @@ license = "GPL-3.0-or-later"
 workspace = true
 
 [dependencies]
-annotate-snippets = "0.12.1"
+annotate-snippets = "0.12.15"
 anyhow.workspace = true
 backtrace.workspace = true
 cargo_metadata.workspace = true

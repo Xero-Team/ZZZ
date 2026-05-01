@@ -58,7 +58,7 @@ scap.workspace = true
 cocoa.workspace = true
 core-foundation.workspace = true
 core-video.workspace = true
-coreaudio-rs = "0.12.1"
+coreaudio-rs = "0.14.2"
 objc.workspace = true
 
 [dev-dependencies]

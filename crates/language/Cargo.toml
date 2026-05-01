@@ -69,12 +69,12 @@ tree-sitter-python = { workspace = true, optional = true }
 tree-sitter-rust = { workspace = true, optional = true }
 tree-sitter-typescript = { workspace = true, optional = true }
 tree-sitter.workspace = true
-unicase = "2.6"
+unicase = "2.9"
 util.workspace = true
 watch.workspace = true
 zlog.workspace = true
 ztracing.workspace = true
-diffy = "0.4.2"
+diffy = "0.5.0"
 
 [dev-dependencies]
 collections = { workspace = true, features = ["test-support"] }

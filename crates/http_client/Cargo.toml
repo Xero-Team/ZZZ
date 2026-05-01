@@ -35,5 +35,6 @@ url.workspace = true
 util.workspace = true
 async-fs.workspace = true
 async-tar.workspace = true
+hex.workspace = true
 sha2.workspace = true
 tempfile.workspace = true

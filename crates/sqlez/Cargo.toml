@@ -18,6 +18,6 @@ log.workspace = true
 parking_lot.workspace = true
 pollster.workspace = true
 sqlformat.workspace = true
-thread_local = "1.1.4"
+thread_local = "1.1.9"
 util.workspace = true
 uuid.workspace = true
