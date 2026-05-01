@@ -18,7 +18,6 @@ use anyhow::{Result, anyhow};
 #[cfg(feature = "audio")]
 use audio::{Audio, Sound};
 use buffer_diff::BufferDiff;
-use client::zed_urls;
 use collections::{HashMap, HashSet, IndexMap};
 use editor::scroll::Autoscroll;
 use editor::{
@@ -687,6 +686,7 @@ impl ConversationView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let root_session_id = resume_session_id.clone();
         let agent_server_store = project.read(cx).agent_server_store().clone();
         let subscriptions = vec![
             cx.observe_global_in::<SettingsStore>(window, Self::agent_ui_font_size_changed),
@@ -725,7 +725,7 @@ impl ConversationView {
             thread_store,
             prompt_store,
             thread_id,
-            root_session_id: resume_session_id.clone(),
+            root_session_id,
             server_state: Self::initial_state(
                 agent.clone(),
                 connection_store,

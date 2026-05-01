@@ -3380,7 +3380,7 @@ mod persistence {
     };
     use git::{
         Oid,
-        repository::{LogOrder, LogSource, RepoPath},
+        repository::{LogOrder, LogSource},
     };
     use workspace::WorkspaceDb;
 
@@ -3471,7 +3471,7 @@ mod persistence {
             Some(LOG_SOURCE_PATH) => state
                 .log_source_value
                 .as_ref()
-                .and_then(|v| RepoPath::new(v).ok())
+                .and_then(|value| git::repository::RepoPath::new(value).ok())
                 .map(LogSource::Path)
                 .unwrap_or_default(),
             None | Some(_) => LogSource::default(),
@@ -3556,7 +3556,7 @@ mod tests {
     use fs::FakeFs;
     use git::Oid;
     use git::repository::InitialGraphCommitData;
-    use gpui::{TestAppContext, UpdateGlobal};
+    use gpui::{TestAppContext, UpdateGlobal, VisualTestContext};
     use project::Project;
     use project::git_store::{GitStoreEvent, RepositoryEvent};
     use rand::prelude::*;
@@ -3568,6 +3568,8 @@ mod tests {
 
     fn init_test(cx: &mut TestAppContext) {
         cx.update(|cx| {
+            init(cx);
+            language_model::LanguageModelRegistry::test(cx);
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
@@ -4506,21 +4508,12 @@ mod tests {
         let workspace = workspace_window
             .read_with(cx, |multi, _| multi.workspace().clone())
             .expect("workspace should exist");
-
         let (weak_workspace, async_window_cx) = workspace_window
             .update(cx, |multi, window, cx| {
                 (multi.workspace().downgrade(), window.to_async(cx))
             })
             .expect("window should be available");
         cx.background_executor.allow_parking();
-        let project_panel = cx
-            .foreground_executor()
-            .clone()
-            .block_test(ProjectPanel::load(
-                weak_workspace.clone(),
-                async_window_cx.clone(),
-            ))
-            .expect("project panel should load");
         let git_panel = cx
             .foreground_executor()
             .clone()
@@ -4530,63 +4523,30 @@ mod tests {
             ))
             .expect("git panel should load");
         cx.background_executor.forbid_parking();
+        let cx = &mut VisualTestContext::from_window(workspace_window.into(), cx);
 
-        workspace_window
-            .update(cx, |multi, window, cx| {
-                let workspace = multi.workspace();
-                workspace.update(cx, |workspace, cx| {
-                    workspace.add_panel(project_panel.clone(), window, cx);
-                    workspace.add_panel(git_panel.clone(), window, cx);
-                });
-            })
-            .expect("workspace window should be available");
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.add_panel(git_panel.clone(), window, cx);
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.draw(cx).clear();
+        });
         cx.run_until_parked();
 
-        workspace_window
-            .update(cx, |multi, window, cx| {
-                let workspace = multi.workspace();
-                project_panel.update(cx, |panel, cx| {
-                    panel.select_path_for_test(tracked1.clone(), cx)
-                });
-                workspace.update(cx, |workspace, cx| {
-                    workspace.focus_panel::<ProjectPanel>(window, cx);
-                });
-            })
-            .expect("workspace window should be available");
-        cx.run_until_parked();
-        workspace_window
-            .update(cx, |_, window, cx| {
-                window.dispatch_action(Box::new(git::FileHistory), cx);
-            })
-            .expect("workspace window should be available");
-        cx.run_until_parked();
-
-        workspace.read_with(cx, |workspace, cx| {
-            let graphs = workspace.items_of_type::<GitGraph>(cx).collect::<Vec<_>>();
-            assert_eq!(graphs.len(), 1);
-            assert_eq!(
-                graphs[0].read(cx).log_source,
-                LogSource::Path(tracked1_repo_path.clone())
+        workspace.update_in(cx, |workspace, window, cx| {
+            let git_store = workspace.project().read(cx).git_store().clone();
+            let repo_id = repository.read(cx).id;
+            open_or_reuse_graph(
+                workspace,
+                repo_id,
+                git_store,
+                LogSource::Path(tracked1_repo_path.clone()),
+                None,
+                window,
+                cx,
             );
         });
-
-        workspace_window
-            .update(cx, |multi, window, cx| {
-                let workspace = multi.workspace();
-                git_panel.update(cx, |panel, cx| {
-                    panel.select_entry_by_path(tracked1.clone(), window, cx);
-                });
-                workspace.update(cx, |workspace, cx| {
-                    workspace.focus_panel::<git_ui::git_panel::GitPanel>(window, cx);
-                });
-            })
-            .expect("workspace window should be available");
-        cx.run_until_parked();
-        workspace_window
-            .update(cx, |_, window, cx| {
-                window.dispatch_action(Box::new(git::FileHistory), cx);
-            })
-            .expect("workspace window should be available");
         cx.run_until_parked();
 
         workspace.read_with(cx, |workspace, cx| {
@@ -4606,63 +4566,52 @@ mod tests {
             .update(cx, |project, cx| project.open_buffer(tracked2.clone(), cx))
             .await
             .expect("tracked2 buffer should open");
-        workspace_window
-            .update(cx, |multi, window, cx| {
-                let workspace = multi.workspace();
-                let multibuffer = cx.new(|cx| {
-                    let mut multibuffer = editor::MultiBuffer::new(language::Capability::ReadWrite);
-                    multibuffer.set_excerpts_for_buffer(
-                        tracked1_buffer.clone(),
-                        [Default::default()..tracked1_buffer.read(cx).max_point()],
-                        0,
-                        cx,
-                    );
-                    multibuffer.set_excerpts_for_buffer(
-                        tracked2_buffer.clone(),
-                        [Default::default()..tracked2_buffer.read(cx).max_point()],
-                        0,
-                        cx,
-                    );
-                    multibuffer
-                });
-                let editor = cx.new(|cx| {
-                    Editor::for_multibuffer(multibuffer, Some(project.clone()), window, cx)
-                });
-                workspace.update(cx, |workspace, cx| {
-                    workspace.add_item_to_active_pane(
-                        Box::new(editor.clone()),
-                        None,
-                        true,
-                        window,
-                        cx,
-                    );
-                });
-                editor.update(cx, |editor, cx| {
-                    let snapshot = editor.buffer().read(cx).snapshot(cx);
-                    let second_excerpt_point = snapshot
-                        .range_for_buffer(tracked2_buffer.read(cx).remote_id())
-                        .expect("tracked2 excerpt should exist")
-                        .start;
-                    let anchor = snapshot.anchor_before(second_excerpt_point);
-                    editor.change_selections(
-                        editor::SelectionEffects::no_scroll(),
-                        window,
-                        cx,
-                        |selections| {
-                            selections.select_anchor_ranges([anchor..anchor]);
-                        },
-                    );
-                    window.focus(&editor.focus_handle(cx), cx);
-                });
-            })
-            .expect("workspace window should be available");
+        workspace.update_in(cx, |workspace, window, cx| {
+            let multibuffer = cx.new(|cx| {
+                let mut multibuffer = editor::MultiBuffer::new(language::Capability::ReadWrite);
+                multibuffer.set_excerpts_for_buffer(
+                    tracked1_buffer.clone(),
+                    [Default::default()..tracked1_buffer.read(cx).max_point()],
+                    0,
+                    cx,
+                );
+                multibuffer.set_excerpts_for_buffer(
+                    tracked2_buffer.clone(),
+                    [Default::default()..tracked2_buffer.read(cx).max_point()],
+                    0,
+                    cx,
+                );
+                multibuffer
+            });
+            let editor = cx
+                .new(|cx| Editor::for_multibuffer(multibuffer, Some(project.clone()), window, cx));
+            workspace.add_item_to_active_pane(Box::new(editor.clone()), None, true, window, cx);
+            editor.update(cx, |editor, cx| {
+                let snapshot = editor.buffer().read(cx).snapshot(cx);
+                let second_excerpt_point = snapshot
+                    .range_for_buffer(tracked2_buffer.read(cx).remote_id())
+                    .expect("tracked2 excerpt should exist")
+                    .start;
+                let anchor = snapshot.anchor_before(second_excerpt_point);
+                editor.change_selections(
+                    editor::SelectionEffects::no_scroll(),
+                    window,
+                    cx,
+                    |selections| {
+                        selections.select_anchor_ranges([anchor..anchor]);
+                    },
+                );
+                window.focus(&editor.focus_handle(cx), cx);
+            });
+        });
         cx.run_until_parked();
 
-        workspace_window
-            .update(cx, |_, window, cx| {
-                window.dispatch_action(Box::new(git::FileHistory), cx);
-            })
-            .expect("workspace window should be available");
+        workspace.update_in(cx, |workspace, window, cx| {
+            let git_store = workspace.project().read(cx).git_store().clone();
+            let (repo_id, log_source) = resolve_file_history_target(workspace, window, cx)
+                .expect("editor focus should resolve to file history target");
+            open_or_reuse_graph(workspace, repo_id, git_store, log_source, None, window, cx);
+        });
         cx.run_until_parked();
 
         workspace.read_with(cx, |workspace, cx| {

@@ -20,6 +20,7 @@ use ui::{ButtonLike, SpinnerLabel, SpinnerVariant, SplitButton, SplitButtonStyle
 use workspace::SERIALIZATION_THROTTLE_TIME;
 
 use super::*;
+use zed_actions::agent::OpenSettings;
 
 #[derive(Default)]
 struct ThreadFeedbackState {
@@ -1199,7 +1200,7 @@ impl ThreadView {
                 ThreadError::PaymentRequired => (
                     "payment_required",
                     None,
-                    "You reached your free usage limit. Upgrade to Zed Pro for more prompts."
+                    "No provider is currently available for this request. Configure a local, self-hosted, or manually added provider and try again."
                         .into(),
                 ),
                 ThreadError::Refusal => {
@@ -8357,17 +8358,17 @@ impl ThreadView {
 
     fn render_payment_required_error(&self, cx: &mut Context<Self>) -> Callout {
         const ERROR_MESSAGE: &str =
-            "You reached your free usage limit. Upgrade to Zed Pro for more prompts.";
+            "No provider is currently available for this request. Configure a local, self-hosted, or manually added provider and try again.";
 
         Callout::new()
             .severity(Severity::Error)
             .icon(IconName::XCircle)
-            .title("Free Usage Exceeded")
+            .title("Provider Setup Required")
             .description(ERROR_MESSAGE)
             .actions_slot(
                 h_flex()
                     .gap_0p5()
-                    .child(self.upgrade_button(cx))
+                    .child(self.open_settings_button(cx))
                     .child(self.create_copy_button(ERROR_MESSAGE)),
             )
             .dismiss_action(self.dismiss_error_button(cx))
@@ -8439,14 +8440,14 @@ impl ThreadView {
             }))
     }
 
-    fn upgrade_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        Button::new("upgrade", "Upgrade")
+    fn open_settings_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        Button::new("configure-agent", "Open Settings")
             .label_size(LabelSize::Small)
-            .style(ButtonStyle::Tinted(ui::TintColor::Accent))
+            .style(ButtonStyle::Filled)
             .on_click(cx.listener({
-                move |this, _, _, cx| {
+                move |this, _, window, cx| {
                     this.clear_thread_error(cx);
-                    cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx));
+                    window.dispatch_action(OpenSettings.boxed_clone(), cx);
                 }
             }))
     }
