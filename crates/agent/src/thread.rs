@@ -2422,10 +2422,9 @@ impl Thread {
                                 .collect();
                             (false, output)
                         } else {
-                            let output = anyhow::anyhow!(
+                            let output = AgentToolOutput::from_error(
                                 "Attempted to read an image, but this model doesn't support it.",
-                            )
-                            .into();
+                            );
                             (true, output)
                         }
                     } else {
@@ -3398,6 +3397,23 @@ pub struct Erased<T>(T);
 pub struct AgentToolOutput {
     pub llm_output: Vec<LanguageModelToolResultContent>,
     pub raw_output: serde_json::Value,
+}
+
+impl AgentToolOutput {
+    pub fn from_error(message: impl Into<String>) -> Self {
+        let message = message.into();
+        let llm_output = vec![LanguageModelToolResultContent::Text(Arc::from(
+            message.as_str(),
+        ))];
+        let raw_output = serde_json::to_value(&llm_output).unwrap_or_else(|e| {
+            log::error!("Failed to serialize tool output: {e}");
+            serde_json::Value::Null
+        });
+        Self {
+            raw_output,
+            llm_output,
+        }
+    }
 }
 
 impl From<anyhow::Error> for AgentToolOutput {
