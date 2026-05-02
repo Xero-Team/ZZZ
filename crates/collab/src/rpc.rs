@@ -2076,6 +2076,7 @@ async fn update_worktree(
         .update_worktree(&request, session.connection_id)
         .await?;
 
+    let request = request.clone();
     broadcast(
         Some(session.connection_id),
         guest_connection_ids.iter().copied(),
@@ -2130,7 +2131,7 @@ async fn remove_repository(
         |connection_id| {
             session
                 .peer
-                .forward_send(session.connection_id, connection_id, request.clone())
+                .forward_send(session.connection_id, connection_id, request)
         },
     );
     response.send(proto::Ack {})?;

@@ -14,10 +14,15 @@ mod linux;
 mod playback;
 
 use crate::{ConnectionQuality, LocalTrack, Participant, RemoteTrack, RoomEvent, TrackPublication};
-pub use livekit::SessionStats;
 pub use livekit::webrtc::stats::RtcStats;
 pub use playback::AudioStream;
 pub(crate) use playback::{RemoteVideoFrame, play_remote_video_track};
+
+#[derive(Clone, Debug, Default)]
+pub struct SessionStats {
+    pub publisher_stats: Vec<RtcStats>,
+    pub subscriber_stats: Vec<RtcStats>,
+}
 
 #[derive(Clone, Debug)]
 pub struct RemoteVideoTrack(livekit::track::RemoteVideoTrack);
@@ -38,7 +43,7 @@ pub struct LocalTrackPublication(livekit::publication::LocalTrackPublication);
 pub struct LocalParticipant(livekit::participant::LocalParticipant);
 
 pub struct Room {
-    room: livekit::Room,
+    room: Arc<livekit::Room>,
     _task: Task<()>,
     playback: playback::AudioStack,
 }
@@ -54,12 +59,12 @@ impl Room {
         token: String,
         cx: &mut AsyncApp,
     ) -> Result<(Self, mpsc::UnboundedReceiver<RoomEvent>)> {
-        let mut config = livekit::RoomOptions::default();
-        config.tls_config = livekit::TlsConfig(Some(http_client_tls::tls_config()?));
+        let config = livekit::RoomOptions::default();
         let (room, mut events) = Tokio::spawn(cx, async move {
             livekit::Room::connect(&url, &token, config).await
         })
         .await??;
+        let room = Arc::new(room);
 
         let (mut tx, rx) = mpsc::unbounded();
         let task = cx.background_executor().spawn(async move {
@@ -147,18 +152,26 @@ impl Room {
             .play_remote_audio_track(&track.0, output_audio_device))
     }
 
-    pub async fn get_stats(&self) -> Result<livekit::SessionStats> {
-        self.room.get_stats().await.map_err(anyhow::Error::from)
+    pub async fn get_stats(&self) -> Result<SessionStats> {
+        let stats = self.room.get_stats().await.map_err(anyhow::Error::from)?;
+        Ok(SessionStats {
+            publisher_stats: stats.publisher_stats,
+            subscriber_stats: stats.subscriber_stats,
+        })
     }
 
     /// Returns a `Task` that fetches room stats on the Tokio runtime.
     ///
     /// LiveKit's SDK is Tokio-based, so the stats fetch must run within
     /// a Tokio context rather than on GPUI's smol-based background executor.
-    pub fn stats_task(&self, cx: &impl gpui::AppContext) -> Task<Result<livekit::SessionStats>> {
+    pub fn stats_task(&self, cx: &impl gpui::AppContext) -> Task<Result<SessionStats>> {
         let inner = self.room.clone();
         Tokio::spawn_result(cx, async move {
-            inner.get_stats().await.map_err(anyhow::Error::from)
+            let stats = inner.get_stats().await.map_err(anyhow::Error::from)?;
+            Ok(SessionStats {
+                publisher_stats: stats.publisher_stats,
+                subscriber_stats: stats.subscriber_stats,
+            })
         })
     }
 }

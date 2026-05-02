@@ -548,7 +548,7 @@ impl Room {
         }
     }
 
-    pub fn get_stats(&self, cx: &App) -> Task<Option<livekit::SessionStats>> {
+    pub fn get_stats(&self, cx: &App) -> Task<Option<livekit_client::SessionStats>> {
         match self.live_kit.as_ref() {
             Some(lk) => {
                 let task = lk.room.stats_task(cx);

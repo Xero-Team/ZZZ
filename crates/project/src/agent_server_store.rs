@@ -1112,11 +1112,11 @@ fn versioned_archive_cache_dir(
 
     let mut version_hasher = Sha256::new();
     version_hasher.update(version.as_bytes());
-    let version_hash = format!("{:x}", version_hasher.finalize());
+    let version_hash = hex::encode(version_hasher.finalize());
 
     let mut url_hasher = Sha256::new();
     url_hasher.update(archive_url.as_bytes());
-    let url_hash = format!("{:x}", url_hasher.finalize());
+    let url_hash = hex::encode(url_hasher.finalize());
 
     base_dir.join(format!(
         "v_{sanitized_version}_{}_{}",

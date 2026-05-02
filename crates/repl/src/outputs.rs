@@ -35,9 +35,10 @@
 
 use editor::{Editor, MultiBuffer};
 use gpui::{AnyElement, ClipboardItem, Entity, EventEmitter, Render, WeakEntity};
+use jupyter_protocol::media::{Media as MimeBundle, MediaType as MimeType};
 use language::Buffer;
 use menu;
-use runtimelib::{ExecutionState, JupyterMessage, JupyterMessageContent, MimeBundle, MimeType};
+use runtimelib::{ExecutionState, JupyterMessage, JupyterMessageContent};
 use ui::{CommonAnimationExt, CopyButton, IconButton, Tooltip, prelude::*};
 
 mod image;
@@ -846,9 +847,10 @@ impl Render for ExecutionView {
 mod tests {
     use super::*;
     use gpui::TestAppContext;
+    use jupyter_protocol::media::MediaType as MimeType;
     use runtimelib::{
         ClearOutput, ErrorOutput, ExecutionState, InputRequest, JupyterMessage,
-        JupyterMessageContent, MimeType, Status, Stdio, StreamContent,
+        JupyterMessageContent, Status, Stdio, StreamContent,
     };
     use settings::SettingsStore;
     use std::path::Path;

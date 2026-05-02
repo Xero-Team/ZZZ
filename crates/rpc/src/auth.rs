@@ -2,9 +2,9 @@ use anyhow::{Context as _, Result};
 use base64::prelude::*;
 use rand::prelude::*;
 use rsa::pkcs1::{DecodeRsaPublicKey, EncodeRsaPublicKey};
+use rsa::sha2::Sha256;
 use rsa::traits::PaddingScheme;
 use rsa::{Oaep, Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
-use sha2::Sha256;
 use std::convert::TryFrom;
 
 fn oaep_sha256_padding() -> impl PaddingScheme {

@@ -512,11 +512,8 @@ pub(crate) async fn capture_local_video_track(
             let track_source = track_source.clone();
             Box::new(move |frame| {
                 if let Some(buffer) = video_frame_buffer_to_webrtc(frame) {
-                    track_source.capture_frame(&VideoFrame {
-                        rotation: VideoRotation::VideoRotation0,
-                        timestamp_us: 0,
-                        buffer,
-                    });
+                    track_source
+                        .capture_frame(&VideoFrame::new(VideoRotation::VideoRotation0, buffer));
                 }
             })
         })

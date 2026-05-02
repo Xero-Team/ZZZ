@@ -97,11 +97,7 @@ pub(crate) async fn start_wayland_desktop_capture(
         let mut video_source: Option<NativeVideoSource> = None;
         let mut current_width: u32 = 0;
         let mut current_height: u32 = 0;
-        let mut video_frame = VideoFrame {
-            rotation: VideoRotation::VideoRotation0,
-            buffer: NV12Buffer::new(1, 1),
-            timestamp_us: 0,
-        };
+        let mut video_frame = VideoFrame::new(VideoRotation::VideoRotation0, NV12Buffer::new(1, 1));
 
         move |result: Result<DesktopFrame, CaptureError>| {
             let frame = match result {

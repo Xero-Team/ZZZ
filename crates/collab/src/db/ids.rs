@@ -61,12 +61,6 @@ macro_rules! id_type {
                 })?))
             }
         }
-
-        impl sea_orm::sea_query::Nullable for $name {
-            fn null() -> Value {
-                Value::Int(None)
-            }
-        }
     };
 }
 
@@ -110,12 +104,6 @@ impl sea_orm::TryFromU64 for SharedThreadId {
         Err(DbErr::ConvertFromU64(
             "SharedThreadId uses UUID and cannot be converted from u64",
         ))
-    }
-}
-
-impl sea_orm::sea_query::Nullable for SharedThreadId {
-    fn null() -> Value {
-        Value::Uuid(None)
     }
 }
 
