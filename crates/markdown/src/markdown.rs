@@ -2676,9 +2676,8 @@ impl MarkdownElementBuilder {
             return;
         }
         let checked = trimmed != "[ ]";
-
-        let leading_ws = text.len() - text.trim_start().len();
-        let marker_rendered = leading_ws..leading_ws + trimmed.len();
+        let leading_whitespace = text.len() - text.trim_start().len();
+        let marker_rendered = leading_whitespace..leading_whitespace + trimmed.len();
         let marker_source = self
             .source_range_for_rendered(&marker_rendered)
             .expect("pending checkbox text must have source mappings");
@@ -2884,15 +2883,16 @@ fn source_range_for_rendered(
 }
 
 fn source_index_for_rendered(mappings: &[SourceMapping], rendered_index: usize) -> Option<usize> {
-    let mut last: Option<&SourceMapping> = None;
+    let mut last_mapping = None;
     for mapping in mappings {
         if mapping.rendered_index <= rendered_index {
-            last = Some(mapping);
+            last_mapping = Some(mapping);
         } else {
             break;
         }
     }
-    last.map(|m| m.source_index + (rendered_index - m.rendered_index))
+
+    last_mapping.map(|mapping| mapping.source_index + (rendered_index - mapping.rendered_index))
 }
 
 pub struct RenderedMarkdown {
@@ -3476,8 +3476,8 @@ mod tests {
 
     #[test]
     fn test_table_checkbox_marker_source_range() {
-        let md = "| Done |\n|------|\n|  [x]  |\n| [ ] |";
-        let events = crate::parser::parse_markdown_with_options(md, false, false).events;
+        let markdown = "| Done |\n|------|\n|  [x]  |\n| [ ] |";
+        let events = crate::parser::parse_markdown_with_options(markdown, false, false).events;
 
         let mut in_cell = false;
         let mut pending_text = String::new();
@@ -3495,8 +3495,9 @@ mod tests {
                     if in_cell {
                         let trimmed = pending_text.trim();
                         if trimmed == "[x]" || trimmed == "[X]" || trimmed == "[ ]" {
-                            let leading = pending_text.len() - pending_text.trim_start().len();
-                            let rendered = leading..leading + trimmed.len();
+                            let leading_whitespace =
+                                pending_text.len() - pending_text.trim_start().len();
+                            let rendered = leading_whitespace..leading_whitespace + trimmed.len();
                             let marker_source = source_range_for_rendered(&mappings, &rendered)
                                 .expect("marker source range");
                             cell_ranges.push(marker_source);
@@ -3509,7 +3510,7 @@ mod tests {
                         rendered_index: pending_text.len(),
                         source_index: range.start,
                     });
-                    pending_text.push_str(&md[range.clone()]);
+                    pending_text.push_str(&markdown[range.clone()]);
                 }
                 _ => {}
             }
@@ -3517,10 +3518,10 @@ mod tests {
 
         assert_eq!(cell_ranges.len(), 2);
         for marker_range in &cell_ranges {
-            let slice = &md[marker_range.clone()];
+            let slice = &markdown[marker_range.clone()];
             assert!(
                 slice == "[x]" || slice == "[X]" || slice == "[ ]",
-                "expected `[x]`/`[X]`/`[ ]`, got {slice:?} at {marker_range:?}"
+                "expected checkbox marker, got {slice:?} at {marker_range:?}",
             );
         }
     }
@@ -3542,12 +3543,8 @@ mod tests {
             },
         ];
 
-        let range = source_range_for_rendered(&mappings, &(0..3)).unwrap();
-        assert_eq!(range, 20..23);
-
-        let range = source_range_for_rendered(&mappings, &(1..2)).unwrap();
-        assert_eq!(range, 21..22);
-
+        assert_eq!(source_range_for_rendered(&mappings, &(0..3)), Some(20..23));
+        assert_eq!(source_range_for_rendered(&mappings, &(1..2)), Some(21..22));
         assert_eq!(source_range_for_rendered(&mappings, &(2..2)), None);
     }
 
@@ -3967,5 +3964,48 @@ mod tests {
             h3_line_height > body_line_height,
             "H3 line height ({h3_line_height:?}) should be greater than body text ({body_line_height:?})"
         );
+    }
+
+    #[gpui::test]
+    fn test_bounds_for_source_range_skips_gaps_between_rendered_lines(cx: &mut TestAppContext) {
+        let source = "First\n\nSecond";
+        let rendered = render_markdown(source, cx);
+        let highlight_bounds = rendered.bounds_for_source_range(0..source.len());
+        assert_eq!(highlight_bounds.len(), rendered.lines.len());
+
+        for (line, highlight_bounds) in rendered.lines.iter().zip(highlight_bounds.iter()) {
+            let line_bounds = line.layout.bounds();
+            assert_eq!(highlight_bounds.top(), line_bounds.top());
+            assert_eq!(
+                highlight_bounds.bottom(),
+                line_bounds.top() + line.layout.line_height()
+            );
+        }
+    }
+
+    #[gpui::test]
+    fn test_bounds_for_source_range_returns_one_bound_per_soft_wrap_row(cx: &mut TestAppContext) {
+        let sentence = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
+        let source = [sentence, sentence, sentence, sentence].join(" ");
+        let rendered = render_markdown(&source, cx);
+        let line = &rendered.lines[0];
+        let line_bounds = line.layout.bounds();
+        let line_height = line.layout.line_height();
+        let wrapped_line = line.layout.line_layout_for_index(0).unwrap();
+        let visual_row_count = wrapped_line.wrap_boundaries().len() + 1;
+
+        let highlight_bounds = rendered.bounds_for_source_range(0..source.len());
+        assert_eq!(highlight_bounds.len(), visual_row_count);
+
+        let mut row_top = line_bounds.top();
+        for (row_index, row_bounds) in highlight_bounds.iter().enumerate() {
+            assert_eq!(row_bounds.top(), row_top);
+            assert_eq!(row_bounds.bottom(), row_top + line_height);
+            assert!(
+                row_bounds.size.width > Pixels::ZERO,
+                "row {row_index} should have a non-empty highlight",
+            );
+            row_top += line_height;
+        }
     }
 }
