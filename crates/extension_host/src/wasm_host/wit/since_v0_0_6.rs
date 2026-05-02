@@ -38,6 +38,7 @@ pub fn linker(executor: &BackgroundExecutor) -> &'static Linker<WasmState> {
     LINKER.get_or_init(|| {
         super::new_linker(executor, |linker| {
             Extension::add_to_linker::<_, WasmState>(linker, |s| s)
+                .map_err(|error| anyhow::anyhow!("{error}"))
         })
     })
 }
@@ -155,7 +156,7 @@ impl HostWorktree for WasmState {
         latest::HostWorktree::which(self, delegate, binary_name).await
     }
 
-    async fn drop(&mut self, _worktree: Resource<Worktree>) -> Result<()> {
+    async fn drop(&mut self, _worktree: Resource<Worktree>) -> wasmtime::Result<()> {
         // We only ever hand out borrows of worktrees.
         Ok(())
     }

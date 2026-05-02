@@ -36,7 +36,7 @@ wasmtime::component::bindgen!({
     with: {
          "worktree": ExtensionWorktree,
          "key-value-store": ExtensionKeyValueStore,
-         "zed:extension/http-client/http-response-stream": ExtensionHttpResponseStream,
+         "zed:extension/http-client.http-response-stream": ExtensionHttpResponseStream,
          "zed:extension/github": since_v0_6_0::zed::extension::github,
          "zed:extension/nodejs": latest::zed::extension::nodejs,
          "zed:extension/platform": latest::zed::extension::platform,
@@ -59,6 +59,7 @@ pub fn linker(executor: &BackgroundExecutor) -> &'static Linker<WasmState> {
     LINKER.get_or_init(|| {
         super::new_linker(executor, |linker| {
             Extension::add_to_linker::<_, WasmState>(linker, |s| s)
+                .map_err(|error| anyhow::anyhow!("{error}"))
         })
     })
 }
@@ -249,7 +250,7 @@ impl HostKeyValueStore for WasmState {
         kv_store.insert(key, value).await.to_wasmtime_result()
     }
 
-    async fn drop(&mut self, _worktree: Resource<ExtensionKeyValueStore>) -> Result<()> {
+    async fn drop(&mut self, _worktree: Resource<ExtensionKeyValueStore>) -> wasmtime::Result<()> {
         // We only ever hand out borrows of key-value stores.
         Ok(())
     }
@@ -290,7 +291,7 @@ impl HostWorktree for WasmState {
         latest::HostWorktree::which(self, delegate, binary_name).await
     }
 
-    async fn drop(&mut self, _worktree: Resource<Worktree>) -> Result<()> {
+    async fn drop(&mut self, _worktree: Resource<Worktree>) -> wasmtime::Result<()> {
         // We only ever hand out borrows of worktrees.
         Ok(())
     }
@@ -321,7 +322,8 @@ impl http_client::Host for WasmState {
         &mut self,
         request: http_client::HttpRequest,
     ) -> wasmtime::Result<Result<Resource<ExtensionHttpResponseStream>, String>> {
-        let request = convert_request(&request)?;
+        let request =
+            convert_request(&request).map_err(|error| wasmtime::Error::msg(error.to_string()))?;
         let response = self.host.http_client.send(request);
         maybe!(async {
             let response = response.await?;
@@ -355,7 +357,10 @@ impl http_client::HostHttpResponseStream for WasmState {
         .to_wasmtime_result()
     }
 
-    async fn drop(&mut self, _resource: Resource<ExtensionHttpResponseStream>) -> Result<()> {
+    async fn drop(
+        &mut self,
+        _resource: Resource<ExtensionHttpResponseStream>,
+    ) -> wasmtime::Result<()> {
         Ok(())
     }
 }
@@ -578,7 +583,8 @@ impl ExtensionImports for WasmState {
         let path = self
             .host
             .writeable_path_from_extension(&self.manifest.id, Path::new(&path))
-            .await?;
+            .await
+            .map_err(|error| wasmtime::Error::msg(error.to_string()))?;
 
         make_file_executable(&path)
             .await

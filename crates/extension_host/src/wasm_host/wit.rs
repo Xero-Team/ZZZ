@@ -28,6 +28,20 @@ use wasmtime::{
     component::{Component, Linker, Resource},
 };
 
+fn wasmtime_error(error: wasmtime::Error) -> anyhow::Error {
+    anyhow!("{error}")
+}
+
+trait ToAnyhowResult<T> {
+    fn to_anyhow_result(self) -> Result<T>;
+}
+
+impl<T> ToAnyhowResult<T> for wasmtime::Result<T> {
+    fn to_anyhow_result(self) -> Result<T> {
+        self.map_err(wasmtime_error)
+    }
+}
+
 #[cfg(test)]
 pub use latest::CodeLabelSpanLiteral;
 pub use latest::{
@@ -121,7 +135,7 @@ impl Extension {
             let extension =
                 latest::Extension::instantiate_async(store, component, latest::linker(executor))
                     .await
-                    .context("failed to instantiate wasm extension")?;
+                    .map_err(|error| anyhow!("failed to instantiate wasm extension: {error}"))?;
             Ok(Self::V0_8_0(extension))
         } else if version >= since_v0_6_0::MIN_VERSION {
             let extension = since_v0_6_0::Extension::instantiate_async(
@@ -130,7 +144,7 @@ impl Extension {
                 since_v0_6_0::linker(executor),
             )
             .await
-            .context("failed to instantiate wasm extension")?;
+            .map_err(|error| anyhow!("failed to instantiate wasm extension: {error}"))?;
             Ok(Self::V0_6_0(extension))
         } else if version >= since_v0_5_0::MIN_VERSION {
             let extension = since_v0_5_0::Extension::instantiate_async(
@@ -139,7 +153,7 @@ impl Extension {
                 since_v0_5_0::linker(executor),
             )
             .await
-            .context("failed to instantiate wasm extension")?;
+            .map_err(|error| anyhow!("failed to instantiate wasm extension: {error}"))?;
             Ok(Self::V0_5_0(extension))
         } else if version >= since_v0_4_0::MIN_VERSION {
             let extension = since_v0_4_0::Extension::instantiate_async(
@@ -148,7 +162,7 @@ impl Extension {
                 since_v0_4_0::linker(executor),
             )
             .await
-            .context("failed to instantiate wasm extension")?;
+            .map_err(|error| anyhow!("failed to instantiate wasm extension: {error}"))?;
             Ok(Self::V0_4_0(extension))
         } else if version >= since_v0_3_0::MIN_VERSION {
             let extension = since_v0_3_0::Extension::instantiate_async(
@@ -157,7 +171,7 @@ impl Extension {
                 since_v0_3_0::linker(executor),
             )
             .await
-            .context("failed to instantiate wasm extension")?;
+            .map_err(|error| anyhow!("failed to instantiate wasm extension: {error}"))?;
             Ok(Self::V0_3_0(extension))
         } else if version >= since_v0_2_0::MIN_VERSION {
             let extension = since_v0_2_0::Extension::instantiate_async(
@@ -166,7 +180,7 @@ impl Extension {
                 since_v0_2_0::linker(executor),
             )
             .await
-            .context("failed to instantiate wasm extension")?;
+            .map_err(|error| anyhow!("failed to instantiate wasm extension: {error}"))?;
             Ok(Self::V0_2_0(extension))
         } else if version >= since_v0_1_0::MIN_VERSION {
             let extension = since_v0_1_0::Extension::instantiate_async(
@@ -175,7 +189,7 @@ impl Extension {
                 since_v0_1_0::linker(executor),
             )
             .await
-            .context("failed to instantiate wasm extension")?;
+            .map_err(|error| anyhow!("failed to instantiate wasm extension: {error}"))?;
             Ok(Self::V0_1_0(extension))
         } else if version >= since_v0_0_6::MIN_VERSION {
             let extension = since_v0_0_6::Extension::instantiate_async(
@@ -184,7 +198,7 @@ impl Extension {
                 since_v0_0_6::linker(executor),
             )
             .await
-            .context("failed to instantiate wasm extension")?;
+            .map_err(|error| anyhow!("failed to instantiate wasm extension: {error}"))?;
             Ok(Self::V0_0_6(extension))
         } else if version >= since_v0_0_4::MIN_VERSION {
             let extension = since_v0_0_4::Extension::instantiate_async(
@@ -193,7 +207,7 @@ impl Extension {
                 since_v0_0_4::linker(executor),
             )
             .await
-            .context("failed to instantiate wasm extension")?;
+            .map_err(|error| anyhow!("failed to instantiate wasm extension: {error}"))?;
             Ok(Self::V0_0_4(extension))
         } else {
             let extension = since_v0_0_1::Extension::instantiate_async(
@@ -202,23 +216,23 @@ impl Extension {
                 since_v0_0_1::linker(executor),
             )
             .await
-            .context("failed to instantiate wasm extension")?;
+            .map_err(|error| anyhow!("failed to instantiate wasm extension: {error}"))?;
             Ok(Self::V0_0_1(extension))
         }
     }
 
     pub async fn call_init_extension(&self, store: &mut Store<WasmState>) -> Result<()> {
         match self {
-            Extension::V0_8_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_6_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_5_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_4_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_3_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_2_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_1_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_0_6(ext) => ext.call_init_extension(store).await,
-            Extension::V0_0_4(ext) => ext.call_init_extension(store).await,
-            Extension::V0_0_1(ext) => ext.call_init_extension(store).await,
+            Extension::V0_8_0(ext) => ext.call_init_extension(store).await.to_anyhow_result(),
+            Extension::V0_6_0(ext) => ext.call_init_extension(store).await.to_anyhow_result(),
+            Extension::V0_5_0(ext) => ext.call_init_extension(store).await.to_anyhow_result(),
+            Extension::V0_4_0(ext) => ext.call_init_extension(store).await.to_anyhow_result(),
+            Extension::V0_3_0(ext) => ext.call_init_extension(store).await.to_anyhow_result(),
+            Extension::V0_2_0(ext) => ext.call_init_extension(store).await.to_anyhow_result(),
+            Extension::V0_1_0(ext) => ext.call_init_extension(store).await.to_anyhow_result(),
+            Extension::V0_0_6(ext) => ext.call_init_extension(store).await.to_anyhow_result(),
+            Extension::V0_0_4(ext) => ext.call_init_extension(store).await.to_anyhow_result(),
+            Extension::V0_0_1(ext) => ext.call_init_extension(store).await.to_anyhow_result(),
         }
     }
 
@@ -230,37 +244,40 @@ impl Extension {
         resource: Resource<Arc<dyn WorktreeDelegate>>,
     ) -> Result<Result<Command, String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_language_server_command(store, &language_server_id.0, resource)
-                    .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_language_server_command(store, &language_server_id.0, resource)
-                    .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_language_server_command(store, &language_server_id.0, resource)
-                    .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_language_server_command(store, &language_server_id.0, resource)
-                    .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_language_server_command(store, &language_server_id.0, resource)
-                    .await
-            }
+            Extension::V0_8_0(ext) => ext
+                .call_language_server_command(store, &language_server_id.0, resource)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_6_0(ext) => ext
+                .call_language_server_command(store, &language_server_id.0, resource)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_5_0(ext) => ext
+                .call_language_server_command(store, &language_server_id.0, resource)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_4_0(ext) => ext
+                .call_language_server_command(store, &language_server_id.0, resource)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_3_0(ext) => ext
+                .call_language_server_command(store, &language_server_id.0, resource)
+                .await
+                .to_anyhow_result(),
             Extension::V0_2_0(ext) => Ok(ext
                 .call_language_server_command(store, &language_server_id.0, resource)
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|command| command.into())),
             Extension::V0_1_0(ext) => Ok(ext
                 .call_language_server_command(store, &language_server_id.0, resource)
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|command| command.into())),
             Extension::V0_0_6(ext) => Ok(ext
                 .call_language_server_command(store, &language_server_id.0, resource)
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|command| command.into())),
             Extension::V0_0_4(ext) => Ok(ext
                 .call_language_server_command(
@@ -271,7 +288,8 @@ impl Extension {
                     },
                     resource,
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|command| command.into())),
             Extension::V0_0_1(ext) => Ok(ext
                 .call_language_server_command(
@@ -283,7 +301,8 @@ impl Extension {
                     .into(),
                     resource,
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|command| command.into())),
         }
     }
@@ -296,72 +315,40 @@ impl Extension {
         resource: Resource<Arc<dyn WorktreeDelegate>>,
     ) -> Result<Result<Option<String>, String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
+            Extension::V0_8_0(ext) => ext
+                .call_language_server_initialization_options(store, &language_server_id.0, resource)
                 .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
+                .to_anyhow_result(),
+            Extension::V0_6_0(ext) => ext
+                .call_language_server_initialization_options(store, &language_server_id.0, resource)
                 .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
+                .to_anyhow_result(),
+            Extension::V0_5_0(ext) => ext
+                .call_language_server_initialization_options(store, &language_server_id.0, resource)
                 .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
+                .to_anyhow_result(),
+            Extension::V0_4_0(ext) => ext
+                .call_language_server_initialization_options(store, &language_server_id.0, resource)
                 .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
+                .to_anyhow_result(),
+            Extension::V0_3_0(ext) => ext
+                .call_language_server_initialization_options(store, &language_server_id.0, resource)
                 .await
-            }
-            Extension::V0_2_0(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
+                .to_anyhow_result(),
+            Extension::V0_2_0(ext) => ext
+                .call_language_server_initialization_options(store, &language_server_id.0, resource)
                 .await
-            }
-            Extension::V0_1_0(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
+                .to_anyhow_result(),
+            Extension::V0_1_0(ext) => ext
+                .call_language_server_initialization_options(store, &language_server_id.0, resource)
                 .await
-            }
-            Extension::V0_0_6(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
+                .to_anyhow_result(),
+            Extension::V0_0_6(ext) => ext
+                .call_language_server_initialization_options(store, &language_server_id.0, resource)
                 .await
-            }
-            Extension::V0_0_4(ext) => {
-                ext.call_language_server_initialization_options(
+                .to_anyhow_result(),
+            Extension::V0_0_4(ext) => ext
+                .call_language_server_initialization_options(
                     store,
                     &LanguageServerConfig {
                         name: language_server_id.0.to_string(),
@@ -370,9 +357,9 @@ impl Extension {
                     resource,
                 )
                 .await
-            }
-            Extension::V0_0_1(ext) => {
-                ext.call_language_server_initialization_options(
+                .to_anyhow_result(),
+            Extension::V0_0_1(ext) => ext
+                .call_language_server_initialization_options(
                     store,
                     &LanguageServerConfig {
                         name: language_server_id.0.to_string(),
@@ -382,7 +369,7 @@ impl Extension {
                     resource,
                 )
                 .await
-            }
+                .to_anyhow_result(),
         }
     }
 
@@ -393,70 +380,70 @@ impl Extension {
         resource: Resource<Arc<dyn WorktreeDelegate>>,
     ) -> Result<Result<Option<String>, String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_language_server_workspace_configuration(
+            Extension::V0_8_0(ext) => ext
+                .call_language_server_workspace_configuration(
                     store,
                     &language_server_id.0,
                     resource,
                 )
                 .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_language_server_workspace_configuration(
+                .to_anyhow_result(),
+            Extension::V0_6_0(ext) => ext
+                .call_language_server_workspace_configuration(
                     store,
                     &language_server_id.0,
                     resource,
                 )
                 .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_language_server_workspace_configuration(
+                .to_anyhow_result(),
+            Extension::V0_5_0(ext) => ext
+                .call_language_server_workspace_configuration(
                     store,
                     &language_server_id.0,
                     resource,
                 )
                 .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_language_server_workspace_configuration(
+                .to_anyhow_result(),
+            Extension::V0_4_0(ext) => ext
+                .call_language_server_workspace_configuration(
                     store,
                     &language_server_id.0,
                     resource,
                 )
                 .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_language_server_workspace_configuration(
+                .to_anyhow_result(),
+            Extension::V0_3_0(ext) => ext
+                .call_language_server_workspace_configuration(
                     store,
                     &language_server_id.0,
                     resource,
                 )
                 .await
-            }
-            Extension::V0_2_0(ext) => {
-                ext.call_language_server_workspace_configuration(
+                .to_anyhow_result(),
+            Extension::V0_2_0(ext) => ext
+                .call_language_server_workspace_configuration(
                     store,
                     &language_server_id.0,
                     resource,
                 )
                 .await
-            }
-            Extension::V0_1_0(ext) => {
-                ext.call_language_server_workspace_configuration(
+                .to_anyhow_result(),
+            Extension::V0_1_0(ext) => ext
+                .call_language_server_workspace_configuration(
                     store,
                     &language_server_id.0,
                     resource,
                 )
                 .await
-            }
-            Extension::V0_0_6(ext) => {
-                ext.call_language_server_workspace_configuration(
+                .to_anyhow_result(),
+            Extension::V0_0_6(ext) => ext
+                .call_language_server_workspace_configuration(
                     store,
                     &language_server_id.0,
                     resource,
                 )
                 .await
-            }
+                .to_anyhow_result(),
             Extension::V0_0_4(_) | Extension::V0_0_1(_) => Ok(Ok(None)),
         }
     }
@@ -468,14 +455,14 @@ impl Extension {
         resource: Resource<Arc<dyn WorktreeDelegate>>,
     ) -> Result<Option<String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_language_server_initialization_options_schema(
+            Extension::V0_8_0(ext) => ext
+                .call_language_server_initialization_options_schema(
                     store,
                     &language_server_id.0,
                     resource,
                 )
                 .await
-            }
+                .to_anyhow_result(),
             Extension::V0_6_0(_)
             | Extension::V0_5_0(_)
             | Extension::V0_4_0(_)
@@ -495,14 +482,14 @@ impl Extension {
         resource: Resource<Arc<dyn WorktreeDelegate>>,
     ) -> Result<Option<String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_language_server_workspace_configuration_schema(
+            Extension::V0_8_0(ext) => ext
+                .call_language_server_workspace_configuration_schema(
                     store,
                     &language_server_id.0,
                     resource,
                 )
                 .await
-            }
+                .to_anyhow_result(),
             Extension::V0_6_0(_)
             | Extension::V0_5_0(_)
             | Extension::V0_4_0(_)
@@ -523,42 +510,42 @@ impl Extension {
         resource: Resource<Arc<dyn WorktreeDelegate>>,
     ) -> Result<Result<Option<String>, String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_language_server_additional_initialization_options(
+            Extension::V0_8_0(ext) => ext
+                .call_language_server_additional_initialization_options(
                     store,
                     &language_server_id.0,
                     &target_language_server_id.0,
                     resource,
                 )
                 .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_language_server_additional_initialization_options(
+                .to_anyhow_result(),
+            Extension::V0_6_0(ext) => ext
+                .call_language_server_additional_initialization_options(
                     store,
                     &language_server_id.0,
                     &target_language_server_id.0,
                     resource,
                 )
                 .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_language_server_additional_initialization_options(
+                .to_anyhow_result(),
+            Extension::V0_5_0(ext) => ext
+                .call_language_server_additional_initialization_options(
                     store,
                     &language_server_id.0,
                     &target_language_server_id.0,
                     resource,
                 )
                 .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_language_server_additional_initialization_options(
+                .to_anyhow_result(),
+            Extension::V0_4_0(ext) => ext
+                .call_language_server_additional_initialization_options(
                     store,
                     &language_server_id.0,
                     &target_language_server_id.0,
                     resource,
                 )
                 .await
-            }
+                .to_anyhow_result(),
             Extension::V0_3_0(_)
             | Extension::V0_2_0(_)
             | Extension::V0_1_0(_)
@@ -576,42 +563,42 @@ impl Extension {
         resource: Resource<Arc<dyn WorktreeDelegate>>,
     ) -> Result<Result<Option<String>, String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_language_server_additional_workspace_configuration(
+            Extension::V0_8_0(ext) => ext
+                .call_language_server_additional_workspace_configuration(
                     store,
                     &language_server_id.0,
                     &target_language_server_id.0,
                     resource,
                 )
                 .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_language_server_additional_workspace_configuration(
+                .to_anyhow_result(),
+            Extension::V0_6_0(ext) => ext
+                .call_language_server_additional_workspace_configuration(
                     store,
                     &language_server_id.0,
                     &target_language_server_id.0,
                     resource,
                 )
                 .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_language_server_additional_workspace_configuration(
+                .to_anyhow_result(),
+            Extension::V0_5_0(ext) => ext
+                .call_language_server_additional_workspace_configuration(
                     store,
                     &language_server_id.0,
                     &target_language_server_id.0,
                     resource,
                 )
                 .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_language_server_additional_workspace_configuration(
+                .to_anyhow_result(),
+            Extension::V0_4_0(ext) => ext
+                .call_language_server_additional_workspace_configuration(
                     store,
                     &language_server_id.0,
                     &target_language_server_id.0,
                     resource,
                 )
                 .await
-            }
+                .to_anyhow_result(),
             Extension::V0_3_0(_)
             | Extension::V0_2_0(_)
             | Extension::V0_1_0(_)
@@ -628,17 +615,18 @@ impl Extension {
         completions: Vec<latest::Completion>,
     ) -> Result<Result<Vec<Option<CodeLabel>>, String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_labels_for_completions(store, &language_server_id.0, &completions)
-                    .await
-            }
+            Extension::V0_8_0(ext) => ext
+                .call_labels_for_completions(store, &language_server_id.0, &completions)
+                .await
+                .to_anyhow_result(),
             Extension::V0_6_0(ext) => Ok(ext
                 .call_labels_for_completions(
                     store,
                     &language_server_id.0,
                     &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -651,7 +639,8 @@ impl Extension {
                     &language_server_id.0,
                     &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -664,7 +653,8 @@ impl Extension {
                     &language_server_id.0,
                     &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -677,7 +667,8 @@ impl Extension {
                     &language_server_id.0,
                     &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -690,7 +681,8 @@ impl Extension {
                     &language_server_id.0,
                     &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -703,7 +695,8 @@ impl Extension {
                     &language_server_id.0,
                     &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -716,7 +709,8 @@ impl Extension {
                     &language_server_id.0,
                     &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -734,17 +728,18 @@ impl Extension {
         symbols: Vec<latest::Symbol>,
     ) -> Result<Result<Vec<Option<CodeLabel>>, String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_labels_for_symbols(store, &language_server_id.0, &symbols)
-                    .await
-            }
+            Extension::V0_8_0(ext) => ext
+                .call_labels_for_symbols(store, &language_server_id.0, &symbols)
+                .await
+                .to_anyhow_result(),
             Extension::V0_6_0(ext) => Ok(ext
                 .call_labels_for_symbols(
                     store,
                     &language_server_id.0,
                     &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -757,7 +752,8 @@ impl Extension {
                     &language_server_id.0,
                     &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -770,7 +766,8 @@ impl Extension {
                     &language_server_id.0,
                     &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -783,7 +780,8 @@ impl Extension {
                     &language_server_id.0,
                     &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -796,7 +794,8 @@ impl Extension {
                     &language_server_id.0,
                     &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -809,7 +808,8 @@ impl Extension {
                     &language_server_id.0,
                     &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -822,7 +822,8 @@ impl Extension {
                     &language_server_id.0,
                     &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
                 )
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(|labels| {
                     labels
                         .into_iter()
@@ -840,34 +841,34 @@ impl Extension {
         arguments: &[String],
     ) -> Result<Result<Vec<SlashCommandArgumentCompletion>, String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_complete_slash_command_argument(store, command, arguments)
-                    .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_complete_slash_command_argument(store, command, arguments)
-                    .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_complete_slash_command_argument(store, command, arguments)
-                    .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_complete_slash_command_argument(store, command, arguments)
-                    .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_complete_slash_command_argument(store, command, arguments)
-                    .await
-            }
-            Extension::V0_2_0(ext) => {
-                ext.call_complete_slash_command_argument(store, command, arguments)
-                    .await
-            }
-            Extension::V0_1_0(ext) => {
-                ext.call_complete_slash_command_argument(store, command, arguments)
-                    .await
-            }
+            Extension::V0_8_0(ext) => ext
+                .call_complete_slash_command_argument(store, command, arguments)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_6_0(ext) => ext
+                .call_complete_slash_command_argument(store, command, arguments)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_5_0(ext) => ext
+                .call_complete_slash_command_argument(store, command, arguments)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_4_0(ext) => ext
+                .call_complete_slash_command_argument(store, command, arguments)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_3_0(ext) => ext
+                .call_complete_slash_command_argument(store, command, arguments)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_2_0(ext) => ext
+                .call_complete_slash_command_argument(store, command, arguments)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_1_0(ext) => ext
+                .call_complete_slash_command_argument(store, command, arguments)
+                .await
+                .to_anyhow_result(),
             Extension::V0_0_1(_) | Extension::V0_0_4(_) | Extension::V0_0_6(_) => {
                 Ok(Ok(Vec::new()))
             }
@@ -882,34 +883,34 @@ impl Extension {
         resource: Option<Resource<Arc<dyn WorktreeDelegate>>>,
     ) -> Result<Result<SlashCommandOutput, String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_run_slash_command(store, command, arguments, resource)
-                    .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_run_slash_command(store, command, arguments, resource)
-                    .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_run_slash_command(store, command, arguments, resource)
-                    .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_run_slash_command(store, command, arguments, resource)
-                    .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_run_slash_command(store, command, arguments, resource)
-                    .await
-            }
-            Extension::V0_2_0(ext) => {
-                ext.call_run_slash_command(store, command, arguments, resource)
-                    .await
-            }
-            Extension::V0_1_0(ext) => {
-                ext.call_run_slash_command(store, command, arguments, resource)
-                    .await
-            }
+            Extension::V0_8_0(ext) => ext
+                .call_run_slash_command(store, command, arguments, resource)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_6_0(ext) => ext
+                .call_run_slash_command(store, command, arguments, resource)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_5_0(ext) => ext
+                .call_run_slash_command(store, command, arguments, resource)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_4_0(ext) => ext
+                .call_run_slash_command(store, command, arguments, resource)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_3_0(ext) => ext
+                .call_run_slash_command(store, command, arguments, resource)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_2_0(ext) => ext
+                .call_run_slash_command(store, command, arguments, resource)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_1_0(ext) => ext
+                .call_run_slash_command(store, command, arguments, resource)
+                .await
+                .to_anyhow_result(),
             Extension::V0_0_1(_) | Extension::V0_0_4(_) | Extension::V0_0_6(_) => {
                 anyhow::bail!("`run_slash_command` not available prior to v0.1.0");
             }
@@ -923,29 +924,30 @@ impl Extension {
         project: Resource<ExtensionProject>,
     ) -> Result<Result<Command, String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_context_server_command(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_context_server_command(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_context_server_command(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_context_server_command(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_context_server_command(store, &context_server_id, project)
-                    .await
-            }
+            Extension::V0_8_0(ext) => ext
+                .call_context_server_command(store, &context_server_id, project)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_6_0(ext) => ext
+                .call_context_server_command(store, &context_server_id, project)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_5_0(ext) => ext
+                .call_context_server_command(store, &context_server_id, project)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_4_0(ext) => ext
+                .call_context_server_command(store, &context_server_id, project)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_3_0(ext) => ext
+                .call_context_server_command(store, &context_server_id, project)
+                .await
+                .to_anyhow_result(),
             Extension::V0_2_0(ext) => Ok(ext
                 .call_context_server_command(store, &context_server_id, project)
-                .await?
+                .await
+                .to_anyhow_result()?
                 .map(Into::into)),
             Extension::V0_0_1(_)
             | Extension::V0_0_4(_)
@@ -963,18 +965,18 @@ impl Extension {
         project: Resource<ExtensionProject>,
     ) -> Result<Result<Option<ContextServerConfiguration>, String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_context_server_configuration(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_context_server_configuration(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_context_server_configuration(store, &context_server_id, project)
-                    .await
-            }
+            Extension::V0_8_0(ext) => ext
+                .call_context_server_configuration(store, &context_server_id, project)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_6_0(ext) => ext
+                .call_context_server_configuration(store, &context_server_id, project)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_5_0(ext) => ext
+                .call_context_server_configuration(store, &context_server_id, project)
+                .await
+                .to_anyhow_result(),
             Extension::V0_0_1(_)
             | Extension::V0_0_4(_)
             | Extension::V0_0_6(_)
@@ -993,13 +995,34 @@ impl Extension {
         provider: &str,
     ) -> Result<Result<Vec<String>, String>> {
         match self {
-            Extension::V0_8_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
-            Extension::V0_6_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
-            Extension::V0_5_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
-            Extension::V0_4_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
-            Extension::V0_3_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
-            Extension::V0_2_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
-            Extension::V0_1_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
+            Extension::V0_8_0(ext) => ext
+                .call_suggest_docs_packages(store, provider)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_6_0(ext) => ext
+                .call_suggest_docs_packages(store, provider)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_5_0(ext) => ext
+                .call_suggest_docs_packages(store, provider)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_4_0(ext) => ext
+                .call_suggest_docs_packages(store, provider)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_3_0(ext) => ext
+                .call_suggest_docs_packages(store, provider)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_2_0(ext) => ext
+                .call_suggest_docs_packages(store, provider)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_1_0(ext) => ext
+                .call_suggest_docs_packages(store, provider)
+                .await
+                .to_anyhow_result(),
             Extension::V0_0_1(_) | Extension::V0_0_4(_) | Extension::V0_0_6(_) => {
                 anyhow::bail!("`suggest_docs_packages` not available prior to v0.1.0");
             }
@@ -1014,34 +1037,34 @@ impl Extension {
         kv_store: Resource<Arc<dyn KeyValueStoreDelegate>>,
     ) -> Result<Result<(), String>> {
         match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_index_docs(store, provider, package_name, kv_store)
-                    .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_index_docs(store, provider, package_name, kv_store)
-                    .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_index_docs(store, provider, package_name, kv_store)
-                    .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_index_docs(store, provider, package_name, kv_store)
-                    .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_index_docs(store, provider, package_name, kv_store)
-                    .await
-            }
-            Extension::V0_2_0(ext) => {
-                ext.call_index_docs(store, provider, package_name, kv_store)
-                    .await
-            }
-            Extension::V0_1_0(ext) => {
-                ext.call_index_docs(store, provider, package_name, kv_store)
-                    .await
-            }
+            Extension::V0_8_0(ext) => ext
+                .call_index_docs(store, provider, package_name, kv_store)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_6_0(ext) => ext
+                .call_index_docs(store, provider, package_name, kv_store)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_5_0(ext) => ext
+                .call_index_docs(store, provider, package_name, kv_store)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_4_0(ext) => ext
+                .call_index_docs(store, provider, package_name, kv_store)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_3_0(ext) => ext
+                .call_index_docs(store, provider, package_name, kv_store)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_2_0(ext) => ext
+                .call_index_docs(store, provider, package_name, kv_store)
+                .await
+                .to_anyhow_result(),
+            Extension::V0_1_0(ext) => ext
+                .call_index_docs(store, provider, package_name, kv_store)
+                .await
+                .to_anyhow_result(),
             Extension::V0_0_1(_) | Extension::V0_0_4(_) | Extension::V0_0_6(_) => {
                 anyhow::bail!("`index_docs` not available prior to v0.1.0");
             }
@@ -1066,7 +1089,8 @@ impl Extension {
                         user_installed_path.as_ref().and_then(|p| p.to_str()),
                         resource,
                     )
-                    .await?
+                    .await
+                    .to_anyhow_result()?
                     .map_err(|e| anyhow!("{e:?}"))?;
 
                 Ok(Ok(dap_binary))
@@ -1081,7 +1105,8 @@ impl Extension {
                         user_installed_path.as_ref().and_then(|p| p.to_str()),
                         resource,
                     )
-                    .await?
+                    .await
+                    .to_anyhow_result()?
                     .map_err(|e| anyhow!("{e:?}"))?;
 
                 Ok(Ok(dap_binary.into()))
@@ -1111,7 +1136,8 @@ impl Extension {
                     serde_json::to_string(&config).context("Adapter config is not a valid JSON")?;
                 let dap_binary = ext
                     .call_dap_request_kind(store, &adapter_name, &config)
-                    .await?
+                    .await
+                    .to_anyhow_result()?
                     .map_err(|e| anyhow!("{e:?}"))?;
 
                 Ok(Ok(dap_binary))
@@ -1121,7 +1147,8 @@ impl Extension {
                     serde_json::to_string(&config).context("Adapter config is not a valid JSON")?;
                 let dap_binary = ext
                     .call_dap_request_kind(store, &adapter_name, &config)
-                    .await?
+                    .await
+                    .to_anyhow_result()?
                     .map_err(|e| anyhow!("{e:?}"))?;
 
                 Ok(Ok(dap_binary.into()))
@@ -1149,7 +1176,8 @@ impl Extension {
                 let config = config.into();
                 let dap_binary = ext
                     .call_dap_config_to_scenario(store, &config)
-                    .await?
+                    .await
+                    .to_anyhow_result()?
                     .map_err(|e| anyhow!("{e:?}"))?;
 
                 Ok(Ok(dap_binary.try_into()?))
@@ -1158,7 +1186,8 @@ impl Extension {
                 let config: latest::DebugConfig = config.into();
                 let dap_binary = ext
                     .call_dap_config_to_scenario(store, &config.into())
-                    .await?
+                    .await
+                    .to_anyhow_result()?
                     .map_err(|e| anyhow!("{e:?}"))?;
 
                 let dap_binary: latest::DebugScenario = dap_binary.into();
@@ -1196,7 +1225,8 @@ impl Extension {
                         &resolved_label,
                         &debug_adapter_name,
                     )
-                    .await?;
+                    .await
+                    .to_anyhow_result()?;
 
                 Ok(dap_binary.map(TryInto::try_into).transpose()?)
             }
@@ -1210,7 +1240,8 @@ impl Extension {
                         &resolved_label,
                         &debug_adapter_name,
                     )
-                    .await?;
+                    .await
+                    .to_anyhow_result()?;
 
                 Ok(dap_binary
                     .map(|s| latest::DebugScenario::from(s).try_into())
@@ -1240,7 +1271,8 @@ impl Extension {
                 let build_config_template = resolved_build_task.try_into()?;
                 let dap_request = ext
                     .call_run_dap_locator(store, &locator_name, &build_config_template)
-                    .await?
+                    .await
+                    .to_anyhow_result()?
                     .map_err(|e| anyhow!("{e:?}"))?;
 
                 Ok(Ok(dap_request.into()))
@@ -1250,7 +1282,8 @@ impl Extension {
                     resolved_build_task.try_into()?;
                 let dap_request = ext
                     .call_run_dap_locator(store, &locator_name, &build_config_template.into())
-                    .await?
+                    .await
+                    .to_anyhow_result()?
                     .map_err(|e| anyhow!("{e:?}"))?;
 
                 let dap_request: latest::DebugRequest = dap_request.into();

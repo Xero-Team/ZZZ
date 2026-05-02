@@ -549,7 +549,6 @@ fn wasm_engine(executor: &BackgroundExecutor) -> wasmtime::Engine {
         .get_or_init(|| {
             let mut config = wasmtime::Config::new();
             config.wasm_component_model(true);
-            config.async_support(true);
             config
                 .enable_incremental_compilation(cache_store())
                 .unwrap();
@@ -649,7 +648,7 @@ impl WasmHost {
             executor.spawn(async move {
                 let zed_api_version = parse_wasm_extension_version(&manifest_id, &wasm_bytes)?;
                 let component = Component::from_binary(&engine, &wasm_bytes)
-                    .context("failed to compile wasm component")?;
+                    .map_err(|error| anyhow!("failed to compile wasm component: {error}"))?;
 
                 anyhow::Ok((zed_api_version, component))
             })
@@ -744,8 +743,10 @@ impl WasmHost {
             .env("PWD", &path)
             .env("RUST_BACKTRACE", "full");
 
-        ctx.preopened_dir(&path, ".", dir_perms, file_perms)?;
-        ctx.preopened_dir(&path, &path, dir_perms, file_perms)?;
+        ctx.preopened_dir(&path, ".", dir_perms, file_perms)
+            .map_err(|error| anyhow!("{error}"))?;
+        ctx.preopened_dir(&path, &path, dir_perms, file_perms)
+            .map_err(|error| anyhow!("{error}"))?;
 
         Ok(ctx.build())
     }
