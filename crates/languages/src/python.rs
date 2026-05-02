@@ -658,7 +658,7 @@ impl LspAdapter for PyrightLspAdapter {
                     .and_then(|s| s.settings.clone())
                     .unwrap_or_default();
 
-            // If we have a detected toolchain, configure Pyright to use it - unless the user sets it themselves.
+            // Honor explicit user toolchain settings over auto-detected values.
             let should_insert_toolchain = || {
                 user_settings.as_object().is_none_or(|object| {
                     [
@@ -669,7 +669,7 @@ impl LspAdapter for PyrightLspAdapter {
                         "defaultInterpreterPath",
                     ]
                     .into_iter()
-                    .any(|known_key| object.contains_key(known_key))
+                    .all(|known_key| !object.contains_key(known_key))
                 })
             };
             if let Some(toolchain) = toolchain
@@ -2087,6 +2087,20 @@ impl LspAdapter for BasedPyrightLspAdapter {
                 language_server_settings(adapter.as_ref(), &Self::SERVER_NAME, cx)
                     .and_then(|s| s.settings.clone())
                     .unwrap_or_default();
+
+            let should_insert_toolchain = || {
+                user_settings.as_object().is_none_or(|object| {
+                    [
+                        "venvPath",
+                        "venv",
+                        "python",
+                        "pythonPath",
+                        "defaultInterpreterPath",
+                    ]
+                    .into_iter()
+                    .all(|known_key| !object.contains_key(known_key))
+                })
+            };
 
             // If we have a detected toolchain, configure Pyright to use it
             let should_insert_toolchain = || {
