@@ -263,9 +263,6 @@ impl ThreadsArchiveView {
     fn update_items(&mut self, cx: &mut Context<Self>) {
         let store = ThreadMetadataStore::global(cx).read(cx);
 
-        // If we're filtering to archived threads but none remain (e.g. the
-        // user just deleted the last one), fall back to showing all threads
-        // so they aren't stranded with an empty list and a disabled toggle.
         if self.thread_filter == ThreadFilter::ArchivedOnly
             && store.archived_entries().next().is_none()
         {
