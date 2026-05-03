@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
-use mdbook::BookItem;
-use mdbook::book::{Book, Chapter};
-use mdbook::preprocess::CmdPreprocessor;
+use mdbook_core::book::{Book, BookItem, Chapter};
+use mdbook_renderer::Renderer;
 use regex::Regex;
 use settings::{KeymapFile, SettingsJsonSchemaParams, SettingsStore};
 use std::borrow::Cow;
@@ -181,7 +180,7 @@ fn handle_preprocessing() -> Result<()> {
     let mut input = String::new();
     stdin.read_to_string(&mut input)?;
 
-    let (_ctx, mut book) = CmdPreprocessor::parse_input(input.as_bytes())?;
+    let (_ctx, mut book) = mdbook_preprocessor::parse_input(input.as_bytes())?;
 
     let mut errors = HashSet::<PreprocessorError>::new();
     handle_frontmatter(&mut book, &mut errors);
@@ -657,14 +656,15 @@ fn load_all_actions() -> ActionManifest {
 
 fn handle_postprocessing() -> Result<()> {
     let logger = zlog::scoped!("render");
-    let mut ctx = mdbook::renderer::RenderContext::from_json(io::stdin())?;
-    let output = ctx
+    let mut ctx = mdbook_renderer::RenderContext::from_json(io::stdin())?;
+    let outputs = ctx
         .config
-        .get_mut("output")
-        .expect("has output")
-        .as_table_mut()
-        .expect("output is table");
-    let zed_html = output.remove("zed-html").expect("zed-html output defined");
+        .outputs::<serde_json::Value>()
+        .context("failed to read mdBook outputs")?;
+    let zed_html = outputs
+        .get("zed-html")
+        .cloned()
+        .expect("zed-html output defined");
     let default_description = zed_html
         .get("default-description")
         .expect("Default description not found")
@@ -686,8 +686,8 @@ fn handle_postprocessing() -> Result<()> {
         ""
     };
 
-    output.insert("html".to_string(), zed_html);
-    mdbook::Renderer::render(&mdbook::renderer::HtmlHandlebars::new(), &ctx)?;
+    ctx.config.set("output.html", zed_html)?;
+    mdbook_html::HtmlHandlebars::new().render(&ctx)?;
     let ignore_list = ["toc.html"];
 
     let root_dir = ctx.destination.clone();
