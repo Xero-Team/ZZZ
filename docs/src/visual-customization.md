@@ -581,4 +581,3 @@ See [Terminal settings](./reference/all-settings.md#terminal) for additional non
     }
   }
 ```
-

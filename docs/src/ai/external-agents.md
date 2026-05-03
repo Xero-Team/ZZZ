@@ -333,7 +333,6 @@ External agents can access MCP servers from two sources: ZZZ's `context_servers`
 
 For more on configuring MCP servers, see [Model Context Protocol](./mcp.md).
 
-
 ### Troubleshooting {#troubleshooting}
 
 **"I enabled MCP tools in ZZZ but the agent can't see them"**
