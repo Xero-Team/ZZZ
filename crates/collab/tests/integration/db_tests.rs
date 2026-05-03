@@ -68,7 +68,7 @@ impl TestDb {
         static LOCK: Mutex<()> = Mutex::new(());
 
         let _guard = LOCK.lock();
-        let mut rng = StdRng::from_os_rng();
+        let mut rng = StdRng::from_rng(&mut rand::rng());
         let url = format!(
             "postgres://postgres@localhost/zed-test-{}",
             rng.random::<u128>()
