@@ -801,7 +801,8 @@ pub fn init(cx: &mut App) {
                                 .ok();
                         }
                     })
-                    .on_action(
+                    .on_action({
+                        let workspace = workspace.clone();
                         move |action: &git_ui::git_panel::OpenAtCommit, window, cx| {
                             let sha = action.sha.clone();
                             workspace

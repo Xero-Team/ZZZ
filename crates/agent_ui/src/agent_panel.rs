@@ -2243,11 +2243,10 @@ impl AgentPanel {
         }
 
         let has_session = |cv: &Entity<ConversationView>| -> bool {
-            let view = cv.read(cx);
-            view.root_session_id() == Some(&session_id)
-                || view
-                    .root_acp_thread(cx)
-                    .is_some_and(|thread| thread.read(cx).session_id() == &session_id)
+            cv.read(cx)
+                .root_session_id
+                .as_ref()
+                .is_some_and(|id| id == &session_id)
         };
 
         // Check if the active view already has this session.
