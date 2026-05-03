@@ -255,7 +255,6 @@
       "g ~": "vim::PushOppositeCase",
       "g ?": "vim::PushRot13",
       // "g ?": "vim::PushRot47",
-      "g w": "vim::PushRewrap",
       "g q": "vim::PushRewrap",
       "insert": "vim::InsertBefore",
       "] d": "editor::GoToDiagnostic",
