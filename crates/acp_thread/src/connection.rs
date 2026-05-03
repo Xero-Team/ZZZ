@@ -160,7 +160,7 @@ pub trait AgentConnection {
         None
     }
 
-    fn telemetry(&self) -> Option<Rc<dyn AgentTelemetry>> {
+    fn thread_snapshot_provider(&self) -> Option<Rc<dyn AgentThreadSnapshotProvider>> {
         None
     }
 
@@ -205,10 +205,8 @@ pub trait AgentSessionSetTitle {
     fn run(&self, title: SharedString, cx: &mut App) -> Task<Result<()>>;
 }
 
-pub trait AgentTelemetry {
-    /// A representation of the current thread state that can be serialized for
-    /// storage with telemetry events.
-    fn thread_data(
+pub trait AgentThreadSnapshotProvider {
+    fn snapshot_for_thread(
         &self,
         session_id: &acp::SessionId,
         cx: &mut App,

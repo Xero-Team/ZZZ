@@ -9,17 +9,17 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct TelemetrySnapshot {
-    pub worktree_snapshots: Vec<TelemetryWorktreeSnapshot>,
+pub struct ProjectSnapshot {
+    pub worktree_snapshots: Vec<ProjectWorktreeSnapshot>,
 }
 
-impl TelemetrySnapshot {
-    pub fn new(project: &Entity<Project>, cx: &mut App) -> Task<TelemetrySnapshot> {
+impl ProjectSnapshot {
+    pub fn new(project: &Entity<Project>, cx: &mut App) -> Task<ProjectSnapshot> {
         let git_store = project.read(cx).git_store().clone();
         let worktree_snapshots: Vec<_> = project
             .read(cx)
             .visible_worktrees(cx)
-            .map(|worktree| TelemetryWorktreeSnapshot::new(worktree, git_store.clone(), cx))
+            .map(|worktree| ProjectWorktreeSnapshot::new(worktree, git_store.clone(), cx))
             .collect();
 
         cx.spawn(async move |_| {
@@ -31,7 +31,7 @@ impl TelemetrySnapshot {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct TelemetryWorktreeSnapshot {
+pub struct ProjectWorktreeSnapshot {
     pub worktree_path: String,
     pub git_state: Option<GitState>,
 }
@@ -44,12 +44,12 @@ pub struct GitState {
     pub diff: Option<String>,
 }
 
-impl TelemetryWorktreeSnapshot {
+impl ProjectWorktreeSnapshot {
     fn new(
         worktree: Entity<Worktree>,
         git_store: Entity<GitStore>,
         cx: &App,
-    ) -> Task<TelemetryWorktreeSnapshot> {
+    ) -> Task<ProjectWorktreeSnapshot> {
         cx.spawn(async move |cx| {
             // Get worktree path and snapshot
             let worktree_info = cx.update(|app_cx| {
@@ -108,7 +108,7 @@ impl TelemetryWorktreeSnapshot {
                 None => None,
             };
 
-            TelemetryWorktreeSnapshot {
+            ProjectWorktreeSnapshot {
                 worktree_path,
                 git_state,
             }

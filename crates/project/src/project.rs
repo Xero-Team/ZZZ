@@ -18,7 +18,7 @@ pub mod project_settings;
 pub mod search;
 pub mod task_inventory;
 pub mod task_store;
-pub mod telemetry_snapshot;
+pub mod project_snapshot;
 pub mod terminals;
 pub mod toolchain_store;
 pub mod trusted_worktrees;
@@ -3756,9 +3756,6 @@ impl Project {
             WorktreeStoreEvent::WorktreeOrderChanged => cx.emit(Event::WorktreeOrderChanged),
             WorktreeStoreEvent::WorktreeUpdateSent(_) => {}
             WorktreeStoreEvent::WorktreeUpdatedEntries(worktree_id, changes) => {
-                self.client()
-                    .telemetry()
-                    .report_discovered_project_type_events(*worktree_id, changes);
                 cx.emit(Event::WorktreeUpdatedEntries(*worktree_id, changes.clone()))
             }
             WorktreeStoreEvent::WorktreeDeletedEntry(worktree_id, id) => {

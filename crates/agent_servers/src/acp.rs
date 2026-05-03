@@ -1800,7 +1800,7 @@ pub mod test_support {
 
     use acp_thread::{
         AgentModelSelector, AgentSessionConfigOptions, AgentSessionModes, AgentSessionRetry,
-        AgentSessionSetTitle, AgentSessionTruncate, AgentTelemetry, UserMessageId,
+        AgentSessionSetTitle, AgentSessionTruncate, AgentThreadSnapshotProvider, UserMessageId,
     };
 
     use super::*;
@@ -2037,8 +2037,8 @@ pub mod test_support {
             self.inner.model_selector(session_id)
         }
 
-        fn telemetry(&self) -> Option<Rc<dyn AgentTelemetry>> {
-            self.inner.telemetry()
+        fn thread_snapshot_provider(&self) -> Option<Rc<dyn AgentThreadSnapshotProvider>> {
+            self.inner.thread_snapshot_provider()
         }
 
         fn session_modes(

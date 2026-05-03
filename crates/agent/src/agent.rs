@@ -58,7 +58,7 @@ use util::rel_path::RelPath;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProjectSnapshot {
-    pub worktree_snapshots: Vec<project::telemetry_snapshot::TelemetryWorktreeSnapshot>,
+    pub worktree_snapshots: Vec<project::project_snapshot::ProjectWorktreeSnapshot>,
     pub timestamp: DateTime<Utc>,
 }
 
@@ -1715,8 +1715,8 @@ impl acp_thread::AgentConnection for NativeAgentConnection {
         Some(Rc::new(NativeAgentSessionList::new(thread_store, cx)) as _)
     }
 
-    fn telemetry(&self) -> Option<Rc<dyn acp_thread::AgentTelemetry>> {
-        Some(Rc::new(self.clone()) as Rc<dyn acp_thread::AgentTelemetry>)
+    fn thread_snapshot_provider(&self) -> Option<Rc<dyn acp_thread::AgentThreadSnapshotProvider>> {
+        Some(Rc::new(self.clone()) as Rc<dyn acp_thread::AgentThreadSnapshotProvider>)
     }
 
     fn into_any(self: Rc<Self>) -> Rc<dyn Any> {
@@ -1724,8 +1724,8 @@ impl acp_thread::AgentConnection for NativeAgentConnection {
     }
 }
 
-impl acp_thread::AgentTelemetry for NativeAgentConnection {
-    fn thread_data(
+impl acp_thread::AgentThreadSnapshotProvider for NativeAgentConnection {
+    fn snapshot_for_thread(
         &self,
         session_id: &acp::SessionId,
         cx: &mut App,

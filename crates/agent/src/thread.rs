@@ -1380,7 +1380,7 @@ impl Thread {
         project: Entity<Project>,
         cx: &mut Context<Self>,
     ) -> Task<Arc<ProjectSnapshot>> {
-        let task = project::telemetry_snapshot::TelemetrySnapshot::new(&project, cx);
+        let task = project::project_snapshot::ProjectSnapshot::new(&project, cx);
         cx.spawn(async move |_, _| {
             let snapshot = task.await;
 

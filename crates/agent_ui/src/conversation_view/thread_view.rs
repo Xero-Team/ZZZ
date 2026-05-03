@@ -35,7 +35,7 @@ impl ThreadFeedbackState {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let Some(telemetry) = thread.read(cx).connection().telemetry() else {
+        let Some(thread_snapshot_provider) = thread.read(cx).connection().thread_snapshot_provider() else {
             return;
         };
 
@@ -60,7 +60,7 @@ impl ThreadFeedbackState {
         let session_id = thread.read(cx).session_id().clone();
         let parent_session_id = thread.read(cx).parent_session_id().cloned();
         let agent_telemetry_id = thread.read(cx).connection().telemetry_id();
-        let task = telemetry.thread_data(&session_id, cx);
+        let task = thread_snapshot_provider.snapshot_for_thread(&session_id, cx);
         let rating = match feedback {
             ThreadFeedback::Positive => "positive",
             ThreadFeedback::Negative => "negative",
@@ -86,7 +86,7 @@ impl ThreadFeedbackState {
     }
 
     pub fn submit_comments(&mut self, thread: Entity<AcpThread>, cx: &mut App) {
-        let Some(telemetry) = thread.read(cx).connection().telemetry() else {
+        let Some(thread_snapshot_provider) = thread.read(cx).connection().thread_snapshot_provider() else {
             return;
         };
 
@@ -108,7 +108,7 @@ impl ThreadFeedbackState {
 
         let session_id = thread.read(cx).session_id().clone();
         let agent_telemetry_id = thread.read(cx).connection().telemetry_id();
-        let task = telemetry.thread_data(&session_id, cx);
+        let task = thread_snapshot_provider.snapshot_for_thread(&session_id, cx);
         cx.background_spawn(async move {
             let thread = task.await?;
 
@@ -894,13 +894,6 @@ impl ThreadView {
         }
 
         self.last_token_limit_telemetry = Some(ratio);
-
-        telemetry::event!(
-            "Agent Token Limit Warning",
-            agent = agent_telemetry_id,
-            session_id = session_id,
-            kind = kind,
-        );
     }
 
     // sending
@@ -4963,7 +4956,12 @@ impl ThreadView {
             }
 
             AgentSettings::get_global(cx).enable_feedback
-                && self.thread.read(cx).connection().telemetry().is_some()
+                && self
+                    .thread
+                    .read(cx)
+                    .connection()
+                    .thread_snapshot_provider()
+                    .is_some()
         });
 
         if enable_thread_feedback {

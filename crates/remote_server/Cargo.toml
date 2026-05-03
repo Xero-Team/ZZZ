@@ -28,7 +28,6 @@ askpass.workspace = true
 clap.workspace = true
 client.workspace = true
 collections.workspace = true
-crashes.workspace = true
 dap_adapters.workspace = true
 debug_adapter_extension.workspace = true
 env_logger.workspace = true
@@ -76,10 +75,8 @@ rayon.workspace = true
 uuid = { workspace = true, features = ["v4"] }
 
 [target.'cfg(not(windows))'.dependencies]
-crash-handler.workspace = true
 fork.workspace = true
 libc.workspace = true
-minidumper.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true

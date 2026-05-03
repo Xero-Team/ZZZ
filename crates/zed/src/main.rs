@@ -12,7 +12,6 @@ use clap::Parser;
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
 use client::{Client, ProxySettings, RefreshLlmTokenListener, UserStore};
 use collections::HashMap;
-use crashes::InitCrashHandler;
 use db::kvp::KeyValueStore;
 use editor::Editor;
 use extension::ExtensionHostProxy;
@@ -192,12 +191,6 @@ fn main() {
         return;
     }
 
-    // `zed --crash-handler` Makes zed operate in minidump crash handler mode
-    if let Some(socket) = &args.crash_handler {
-        crashes::crash_server(socket.as_path());
-        return;
-    }
-
     #[cfg(target_os = "windows")]
     if args.record_etw_trace {
         let zed_pid = args
@@ -335,30 +328,6 @@ fn main() {
         session_id.clone(),
         KeyValueStore::from_app_db(&app_db),
     ));
-    let background_executor = app.background_executor();
-    crashes::init(
-        InitCrashHandler {
-            session_id,
-            // strip the build and channel information from the version string, we send them separately
-            zed_version: semver::Version::new(
-                app_version.major,
-                app_version.minor,
-                app_version.patch,
-            )
-            .to_string(),
-            binary: "zed".to_string(),
-            release_channel: release_channel::RELEASE_CHANNEL_NAME.clone(),
-            commit_sha: app_commit_sha
-                .as_ref()
-                .map(|sha| sha.full())
-                .unwrap_or_else(|| "no sha".to_owned()),
-        },
-        |task| {
-            app.background_executor().spawn(task).detach();
-        },
-        move |duration| background_executor.timer(duration),
-    );
-
     let (open_listener, mut open_rx) = OpenListener::new();
 
     let failed_single_instance_check = if *zed_env_vars::ZED_STATELESS
@@ -1544,11 +1513,6 @@ struct Args {
     /// by having Zed act like netcat communicating over a Unix socket.
     #[arg(long, hide = true)]
     nc: Option<String>,
-
-    /// Used for recording minidumps on crashes by having Zed run a separate
-    /// process communicating over a socket.
-    #[arg(long, hide = true)]
-    crash_handler: Option<PathBuf>,
 
     /// Run zed in the foreground, only used on Windows, to match the behavior on macOS.
     #[arg(long)]
