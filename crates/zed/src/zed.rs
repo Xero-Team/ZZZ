@@ -2480,7 +2480,7 @@ mod tests {
         window: &WindowHandle<MultiWorkspace>,
         cx: &mut TestAppContext,
     ) {
-        let all_tasks = window
+        let (all_tasks, multi_workspace_task) = window
             .update(cx, |multi_workspace, window, cx| {
                 let mut tasks = multi_workspace
                     .workspaces()
@@ -2490,12 +2490,15 @@ mod tests {
                         })
                     })
                     .collect::<Vec<_>>();
-                tasks.push(multi_workspace.flush_serialization());
-                tasks
+                let multi_workspace_task = multi_workspace.flush_serialization();
+                (tasks, multi_workspace_task)
             })
             .unwrap();
 
         futures::future::join_all(all_tasks).await;
+        multi_workspace_task.await;
+        cx.background_executor.run_until_parked();
+        cx.run_until_parked();
     }
 
     #[gpui::test]
