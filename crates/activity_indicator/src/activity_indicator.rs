@@ -65,9 +65,14 @@ struct PendingWork<'a> {
 struct Content {
     icon: Option<gpui::AnyElement>,
     message: String,
-    on_click:
-        Option<Arc<dyn Fn(&mut ActivityIndicator, &mut Window, &mut Context<ActivityIndicator>)>>,
+    interaction: ContentInteraction,
     tooltip_message: Option<String>,
+}
+
+enum ContentInteraction {
+    Passive,
+    Action(Arc<dyn Fn(&mut ActivityIndicator, &mut Window, &mut Context<ActivityIndicator>)>),
+    Menu,
 }
 
 impl ActivityIndicator {
@@ -344,7 +349,7 @@ impl ActivityIndicator {
                         .into_any_element(),
                 ),
                 message: message.clone(),
-                on_click: Some(Arc::new(move |this, window, cx| {
+                interaction: ContentInteraction::Action(Arc::new(move |this, window, cx| {
                     this.project.update(cx, |project, cx| {
                         project.pop_environment_error(cx);
                     });
@@ -386,7 +391,7 @@ impl ActivityIndicator {
                             .into_any_element(),
                     ),
                     message,
-                    on_click: Some(Arc::new(Self::toggle_language_server_work_context_menu)),
+                    interaction: ContentInteraction::Menu,
                     tooltip_message: None,
                 });
             }
@@ -409,7 +414,7 @@ impl ActivityIndicator {
                 ),
                 message: format!("Debug: {}", session.read(cx).adapter()),
                 tooltip_message: session.read(cx).label().map(|label| label.to_string()),
-                on_click: None,
+                interaction: ContentInteraction::Passive,
             });
         }
 
@@ -431,7 +436,7 @@ impl ActivityIndicator {
                         .into_any_element(),
                 ),
                 message: job_info.message.into(),
-                on_click: None,
+                interaction: ContentInteraction::Passive,
                 tooltip_message: None,
             });
         }
@@ -447,7 +452,7 @@ impl ActivityIndicator {
                             .into_any_element(),
                     ),
                     message: fs_job.message.clone().into(),
-                    on_click: None,
+                    interaction: ContentInteraction::Passive,
                     tooltip_message: None,
                 });
             }
@@ -516,7 +521,7 @@ impl ActivityIndicator {
                         }
                     )
                 ),
-                on_click: Some(Arc::new(move |this, window, cx| {
+                interaction: ContentInteraction::Action(Arc::new(move |this, window, cx| {
                     this.statuses
                         .retain(|status| !downloading.contains(&status.name));
                     this.dismiss_message(&DismissMessage, window, cx)
@@ -545,7 +550,7 @@ impl ActivityIndicator {
                         }
                     ),
                 ),
-                on_click: Some(Arc::new(move |this, window, cx| {
+                interaction: ContentInteraction::Action(Arc::new(move |this, window, cx| {
                     this.statuses
                         .retain(|status| !checking_for_update.contains(&status.name));
                     this.dismiss_message(&DismissMessage, window, cx)
@@ -574,7 +579,7 @@ impl ActivityIndicator {
                             acc
                         }),
                 ),
-                on_click: Some(Arc::new(|this, window, cx| {
+                interaction: ContentInteraction::Action(Arc::new(|this, window, cx| {
                     this.show_error_message(&ShowErrorMessage, window, cx)
                 })),
                 tooltip_message: None,
@@ -590,7 +595,7 @@ impl ActivityIndicator {
                         .into_any_element(),
                 ),
                 message: format!("Formatting failed: {failure}. Click to see logs."),
-                on_click: Some(Arc::new(|indicator, window, cx| {
+                interaction: ContentInteraction::Action(Arc::new(|indicator, window, cx| {
                     indicator.project.update(cx, |project, cx| {
                         project.reset_last_formatting_failure(cx);
                     });
@@ -637,16 +642,18 @@ impl ActivityIndicator {
                 ),
                 message: final_message,
                 tooltip_message,
-                on_click: Some(Arc::new(move |activity_indicator, window, cx| {
-                    if altered_message {
-                        activity_indicator.show_error_message(&ShowErrorMessage, window, cx)
-                    } else {
-                        activity_indicator
-                            .statuses
-                            .retain(|status| status.name != server_name);
-                        cx.notify();
-                    }
-                })),
+                interaction: ContentInteraction::Action(Arc::new(
+                    move |activity_indicator, window, cx| {
+                        if altered_message {
+                            activity_indicator.show_error_message(&ShowErrorMessage, window, cx)
+                        } else {
+                            activity_indicator
+                                .statuses
+                                .retain(|status| status.name != server_name);
+                            cx.notify();
+                        }
+                    },
+                )),
             });
         }
 
@@ -683,7 +690,7 @@ impl ActivityIndicator {
                     }
                 })),
                 message,
-                on_click: Some(Arc::new(|this, window, cx| {
+                interaction: ContentInteraction::Action(Arc::new(|this, window, cx| {
                     this.dismiss_message(&Default::default(), window, cx)
                 })),
                 tooltip_message: None,
@@ -691,14 +698,6 @@ impl ActivityIndicator {
         }
 
         None
-    }
-
-    fn toggle_language_server_work_context_menu(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.context_menu_handle.toggle(window, cx);
     }
 }
 
@@ -713,99 +712,122 @@ impl Render for ActivityIndicator {
             .on_action(cx.listener(Self::show_error_message))
             .on_action(cx.listener(Self::dismiss_message));
         let Some(content) = self.content_to_render(cx) else {
-            return result;
+            return result.into_any_element();
         };
         let activity_indicator = cx.entity().downgrade();
         let truncate_content = content.message.len() > MAX_MESSAGE_LEN;
 
-        result.gap_2().child(
-            PopoverMenu::new("activity-indicator-popover")
-                .trigger(
-                    Button::new("activity-indicator-trigger", {
-                        if truncate_content {
-                            truncate_and_trailoff(&content.message, MAX_MESSAGE_LEN)
-                        } else {
-                            content.message.clone()
-                        }
-                    })
-                    .label_size(LabelSize::Small)
-                    .loading(content.icon.is_some())
-                    .map(|button| {
-                        if truncate_content {
-                            button.tooltip(Tooltip::text(content.message))
-                        } else {
-                            button.when_some(content.tooltip_message, |this, tooltip_message| {
-                                this.tooltip(Tooltip::text(tooltip_message))
-                            })
-                        }
-                    })
-                    .when_some(content.on_click, |this, handler| {
-                        this.on_click(cx.listener(move |this, _, window, cx| {
-                            handler(this, window, cx);
-                        }))
-                    }),
-                )
-                .anchor(gpui::Anchor::BottomLeft)
-                .menu(move |window, cx| {
-                    let strong_this = activity_indicator.upgrade()?;
-                    let mut has_work = false;
-                    let menu = ContextMenu::build(window, cx, |mut menu, _, cx| {
-                        for work in strong_this.read(cx).pending_language_server_work(cx) {
-                            has_work = true;
-                            let activity_indicator = activity_indicator.clone();
-                            let mut title = work
-                                .progress
-                                .title
-                                .clone()
-                                .unwrap_or(work.progress_token.to_string());
-
-                            if work.progress.is_cancellable {
-                                let language_server_id = work.language_server_id;
-                                let token = work.progress_token.clone();
-                                let title = SharedString::from(title);
-                                menu = menu.custom_entry(
-                                    move |_, _| {
-                                        h_flex()
-                                            .w_full()
-                                            .justify_between()
-                                            .child(Label::new(title.clone()))
-                                            .child(Icon::new(IconName::XCircle))
-                                            .into_any_element()
-                                    },
-                                    move |_, cx| {
-                                        let token = token.clone();
-                                        activity_indicator
-                                            .update(cx, |activity_indicator, cx| {
-                                                activity_indicator.project.update(
-                                                    cx,
-                                                    |project, cx| {
-                                                        project.cancel_language_server_work(
-                                                            language_server_id,
-                                                            Some(token),
-                                                            cx,
-                                                        );
-                                                    },
-                                                );
-                                                activity_indicator.context_menu_handle.hide(cx);
-                                                cx.notify();
-                                            })
-                                            .ok();
-                                    },
-                                );
-                            } else {
-                                if let Some(progress_message) = work.progress.message.as_ref() {
-                                    title.push_str(": ");
-                                    title.push_str(progress_message);
-                                }
-
-                                menu = menu.label(title);
-                            }
-                        }
-                        menu
-                    });
-                    has_work.then_some(menu)
-                }),
+        let base_button = Button::new(
+            "activity-indicator-trigger",
+            if truncate_content {
+                truncate_and_trailoff(&content.message, MAX_MESSAGE_LEN)
+            } else {
+                content.message.clone()
+            },
         )
+        .label_size(LabelSize::Small)
+        .loading(content.icon.is_some())
+        .map(|button| {
+            if truncate_content {
+                button.tooltip(Tooltip::text(content.message))
+            } else {
+                button.when_some(content.tooltip_message, |this, tooltip_message| {
+                    this.tooltip(Tooltip::text(tooltip_message))
+                })
+            }
+        });
+
+        let element = match content.interaction {
+            ContentInteraction::Passive => result.gap_2().child(base_button).into_any_element(),
+            ContentInteraction::Action(handler) => result
+                .gap_2()
+                .child(
+                    base_button.on_click(cx.listener(move |this, _, window, cx| {
+                        handler(this, window, cx);
+                    })),
+                )
+                .into_any_element(),
+            ContentInteraction::Menu => {
+                let menu_handle = self.context_menu_handle.clone();
+                result
+                    .gap_2()
+                    .child(
+                        PopoverMenu::new("activity-indicator-popover")
+                            .with_handle(menu_handle.clone())
+                            .child(base_button.on_click(cx.listener(move |_, _, window, cx| {
+                                menu_handle.toggle(window, cx);
+                            })))
+                            .anchor(gpui::Anchor::BottomLeft)
+                            .menu(move |window, cx| {
+                                let strong_this = activity_indicator.upgrade()?;
+                                let mut has_work = false;
+                                let menu = ContextMenu::build(window, cx, |mut menu, _, cx| {
+                                    for work in strong_this.read(cx).pending_language_server_work(cx)
+                                    {
+                                        has_work = true;
+                                        let activity_indicator = activity_indicator.clone();
+                                        let mut title = work
+                                            .progress
+                                            .title
+                                            .clone()
+                                            .unwrap_or(work.progress_token.to_string());
+
+                                        if work.progress.is_cancellable {
+                                            let language_server_id = work.language_server_id;
+                                            let token = work.progress_token.clone();
+                                            let title = SharedString::from(title);
+                                            menu = menu.custom_entry(
+                                                move |_, _| {
+                                                    h_flex()
+                                                        .w_full()
+                                                        .justify_between()
+                                                        .child(Label::new(title.clone()))
+                                                        .child(Icon::new(IconName::XCircle))
+                                                        .into_any_element()
+                                                },
+                                                move |_, cx| {
+                                                    let token = token.clone();
+                                                    activity_indicator
+                                                        .update(cx, |activity_indicator, cx| {
+                                                            activity_indicator.project.update(
+                                                                cx,
+                                                                |project, cx| {
+                                                                    project.cancel_language_server_work(
+                                                                        language_server_id,
+                                                                        Some(token),
+                                                                        cx,
+                                                                    );
+                                                                },
+                                                            );
+                                                            activity_indicator
+                                                                .context_menu_handle
+                                                                .hide(cx);
+                                                            cx.notify();
+                                                        })
+                                                        .ok();
+                                                },
+                                            );
+                                        } else {
+                                            if let Some(progress_message) =
+                                                work.progress.message.as_ref()
+                                            {
+                                                title.push_str(": ");
+                                                title.push_str(progress_message);
+                                            }
+
+                                            menu = menu.label(title);
+                                        }
+                                    }
+                                    menu
+                                });
+                                has_work.then_some(menu)
+                            }),
+                    )
+                    .into_any_element()
+            }
+        };
+
+        element
     }
 }
 

@@ -179,6 +179,14 @@ impl<M: ManagedView> PopoverMenu<M> {
         self
     }
 
+    pub fn child<T: IntoElement + Toggleable + 'static>(mut self, t: T) -> Self {
+        self.child_builder = Some(Box::new(move |menu, _builder| {
+            let open = menu.borrow().is_some();
+            t.toggle_state(open).into_any_element()
+        }));
+        self
+    }
+
     pub fn trigger<T: PopoverTrigger>(mut self, t: T) -> Self {
         let on_open = self.on_open.clone();
         self.child_builder = Some(Box::new(move |menu, builder| {
