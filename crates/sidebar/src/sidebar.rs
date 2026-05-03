@@ -4386,7 +4386,6 @@ impl Sidebar {
                             SidebarSide::Left => "left",
                             SidebarSide::Right => "right",
                         };
-                        telemetry::event!("Sidebar Add Project Clicked", side = side);
                         window.dispatch_action(
                             Open {
                                 create_new_window: false,
@@ -4719,11 +4718,6 @@ impl Sidebar {
     ) {
         match &self.view {
             SidebarView::ThreadList => {
-                let side = match self.side(cx) {
-                    SidebarSide::Left => "left",
-                    SidebarSide::Right => "right",
-                };
-                telemetry::event!("Thread History Viewed", side = side);
                 self.show_archive(window, cx);
             }
             SidebarView::Archive(_) => self.show_thread_list(window, cx),

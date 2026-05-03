@@ -37,11 +37,7 @@ pub struct CommandPalette {
     picker: Entity<Picker<CommandPaletteDelegate>>,
 }
 
-impl ModalView for CommandPalette {
-    fn is_command_palette(&self) -> bool {
-        true
-    }
-}
+impl ModalView for CommandPalette {}
 
 /// underscores to spaces.
 ///

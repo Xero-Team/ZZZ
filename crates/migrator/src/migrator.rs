@@ -5130,8 +5130,6 @@ mod tests {
             ),
         );
     }
-<<<<<<< HEAD
-
     #[test]
     fn test_promote_show_branch_icon_true_to_show_branch_status_icon_at_root() {
         assert_migrate_settings(
@@ -5379,6 +5377,4 @@ mod tests {
             None,
         );
     }
-=======
->>>>>>> 43b5679cb6 (Remove collaboration and telemetry settings)
 }

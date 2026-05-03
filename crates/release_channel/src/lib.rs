@@ -150,10 +150,8 @@ pub fn init_test(app_version: Version, release_channel: ReleaseChannel, cx: &mut
 
 impl ReleaseChannel {
     /// All release channels.
-    pub const ALL: [ReleaseChannel; 4] = [
+    pub const ALL: [ReleaseChannel; 2] = [
         ReleaseChannel::Dev,
-        ReleaseChannel::Nightly,
-        ReleaseChannel::Preview,
         ReleaseChannel::Stable,
     ];
 

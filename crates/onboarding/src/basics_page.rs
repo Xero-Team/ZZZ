@@ -452,7 +452,6 @@ fn render_registry_agent_button(
         .state(state_element)
         .disabled(installed)
         .on_click(move |_, _, cx| {
-            telemetry::event!("Welcome Agent Install Clicked", agent = agent_id.as_str());
             let agent_id = agent_id.clone();
             update_settings_file(fs.clone(), cx, move |settings, _| {
                 let agent_servers = settings.agent_servers.get_or_insert_default();
@@ -530,7 +529,6 @@ fn render_zed_agent_button(user_store: &Entity<UserStore>, cx: &mut App) -> impl
                 this.on_click(move |_, _window, cx| cx.open_url(&zed_urls::start_trial_url(cx)))
             } else {
                 this.on_click(move |_, _, cx| {
-                    telemetry::event!("Welcome Zed Agent Sign In Clicked");
                     let client = Client::global(cx);
                     cx.spawn(async move |cx| client.sign_in_with_optional_connect(true, cx).await)
                         .detach_and_log_err(cx);
