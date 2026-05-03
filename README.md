@@ -1,46 +1,102 @@
-# Zed
+# ZZZ
 
-[![Zed](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/zed-industries/zed/main/assets/badge/v0.json)](https://zed.dev)
-[![CI](https://github.com/zed-industries/zed/actions/workflows/run_tests.yml/badge.svg)](https://github.com/zed-industries/zed/actions/workflows/run_tests.yml)
+> Zedless, Zeroed, Zen. — Zed, without the noise.
 
-Welcome to Zed, a high-performance, multiplayer code editor from the creators of [Atom](https://github.com/atom/atom) and [Tree-sitter](https://github.com/tree-sitter/tree-sitter).
+ZZZ is a community fork of [Zed](https://github.com/zed-industries/zed),
+a high-performance code editor originally built by the creators of
+[Atom](https://github.com/atom/atom) and [Tree-sitter](https://github.com/tree-sitter/tree-sitter).
+
+This fork exists because some things should not be configurable — they should simply be absent.
 
 ---
 
-### Installation
+## Philosophy
 
-On macOS, Linux, and Windows you can [download Zed directly](https://zed.dev/download) or install Zed via your local package manager ([macOS](https://zed.dev/docs/installation#macos)/[Linux](https://zed.dev/docs/linux#installing-via-a-package-manager)/[Windows](https://zed.dev/docs/windows#package-managers)).
+> _无 Zed 之 Zed，是为真 Zed。_
+> In English: Zed without Zed is true Zed.
+>
+> Strip away the telemetry, the upsells, the proprietary coupling —
+> what remains is the editor.
 
-Other platforms are not yet available:
+---
 
-- Web ([tracking issue](https://github.com/zed-industries/zed/issues/5396))
+## How ZZZ differs from upstream Zed
 
-### Developing Zed
+|                       | Upstream Zed                    | ZZZ                                    |
+| --------------------- | ------------------------------- | -------------------------------------- |
+| Telemetry             | Opt-out                         | Removed in source code                 |
+| AI service promotion  | upsells                         | None                                   |
+| Agent protocol        | Zed Agent (proprietary) and ACP | ACP Only                               |
+| Commercial API        | promoted                        | Available, manually configured, silent |
+| Contributor agreement | CLA required                    | No CLA — you keep your copyright       |
 
-- [Building Zed for macOS](./docs/src/development/macos.md)
-- [Building Zed for Linux](./docs/src/development/linux.md)
-- [Building Zed for Windows](./docs/src/development/windows.md)
+---
 
-### Contributing
+## How ZZZ differs from other Zed forks
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for ways you can contribute to Zed.
+[Gram](https://codeberg.org/GramEditor/gram) removes AI entirely — a valid and principled choice.
+[Zedless](https://github.com/zedless-editor/zedless) takes a similar privacy-first approach.
 
-Also... we're hiring! Check out our [jobs](https://zed.dev/jobs) page for open roles.
+ZZZ takes a different position: **AI features can stay, but they default to your own infrastructure.**
+The editor ships pointed at a local endpoint. No account, no cloud, nowhere asking you to sign up.
+If you want a commercial provider, you can add it yourself — quietly. _Actually, you can even use Zed AI if you want._
 
-### Licensing
+---
 
-License information for third party dependencies must be correctly provided for CI to pass.
+## Installation
 
-We use [`cargo-about`](https://github.com/EmbarkStudios/cargo-about) to automatically comply with open source licenses. If CI is failing, check the following:
+ZZZ does not provide pre-built binaries yet. Build from source:
 
-- Is it showing a `no license specified` error for a crate you've created? If so, add `publish = false` under `[package]` in your crate's Cargo.toml.
-- Is the error `failed to satisfy license requirements` for a dependency? If so, first determine what license the project has and whether this system is sufficient to comply with this license's requirements. If you're unsure, ask a lawyer. Once you've verified that this system is acceptable add the license's SPDX identifier to the `accepted` array in `script/licenses/zed-licenses.toml`.
-- Is `cargo-about` unable to find the license for a dependency? If so, add a clarification field at the end of `script/licenses/zed-licenses.toml`, as specified in the [cargo-about book](https://embarkstudios.github.io/cargo-about/cli/generate/config.html#crate-configuration).
+```sh
+cargo run
+```
 
-## Sponsorship
+See upstream build guides for system dependencies:
+[macOS](./docs/src/development/macos.md) ·
+[Linux](./docs/src/development/linux.md) ·
+[Windows](./docs/src/development/windows.md)
 
-Zed is developed by **Zed Industries, Inc.**, a for-profit company.
+To use an AI provider (OpenAI, Anthropic, Zed AI, etc.), add the API key manually in settings.
 
-If you’d like to financially support the project, you can do so via GitHub Sponsors.
-Sponsorships go directly to Zed Industries and are used as general company revenue.
-There are no perks or entitlements associated with sponsorship.
+---
+
+## Contributing
+
+No CLA. No copyright assignment.
+
+Contributions are accepted under the
+[Developer Certificate of Origin (DCO)](https://developercertificate.org/).
+Sign your commits with `git commit -s` and you're done.
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full workflow.
+
+---
+
+## Upstream Sync
+
+ZZZ tracks the upstream Zed `main` branch.
+
+If a patch conflicts with upstream, opening an issue or PR is welcome.
+
+---
+
+## Acknowledgements
+
+[Gram](https://codeberg.org/GramEditor/gram) proved that a Zed fork built
+on genuine principles — not just preferences — is worth doing.
+This project would not exist without that precedent.
+
+---
+
+## Sponsoring
+
+If you’d like to support the project, please give it a star. :)
+
+---
+
+## Licensing
+
+ZZZ inherits Zed's license structure.
+See [LICENSE-GPL](./LICENSE-GPL) and [LICENSE-APACHE](./LICENSE-APACHE).
+
+The original Zed README is preserved at [README.ORIGINAL.md](./README.ORIGINAL.md).
