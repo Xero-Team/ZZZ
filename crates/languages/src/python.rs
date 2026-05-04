@@ -1276,7 +1276,7 @@ fn micromamba_shell_name(kind: ShellKind) -> &'static str {
         ShellKind::Csh => "csh",
         ShellKind::Fish => "fish",
         ShellKind::Nushell => "nu",
-        ShellKind::PowerShell => "powershell",
+        ShellKind::PowerShell | ShellKind::Pwsh => "powershell",
         ShellKind::Cmd => "cmd.exe",
         // default / catch-all:
         _ => "posix",
@@ -1487,9 +1487,17 @@ impl ToolchainLister for PythonToolchainProvider {
                     // Activate micromamba shell in the child shell
                     // [required for micromamba]
                     if manager == "micromamba" {
-                        let shell = micromamba_shell_name(shell);
-                        activation_script
-                            .push(format!(r#"eval "$({manager} shell hook --shell {shell})""#));
+                        match shell {
+                            ShellKind::PowerShell | ShellKind::Pwsh => {
+                                activation_script.push(format!(r#"(& {manager} shell hook --shell powershell) | Out-String | Invoke-Expression"#));
+                            }
+                            _ => {
+                                let shell_name = micromamba_shell_name(shell);
+                                activation_script.push(format!(
+                                    r#"eval "$({manager} shell hook --shell {shell_name})""#
+                                ));
+                            }
+                        }
                     }
 
                     if let Some(name) = &toolchain.environment.name {
