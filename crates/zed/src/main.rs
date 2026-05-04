@@ -53,7 +53,7 @@ use std::{
 };
 use theme::{ActiveTheme, GlobalTheme, ThemeRegistry};
 use theme_settings::load_user_theme;
-use util::{ResultExt, TryFutureExt, maybe};
+use util::ResultExt;
 use uuid::Uuid;
 use workspace::{
     AppState, MultiWorkspace, SerializedWorkspaceLocation, SessionWorkspace, Toast,
@@ -325,7 +325,7 @@ fn main() {
         .spawn(installation_id(KeyValueStore::from_app_db(&app_db)));
     let session_id = Uuid::new_v4().to_string();
     let session = app.background_executor().spawn(Session::new(
-        session_id.clone(),
+        session_id,
         KeyValueStore::from_app_db(&app_db),
     ));
     let (open_listener, mut open_rx) = OpenListener::new();
@@ -631,6 +631,9 @@ fn main() {
         outline_panel::init(cx);
         tasks_ui::init(cx);
         snippets_ui::init(cx);
+        channel::init(&app_state.client.clone(), app_state.user_store.clone(), cx);
+        call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
+        notifications::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         search::init(cx);
         cx.set_global(workspace::PaneSearchBarCallbacks {
             setup_search_bar: |languages, toolbar, window, cx| {
@@ -657,6 +660,7 @@ fn main() {
         markdown_preview::init(cx);
         csv_preview::init(cx);
         svg_preview::init(cx);
+        collab_ui::init(&app_state, cx);
         onboarding::init(cx);
         settings_ui::init(cx);
         keymap_editor::init(cx);
@@ -727,7 +731,7 @@ fn main() {
         let urls: Vec<_> = args
             .paths_or_urls
             .iter()
-            .map(|arg| parse_url_arg(arg, cx))
+            .map(|arg| parse_url_arg(arg))
             .collect();
 
         // Check if any diff paths are directories to determine diff_all mode
@@ -1575,7 +1579,7 @@ impl ToString for IdType {
     }
 }
 
-fn parse_url_arg(arg: &str, cx: &App) -> String {
+fn parse_url_arg(arg: &str) -> String {
     match std::fs::canonicalize(Path::new(&arg)) {
         Ok(path) => format!("file://{}", path.display()),
         Err(_) => {
