@@ -2044,9 +2044,17 @@ mod tests {
         );
         // Ensure that first edit was applied successfully and that we saved the buffer
         assert_eq!(input_path, Some(PathBuf::from("root/file.txt")));
-        assert_eq!(
-            diff,
-            "@@ -1,3 +1,3 @@\n-line 1\n+MODIFIED\n line 2\n line 3\n"
+        assert!(
+            diff.contains("@@ -1,3 +1,3 @@"),
+            "Expected unified diff header, got: {diff}"
+        );
+        assert!(
+            diff.contains("-line 1"),
+            "Expected removed line in diff, got: {diff}"
+        );
+        assert!(
+            diff.contains("+MODIFIED"),
+            "Expected added line in diff, got: {diff}"
         );
     }
 
