@@ -1683,12 +1683,12 @@ impl EditPredictionStore {
         edited_buffer_snapshot: &BufferSnapshot,
         editable_offset_range: Range<usize>,
         _edit_preview: &EditPreview,
-        example: Option<ExampleSpec>,
-        e2e_latency: std::time::Duration,
+        _example: Option<ExampleSpec>,
+        _e2e_latency: std::time::Duration,
         cx: &mut Context<Self>,
     ) {
         #[cfg(not(test))]
-        let _ = (&request_id, &example, e2e_latency);
+        let _ = &request_id;
 
         let this = &mut *self;
         let project_state = this.get_or_init_project(project, cx);

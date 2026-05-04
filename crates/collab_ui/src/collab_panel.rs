@@ -41,8 +41,7 @@ use ui::{
 };
 use util::{ResultExt, TryFutureExt, maybe};
 use workspace::{
-    AutoWatch, CopyRoomId, Deafen, LeaveCall, MultiWorkspace, Mute, OpenChannelNotes,
-    OpenChannelNotesById, ScreenShare, ShareProject, Workspace,
+    AutoWatch, Workspace,
     dock::{DockPosition, Panel, PanelEvent},
     notifications::{
         DetachAndPromptErr, Notification as WorkspaceNotification, NotificationId, NotifyResultExt,

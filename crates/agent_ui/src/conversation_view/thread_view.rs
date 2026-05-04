@@ -15,7 +15,7 @@ use crate::message_editor::SharedSessionCapabilities;
 use gpui::List;
 use heapless::Vec as ArrayVec;
 use language_model::{LanguageModelEffortLevel, Speed};
-use settings::{SidebarSide, update_settings_file};
+use settings::update_settings_file;
 use ui::{ButtonLike, SpinnerLabel, SpinnerVariant, SplitButton, SplitButtonStyle, Tab};
 use workspace::SERIALIZATION_THROTTLE_TIME;
 
@@ -36,7 +36,9 @@ impl ThreadFeedbackState {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let Some(thread_snapshot_provider) = thread.read(cx).connection().thread_snapshot_provider() else {
+        let Some(thread_snapshot_provider) =
+            thread.read(cx).connection().thread_snapshot_provider()
+        else {
             return;
         };
 
@@ -87,7 +89,9 @@ impl ThreadFeedbackState {
     }
 
     pub fn submit_comments(&mut self, thread: Entity<AcpThread>, cx: &mut App) {
-        let Some(thread_snapshot_provider) = thread.read(cx).connection().thread_snapshot_provider() else {
+        let Some(thread_snapshot_provider) =
+            thread.read(cx).connection().thread_snapshot_provider()
+        else {
             return;
         };
 
@@ -865,26 +869,21 @@ impl ThreadView {
     }
 
     fn emit_token_limit_telemetry_if_needed(&mut self, cx: &App) {
-        let (ratio, agent_telemetry_id, session_id) = {
+        let ratio = {
             let thread_data = self.thread.read(cx);
             let Some(token_usage) = thread_data.token_usage() else {
                 return;
             };
-            (
-                token_usage.ratio(),
-                thread_data.connection().telemetry_id(),
-                thread_data.session_id().clone(),
-            )
+            token_usage.ratio()
         };
 
-        let kind = match ratio {
+        match ratio {
             acp_thread::TokenUsageRatio::Normal => {
                 self.last_token_limit_telemetry = None;
                 return;
             }
-            acp_thread::TokenUsageRatio::Warning => "warning",
-            acp_thread::TokenUsageRatio::Exceeded => "exceeded",
-        };
+            acp_thread::TokenUsageRatio::Warning | acp_thread::TokenUsageRatio::Exceeded => {}
+        }
 
         let should_skip = self
             .last_token_limit_telemetry
@@ -1032,11 +1031,6 @@ impl ThreadView {
             cx.notify();
         })
         .detach();
-
-        let side = match AgentSettings::get_global(cx).sidebar_side() {
-            SidebarSide::Left => "left",
-            SidebarSide::Right => "right",
-        };
 
         let task = cx.spawn_in(window, async move |this, cx| {
             let Some((contents, tracked_buffers)) = contents_task.await? else {
@@ -8357,8 +8351,7 @@ impl ThreadView {
     }
 
     fn render_payment_required_error(&self, cx: &mut Context<Self>) -> Callout {
-        const ERROR_MESSAGE: &str =
-            "No provider is currently available for this request. Configure a local, self-hosted, or manually added provider and try again.";
+        const ERROR_MESSAGE: &str = "No provider is currently available for this request. Configure a local, self-hosted, or manually added provider and try again.";
 
         Callout::new()
             .severity(Severity::Error)

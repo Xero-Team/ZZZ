@@ -1471,7 +1471,7 @@ impl ExtensionsPage {
                     .size(IconSize::Small)
                     .color(Color::Muted),
             )
-            .on_click({ move |_event, _window, cx| cx.open_url(&registry_url) });
+            .on_click(move |_event, _window, cx| cx.open_url(&registry_url));
 
         div().pt_4().px_4().child(
             Banner::new()
@@ -1500,7 +1500,7 @@ impl ExtensionsPage {
     ) -> impl IntoElement {
         let docs_url_button = Button::new("open_docs", "View Documentation")
             .end_icon(Icon::new(IconName::ArrowUpRight).size(IconSize::Small))
-            .on_click({ move |_event, _window, cx| cx.open_url(&docs_url) });
+            .on_click(move |_event, _window, cx| cx.open_url(&docs_url));
 
         div()
             .pt_4()

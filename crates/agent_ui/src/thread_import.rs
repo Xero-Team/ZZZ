@@ -941,20 +941,20 @@ mod tests {
     #[test]
     fn test_returns_empty_when_channel_db_missing() {
         let dir = tempfile::tempdir().unwrap();
-        let threads = read_threads_from_channel(dir.path(), ReleaseChannel::Nightly).unwrap();
+        let threads = read_threads_from_channel(dir.path(), ReleaseChannel::Stable).unwrap();
         assert!(threads.is_empty());
     }
 
     #[test]
     fn test_preserves_archived_state() {
         let dir = tempfile::tempdir().unwrap();
-        let connection = create_channel_db(dir.path(), ReleaseChannel::Nightly);
+        let connection = create_channel_db(dir.path(), ReleaseChannel::Stable);
 
         insert_thread(&connection, "Active Thread", "2025-01-15T10:00:00Z", false);
         insert_thread(&connection, "Archived Thread", "2025-01-15T09:00:00Z", true);
         drop(connection);
 
-        let threads = read_threads_from_channel(dir.path(), ReleaseChannel::Nightly).unwrap();
+        let threads = read_threads_from_channel(dir.path(), ReleaseChannel::Stable).unwrap();
         assert_eq!(threads.len(), 2);
 
         let active = threads

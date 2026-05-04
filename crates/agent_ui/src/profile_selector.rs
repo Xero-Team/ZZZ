@@ -533,7 +533,7 @@ impl PickerDelegate for ProfilePickerDelegate {
                         }
                     });
 
-                    provider.set_profile(profile_id.clone(), cx);
+                    provider.set_profile(profile_id, cx);
                 }
 
                 cx.emit(DismissEvent);

@@ -1,9 +1,6 @@
 use gpui::{Action as _, App};
 use itertools::Itertools as _;
-use settings::{
-    AudioInputDeviceName, AudioOutputDeviceName, LanguageSettingsContent, SemanticTokens,
-    SettingsContent,
-};
+use settings::{LanguageSettingsContent, SemanticTokens, SettingsContent};
 use std::sync::{Arc, OnceLock};
 use strum::{EnumMessage, IntoDiscriminant as _, VariantArray};
 use theme::SystemAppearance;

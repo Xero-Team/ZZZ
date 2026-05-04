@@ -506,7 +506,7 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
 
         if let Some(specs) = window.gpu_specs() {
             log::info!("Using GPU: {:?}", specs);
-            show_software_emulation_warning_if_needed(specs.clone(), window, cx);
+            show_software_emulation_warning_if_needed(specs, window, cx);
         }
 
         let edit_prediction_menu_handle = PopoverMenuHandle::default();
@@ -537,8 +537,12 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             cx.new(|cx| toolchain_selector::ActiveToolchain::new(workspace, window, cx));
         let vim_mode_indicator = cx.new(|cx| vim::ModeIndicator::new(window, cx));
         let image_info = cx.new(|_cx| ImageInfo::new(workspace));
-        let activity_indicator =
-            activity_indicator::ActivityIndicator::new(workspace, app_state.languages.clone(), window, cx);
+        let activity_indicator = activity_indicator::ActivityIndicator::new(
+            workspace,
+            app_state.languages.clone(),
+            window,
+            cx,
+        );
 
         let lsp_button_menu_handle = PopoverMenuHandle::default();
         let lsp_button =
@@ -2482,7 +2486,7 @@ mod tests {
     ) {
         let (all_tasks, multi_workspace_task) = window
             .update(cx, |multi_workspace, window, cx| {
-                let mut tasks = multi_workspace
+                let tasks = multi_workspace
                     .workspaces()
                     .map(|workspace| {
                         workspace.update(cx, |workspace, cx| {

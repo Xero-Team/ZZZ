@@ -295,13 +295,6 @@ impl Render for EditPredictionButton {
             }
             provider @ (EditPredictionProvider::Zed | EditPredictionProvider::Mercury) => {
                 let enabled = self.editor_enabled.unwrap_or(true);
-                let file = self.file.clone();
-                let language = self.language.clone();
-                let project = self.project.clone();
-                let provider_name: &'static str = match provider {
-                    EditPredictionProvider::Zed => "zed",
-                    _ => "unknown",
-                };
                 let icons = self
                     .edit_prediction_provider
                     .as_ref()
@@ -618,9 +611,7 @@ impl EditPredictionButton {
                 })
                 .entry("Disable Copilot", None, {
                     let fs = fs.clone();
-                    move |_window, cx| {
-                        hide_copilot(fs.clone(), cx)
-                    }
+                    move |_window, cx| hide_copilot(fs.clone(), cx)
                 });
 
             let menu =
@@ -680,7 +671,7 @@ impl EditPredictionButton {
             let language_name = language.name();
 
             menu = menu.toggleable_entry(
-                language_name.clone(),
+                language_name,
                 language_enabled,
                 IconPosition::Start,
                 None,

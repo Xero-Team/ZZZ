@@ -203,13 +203,12 @@ fn main() {
         }
 
         let release_channel = option_env!("RELEASE_CHANNEL").unwrap_or("dev");
-        let icon = match release_channel {
+        let _icon = match release_channel {
             "stable" => "resources/windows/app-icon.ico",
             "preview" | "nightly" => "resources/windows/app-icon.ico",
             "dev" => "resources/windows/app-icon-dev.ico",
             _ => "resources/windows/app-icon-dev.ico",
         };
-        let icon = std::path::Path::new(icon);
         println!("cargo:rerun-if-env-changed=RELEASE_CHANNEL");
         println!("cargo:rerun-if-env-changed=GITHUB_RUN_NUMBER");
 

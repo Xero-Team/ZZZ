@@ -3224,7 +3224,7 @@ impl SettingsWindow {
                 shown_errors: &mut HashSet<String>,
                 cx: &mut Context<SettingsWindow>,
             ) -> impl IntoElement {
-                if shown_errors.insert(error.clone()) {}
+                shown_errors.insert(error.clone());
                 Banner::new()
                     .severity(Severity::Warning)
                     .child(

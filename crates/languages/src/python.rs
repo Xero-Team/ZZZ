@@ -2088,20 +2088,6 @@ impl LspAdapter for BasedPyrightLspAdapter {
                     .and_then(|s| s.settings.clone())
                     .unwrap_or_default();
 
-            let should_insert_toolchain = || {
-                user_settings.as_object().is_none_or(|object| {
-                    [
-                        "venvPath",
-                        "venv",
-                        "python",
-                        "pythonPath",
-                        "defaultInterpreterPath",
-                    ]
-                    .into_iter()
-                    .all(|known_key| !object.contains_key(known_key))
-                })
-            };
-
             // If we have a detected toolchain, configure Pyright to use it
             let should_insert_toolchain = || {
                 user_settings.as_object().is_none_or(|object| {
@@ -2113,7 +2099,7 @@ impl LspAdapter for BasedPyrightLspAdapter {
                         "defaultInterpreterPath",
                     ]
                     .into_iter()
-                    .any(|known_key| object.contains_key(known_key))
+                    .all(|known_key| !object.contains_key(known_key))
                 })
             };
             if let Some(toolchain) = toolchain

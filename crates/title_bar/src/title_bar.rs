@@ -25,10 +25,9 @@ use client::{Client, UserStore, zed_urls};
 use cloud_api_types::Plan;
 
 use gpui::{
-    Action, Anchor, Animation, AnimationExt, AnyElement, App, Context, Element, Entity, Focusable,
-    InteractiveElement, IntoElement, MouseButton, ParentElement, Render,
-    StatefulInteractiveElement, Styled, Subscription, WeakEntity, Window, actions, div,
-    pulsating_between,
+    Action, Anchor, AnyElement, App, Context, Element, Entity, Focusable, InteractiveElement,
+    IntoElement, MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled,
+    Subscription, WeakEntity, Window, actions, div,
 };
 use onboarding_banner::OnboardingBanner;
 use project::{

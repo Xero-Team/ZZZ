@@ -1,6 +1,5 @@
 use crate::multibuffer_hint::MultibufferHint;
 use client::{Client, UserStore, zed_urls};
-use cloud_api_types::Plan;
 use db::kvp::KeyValueStore;
 use fs::Fs;
 use gpui::{
@@ -216,26 +215,6 @@ impl Onboarding {
     fn new(workspace: &Workspace, cx: &mut App) -> Entity<Self> {
         let font_family_cache = theme::FontFamilyCache::global(cx);
 
-        let client = Client::global(cx);
-        let status = *client.status().borrow();
-        let plan = workspace.user_store().read(cx).plan();
-        let zed_agent_state = if status.is_signed_out()
-            || matches!(
-                status,
-                client::Status::AuthenticationError | client::Status::ConnectionError
-            ) {
-            "signed_out"
-        } else if status.is_signing_in() {
-            "signing_in"
-        } else {
-            match plan {
-                Some(Plan::ZedPro) => "pro",
-                Some(Plan::ZedProTrial) => "trial",
-                Some(Plan::ZedBusiness) => "business",
-                Some(Plan::ZedStudent) => "student",
-                Some(Plan::ZedFree) | None => "free",
-            }
-        };
         cx.new(|cx| {
             cx.spawn(async move |this, cx| {
                 font_family_cache.prefetch(cx).await;

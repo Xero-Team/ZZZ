@@ -46,10 +46,7 @@ use prompt_store::{PromptId, PromptStore};
 use crate::DEFAULT_THREAD_TITLE;
 use crate::message_editor::SessionCapabilities;
 use rope::Point;
-use settings::{
-    NewThreadLocation, NotifyWhenAgentWaiting, Settings as _, SettingsStore, SidebarSide,
-    ThinkingBlockDisplay,
-};
+use settings::{NotifyWhenAgentWaiting, Settings as _, SettingsStore, ThinkingBlockDisplay};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
@@ -816,7 +813,7 @@ impl ConversationView {
         title: Option<SharedString>,
         project: Entity<Project>,
         initial_content: Option<AgentInitialContent>,
-        source: &'static str,
+        _source: &'static str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> ServerState {
@@ -848,15 +845,6 @@ impl ConversationView {
             });
 
         let connect_result = connection_entry.read(cx).wait_for_connection();
-
-        let side = match AgentSettings::get_global(cx).sidebar_side() {
-            SidebarSide::Left => "left",
-            SidebarSide::Right => "right",
-        };
-        let thread_location = match AgentSettings::get_global(cx).new_thread_location {
-            NewThreadLocation::LocalProject => "current_worktree",
-            NewThreadLocation::NewWorktree => "new_worktree",
-        };
 
         let load_task = cx.spawn_in(window, async move |this, cx| {
             let connection = match connect_result.await {
@@ -2077,46 +2065,6 @@ impl ConversationView {
             .into_any_element()
     }
 
-    fn emit_token_limit_telemetry_if_needed(
-        &mut self,
-        thread: &Entity<AcpThread>,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(active_thread) = self.active_thread() else {
-            return;
-        };
-
-        let ratio = {
-            let thread_data = thread.read(cx);
-            let Some(token_usage) = thread_data.token_usage() else {
-                return;
-            };
-            token_usage.ratio()
-        };
-
-        match ratio {
-            acp_thread::TokenUsageRatio::Normal => {
-                active_thread.update(cx, |active, _cx| {
-                    active.last_token_limit_telemetry = None;
-                });
-                return;
-            }
-            acp_thread::TokenUsageRatio::Warning | acp_thread::TokenUsageRatio::Exceeded => {}
-        };
-
-        let should_skip = active_thread
-            .read(cx)
-            .last_token_limit_telemetry
-            .as_ref()
-            .is_some_and(|last| *last >= ratio);
-        if should_skip {
-            return;
-        }
-
-        active_thread.update(cx, |active, _cx| {
-            active.last_token_limit_telemetry = Some(ratio);
-        });
-    }
     fn emit_load_error_telemetry(&self, error: &LoadError) {
         let _ = error;
     }

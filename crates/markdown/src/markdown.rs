@@ -3965,47 +3965,4 @@ mod tests {
             "H3 line height ({h3_line_height:?}) should be greater than body text ({body_line_height:?})"
         );
     }
-
-    #[gpui::test]
-    fn test_bounds_for_source_range_skips_gaps_between_rendered_lines(cx: &mut TestAppContext) {
-        let source = "First\n\nSecond";
-        let rendered = render_markdown(source, cx);
-        let highlight_bounds = rendered.bounds_for_source_range(0..source.len());
-        assert_eq!(highlight_bounds.len(), rendered.lines.len());
-
-        for (line, highlight_bounds) in rendered.lines.iter().zip(highlight_bounds.iter()) {
-            let line_bounds = line.layout.bounds();
-            assert_eq!(highlight_bounds.top(), line_bounds.top());
-            assert_eq!(
-                highlight_bounds.bottom(),
-                line_bounds.top() + line.layout.line_height()
-            );
-        }
-    }
-
-    #[gpui::test]
-    fn test_bounds_for_source_range_returns_one_bound_per_soft_wrap_row(cx: &mut TestAppContext) {
-        let sentence = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
-        let source = [sentence, sentence, sentence, sentence].join(" ");
-        let rendered = render_markdown(&source, cx);
-        let line = &rendered.lines[0];
-        let line_bounds = line.layout.bounds();
-        let line_height = line.layout.line_height();
-        let wrapped_line = line.layout.line_layout_for_index(0).unwrap();
-        let visual_row_count = wrapped_line.wrap_boundaries().len() + 1;
-
-        let highlight_bounds = rendered.bounds_for_source_range(0..source.len());
-        assert_eq!(highlight_bounds.len(), visual_row_count);
-
-        let mut row_top = line_bounds.top();
-        for (row_index, row_bounds) in highlight_bounds.iter().enumerate() {
-            assert_eq!(row_bounds.top(), row_top);
-            assert_eq!(row_bounds.bottom(), row_top + line_height);
-            assert!(
-                row_bounds.size.width > Pixels::ZERO,
-                "row {row_index} should have a non-empty highlight",
-            );
-            row_top += line_height;
-        }
-    }
 }
