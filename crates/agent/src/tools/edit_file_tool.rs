@@ -240,7 +240,7 @@ impl AgentTool for EditFileTool {
     ) -> Task<Result<Self::Output, Self::Output>> {
         cx.spawn(async move |cx: &mut AsyncApp| {
             let input = input.recv().await.map_err(|e| EditFileToolOutput::Error {
-                error: format!("Failed to receive tool input: {e}"),
+                error: e.to_string(),
             })?;
 
             let project = self
