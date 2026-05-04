@@ -18,14 +18,17 @@ static RAW_RELEASE_CHANNEL_NAME: LazyLock<String> = LazyLock::new(|| {
 });
 
 /// stable | dev
-pub static RELEASE_CHANNEL_NAME: LazyLock<String> = LazyLock::new(|| RELEASE_CHANNEL.dev_name().to_string());
+pub static RELEASE_CHANNEL_NAME: LazyLock<String> =
+    LazyLock::new(|| RELEASE_CHANNEL.dev_name().to_string());
 
 #[doc(hidden)]
 pub static RELEASE_CHANNEL: LazyLock<ReleaseChannel> =
-    LazyLock::new(|| match ReleaseChannel::from_str(&RAW_RELEASE_CHANNEL_NAME) {
-        Ok(channel) => channel,
-        _ => panic!("invalid release channel {}", *RAW_RELEASE_CHANNEL_NAME),
-    });
+    LazyLock::new(
+        || match ReleaseChannel::from_str(&RAW_RELEASE_CHANNEL_NAME) {
+            Ok(channel) => channel,
+            _ => panic!("invalid release channel {}", *RAW_RELEASE_CHANNEL_NAME),
+        },
+    );
 
 /// The app identifier for the current release channel, Windows only.
 #[cfg(target_os = "windows")]
@@ -150,10 +153,7 @@ pub fn init_test(app_version: Version, release_channel: ReleaseChannel, cx: &mut
 
 impl ReleaseChannel {
     /// All release channels.
-    pub const ALL: [ReleaseChannel; 2] = [
-        ReleaseChannel::Dev,
-        ReleaseChannel::Stable,
-    ];
+    pub const ALL: [ReleaseChannel; 2] = [ReleaseChannel::Dev, ReleaseChannel::Stable];
 
     /// Returns the global [`ReleaseChannel`].
     pub fn global(cx: &App) -> Self {

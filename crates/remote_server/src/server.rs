@@ -36,10 +36,14 @@ use remote::{
     proxy::ProxyLaunchError,
 };
 use reqwest_client::ReqwestClient;
-use rpc::proto::{self, Envelope, REMOTE_SERVER_PROJECT_ID};
 use rpc::AnyProtoClient;
+use rpc::proto::{self, Envelope, REMOTE_SERVER_PROJECT_ID};
 use settings::{Settings, SettingsStore, watch_config_file};
-use smol::{channel::{Receiver, Sender}, io::AsyncReadExt, stream::StreamExt as _};
+use smol::{
+    channel::{Receiver, Sender},
+    io::AsyncReadExt,
+    stream::StreamExt as _,
+};
 use std::{
     env,
     ffi::OsStr,
