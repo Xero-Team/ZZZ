@@ -3406,9 +3406,9 @@ mod persistence {
                 ALTER TABLE git_graphs ADD COLUMN repo_working_path TEXT;
             ),
             sql!(
-                ALTER TABLE git_graphs ADD COLUMN log_source_type TEXT;
+                ALTER TABLE git_graphs ADD COLUMN log_source_type INTEGER;
                 ALTER TABLE git_graphs ADD COLUMN log_source_value TEXT;
-                ALTER TABLE git_graphs ADD COLUMN log_order TEXT;
+                ALTER TABLE git_graphs ADD COLUMN log_order INTEGER;
                 ALTER TABLE git_graphs ADD COLUMN selected_sha TEXT;
                 ALTER TABLE git_graphs ADD COLUMN search_query TEXT;
                 ALTER TABLE git_graphs ADD COLUMN search_case_sensitive INTEGER;
