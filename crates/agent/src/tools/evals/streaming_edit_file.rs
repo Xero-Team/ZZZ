@@ -1,8 +1,7 @@
-use crate::tools::streaming_edit_file_tool::*;
 use crate::{
     AgentTool, ContextServerRegistry, EditFileTool, GrepTool, GrepToolInput, ListDirectoryTool,
-    ListDirectoryToolInput, ReadFileTool, ReadFileToolInput, StreamingEditFileTool, Template,
-    Templates, Thread, ToolCallEventStream, ToolInput,
+    ListDirectoryToolInput, ReadFileTool, ReadFileToolInput, Template, Templates, Thread,
+    ToolCallEventStream, ToolInput,
 };
 use Role::*;
 use anyhow::{Context as _, Result};
@@ -16,8 +15,7 @@ use language_model::{
     LanguageModel, LanguageModelCompletionError, LanguageModelCompletionEvent,
     LanguageModelRegistry, LanguageModelRequest, LanguageModelRequestMessage,
     LanguageModelRequestTool, LanguageModelToolResult, LanguageModelToolResultContent,
-    LanguageModelToolSchemaFormat, LanguageModelToolUse, LanguageModelToolUseId, MessageContent,
-    Role, SelectedModel,
+    LanguageModelToolUse, LanguageModelToolUseId, MessageContent, Role, SelectedModel,
 };
 use project::Project;
 use prompt_store::{ProjectContext, WorktreeContext};
@@ -73,7 +71,7 @@ impl EvalInput {
 struct EvalSample {
     text_before: String,
     text_after: String,
-    tool_input: StreamingEditFileToolInput,
+    tool_input: crate::EditFileToolInput,
     diff: String,
 }
 
@@ -349,24 +347,9 @@ impl StreamingEditToolTest {
         }))
     }
 
-    /// Build the tool definitions for the model, replacing `edit_file` with the
-    /// streaming edit file tool schema. In production the streaming tool is
-    /// exposed under the name `"edit_file"` (see `Thread::enabled_tools`), so
-    /// the model has never seen the name `"streaming_edit_file"`.
+    /// Build tool definitions for the model.
     fn build_tools() -> Vec<LanguageModelRequestTool> {
-        let mut tools: Vec<LanguageModelRequestTool> = crate::built_in_tools()
-            .filter(|tool| tool.name != EditFileTool::NAME)
-            .collect();
-        tools.push(LanguageModelRequestTool {
-            name: EditFileTool::NAME.to_string(),
-            description: StreamingEditFileTool::description().to_string(),
-            input_schema: StreamingEditFileTool::input_schema(
-                LanguageModelToolSchemaFormat::JsonSchema,
-            )
-            .to_value(),
-            use_input_streaming: StreamingEditFileTool::supports_input_streaming(),
-        });
-        tools
+        crate::built_in_tools().collect()
     }
 
     async fn eval(
@@ -441,8 +424,6 @@ impl StreamingEditToolTest {
             ..Default::default()
         };
 
-        // The model will call the tool as "edit_file" (the production-visible
-        // name), but the schema is from StreamingEditFileTool.
         let tool_input =
             retry_on_rate_limit(async || self.extract_tool_use(request.clone(), cx).await).await?;
 
@@ -462,13 +443,11 @@ impl StreamingEditToolTest {
                 cx,
             )
         });
-        let action_log = thread.read_with(cx, |thread, _| thread.action_log().clone());
-
-        let tool = Arc::new(StreamingEditFileTool::new(
+        let tool = Arc::new(EditFileTool::new(
             self.project.clone(),
             thread.downgrade(),
-            action_log,
             language_registry,
+            Templates::new(),
         ));
 
         let result = cx
@@ -488,7 +467,7 @@ impl StreamingEditToolTest {
             }
         };
 
-        let StreamingEditFileToolOutput::Success { new_text, .. } = &output else {
+        let crate::EditFileToolOutput::Success { new_text, .. } = &output else {
             anyhow::bail!("Tool returned error output: {}", output);
         };
 
@@ -510,14 +489,12 @@ impl StreamingEditToolTest {
         Ok(StreamingEditEvalOutput { assertion, sample })
     }
 
-    /// Stream the model completion and extract the first complete tool use
-    /// whose name matches `EditFileTool::NAME` (the production-visible name
-    /// for the streaming edit tool), parsed as `StreamingEditFileToolInput`.
+    /// Stream model completion and extract first complete `edit_file` tool use.
     async fn extract_tool_use(
         &self,
         request: LanguageModelRequest,
         cx: &mut TestAppContext,
-    ) -> Result<StreamingEditFileToolInput> {
+    ) -> Result<crate::EditFileToolInput> {
         let model = self.model.clone();
         let events = cx
             .update(|cx| {
@@ -539,8 +516,8 @@ impl StreamingEditToolTest {
                     if tool_use.is_input_complete
                         && tool_use.name.as_ref() == EditFileTool::NAME =>
                 {
-                    let input: StreamingEditFileToolInput = serde_json::from_value(tool_use.input)
-                        .context("Failed to parse tool input as StreamingEditFileToolInput")?;
+                    let input: crate::EditFileToolInput = serde_json::from_value(tool_use.input)
+                        .context("Failed to parse tool input as EditFileToolInput")?;
                     return Ok(input);
                 }
                 Ok(LanguageModelCompletionEvent::Text(text)) => {

@@ -240,11 +240,11 @@ async fn test_streaming_edit_json_parse_error_does_not_cause_unsaved_changes(
             cx,
         );
         let language_registry = project.read(cx).languages().clone();
-        thread.add_tool(crate::StreamingEditFileTool::new(
+        thread.add_tool(crate::EditFileTool::new(
             project.clone(),
             cx.weak_entity(),
-            thread.action_log().clone(),
             language_registry,
+            crate::Templates::new(),
         ));
         thread
     });
