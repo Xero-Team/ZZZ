@@ -39,8 +39,8 @@ use ui_input::ErasedEditor;
 use util::ResultExt;
 use util::paths::PathExt;
 use workspace::{
-    CloseWindow, ModalView, PathList, SerializedWorkspaceLocation, Workspace, WorkspaceDb,
-    WorkspaceId, resolve_worktree_workspaces,
+    CloseWindow, ModalView, PathList, RecentWorkspace, SerializedWorkspaceLocation, Workspace,
+    WorkspaceDb, WorkspaceId,
 };
 
 use zed_actions::agents_sidebar::FocusSidebarFilter;
@@ -1115,7 +1115,6 @@ impl ProjectPickerModal {
                 .await
                 .log_err()
                 .unwrap_or_default();
-            let workspaces = resolve_worktree_workspaces(workspaces, fs.as_ref()).await;
             this.update_in(cx, move |this, window, cx| {
                 this.picker.update(cx, move |picker, cx| {
                     picker.delegate.workspaces = workspaces;
@@ -1170,12 +1169,7 @@ struct ProjectPickerDelegate {
     archive_view: WeakEntity<ThreadsArchiveView>,
     current_workspace_id: Option<WorkspaceId>,
     sibling_workspace_ids: HashSet<WorkspaceId>,
-    workspaces: Vec<(
-        WorkspaceId,
-        SerializedWorkspaceLocation,
-        PathList,
-        DateTime<Utc>,
-    )>,
+    workspaces: Vec<RecentWorkspace>,
     filtered_entries: Vec<ProjectPickerEntry>,
     selected_index: usize,
     focus_handle: FocusHandle,
@@ -1320,9 +1314,10 @@ impl PickerDelegate for ProjectPickerDelegate {
             .workspaces
             .iter()
             .enumerate()
-            .filter(|(_, (id, _, _, _))| self.is_sibling_workspace(*id))
-            .map(|(id, (_, _, paths, _))| {
-                let combined_string = paths
+            .filter(|(_, workspace)| self.is_sibling_workspace(workspace.workspace_id))
+            .map(|(id, workspace)| {
+                let combined_string = workspace
+                    .identity_paths
                     .ordered_paths()
                     .map(|path| path.compact().to_string_lossy().into_owned())
                     .collect::<Vec<_>>()
@@ -1352,11 +1347,13 @@ impl PickerDelegate for ProjectPickerDelegate {
             .workspaces
             .iter()
             .enumerate()
-            .filter(|(_, (id, _, _, _))| {
-                !self.is_current_workspace(*id) && !self.is_sibling_workspace(*id)
+            .filter(|(_, workspace)| {
+                !self.is_current_workspace(workspace.workspace_id)
+                    && !self.is_sibling_workspace(workspace.workspace_id)
             })
-            .map(|(id, (_, _, paths, _))| {
-                let combined_string = paths
+            .map(|(id, workspace)| {
+                let combined_string = workspace
+                    .identity_paths
                     .ordered_paths()
                     .map(|path| path.compact().to_string_lossy().into_owned())
                     .collect::<Vec<_>>()
@@ -1394,8 +1391,8 @@ impl PickerDelegate for ProjectPickerDelegate {
             entries.push(ProjectPickerEntry::Header("This Window".into()));
 
             if is_empty_query {
-                for (id, (workspace_id, _, _, _)) in self.workspaces.iter().enumerate() {
-                    if self.is_sibling_workspace(*workspace_id) {
+                for (id, workspace) in self.workspaces.iter().enumerate() {
+                    if self.is_sibling_workspace(workspace.workspace_id) {
                         entries.push(ProjectPickerEntry::Workspace(StringMatch {
                             candidate_id: id,
                             score: 0.0,
@@ -1421,9 +1418,9 @@ impl PickerDelegate for ProjectPickerDelegate {
             entries.push(ProjectPickerEntry::Header("Recent Projects".into()));
 
             if is_empty_query {
-                for (id, (workspace_id, _, _, _)) in self.workspaces.iter().enumerate() {
-                    if !self.is_current_workspace(*workspace_id)
-                        && !self.is_sibling_workspace(*workspace_id)
+                for (id, workspace) in self.workspaces.iter().enumerate() {
+                    if !self.is_current_workspace(workspace.workspace_id)
+                        && !self.is_sibling_workspace(workspace.workspace_id)
                     {
                         entries.push(ProjectPickerEntry::Workspace(StringMatch {
                             candidate_id: id,
@@ -1456,11 +1453,11 @@ impl PickerDelegate for ProjectPickerDelegate {
             Some(ProjectPickerEntry::Workspace(hit)) => hit.candidate_id,
             _ => return,
         };
-        let Some((_workspace_id, _location, paths, _)) = self.workspaces.get(candidate_id) else {
+        let Some(workspace) = self.workspaces.get(candidate_id) else {
             return;
         };
 
-        self.update_working_directories_and_unarchive(paths.clone(), window, cx);
+        self.update_working_directories_and_unarchive(workspace.paths.clone(), window, cx);
         cx.emit(DismissEvent);
     }
 
@@ -1492,9 +1489,11 @@ impl PickerDelegate for ProjectPickerDelegate {
                     .into_any_element(),
             ),
             ProjectPickerEntry::Workspace(hit) => {
-                let (_, location, paths, _) = self.workspaces.get(hit.candidate_id)?;
+                let workspace = self.workspaces.get(hit.candidate_id)?;
+                let location = &workspace.location;
 
-                let ordered_paths: Vec<_> = paths
+                let ordered_paths: Vec<_> = workspace
+                    .identity_paths
                     .ordered_paths()
                     .map(|p| p.compact().to_string_lossy().to_string())
                     .collect();
@@ -1502,7 +1501,8 @@ impl PickerDelegate for ProjectPickerDelegate {
                 let tooltip_path: SharedString = ordered_paths.join("\n").into();
 
                 let mut path_start_offset = 0;
-                let match_labels: Vec<_> = paths
+                let match_labels: Vec<_> = workspace
+                    .identity_paths
                     .ordered_paths()
                     .map(|p| p.compact())
                     .map(|path| {
