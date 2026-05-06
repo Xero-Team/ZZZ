@@ -2545,10 +2545,11 @@ async fn get_users(
         .map(UserId::from_proto)
         .collect();
     let users = session
-        .db()
-        .await
+        .app_state
+        .user_service
         .get_users_by_ids(user_ids)
-        .await?
+        .await?;
+    let users = users
         .into_iter()
         .map(|user| proto::User {
             id: user.id.to_proto(),
@@ -2571,13 +2572,19 @@ async fn fuzzy_search_users(
     let users = match query.len() {
         0 => vec![],
         1 | 2 => session
-            .db()
-            .await
+            .app_state
+            .user_service
             .get_user_by_github_login(&query)
             .await?
             .into_iter()
             .collect(),
-        _ => session.db().await.fuzzy_search_users(&query, 10).await?,
+        _ => {
+            session
+                .app_state
+                .user_service
+                .fuzzy_search_users(&query, 10)
+                .await?
+        }
     };
     let users = users
         .into_iter()
@@ -3167,13 +3174,11 @@ async fn get_channel_members(
 
     let channel = db.get_channel(channel_id, session.user_id()).await?;
 
-    let (members, users) = db
-        .get_channel_participant_details(&channel, &request.query, limit)
+    let (members, users) = session
+        .app_state
+        .user_service
+        .search_channel_members(&channel, &request.query, limit as u32)
         .await?;
-    let members = members
-        .into_iter()
-        .map(proto::ChannelMember::from)
-        .collect();
     let users = users.into_iter().map(proto::User::from).collect();
 
     response.send(proto::GetChannelMembersResponse { members, users })?;
@@ -4082,6 +4087,20 @@ where
                 tracing::error!("{:?}", error);
                 None
             }
+        }
+    }
+}
+
+impl From<User> for proto::User {
+    fn from(user: User) -> Self {
+        Self {
+            id: user.id.to_proto(),
+            avatar_url: format!(
+                "https://avatars.githubusercontent.com/u/{}?s=128&v=4",
+                user.github_user_id
+            ),
+            github_login: user.github_login,
+            name: user.name,
         }
     }
 }
