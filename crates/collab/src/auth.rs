@@ -12,8 +12,7 @@ use std::sync::Arc;
 
 /// Validates the authorization header and adds an Extension<Principal> to the request.
 /// Authorization: <user-id> <token>
-///   <token> can be an access_token attached to that user, or an access token of an admin
-///   or (in development) the string ADMIN:<config.api_token>.
+///   <token> is the access_token attached to that user.
 /// Authorization: "dev-server-token" <token>
 pub async fn validate_header(mut req: Request, next: Next) -> impl IntoResponse {
     let mut auth_header = req
