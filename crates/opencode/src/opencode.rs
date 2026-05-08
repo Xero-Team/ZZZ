@@ -123,8 +123,6 @@ pub enum Model {
     DeepSeekV4Pro,
     #[serde(rename = "deepseek-v4-flash")]
     DeepSeekV4Flash,
-    #[serde(rename = "ling-2.6-flash-free")]
-    Ling2_6FlashFree,
     #[serde(rename = "hy3-preview-free")]
     Hy3PreviewFree,
     #[serde(rename = "minimax-m2.5")]
@@ -216,7 +214,6 @@ impl Model {
             Self::MiniMaxM2_5Free
             | Self::Nemotron3SuperFree
             | Self::BigPickle
-            | Self::Ling2_6FlashFree
             | Self::Hy3PreviewFree => &[OpenCodeSubscription::Free],
 
             // Custom models get their subscription from settings, not from here
@@ -262,7 +259,6 @@ impl Model {
 
             Self::DeepSeekV4Pro => "deepseek-v4-pro",
             Self::DeepSeekV4Flash => "deepseek-v4-flash",
-            Self::Ling2_6FlashFree => "ling-2.6-flash-free",
             Self::Hy3PreviewFree => "hy3-preview-free",
             Self::MiniMaxM2_5 => "minimax-m2.5",
             Self::MiniMaxM2_5Free => "minimax-m2.5-free",
@@ -319,7 +315,6 @@ impl Model {
 
             Self::DeepSeekV4Pro => "DeepSeek V4 Pro",
             Self::DeepSeekV4Flash => "DeepSeek V4 Flash",
-            Self::Ling2_6FlashFree => "Ling 2.6 Flash Free",
             Self::Hy3PreviewFree => "Hy3 Preview Free",
             Self::MiniMaxM2_5 => "MiniMax M2.5",
             Self::MiniMaxM2_5Free => "MiniMax M2.5 Free",
@@ -400,7 +395,6 @@ impl Model {
             | Self::Qwen3_6Plus
             | Self::BigPickle
             | Self::Nemotron3SuperFree
-            | Self::Ling2_6FlashFree
             | Self::Hy3PreviewFree => ApiProtocol::OpenAiChat,
 
             Self::Custom { protocol, .. } => *protocol,
@@ -446,7 +440,6 @@ impl Model {
             Self::BigPickle => 200_000,
             Self::Nemotron3SuperFree => 204_800,
             Self::DeepSeekV4Pro | Self::DeepSeekV4Flash => 1_000_000,
-            Self::Ling2_6FlashFree => 262_100,
             Self::Hy3PreviewFree => 256_000,
 
             Self::Custom { max_tokens, .. } => *max_tokens,
@@ -501,7 +494,6 @@ impl Model {
             Self::MimoV2_5Pro | Self::MimoV2_5 | Self::MimoV2Pro | Self::MimoV2Omni => {
                 Some(128_000)
             }
-            Self::Ling2_6FlashFree => Some(32_800),
             Self::Hy3PreviewFree => Some(64_000),
 
             Self::Custom {
@@ -567,7 +559,6 @@ impl Model {
             | Self::MimoV2_5Pro
             | Self::BigPickle
             | Self::Nemotron3SuperFree
-            | Self::Ling2_6FlashFree
             | Self::Hy3PreviewFree => false,
 
             // DeepSeek models (Anthropic protocol) don't support images
