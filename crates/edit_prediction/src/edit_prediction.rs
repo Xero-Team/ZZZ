@@ -2766,6 +2766,7 @@ impl EditPredictionStore {
         prediction: &EditPrediction,
         rating: EditPredictionRating,
         feedback: String,
+        expected_output: Option<String>,
         cx: &mut Context<Self>,
     ) {
         let organization = self.user_store.read(cx).current_organization();
@@ -2791,6 +2792,7 @@ impl EditPredictionStore {
                         },
                         inputs: inputs?,
                         output,
+                        expected_output,
                         feedback,
                     })
                     .await?;
