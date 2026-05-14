@@ -141,6 +141,129 @@ impl CachedMermaidDiagram {
     }
 }
 
+/// Converts an HSLA color to a CSS hex string (e.g. `#1a2b3c`).
+fn hsla_to_hex(color: Hsla) -> String {
+    let rgba: Rgba = color.to_rgb();
+    let r = (rgba.r * 255.0).round() as u8;
+    let g = (rgba.g * 255.0).round() as u8;
+    let b = (rgba.b * 255.0).round() as u8;
+    format!("#{r:02x}{g:02x}{b:02x}")
+}
+
+fn mermaid_font_family(font_family: &str) -> &str {
+    gpui::font_name_with_fallbacks(font_family, "system-ui")
+}
+
+fn build_mermaid_theme(cx: &Context<Markdown>) -> mermaid_rs_renderer::Theme {
+    let colors = cx.theme().colors();
+    let theme_settings = ThemeSettings::get_global(cx);
+    let mut theme = mermaid_rs_renderer::Theme::modern();
+
+    theme.font_family = mermaid_font_family(theme_settings.ui_font.family.as_ref()).to_string();
+    theme.background = hsla_to_hex(colors.editor_background);
+    theme.primary_color = hsla_to_hex(colors.surface_background);
+    theme.primary_text_color = hsla_to_hex(colors.text);
+    theme.primary_border_color = hsla_to_hex(colors.border);
+    theme.line_color = hsla_to_hex(colors.border);
+    theme.secondary_color = hsla_to_hex(colors.element_background);
+    theme.tertiary_color = hsla_to_hex(colors.ghost_element_hover);
+    theme.edge_label_background = hsla_to_hex(colors.editor_background);
+    theme.cluster_background = hsla_to_hex(colors.panel_background);
+    theme.cluster_border = hsla_to_hex(colors.border_variant);
+    theme.text_color = hsla_to_hex(colors.text);
+    let accents = cx.theme().accents();
+    let pie_colors: [String; 12] =
+        std::array::from_fn(|i| hsla_to_hex(accents.color_for_index(i as u32)));
+    theme.pie_colors = pie_colors;
+    theme.pie_title_text_color = hsla_to_hex(colors.text);
+    theme.pie_section_text_color = "#fff".to_string();
+    theme.pie_legend_text_color = hsla_to_hex(colors.text);
+    theme.pie_stroke_color = hsla_to_hex(colors.border);
+    theme.pie_outer_stroke_color = hsla_to_hex(colors.border);
+
+    theme.sequence_actor_fill = hsla_to_hex(colors.element_background);
+    theme.sequence_actor_border = hsla_to_hex(colors.border);
+    theme.sequence_actor_line = hsla_to_hex(colors.border);
+    theme.sequence_note_fill = hsla_to_hex(colors.surface_background);
+    theme.sequence_note_border = hsla_to_hex(colors.border_variant);
+    theme.sequence_activation_fill = hsla_to_hex(colors.ghost_element_hover);
+    theme.sequence_activation_border = hsla_to_hex(colors.border);
+
+    let players = cx.theme().players();
+    theme.git_colors = std::array::from_fn(|i| hsla_to_hex(players.0[i % players.0.len()].cursor));
+    theme.git_inv_colors =
+        std::array::from_fn(|i| hsla_to_hex(players.0[i % players.0.len()].background));
+    theme.git_branch_label_colors = std::array::from_fn(|_| "#fff".to_string());
+    theme.git_commit_label_color = hsla_to_hex(colors.text);
+    theme.git_commit_label_background = hsla_to_hex(colors.element_background);
+    theme.git_tag_label_color = hsla_to_hex(colors.text);
+    theme.git_tag_label_background = hsla_to_hex(colors.element_background);
+    theme.git_tag_label_border = hsla_to_hex(colors.border);
+
+    theme
+}
+
+fn build_accent_classdefs(cx: &Context<Markdown>) -> String {
+    use std::fmt::Write;
+    let players = &cx.theme().players();
+    let is_light = cx.theme().appearance.is_light();
+    let mut defs = String::new();
+    for (i, player) in players.0.iter().enumerate() {
+        let (fill, text_color) = accent_fill_and_text(player.background, is_light);
+        let fill = hsla_to_hex(fill);
+        let stroke = hsla_to_hex(player.cursor);
+        let text_color = hsla_to_hex(text_color);
+        writeln!(
+            defs,
+            "classDef accent{i} fill:{fill},stroke:{stroke},color:{text_color}"
+        )
+        .ok();
+    }
+    defs
+}
+
+/// Adjusts an accent fill color to ensure readable text contrast.
+///
+/// On dark themes, darkens the fill and uses white text.
+/// On light themes, lightens the fill and uses black text.
+/// The fill is adjusted until it meets a minimum WCAG contrast ratio
+/// of ~4.5:1 against the chosen text color.
+fn accent_fill_and_text(color: Hsla, is_light: bool) -> (Hsla, Hsla) {
+    let mut fill = color;
+    if is_light {
+        // Lighten fill until luminance is high enough for black text.
+        // Target: relative luminance >= 0.35 → contrast ratio ~8:1 with black.
+        for _ in 0..50 {
+            if relative_luminance(fill) >= 0.35 {
+                break;
+            }
+            fill.l = (fill.l + 0.02).min(1.0);
+        }
+        (fill, gpui::black())
+    } else {
+        // Darken fill until luminance is low enough for white text.
+        // Target: relative luminance <= 0.18 → contrast ratio ~4.6:1 with white.
+        for _ in 0..50 {
+            if relative_luminance(fill) <= 0.18 {
+                break;
+            }
+            fill.l = (fill.l - 0.02).max(0.0);
+        }
+        (fill, gpui::white())
+    }
+}
+
+fn relative_luminance(color: Hsla) -> f32 {
+    let rgba: Rgba = color.to_rgb();
+    fn linearize(c: f32) -> f32 {
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    }
+    0.2126 * linearize(rgba.r) + 0.7152 * linearize(rgba.g) + 0.0722 * linearize(rgba.b)
+}
 fn parse_mermaid_info(info: &str) -> Option<u32> {
     let mut parts = info.split_whitespace();
     if parts.next()? != "mermaid" {
@@ -357,6 +480,15 @@ mod tests {
             .iter()
             .position(|diagram| diagram == &new_content)?;
         MermaidState::get_fallback_image(idx, old_full_order, new_full_order.len(), cache)
+    }
+
+    #[test]
+    fn test_mermaid_font_family_resolves_zed_virtual_fonts() {
+        assert_eq!(super::mermaid_font_family(".ZedSans"), "IBM Plex Sans");
+        assert_eq!(super::mermaid_font_family("Zed Plex Sans"), "IBM Plex Sans");
+        assert_eq!(super::mermaid_font_family(".ZedMono"), "Lilex");
+        assert_eq!(super::mermaid_font_family(".SystemUIFont"), "system-ui");
+        assert_eq!(super::mermaid_font_family("Custom Font"), "Custom Font");
     }
 
     #[test]
