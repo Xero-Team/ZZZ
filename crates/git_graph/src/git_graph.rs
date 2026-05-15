@@ -18,7 +18,7 @@ use git_ui::{
 use gpui::{
     Action, Anchor, AnyElement, App, Bounds, ClickEvent, ClipboardItem, DefiniteLength,
     DismissEvent, DragMoveEvent, ElementId, Empty, Entity, EventEmitter, FocusHandle, Focusable,
-    Hsla, MouseButton, MouseDownEvent, PathBuilder, Pixels, Point, ScrollStrategy,
+    Hsla, MouseButton, MouseDownEvent, PathBuilder, Pixels, Point, Rems, ScrollStrategy,
     ScrollWheelEvent, SharedString, Subscription, Task, TextStyleRefinement,
     UniformListScrollHandle, WeakEntity, Window, actions, anchored, deferred, point, prelude::*,
     px, uniform_list,
@@ -122,7 +122,9 @@ impl Focusable for CommitTagPicker {
 
 impl Render for CommitTagPicker {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex().w(rems(18.)).child(self.picker.clone())
+        v_flex()
+            .w(COMMIT_TAG_LIST_WIDTH_IN_REMS)
+            .child(self.picker.clone())
     }
 }
 
@@ -2107,21 +2109,19 @@ impl GitGraph {
         let Some(commit) = self.graph_data.commits.get(index) else {
             return;
         };
-        let short_sha = commit.data.sha.display_short();
-        let tag_names = commit
-            .data
-            .tag_names()
-            .into_iter()
-            .map(|tag_name| SharedString::from(tag_name.to_string()))
-            .collect::<Vec<_>>();
-        let copy_tag_label = "Copy Tag";
+        let sha = commit.data.sha;
+        let sha_short = sha.display_short();
+        let git_tasks = self
+            .git_task_context(sha, cx)
+            .map(|task_context| self.git_context_menu_tasks(&task_context, cx))
+            .unwrap_or_default();
 
         let focus_handle = self.focus_handle.clone();
         let git_graph = cx.entity();
         let context_menu = ContextMenu::build(window, cx, |context_menu, window, _| {
             context_menu
                 .context(focus_handle)
-                .header(format!("Commit {short_sha}"))
+                .header(format!("Commit {sha_short}"))
                 .entry(
                     "View Commit",
                     Some(OpenCommitView.boxed_clone()),
@@ -2136,31 +2136,70 @@ impl GitGraph {
                         this.copy_commit_sha(index, cx);
                     }),
                 )
-                .map(|menu| match tag_names.as_slice() {
-                    [] => menu.item(
-                        ContextMenuEntry::new(copy_tag_label)
-                            .action(CopyCommitTag.boxed_clone())
-                            .disabled(true),
-                    ),
-                    [tag_name] => {
-                        let tag_name = tag_name.clone();
-                        let label = format!("{copy_tag_label}: {tag_name}");
-                        menu.entry(label, Some(CopyCommitTag.boxed_clone()), move |_, cx| {
-                            cx.write_to_clipboard(ClipboardItem::new_string(tag_name.to_string()));
-                        })
-                    }
-                    _ => menu.submenu(copy_tag_label, move |menu, _, _| {
-                        let mut menu = menu.fixed_width(COMMIT_TAG_LIST_WIDTH_IN_REMS.into());
-                        for tag_name in tag_names.clone() {
-                            let tag_name_to_copy = tag_name.clone();
-                            menu = menu.entry(tag_name, None, move |_, cx| {
-                                cx.write_to_clipboard(ClipboardItem::new_string(
-                                    tag_name_to_copy.to_string(),
-                                ));
-                            });
+                .map(|menu| {
+                    let tag_names = commit
+                        .data
+                        .tag_names()
+                        .into_iter()
+                        .map(|tag_name| SharedString::from(tag_name.to_string()))
+                        .collect::<Vec<_>>();
+                    let copy_tag_label = "Copy Tag";
+
+                    match tag_names.as_slice() {
+                        [] => menu.item(
+                            ContextMenuEntry::new(copy_tag_label)
+                                .action(CopyCommitTag.boxed_clone())
+                                .disabled(true),
+                        ),
+                        [tag_name] => {
+                            let tag_name = tag_name.clone();
+                            let label = format!("{copy_tag_label}: {tag_name}");
+                            menu.entry(
+                                label,
+                                Some(CopyCommitTag.boxed_clone()),
+                                move |_window, cx| {
+                                    cx.write_to_clipboard(ClipboardItem::new_string(
+                                        tag_name.to_string(),
+                                    ));
+                                },
+                            )
                         }
-                        menu
-                    }),
+                        _ => menu.submenu(copy_tag_label, move |menu, _window, _cx| {
+                            let mut menu = menu.fixed_width(COMMIT_TAG_LIST_WIDTH_IN_REMS.into());
+
+                            for tag_name in tag_names.clone() {
+                                let tag_name_to_copy = tag_name.clone();
+
+                                menu = menu.entry(tag_name, None, move |_window, cx| {
+                                    cx.write_to_clipboard(ClipboardItem::new_string(
+                                        tag_name_to_copy.to_string(),
+                                    ));
+                                });
+                            }
+                            menu
+                        }),
+                    }
+                })
+                .when(!git_tasks.is_empty(), |mut menu| {
+                    menu = menu.separator().header("Custom Git Commands");
+
+                    for (task_source_kind, resolved_task) in git_tasks {
+                        let label = resolved_task.display_label().to_string();
+
+                        menu = menu.entry(
+                            label,
+                            None,
+                            window.handler_for(&git_graph, move |this, window, cx| {
+                                this.schedule_git_task(
+                                    task_source_kind.clone(),
+                                    resolved_task.clone(),
+                                    window,
+                                    cx,
+                                );
+                            }),
+                        );
+                    }
+                    menu
                 })
         });
         self.set_context_menu(context_menu, position, index, window, cx);
