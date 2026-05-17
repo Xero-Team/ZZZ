@@ -473,15 +473,17 @@ pub struct AcpSession {
 
 pub struct AcpSessionList {
     connection: ConnectionTo<Agent>,
+    supports_delete: bool,
     updates_tx: async_channel::Sender<acp_thread::SessionListUpdate>,
     updates_rx: async_channel::Receiver<acp_thread::SessionListUpdate>,
 }
 
 impl AcpSessionList {
-    fn new(connection: ConnectionTo<Agent>) -> Self {
+    fn new(connection: ConnectionTo<Agent>, supports_delete: bool) -> Self {
         let (tx, rx) = async_channel::unbounded();
         Self {
             connection,
+            supports_delete,
             updates_tx: tx,
             updates_rx: rx,
         }
@@ -538,6 +540,29 @@ impl AgentSessionList for AcpSessionList {
                 next_cursor: response.next_cursor,
                 meta: response.meta,
             })
+        })
+    }
+
+    fn supports_delete(&self, cx: &App) -> bool {
+        self.supports_delete && cx.has_flag::<AcpBetaFeatureFlag>()
+    }
+
+    fn delete_session(&self, session_id: &acp::SessionId, cx: &mut App) -> Task<Result<()>> {
+        if !self.supports_delete(cx) {
+            return Task::ready(Err(anyhow::anyhow!("delete_session not supported")));
+        }
+
+        let conn = self.connection.clone();
+        let updates_tx = self.updates_tx.clone();
+        let session_id = session_id.clone();
+        cx.foreground_executor().spawn(async move {
+            into_foreground_future(conn.send_request(acp::DeleteSessionRequest::new(session_id)))
+                .await
+                .map_err(map_acp_error)?;
+            updates_tx
+                .try_send(acp_thread::SessionListUpdate::Refresh)
+                .log_err();
+            Ok(())
         })
     }
 
@@ -931,6 +956,11 @@ impl AcpConnection {
             .unwrap_or_else(|| agent_id.0.clone());
         let agent_version = agent_info
             .and_then(|info| (!info.version.is_empty()).then(|| SharedString::from(info.version)));
+        let agent_supports_delete = response
+            .agent_capabilities
+            .session_capabilities
+            .delete
+            .is_some();
 
         let session_list = if response
             .agent_capabilities
@@ -938,7 +968,10 @@ impl AcpConnection {
             .list
             .is_some()
         {
-            let list = Rc::new(AcpSessionList::new(connection.clone()));
+            let list = Rc::new(AcpSessionList::new(
+                connection.clone(),
+                agent_supports_delete,
+            ));
             *client_session_list.borrow_mut() = Some(list.clone());
             Some(list)
         } else {
@@ -2459,6 +2492,8 @@ pub mod test_support {
 mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use feature_flags::FeatureFlag as _;
+
     use super::*;
 
     #[test]
@@ -2861,7 +2896,6 @@ mod tests {
             }
         );
     }
-
     #[gpui::test]
     async fn session_delete_support_requires_beta_flag_and_capability(
         cx: &mut gpui::TestAppContext,
@@ -3013,7 +3047,6 @@ mod tests {
             .expect("logout should be sent when the agent advertises support");
         assert_eq!(harness.logout_count.load(Ordering::SeqCst), 1);
     }
-
     #[cfg(not(windows))]
     #[gpui::test]
     async fn startup_returns_error_when_agent_exits_before_initialization(
