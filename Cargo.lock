@@ -6223,6 +6223,7 @@ dependencies = [
  "snippet_provider",
  "task",
  "theme_settings",
+ "thiserror 2.0.17",
  "tokio",
  "toml 1.1.2+spec-1.1.0",
  "tree-sitter",
