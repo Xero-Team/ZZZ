@@ -4312,7 +4312,6 @@ impl From<UserMessageContent> for acp::ContentBlock {
 fn convert_image(image_content: acp::ImageContent) -> LanguageModelImage {
     LanguageModelImage {
         source: image_content.data.into(),
-        size: None,
     }
 }
 

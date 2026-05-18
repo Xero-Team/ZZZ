@@ -1339,7 +1339,6 @@ mod tests {
         };
         let user_image = LanguageModelImage {
             source: SharedString::from("aGVsbG8="),
-            size: None,
         };
         let expected_image_url = user_image.to_base64_url();
 
