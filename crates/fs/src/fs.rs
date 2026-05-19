@@ -1256,6 +1256,7 @@ impl Fs for RealFs {
                     async move {
                         executor.timer(latency).await;
                         let paths = std::mem::take(&mut *pending_paths.lock());
+                        log::debug!("pending path events: {:?}", paths);
                         (!paths.is_empty()).then_some(paths)
                     }
                 }
