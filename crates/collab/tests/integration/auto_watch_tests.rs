@@ -227,6 +227,48 @@ async fn test_auto_watch_toggle_off_leaves_tabs_open(
     });
 }
 
+#[gpui::test]
+async fn test_auto_watch_is_disabled_when_leaving_call(
+    executor: BackgroundExecutor,
+    user_a: &mut TestAppContext,
+    user_b: &mut TestAppContext,
+    user_c: &mut TestAppContext,
+) {
+    let mut server = TestServer::start(executor.clone()).await;
+    let setup = setup_auto_watch_test(&mut server, user_a, user_b, user_c).await;
+    let (workspace_a, user_a) = setup
+        .client_a
+        .build_workspace(&setup.user_a_project, user_a);
+
+    workspace_a.update_in(user_a, |workspace, window, cx| {
+        workspace.toggle_auto_watch(window, cx);
+    });
+    executor.run_until_parked();
+
+    workspace_a.update(user_a, |workspace, _cx| {
+        assert_eq!(
+            *workspace.auto_watch_state(),
+            AutoWatch::Active { watched_peer: None },
+            "auto-watch should be enabled after toggling on"
+        );
+    });
+
+    let active_call_a = user_a.read(ActiveCall::global);
+    active_call_a
+        .update(user_a, |call, cx| call.hang_up(cx))
+        .await
+        .unwrap();
+    executor.run_until_parked();
+
+    workspace_a.update(user_a, |workspace, _cx| {
+        assert_eq!(
+            *workspace.auto_watch_state(),
+            AutoWatch::Off,
+            "auto-watch should be off after leaving the call"
+        );
+    });
+}
+
 #[track_caller]
 fn assert_active_matches_title(workspace: &Workspace, expected_title: &str, cx: &App) {
     let active_item = workspace.active_item(cx).expect("no active item");
