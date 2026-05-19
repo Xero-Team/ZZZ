@@ -1,3 +1,4 @@
+use gpui::{BackgroundExecutor, Task};
 use notify::{Event, EventKind};
 use parking_lot::Mutex;
 use std::{
@@ -19,29 +20,66 @@ pub enum WatcherMode {
 }
 
 pub struct FsWatcher {
+    executor: BackgroundExecutor,
     tx: async_channel::Sender<()>,
     pending_path_events: Arc<Mutex<Vec<PathEvent>>>,
-    registrations: Mutex<BTreeMap<Arc<std::path::Path>, WatcherRegistrationId>>,
+    registrations: Arc<Mutex<BTreeMap<Arc<std::path::Path>, FsWatcherRegistration>>>,
+    pending_registrations: Arc<Mutex<HashMap<Arc<std::path::Path>, Task<()>>>>,
+}
+
+#[derive(Clone, Copy)]
+struct FsWatcherRegistration {
+    id: WatcherRegistrationId,
     mode: WatcherMode,
 }
 
 impl FsWatcher {
     pub fn new(
+        executor: BackgroundExecutor,
         tx: async_channel::Sender<()>,
         pending_path_events: Arc<Mutex<Vec<PathEvent>>>,
-        mode: WatcherMode,
     ) -> Self {
         Self {
+            executor,
             tx,
             pending_path_events,
             registrations: Default::default(),
-            mode,
+            pending_registrations: Default::default(),
         }
+    }
+
+    fn add_existing_path(&self, path: Arc<Path>) -> anyhow::Result<()> {
+        let registration_path = path.clone();
+        let registration =
+            register_existing_path(path, self.tx.clone(), self.pending_path_events.clone())?;
+        self.registrations
+            .lock()
+            .insert(registration_path, registration);
+        Ok(())
+    }
+
+    fn add_pending_path(&self, path: Arc<Path>) {
+        let mut pending_registrations = self.pending_registrations.lock();
+        if pending_registrations.contains_key(path.as_ref()) {
+            return;
+        }
+
+        let task = self.executor.spawn(poll_path_until_created(
+            self.executor.clone(),
+            path.clone(),
+            self.tx.clone(),
+            self.pending_path_events.clone(),
+            self.registrations.clone(),
+            self.pending_registrations.clone(),
+        ));
+        pending_registrations.insert(path, task);
     }
 }
 
 impl Drop for FsWatcher {
     fn drop(&mut self) {
+        self.pending_registrations.lock().clear();
+
         let mut registrations = BTreeMap::new();
         {
             let old = &mut self.registrations.lock();
@@ -50,7 +88,7 @@ impl Drop for FsWatcher {
 
         let global_watcher = global_watcher();
         for (_, registration) in registrations {
-            global_watcher.remove(registration);
+            global_watcher.remove(registration.id);
         }
     }
 }
@@ -58,55 +96,53 @@ impl Drop for FsWatcher {
 impl Watcher for FsWatcher {
     fn add(&self, path: &std::path::Path) -> anyhow::Result<()> {
         log::trace!("watcher add: {path:?}");
-        let tx = self.tx.clone();
-        let pending_path_events = self.pending_path_events.clone();
 
-        if (self.mode == WatcherMode::Poll || cfg!(any(target_os = "windows", target_os = "macos")))
-            && let Some((watched_path, _)) = self
-                .registrations
-                .lock()
-                .range::<std::path::Path, _>((
-                    std::ops::Bound::Unbounded,
-                    std::ops::Bound::Included(path),
-                ))
-                .next_back()
-            && path.starts_with(watched_path.as_ref())
-        {
-            log::trace!(
-                "path to watch is covered by existing registration: {path:?}, {watched_path:?}"
-            );
+        let (path_is_covered_by_recursive_registration, path_is_already_watched) = {
+            let registrations = self.registrations.lock();
+            (
+                path.ancestors().skip(1).any(|ancestor| {
+                    registrations.get(ancestor).is_some_and(|registration| {
+                        registration.mode == WatcherMode::Poll
+                            || cfg!(any(target_os = "windows", target_os = "macos"))
+                    })
+                }),
+                registrations.contains_key(path),
+            )
+        };
+
+        if path_is_covered_by_recursive_registration {
+            log::trace!("path to watch is covered by existing registration: {path:?}");
             return Ok(());
         }
 
-        if self.registrations.lock().contains_key(path) {
+        if path_is_already_watched {
             log::trace!("path to watch is already watched: {path:?}");
             return Ok(());
         }
 
-        let root_path = SanitizedPath::new_arc(path);
+        if self.pending_registrations.lock().contains_key(path) {
+            log::trace!("path to watch is already pending: {path:?}");
+            return Ok(());
+        }
+
         let path: Arc<std::path::Path> = path.into();
+        if std::fs::symlink_metadata(path.as_ref()).is_err() {
+            self.add_pending_path(path);
+            return Ok(());
+        }
 
-        let registration_path = path.clone();
-        let registration_id =
-            global_watcher().add(path.clone(), self.mode, move |event: &notify::Event| {
-                log::trace!("watcher received event: {event:?}");
-                push_notify_event(&tx, &pending_path_events, &root_path, path.as_ref(), event);
-            })?;
-
-        self.registrations
-            .lock()
-            .insert(registration_path, registration_id);
-
-        Ok(())
+        self.add_existing_path(path)
     }
 
     fn remove(&self, path: &std::path::Path) -> anyhow::Result<()> {
         log::trace!("remove watched path: {path:?}");
+        self.pending_registrations.lock().remove(path);
+
         let Some(registration) = self.registrations.lock().remove(path) else {
             return Ok(());
         };
 
-        global_watcher().remove(registration);
+        global_watcher().remove(registration.id);
         Ok(())
     }
 }
@@ -647,9 +683,10 @@ fn path_already_covered(
     mode: WatcherMode,
 ) -> bool {
     (mode == WatcherMode::Poll || cfg!(any(target_os = "windows", target_os = "macos")))
-        && path_registrations
-            .keys()
-            .any(|existing| path.starts_with(existing.as_ref()) && path != existing.as_ref())
+        && path
+            .ancestors()
+            .skip(1)
+            .any(|ancestor| path_registrations.contains_key(ancestor))
 }
 
 static POLL_INTERVAL: LazyLock<Duration> = LazyLock::new(|| {
