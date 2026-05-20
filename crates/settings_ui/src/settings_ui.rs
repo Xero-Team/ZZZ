@@ -1967,11 +1967,14 @@ impl SettingsWindow {
                 async move {
                     let query_lower = query.to_lowercase();
                     let query_words: Vec<&str> = query_lower.split_whitespace().collect();
+                    if query_words.is_empty() {
+                        return Vec::new();
+                    }
                     search_index
                         .documents
                         .iter()
                         .filter(|doc| {
-                            query_words.iter().any(|query_word| {
+                            query_words.iter().all(|query_word| {
                                 doc.words
                                     .iter()
                                     .any(|doc_word| doc_word.starts_with(query_word))
@@ -2763,10 +2766,6 @@ impl SettingsWindow {
                                                 ))
                                         })
                                         .on_click({
-                                            let category = this.pages[entry.page_index].title;
-                                            let subcategory =
-                                                (!entry.is_root).then_some(entry.title);
-
                                             cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
                                                 if this.toggle_navbar_entry_on_double_click(
                                                         entry_index,
@@ -2777,12 +2776,6 @@ impl SettingsWindow {
                                                 {
                                                     return;
                                                 }
-
-                                                telemetry::event!(
-                                                    "Settings Navigation Clicked",
-                                                    category = category,
-                                                    subcategory = subcategory
-                                                );
                                                 this.open_and_scroll_to_navbar_entry(
                                                     entry_index,
                                                     None,

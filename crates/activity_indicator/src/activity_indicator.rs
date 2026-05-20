@@ -760,11 +760,10 @@ impl Render for ActivityIndicator {
                             .anchor(gpui::Anchor::BottomLeft)
                             .menu(move |window, cx| {
                                 let strong_this = activity_indicator.upgrade()?;
-                                let mut has_work = false;
+                                let mut has_cancellable_work = false;
                                 let menu = ContextMenu::build(window, cx, |mut menu, _, cx| {
                                     for work in strong_this.read(cx).pending_language_server_work(cx)
                                     {
-                                        has_work = true;
                                         let activity_indicator = activity_indicator.clone();
                                         let mut title = work
                                             .progress
@@ -773,16 +772,21 @@ impl Render for ActivityIndicator {
                                             .unwrap_or(work.progress_token.to_string());
 
                                         if work.progress.is_cancellable {
+                                            has_cancellable_work = true;
                                             let language_server_id = work.language_server_id;
                                             let token = work.progress_token.clone();
-                                            let title = SharedString::from(title);
+                                            let title = SharedString::from(format!("Cancel {title}"));
                                             menu = menu.custom_entry(
                                                 move |_, _| {
                                                     h_flex()
                                                         .w_full()
-                                                        .justify_between()
+                                                        .gap_1()
+                                                        .child(
+                                                            Icon::new(IconName::Close)
+                                                                .color(Color::Muted)
+                                                                .size(IconSize::Small),
+                                                        )
                                                         .child(Label::new(title.clone()))
-                                                        .child(Icon::new(IconName::XCircle))
                                                         .into_any_element()
                                                 },
                                                 move |_, cx| {
@@ -820,7 +824,7 @@ impl Render for ActivityIndicator {
                                     }
                                     menu
                                 });
-                                has_work.then_some(menu)
+                                has_cancellable_work.then_some(menu)
                             }),
                     )
                     .into_any_element()
