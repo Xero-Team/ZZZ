@@ -902,6 +902,8 @@ impl PlatformTextSystem for NoopTextSystem {
         if !glyphs.is_empty() {
             runs.push(ShapedRun {
                 font_id: FontId(0),
+                synthetic_italic: Default::default(),
+                synthetic_bold: Default::default(),
                 glyphs,
             });
         } else {

@@ -151,6 +151,8 @@ impl ShapedLine {
             if split_pos > 0 {
                 left_runs.push(ShapedRun {
                     font_id: run.font_id,
+                    synthetic_italic: run.synthetic_italic,
+                    synthetic_bold: run.synthetic_bold,
                     glyphs: run.glyphs[..split_pos].to_vec(),
                 });
             }
@@ -167,6 +169,8 @@ impl ShapedLine {
                     .collect();
                 right_runs.push(ShapedRun {
                     font_id: run.font_id,
+                    synthetic_italic: run.synthetic_italic,
+                    synthetic_bold: run.synthetic_bold,
                     glyphs: right_glyphs,
                 });
             }
@@ -538,6 +542,8 @@ fn paint_line(
                             glyph.id,
                             layout.font_size,
                             color,
+                            run.synthetic_italic,
+                            run.synthetic_bold,
                         )?;
                     }
                 }
@@ -780,6 +786,8 @@ mod tests {
                 descent: px(4.0),
                 runs: vec![ShapedRun {
                     font_id: FontId(0),
+                    synthetic_italic: Default::default(),
+                    synthetic_bold: Default::default(),
                     glyphs: shaped_glyphs,
                 }],
                 len: text.len(),
@@ -855,6 +863,8 @@ mod tests {
                 runs: vec![
                     ShapedRun {
                         font_id: FontId(0),
+                        synthetic_italic: Default::default(),
+                        synthetic_bold: Default::default(),
                         glyphs: vec![
                             ShapedGlyph {
                                 id: GlyphId(0),
@@ -878,6 +888,8 @@ mod tests {
                     },
                     ShapedRun {
                         font_id: FontId(1),
+                        synthetic_italic: Default::default(),
+                        synthetic_bold: Default::default(),
                         glyphs: vec![
                             ShapedGlyph {
                                 id: GlyphId(0),

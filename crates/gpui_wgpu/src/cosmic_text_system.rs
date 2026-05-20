@@ -5,9 +5,10 @@ use cosmic_text::{
     FontSystem, ShapeBuffer, ShapeLine,
 };
 use gpui::{
-    Bounds, DevicePixels, Font, FontFeatures, FontId, FontMetrics, FontRun, GlyphId, LineLayout,
-    Pixels, PlatformTextSystem, RenderGlyphParams, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y,
-    ShapedGlyph, ShapedRun, SharedString, Size, TextRenderingMode, point, size,
+    Bounds, DevicePixels, Font, FontFeatures, FontId, FontMetrics, FontRun, FontStyle, FontWeight,
+    GlyphId, LineLayout, Pixels, PlatformTextSystem, RenderGlyphParams, SUBPIXEL_VARIANTS_X,
+    SUBPIXEL_VARIANTS_Y, ShapedGlyph, ShapedRun, SharedString, Size, SyntheticBold,
+    SyntheticItalic, TextRenderingMode, point, size, synthetic_bold_for,
 };
 
 use itertools::Itertools;
@@ -16,7 +17,7 @@ use smallvec::SmallVec;
 use std::{borrow::Cow, sync::Arc};
 use swash::{
     scale::{Render, ScaleContext, Source, StrikeWith},
-    zeno::{Format, Vector},
+    zeno::{Format, Transform, Vector},
 };
 
 pub struct CosmicTextSystem(RwLock<CosmicTextSystemState>);
@@ -48,6 +49,8 @@ struct CosmicTextSystemState {
 struct LoadedFont {
     font: Arc<CosmicTextFont>,
     features: CosmicFontFeatures,
+    style: cosmic_text::Style,
+    weight: FontWeight,
     is_known_emoji_font: bool,
 }
 
@@ -227,6 +230,14 @@ impl CosmicTextSystemState {
 
         let mut loaded_font_ids = SmallVec::new();
         for (font_id, postscript_name) in families {
+            let (style, weight) = {
+                let face = self
+                    .font_system
+                    .db()
+                    .face(font_id)
+                    .context("font face not found in database")?;
+                (face.style, FontWeight(face.weight.0.into()))
+            };
             let font = self
                 .font_system
                 .get_font(font_id, cosmic_text::Weight::NORMAL)
@@ -250,6 +261,8 @@ impl CosmicTextSystemState {
             self.loaded_fonts.push(LoadedFont {
                 font,
                 features: cosmic_font_features(features)?,
+                style,
+                weight,
                 is_known_emoji_font: check_is_known_emoji_font(&postscript_name),
             });
         }
@@ -334,15 +347,18 @@ impl CosmicTextSystemState {
             .hint(true)
             .build();
 
-        let sources: &[Source] = if params.is_emoji {
-            &[
-                Source::ColorOutline(0),
-                Source::ColorBitmap(StrikeWith::BestFit),
-                Source::Outline,
-            ]
-        } else {
-            &[Source::Bitmap(StrikeWith::ExactSize), Source::Outline]
-        };
+        let sources: &[Source] =
+            if params.synthetic_italic.is_enabled() || params.synthetic_bold.is_enabled() {
+                &[Source::Outline]
+            } else if params.is_emoji {
+                &[
+                    Source::ColorOutline(0),
+                    Source::ColorBitmap(StrikeWith::BestFit),
+                    Source::Outline,
+                ]
+            } else {
+                &[Source::Bitmap(StrikeWith::ExactSize), Source::Outline]
+            };
 
         let mut renderer = Render::new(sources);
         if params.subpixel_rendering {
@@ -352,6 +368,18 @@ impl CosmicTextSystemState {
                 .offset(subpixel_offset);
         } else {
             renderer.format(Format::Alpha).offset(subpixel_offset);
+        }
+
+        if params.synthetic_italic.is_enabled() {
+            let skew = params.synthetic_italic.to_skew();
+            renderer.transform(Some(Transform::new(1.0, 0.0, skew, 1.0, 0.0, 0.0)));
+        }
+        if params.synthetic_bold.is_enabled() {
+            renderer.embolden(
+                params
+                    .synthetic_bold
+                    .device_pixel_amount(params.font_size, params.scale_factor),
+            );
         }
 
         let glyph_id: u16 = params.glyph_id.0.try_into()?;
@@ -390,6 +418,8 @@ impl CosmicTextSystemState {
             self.loaded_fonts.push(LoadedFont {
                 font,
                 features: CosmicFontFeatures::new(),
+                style: face.style,
+                weight: FontWeight(face.weight.0.into()),
                 is_known_emoji_font: check_is_known_emoji_font(&face.post_script_name),
             });
 
@@ -401,7 +431,7 @@ impl CosmicTextSystemState {
     fn layout_line(&mut self, text: &str, font_size: Pixels, font_runs: &[FontRun]) -> LineLayout {
         let mut attrs_list = AttrsList::new(&Attrs::new());
         let mut offs = 0;
-        for run in font_runs {
+        for (run_index, run) in font_runs.iter().enumerate() {
             let loaded_font = self.loaded_font(run.font_id);
             let Some(face) = self.font_system.db().face(loaded_font.font.id()) else {
                 log::warn!(
@@ -423,7 +453,7 @@ impl CosmicTextSystemState {
             attrs_list.add_span(
                 offs..(offs + run.len),
                 &Attrs::new()
-                    .metadata(run.font_id.0)
+                    .metadata(run_index)
                     .family(Family::Name(&first_family.0))
                     .stretch(face.stretch)
                     .style(face.style)
@@ -466,7 +496,14 @@ impl CosmicTextSystemState {
 
         let mut runs: Vec<ShapedRun> = Vec::new();
         for glyph in &layout.glyphs {
-            let mut font_id = FontId(glyph.metadata);
+            let Some(font_run) = font_runs.get(glyph.metadata) else {
+                log::warn!(
+                    "glyph metadata points to missing font run {:?}",
+                    glyph.metadata
+                );
+                continue;
+            };
+            let mut font_id = font_run.font_id;
             let mut loaded_font = self.loaded_font(font_id);
             if loaded_font.font.id() != glyph.font_id {
                 match self.font_id_for_cosmic_id(glyph.font_id) {
@@ -484,6 +521,12 @@ impl CosmicTextSystemState {
                 }
             }
             let is_emoji = loaded_font.is_known_emoji_font;
+            let synthetic_italic = synthetic_italic_for(font_run.font_style, loaded_font.style);
+            let synthetic_bold = if is_emoji {
+                SyntheticBold::disabled()
+            } else {
+                synthetic_bold_for(font_run.font_weight, loaded_font.weight)
+            };
 
             // HACK: Prevent crash caused by variation selectors.
             if glyph.glyph_id == 3 && is_emoji {
@@ -497,14 +540,17 @@ impl CosmicTextSystemState {
                 is_emoji,
             };
 
-            if let Some(last_run) = runs
-                .last_mut()
-                .filter(|last_run| last_run.font_id == font_id)
-            {
+            if let Some(last_run) = runs.last_mut().filter(|last_run| {
+                last_run.font_id == font_id
+                    && last_run.synthetic_italic == synthetic_italic
+                    && last_run.synthetic_bold == synthetic_bold
+            }) {
                 last_run.glyphs.push(shaped_glyph);
             } else {
                 runs.push(ShapedRun {
                     font_id,
+                    synthetic_italic,
+                    synthetic_bold,
                     glyphs: vec![shaped_glyph],
                 });
             }
@@ -592,6 +638,22 @@ fn find_best_match(
     }
 
     Ok(best_index)
+}
+
+fn synthetic_italic_for(
+    requested_style: FontStyle,
+    actual_style: cosmic_text::Style,
+) -> SyntheticItalic {
+    if requested_style == FontStyle::Italic
+        && !matches!(
+            actual_style,
+            cosmic_text::Style::Italic | cosmic_text::Style::Oblique
+        )
+    {
+        SyntheticItalic::enabled()
+    } else {
+        SyntheticItalic::disabled()
+    }
 }
 
 fn cosmic_font_features(features: &FontFeatures) -> Result<CosmicFontFeatures> {

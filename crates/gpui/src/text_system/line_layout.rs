@@ -1,4 +1,7 @@
-use crate::{FontId, GlyphId, Pixels, PlatformTextSystem, Point, SharedString, Size, point, px};
+use crate::{
+    FontId, FontStyle, FontWeight, GlyphId, Pixels, PlatformTextSystem, Point, SharedString, Size,
+    SyntheticBold, SyntheticItalic, point, px,
+};
 use collections::FxHashMap;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use smallvec::SmallVec;
@@ -33,6 +36,10 @@ pub struct LineLayout {
 pub struct ShapedRun {
     /// The font id for this run
     pub font_id: FontId,
+    /// Synthetic italic transform to apply when painting this run.
+    pub synthetic_italic: SyntheticItalic,
+    /// Synthetic bold transform to apply when painting this run.
+    pub synthetic_bold: SyntheticBold,
     /// The glyphs that make up this run
     pub glyphs: Vec<ShapedGlyph>,
 }
@@ -815,6 +822,8 @@ fn apply_force_width_to_layout(layout: &mut LineLayout, force_width: Pixels) {
 pub struct FontRun {
     pub len: usize,
     pub font_id: FontId,
+    pub font_style: FontStyle,
+    pub font_weight: FontWeight,
 }
 
 trait AsCacheKeyRef {
@@ -979,6 +988,8 @@ mod tests {
             descent: px(4.),
             runs: vec![ShapedRun {
                 font_id: FontId(0),
+                synthetic_italic: Default::default(),
+                synthetic_bold: Default::default(),
                 glyphs,
             }],
             len: 0,

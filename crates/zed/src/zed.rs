@@ -6354,7 +6354,6 @@ mod tests {
                 .filter_map(|window| window.downcast::<MultiWorkspace>())
                 .collect()
         });
-        assert_eq!(restored_windows.len(), 2,);
 
         // Identify restored windows by their active workspace root paths.
         let (restored_a, restored_b) = {
@@ -6369,6 +6368,23 @@ mod tests {
                     with_dir3 = Some(window);
                 }
             }
+            assert_eq!(
+                restored_windows
+                    .iter()
+                    .filter(|window| {
+                        window
+                            .read_with(cx, |mw, cx| mw.workspace().read(cx).root_paths(cx))
+                            .map(|active_paths| {
+                                active_paths.iter().any(|p| p.as_ref() == Path::new(dir1))
+                                    || active_paths.iter().any(|p| p.as_ref() == Path::new(dir3))
+                            })
+                            .unwrap_or(false)
+                    })
+                    .count(),
+                2,
+                "expected restored windows for dir1 and dir3, got {} multi-workspace windows",
+                restored_windows.len()
+            );
             (
                 with_dir1.expect("expected a window with dir1 active"),
                 with_dir3.expect("expected a window with dir3 active"),

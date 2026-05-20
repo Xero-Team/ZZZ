@@ -13,13 +13,14 @@ use core_graphics::{
     color_space::CGColorSpace,
     context::{CGContext, CGTextDrawingMode},
     display::CGPoint,
+    geometry::CGAffineTransform,
 };
 use core_text::{
     font::CTFont,
     font_collection::CTFontCollectionRef,
     font_descriptor::{
-        CTFontDescriptor, kCTFontSlantTrait, kCTFontSymbolicTrait, kCTFontWeightTrait,
-        kCTFontWidthTrait,
+        CTFontDescriptor, kCTFontItalicTrait, kCTFontSlantTrait, kCTFontSymbolicTrait,
+        kCTFontWeightTrait, kCTFontWidthTrait,
     },
     line::CTLine,
     string_attributes::kCTFontAttributeName,
@@ -37,7 +38,8 @@ use gpui::{
     Bounds, DevicePixels, Font, FontFallbacks, FontFeatures, FontId, FontMetrics, FontRun,
     FontStyle, FontWeight, GlyphId, Hsla, LineLayout, Pixels, PlatformTextSystem,
     RenderGlyphParams, Result, Rgba, SUBPIXEL_VARIANTS_X, ShapedGlyph, ShapedRun, SharedString,
-    Size, TextRenderingMode, point, px, size, swap_rgba_pa_to_bgra,
+    Size, SyntheticBold, SyntheticItalic, TextRenderingMode, point, px, size, swap_rgba_pa_to_bgra,
+    synthetic_bold_for,
 };
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use pathfinder_geometry::{
@@ -406,7 +408,24 @@ impl MacTextSystemState {
         )?);
 
         // Expand the bounds by 1 pixel on each side to give CG room for anti-aliasing.
-        Ok(bounds.dilate(DevicePixels(1)))
+        let mut bounds = bounds.dilate(DevicePixels(1));
+        if params.synthetic_italic.is_enabled() {
+            let extra_width = (params.font_size.0
+                * params.scale_factor
+                * params.synthetic_italic.to_skew().abs())
+            .ceil() as i32;
+            bounds.origin.x -= DevicePixels(extra_width);
+            bounds.size.width += DevicePixels(extra_width * 2);
+        }
+        if params.synthetic_bold.is_enabled() && !params.is_emoji {
+            bounds.size.width += DevicePixels(
+                params
+                    .synthetic_bold
+                    .device_pixel_amount(params.font_size, params.scale_factor)
+                    .ceil() as i32,
+            );
+        }
+        Ok(bounds)
     }
 
     fn rasterize_glyph(
@@ -463,6 +482,16 @@ impl MacTextSystemState {
                 params.scale_factor as CGFloat,
                 params.scale_factor as CGFloat,
             );
+            if params.synthetic_italic.is_enabled() {
+                cx.concat_ctm(CGAffineTransform::new(
+                    1.0,
+                    0.0,
+                    params.synthetic_italic.to_skew() as CGFloat,
+                    1.0,
+                    0.0,
+                    0.0,
+                ));
+            }
 
             let subpixel_shift = params
                 .subpixel_variant
@@ -493,6 +522,27 @@ impl MacTextSystemState {
                     )],
                     cx,
                 );
+            if params.synthetic_bold.is_enabled() && !params.is_emoji {
+                let bold_amount = params
+                    .synthetic_bold
+                    .device_pixel_amount(params.font_size, params.scale_factor);
+                let strike_count = bold_amount.ceil() as i32;
+                for strike_index in 1..=strike_count {
+                    let strike_offset = bold_amount.min(strike_index as f32) / params.scale_factor;
+                    self.fonts[params.font_id.0]
+                        .native_font()
+                        .clone_with_font_size(f32::from(params.font_size) as CGFloat)
+                        .draw_glyphs(
+                            &[params.glyph_id.0 as CGGlyph],
+                            &[CGPoint::new(
+                                ((subpixel_shift.x / params.scale_factor) + strike_offset)
+                                    as CGFloat,
+                                (subpixel_shift.y / params.scale_factor) as CGFloat,
+                            )],
+                            cx,
+                        );
+                }
+            }
 
             if params.is_emoji {
                 // Convert from RGBA with premultiplied alpha to BGRA with straight alpha.
@@ -512,11 +562,12 @@ impl MacTextSystemState {
         let mut max_descent = 0.0f32;
 
         {
-            let mut text = text;
+            let mut remaining_text = text;
             let mut break_ligature = true;
+            let mut font_run_end_utf16 = Vec::with_capacity(font_runs.len());
             for run in font_runs {
                 let text_run;
-                (text_run, text) = text.split_at(run.len);
+                (text_run, remaining_text) = remaining_text.split_at(run.len);
 
                 let utf16_start = string.char_len(); // insert at end of string
                 // note: replace_str may silently ignore codepoints it dislikes (e.g., BOM at start of string)
@@ -526,6 +577,7 @@ impl MacTextSystemState {
                 let length = utf16_end - utf16_start;
                 let cf_range = CFRange::init(utf16_start, length);
                 let font = &self.fonts[run.font_id.0];
+                font_run_end_utf16.push((utf16_end, run.font_style, run.font_weight));
 
                 let font_metrics = font.metrics();
                 let font_scale = f32::from(font_size) / font_metrics.units_per_em as f32;
@@ -546,62 +598,114 @@ impl MacTextSystemState {
                 }
                 break_ligature = !break_ligature;
             }
-        }
-        // Retrieve the glyphs from the shaped line, converting UTF16 offsets to UTF8 offsets.
-        let line = CTLine::new_with_attributed_string(string.as_concrete_TypeRef());
-        let glyph_runs = line.glyph_runs();
-        let mut runs = <Vec<ShapedRun>>::with_capacity(glyph_runs.len() as usize);
-        let mut ix_converter = StringIndexConverter::new(text);
-        for run in glyph_runs.into_iter() {
-            let attributes = run.attributes().unwrap();
-            let font = unsafe {
-                attributes
-                    .get(kCTFontAttributeName)
-                    .downcast::<CTFont>()
-                    .unwrap()
-            };
-            let font_id = self.id_for_native_font(font);
 
-            let glyphs = match runs.last_mut() {
-                Some(run) if run.font_id == font_id => &mut run.glyphs,
-                _ => {
-                    runs.push(ShapedRun {
-                        font_id,
-                        glyphs: Vec::with_capacity(run.glyph_count().try_into().unwrap_or(0)),
+            // Retrieve the glyphs from the shaped line, converting UTF16 offsets to UTF8 offsets.
+            let line = CTLine::new_with_attributed_string(string.as_concrete_TypeRef());
+            let glyph_runs = line.glyph_runs();
+            let mut runs = <Vec<ShapedRun>>::with_capacity(glyph_runs.len() as usize);
+            let mut ix_converter = StringIndexConverter::new(text);
+            for run in glyph_runs.into_iter() {
+                let attributes = run.attributes().unwrap();
+                let font = unsafe {
+                    attributes
+                        .get(kCTFontAttributeName)
+                        .downcast::<CTFont>()
+                        .unwrap()
+                };
+                let font_id = self.id_for_native_font(font.clone());
+                let run_start_utf16 = run
+                    .string_indices()
+                    .first()
+                    .copied()
+                    .and_then(|index| usize::try_from(index).ok())
+                    .unwrap_or(0);
+                let (requested_style, requested_weight) = font_run_end_utf16
+                    .iter()
+                    .find_map(|(end, style, weight)| {
+                        (run_start_utf16 < *end).then_some((*style, *weight))
+                    })
+                    .unwrap_or((FontStyle::default(), FontWeight::default()));
+                let synthetic_italic = synthetic_italic_for(requested_style, &font);
+                let synthetic_bold = if self.is_emoji(font_id) {
+                    SyntheticBold::disabled()
+                } else {
+                    synthetic_bold_for(requested_weight, ct_font_weight(&font))
+                };
+
+                let glyphs = match runs.last_mut() {
+                    Some(run)
+                        if run.font_id == font_id
+                            && run.synthetic_italic == synthetic_italic
+                            && run.synthetic_bold == synthetic_bold =>
+                    {
+                        &mut run.glyphs
+                    }
+                    _ => {
+                        runs.push(ShapedRun {
+                            font_id,
+                            synthetic_italic,
+                            synthetic_bold,
+                            glyphs: Vec::with_capacity(run.glyph_count().try_into().unwrap_or(0)),
+                        });
+                        &mut runs.last_mut().unwrap().glyphs
+                    }
+                };
+                for ((&glyph_id, position), &glyph_utf16_ix) in run
+                    .glyphs()
+                    .iter()
+                    .zip(run.positions().iter())
+                    .zip(run.string_indices().iter())
+                {
+                    let glyph_utf16_ix = usize::try_from(glyph_utf16_ix).unwrap();
+                    if ix_converter.utf16_ix > glyph_utf16_ix {
+                        // We cannot reuse current index converter, as it can only seek forward. Restart the search.
+                        ix_converter = StringIndexConverter::new(text);
+                    }
+                    ix_converter.advance_to_utf16_ix(glyph_utf16_ix);
+                    glyphs.push(ShapedGlyph {
+                        id: GlyphId(glyph_id as u32),
+                        position: point(position.x as f32, position.y as f32).map(px),
+                        index: ix_converter.utf8_ix,
+                        is_emoji: self.is_emoji(font_id),
                     });
-                    &mut runs.last_mut().unwrap().glyphs
                 }
-            };
-            for ((&glyph_id, position), &glyph_utf16_ix) in run
-                .glyphs()
-                .iter()
-                .zip(run.positions().iter())
-                .zip(run.string_indices().iter())
-            {
-                let glyph_utf16_ix = usize::try_from(glyph_utf16_ix).unwrap();
-                if ix_converter.utf16_ix > glyph_utf16_ix {
-                    // We cannot reuse current index converter, as it can only seek forward. Restart the search.
-                    ix_converter = StringIndexConverter::new(text);
-                }
-                ix_converter.advance_to_utf16_ix(glyph_utf16_ix);
-                glyphs.push(ShapedGlyph {
-                    id: GlyphId(glyph_id as u32),
-                    position: point(position.x as f32, position.y as f32).map(px),
-                    index: ix_converter.utf8_ix,
-                    is_emoji: self.is_emoji(font_id),
-                });
             }
-        }
-        let typographic_bounds = line.get_typographic_bounds();
-        LineLayout {
-            runs,
-            font_size,
-            width: typographic_bounds.width.into(),
-            ascent: max_ascent.into(),
-            descent: max_descent.into(),
-            len: text.len(),
+            let typographic_bounds = line.get_typographic_bounds();
+            return LineLayout {
+                runs,
+                font_size,
+                width: typographic_bounds.width.into(),
+                ascent: max_ascent.into(),
+                descent: max_descent.into(),
+                len: text.len(),
+            };
         }
     }
+}
+
+fn synthetic_italic_for(requested_style: FontStyle, actual_font: &CTFont) -> SyntheticItalic {
+    if requested_style == FontStyle::Italic && !ct_font_is_italic_or_oblique(actual_font) {
+        SyntheticItalic::enabled()
+    } else {
+        SyntheticItalic::disabled()
+    }
+}
+
+fn ct_font_weight(font: &CTFont) -> FontWeight {
+    let traits = font.all_traits();
+    unsafe {
+        traits
+            .get(kCTFontWeightTrait)
+            .downcast::<CFNumber>()
+            .and_then(|weight| weight.to_f64())
+            .map(|weight| FontWeight((((weight as f32) + 1.0) * 500.0).clamp(100.0, 900.0)))
+            .unwrap_or(FontWeight::NORMAL)
+    }
+}
+
+fn ct_font_is_italic_or_oblique(font: &CTFont) -> bool {
+    unsafe { font.symbolic_traits() & kCTFontItalicTrait != 0 }
+    || font.slant_angle() != 0.0
 }
 
 #[derive(Debug, Clone)]
@@ -743,7 +847,7 @@ mod lenient_font_attributes {
 #[cfg(test)]
 mod tests {
     use crate::MacTextSystem;
-    use gpui::{FontRun, GlyphId, PlatformTextSystem, font, px};
+    use gpui::{FontRun, FontWeight, GlyphId, PlatformTextSystem, font, px};
 
     #[test]
     fn test_layout_line_bom_char() {
@@ -753,6 +857,8 @@ mod tests {
         let mut style = FontRun {
             font_id,
             len: line.len(),
+            font_style: Default::default(),
+            font_weight: FontWeight::default(),
         };
 
         let layout = fonts.layout_line(line, px(16.), &[style]);
@@ -774,10 +880,14 @@ mod tests {
             FontRun {
                 len: "\u{feff}".len(),
                 font_id,
+                font_style: Default::default(),
+                font_weight: FontWeight::default(),
             },
             FontRun {
                 len: "ab".len(),
                 font_id,
+                font_style: Default::default(),
+                font_weight: FontWeight::default(),
             },
         ];
         let layout = fonts.layout_line(line, px(16.), font_runs);
@@ -796,8 +906,18 @@ mod tests {
 
         let text = "hello world";
         let font_runs = &[
-            FontRun { font_id, len: 5 }, // "hello"
-            FontRun { font_id, len: 6 }, // " world"
+            FontRun {
+                font_id,
+                len: 5,
+                font_style: Default::default(),
+                font_weight: FontWeight::default(),
+            }, // "hello"
+            FontRun {
+                font_id,
+                len: 6,
+                font_style: Default::default(),
+                font_weight: FontWeight::default(),
+            }, // " world"
         ];
 
         let layout = fonts.layout_line(text, px(16.), font_runs);
@@ -817,11 +937,18 @@ mod tests {
         // Test with different font runs - should not insert ZWNJ
         let font_id2 = fonts.font_id(&font("Times")).unwrap_or(font_id);
         let font_runs_different = &[
-            FontRun { font_id, len: 5 }, // "hello"
+            FontRun {
+                font_id,
+                len: 5,
+                font_style: Default::default(),
+                font_weight: FontWeight::default(),
+            }, // "hello"
             // " world"
             FontRun {
                 font_id: font_id2,
                 len: 6,
+                font_style: Default::default(),
+                font_weight: FontWeight::default(),
             },
         ];
 
@@ -846,15 +973,35 @@ mod tests {
         let font_id = fonts.font_id(&font("Helvetica")).unwrap();
 
         let text = "hello";
-        let font_runs = &[FontRun { font_id, len: 5 }];
+        let font_runs = &[FontRun {
+            font_id,
+            len: 5,
+            font_style: Default::default(),
+            font_weight: FontWeight::default(),
+        }];
         let layout = fonts.layout_line(text, px(16.), font_runs);
         assert_eq!(layout.len, text.len());
 
         let text = "abc";
         let font_runs = &[
-            FontRun { font_id, len: 1 }, // "a"
-            FontRun { font_id, len: 1 }, // "b"
-            FontRun { font_id, len: 1 }, // "c"
+            FontRun {
+                font_id,
+                len: 1,
+                font_style: Default::default(),
+                font_weight: FontWeight::default(),
+            }, // "a"
+            FontRun {
+                font_id,
+                len: 1,
+                font_style: Default::default(),
+                font_weight: FontWeight::default(),
+            }, // "b"
+            FontRun {
+                font_id,
+                len: 1,
+                font_style: Default::default(),
+                font_weight: FontWeight::default(),
+            }, // "c"
         ];
         let layout = fonts.layout_line(text, px(16.), font_runs);
         assert_eq!(layout.len, text.len());

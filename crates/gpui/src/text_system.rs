@@ -215,6 +215,8 @@ impl TextSystem {
                 &[FontRun {
                     len: buffer.len(),
                     font_id,
+                    font_style: FontStyle::Normal,
+                    font_weight: FontWeight::NORMAL,
                 }],
             )
             .width
@@ -562,6 +564,8 @@ impl WindowTextSystem {
                 let font_id = self.resolve_font(&run.font);
                 if let Some(font_run) = font_runs.last_mut()
                     && font_id == font_run.font_id
+                    && run.font.style == font_run.font_style
+                    && run.font.weight == font_run.font_weight
                     && !decoration_changed
                 {
                     font_run.len += run_len_within_line;
@@ -569,6 +573,8 @@ impl WindowTextSystem {
                     font_runs.push(FontRun {
                         len: run_len_within_line,
                         font_id,
+                        font_style: run.font.style,
+                        font_weight: run.font.weight,
                     });
                 }
 
@@ -676,6 +682,8 @@ impl WindowTextSystem {
             let font_id = self.resolve_font(&run.font);
             if let Some(font_run) = font_runs.last_mut()
                 && font_id == font_run.font_id
+                && run.font.style == font_run.font_style
+                && run.font.weight == font_run.font_weight
                 && !decoration_changed
             {
                 font_run.len += run.len;
@@ -683,6 +691,8 @@ impl WindowTextSystem {
                 font_runs.push(FontRun {
                     len: run.len,
                     font_id,
+                    font_style: run.font.style,
+                    font_weight: run.font.weight,
                 });
             }
         }
@@ -736,6 +746,8 @@ impl WindowTextSystem {
             let font_id = self.resolve_font(&run.font);
             if let Some(font_run) = font_runs.last_mut()
                 && font_id == font_run.font_id
+                && run.font.style == font_run.font_style
+                && run.font.weight == font_run.font_weight
                 && !decoration_changed
             {
                 font_run.len += run.len;
@@ -743,6 +755,8 @@ impl WindowTextSystem {
                 font_runs.push(FontRun {
                     len: run.len,
                     font_id,
+                    font_style: run.font.style,
+                    font_weight: run.font.weight,
                 });
             }
         }
@@ -798,6 +812,8 @@ impl WindowTextSystem {
             let font_id = self.resolve_font(&run.font);
             if let Some(font_run) = font_runs.last_mut()
                 && font_id == font_run.font_id
+                && run.font.style == font_run.font_style
+                && run.font.weight == font_run.font_weight
                 && !decoration_changed
             {
                 font_run.len += run.len;
@@ -805,6 +821,8 @@ impl WindowTextSystem {
                 font_runs.push(FontRun {
                     len: run.len,
                     font_id,
+                    font_style: run.font.style,
+                    font_weight: run.font.weight,
                 });
             }
         }
@@ -1010,6 +1028,8 @@ pub struct RenderGlyphParams {
     pub font_size: Pixels,
     pub subpixel_variant: Point<u8>,
     pub scale_factor: f32,
+    pub synthetic_italic: SyntheticItalic,
+    pub synthetic_bold: SyntheticBold,
     pub is_emoji: bool,
     pub subpixel_rendering: bool,
     pub dilation: u8,
@@ -1024,9 +1044,142 @@ impl Hash for RenderGlyphParams {
         self.font_size.0.to_bits().hash(state);
         self.subpixel_variant.hash(state);
         self.scale_factor.to_bits().hash(state);
+        self.synthetic_italic.hash(state);
+        self.synthetic_bold.hash(state);
         self.is_emoji.hash(state);
         self.subpixel_rendering.hash(state);
         self.dilation.hash(state);
+    }
+}
+
+/// A synthetic bold transform applied when a requested bold face falls back to a lighter face.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct SyntheticBold {
+    amount_per_em_times_1024: u16,
+}
+
+impl SyntheticBold {
+    const AMOUNT_SCALE: f32 = 1024.0;
+    const WEBRENDER_DEFAULT_AMOUNT: f32 = 1.0 / 48.0;
+
+    /// Returns a disabled synthetic bold transform.
+    pub fn disabled() -> Self {
+        Self {
+            amount_per_em_times_1024: 0,
+        }
+    }
+
+    /// Returns an enabled synthetic bold transform with the given embolden amount in ems.
+    pub fn enabled(amount_per_em: f32) -> Self {
+        Self {
+            amount_per_em_times_1024: (amount_per_em.max(0.0) * Self::AMOUNT_SCALE) as u16,
+        }
+    }
+
+    /// Returns the default synthetic bold transform used by WebRender.
+    pub fn default_enabled() -> Self {
+        Self::enabled(Self::WEBRENDER_DEFAULT_AMOUNT)
+    }
+
+    /// Returns whether this synthetic bold transform is enabled.
+    pub fn is_enabled(self) -> bool {
+        self.amount_per_em_times_1024 != 0
+    }
+
+    /// Returns the embolden amount in ems.
+    pub fn amount(self) -> f32 {
+        self.amount_per_em_times_1024 as f32 / Self::AMOUNT_SCALE
+    }
+
+    /// Returns the embolden amount in device pixels, matching WebRender's default scaling.
+    pub fn device_pixel_amount(self, font_size: Pixels, scale_factor: f32) -> f32 {
+        if !self.is_enabled() {
+            return 0.0;
+        }
+
+        let mut amount = font_size.0 * scale_factor * self.amount();
+        if amount < 1.0 {
+            amount = 0.25 + 0.75 * amount;
+        }
+        amount.max(1.0)
+    }
+}
+
+impl Default for SyntheticBold {
+    fn default() -> Self {
+        Self::disabled()
+    }
+}
+
+/// A synthetic italic transform applied when a requested italic face falls back to an upright face.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct SyntheticItalic {
+    angle_degrees_times_256: i16,
+}
+
+impl SyntheticItalic {
+    const ANGLE_SCALE: f32 = 256.0;
+
+    /// Returns the default synthetic italic transform.
+    pub fn enabled() -> Self {
+        Self::from_degrees(14.0)
+    }
+
+    /// Returns a disabled synthetic italic transform.
+    pub fn disabled() -> Self {
+        Self {
+            angle_degrees_times_256: 0,
+        }
+    }
+
+    /// Creates a synthetic italic transform from an angle in degrees.
+    pub fn from_degrees(degrees: f32) -> Self {
+        Self {
+            angle_degrees_times_256: (degrees.clamp(-89.0, 89.0) * Self::ANGLE_SCALE) as i16,
+        }
+    }
+
+    /// Returns whether this synthetic italic transform is enabled.
+    pub fn is_enabled(self) -> bool {
+        self.angle_degrees_times_256 != 0
+    }
+
+    /// Returns the synthetic italic angle in degrees.
+    pub fn to_degrees(self) -> f32 {
+        self.angle_degrees_times_256 as f32 / Self::ANGLE_SCALE
+    }
+
+    /// Returns the synthetic italic angle in radians.
+    pub fn to_radians(self) -> f32 {
+        self.to_degrees().to_radians()
+    }
+
+    /// Returns the shear factor for this synthetic italic angle.
+    pub fn to_skew(self) -> f32 {
+        self.to_radians().tan()
+    }
+}
+
+impl Default for SyntheticItalic {
+    fn default() -> Self {
+        Self::disabled()
+    }
+}
+
+/// Returns the synthetic bold transform to use for a requested and actual font weight.
+pub fn synthetic_bold_for(
+    requested_weight: FontWeight,
+    actual_weight: FontWeight,
+) -> SyntheticBold {
+    const SYNTHETIC_BOLD_THRESHOLD: f32 = 150.0;
+
+    if requested_weight >= FontWeight::SEMIBOLD
+        && actual_weight < requested_weight
+        && requested_weight.0 - actual_weight.0 >= SYNTHETIC_BOLD_THRESHOLD
+    {
+        SyntheticBold::default_enabled()
+    } else {
+        SyntheticBold::disabled()
     }
 }
 

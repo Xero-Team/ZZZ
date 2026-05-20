@@ -3600,6 +3600,8 @@ impl Window {
         glyph_id: GlyphId,
         font_size: Pixels,
         color: Hsla,
+        synthetic_italic: crate::SyntheticItalic,
+        synthetic_bold: crate::SyntheticBold,
     ) -> Result<()> {
         self.invalidator.debug_assert_paint();
 
@@ -3626,6 +3628,8 @@ impl Window {
             font_size,
             subpixel_variant,
             scale_factor,
+            synthetic_italic,
+            synthetic_bold,
             is_emoji: false,
             subpixel_rendering,
             dilation,
@@ -3716,6 +3720,8 @@ impl Window {
             font_size,
             subpixel_variant: Default::default(),
             scale_factor,
+            synthetic_italic: Default::default(),
+            synthetic_bold: Default::default(),
             is_emoji: true,
             subpixel_rendering: false,
             dilation: 0,

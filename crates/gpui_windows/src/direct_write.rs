@@ -531,6 +531,7 @@ impl DirectWriteState {
 
             let mut utf8_offset = 0usize;
             let mut utf16_offset = 0u32;
+            let mut font_run_end_utf16 = Vec::with_capacity(font_runs.len());
             let text_layout = {
                 let first_run = &font_runs[0];
                 let font_info = &self.fonts[first_run.font_id.0];
@@ -566,6 +567,11 @@ impl DirectWriteState {
                 };
                 layout.SetTypography(&font_info.features, text_range)?;
                 utf16_offset += current_text_utf16_length;
+                font_run_end_utf16.push((
+                    utf16_offset as usize,
+                    first_run.font_style,
+                    first_run.font_weight,
+                ));
 
                 layout
             };
@@ -603,6 +609,7 @@ impl DirectWriteState {
                 text_layout.SetFontStyle(font_info.font_face.GetStyle(), text_range)?;
                 text_layout.SetFontWeight(font_info.font_face.GetWeight(), text_range)?;
                 text_layout.SetTypography(&font_info.features, text_range)?;
+                font_run_end_utf16.push((utf16_offset as usize, run.font_style, run.font_weight));
 
                 break_ligatures = !break_ligatures;
             }
@@ -612,6 +619,7 @@ impl DirectWriteState {
                 text_system: self,
                 components,
                 index_converter: StringIndexConverter::new(text),
+                font_run_end_utf16,
                 runs: &mut runs,
                 width: 0.0,
             };
@@ -685,7 +693,7 @@ impl DirectWriteState {
         let transform = DWRITE_MATRIX {
             m11: params.scale_factor,
             m12: 0.0,
-            m21: 0.0,
+            m21: params.synthetic_italic.to_skew() * params.scale_factor,
             m22: params.scale_factor,
             dx: 0.0,
             dy: 0.0,
@@ -760,10 +768,18 @@ impl DirectWriteState {
                 size: size(0.into(), 0.into()),
             })
         } else {
+            let extra_width = if params.synthetic_bold.is_enabled() && !params.is_emoji {
+                params
+                    .synthetic_bold
+                    .device_pixel_amount(params.font_size, params.scale_factor)
+                    .ceil() as i32
+            } else {
+                0
+            };
             Ok(Bounds {
                 origin: point(bounds.left.into(), bounds.top.into()),
                 size: size(
-                    (bounds.right - bounds.left).into(),
+                    (bounds.right - bounds.left + extra_width).into(),
                     (bounds.bottom - bounds.top).into(),
                 ),
             })
@@ -833,6 +849,15 @@ impl DirectWriteState {
                 )?;
             }
 
+            if params.synthetic_bold.is_enabled() {
+                apply_synthetic_bold_mask(
+                    &mut bitmap_data,
+                    glyph_bounds.size.width.0 as usize,
+                    glyph_bounds.size.height.0 as usize,
+                    synthetic_bold_offsets(params),
+                );
+            }
+
             return Ok(bitmap_data);
         }
 
@@ -869,6 +894,15 @@ impl DirectWriteState {
                 bitmap_data[src + 1],
                 bitmap_data[src + 2],
                 0,
+            );
+        }
+
+        if params.synthetic_bold.is_enabled() {
+            apply_synthetic_bold_subpixel(
+                &mut bitmap_data,
+                width,
+                height,
+                synthetic_bold_offsets(params),
             );
         }
 
@@ -1363,6 +1397,7 @@ struct RendererContext<'t, 'a, 'b> {
     text_system: &'t mut DirectWriteState,
     components: &'a DirectWriteComponents,
     index_converter: StringIndexConverter<'a>,
+    font_run_end_utf16: Vec<(usize, FontStyle, FontWeight)>,
     runs: &'b mut Vec<ShapedRun>,
     width: f32,
 }
@@ -1518,6 +1553,23 @@ impl IDWriteTextRenderer_Impl for TextRenderer_Impl {
             )?;
 
         let color_font = unsafe { font_face.IsColorFont().as_bool() };
+        let (requested_style, requested_weight) = context
+            .font_run_end_utf16
+            .iter()
+            .find_map(|(end, style, weight)| {
+                ((desc.textPosition as usize) < *end).then_some((*style, *weight))
+            })
+            .unwrap_or((FontStyle::default(), FontWeight::default()));
+        let synthetic_italic =
+            synthetic_italic_for(requested_style, unsafe { font_face.GetStyle() });
+        let synthetic_bold = if color_font {
+            SyntheticBold::disabled()
+        } else {
+            synthetic_bold_for(
+                requested_weight,
+                font_weight_from_dwrite(unsafe { font_face.GetWeight() }),
+            )
+        };
 
         let glyph_ids = unsafe { std::slice::from_raw_parts(glyphrun.glyphIndices, glyph_count) };
         let glyph_advances =
@@ -1556,7 +1608,12 @@ impl IDWriteTextRenderer_Impl for TextRenderer_Impl {
             }
             glyph_idx += cluster_glyph_count;
         }
-        context.runs.push(ShapedRun { font_id, glyphs });
+        context.runs.push(ShapedRun {
+            font_id,
+            synthetic_italic,
+            synthetic_bold,
+            glyphs,
+        });
         Ok(())
     }
 
@@ -1644,6 +1701,80 @@ impl<'a> StringIndexConverter<'a> {
     }
 }
 
+fn synthetic_bold_offsets(params: &RenderGlyphParams) -> Vec<usize> {
+    let bold_amount = params
+        .synthetic_bold
+        .device_pixel_amount(params.font_size, params.scale_factor);
+    let strike_count = bold_amount.ceil() as usize;
+    (1..=strike_count)
+        .map(|strike_index| bold_amount.min(strike_index as f32).round() as usize)
+        .collect()
+}
+
+fn apply_synthetic_bold_mask(
+    bitmap_data: &mut [u8],
+    width: usize,
+    height: usize,
+    offsets: Vec<usize>,
+) {
+    if offsets.is_empty() {
+        return;
+    }
+
+    let original = bitmap_data.to_vec();
+    for row in 0..height {
+        let row_start = row * width;
+        for col in 0..width {
+            let src_alpha = original[row_start + col];
+            if src_alpha == 0 {
+                continue;
+            }
+
+            for &offset in &offsets {
+                let dst_col = col + offset;
+                if dst_col >= width {
+                    break;
+                }
+                let dst = row_start + dst_col;
+                bitmap_data[dst] = bitmap_data[dst].max(src_alpha);
+            }
+        }
+    }
+}
+
+fn apply_synthetic_bold_subpixel(
+    bitmap_data: &mut [u8],
+    width: usize,
+    height: usize,
+    offsets: Vec<usize>,
+) {
+    if offsets.is_empty() {
+        return;
+    }
+
+    let original = bitmap_data.to_vec();
+    for row in 0..height {
+        for col in 0..width {
+            let src = (row * width + col) * 4;
+            if original[src] == 0 && original[src + 1] == 0 && original[src + 2] == 0 {
+                continue;
+            }
+
+            for &offset in &offsets {
+                let dst_col = col + offset;
+                if dst_col >= width {
+                    break;
+                }
+
+                let dst = (row * width + dst_col) * 4;
+                bitmap_data[dst] = bitmap_data[dst].max(original[src]);
+                bitmap_data[dst + 1] = bitmap_data[dst + 1].max(original[src + 1]);
+                bitmap_data[dst + 2] = bitmap_data[dst + 2].max(original[src + 2]);
+            }
+        }
+    }
+}
+
 fn font_style_to_dwrite(style: FontStyle) -> DWRITE_FONT_STYLE {
     match style {
         FontStyle::Normal => DWRITE_FONT_STYLE_NORMAL,
@@ -1658,6 +1789,19 @@ fn font_style_from_dwrite(value: DWRITE_FONT_STYLE) -> FontStyle {
         1 => FontStyle::Italic,
         2 => FontStyle::Oblique,
         _ => unreachable!(),
+    }
+}
+
+fn synthetic_italic_for(
+    requested_style: FontStyle,
+    actual_style: DWRITE_FONT_STYLE,
+) -> SyntheticItalic {
+    if requested_style == FontStyle::Italic
+        && font_style_from_dwrite(actual_style) == FontStyle::Normal
+    {
+        SyntheticItalic::enabled()
+    } else {
+        SyntheticItalic::disabled()
     }
 }
 
