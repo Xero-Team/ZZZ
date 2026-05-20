@@ -7597,6 +7597,7 @@ dependencies = [
  "settings",
  "smallvec",
  "strum 0.28.0",
+ "sysinfo 0.38.4",
  "task",
  "theme",
  "theme_settings",
