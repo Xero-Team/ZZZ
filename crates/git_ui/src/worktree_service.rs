@@ -1077,11 +1077,8 @@ mod tests {
         });
 
         // Verify main worktree is now trusted
-        let has_restricted = cx.read(|cx| {
-            project::trusted_worktrees::TrustedWorktrees::has_restricted_worktrees(
-                &worktree_store,
-                cx,
-            )
+        let has_restricted = trusted_store.read_with(cx, |store, cx| {
+            store.has_restricted_worktrees(&worktree_store, cx)
         });
         assert!(
             !has_restricted,
@@ -1114,11 +1111,8 @@ mod tests {
         let new_workspace = multi_workspace.read_with(cx, |mw, _| mw.workspace().clone());
         let new_worktree_store =
             new_workspace.read_with(cx, |ws, cx| ws.project().read(cx).worktree_store());
-        let new_has_restricted = cx.read(|cx| {
-            project::trusted_worktrees::TrustedWorktrees::has_restricted_worktrees(
-                &new_worktree_store,
-                cx,
-            )
+        let new_has_restricted = trusted_store.read_with(cx, |store, cx| {
+            store.has_restricted_worktrees(&new_worktree_store, cx)
         });
         assert!(
             !new_has_restricted,

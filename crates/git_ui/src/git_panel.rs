@@ -2174,11 +2174,7 @@ impl GitPanel {
     fn on_commit(&mut self, _: &Commit, window: &mut Window, cx: &mut Context<Self>) {
         let is_amend = self.amend_pending;
         if self.commit(&self.commit_editor.focus_handle(cx), window, cx) {
-            if is_amend {
-                telemetry::event!("Git Amended", source = "Git Panel");
-            } else {
-                telemetry::event!("Git Committed", source = "Git Panel");
-            }
+            let _ = is_amend;
         }
     }
 
@@ -2211,7 +2207,7 @@ impl GitPanel {
 
     fn on_amend(&mut self, _: &Amend, window: &mut Window, cx: &mut Context<Self>) {
         if self.amend(&self.commit_editor.focus_handle(cx), window, cx) {
-            telemetry::event!("Git Amended", source = "Git Panel");
+            let _ = ();
         }
     }
 
@@ -4460,7 +4456,7 @@ impl GitPanel {
                 .flex_none()
                 .justify_between()
                 .child(
-                    panel_button("View Diff")
+                    Button::new("view_diff", "View Diff")
                         .color(Color::Muted)
                         .start_icon(
                             Icon::new(IconName::Diff)

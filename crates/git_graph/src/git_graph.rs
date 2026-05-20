@@ -63,6 +63,7 @@ const LEFT_PADDING: Pixels = px(12.0);
 const LINE_WIDTH: Pixels = px(1.5);
 const RESIZE_HANDLE_WIDTH: f32 = 8.0;
 const COPIED_STATE_DURATION: Duration = Duration::from_secs(2);
+const COMMIT_TAG_LIST_WIDTH_IN_REMS: Rems = rems(10.0);
 // Extra vertical breathing room added to the UI line height when computing
 // the git graph's row height, so commit dots and lines have space around them.
 const ROW_VERTICAL_PADDING: Pixels = px(4.0);
@@ -2063,14 +2064,13 @@ impl GitGraph {
             return;
         };
         let short_sha = commit.data.sha.display_short();
-        let tag_names = commit.data.tag_names();
+        let tag_names = commit
+            .data
+            .tag_names()
+            .into_iter()
+            .map(|tag_name| SharedString::from(tag_name.to_string()))
+            .collect::<Vec<_>>();
         let copy_tag_label = "Copy Tag";
-        let copy_tag_label: SharedString = match tag_names.as_slice() {
-            [] => copy_tag_label.into(),
-            [tag_name] => format!("{copy_tag_label}: {tag_name}").into(),
-            _ => format!("{copy_tag_label}…").into(),
-        };
-        let copy_tag_disabled = tag_names.is_empty();
 
         let focus_handle = self.focus_handle.clone();
         let git_graph = cx.entity();
@@ -2092,14 +2092,32 @@ impl GitGraph {
                         this.copy_commit_sha(index, cx);
                     }),
                 )
-                .item(
-                    ContextMenuEntry::new(copy_tag_label)
-                        .action(CopyCommitTag.boxed_clone())
-                        .disabled(copy_tag_disabled)
-                        .handler(window.handler_for(&git_graph, move |this, window, cx| {
-                            this.copy_commit_tag(index, window, cx);
-                        })),
-                )
+                .map(|menu| match tag_names.as_slice() {
+                    [] => menu.item(
+                        ContextMenuEntry::new(copy_tag_label)
+                            .action(CopyCommitTag.boxed_clone())
+                            .disabled(true),
+                    ),
+                    [tag_name] => {
+                        let tag_name = tag_name.clone();
+                        let label = format!("{copy_tag_label}: {tag_name}");
+                        menu.entry(label, Some(CopyCommitTag.boxed_clone()), move |_, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(tag_name.to_string()));
+                        })
+                    }
+                    _ => menu.submenu(copy_tag_label, move |menu, _, _| {
+                        let mut menu = menu.fixed_width(COMMIT_TAG_LIST_WIDTH_IN_REMS.into());
+                        for tag_name in tag_names.clone() {
+                            let tag_name_to_copy = tag_name.clone();
+                            menu = menu.entry(tag_name, None, move |_, cx| {
+                                cx.write_to_clipboard(ClipboardItem::new_string(
+                                    tag_name_to_copy.to_string(),
+                                ));
+                            });
+                        }
+                        menu
+                    }),
+                })
         });
         self.set_context_menu(context_menu, position, index, window, cx);
     }

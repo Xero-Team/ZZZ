@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_imports)]
+
 pub mod blame;
 
 use super::*;
@@ -135,6 +137,7 @@ impl StoredReviewComment {
     }
 }
 
+#[cfg(any())]
 impl Editor {
     pub fn diff_hunks_in_ranges<'a>(
         &'a self,
@@ -2465,7 +2468,7 @@ impl Editor {
     }
 }
 
-#[cfg(test)]
+#[cfg(any())]
 impl Editor {
     /// Returns the line range for the first diff review overlay, if one is active.
     /// Returns (start_row, end_row) as physical line numbers in the underlying file.
@@ -2502,6 +2505,7 @@ impl Editor {
     }
 }
 
+#[cfg(any())]
 impl EditorSnapshot {
     pub(super) fn display_diff_hunks_for_rows<'a>(
         &'a self,

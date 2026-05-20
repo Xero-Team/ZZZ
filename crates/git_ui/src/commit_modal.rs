@@ -502,16 +502,10 @@ impl CommitModal {
     }
 
     fn on_commit(&mut self, _: &git::Commit, window: &mut Window, cx: &mut Context<Self>) {
-        let is_amend = self.git_panel.read(cx).amend_pending();
         let did_execute = self.git_panel.update(cx, |git_panel, cx| {
             git_panel.commit(&self.commit_editor.focus_handle(cx), window, cx)
         });
         if did_execute {
-            if is_amend {
-                telemetry::event!("Git Amended", source = "Git Modal");
-            } else {
-                telemetry::event!("Git Committed", source = "Git Modal");
-            }
             cx.emit(DismissEvent);
         }
     }
