@@ -238,6 +238,8 @@ pub enum IconName {
     Terminal,
     TerminalAlt,
     TextSnippet,
+    TextWrap,
+    TextUnwrap,
     ThinkingMode,
     ThinkingModeOff,
     Thread,
