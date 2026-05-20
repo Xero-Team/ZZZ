@@ -80,6 +80,7 @@ dependencies = [
  "futures 0.3.32",
  "git",
  "gpui",
+ "indoc",
  "language",
  "log",
  "pretty_assertions",
@@ -651,7 +652,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -662,7 +663,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3825,13 +3826,8 @@ version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be17b688510d934ce13f48a2beba700e11583e281e0fda99c22bb256a14eda73"
 dependencies = [
-<<<<<<< HEAD
  "bitflags 2.11.1",
- "fontdb 0.23.0",
-=======
- "bitflags 2.10.0",
  "fontdb",
->>>>>>> dc06395e73 (markdown: Bump mermaid-rs-renderer to fix flowchart parser panic (#56199))
  "harfrust",
  "linebender_resource_handle",
  "log",
@@ -3875,7 +3871,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
- "windows 0.62.2",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -5158,7 +5154,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5693,12 +5689,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ego-tree"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2972feb8dffe7bc8c5463b1dacda1b0dfbed3710e50f977d965429692d74cd8"
-
-[[package]]
 name = "editor_benchmarks"
 version = "0.1.0"
 dependencies = [
@@ -5715,6 +5705,12 @@ dependencies = [
  "theme",
  "workspace",
 ]
+
+[[package]]
+name = "ego-tree"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2972feb8dffe7bc8c5463b1dacda1b0dfbed3710e50f977d965429692d74cd8"
 
 [[package]]
 name = "either"
@@ -5987,7 +5983,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7301,8 +7297,8 @@ dependencies = [
  "libc",
  "log",
  "rustversion",
- "windows-link 0.2.1",
- "windows-result 0.4.1",
+ "windows-link 0.1.3",
+ "windows-result 0.3.4",
 ]
 
 [[package]]
@@ -7439,7 +7435,7 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7780,7 +7776,7 @@ dependencies = [
  "log",
  "presser",
  "thiserror 2.0.18",
- "windows 0.62.2",
+ "windows 0.56.0",
 ]
 
 [[package]]
@@ -8770,7 +8766,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.56.0",
 ]
 
 [[package]]
@@ -9021,11 +9017,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
 dependencies = [
  "equivalent",
-<<<<<<< HEAD
  "hashbrown 0.17.0",
-=======
- "hashbrown 0.15.5",
->>>>>>> dc06395e73 (markdown: Bump mermaid-rs-renderer to fix flowchart parser panic (#56199))
  "serde",
  "serde_core",
 ]
@@ -9242,7 +9234,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -10979,13 +10971,8 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
-<<<<<<< HEAD
  "thiserror 2.0.18",
- "ttf-parser 0.20.0",
-=======
- "thiserror 2.0.17",
  "ttf-parser",
->>>>>>> dc06395e73 (markdown: Bump mermaid-rs-renderer to fix flowchart parser panic (#56199))
 ]
 
 [[package]]
@@ -11103,7 +11090,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "536bfad37a309d62069485248eeaba1e8d9853aaf951caaeaed0585a95346f08"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -11196,31 +11183,6 @@ checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
 
 [[package]]
 name = "naga"
-version = "29.0.0"
-source = "git+https://github.com/zed-industries/wgpu.git?branch=v29#a466bc382ea747f8e1ac810efdb6dcd49a514575"
-dependencies = [
- "arrayvec",
- "bit-set 0.9.1",
- "bitflags 2.11.1",
- "cfg-if",
- "cfg_aliases 0.2.1",
- "codespan-reporting",
- "half",
- "hashbrown 0.16.1",
- "hexf-parse",
- "indexmap 2.14.0",
- "libm",
- "log",
- "num-traits",
- "once_cell",
- "rustc-hash 1.1.0",
- "spirv",
- "thiserror 2.0.18",
- "unicode-ident",
-]
-
-[[package]]
-name = "naga"
 version = "29.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa2630921705b9b01dcdd0b6864b9562ca3c1951eecd0f0c4f5f04f61e412647"
@@ -11240,6 +11202,31 @@ dependencies = [
  "num-traits",
  "once_cell",
  "rustc-hash 1.1.0",
+ "thiserror 2.0.18",
+ "unicode-ident",
+]
+
+[[package]]
+name = "naga"
+version = "29.0.3"
+source = "git+https://github.com/zed-industries/wgpu.git?rev=357a0c56e0070480ad9daea5d2eaa83150b79e88#357a0c56e0070480ad9daea5d2eaa83150b79e88"
+dependencies = [
+ "arrayvec",
+ "bit-set 0.9.1",
+ "bitflags 2.11.1",
+ "cfg-if",
+ "cfg_aliases 0.2.1",
+ "codespan-reporting",
+ "half",
+ "hashbrown 0.16.1",
+ "hexf-parse",
+ "indexmap 2.14.0",
+ "libm",
+ "log",
+ "num-traits",
+ "once_cell",
+ "rustc-hash 1.1.0",
+ "spirv",
  "thiserror 2.0.18",
  "unicode-ident",
 ]
@@ -11502,7 +11489,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -12224,6 +12211,7 @@ dependencies = [
  "gpui",
  "picker",
  "project",
+ "project_panel",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -14135,7 +14123,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes 1.11.1",
- "heck 0.5.0",
+ "heck 0.4.1",
  "itertools 0.12.1",
  "log",
  "multimap",
@@ -14155,7 +14143,7 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "343d3bd7056eda839b03204e68deff7d1b13aba7af2b2fd16890697274262ee7"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -15782,7 +15770,7 @@ dependencies = [
  "errno 0.3.14",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -15904,7 +15892,7 @@ dependencies = [
  "security-framework 3.7.0",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -17089,7 +17077,7 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1c97747dbf44bb1ca44a561ece23508e99cb592e862f22222dcf42f51d1e451"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -17158,7 +17146,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -17521,7 +17509,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "psm",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -18296,7 +18284,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -18370,7 +18358,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -19541,7 +19529,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -19782,7 +19770,7 @@ dependencies = [
  "strict-num",
  "svgtypes",
  "tiny-skia-path",
- "ttf-parser 0.25.1",
+ "ttf-parser",
  "unicode-bidi",
  "unicode-script",
  "unicode-vo",
@@ -21162,8 +21150,8 @@ checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 
 [[package]]
 name = "wgpu"
-version = "29.0.0"
-source = "git+https://github.com/zed-industries/wgpu.git?branch=v29#a466bc382ea747f8e1ac810efdb6dcd49a514575"
+version = "29.0.3"
+source = "git+https://github.com/zed-industries/wgpu.git?rev=357a0c56e0070480ad9daea5d2eaa83150b79e88#357a0c56e0070480ad9daea5d2eaa83150b79e88"
 dependencies = [
  "arrayvec",
  "bitflags 2.11.1",
@@ -21174,7 +21162,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "js-sys",
  "log",
- "naga 29.0.0",
+ "naga 29.0.3",
  "parking_lot",
  "portable-atomic",
  "profiling",
@@ -21191,8 +21179,8 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "29.0.0"
-source = "git+https://github.com/zed-industries/wgpu.git?branch=v29#a466bc382ea747f8e1ac810efdb6dcd49a514575"
+version = "29.0.3"
+source = "git+https://github.com/zed-industries/wgpu.git?rev=357a0c56e0070480ad9daea5d2eaa83150b79e88#357a0c56e0070480ad9daea5d2eaa83150b79e88"
 dependencies = [
  "arrayvec",
  "bit-set 0.9.1",
@@ -21204,7 +21192,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "indexmap 2.14.0",
  "log",
- "naga 29.0.0",
+ "naga 29.0.3",
  "once_cell",
  "parking_lot",
  "portable-atomic",
@@ -21223,32 +21211,32 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core-deps-apple"
-version = "29.0.0"
-source = "git+https://github.com/zed-industries/wgpu.git?branch=v29#a466bc382ea747f8e1ac810efdb6dcd49a514575"
+version = "29.0.3"
+source = "git+https://github.com/zed-industries/wgpu.git?rev=357a0c56e0070480ad9daea5d2eaa83150b79e88#357a0c56e0070480ad9daea5d2eaa83150b79e88"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-emscripten"
-version = "29.0.0"
-source = "git+https://github.com/zed-industries/wgpu.git?branch=v29#a466bc382ea747f8e1ac810efdb6dcd49a514575"
+version = "29.0.3"
+source = "git+https://github.com/zed-industries/wgpu.git?rev=357a0c56e0070480ad9daea5d2eaa83150b79e88#357a0c56e0070480ad9daea5d2eaa83150b79e88"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-windows-linux-android"
-version = "29.0.0"
-source = "git+https://github.com/zed-industries/wgpu.git?branch=v29#a466bc382ea747f8e1ac810efdb6dcd49a514575"
+version = "29.0.3"
+source = "git+https://github.com/zed-industries/wgpu.git?rev=357a0c56e0070480ad9daea5d2eaa83150b79e88#357a0c56e0070480ad9daea5d2eaa83150b79e88"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-hal"
-version = "29.0.0"
-source = "git+https://github.com/zed-industries/wgpu.git?branch=v29#a466bc382ea747f8e1ac810efdb6dcd49a514575"
+version = "29.0.3"
+source = "git+https://github.com/zed-industries/wgpu.git?rev=357a0c56e0070480ad9daea5d2eaa83150b79e88#357a0c56e0070480ad9daea5d2eaa83150b79e88"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -21269,7 +21257,7 @@ dependencies = [
  "libc",
  "libloading",
  "log",
- "naga 29.0.0",
+ "naga 29.0.3",
  "ndk-sys",
  "objc2",
  "objc2-core-foundation",
@@ -21295,21 +21283,22 @@ dependencies = [
  "wgpu-types",
  "windows 0.62.2",
  "windows-core 0.62.2",
+ "windows-result 0.4.1",
 ]
 
 [[package]]
 name = "wgpu-naga-bridge"
-version = "29.0.0"
-source = "git+https://github.com/zed-industries/wgpu.git?branch=v29#a466bc382ea747f8e1ac810efdb6dcd49a514575"
+version = "29.0.3"
+source = "git+https://github.com/zed-industries/wgpu.git?rev=357a0c56e0070480ad9daea5d2eaa83150b79e88#357a0c56e0070480ad9daea5d2eaa83150b79e88"
 dependencies = [
- "naga 29.0.0",
+ "naga 29.0.3",
  "wgpu-types",
 ]
 
 [[package]]
 name = "wgpu-types"
-version = "29.0.0"
-source = "git+https://github.com/zed-industries/wgpu.git?branch=v29#a466bc382ea747f8e1ac810efdb6dcd49a514575"
+version = "29.0.3"
+source = "git+https://github.com/zed-industries/wgpu.git?rev=357a0c56e0070480ad9daea5d2eaa83150b79e88#357a0c56e0070480ad9daea5d2eaa83150b79e88"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -21414,7 +21403,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
