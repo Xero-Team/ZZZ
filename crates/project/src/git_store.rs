@@ -9102,6 +9102,8 @@ async fn compute_snapshot(
     backend: Arc<dyn GitRepository>,
     cx: &mut AsyncApp,
 ) -> Result<RepositorySnapshot> {
+    log::debug!("starting compute snapshot");
+
     let (id, work_directory_abs_path, prev_snapshot) = this.update(cx, |this, _| {
         this.paths_needing_status_update.clear();
         (
@@ -9133,6 +9135,7 @@ async fn compute_snapshot(
             }
         })
         .await?;
+    log::debug!("fetched branches, head commit, worktrees");
     let branch = branches.iter().find(|branch| branch.is_head).cloned();
     let branch_list: Arc<[Branch]> = branches.into();
 
@@ -9155,6 +9158,8 @@ async fn compute_snapshot(
             }
         })
         .await?;
+
+    log::debug!("fetched remotes");
 
     let snapshot = this.update(cx, |this, cx| {
         let head_changed =
@@ -9215,6 +9220,7 @@ async fn compute_snapshot(
             }
         })
         .await?;
+    log::debug!("fetched statuses, diff stats, stash entries");
 
     let diff_stat_map: HashMap<&RepoPath, DiffStat> =
         diff_stats.entries.iter().map(|(p, s)| (p, *s)).collect();
