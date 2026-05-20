@@ -1751,6 +1751,16 @@ impl ProtoClient for ChannelClient {
         self.request_dynamic(envelope, request_type, true).boxed()
     }
 
+    fn request_stream(
+        &self,
+        _envelope: proto::Envelope,
+        _request_type: &'static str,
+    ) -> BoxFuture<'static, Result<futures::stream::BoxStream<'static, Result<proto::Envelope>>>>
+    {
+        async move { anyhow::bail!("streaming rpc requests are not supported for ChannelClient") }
+            .boxed()
+    }
+
     fn send(&self, envelope: proto::Envelope, _message_type: &'static str) -> Result<()> {
         self.send_dynamic(envelope)
     }

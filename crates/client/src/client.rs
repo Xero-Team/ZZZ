@@ -1763,6 +1763,24 @@ impl ProtoClient for Client {
         self.request_dynamic(envelope, request_type).boxed()
     }
 
+    fn request_stream(
+        &self,
+        envelope: proto::Envelope,
+        _request_type: &'static str,
+    ) -> BoxFuture<'static, Result<futures::stream::BoxStream<'static, Result<proto::Envelope>>>>
+    {
+        let peer = self.peer.clone();
+        let connection_id = self.connection_id();
+        async move {
+            let connection_id = connection_id?;
+            let stream = peer
+                .request_stream_dynamic(connection_id, envelope, "stream request")
+                .await?;
+            Ok(stream.boxed())
+        }
+        .boxed()
+    }
+
     fn send(&self, envelope: proto::Envelope, message_type: &'static str) -> Result<()> {
         log::debug!("rpc send. client_id:{}, name:{}", self.id(), message_type);
         let connection_id = self.connection_id()?;

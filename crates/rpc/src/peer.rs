@@ -8,8 +8,9 @@ use super::{
 use anyhow::{Context as _, Result, anyhow};
 use collections::HashMap;
 use futures::{
-    FutureExt, SinkExt, Stream, StreamExt, TryFutureExt,
+    FutureExt, SinkExt, StreamExt, TryFutureExt,
     channel::{mpsc, oneshot},
+    future::BoxFuture,
     stream::BoxStream,
 };
 use parking_lot::{Mutex, RwLock};
@@ -484,7 +485,32 @@ impl Peer {
         &self,
         receiver_id: ConnectionId,
         request: T,
-    ) -> impl Future<Output = Result<impl Unpin + Stream<Item = Result<T::Response>>>> {
+    ) -> BoxFuture<'static, Result<BoxStream<'static, Result<T::Response>>>> {
+        let request_name = T::NAME;
+        let request = request.into_envelope(0, None, None);
+        self.request_stream_dynamic(receiver_id, request, request_name)
+            .map_ok(|stream| {
+                stream
+                    .filter_map(move |response| {
+                        future::ready(match response {
+                            Ok(response) => Some(
+                                T::Response::from_envelope(response)
+                                    .context("received response of the wrong type"),
+                            ),
+                            Err(error) => Some(Err(error)),
+                        })
+                    })
+                    .boxed()
+            })
+            .boxed()
+    }
+
+    pub fn request_stream_dynamic(
+        &self,
+        receiver_id: ConnectionId,
+        envelope: proto::Envelope,
+        type_name: &'static str,
+    ) -> BoxFuture<'static, Result<BoxStream<'static, Result<proto::Envelope>>>> {
         let (tx, rx) = mpsc::unbounded();
         let send = self.connection_state(receiver_id).and_then(|connection| {
             let message_id = connection.next_message_id.fetch_add(1, SeqCst);
@@ -496,9 +522,13 @@ impl Peer {
                 .insert(message_id, tx);
             connection
                 .outgoing_tx
-                .unbounded_send(Message::Envelope(
-                    request.into_envelope(message_id, None, None),
-                ))
+                .unbounded_send(Message::Envelope(proto::Envelope {
+                    id: message_id,
+                    responding_to: envelope.responding_to,
+                    original_sender_id: envelope.original_sender_id,
+                    ack_id: envelope.ack_id,
+                    payload: envelope.payload,
+                }))
                 .context("connection was closed")?;
             Ok((message_id, stream_response_channels))
         });
@@ -507,33 +537,34 @@ impl Peer {
             let (message_id, stream_response_channels) = send?;
             let stream_response_channels = Arc::downgrade(&stream_response_channels);
 
-            Ok(rx.filter_map(move |(response, _barrier)| {
-                let stream_response_channels = stream_response_channels.clone();
-                future::ready(match response {
-                    Ok(response) => {
-                        if let Some(proto::envelope::Payload::Error(error)) = &response.payload {
-                            Some(Err(RpcError::from_proto(error, T::NAME)))
-                        } else if let Some(proto::envelope::Payload::EndStream(_)) =
-                            &response.payload
-                        {
-                            // Remove the transmitting end of the response channel to end the stream.
-                            if let Some(channels) = stream_response_channels.upgrade()
-                                && let Some(channels) = channels.lock().as_mut()
+            Ok(rx
+                .filter_map(move |(response, _barrier)| {
+                    let stream_response_channels = stream_response_channels.clone();
+                    future::ready(match response {
+                        Ok(response) => {
+                            if let Some(proto::envelope::Payload::Error(error)) = &response.payload
                             {
-                                channels.remove(&message_id);
+                                Some(Err(RpcError::from_proto(error, type_name)))
+                            } else if let Some(proto::envelope::Payload::EndStream(_)) =
+                                &response.payload
+                            {
+                                // Remove the transmitting end of the response channel to end the stream.
+                                if let Some(channels) = stream_response_channels.upgrade()
+                                    && let Some(channels) = channels.lock().as_mut()
+                                {
+                                    channels.remove(&message_id);
+                                }
+                                None
+                            } else {
+                                Some(Ok(response))
                             }
-                            None
-                        } else {
-                            Some(
-                                T::Response::from_envelope(response)
-                                    .context("received response of the wrong type"),
-                            )
                         }
-                    }
-                    Err(error) => Some(Err(error)),
+                        Err(error) => Some(Err(error)),
+                    })
                 })
-            }))
+                .boxed())
         }
+        .boxed()
     }
 
     pub fn send<T: EnvelopedMessage>(&self, receiver_id: ConnectionId, message: T) -> Result<()> {
