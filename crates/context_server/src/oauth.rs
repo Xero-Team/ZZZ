@@ -146,6 +146,7 @@ pub struct AuthServerMetadata {
     pub token_endpoint: Url,
     pub registration_endpoint: Option<Url>,
     pub scopes_supported: Option<Vec<String>>,
+    pub grant_types_supported: Option<Vec<String>>,
     pub code_challenge_methods_supported: Option<Vec<String>>,
     pub client_id_metadata_document_supported: bool,
 }
@@ -672,11 +673,29 @@ pub fn token_refresh_params(
 /// port (e.g. `http://127.0.0.1:12345/callback`). Some auth servers do strict
 /// redirect URI matching even for loopback addresses, so we register the
 /// exact URI we intend to use.
-pub fn dcr_registration_body(redirect_uri: &str) -> serde_json::Value {
+const SUPPORTED_GRANT_TYPES: &[&str] = &["authorization_code", "refresh_token"];
+
+pub fn dcr_registration_body(
+    redirect_uri: &str,
+    server_grant_types: Option<&[String]>,
+) -> serde_json::Value {
+    let grant_types: Vec<&str> = match server_grant_types {
+        Some(server_grant_types) => SUPPORTED_GRANT_TYPES
+            .iter()
+            .copied()
+            .filter(|grant_type| {
+                server_grant_types
+                    .iter()
+                    .any(|server| server == *grant_type)
+            })
+            .collect(),
+        None => SUPPORTED_GRANT_TYPES.to_vec(),
+    };
+
     serde_json::json!({
         "client_name": "Zed",
         "redirect_uris": [redirect_uri],
-        "grant_types": ["authorization_code"],
+        "grant_types": grant_types,
         "response_types": ["code"],
         "token_endpoint_auth_method": "none"
     })
@@ -694,7 +713,15 @@ pub async fn fetch_protected_resource_metadata(
     www_authenticate: &WwwAuthenticate,
 ) -> Result<ProtectedResourceMetadata> {
     let candidate_urls = match &www_authenticate.resource_metadata {
-        Some(url) if url.origin() == server_url.origin() => vec![url.clone()],
+        Some(url) if url.origin() == server_url.origin() => {
+            let mut urls = vec![url.clone()];
+            for fallback in protected_resource_metadata_urls(server_url) {
+                if !urls.contains(&fallback) {
+                    urls.push(fallback);
+                }
+            }
+            urls
+        }
         Some(url) => {
             log::warn!(
                 "Ignoring cross-origin resource_metadata URL {} \
@@ -760,6 +787,7 @@ pub async fn fetch_auth_server_metadata(
 
                 return Ok(AuthServerMetadata {
                     issuer: reported_issuer,
+                    grant_types_supported: response.grant_types_supported,
                     authorization_endpoint: response
                         .authorization_endpoint
                         .ok_or_else(|| anyhow!("missing authorization_endpoint"))?,
@@ -846,7 +874,18 @@ pub async fn resolve_client_registration(
         }),
         ClientRegistrationStrategy::Dcr {
             registration_endpoint,
-        } => perform_dcr(http_client, &registration_endpoint, redirect_uri).await,
+        } => {
+            perform_dcr(
+                http_client,
+                &registration_endpoint,
+                redirect_uri,
+                discovery
+                    .auth_server_metadata
+                    .grant_types_supported
+                    .as_deref(),
+            )
+            .await
+        }
         ClientRegistrationStrategy::Unavailable => {
             bail!("authorization server supports neither CIMD nor DCR")
         }
@@ -860,10 +899,11 @@ pub async fn perform_dcr(
     http_client: &Arc<dyn HttpClient>,
     registration_endpoint: &Url,
     redirect_uri: &str,
+    server_grant_types: Option<&[String]>,
 ) -> Result<OAuthClientRegistration> {
     validate_oauth_url(registration_endpoint)?;
 
-    let body = dcr_registration_body(redirect_uri);
+    let body = dcr_registration_body(redirect_uri, server_grant_types);
     let body_bytes = serde_json::to_vec(&body)?;
 
     let request = Request::builder()
@@ -1205,6 +1245,8 @@ struct AuthServerMetadataResponse {
     registration_endpoint: Option<Url>,
     #[serde(default)]
     scopes_supported: Option<Vec<String>>,
+    #[serde(default)]
+    grant_types_supported: Option<Vec<String>>,
     #[serde(default)]
     code_challenge_methods_supported: Option<Vec<String>>,
     #[serde(default)]
@@ -1705,6 +1747,7 @@ mod tests {
             token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
             registration_endpoint: Some(Url::parse("https://auth.example.com/register").unwrap()),
             scopes_supported: None,
+            grant_types_supported: None,
             code_challenge_methods_supported: Some(vec!["S256".into()]),
             client_id_metadata_document_supported: true,
         };
@@ -1725,6 +1768,7 @@ mod tests {
             token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
             registration_endpoint: Some(reg_endpoint.clone()),
             scopes_supported: None,
+            grant_types_supported: None,
             code_challenge_methods_supported: Some(vec!["S256".into()]),
             client_id_metadata_document_supported: false,
         };
@@ -1744,6 +1788,7 @@ mod tests {
             token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
             registration_endpoint: None,
             scopes_supported: None,
+            grant_types_supported: None,
             code_challenge_methods_supported: Some(vec!["S256".into()]),
             client_id_metadata_document_supported: false,
         };
@@ -1800,6 +1845,7 @@ mod tests {
             token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
             registration_endpoint: None,
             scopes_supported: None,
+            grant_types_supported: None,
             code_challenge_methods_supported: Some(vec!["S256".into()]),
             client_id_metadata_document_supported: true,
         };
@@ -1842,6 +1888,7 @@ mod tests {
             token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
             registration_endpoint: None,
             scopes_supported: None,
+            grant_types_supported: None,
             code_challenge_methods_supported: Some(vec!["S256".into()]),
             client_id_metadata_document_supported: false,
         };
@@ -1928,7 +1975,7 @@ mod tests {
 
     #[test]
     fn test_dcr_registration_body_shape() {
-        let body = dcr_registration_body("http://127.0.0.1:12345/callback");
+        let body = dcr_registration_body("http://127.0.0.1:12345/callback", None);
         assert_eq!(body["client_name"], "Zed");
         assert_eq!(body["redirect_uris"][0], "http://127.0.0.1:12345/callback");
         assert_eq!(body["grant_types"][0], "authorization_code");
@@ -2396,6 +2443,7 @@ mod tests {
                 token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
                 registration_endpoint: None,
                 scopes_supported: None,
+                grant_types_supported: None,
                 code_challenge_methods_supported: Some(vec!["S256".into()]),
                 client_id_metadata_document_supported: true,
             };
@@ -2470,6 +2518,7 @@ mod tests {
                 token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
                 registration_endpoint: None,
                 scopes_supported: None,
+                grant_types_supported: None,
                 code_challenge_methods_supported: Some(vec!["S256".into()]),
                 client_id_metadata_document_supported: true,
             };
@@ -2508,9 +2557,10 @@ mod tests {
             });
 
             let endpoint = Url::parse("https://auth.example.com/register").unwrap();
-            let registration = perform_dcr(&client, &endpoint, "http://127.0.0.1:9999/callback")
-                .await
-                .unwrap();
+            let registration =
+                perform_dcr(&client, &endpoint, "http://127.0.0.1:9999/callback", None)
+                    .await
+                    .unwrap();
 
             assert_eq!(registration.client_id, "dynamic-client-001");
             assert_eq!(
@@ -2530,7 +2580,8 @@ mod tests {
             });
 
             let endpoint = Url::parse("https://auth.example.com/register").unwrap();
-            let result = perform_dcr(&client, &endpoint, "http://127.0.0.1:9999/callback").await;
+            let result =
+                perform_dcr(&client, &endpoint, "http://127.0.0.1:9999/callback", None).await;
 
             assert!(result.is_err());
             assert!(result.unwrap_err().to_string().contains("403"));
