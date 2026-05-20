@@ -1,12 +1,14 @@
 use collections::HashMap;
 use gpui::{
-    Animation, AnimationExt, AnyElement, Context, ImageSource, RenderImage, StyledText, Task, img,
-    pulsating_between,
+    Animation, AnimationExt, AnyElement, Context, Hsla, ImageSource, RenderImage, Rgba, StyledText,
+    Task, img, pulsating_between,
 };
+use settings::Settings;
 use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+use theme_settings::ThemeSettings;
 use ui::prelude::*;
 
 use crate::parser::{CodeBlockKind, MarkdownEvent, MarkdownTag};
@@ -141,6 +143,7 @@ impl CachedMermaidDiagram {
     }
 }
 
+#[allow(dead_code)]
 /// Converts an HSLA color to a CSS hex string (e.g. `#1a2b3c`).
 fn hsla_to_hex(color: Hsla) -> String {
     let rgba: Rgba = color.to_rgb();
@@ -150,10 +153,12 @@ fn hsla_to_hex(color: Hsla) -> String {
     format!("#{r:02x}{g:02x}{b:02x}")
 }
 
+#[allow(dead_code)]
 fn mermaid_font_family(font_family: &str) -> &str {
     gpui::font_name_with_fallbacks(font_family, "system-ui")
 }
 
+#[allow(dead_code)]
 fn build_mermaid_theme(cx: &Context<Markdown>) -> mermaid_rs_renderer::Theme {
     let colors = cx.theme().colors();
     let theme_settings = ThemeSettings::get_global(cx);
@@ -203,6 +208,7 @@ fn build_mermaid_theme(cx: &Context<Markdown>) -> mermaid_rs_renderer::Theme {
     theme
 }
 
+#[allow(dead_code)]
 fn build_accent_classdefs(cx: &Context<Markdown>) -> String {
     use std::fmt::Write;
     let players = &cx.theme().players();
@@ -228,6 +234,7 @@ fn build_accent_classdefs(cx: &Context<Markdown>) -> String {
 /// On light themes, lightens the fill and uses black text.
 /// The fill is adjusted until it meets a minimum WCAG contrast ratio
 /// of ~4.5:1 against the chosen text color.
+#[allow(dead_code)]
 fn accent_fill_and_text(color: Hsla, is_light: bool) -> (Hsla, Hsla) {
     let mut fill = color;
     if is_light {
@@ -253,6 +260,7 @@ fn accent_fill_and_text(color: Hsla, is_light: bool) -> (Hsla, Hsla) {
     }
 }
 
+#[allow(dead_code)]
 fn relative_luminance(color: Hsla) -> f32 {
     let rgba: Rgba = color.to_rgb();
     fn linearize(c: f32) -> f32 {
