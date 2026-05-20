@@ -188,6 +188,10 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
         project_panel::init(cx);
         outline_panel::init(cx);
         terminal_view::init(cx);
+        channel::init(&app_state.client.clone(), app_state.user_store.clone(), cx);
+        call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
+        notifications::init(app_state.client.clone(), app_state.user_store.clone(), cx);
+        collab_ui::init(&app_state, cx);
         image_viewer::init(cx);
         search::init(cx);
         cx.set_global(workspace::PaneSearchBarCallbacks {

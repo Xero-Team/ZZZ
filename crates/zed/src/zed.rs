@@ -5400,6 +5400,10 @@ mod tests {
             project_panel::init(cx);
             outline_panel::init(cx);
             terminal_view::init(cx);
+            channel::init(&app_state.client.clone(), app_state.user_store.clone(), cx);
+            call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
+            notifications::init(app_state.client.clone(), app_state.user_store.clone(), cx);
+            collab_ui::init(&app_state, cx);
             copilot_chat::init(
                 app_state.fs.clone(),
                 app_state.client.http_client(),
