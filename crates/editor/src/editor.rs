@@ -6895,6 +6895,8 @@ impl Editor {
             self.show_signature_help(&ShowSignatureHelp, window, cx);
         }
 
+        self.finalize_last_transaction(cx);
+
         Some(cx.spawn_in(window, async move |editor, cx| {
             let additional_edits_tx = apply_edits.await?;
 
