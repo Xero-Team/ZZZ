@@ -18,6 +18,7 @@ use rpc::{
     proto::{self, ExternalExtensionAgent},
 };
 use schemars::JsonSchema;
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use settings::{RegisterSetting, SettingsStore};
 use sha2::{Digest, Sha256};
@@ -1554,7 +1555,11 @@ impl ExternalAgentServer for LocalRegistryNpxAgent {
                 .join(sanitize_path_component(&registry_id));
             fs.create_dir(&prefix_dir).await?;
 
-            let mut exec_args = vec!["--yes".to_string(), "--".to_string(), package.to_string()];
+            let mut exec_args = vec![
+                "--yes".to_string(),
+                "--".to_string(),
+                bounded_npm_package_spec(package.as_ref()),
+            ];
             exec_args.extend(args);
 
             let npm_command = node_runtime
