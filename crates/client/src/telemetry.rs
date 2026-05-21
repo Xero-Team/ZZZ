@@ -6,7 +6,6 @@ use gpui::App;
 use http_client::HttpClientWithUrl;
 #[cfg(test)]
 use parking_lot::Mutex;
-#[cfg(test)]
 use regex::Regex;
 #[cfg(test)]
 use settings::SettingsStore;

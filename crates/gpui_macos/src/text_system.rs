@@ -8,6 +8,7 @@ use core_foundation::{
     number::CFNumber,
     string::CFString,
 };
+use core_graphics_24 as core_graphics;
 use core_graphics::{
     base::{CGGlyph, kCGImageAlphaPremultipliedLast},
     color_space::CGColorSpace,
@@ -410,7 +411,7 @@ impl MacTextSystemState {
         // Expand the bounds by 1 pixel on each side to give CG room for anti-aliasing.
         let mut bounds = bounds.dilate(DevicePixels(1));
         if params.synthetic_italic.is_enabled() {
-            let extra_width = (params.font_size.0
+            let extra_width = (params.font_size.as_f32()
                 * params.scale_factor
                 * params.synthetic_italic.to_skew().abs())
             .ceil() as i32;
@@ -520,7 +521,7 @@ impl MacTextSystemState {
                         (subpixel_shift.x / params.scale_factor) as CGFloat,
                         (subpixel_shift.y / params.scale_factor) as CGFloat,
                     )],
-                    cx,
+                    cx.clone(),
                 );
             if params.synthetic_bold.is_enabled() && !params.is_emoji {
                 let bold_amount = params
@@ -539,7 +540,7 @@ impl MacTextSystemState {
                                     as CGFloat,
                                 (subpixel_shift.y / params.scale_factor) as CGFloat,
                             )],
-                            cx,
+                            cx.clone(),
                         );
                 }
             }
@@ -606,23 +607,24 @@ impl MacTextSystemState {
             let mut ix_converter = StringIndexConverter::new(text);
             for run in glyph_runs.into_iter() {
                 let attributes = run.attributes().unwrap();
-                let font = unsafe {
-                    attributes
-                        .get(kCTFontAttributeName)
-                        .downcast::<CTFont>()
-                        .unwrap()
-                };
+            let font = unsafe {
+                attributes
+                    .get(kCTFontAttributeName)
+                    .downcast::<CTFont>()
+                    .unwrap()
+            };
                 let font_id = self.id_for_native_font(font.clone());
                 let run_start_utf16 = run
                     .string_indices()
-                    .first()
-                    .copied()
-                    .and_then(|index| usize::try_from(index).ok())
-                    .unwrap_or(0);
+                .first()
+                .copied()
+                .and_then(|index| usize::try_from(index).ok())
+                .unwrap_or(0);
                 let (requested_style, requested_weight) = font_run_end_utf16
                     .iter()
                     .find_map(|(end, style, weight)| {
-                        (run_start_utf16 < *end).then_some((*style, *weight))
+                        let end = usize::try_from(*end).ok()?;
+                        (run_start_utf16 < end).then_some((*style, *weight))
                     })
                     .unwrap_or((FontStyle::default(), FontWeight::default()));
                 let synthetic_italic = synthetic_italic_for(requested_style, &font);
@@ -704,8 +706,7 @@ fn ct_font_weight(font: &CTFont) -> FontWeight {
 }
 
 fn ct_font_is_italic_or_oblique(font: &CTFont) -> bool {
-    unsafe { font.symbolic_traits() & kCTFontItalicTrait != 0 }
-    || font.slant_angle() != 0.0
+    font.symbolic_traits() & kCTFontItalicTrait != 0 || font.slant_angle() != 0.0
 }
 
 #[derive(Debug, Clone)]
