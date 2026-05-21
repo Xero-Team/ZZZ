@@ -41,9 +41,13 @@ use ::ui::IconName;
 use agent_client_protocol::schema as acp;
 use agent_settings::{AgentProfileId, AgentSettings};
 use command_palette_hooks::CommandPaletteFilter;
+use editor::{Editor, SelectionEffects, scroll::Autoscroll};
 use feature_flags::FeatureFlagAppExt as _;
 use fs::Fs;
-use gpui::{Action, App, Context, Entity, SharedString, Window, actions};
+use gpui::{
+    Action, App, Context, Entity, ImageSource, Resource, SharedString, SharedUri, TaskExt, Window,
+    actions,
+};
 use language::{
     LanguageRegistry,
     language_settings::{AllLanguageSettings, EditPredictionProvider},
@@ -52,7 +56,8 @@ use language_model::{
     ConfiguredModel, LanguageModelId, LanguageModelProviderId, LanguageModelRegistry,
 };
 use project::{AgentId, DisableAiSettings};
-use prompt_store::PromptBuilder;
+use prompt_store::{PromptBuilder, rules_to_skills_migration};
+use rope::Point;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings::{LanguageModelSelection, Settings as _, SettingsStore};
@@ -78,6 +83,68 @@ pub use thread_import::{
 use zed_actions;
 pub use zed_actions::{CreateWorktree, NewWorktreeBranchTarget, SwitchWorktree};
 
+pub(crate) fn resolve_agent_image(
+    dest_url: &str,
+    worktree_roots: &[PathBuf],
+) -> Option<ImageSource> {
+    if dest_url.starts_with("http://") || dest_url.starts_with("https://") {
+        return Some(ImageSource::Resource(Resource::Uri(SharedUri::from(
+            dest_url.to_string(),
+        ))));
+    }
+
+    let path = Path::new(dest_url);
+    if path.is_absolute() && path.exists() {
+        return Some(ImageSource::Resource(Resource::Path(Arc::from(path))));
+    }
+
+    for root in worktree_roots {
+        let absolute_path = root.join(dest_url);
+        if absolute_path.exists() {
+            return Some(ImageSource::Resource(Resource::Path(Arc::from(
+                absolute_path.as_path(),
+            ))));
+        }
+    }
+
+    None
+}
+
+pub(crate) fn open_abs_path_at_point(
+    workspace: &mut Workspace,
+    abs_path: PathBuf,
+    point: Point,
+    window: &mut Window,
+    cx: &mut Context<Workspace>,
+) -> bool {
+    let project = workspace.project();
+    let Some(path) = project.update(cx, |project, cx| project.find_project_path(abs_path, cx))
+    else {
+        return false;
+    };
+
+    let item = workspace.open_path(path, None, true, window, cx);
+    window
+        .spawn(cx, async move |cx| {
+            let Some(editor) = item.await?.downcast::<Editor>() else {
+                return Ok(());
+            };
+            let range = point..point;
+            editor
+                .update_in(cx, |editor, window, cx| {
+                    editor.change_selections(
+                        SelectionEffects::scroll(Autoscroll::center()),
+                        window,
+                        cx,
+                        |selections| selections.select_ranges([range]),
+                    );
+                })
+                .ok();
+            anyhow::Ok(())
+        })
+        .detach_and_log_err(cx);
+    true
+}
 pub const DEFAULT_THREAD_TITLE: &str = "New Agent Thread";
 const PARALLEL_AGENT_LAYOUT_BACKFILL_KEY: &str = "parallel_agent_layout_backfilled";
 actions!(
