@@ -37513,6 +37513,408 @@ async fn test_tsx_nested_jsx_member_expression_highlights(cx: &mut TestAppContex
     });
 }
 
+#[gpui::test]
+async fn test_xml_highlight_regression_sample(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/xml/testdata/highlights.xml")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "XML".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["xml".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_xml::LANGUAGE_XML.into()),
+        )
+        .with_highlights_query(include_str!("../../grammars/src/xml/highlights.scm"))
+        .unwrap(),
+    );
+
+    let keyword_color = Hsla::red();
+    let text_color = Hsla::blue();
+    let string_color = Hsla::white();
+    let comment_color = Hsla::green();
+    let number_color = Hsla::black();
+    let constant_color = Hsla::green();
+
+    let theme = Arc::new(SyntaxTheme::new_test(vec![
+        ("keyword", keyword_color),
+        ("property", Hsla::default()),
+        ("label", Hsla::default()),
+        ("tag", Hsla::default()),
+        ("text", text_color),
+        ("string", string_color),
+        ("string.special", string_color),
+        ("number", number_color),
+        ("constant", constant_color),
+        ("constant.builtin", constant_color),
+        ("comment", comment_color),
+    ]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let highlights =
+            snapshot.combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme);
+
+        let highlighted_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(keyword_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        for needle in ["xmlns", "xmlns:ns", "PUBLIC", "SYSTEM"] {
+            assert!(
+                highlighted_snippets.contains(&needle),
+                "missing namespace highlight for {needle:?}; got {highlighted_snippets:?}",
+            );
+        }
+
+        let text_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(text_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            text_snippets
+                .iter()
+                .any(|snippet| snippet.contains("Hello"))
+        );
+
+        let constant_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(constant_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        for needle in [
+            "&writer;", "&lt;", "&gt;", "&quot;", "&apos;", "&#160;", "&#xA0;",
+        ] {
+            assert!(
+                constant_snippets.contains(&needle),
+                "missing XML constant {needle:?}"
+            );
+        }
+
+        let comment_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(comment_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            comment_snippets
+                .iter()
+                .any(|snippet| snippet.contains("comment"))
+        );
+
+        let string_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(string_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            string_snippets
+                .iter()
+                .any(|snippet| snippet.contains("style.css"))
+        );
+        assert!(
+            string_snippets
+                .iter()
+                .any(|snippet| snippet.contains("XHTML 1.1"))
+        );
+
+        let number_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(number_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(number_snippets.contains(&"1.1"));
+    });
+}
+
+#[gpui::test]
+async fn test_dtd_highlight_regression_sample(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/dtd/testdata/highlights.dtd")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "DTD".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["dtd".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_xml::LANGUAGE_DTD.into()),
+        )
+        .with_highlights_query(include_str!("../../grammars/src/dtd/highlights.scm"))
+        .unwrap(),
+    );
+
+    let keyword_color = Hsla::red();
+    let comment_color = Hsla::green();
+    let string_color = Hsla::white();
+    let number_color = Hsla::black();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![
+        ("keyword", keyword_color),
+        ("string", string_color),
+        ("string.special", string_color),
+        ("number", number_color),
+        ("comment", comment_color),
+    ]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let highlights =
+            snapshot.combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme);
+
+        let keyword_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(keyword_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        for needle in [
+            "ELEMENT", "ATTLIST", "ENTITY", "NOTATION", "INCLUDE", "IGNORE", "PUBLIC", "SYSTEM",
+        ] {
+            assert!(
+                keyword_snippets.contains(&needle),
+                "missing DTD keyword {needle:?}"
+            );
+        }
+
+        let comment_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(comment_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            comment_snippets
+                .iter()
+                .any(|snippet| snippet.contains("comment"))
+        );
+
+        let string_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(string_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            string_snippets
+                .iter()
+                .any(|snippet| snippet.contains("SVG 1.1"))
+        );
+        assert!(
+            string_snippets
+                .iter()
+                .any(|snippet| snippet.contains("urn:demo:system"))
+        );
+
+        let number_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(number_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(number_snippets.contains(&"1.1"));
+    });
+}
+
+#[gpui::test]
+async fn test_dtd_structure_navigation(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let language = Language::new(
+        LanguageConfig {
+            name: "DTD".into(),
+            matcher: LanguageMatcher {
+                path_suffixes: vec!["dtd".to_string()],
+                ..LanguageMatcher::default()
+            },
+            ..LanguageConfig::default()
+        },
+        Some(tree_sitter_xml::LANGUAGE_DTD.into()),
+    )
+    .with_outline_query(include_str!("../../grammars/src/dtd/outline.scm"))
+    .expect("DTD outline query");
+
+    let mut cx = EditorLspTestContext::new(language, Default::default(), cx).await;
+
+    async fn assert(offset: i8, before: &str, after: &str, cx: &mut EditorLspTestContext) {
+        let _state_context = cx.set_state(before);
+        cx.run_until_parked();
+        cx.update_editor(|editor, window, cx| editor.go_to_symbol_by_offset(window, cx, offset))
+            .await
+            .unwrap();
+        cx.run_until_parked();
+        cx.assert_editor_state(after);
+    }
+
+    const ABOVE: i8 = -1;
+    const BELOW: i8 = 1;
+
+    assert(
+        ABOVE,
+        indoc! {"
+            <!ELEMENT note (#PCDATA)>
+
+            ˇ<!-- between top-level declarations -->
+
+            <!ENTITY % shared \"INCLUDE\">
+            <!NOTATION svg SYSTEM \"image/svg+xml\">
+        "},
+        indoc! {"
+            <!ELEMENT ˇnote (#PCDATA)>
+
+            <!-- between top-level declarations -->
+
+            <!ENTITY % shared \"INCLUDE\">
+            <!NOTATION svg SYSTEM \"image/svg+xml\">
+        "},
+        &mut cx,
+    )
+    .await;
+
+    assert(
+        BELOW,
+        indoc! {"
+            <!ELEMENT note (#PCDATA)>
+
+            ˇ<!-- between top-level declarations -->
+
+            <!ENTITY % shared \"INCLUDE\">
+            <!NOTATION svg SYSTEM \"image/svg+xml\">
+        "},
+        indoc! {"
+            <!ELEMENT note (#PCDATA)>
+
+            <!-- between top-level declarations -->
+
+            <!ENTITY % ˇshared \"INCLUDE\">
+            <!NOTATION svg SYSTEM \"image/svg+xml\">
+        "},
+        &mut cx,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_xml_negative_keyword_casing(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/xml/testdata/negative.xml")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "XML".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["xml".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_xml::LANGUAGE_XML.into()),
+        )
+        .with_highlights_query(include_str!("../../grammars/src/xml/highlights.scm"))
+        .unwrap(),
+    );
+
+    let keyword_color = Hsla::red();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![("keyword", keyword_color)]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let keyword_snippets = snapshot
+            .combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme)
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(keyword_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+
+        for needle in [
+            "doctype", "public", "element", "attlist", "entity", "notation",
+        ] {
+            assert!(
+                !keyword_snippets.contains(&needle),
+                "unexpected XML keyword highlight for {needle:?}: {keyword_snippets:?}"
+            );
+        }
+    });
+}
+
+#[gpui::test]
+async fn test_dtd_negative_keyword_casing(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/dtd/testdata/negative.dtd")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "DTD".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["dtd".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_xml::LANGUAGE_DTD.into()),
+        )
+        .with_highlights_query(include_str!("../../grammars/src/dtd/highlights.scm"))
+        .unwrap(),
+    );
+
+    let keyword_color = Hsla::red();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![("keyword", keyword_color)]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let keyword_snippets = snapshot
+            .combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme)
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(keyword_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+
+        for needle in [
+            "element", "attlist", "entity", "notation", "public", "system", "include", "ignore",
+        ] {
+            assert!(
+                !keyword_snippets.contains(&needle),
+                "unexpected DTD keyword highlight for {needle:?}: {keyword_snippets:?}"
+            );
+        }
+    });
+}
+
 fn setup_syntax_highlighting(
     language: Arc<Language>,
     cx: &mut EditorTestContext,

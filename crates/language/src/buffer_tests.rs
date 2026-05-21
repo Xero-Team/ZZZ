@@ -16,6 +16,7 @@ use settings::{AllLanguageSettingsContent, LanguageSettingsContent};
 use std::collections::BTreeSet;
 use std::{
     env,
+    num::NonZeroU32,
     ops::Range,
     sync::LazyLock,
     time::{Duration, Instant},
@@ -956,6 +957,138 @@ async fn test_outline_with_extra_context(cx: &mut gpui::TestAppContext) {
             .collect::<Vec<_>>(),
         &[("function a", 0)]
     );
+}
+
+#[gpui::test]
+async fn test_xml_outline(cx: &mut gpui::TestAppContext) {
+    let text = r#"
+        <!DOCTYPE note>
+        <note>
+            <item>hello</item>
+            <empty />
+        </note>
+    "#
+    .unindent();
+
+    let language = Language::new(
+        LanguageConfig {
+            name: "XML".into(),
+            matcher: LanguageMatcher {
+                path_suffixes: vec!["xml".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        Some(tree_sitter_xml::LANGUAGE_XML.into()),
+    )
+    .with_outline_query(include_str!("../../grammars/src/xml/outline.scm"))
+    .unwrap();
+
+    let buffer = cx.new(|cx| Buffer::local(text, cx).with_language(Arc::new(language), cx));
+    let snapshot = buffer.update(cx, |buffer, _| buffer.snapshot());
+    let outline = snapshot.outline(None);
+
+    assert_eq!(
+        outline
+            .items
+            .iter()
+            .map(|item| (item.text.as_str(), item.depth))
+            .collect::<Vec<_>>(),
+        &[("note", 0), ("note", 0), ("item", 1), ("empty", 1)]
+    );
+}
+
+#[gpui::test]
+fn test_xml_autoindent(cx: &mut App) {
+    init_settings(cx, |settings| {
+        settings.defaults.tab_size = NonZeroU32::new(2);
+    });
+
+    cx.new(|cx| {
+        let (text, ranges) = marked_text_ranges("<root>ˇ</root>", false);
+        let mut buffer = Buffer::local(text, cx).with_language(Arc::new(xml_lang()), cx);
+
+        buffer.edit(
+            ranges.into_iter().map(|range| (range, "\na")),
+            Some(AutoindentMode::EachLine),
+            cx,
+        );
+        assert_eq!(buffer.text(), "<root>\n  a</root>");
+
+        buffer
+    });
+}
+
+#[gpui::test]
+async fn test_dtd_outline(cx: &mut gpui::TestAppContext) {
+    let text = r#"
+        <!ELEMENT note (#PCDATA)>
+        <!ATTLIST note status (draft|final) #REQUIRED>
+        <!ENTITY % shared "INCLUDE">
+        <!NOTATION svg SYSTEM "image/svg+xml">
+    "#
+    .unindent();
+
+    let language = Language::new(
+        LanguageConfig {
+            name: "DTD".into(),
+            matcher: LanguageMatcher {
+                path_suffixes: vec!["dtd".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        Some(tree_sitter_xml::LANGUAGE_DTD.into()),
+    )
+    .with_outline_query(include_str!("../../grammars/src/dtd/outline.scm"))
+    .unwrap();
+
+    let buffer = cx.new(|cx| Buffer::local(text, cx).with_language(Arc::new(language), cx));
+    let snapshot = buffer.update(cx, |buffer, _| buffer.snapshot());
+    let outline = snapshot.outline(None);
+
+    assert_eq!(
+        outline
+            .items
+            .iter()
+            .map(|item| (item.text.as_str(), item.depth))
+            .collect::<Vec<_>>(),
+        &[("note", 0), ("note", 0), ("shared", 0), ("svg", 0)]
+    );
+}
+
+#[gpui::test]
+fn test_dtd_autoindent(cx: &mut App) {
+    init_settings(cx, |settings| {
+        settings.defaults.tab_size = NonZeroU32::new(2);
+    });
+
+    cx.new(|cx| {
+        let (text, ranges) = marked_text_ranges("<![ INCLUDE [ˇ]]>", false);
+        let language = Language::new(
+            LanguageConfig {
+                name: "DTD".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["dtd".to_string()],
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            Some(tree_sitter_xml::LANGUAGE_DTD.into()),
+        )
+        .with_indents_query(include_str!("../../grammars/src/dtd/indents.scm"))
+        .unwrap();
+        let mut buffer = Buffer::local(text, cx).with_language(Arc::new(language), cx);
+
+        buffer.edit(
+            ranges.into_iter().map(|range| (range, "\na")),
+            Some(AutoindentMode::EachLine),
+            cx,
+        );
+        assert_eq!(buffer.text(), "<![ INCLUDE [\n  a]]>");
+
+        buffer
+    });
 }
 
 #[gpui::test]
@@ -3956,6 +4089,22 @@ fn html_lang() -> Language {
             (#set! injection.language "javascript"))
         "#,
     )
+    .unwrap()
+}
+
+fn xml_lang() -> Language {
+    Language::new(
+        LanguageConfig {
+            name: "XML".into(),
+            matcher: LanguageMatcher {
+                path_suffixes: vec!["xml".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        Some(tree_sitter_xml::LANGUAGE_XML.into()),
+    )
+    .with_indents_query(include_str!("../../grammars/src/xml/indents.scm"))
     .unwrap()
 }
 

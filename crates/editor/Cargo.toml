@@ -26,6 +26,7 @@ test-support = [
     "tree-sitter-rust",
     "tree-sitter-typescript",
     "tree-sitter-html",
+    "tree-sitter-xml",
     "proptest",
     "unindent",
 ]
@@ -88,6 +89,7 @@ tree-sitter-c = { workspace = true, optional = true }
 tree-sitter-html = { workspace = true, optional = true }
 tree-sitter-rust = { workspace = true, optional = true }
 tree-sitter-typescript = { workspace = true, optional = true }
+tree-sitter-xml = { workspace = true, optional = true }
 tree-sitter-python = { workspace = true, optional = true }
 ztracing.workspace = true
 tracing.workspace = true
@@ -128,6 +130,7 @@ tree-sitter-go.workspace = true
 tree-sitter-html.workspace = true
 tree-sitter-rust.workspace = true
 tree-sitter-typescript.workspace = true
+tree-sitter-xml.workspace = true
 tree-sitter-yaml.workspace = true
 tree-sitter-bash.workspace = true
 tree-sitter-md.workspace = true

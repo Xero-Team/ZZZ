@@ -1,0 +1,6 @@
+name = "DTD"
+grammar = "dtd"
+path_suffixes = ["dtd", "ent"]
+first_line_pattern = '^\s*(?:<\?xml|<!\[|<!(?:ELEMENT|ATTLIST|ENTITY|NOTATION))'
+block_comment = ["<!-- ", " -->"]
+brackets = [{ start = "<!", end = ">", close = true, newline = true }]

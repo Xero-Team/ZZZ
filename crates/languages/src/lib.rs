@@ -109,6 +109,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
             ..Default::default()
         },
         LanguageInfo {
+            name: "dtd",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
             name: "diff",
             adapters: vec![],
             ..Default::default()
@@ -201,6 +206,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
         },
         LanguageInfo {
             name: "regex",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
+            name: "xml",
             adapters: vec![],
             ..Default::default()
         },

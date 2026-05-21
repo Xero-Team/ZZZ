@@ -839,6 +839,8 @@ mod macos {
         foundation::{NSProcessInfo, NSString},
     };
     use coreaudio::OSStatus;
+    use futures::{StreamExt, channel::mpsc::UnboundedReceiver};
+    use objc::{msg_send, sel, sel_impl};
     use objc2_core_audio::{
         AudioObjectAddPropertyListener, AudioObjectGetPropertyData, AudioObjectID,
         AudioObjectPropertyAddress, AudioObjectRemovePropertyListener,
@@ -848,8 +850,6 @@ mod macos {
         kAudioObjectPropertyScopeOutput, kAudioObjectSystemObject,
     };
     use std::{ffi::c_void, ptr::NonNull};
-    use futures::{StreamExt, channel::mpsc::UnboundedReceiver};
-    use objc::{msg_send, sel, sel_impl};
 
     /// A guard that prevents App Nap while held.
     ///

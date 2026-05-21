@@ -8,7 +8,6 @@ use core_foundation::{
     number::CFNumber,
     string::CFString,
 };
-use core_graphics_24 as core_graphics;
 use core_graphics::{
     base::{CGGlyph, kCGImageAlphaPremultipliedLast},
     color_space::CGColorSpace,
@@ -16,6 +15,7 @@ use core_graphics::{
     display::CGPoint,
     geometry::CGAffineTransform,
 };
+use core_graphics_24 as core_graphics;
 use core_text::{
     font::CTFont,
     font_collection::CTFontCollectionRef,
@@ -607,19 +607,19 @@ impl MacTextSystemState {
             let mut ix_converter = StringIndexConverter::new(text);
             for run in glyph_runs.into_iter() {
                 let attributes = run.attributes().unwrap();
-            let font = unsafe {
-                attributes
-                    .get(kCTFontAttributeName)
-                    .downcast::<CTFont>()
-                    .unwrap()
-            };
+                let font = unsafe {
+                    attributes
+                        .get(kCTFontAttributeName)
+                        .downcast::<CTFont>()
+                        .unwrap()
+                };
                 let font_id = self.id_for_native_font(font.clone());
                 let run_start_utf16 = run
                     .string_indices()
-                .first()
-                .copied()
-                .and_then(|index| usize::try_from(index).ok())
-                .unwrap_or(0);
+                    .first()
+                    .copied()
+                    .and_then(|index| usize::try_from(index).ok())
+                    .unwrap_or(0);
                 let (requested_style, requested_weight) = font_run_end_utf16
                     .iter()
                     .find_map(|(end, style, weight)| {

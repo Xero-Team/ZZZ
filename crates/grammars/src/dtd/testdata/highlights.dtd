@@ -1,0 +1,15 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<!ELEMENT note (#PCDATA|item)*>
+<!ATTLIST note
+  status (draft|final) #REQUIRED
+  format NOTATION (svg) #IMPLIED>
+<!ENTITY % shared "INCLUDE">
+<!ENTITY logo SYSTEM "urn:demo:system">
+<!NOTATION svg PUBLIC "-//W3C//DTD SVG 1.1//EN">
+<![ INCLUDE [
+  <!ELEMENT item EMPTY>
+]]>
+<![ IGNORE [
+  <!ELEMENT ignored EMPTY>
+]]>
+<!-- comment -->

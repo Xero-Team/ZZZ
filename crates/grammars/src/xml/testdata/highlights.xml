@@ -1,0 +1,20 @@
+<?xml version="1.1" encoding="UTF-8" standalone="yes"?>
+<?app instruction="demo"?>
+<?xml-stylesheet href="style.css" type="text/css"?>
+<?xml-model href="schema.rng" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<!DOCTYPE ns:note PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd" [
+  <!ELEMENT ns:note (#PCDATA|ns:item)*>
+  <!ATTLIST ns:note
+    xmlns CDATA #IMPLIED
+    xmlns:ns CDATA #IMPLIED
+    status (draft|final) #REQUIRED>
+  <!ENTITY system-entity SYSTEM "urn:demo:system">
+  <!ENTITY writer "Alice &amp; Bob">
+  <!NOTATION svg PUBLIC "-//W3C//DTD SVG 1.1//EN">
+]>
+<ns:note xmlns="urn:default" xmlns:ns="urn:ns" status="draft">
+  <!-- comment -->
+  <![CDATA[<raw>&escaped;</raw>]]>
+  Hello &writer; &lt; &gt; &quot; &apos; &#160; &#xA0;
+  <ns:item ns:id="42" title="&quot;quoted&quot;">Text</ns:item>
+</ns:note>
