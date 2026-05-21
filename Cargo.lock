@@ -10438,6 +10438,7 @@ dependencies = [
  "log",
  "nanoid",
  "objc",
+ "objc2-core-audio",
  "parking_lot",
  "postage",
  "rodio",

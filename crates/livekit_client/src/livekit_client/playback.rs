@@ -838,12 +838,16 @@ mod macos {
         base::{id, nil},
         foundation::{NSProcessInfo, NSString},
     };
-    use coreaudio::sys::{
-        AudioObjectAddPropertyListener, AudioObjectID, AudioObjectPropertyAddress,
-        AudioObjectRemovePropertyListener, OSStatus, kAudioHardwarePropertyDefaultInputDevice,
-        kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyElementMaster,
-        kAudioObjectPropertyScopeGlobal, kAudioObjectSystemObject,
+    use coreaudio::OSStatus;
+    use objc2_core_audio::{
+        AudioObjectAddPropertyListener, AudioObjectGetPropertyData, AudioObjectID,
+        AudioObjectPropertyAddress, AudioObjectRemovePropertyListener,
+        kAudioDevicePropertyStreamFormat, kAudioHardwarePropertyDefaultInputDevice,
+        kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyElementMain,
+        kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyScopeInput,
+        kAudioObjectPropertyScopeOutput, kAudioObjectSystemObject,
     };
+    use std::{ffi::c_void, ptr::NonNull};
     use futures::{StreamExt, channel::mpsc::UnboundedReceiver};
     use objc::{msg_send, sel, sel_impl};
 
@@ -905,11 +909,37 @@ mod macos {
 
     struct PropertyListenerCallbackWrapper(Box<dyn FnMut() + Send>);
 
-    unsafe extern "C" fn property_listener_handler_shim(
+    fn default_device_property_address(input: bool) -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress {
+            mSelector: if input {
+                kAudioHardwarePropertyDefaultInputDevice
+            } else {
+                kAudioHardwarePropertyDefaultOutputDevice
+            },
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain,
+        }
+    }
+
+    fn stream_format_property_address(input: bool) -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress {
+            mSelector: kAudioDevicePropertyStreamFormat,
+            mScope: if input {
+                kAudioObjectPropertyScopeInput
+            } else {
+                kAudioObjectPropertyScopeOutput
+            },
+            mElement: kAudioObjectPropertyElementMain,
+        }
+    }
+
+    const AUDIO_OBJECT_SYSTEM_OBJECT: AudioObjectID = kAudioObjectSystemObject as AudioObjectID;
+
+    unsafe extern "C-unwind" fn property_listener_handler_shim(
         _: AudioObjectID,
         _: u32,
-        _: *const AudioObjectPropertyAddress,
-        callback: *mut ::std::os::raw::c_void,
+        _: NonNull<AudioObjectPropertyAddress>,
+        callback: *mut c_void,
     ) -> OSStatus {
         let wrapper = callback as *mut PropertyListenerCallbackWrapper;
         unsafe { (*wrapper).0() };
@@ -926,18 +956,12 @@ mod macos {
 
             // Get the current default device ID
             let device_id = unsafe {
+                let default_device_address = default_device_property_address(input);
+
                 // Listen for default device changes
                 coreaudio::Error::from_os_status(AudioObjectAddPropertyListener(
-                    kAudioObjectSystemObject,
-                    &AudioObjectPropertyAddress {
-                        mSelector: if input {
-                            kAudioHardwarePropertyDefaultInputDevice
-                        } else {
-                            kAudioHardwarePropertyDefaultOutputDevice
-                        },
-                        mScope: kAudioObjectPropertyScopeGlobal,
-                        mElement: kAudioObjectPropertyElementMaster,
-                    },
+                    AUDIO_OBJECT_SYSTEM_OBJECT,
+                    NonNull::from(&default_device_address),
                     Some(property_listener_handler_shim),
                     &*callback as *const _ as *mut _,
                 ))?;
@@ -946,17 +970,13 @@ mod macos {
                 let device_id = if input {
                     let mut input_device: AudioObjectID = 0;
                     let mut prop_size = std::mem::size_of::<AudioObjectID>() as u32;
-                    let result = coreaudio::sys::AudioObjectGetPropertyData(
-                        kAudioObjectSystemObject,
-                        &AudioObjectPropertyAddress {
-                            mSelector: kAudioHardwarePropertyDefaultInputDevice,
-                            mScope: kAudioObjectPropertyScopeGlobal,
-                            mElement: kAudioObjectPropertyElementMaster,
-                        },
+                    let result = AudioObjectGetPropertyData(
+                        AUDIO_OBJECT_SYSTEM_OBJECT,
+                        NonNull::from(&default_device_address),
                         0,
                         std::ptr::null(),
-                        &mut prop_size as *mut _,
-                        &mut input_device as *mut _ as *mut _,
+                        NonNull::from(&mut prop_size),
+                        NonNull::from(&mut input_device).cast(),
                     );
                     if result != 0 {
                         log::warn!("Failed to get default input device ID");
@@ -967,17 +987,13 @@ mod macos {
                 } else {
                     let mut output_device: AudioObjectID = 0;
                     let mut prop_size = std::mem::size_of::<AudioObjectID>() as u32;
-                    let result = coreaudio::sys::AudioObjectGetPropertyData(
-                        kAudioObjectSystemObject,
-                        &AudioObjectPropertyAddress {
-                            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-                            mScope: kAudioObjectPropertyScopeGlobal,
-                            mElement: kAudioObjectPropertyElementMaster,
-                        },
+                    let result = AudioObjectGetPropertyData(
+                        AUDIO_OBJECT_SYSTEM_OBJECT,
+                        NonNull::from(&default_device_address),
                         0,
                         std::ptr::null(),
-                        &mut prop_size as *mut _,
-                        &mut output_device as *mut _ as *mut _,
+                        NonNull::from(&mut prop_size),
+                        NonNull::from(&mut output_device).cast(),
                     );
                     if result != 0 {
                         log::warn!("Failed to get default output device ID");
@@ -988,18 +1004,12 @@ mod macos {
                 };
 
                 if device_id != 0 {
+                    let stream_format_address = stream_format_property_address(input);
+
                     // Listen for format changes on the device
                     coreaudio::Error::from_os_status(AudioObjectAddPropertyListener(
                         device_id,
-                        &AudioObjectPropertyAddress {
-                            mSelector: coreaudio::sys::kAudioDevicePropertyStreamFormat,
-                            mScope: if input {
-                                coreaudio::sys::kAudioObjectPropertyScopeInput
-                            } else {
-                                coreaudio::sys::kAudioObjectPropertyScopeOutput
-                            },
-                            mElement: kAudioObjectPropertyElementMaster,
-                        },
+                        NonNull::from(&stream_format_address),
                         Some(property_listener_handler_shim),
                         &*callback as *const _ as *mut _,
                     ))?;
@@ -1020,35 +1030,23 @@ mod macos {
     impl Drop for CoreAudioDefaultDeviceChangeListener {
         fn drop(&mut self) {
             unsafe {
+                let default_device_address = default_device_property_address(self.input);
+
                 // Remove the system-level property listener
                 AudioObjectRemovePropertyListener(
-                    kAudioObjectSystemObject,
-                    &AudioObjectPropertyAddress {
-                        mSelector: if self.input {
-                            kAudioHardwarePropertyDefaultInputDevice
-                        } else {
-                            kAudioHardwarePropertyDefaultOutputDevice
-                        },
-                        mScope: kAudioObjectPropertyScopeGlobal,
-                        mElement: kAudioObjectPropertyElementMaster,
-                    },
+                    AUDIO_OBJECT_SYSTEM_OBJECT,
+                    NonNull::from(&default_device_address),
                     Some(property_listener_handler_shim),
                     &*self.callback as *const _ as *mut _,
                 );
 
                 // Remove the device-specific property listener if we have a valid device ID
                 if self.device_id != 0 {
+                    let stream_format_address = stream_format_property_address(self.input);
+
                     AudioObjectRemovePropertyListener(
                         self.device_id,
-                        &AudioObjectPropertyAddress {
-                            mSelector: coreaudio::sys::kAudioDevicePropertyStreamFormat,
-                            mScope: if self.input {
-                                coreaudio::sys::kAudioObjectPropertyScopeInput
-                            } else {
-                                coreaudio::sys::kAudioObjectPropertyScopeOutput
-                            },
-                            mElement: kAudioObjectPropertyElementMaster,
-                        },
+                        NonNull::from(&stream_format_address),
                         Some(property_listener_handler_shim),
                         &*self.callback as *const _ as *mut _,
                     );

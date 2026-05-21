@@ -59,6 +59,7 @@ cocoa.workspace = true
 core-foundation.workspace = true
 core-video.workspace = true
 coreaudio-rs = "0.14.2"
+objc2-core-audio = { version = "0.3", features = ["std", "AudioHardware", "AudioHardwareDeprecated", "objc2", "objc2-foundation"], default-features = false }
 objc.workspace = true
 
 [dev-dependencies]
