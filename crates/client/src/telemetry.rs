@@ -6,13 +6,15 @@ use gpui::App;
 use http_client::HttpClientWithUrl;
 #[cfg(test)]
 use parking_lot::Mutex;
-use regex::Regex;
 #[cfg(test)]
 use settings::SettingsStore;
 #[cfg(test)]
 use std::collections::HashSet;
 use std::sync::Arc;
 use worktree::{UpdatedEntriesSet, WorktreeId};
+
+#[cfg(any(test, target_os = "macos"))]
+use regex::Regex;
 
 pub struct TelemetrySubscription {
     pub historical_events: Result<HistoricalEvents>,
