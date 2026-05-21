@@ -1295,6 +1295,12 @@ impl Sidebar {
                         waiting_thread_count += 1;
                     }
                 }
+
+                if is_active
+                    && let Some(ActiveEntry::Thread { thread_id, .. }) = self.active_entry.as_ref()
+                {
+                    notified_threads.remove(thread_id);
+                }
             }
 
             let has_threads = if !threads.is_empty() {
