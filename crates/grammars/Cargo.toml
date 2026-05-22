@@ -37,6 +37,7 @@ tree-sitter-md = { workspace = true, optional = true }
 tree-sitter-python = { workspace = true, optional = true }
 tree-sitter-regex = { workspace = true, optional = true }
 tree-sitter-rust = { workspace = true, optional = true }
+tree-sitter-toml = { workspace = true, optional = true }
 tree-sitter-typescript = { workspace = true, optional = true }
 tree-sitter-xml = { workspace = true, optional = true }
 tree-sitter-yaml = { workspace = true, optional = true }
@@ -63,8 +64,13 @@ load-grammars = [
     "tree-sitter-python",
     "tree-sitter-regex",
     "tree-sitter-rust",
+    "tree-sitter-toml",
     "tree-sitter-typescript",
     "tree-sitter-xml",
     "tree-sitter-yaml",
 ]
 test-support = ["load-grammars"]
+
+[dev-dependencies]
+tree-sitter.workspace = true
+tree-sitter-toml.workspace = true

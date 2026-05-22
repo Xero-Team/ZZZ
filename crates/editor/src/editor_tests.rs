@@ -5356,6 +5356,23 @@ async fn test_indent_yaml_non_comments_with_multiple_cursors(cx: &mut TestAppCon
 }
 
 #[gpui::test]
+async fn test_autoclose_toml_multiline_strings(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    let toml_language = languages::language("toml", tree_sitter_toml::LANGUAGE.into());
+    cx.update_buffer(|buffer, cx| buffer.set_language(Some(toml_language), cx));
+
+    cx.set_state("key = ˇ");
+    cx.update_editor(|editor, window, cx| editor.handle_input("\"\"\"", window, cx));
+    cx.assert_editor_state("key = \"\"\"ˇ\"\"\"");
+
+    cx.set_state("key = ˇ");
+    cx.update_editor(|editor, window, cx| editor.handle_input("'''", window, cx));
+    cx.assert_editor_state("key = '''ˇ'''");
+}
+
+#[gpui::test]
 async fn test_indent_outdent_with_hard_tabs(cx: &mut TestAppContext) {
     init_test(cx, |settings| {
         settings.defaults.hard_tabs = Some(true);

@@ -129,6 +129,7 @@ tree-sitter-c.workspace = true
 tree-sitter-go.workspace = true
 tree-sitter-html.workspace = true
 tree-sitter-rust.workspace = true
+tree-sitter-toml.workspace = true
 tree-sitter-typescript.workspace = true
 tree-sitter-xml.workspace = true
 tree-sitter-yaml.workspace = true

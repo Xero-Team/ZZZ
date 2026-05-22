@@ -36,6 +36,7 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
         ("python", tree_sitter_python::LANGUAGE.into()),
         ("regex", tree_sitter_regex::LANGUAGE.into()),
         ("rust", tree_sitter_rust::LANGUAGE.into()),
+        ("toml", tree_sitter_toml::LANGUAGE.into()),
         ("tsx", tree_sitter_typescript::LANGUAGE_TSX.into()),
         (
             "typescript",
@@ -146,6 +147,31 @@ fn append_query(target: &mut Option<Cow<'static, str>>, contents: Cow<'static, s
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tree_sitter::Parser;
+
+    fn parse_toml(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_toml::LANGUAGE.into())
+            .expect("load TOML grammar");
+        parser.parse(source, None).expect("parse TOML source")
+    }
+
+    fn assert_toml_parses(source: &str) {
+        let tree = parse_toml(source);
+        assert!(
+            !tree.root_node().has_error(),
+            "expected valid TOML, got parse error for:\n{source}"
+        );
+    }
+
+    fn assert_toml_rejects(source: &str) {
+        let tree = parse_toml(source);
+        assert!(
+            tree.root_node().has_error(),
+            "expected invalid TOML, but parse succeeded for:\n{source}"
+        );
+    }
 
     #[test]
     fn xml_queries_include_shared_and_xml_specific_layers() {
@@ -221,5 +247,115 @@ mod tests {
         assert!(highlights.contains("^(l|label|t|reset|u|update-ref)$"));
         assert!(highlights.contains("(label) @constant\n  (message)? @comment)"));
         assert!(highlights.contains("(label) @constant.builtin\n  (label) @constant"));
+    }
+
+    #[test]
+    fn toml_config_supports_multiline_strings() {
+        let config = load_config("toml");
+
+        assert!(
+            config
+                .matcher
+                .path_suffixes
+                .iter()
+                .any(|suffix| suffix == "toml")
+        );
+        assert!(
+            config
+                .brackets
+                .pairs
+                .iter()
+                .any(|bracket| bracket.start == "\"\"\"" && bracket.end == "\"\"\"")
+        );
+        assert!(
+            config
+                .brackets
+                .pairs
+                .iter()
+                .any(|bracket| bracket.start == "'''" && bracket.end == "'''")
+        );
+    }
+
+    #[test]
+    fn toml_queries_include_multiline_string_brackets_and_outline_items() {
+        let queries = load_queries("toml");
+
+        let brackets = queries.brackets.expect("toml brackets query");
+        assert!(brackets.contains("(\"\\\"\\\"\\\"\" @open"));
+        assert!(brackets.contains("'''"));
+
+        let highlights = queries.highlights.expect("toml highlights query");
+        assert!(highlights.contains("(escape_sequence) @string.escape"));
+        assert!(highlights.contains("(offset_date_time) @string.special"));
+
+        let outline = queries.outline.expect("toml outline query");
+        assert!(outline.contains("(table"));
+        assert!(outline.contains("(table_array_element"));
+        assert!(outline.contains("(pair"));
+        assert!(outline.contains("#not-has-parent? @item inline_table"));
+    }
+
+    #[test]
+    fn toml_parser_accepts_spec_examples() {
+        for source in [
+            "key = \"value\"\n",
+            "physical.color = \"orange\"\nsite.\"google.com\" = true\n",
+            "basic = \"I'm a string. \\\"quoted\\\"\\n\"\n",
+            "escaped = \"tab\\t esc\\e hex\\x41 unicode\\u03B1 big\\U0001F600\"\n",
+            "literal = 'C:\\Users\\nodejs\\templates'\n",
+            "multi_basic = \"\"\"\nRoses are red\nViolets are blue\"\"\"\n",
+            "multi_literal = '''\nThe first newline is\ntrimmed in literal strings.\n'''\n",
+            "int = 0xdead_beef\n",
+            "float = 6.626e-34\n",
+            "special = -inf\nother = +nan\n",
+            "bool = false\n",
+            "odt = 1979-05-27T07:32:00Z\n",
+            "odt = 1979-05-27 07:32Z\n",
+            "ldt = 1979-05-27T07:32:00\n",
+            "ldt = 1979-05-27T07:32\n",
+            "ld = 1979-05-27\nlt = 07:32:00\n",
+            "lt = 07:32\n",
+            "values = [1, 2, 3,]\n",
+            "contributors = [\n  \"Foo Bar <foo@example.com>\",\n  { name = \"Baz Qux\", email = \"bazqux@example.com\" },\n]\n",
+            "[fruit]\napple = \"red\"\n[fruit.apple.texture]\nsmooth = true\n",
+            "point = { x = 1, y = 2 }\n",
+            "point = { x = 1, y = 2, }\n",
+            "[[product]]\nname = \"Hammer\"\n\n[[product]]\nname = \"Nail\"\n",
+        ] {
+            assert_toml_parses(source);
+        }
+    }
+
+    #[test]
+    fn toml_parser_rejects_spec_invalid_examples() {
+        for source in [
+            "key =\n",
+            "first = \"Tom\" last = \"Preston-Werner\"\n",
+            "= \"no key name\"\n",
+            "\"\"\"key\"\"\" = \"not allowed\"\n",
+            "invalid_float_1 = .7\n",
+            "invalid_float_2 = 7.\n",
+            "invalid_float_3 = 3.e+20\n",
+            "bad_offset = 1979-05-27T07:32:00z\n",
+            "bad_delimiter = 1979-05-27t07:32:00\n",
+        ] {
+            assert_toml_rejects(source);
+        }
+    }
+
+    #[test]
+    fn toml_parser_currently_misses_some_toml_1_1_semantic_constraints() {
+        for source in [
+            "name = \"Tom\"\nname = \"Pradyun\"\n",
+            "fruit.apple = 1\nfruit.apple.smooth = true\n",
+            "[fruit]\napple = \"red\"\n[fruit]\norange = \"orange\"\n",
+            "[fruit]\napple = \"red\"\n[fruit.apple]\ntexture = \"smooth\"\n",
+            "[product]\ntype = { name = \"Nail\" }\ntype.edible = false\n",
+            "[product]\ntype.name = \"Nail\"\ntype = { edible = false }\n",
+            "fruits = []\n[[fruits]]\nname = \"apple\"\n",
+            "[[fruits]]\nname = \"apple\"\n[[fruits.varieties]]\nname = \"red delicious\"\n[fruits.varieties]\nname = \"granny smith\"\n",
+        ] {
+            assert_toml_parses(source);
+        }
     }
 }

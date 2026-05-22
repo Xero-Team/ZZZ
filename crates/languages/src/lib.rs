@@ -207,6 +207,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
             ..Default::default()
         },
         LanguageInfo {
+            name: "toml",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
             name: "tsx",
             adapters: vec![typescript_lsp_adapter.clone(), vtsls_adapter.clone()],
             context: Some(typescript_context.clone()),
@@ -455,6 +460,30 @@ mod tests {
                 .language_for_file_path(Path::new(".git/info/attributes"))
                 .map(|language| language.name()),
             Some("Git Attributes".into())
+        );
+    }
+
+    #[gpui::test]
+    async fn test_toml_registered_for_file_matching(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        let settings = cx.update(SettingsStore::test);
+        cx.set_global(settings);
+
+        let languages = Arc::new(LanguageRegistry::new(cx.executor()));
+        cx.update(|cx| init(languages.clone(), fs, NodeRuntime::unavailable(), cx));
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new("Cargo.toml"))
+                .map(|language| language.name()),
+            Some("TOML".into())
+        );
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new("uv.lock"))
+                .map(|language| language.name()),
+            Some("TOML".into())
         );
     }
 }

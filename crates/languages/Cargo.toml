@@ -77,6 +77,7 @@ tree-sitter-css.workspace = true
 tree-sitter-go.workspace = true
 tree-sitter-python.workspace = true
 tree-sitter-rust.workspace = true
+tree-sitter-toml.workspace = true
 tree-sitter-typescript.workspace = true
 tree-sitter.workspace = true
 unindent.workspace = true
