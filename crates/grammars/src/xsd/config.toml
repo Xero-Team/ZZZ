@@ -1,7 +1,7 @@
-name = "XML"
+name = "XSD"
 grammar = "xml"
-query_layers = ["shared/xml_dtd"]
-path_suffixes = ["xml", "xhtml", "svg"]
+query_layers = ["shared/xml_dtd", "xml"]
+path_suffixes = ["xsd"]
 first_line_pattern = '^\s*<\?xml\b'
 block_comment = ["<!-- ", " -->"]
 brackets = [{ start = "<", end = ">", close = true, newline = true }]

@@ -1,5 +1,6 @@
 name = "DTD"
 grammar = "dtd"
+query_layers = ["shared/xml_dtd"]
 path_suffixes = ["dtd", "ent"]
 first_line_pattern = '^\s*(?:<\?xml|<!\[|<!(?:ELEMENT|ATTLIST|ENTITY|NOTATION))'
 block_comment = ["<!-- ", " -->"]

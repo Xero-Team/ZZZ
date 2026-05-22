@@ -215,6 +215,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
             ..Default::default()
         },
         LanguageInfo {
+            name: "xsd",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
             name: "yaml",
             adapters: vec![yaml_lsp_adapter],
             ..Default::default()
@@ -374,7 +379,7 @@ fn register_language(
         Arc::new(move || {
             Ok(LoadedLanguage {
                 config: config.clone(),
-                queries: grammars::load_queries(name),
+                queries: grammars::load_queries_for_config(name, &config),
                 context_provider: context.clone(),
                 toolchain_provider: toolchain.clone(),
                 manifest_name: manifest_name.clone(),

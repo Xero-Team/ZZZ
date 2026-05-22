@@ -236,6 +236,38 @@ fn test_select_language(cx: &mut App) {
     );
 }
 
+#[gpui::test]
+fn test_select_xsd_language(cx: &mut App) {
+    init_settings(cx, |_| {});
+
+    let registry = Arc::new(LanguageRegistry::test(cx.background_executor().clone()));
+    registry.add(Arc::new(Language::new(
+        LanguageConfig {
+            name: "XSD".into(),
+            matcher: LanguageMatcher {
+                path_suffixes: vec!["xsd".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        Some(tree_sitter_xml::LANGUAGE_XML.into()),
+    )));
+
+    assert_eq!(
+        registry
+            .language_for_file(&file("schema/types.xsd"), None, cx)
+            .map(|language| language.name()),
+        Some("XSD".into())
+    );
+
+    assert_eq!(
+        registry
+            .language_for_file(&file("schema/types.xml"), None, cx)
+            .map(|language| language.name()),
+        None
+    );
+}
+
 #[gpui::test(iterations = 10)]
 async fn test_first_line_pattern(cx: &mut TestAppContext) {
     cx.update(|cx| init_settings(cx, |_| {}));
@@ -4106,6 +4138,82 @@ fn xml_lang() -> Language {
     )
     .with_indents_query(include_str!("../../grammars/src/xml/indents.scm"))
     .unwrap()
+}
+
+#[gpui::test]
+async fn test_xsd_outline(cx: &mut gpui::TestAppContext) {
+    let text = include_str!("../../grammars/src/xsd/testdata/outline.xsd").to_string();
+
+    let language = Language::new(
+        LanguageConfig {
+            name: "XSD".into(),
+            matcher: LanguageMatcher {
+                path_suffixes: vec!["xsd".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        Some(tree_sitter_xml::LANGUAGE_XML.into()),
+    )
+    .with_outline_query(include_str!("../../grammars/src/xsd/outline.scm"))
+    .unwrap();
+
+    let buffer = cx.new(|cx| Buffer::local(text, cx).with_language(Arc::new(language), cx));
+    let snapshot = buffer.update(cx, |buffer, _| buffer.snapshot());
+    let outline = snapshot.outline(None);
+
+    assert_eq!(
+        outline
+            .items
+            .iter()
+            .map(|item| (item.text.as_str(), item.depth))
+            .collect::<Vec<_>>(),
+        &[
+            ("xs:schema", 0),
+            ("xs:element \"garage\"", 1),
+            ("xs:complexType \"GarageType\"", 1),
+            ("xs:sequence", 2),
+            ("xs:element \"car\"", 3),
+            ("xs:simpleType \"IdentifierType\"", 1),
+            ("xs:restriction", 2),
+            ("xs:minLength", 3),
+            ("xs:maxLength", 3),
+        ]
+    );
+}
+
+#[gpui::test]
+fn test_xsd_autoindent(cx: &mut App) {
+    init_settings(cx, |settings| {
+        settings.defaults.tab_size = NonZeroU32::new(2);
+    });
+
+    cx.new(|cx| {
+        let (text, ranges) = marked_text_ranges("<xs:schema>ˇ</xs:schema>", false);
+        let language = Language::new(
+            LanguageConfig {
+                name: "XSD".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["xsd".to_string()],
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            Some(tree_sitter_xml::LANGUAGE_XML.into()),
+        )
+        .with_indents_query(include_str!("../../grammars/src/xml/indents.scm"))
+        .unwrap();
+        let mut buffer = Buffer::local(text, cx).with_language(Arc::new(language), cx);
+
+        buffer.edit(
+            ranges.into_iter().map(|range| (range, "\na")),
+            Some(AutoindentMode::EachLine),
+            cx,
+        );
+        assert_eq!(buffer.text(), "<xs:schema>\n  a</xs:schema>");
+
+        buffer
+    });
 }
 
 fn erb_lang() -> Language {

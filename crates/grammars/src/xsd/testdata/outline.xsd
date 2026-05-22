@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="garage" type="GarageType"/>
+  <xs:complexType name="GarageType">
+    <xs:sequence>
+      <xs:element name="car" type="CarType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:simpleType name="IdentifierType">
+    <xs:restriction base="xs:token">
+      <xs:minLength value="3"/>
+      <xs:maxLength value="64"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

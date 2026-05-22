@@ -37535,7 +37535,11 @@ async fn test_xml_highlight_regression_sample(cx: &mut TestAppContext) {
             },
             Some(tree_sitter_xml::LANGUAGE_XML.into()),
         )
-        .with_highlights_query(include_str!("../../grammars/src/xml/highlights.scm"))
+        .with_highlights_query(concat!(
+            include_str!("../../grammars/src/shared/xml_dtd/highlights.scm"),
+            "\n",
+            include_str!("../../grammars/src/xml/highlights.scm"),
+        ))
         .unwrap(),
     );
 
@@ -37662,7 +37666,11 @@ async fn test_dtd_highlight_regression_sample(cx: &mut TestAppContext) {
             },
             Some(tree_sitter_xml::LANGUAGE_DTD.into()),
         )
-        .with_highlights_query(include_str!("../../grammars/src/dtd/highlights.scm"))
+        .with_highlights_query(concat!(
+            include_str!("../../grammars/src/shared/xml_dtd/highlights.scm"),
+            "\n",
+            include_str!("../../grammars/src/dtd/highlights.scm"),
+        ))
         .unwrap(),
     );
 
@@ -37835,7 +37843,11 @@ async fn test_xml_negative_keyword_casing(cx: &mut TestAppContext) {
             },
             Some(tree_sitter_xml::LANGUAGE_XML.into()),
         )
-        .with_highlights_query(include_str!("../../grammars/src/xml/highlights.scm"))
+        .with_highlights_query(concat!(
+            include_str!("../../grammars/src/shared/xml_dtd/highlights.scm"),
+            "\n",
+            include_str!("../../grammars/src/xml/highlights.scm"),
+        ))
         .unwrap(),
     );
 
@@ -37886,7 +37898,11 @@ async fn test_dtd_negative_keyword_casing(cx: &mut TestAppContext) {
             },
             Some(tree_sitter_xml::LANGUAGE_DTD.into()),
         )
-        .with_highlights_query(include_str!("../../grammars/src/dtd/highlights.scm"))
+        .with_highlights_query(concat!(
+            include_str!("../../grammars/src/shared/xml_dtd/highlights.scm"),
+            "\n",
+            include_str!("../../grammars/src/dtd/highlights.scm"),
+        ))
         .unwrap(),
     );
 
@@ -37910,6 +37926,120 @@ async fn test_dtd_negative_keyword_casing(cx: &mut TestAppContext) {
             assert!(
                 !keyword_snippets.contains(&needle),
                 "unexpected DTD keyword highlight for {needle:?}: {keyword_snippets:?}"
+            );
+        }
+    });
+}
+
+#[gpui::test]
+async fn test_xsd_highlight_regression_sample(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/xsd/testdata/highlights.xsd")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "XSD".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["xsd".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_xml::LANGUAGE_XML.into()),
+        )
+        .with_highlights_query(concat!(
+            include_str!("../../grammars/src/shared/xml_dtd/highlights.scm"),
+            "\n",
+            include_str!("../../grammars/src/xml/highlights.scm"),
+            "\n",
+            include_str!("../../grammars/src/xsd/highlights.scm"),
+        ))
+        .unwrap(),
+    );
+
+    let keyword_color = Hsla::red();
+    let type_color = Hsla::blue();
+    let property_color = Hsla::green();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![
+        ("keyword", keyword_color),
+        ("type", type_color),
+        ("property", property_color),
+    ]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let highlights =
+            snapshot.combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme);
+
+        let type_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(type_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        for needle in [
+            "xs:schema",
+            "xs:simpleType",
+            "xs:complexType",
+            "xs:sequence",
+            "xs:element",
+            "xs:any",
+            "xs:attribute",
+        ] {
+            assert!(
+                type_snippets.contains(&needle),
+                "missing XSD type tag {needle:?}"
+            );
+        }
+
+        let keyword_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(keyword_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        for needle in [
+            "xs:restriction",
+            "xs:enumeration",
+            "xs:pattern",
+            "xs:whiteSpace",
+            "xs:minLength",
+            "xs:maxLength",
+            "xsi:nil",
+        ] {
+            assert!(
+                keyword_snippets.contains(&needle),
+                "missing XSD keyword {needle:?}"
+            );
+        }
+
+        let property_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(property_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        for needle in [
+            "targetNamespace",
+            "name",
+            "base",
+            "itemType",
+            "memberTypes",
+            "minOccurs",
+            "maxOccurs",
+            "processContents",
+            "substitutionGroup",
+            "abstract",
+            "use",
+        ] {
+            assert!(
+                property_snippets.contains(&needle),
+                "missing XSD property {needle:?}"
             );
         }
     });

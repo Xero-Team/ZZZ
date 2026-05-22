@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           targetNamespace="urn:demo"
+           xmlns:tns="urn:demo"
+           elementFormDefault="qualified">
+  <!-- schema comment -->
+  <xs:simpleType name="ColorType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="red"/>
+      <xs:enumeration value="green"/>
+      <xs:pattern value="[a-z]+"/>
+      <xs:whiteSpace value="collapse"/>
+      <xs:minLength value="3"/>
+      <xs:maxLength value="32"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="IdentifierListType">
+    <xs:list itemType="xs:token"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="ScalarType">
+    <xs:union memberTypes="xs:string xs:dateTime"/>
+  </xs:simpleType>
+
+  <xs:complexType name="CarType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string" minOccurs="1" maxOccurs="1"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="paint" type="ColorType" xsi:nil="false"/>
+      <xs:any namespace="##other" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="identifier" type="IdentifierListType" use="required"/>
+  </xs:complexType>
+
+  <xs:element name="car" type="tns:CarType" substitutionGroup="tns:vehicle" abstract="false"/>
+</xs:schema>

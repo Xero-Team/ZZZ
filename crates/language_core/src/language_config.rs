@@ -42,6 +42,9 @@ pub struct LanguageConfig {
     /// The criteria for matching this language to a given file.
     #[serde(flatten)]
     pub matcher: LanguageMatcher,
+    /// Additional query directories that should be loaded before this language's own queries.
+    #[serde(default)]
+    pub query_layers: Vec<Arc<str>>,
     /// List of bracket types in a language.
     #[serde(default)]
     pub brackets: BracketPairConfig,
@@ -166,6 +169,7 @@ impl Default for LanguageConfig {
             kernel_language_names: Default::default(),
             grammar: None,
             matcher: LanguageMatcher::default(),
+            query_layers: Default::default(),
             brackets: Default::default(),
             auto_indent_using_last_non_empty_line: auto_indent_using_last_non_empty_line_default(),
             auto_indent_on_paste: None,
