@@ -2,9 +2,11 @@ use gh_workflow::*;
 use indoc::indoc;
 
 use crate::tasks::workflows::{
+    change_detection::orchestrate_for_extension,
     extension_bump::compare_versions,
-    run_tests::{fetch_ts_query_ls, orchestrate_for_extension, run_ts_query_ls, tests_pass},
+    job_summary::tests_pass,
     runners,
+    ts_query::{fetch_ts_query_ls, run_ts_query_ls},
     steps::{
         self, BASH_SHELL, CommonJobConditions, FluentBuilder, NamedJob,
         cache_rust_dependencies_namespace, named,

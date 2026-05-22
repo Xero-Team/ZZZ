@@ -141,13 +141,13 @@ jobs:
         mkdir -p /tmp/ext-scratch
         mkdir -p /tmp/ext-output
         "$GITHUB_WORKSPACE/zed-extension" --source-dir . --scratch-dir /tmp/ext-scratch --output-dir /tmp/ext-output
-    - name: run_tests::fetch_ts_query_ls
+    - name: ts_query::fetch_ts_query_ls
       uses: dsaltares/fetch-gh-release-asset@aa37ae5c44d3c9820bc12fe675e8670ecd93bd1c
       with:
         repo: ribru17/ts_query_ls
         version: tags/v3.15.1
         file: ts_query_ls-x86_64-unknown-linux-gnu.tar.gz
-    - name: run_tests::run_ts_query_ls
+    - name: ts_query::run_ts_query_ls
       run: |-
         tar -xf "$GITHUB_WORKSPACE/ts_query_ls-x86_64-unknown-linux-gnu.tar.gz" -C "$GITHUB_WORKSPACE"
         "$GITHUB_WORKSPACE/ts_query_ls" format --check . || {
@@ -197,7 +197,7 @@ jobs:
     - check_extension
     runs-on: ubuntu-latest
     steps:
-    - name: run_tests::tests_pass
+    - name: job_summary::tests_pass
       run: |
         set +x
         EXIT_CODE=0

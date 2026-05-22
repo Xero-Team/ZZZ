@@ -5,7 +5,7 @@ use crate::tasks::workflows::{
         prep_release_artifacts,
     },
     run_bundling::{bundle_linux, bundle_mac, bundle_windows},
-    run_tests::{clippy, run_platform_tests_no_filter},
+    platform_checks::{clippy, run_platform_tests_no_filter},
     runners::{Arch, Platform, ReleaseChannel},
     steps::{CommonJobConditions, FluentBuilder, NamedJob},
 };

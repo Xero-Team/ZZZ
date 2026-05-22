@@ -22,13 +22,16 @@ mod extension_workflow_rollout;
 mod extensions;
 mod nix_build;
 mod publish_extension_cli;
+mod change_detection;
+mod job_summary;
+mod platform_checks;
 mod run_bundling;
 
 mod release;
 mod run_agent_evals;
-mod run_tests;
 mod runners;
 mod steps;
+mod ts_query;
 mod vars;
 
 #[derive(Clone)]
@@ -196,7 +199,6 @@ pub fn run_workflows(args: GenerateWorkflowArgs) -> Result<()> {
         WorkflowFile::zed(compliance_check::compliance_check),
         WorkflowFile::zed(extension_tests::extension_tests),
         WorkflowFile::zed(release::release),
-        WorkflowFile::zed(run_tests::run_tests),
     ];
 
     for workflow_file in workflows {

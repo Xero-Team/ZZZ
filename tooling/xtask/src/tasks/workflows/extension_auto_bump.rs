@@ -5,8 +5,8 @@ use indoc::indoc;
 use serde_json::json;
 
 use crate::tasks::workflows::{
+    change_detection::DETECT_CHANGED_EXTENSIONS_SCRIPT,
     extensions::WithAppSecrets,
-    run_tests::DETECT_CHANGED_EXTENSIONS_SCRIPT,
     runners,
     steps::{self, CommonJobConditions, NamedJob, named},
     vars::{StepOutput, one_workflow_per_non_main_branch},
