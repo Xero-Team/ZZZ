@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 
 use crate::tasks::workflow_checks::{self};
 
-mod after_release;
 mod autofix_pr;
 mod bump_patch_version;
 mod bump_zed_version;
@@ -23,7 +22,6 @@ mod extension_workflow_rollout;
 mod extensions;
 mod nix_build;
 mod publish_extension_cli;
-mod release_nightly;
 mod run_bundling;
 
 mod release;
@@ -195,31 +193,9 @@ pub fn run_workflows(args: GenerateWorkflowArgs) -> Result<()> {
     }
 
     let workflows = [
-        WorkflowFile::zed(after_release::after_release),
-        WorkflowFile::zed(autofix_pr::autofix_pr),
-        WorkflowFile::zed(bump_patch_version::bump_patch_version),
-        WorkflowFile::zed(bump_zed_version::bump_zed_version),
-        WorkflowFile::zed(cherry_pick::cherry_pick),
-        WorkflowFile::zed(compare_perf::compare_perf),
         WorkflowFile::zed(compliance_check::compliance_check),
-        WorkflowFile::zed(danger::danger),
-        WorkflowFile::zed(deploy_collab::deploy_collab),
-        WorkflowFile::zed(deploy_docs::deploy_docs),
-        WorkflowFile::zed(deploy_docs::deploy_nightly_docs),
-        WorkflowFile::zed(extension_bump::extension_bump),
-        WorkflowFile::zed(extension_auto_bump::extension_auto_bump),
-        WorkflowFile::zed(extension_tests::extension_tests),
-        WorkflowFile::zed(extension_workflow_rollout::extension_workflow_rollout),
-        WorkflowFile::zed(publish_extension_cli::publish_extension_cli),
         WorkflowFile::zed(release::release),
-        WorkflowFile::zed(release_nightly::release_nightly),
-        WorkflowFile::zed(run_agent_evals::run_cron_unit_evals),
-        WorkflowFile::zed(run_agent_evals::run_unit_evals),
-        WorkflowFile::zed(run_bundling::run_bundling),
         WorkflowFile::zed(run_tests::run_tests),
-        /* workflows used for CI/CD in extension repositories */
-        WorkflowFile::extension(extensions::run_tests::run_tests),
-        WorkflowFile::extension_shared(extensions::bump_version::bump_version),
     ];
 
     for workflow_file in workflows {

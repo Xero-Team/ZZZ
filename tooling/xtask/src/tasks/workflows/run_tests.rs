@@ -7,10 +7,7 @@ use indoc::formatdoc;
 use serde_json::json;
 
 use crate::tasks::workflows::{
-    steps::{
-        CommonJobConditions, cache_rust_dependencies_namespace, repository_owner_guard_expression,
-        use_clang,
-    },
+    steps::{cache_rust_dependencies_namespace, use_clang},
     vars::{self, PathCondition},
 };
 
@@ -290,7 +287,6 @@ fn orchestrate_impl(rules: &[&PathCondition], target: OrchestrateTarget) -> Name
 
     let job = Job::default()
         .runs_on(runners::LINUX_SMALL)
-        .with_repository_owner_guard()
         .outputs(outputs)
         .add_step(steps::checkout_repo().with_deep_history_on_non_main())
         .add_step(Step::new(step_name.clone()).run(script).id(step_name));
@@ -344,7 +340,6 @@ pub fn tests_pass(jobs: &[NamedJob], extra_job_names: &[&str]) -> NamedJob {
                 .map(|name| name.to_string())
                 .collect::<Vec<String>>(),
         )
-        .cond(repository_owner_guard_expression(true))
         .add_step(
             env_entries
                 .into_iter()

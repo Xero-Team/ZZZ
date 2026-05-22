@@ -66,4 +66,5 @@ impl std::fmt::Display for Platform {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReleaseChannel {
     Nightly,
+    Preview,
 }

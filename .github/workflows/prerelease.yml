@@ -1,0 +1,96 @@
+# Generated from xtask::workflows::prerelease
+# Rebuild with `cargo xtask workflows`.
+name: prerelease
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: '1'
+  RELEASE_VERSION: ${{ inputs.release_version }}
+  CI: ''
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Prerelease version for Windows installer.
+        required: true
+        type: string
+jobs:
+  prerelease_gate:
+    runs-on: namespace-profile-2x4-ubuntu-2404
+    steps:
+    - name: release::release
+      run: 'true'
+  bundle_mac_aarch64:
+    needs:
+    - prerelease_gate
+    runs-on: namespace-profile-mac-large
+    env:
+      CARGO_INCREMENTAL: 0
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: run_bundling::set_release_channel_to_preview
+      run: |
+        set -eu
+        echo "Publishing preview release"
+        echo "preview" > crates/zed/RELEASE_CHANNEL
+    - name: steps::setup_node
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '20'
+    - name: steps::clear_target_dir_if_large
+      run: ./script/clear-target-dir-if-larger-than 350 200
+    - name: run_bundling::bundle_mac::bundle_mac
+      run: ./script/bundle-mac aarch64-apple-darwin
+    - name: '@actions/upload-artifact Zed-aarch64.dmg'
+      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+      with:
+        name: Zed-aarch64.dmg
+        path: target/aarch64-apple-darwin/release/Zed-aarch64.dmg
+        if-no-files-found: error
+    - name: '@actions/upload-artifact zed-remote-server-macos-aarch64.gz'
+      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+      with:
+        name: zed-remote-server-macos-aarch64.gz
+        path: target/zed-remote-server-macos-aarch64.gz
+        if-no-files-found: error
+    timeout-minutes: 60
+  bundle_windows_x86_64:
+    needs:
+    - prerelease_gate
+    runs-on: self-32vcpu-windows-2022
+    env:
+      CARGO_INCREMENTAL: 0
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: run_bundling::set_release_channel_to_preview
+      run: |
+        $ErrorActionPreference = "Stop"
+        Write-Host "Publishing preview release"
+        "preview" | Set-Content -Path "crates/zed/RELEASE_CHANNEL"
+      shell: pwsh
+      working-directory: ${{ env.ZED_WORKSPACE }}
+    - name: run_bundling::bundle_windows::bundle_windows
+      run: script/bundle-windows.ps1 -Architecture x86_64
+      shell: pwsh
+      working-directory: ${{ env.ZED_WORKSPACE }}
+    - name: '@actions/upload-artifact Zed-x86_64.exe'
+      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+      with:
+        name: Zed-x86_64.exe
+        path: target/Zed-x86_64.exe
+        if-no-files-found: error
+    - name: '@actions/upload-artifact zed-remote-server-windows-x86_64.zip'
+      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+      with:
+        name: zed-remote-server-windows-x86_64.zip
+        path: target/zed-remote-server-windows-x86_64.zip
+        if-no-files-found: error
+    timeout-minutes: 60
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}

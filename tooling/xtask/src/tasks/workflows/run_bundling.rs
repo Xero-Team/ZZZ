@@ -2,7 +2,6 @@ use std::path::Path;
 
 use crate::tasks::workflows::{
     nix_build::build_nix,
-    release::ReleaseBundleJobs,
     runners::{Arch, Platform, ReleaseChannel},
     steps::{DEFAULT_REPOSITORY_OWNER_GUARD, FluentBuilder, NamedJob, dependant_job, named},
     vars::{assets, bundle_envs},
@@ -11,6 +10,39 @@ use crate::tasks::workflows::{
 use super::{runners, steps};
 use gh_workflow::*;
 use indoc::indoc;
+
+pub(crate) struct ReleaseBundleJobs {
+    pub linux_aarch64: NamedJob,
+    pub linux_x86_64: NamedJob,
+    pub mac_aarch64: NamedJob,
+    pub mac_x86_64: NamedJob,
+    pub windows_aarch64: NamedJob,
+    pub windows_x86_64: NamedJob,
+}
+
+impl ReleaseBundleJobs {
+    pub fn jobs(&self) -> Vec<&NamedJob> {
+        vec![
+            &self.linux_aarch64,
+            &self.linux_x86_64,
+            &self.mac_aarch64,
+            &self.mac_x86_64,
+            &self.windows_aarch64,
+            &self.windows_x86_64,
+        ]
+    }
+
+    pub fn into_jobs(self) -> Vec<NamedJob> {
+        vec![
+            self.linux_aarch64,
+            self.linux_x86_64,
+            self.mac_aarch64,
+            self.mac_x86_64,
+            self.windows_aarch64,
+            self.windows_x86_64,
+        ]
+    }
+}
 
 pub fn run_bundling() -> Workflow {
     let bundle = ReleaseBundleJobs {
@@ -100,7 +132,6 @@ pub(crate) fn bundle_mac(
                 job.add_step(set_release_channel(platform, release_channel))
             })
             .add_step(steps::setup_node())
-            .add_step(steps::setup_sentry())
             .add_step(steps::clear_target_dir_if_large(runners::Platform::Mac))
             .add_step(bundle_mac(arch))
             .add_step(upload_artifact(&format!(
@@ -138,8 +169,8 @@ pub(crate) fn bundle_linux(
         Arch::AARCH64 => assets::LINUX_AARCH64,
     };
     let remote_server_artifact_name = match arch {
-        Arch::X86_64 => assets::REMOTE_SERVER_LINUX_X86_64,
         Arch::AARCH64 => assets::REMOTE_SERVER_LINUX_AARCH64,
+        Arch::X86_64 => assets::REMOTE_SERVER_LINUX_X86_64,
     };
     NamedJob {
         name: format!("bundle_linux_{arch}"),
@@ -152,7 +183,6 @@ pub(crate) fn bundle_linux(
             .when_some(release_channel, |job, release_channel| {
                 job.add_step(set_release_channel(platform, release_channel))
             })
-            .add_step(steps::setup_sentry())
             .map(steps::install_linux_dependencies)
             .add_step(steps::script("./script/bundle-linux"))
             .add_step(upload_artifact(&format!("target/release/{artifact_name}")))
@@ -192,7 +222,6 @@ pub(crate) fn bundle_windows(
             .when_some(release_channel, |job, release_channel| {
                 job.add_step(set_release_channel(platform, release_channel))
             })
-            .add_step(steps::setup_sentry())
             .add_step(bundle_windows(arch))
             .add_step(upload_artifact(&format!("target/{artifact_name}")))
             .add_step(upload_artifact(&format!(
@@ -204,6 +233,7 @@ pub(crate) fn bundle_windows(
 fn set_release_channel(platform: Platform, release_channel: ReleaseChannel) -> Step<Run> {
     match release_channel {
         ReleaseChannel::Nightly => set_release_channel_to_nightly(platform),
+        ReleaseChannel::Preview => set_release_channel_to_preview(platform),
     }
 }
 
@@ -220,6 +250,22 @@ fn set_release_channel_to_nightly(platform: Platform) -> Step<Run> {
             $version = git rev-parse --short HEAD
             Write-Host "Publishing version: $version on release channel nightly"
             "nightly" | Set-Content -Path "crates/zed/RELEASE_CHANNEL"
+        "#})
+        .working_directory("${{ env.ZED_WORKSPACE }}"),
+    }
+}
+
+fn set_release_channel_to_preview(platform: Platform) -> Step<Run> {
+    match platform {
+        Platform::Linux | Platform::Mac => named::bash(indoc::indoc! {r#"
+            set -eu
+            echo "Publishing preview release"
+            echo "preview" > crates/zed/RELEASE_CHANNEL
+        "#}),
+        Platform::Windows => named::pwsh(indoc::indoc! {r#"
+            $ErrorActionPreference = "Stop"
+            Write-Host "Publishing preview release"
+            "preview" | Set-Content -Path "crates/zed/RELEASE_CHANNEL"
         "#})
         .working_directory("${{ env.ZED_WORKSPACE }}"),
     }
