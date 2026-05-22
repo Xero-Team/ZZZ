@@ -17,10 +17,11 @@ jobs:
         clean: false
         fetch-depth: 0
     - name: steps::cache_rust_dependencies_namespace
-      uses: namespacelabs/nscloud-cache-action@a90bb5d4b27522ce881c6e98eebd7d7e6d1653f9
+      uses: actions/cache@v5
       with:
-        cache: rust
         path: ~/.rustup
+        key: rustup-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
+        restore-keys: rustup-${{ runner.os }}-
     - id: determine-version
       name: compliance_check::scheduled_compliance_check
       run: |

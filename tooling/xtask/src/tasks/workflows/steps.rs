@@ -251,12 +251,16 @@ pub fn install_rustup_target(target: &str) -> Step<Run> {
 
 pub fn cache_rust_dependencies_namespace() -> Step<Use> {
     named::uses(
-        "namespacelabs",
-        "nscloud-cache-action",
-        "a90bb5d4b27522ce881c6e98eebd7d7e6d1653f9", // v1
+        "actions",
+        "cache",
+        "v5",
     )
-    .add_with(("cache", "rust"))
-    .add_with(("path", "~/.rustup"))
+    .add_with(
+        Input::default()
+            .add("path", "~/.rustup")
+            .add("key", "rustup-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}")
+            .add("restore-keys", "rustup-${{ runner.os }}-"),
+    )
 }
 
 pub fn setup_sccache(platform: Platform) -> Step<Run> {
@@ -284,23 +288,31 @@ pub fn show_sccache_stats(platform: Platform) -> Step<Run> {
 
 pub fn cache_nix_dependencies_namespace() -> Step<Use> {
     named::uses(
-        "namespacelabs",
-        "nscloud-cache-action",
-        "a90bb5d4b27522ce881c6e98eebd7d7e6d1653f9", // v1
+        "actions",
+        "cache",
+        "v5",
     )
-    .add_with(("cache", "nix"))
+    .add_with(
+        Input::default()
+            .add("path", "~/nix-cache")
+            .add("key", "nix-cache-${{ runner.os }}-${{ hashFiles('flake.lock') }}")
+            .add("restore-keys", "nix-cache-${{ runner.os }}-"),
+    )
 }
 
 pub fn cache_nix_store_macos() -> Step<Use> {
-    // On macOS, `/nix` is on a read-only root filesystem so nscloud's `cache: nix`
-    // cannot mount or symlink there. Instead we cache a user-writable directory and
-    // use nix-store --import/--export in separate steps to transfer store paths.
+    // Cache user-writable local Nix store for incremental rebuilds.
     named::uses(
-        "namespacelabs",
-        "nscloud-cache-action",
-        "a90bb5d4b27522ce881c6e98eebd7d7e6d1653f9", // v1
+        "actions",
+        "cache",
+        "v5",
     )
-    .add_with(("path", "~/nix-cache"))
+    .add_with(
+        Input::default()
+            .add("path", "~/nix-cache")
+            .add("key", "nix-cache-${{ runner.os }}-${{ hashFiles('flake.lock') }}")
+            .add("restore-keys", "nix-cache-${{ runner.os }}-"),
+    )
 }
 
 pub fn setup_linux() -> Step<Run> {
