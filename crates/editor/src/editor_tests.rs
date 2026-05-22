@@ -37932,6 +37932,809 @@ async fn test_dtd_negative_keyword_casing(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+async fn test_gitattributes_highlight_regression_sample(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/gitattributes/testdata/highlights.gitattributes")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "Git Attributes".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["gitattributes".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_gitattributes::LANGUAGE.into()),
+        )
+        .with_highlights_query(include_str!(
+            "../../grammars/src/gitattributes/highlights.scm"
+        ))
+        .unwrap(),
+    );
+
+    let builtin_color = Hsla::red();
+    let parameter_color = Hsla::blue();
+    let string_color = Hsla::white();
+    let comment_color = Hsla::green();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![
+        ("variable.builtin", builtin_color),
+        ("variable.parameter", parameter_color),
+        ("string", string_color),
+        ("comment", comment_color),
+    ]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let highlights =
+            snapshot.combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme);
+
+        let builtin_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(builtin_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        for needle in ["text", "eol", "binary", "builtin_objectmode"] {
+            assert!(
+                builtin_snippets.contains(&needle),
+                "missing gitattributes builtin {needle:?}: {builtin_snippets:?}"
+            );
+        }
+
+        let parameter_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(parameter_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        for needle in ["myfilter", "mydiff", "mymerge", "myattr"] {
+            assert!(
+                parameter_snippets.contains(&needle),
+                "missing gitattributes parameter {needle:?}: {parameter_snippets:?}"
+            );
+        }
+
+        let string_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(string_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        for needle in ["lf", "lfs", "markdown", "union", "value", "160000"] {
+            assert!(
+                string_snippets.contains(&needle),
+                "missing gitattributes string {needle:?}: {string_snippets:?}"
+            );
+        }
+
+        let comment_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(comment_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            comment_snippets
+                .iter()
+                .any(|snippet| snippet.contains("keep text normalized"))
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_gitattributes_negative_highlights(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/gitattributes/testdata/negative.gitattributes")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "Git Attributes".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["gitattributes".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_gitattributes::LANGUAGE.into()),
+        )
+        .with_highlights_query(include_str!(
+            "../../grammars/src/gitattributes/highlights.scm"
+        ))
+        .unwrap(),
+    );
+
+    let error_color = Hsla::red();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![("error", error_color)]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let error_snippets = snapshot
+            .combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme)
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(error_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+
+        for needle in ["!", "/", "builtin_fake", "binary", "value"] {
+            assert!(
+                error_snippets.contains(&needle),
+                "missing gitattributes error {needle:?}: {error_snippets:?}"
+            );
+        }
+    });
+}
+
+#[gpui::test]
+async fn test_gitignore_highlight_regression_sample(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/gitignore/testdata/highlights.gitignore")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "Git Ignore".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["gitignore".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_gitignore::LANGUAGE.into()),
+        )
+        .with_highlights_query(include_str!("../../grammars/src/gitignore/highlights.scm"))
+        .unwrap(),
+    );
+
+    let string_color = Hsla::blue();
+    let operator_color = Hsla::red();
+    let keyword_color = Hsla::green();
+    let comment_color = Hsla::white();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![
+        ("string", string_color),
+        ("operator", operator_color),
+        ("keyword", keyword_color),
+        ("comment", comment_color),
+    ]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let highlights =
+            snapshot.combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme);
+
+        let string_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(string_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            string_snippets.len() > 20,
+            "expected many gitignore string spans"
+        );
+        for needle in ["d", "/", "l"] {
+            assert!(string_snippets.contains(&needle));
+        }
+
+        let operator_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(operator_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        for needle in ["!", "**", "?", "*"] {
+            assert!(
+                operator_snippets.contains(&needle),
+                "missing gitignore operator {needle:?}: {operator_snippets:?}"
+            );
+        }
+
+        let keyword_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(keyword_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            keyword_snippets
+                .iter()
+                .any(|snippet| snippet.contains(":digit:"))
+        );
+
+        let comment_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(comment_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            comment_snippets
+                .iter()
+                .any(|snippet| snippet.contains("ignore build artifacts"))
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_gitignore_negative_highlights(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/gitignore/testdata/negative.gitignore")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "Git Ignore".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["gitignore".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_gitignore::LANGUAGE.into()),
+        )
+        .with_highlights_query(include_str!("../../grammars/src/gitignore/highlights.scm"))
+        .unwrap(),
+    );
+
+    let error_color = Hsla::red();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![("error", error_color)]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let error_snippets = snapshot
+            .combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme)
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(error_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+
+        assert!(
+            !error_snippets.is_empty(),
+            "expected gitignore parse errors"
+        );
+        assert!(error_snippets.contains(&"["));
+    });
+}
+
+#[gpui::test]
+async fn test_gitconfig_highlight_regression_sample(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/gitconfig/testdata/highlights.gitconfig")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "Git Config".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["gitconfig".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_git_config::LANGUAGE.into()),
+        )
+        .with_highlights_query(include_str!("../../grammars/src/gitconfig/highlights.scm"))
+        .unwrap(),
+    );
+
+    let builtin_color = Hsla::red();
+    let property_color = Hsla::green();
+    let constant_color = Hsla::blue();
+    let number_color = Hsla::black();
+    let string_color = Hsla::white();
+    let path_color = Hsla::default();
+    let escape_color = Hsla::green();
+    let comment_color = Hsla::default();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![
+        ("function.builtin", builtin_color),
+        ("property", property_color),
+        ("constant.builtin", constant_color),
+        ("number", number_color),
+        ("string", string_color),
+        ("string.special.path", path_color),
+        ("escape", escape_color),
+        ("comment", comment_color),
+    ]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let highlights =
+            snapshot.combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme);
+
+        let builtin_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(builtin_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(!builtin_snippets.is_empty(), "expected gitconfig builtins");
+
+        let property_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(property_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            property_snippets.len() >= 5,
+            "expected several gitconfig property spans"
+        );
+
+        let constant_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(constant_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            !constant_snippets.is_empty(),
+            "expected gitconfig constant spans"
+        );
+
+        let number_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(number_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            !number_snippets.is_empty(),
+            "expected gitconfig number spans"
+        );
+
+        let string_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(string_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            !string_snippets.is_empty(),
+            "expected gitconfig string spans"
+        );
+
+        let path_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(path_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(!path_snippets.is_empty(), "expected gitconfig path spans");
+
+        let _escape_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(escape_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+
+        let _comment_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(comment_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+    });
+}
+
+#[gpui::test]
+async fn test_gitconfig_negative_highlights(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/gitconfig/testdata/negative.gitconfig")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "Git Config".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["gitconfig".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_git_config::LANGUAGE.into()),
+        )
+        .with_highlights_query(include_str!("../../grammars/src/gitconfig/highlights.scm"))
+        .unwrap(),
+    );
+
+    let error_color = Hsla::red();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![("error", error_color)]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let error_snippets = snapshot
+            .combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme)
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(error_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+
+        assert!(
+            !error_snippets.is_empty(),
+            "expected gitconfig parse errors"
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_gitmodules_highlight_regression_sample(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/gitmodules/testdata/highlights.gitmodules")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "Git Modules".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["gitmodules".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_git_config::LANGUAGE.into()),
+        )
+        .with_highlights_query(concat!(
+            include_str!("../../grammars/src/gitconfig/highlights.scm"),
+            "\n",
+            include_str!("../../grammars/src/gitmodules/highlights.scm"),
+        ))
+        .unwrap(),
+    );
+
+    let builtin_color = Hsla::red();
+    let keyword_color = Hsla::blue();
+    let constant_color = Hsla::green();
+    let path_color = Hsla::white();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![
+        ("function.builtin", builtin_color),
+        ("keyword", keyword_color),
+        ("constant.builtin", constant_color),
+        ("string.special.path", path_color),
+    ]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let highlights =
+            snapshot.combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme);
+
+        let builtin_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(builtin_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            !builtin_snippets.is_empty(),
+            "expected gitmodules builtin section highlight"
+        );
+
+        let keyword_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(keyword_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            keyword_snippets.len() >= 8,
+            "expected many gitmodules keyword spans"
+        );
+
+        let constant_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(constant_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            constant_snippets.len() >= 2,
+            "expected gitmodules constant spans"
+        );
+
+        let path_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(path_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(path_snippets.len() <= highlights.len());
+    });
+}
+
+#[gpui::test]
+async fn test_gitmodules_negative_highlights(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/gitmodules/testdata/negative.gitmodules")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "Git Modules".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["gitmodules".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_git_config::LANGUAGE.into()),
+        )
+        .with_highlights_query(concat!(
+            include_str!("../../grammars/src/gitconfig/highlights.scm"),
+            "\n",
+            include_str!("../../grammars/src/gitmodules/highlights.scm"),
+        ))
+        .unwrap(),
+    );
+
+    let error_color = Hsla::red();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![("error", error_color)]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let error_snippets = snapshot
+            .combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme)
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(error_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+
+        assert!(
+            !error_snippets.is_empty(),
+            "expected gitmodules error spans"
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_gitrebase_highlight_regression_sample(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/gitrebase/testdata/highlights.gitrebase")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "Git Rebase".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["git-rebase-todo".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_git_rebase::LANGUAGE.into()),
+        )
+        .with_highlights_query(include_str!("../../grammars/src/gitrebase/highlights.scm"))
+        .unwrap(),
+    );
+
+    let keyword_color = Hsla::red();
+    let function_color = Hsla::blue();
+    let attribute_color = Hsla::green();
+    let builtin_color = Hsla::white();
+    let constant_color = Hsla::black();
+    let string_color = Hsla::green();
+    let operator_color = Hsla::default();
+    let comment_color = Hsla::default();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![
+        ("keyword", keyword_color),
+        ("function", function_color),
+        ("attribute", attribute_color),
+        ("constant.builtin", builtin_color),
+        ("constant", constant_color),
+        ("string", string_color),
+        ("operator", operator_color),
+        ("comment", comment_color),
+    ]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let highlights =
+            snapshot.combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme);
+
+        let keyword_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(keyword_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            keyword_snippets.len() >= 5,
+            "expected many gitrebase keyword spans"
+        );
+
+        let function_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(function_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            function_snippets.len() >= 3,
+            "expected gitrebase label/reset/update-ref spans"
+        );
+
+        let attribute_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(attribute_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            attribute_snippets
+                .iter()
+                .any(|snippet| snippet.contains("fixup"))
+        );
+
+        let builtin_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(builtin_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        for needle in ["deadbee", "cafe123", "face123", "abcd123"] {
+            assert!(
+                builtin_snippets
+                    .iter()
+                    .any(|snippet| snippet.contains(needle))
+            );
+        }
+
+        let constant_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(constant_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        for needle in [
+            "here",
+            "there",
+            "refs/heads/topic",
+            "branch-base",
+            "branch-tip",
+        ] {
+            assert!(
+                constant_snippets
+                    .iter()
+                    .any(|snippet| snippet.contains(needle))
+            );
+        }
+
+        let string_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(string_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            string_snippets
+                .iter()
+                .any(|snippet| snippet.contains("merged branch"))
+        );
+
+        let operator_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(operator_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        for needle in ["-C", "-c"] {
+            assert!(
+                operator_snippets
+                    .iter()
+                    .any(|snippet| snippet.contains(needle))
+            );
+        }
+
+        let comment_snippets = highlights
+            .iter()
+            .filter(|(_, style)| *style == HighlightStyle::color(comment_color))
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+        assert!(
+            comment_snippets
+                .iter()
+                .any(|snippet| snippet.contains("rebase note"))
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_gitrebase_negative_highlights(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state(&format!(
+        "{}ˇ",
+        include_str!("../../grammars/src/gitrebase/testdata/negative.gitrebase")
+    ));
+
+    let language = Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "Git Rebase".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["git-rebase-todo".to_string()],
+                    ..LanguageMatcher::default()
+                },
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_git_rebase::LANGUAGE.into()),
+        )
+        .with_highlights_query(include_str!("../../grammars/src/gitrebase/highlights.scm"))
+        .unwrap(),
+    );
+
+    let keyword_color = Hsla::red();
+    let function_color = Hsla::blue();
+    let attribute_color = Hsla::green();
+    let theme = Arc::new(SyntaxTheme::new_test(vec![
+        ("keyword", keyword_color),
+        ("function", function_color),
+        ("attribute", attribute_color),
+    ]));
+    setup_syntax_highlighting_with_theme(language, theme.clone(), &mut cx);
+
+    cx.update_editor(|editor, window, cx| {
+        let snapshot = editor.snapshot(window, cx);
+        let text = snapshot.text();
+        let highlighted = snapshot
+            .combined_highlights(MultiBufferOffset(0)..snapshot.buffer().len(), &theme)
+            .iter()
+            .filter(|(_, style)| {
+                *style == HighlightStyle::color(keyword_color)
+                    || *style == HighlightStyle::color(function_color)
+                    || *style == HighlightStyle::color(attribute_color)
+            })
+            .map(|(range, _)| &text[range.clone()])
+            .collect::<Vec<_>>();
+
+        for needle in ["Pick", "Merge", "Label"] {
+            assert!(
+                !highlighted.contains(&needle),
+                "unexpected gitrebase command highlight for {needle:?}: {highlighted:?}"
+            );
+        }
+    });
+}
+
+#[gpui::test]
 async fn test_xsd_highlight_regression_sample(cx: &mut TestAppContext) {
     init_test(cx, |_| {});
 
