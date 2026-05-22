@@ -253,7 +253,7 @@ const FILE_SUFFIXES_BY_ICON_KEY: &[(&str, &[&str])] = &[
     ("svelte", &["svelte"]),
     ("swift", &["swift"]),
     ("tcl", &["tcl"]),
-    ("template", &["hbs", "plist", "xml"]),
+    ("template", &["hbs", "plist", "xml", "dtd", "xsl", "xslt"]),
     (
         "terminal",
         &[
