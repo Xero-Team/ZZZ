@@ -1,6 +1,7 @@
 use anyhow::Context as _;
 use language_core::{LanguageConfig, LanguageQueries, QUERY_FILENAME_PREFIXES};
 use rust_embed::RustEmbed;
+use std::borrow::Cow;
 use util::asset_str;
 
 #[derive(RustEmbed)]
@@ -21,6 +22,7 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
         ("css", tree_sitter_css::LANGUAGE.into()),
         ("dtd", tree_sitter_xml::LANGUAGE_DTD.into()),
         ("diff", tree_sitter_diff::LANGUAGE.into()),
+        ("gitattributes", tree_sitter_gitattributes::LANGUAGE.into()),
         ("go", tree_sitter_go::LANGUAGE.into()),
         ("gomod", tree_sitter_go_mod::LANGUAGE.into()),
         ("gowork", tree_sitter_gowork::LANGUAGE.into()),
@@ -71,6 +73,7 @@ pub fn load_config_for_feature(name: &str, grammars_loaded: bool) -> LanguageCon
         LanguageConfig {
             name: config.name,
             matcher: config.matcher,
+            query_layers: config.query_layers,
             jsx_tag_auto_close: config.jsx_tag_auto_close,
             ..Default::default()
         }
@@ -89,22 +92,81 @@ pub fn get_file(path: &str) -> Option<rust_embed::EmbeddedFile> {
 /// Multiple `.scm` files with the same prefix (e.g. `highlights.scm` and
 /// `highlights_extra.scm`) are concatenated together with their contents appended.
 pub fn load_queries(name: &str) -> LanguageQueries {
+    load_queries_from_prefixes(&[name])
+}
+
+pub fn load_queries_for_config(name: &str, config: &LanguageConfig) -> LanguageQueries {
+    let mut prefixes = config
+        .query_layers
+        .iter()
+        .map(|layer| layer.as_ref())
+        .collect::<Vec<_>>();
+    prefixes.push(name);
+    load_queries_from_prefixes(&prefixes)
+}
+
+pub fn load_queries_from_prefixes(prefixes: &[&str]) -> LanguageQueries {
     let mut result = LanguageQueries::default();
+    for prefix in prefixes {
+        append_queries_from_prefix(&mut result, prefix);
+    }
+    result
+}
+
+fn append_queries_from_prefix(result: &mut LanguageQueries, prefix: &str) {
     for path in GrammarDir::iter() {
-        if let Some(remainder) = path.strip_prefix(name).and_then(|p| p.strip_prefix('/')) {
+        if let Some(remainder) = path.strip_prefix(prefix).and_then(|p| p.strip_prefix('/')) {
             if !remainder.ends_with(".scm") {
                 continue;
             }
-            for (prefix, query) in QUERY_FILENAME_PREFIXES {
-                if remainder.starts_with(prefix) {
-                    let contents = asset_str::<GrammarDir>(path.as_ref());
-                    match query(&mut result) {
-                        None => *query(&mut result) = Some(contents),
-                        Some(existing) => existing.to_mut().push_str(contents.as_ref()),
-                    }
+            for (query_prefix, query) in QUERY_FILENAME_PREFIXES {
+                if remainder.starts_with(query_prefix) {
+                    append_query(query(result), asset_str::<GrammarDir>(path.as_ref()));
                 }
             }
         }
     }
-    result
+}
+
+fn append_query(target: &mut Option<Cow<'static, str>>, contents: Cow<'static, str>) {
+    match target {
+        None => *target = Some(contents),
+        Some(existing) => {
+            if !existing.is_empty() {
+                existing.to_mut().push('\n');
+            }
+            existing.to_mut().push_str(contents.as_ref());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn xml_queries_include_shared_and_xml_specific_layers() {
+        let config = load_config("xml");
+        let queries = load_queries_for_config("xml", &config);
+
+        let highlights = queries.highlights.expect("xml highlights query");
+        assert!(highlights.contains("(elementdecl"));
+        assert!(highlights.contains("(STag (Name) @tag)"));
+
+        let outline = queries.outline.expect("xml outline query");
+        assert!(outline.contains("(element"));
+    }
+
+    #[test]
+    fn xsd_queries_include_xml_and_xsd_layers() {
+        let config = load_config("xsd");
+        let queries = load_queries_for_config("xsd", &config);
+
+        let highlights = queries.highlights.expect("xsd highlights query");
+        assert!(highlights.contains("(STag (Name) @tag)"));
+        assert!(highlights.contains("complexType"));
+
+        let indents = queries.indents.expect("xsd indents query");
+        assert!(indents.contains("(element"));
+    }
 }

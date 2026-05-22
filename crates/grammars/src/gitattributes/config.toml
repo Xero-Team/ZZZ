@@ -1,0 +1,12 @@
+name = "Git Attributes"
+grammar = "gitattributes"
+path_suffixes = [
+  "attributes",
+  "gitattributes",
+  ".gitattributes",
+]
+line_comments = ["# "]
+autoclose_before = "]"
+brackets = [
+  { start = "[", end = "]", close = true, newline = false },
+]

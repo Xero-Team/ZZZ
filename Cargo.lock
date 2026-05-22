@@ -8121,6 +8121,7 @@ dependencies = [
  "tree-sitter-cpp",
  "tree-sitter-css",
  "tree-sitter-diff",
+ "tree-sitter-gitattributes",
  "tree-sitter-gitcommit",
  "tree-sitter-go",
  "tree-sitter-gomod",
@@ -19291,6 +19292,15 @@ name = "tree-sitter-embedded-template"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "833d528e8fcb4e49ddb04d4d6450ddb8ac08f282a58fec94ce981c9c5dbf7e3a"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-gitattributes"
+version = "0.2.0"
+source = "git+https://github.com/tree-sitter-grammars/tree-sitter-gitattributes?rev=1b7af09d45b579f9f288453b95ad555f1f431645#1b7af09d45b579f9f288453b95ad555f1f431645"
 dependencies = [
  "cc",
  "tree-sitter-language",
