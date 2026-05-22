@@ -39,8 +39,32 @@ function Get-VSArch {
     }
 }
 
+function Get-VSDevShellPath {
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+
+    if (-not (Test-Path $vswhere)) {
+        throw "Unable to locate vswhere.exe at $vswhere"
+    }
+
+    $installationPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+
+    if (-not $installationPath) {
+        throw "Unable to locate a Visual Studio installation with C++ build tools"
+    }
+
+    $devShellPath = Join-Path $installationPath "Common7\Tools\Launch-VsDevShell.ps1"
+
+    if (-not (Test-Path $devShellPath)) {
+        throw "Unable to locate Launch-VsDevShell.ps1 at $devShellPath"
+    }
+
+    return $devShellPath
+}
+
 Push-Location
-& "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1" -Arch (Get-VSArch -Arch $Architecture) -HostArch (Get-VSArch -Arch $OSArchitecture)
+if (-not $env:VSCMD_VER) {
+    & (Get-VSDevShellPath) -Arch (Get-VSArch -Arch $Architecture) -HostArch (Get-VSArch -Arch $OSArchitecture)
+}
 Pop-Location
 
 $target = "$Architecture-pc-windows-msvc"
