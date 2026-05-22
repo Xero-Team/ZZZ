@@ -26,6 +26,15 @@ $Architecture = if ($Architecture) {
     $OSArchitecture
 }
 
+if (-not $env:CARGO_HOME -and $env:CI -and $env:RUNNER_TEMP) {
+    $env:CARGO_HOME = Join-Path $env:RUNNER_TEMP 'cargo'
+}
+
+if ($env:CARGO_HOME) {
+    New-Item -Path $env:CARGO_HOME -ItemType Directory -Force | Out-Null
+    $env:Path = "$env:CARGO_HOME\bin;$env:Path"
+}
+
 $CargoOutDir = "./target/$Architecture-pc-windows-msvc/release"
 
 function Get-VSArch {
