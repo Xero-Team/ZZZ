@@ -1,0 +1,9 @@
+[submodule "libfoo"]
+	path = deps/libfoo
+	url = ../libfoo.git
+	branch = main
+	update = rebase
+	ignore = dirty
+	fetchRecurseSubmodules = true
+	shallow = false
+	active = true

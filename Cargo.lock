@@ -5665,8 +5665,12 @@ dependencies = [
  "tracing",
  "tree-sitter-bash",
  "tree-sitter-c",
+ "tree-sitter-git-config",
+ "tree-sitter-git-rebase",
+ "tree-sitter-gitattributes",
  "tree-sitter-go",
  "tree-sitter-html",
+ "tree-sitter-ignore",
  "tree-sitter-md",
  "tree-sitter-python",
  "tree-sitter-rust",
@@ -8121,11 +8125,14 @@ dependencies = [
  "tree-sitter-cpp",
  "tree-sitter-css",
  "tree-sitter-diff",
+ "tree-sitter-git-config",
+ "tree-sitter-git-rebase",
  "tree-sitter-gitattributes",
  "tree-sitter-gitcommit",
  "tree-sitter-go",
  "tree-sitter-gomod",
  "tree-sitter-gowork",
+ "tree-sitter-ignore",
  "tree-sitter-jsdoc",
  "tree-sitter-json",
  "tree-sitter-md",
@@ -19298,6 +19305,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-git-config"
+version = "0.0.1"
+dependencies = [
+ "cc",
+ "tree-sitter",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-git-rebase"
+version = "0.1.0"
+source = "git+https://github.com/the-mikedavis/tree-sitter-git-rebase?rev=39bf3b7566c86ccffd70aaa5105c7c8b76788975#39bf3b7566c86ccffd70aaa5105c7c8b76788975"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-gitattributes"
 version = "0.2.0"
 source = "git+https://github.com/tree-sitter-grammars/tree-sitter-gitattributes?rev=1b7af09d45b579f9f288453b95ad555f1f431645#1b7af09d45b579f9f288453b95ad555f1f431645"
@@ -19359,6 +19384,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "261b708e5d92061ede329babaaa427b819329a9d427a1d710abb0f67bbef63ee"
 dependencies = [
  "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-ignore"
+version = "0.0.1"
+dependencies = [
+ "cc",
+ "tree-sitter",
  "tree-sitter-language",
 ]
 

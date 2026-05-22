@@ -22,7 +22,9 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
         ("css", tree_sitter_css::LANGUAGE.into()),
         ("dtd", tree_sitter_xml::LANGUAGE_DTD.into()),
         ("diff", tree_sitter_diff::LANGUAGE.into()),
+        ("git_config", tree_sitter_git_config::LANGUAGE.into()),
         ("gitattributes", tree_sitter_gitattributes::LANGUAGE.into()),
+        ("gitignore", tree_sitter_gitignore::LANGUAGE.into()),
         ("go", tree_sitter_go::LANGUAGE.into()),
         ("gomod", tree_sitter_go_mod::LANGUAGE.into()),
         ("gowork", tree_sitter_gowork::LANGUAGE.into()),
@@ -42,6 +44,7 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
         ("xml", tree_sitter_xml::LANGUAGE_XML.into()),
         ("yaml", tree_sitter_yaml::LANGUAGE.into()),
         ("gitcommit", tree_sitter_gitcommit::LANGUAGE.into()),
+        ("git_rebase", tree_sitter_git_rebase::LANGUAGE.into()),
     ]
 }
 
@@ -168,5 +171,55 @@ mod tests {
 
         let indents = queries.indents.expect("xsd indents query");
         assert!(indents.contains("(element"));
+    }
+
+    #[test]
+    fn gitmodules_queries_include_gitconfig_layers() {
+        let config = load_config("gitmodules");
+        let queries = load_queries_for_config("gitmodules", &config);
+
+        let highlights = queries.highlights.expect("gitmodules highlights query");
+        assert!(highlights.contains("(section_name) @tag"));
+        assert!(highlights.contains("shell_command) @error"));
+        assert!(highlights.contains("^(~|\\./|\\.\\./|/)"));
+
+        let injections = queries.injections.expect("gitmodules injections query");
+        assert!(injections.contains("injection.language \"comment\""));
+    }
+
+    #[test]
+    fn gitattributes_queries_keep_builtin_objectmode_valid() {
+        let queries = load_queries("gitattributes");
+
+        let highlights = queries.highlights.expect("gitattributes highlights query");
+        assert!(highlights.contains("builtin_objectmode"));
+        assert!(highlights.contains("#not-eq? @error \"builtin_objectmode\""));
+    }
+
+    #[test]
+    fn gitignore_and_gitconfig_queries_highlight_errors() {
+        let gitignore_queries = load_queries("gitignore");
+        let gitignore_highlights = gitignore_queries
+            .highlights
+            .expect("gitignore highlights query");
+        assert!(gitignore_highlights.contains("(ERROR) @error"));
+
+        let gitconfig_queries = load_queries("gitconfig");
+        let gitconfig_highlights = gitconfig_queries
+            .highlights
+            .expect("gitconfig highlights query");
+        assert!(gitconfig_highlights.contains("(escape_sequence) @escape"));
+        assert!(gitconfig_highlights.contains("^(~|\\./|\\.\\./|/)"));
+        assert!(gitconfig_highlights.contains("(ERROR) @error"));
+    }
+
+    #[test]
+    fn gitrebase_queries_highlight_bare_merge_labels() {
+        let queries = load_queries("gitrebase");
+        let highlights = queries.highlights.expect("gitrebase highlights query");
+
+        assert!(highlights.contains("^(l|label|t|reset|u|update-ref)$"));
+        assert!(highlights.contains("(label) @constant\n  (message)? @comment)"));
+        assert!(highlights.contains("(label) @constant.builtin\n  (label) @constant"));
     }
 }

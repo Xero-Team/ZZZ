@@ -1,0 +1,6 @@
+# keep text normalized
+*.txt text eol=lf
+*.png binary
+docs/** myfilter=lfs mydiff=markdown mymerge=union
+"path with spaces/*.md" myattr=value
+submodule/** builtin_objectmode=160000

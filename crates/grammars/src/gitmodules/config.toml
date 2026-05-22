@@ -1,0 +1,10 @@
+name = "Git Modules"
+grammar = "git_config"
+query_layers = ["gitconfig"]
+path_suffixes = [".gitmodules"]
+line_comments = ["# ", "; "]
+autoclose_before = "]"
+brackets = [
+  { start = "[", end = "]", close = true, newline = false },
+]
+hard_tabs = true

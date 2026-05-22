@@ -1,0 +1,7 @@
+# ignore build artifacts
+dist/
+!dist/keep.txt
+logs/**/*.log
+file?.tmp
+src/[[:digit:]]*.rs
+\#literal

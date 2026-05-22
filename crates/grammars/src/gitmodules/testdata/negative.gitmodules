@@ -1,0 +1,4 @@
+[submodule "libbar"]
+	path = deps/libbar
+	url = ./libbar.git
+	update = !echo nope

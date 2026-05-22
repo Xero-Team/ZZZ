@@ -1,0 +1,10 @@
+[core]
+	editor = "nvim"
+	autocrlf = true
+	repositoryformatversion = 1
+[include]
+	path = ../shared.gitconfig
+[includeIf "gitdir:~/work/"]
+	path = ./local.gitconfig
+	commentChar = "\t"
+; keep config grouped

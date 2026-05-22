@@ -46,8 +46,12 @@
 (macro_def
   macro_name: (_) @property)
 
+((attr_name) @variable.builtin
+  (#eq? @variable.builtin "builtin_objectmode"))
+
 ((attr_name) @error
-  (#match? @error "^builtin_"))
+  (#match? @error "^builtin_")
+  (#not-eq? @error "builtin_objectmode"))
 
 ((attribute
   (attr_unset) @error

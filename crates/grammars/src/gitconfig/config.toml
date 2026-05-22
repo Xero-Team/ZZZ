@@ -1,0 +1,13 @@
+name = "Git Config"
+grammar = "git_config"
+path_suffixes = [
+  "config.worktree",
+  ".gitconfig",
+  ".lfsconfig",
+]
+line_comments = ["# ", "; "]
+autoclose_before = "]"
+brackets = [
+  { start = "[", end = "]", close = true, newline = false },
+]
+hard_tabs = true

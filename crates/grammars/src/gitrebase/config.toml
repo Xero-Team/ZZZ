@@ -1,0 +1,7 @@
+name = "Git Rebase"
+grammar = "git_rebase"
+path_suffixes = [
+  "git-rebase-todo",
+]
+line_comments = ["# "]
+brackets = []

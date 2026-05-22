@@ -23,8 +23,11 @@ tree-sitter-c = { workspace = true, optional = true }
 tree-sitter-cpp = { workspace = true, optional = true }
 tree-sitter-css = { workspace = true, optional = true }
 tree-sitter-diff = { workspace = true, optional = true }
+tree-sitter-git-config = { workspace = true, optional = true }
 tree-sitter-gitattributes = { workspace = true, optional = true }
 tree-sitter-gitcommit = { workspace = true, optional = true }
+tree-sitter-git-rebase = { workspace = true, optional = true }
+tree-sitter-gitignore = { workspace = true, optional = true }
 tree-sitter-go = { workspace = true, optional = true }
 tree-sitter-go-mod = { workspace = true, optional = true }
 tree-sitter-gowork = { workspace = true, optional = true }
@@ -46,8 +49,11 @@ load-grammars = [
     "tree-sitter-cpp",
     "tree-sitter-css",
     "tree-sitter-diff",
+    "tree-sitter-git-config",
     "tree-sitter-gitattributes",
     "tree-sitter-gitcommit",
+    "tree-sitter-git-rebase",
+    "tree-sitter-gitignore",
     "tree-sitter-go",
     "tree-sitter-go-mod",
     "tree-sitter-gowork",

@@ -1,0 +1,11 @@
+pick deadbee add feature
+reword cafe123 rewrite message
+label here
+reset there
+update-ref refs/heads/topic
+exec ./script.sh
+break
+fixup -C face123 squash commit
+merge branch-base
+merge -c abcd123 branch-tip merged branch
+# rebase note

@@ -753,8 +753,11 @@ tree-sitter-css = "0.25"
 tree-sitter-diff = "0.1.0"
 tree-sitter-elixir = "0.3"
 tree-sitter-embedded-template = "0.25.0"
+tree-sitter-git-config = { path = "crates/grammars/vendor/tree-sitter-git-config" }
 tree-sitter-gitattributes = { git = "https://github.com/tree-sitter-grammars/tree-sitter-gitattributes", rev = "1b7af09d45b579f9f288453b95ad555f1f431645" }
 tree-sitter-gitcommit = { git = "https://github.com/zed-industries/tree-sitter-git-commit", rev = "88309716a69dd13ab83443721ba6e0b491d37ee9" }
+tree-sitter-git-rebase = { git = "https://github.com/the-mikedavis/tree-sitter-git-rebase", rev = "39bf3b7566c86ccffd70aaa5105c7c8b76788975" }
+tree-sitter-gitignore = { path = "crates/grammars/vendor/tree-sitter-gitignore", package = "tree-sitter-ignore" }
 tree-sitter-go = "0.25"
 tree-sitter-go-mod = { git = "https://github.com/camdencheek/tree-sitter-go-mod", rev = "2e886870578eeba1927a2dc4bd2e2b3f598c5f9a", package = "tree-sitter-gomod" }
 tree-sitter-gowork = { git = "https://github.com/zed-industries/tree-sitter-go-work", rev = "acb0617bf7f4fda02c6217676cc64acb89536dc7" }

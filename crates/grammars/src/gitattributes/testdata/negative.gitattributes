@@ -1,0 +1,4 @@
+!secret/* text
+docs/ text
+*.bin builtin_fake=value
+*.png binary=value
