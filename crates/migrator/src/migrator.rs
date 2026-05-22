@@ -1219,8 +1219,9 @@ mod tests {
             "type": "custom",
             "command": "/path/to/agent"
         },
-        "future-extension-agent": {
-            "type": "extension",
+        "future-custom-agent": {
+            "type": "custom",
+            "command": "/path/to/ext-agent",
             "default_model": "ext-model"
         }
     }
@@ -1243,8 +1244,9 @@ mod tests {
             "type": "custom",
             "command": "/path/to/agent"
         },
-        "future-extension-agent": {
-            "type": "extension",
+        "future-custom-agent": {
+            "type": "custom",
+            "command": "/path/to/ext-agent",
             "default_model": "ext-model"
         }
     }

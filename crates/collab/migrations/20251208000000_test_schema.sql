@@ -177,8 +177,7 @@ CREATE TABLE public.extension_versions (
     provides_slash_commands boolean DEFAULT false NOT NULL,
     provides_indexed_docs_providers boolean DEFAULT false NOT NULL,
     provides_snippets boolean DEFAULT false NOT NULL,
-    provides_debug_adapters boolean DEFAULT false NOT NULL,
-    provides_agent_servers boolean DEFAULT false NOT NULL
+    provides_debug_adapters boolean DEFAULT false NOT NULL
 );
 
 CREATE TABLE public.extensions (
