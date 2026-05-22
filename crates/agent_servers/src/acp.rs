@@ -1726,6 +1726,22 @@ impl AgentConnection for AcpConnection {
         })
     }
 
+    fn supports_logout(&self) -> bool {
+        self.agent_capabilities.auth.logout.is_some()
+    }
+
+    fn logout(&self, cx: &mut App) -> Task<Result<()>> {
+        if !self.supports_logout() {
+            return Task::ready(Err(anyhow!("Logout is not supported by this agent.")));
+        }
+
+        let conn = self.connection.clone();
+        cx.foreground_executor().spawn(async move {
+            into_foreground_future(conn.send_request(acp::LogoutRequest::new())).await?;
+            Ok(())
+        })
+    }
+
     fn prompt(
         &self,
         _id: acp_thread::UserMessageId,
@@ -2084,6 +2100,14 @@ pub mod test_support {
 
         fn authenticate(&self, method: acp::AuthMethodId, cx: &mut App) -> Task<Result<()>> {
             self.inner.authenticate(method, cx)
+        }
+
+        fn supports_logout(&self) -> bool {
+            self.inner.supports_logout()
+        }
+
+        fn logout(&self, cx: &mut App) -> Task<Result<()>> {
+            self.inner.logout(cx)
         }
 
         fn prompt(
@@ -2484,6 +2508,498 @@ mod tests {
         );
     }
 
+    #[test]
+    fn session_directories_use_ordered_paths_when_supported() {
+        let work_dirs = PathList::new(&[
+            std::path::PathBuf::from("/workspace-b"),
+            std::path::PathBuf::from("/workspace-a"),
+            std::path::PathBuf::from("/workspace-c"),
+        ]);
+
+        let directories =
+            session_directories_from_work_dirs(&work_dirs, true).expect("work dirs should convert");
+
+        assert_eq!(
+            directories,
+            SessionDirectories {
+                cwd: std::path::PathBuf::from("/workspace-b"),
+                additional_directories: vec![
+                    std::path::PathBuf::from("/workspace-a"),
+                    std::path::PathBuf::from("/workspace-c")
+                ],
+            }
+        );
+
+        let session_id = acp::SessionId::new("session-1");
+        let new_session_request = directories.clone().into_new_session_request(Vec::new());
+        let load_session_request = directories
+            .clone()
+            .into_load_session_request(session_id.clone(), Vec::new());
+        let resume_session_request =
+            directories.into_resume_session_request(session_id, Vec::new());
+
+        assert_eq!(
+            new_session_request.cwd,
+            std::path::PathBuf::from("/workspace-b")
+        );
+        assert_eq!(
+            new_session_request.additional_directories,
+            vec![
+                std::path::PathBuf::from("/workspace-a"),
+                std::path::PathBuf::from("/workspace-c")
+            ]
+        );
+        assert_eq!(
+            load_session_request.additional_directories,
+            new_session_request.additional_directories
+        );
+        assert_eq!(
+            resume_session_request.additional_directories,
+            new_session_request.additional_directories
+        );
+    }
+
+    #[test]
+    fn session_directories_drop_additional_paths_when_unsupported() {
+        let work_dirs = PathList::new(&[
+            std::path::PathBuf::from("/workspace-b"),
+            std::path::PathBuf::from("/workspace-a"),
+        ]);
+
+        let directories = session_directories_from_work_dirs(&work_dirs, false)
+            .expect("work dirs should convert");
+
+        assert_eq!(
+            directories,
+            SessionDirectories {
+                cwd: std::path::PathBuf::from("/workspace-b"),
+                additional_directories: Vec::new(),
+            }
+        );
+    }
+
+    #[test]
+    fn session_info_work_dirs_preserve_cwd_then_additional_directories() {
+        let work_dirs = work_dirs_from_session_info(
+            std::path::PathBuf::from("/workspace-b"),
+            vec![
+                std::path::PathBuf::from("/workspace-a"),
+                std::path::PathBuf::from("/workspace-c"),
+            ],
+        );
+
+        assert_eq!(
+            work_dirs.ordered_paths().cloned().collect::<Vec<_>>(),
+            vec![
+                std::path::PathBuf::from("/workspace-b"),
+                std::path::PathBuf::from("/workspace-a"),
+                std::path::PathBuf::from("/workspace-c"),
+            ]
+        );
+    }
+
+    #[test]
+    fn session_info_work_dirs_deduplicate_cwd_and_additional_directories() {
+        let work_dirs = work_dirs_from_session_info(
+            std::path::PathBuf::from("/workspace-b"),
+            vec![
+                std::path::PathBuf::from("/workspace-a"),
+                std::path::PathBuf::from("/workspace-b"),
+                std::path::PathBuf::from("/workspace-a"),
+                std::path::PathBuf::from("/workspace-c"),
+            ],
+        );
+
+        assert_eq!(
+            work_dirs.ordered_paths().cloned().collect::<Vec<_>>(),
+            vec![
+                std::path::PathBuf::from("/workspace-b"),
+                std::path::PathBuf::from("/workspace-a"),
+                std::path::PathBuf::from("/workspace-c"),
+            ]
+        );
+    }
+
+    #[gpui::test]
+    async fn session_list_includes_additional_directories_in_work_dirs_when_beta_enabled(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        cx.update(|cx| set_acp_beta_override(cx, "on"));
+        let connection = connect_session_list_test_agent(
+            vec![
+                acp::SessionInfo::new("session-1", "/workspace-b").additional_directories(vec![
+                    std::path::PathBuf::from("/workspace-a"),
+                    std::path::PathBuf::from("/workspace-b"),
+                    std::path::PathBuf::from("/workspace-a"),
+                    std::path::PathBuf::from("/workspace-c"),
+                ]),
+            ],
+            cx,
+        )
+        .await;
+        let session_list = AcpSessionList::new(connection, false);
+
+        let response = cx
+            .update(|cx| session_list.list_sessions(AgentSessionListRequest::default(), cx))
+            .await
+            .expect("session list should load");
+        let session = response
+            .sessions
+            .first()
+            .expect("session list should include the returned session");
+        let work_dirs = session
+            .work_dirs
+            .as_ref()
+            .expect("session should include work dirs");
+
+        assert_eq!(
+            work_dirs.ordered_paths().cloned().collect::<Vec<_>>(),
+            vec![
+                std::path::PathBuf::from("/workspace-b"),
+                std::path::PathBuf::from("/workspace-a"),
+                std::path::PathBuf::from("/workspace-c"),
+            ]
+        );
+    }
+
+    #[gpui::test]
+    async fn session_list_excludes_additional_directories_in_work_dirs_when_beta_disabled(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        cx.update(|cx| set_acp_beta_override(cx, "off"));
+
+        let connection = connect_session_list_test_agent(
+            vec![
+                acp::SessionInfo::new("session-1", "/workspace-b").additional_directories(vec![
+                    std::path::PathBuf::from("/workspace-a"),
+                    std::path::PathBuf::from("/workspace-c"),
+                ]),
+            ],
+            cx,
+        )
+        .await;
+        let session_list = AcpSessionList::new(connection, false);
+
+        let response = cx
+            .update(|cx| session_list.list_sessions(AgentSessionListRequest::default(), cx))
+            .await
+            .expect("session list should load");
+        let session = response
+            .sessions
+            .first()
+            .expect("session list should include the returned session");
+        let work_dirs = session
+            .work_dirs
+            .as_ref()
+            .expect("session should include work dirs");
+
+        assert_eq!(
+            work_dirs.ordered_paths().cloned().collect::<Vec<_>>(),
+            vec![std::path::PathBuf::from("/workspace-b")]
+        );
+    }
+
+    fn set_acp_beta_override(cx: &mut App, value: &str) {
+        let store = settings::SettingsStore::test(cx);
+        cx.set_global(store);
+        settings::SettingsStore::update_global(cx, |store, _| {
+            store.register_setting::<feature_flags::FeatureFlagsSettings>();
+        });
+        feature_flags::FeatureFlagStore::init(cx);
+
+        let value = value.to_string();
+        settings::SettingsStore::update_global(cx, |store, cx| {
+            store.update_user_settings(cx, |content| {
+                content
+                    .feature_flags
+                    .get_or_insert_default()
+                    .insert(AcpBetaFeatureFlag::NAME.to_string(), value);
+            });
+        });
+    }
+
+    async fn connect_session_list_test_agent(
+        sessions: Vec<acp::SessionInfo>,
+        cx: &mut gpui::TestAppContext,
+    ) -> ConnectionTo<Agent> {
+        let (client_transport, agent_transport) = agent_client_protocol::Channel::duplex();
+        let sessions = Arc::new(sessions);
+
+        cx.background_spawn(
+            Agent
+                .builder()
+                .name("list-test-agent")
+                .on_receive_request(
+                    {
+                        let sessions = sessions.clone();
+                        async move |_request: acp::ListSessionsRequest, responder, _cx| {
+                            responder.respond(acp::ListSessionsResponse::new((*sessions).clone()))
+                        }
+                    },
+                    agent_client_protocol::on_receive_request!(),
+                )
+                .connect_to(agent_transport),
+        )
+        .detach();
+
+        let (connection_tx, connection_rx) = futures::channel::oneshot::channel();
+        cx.background_spawn(Client.builder().name("list-test-client").connect_with(
+            client_transport,
+            move |connection: ConnectionTo<Agent>| async move {
+                connection_tx.send(connection).ok();
+                futures::future::pending::<Result<(), acp::Error>>().await
+            },
+        ))
+        .detach();
+
+        connection_rx
+            .await
+            .expect("failed to receive ACP connection")
+    }
+
+    #[gpui::test]
+    async fn additional_directories_support_requires_beta_flag_and_agent_capability(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        cx.update(|cx| {
+            let store = settings::SettingsStore::test(cx);
+            cx.set_global(store);
+            settings::SettingsStore::update_global(cx, |store, _| {
+                store.register_setting::<feature_flags::FeatureFlagsSettings>();
+            });
+            feature_flags::FeatureFlagStore::init(cx);
+        });
+
+        let fs = fs::FakeFs::new(cx.executor());
+        fs.insert_tree("/", serde_json::json!({ "a": {}, "b": {} }))
+            .await;
+        let project = project::Project::test(fs, [std::path::Path::new("/a")], cx).await;
+        let mut harness = test_support::connect_fake_acp_connection(project, cx).await;
+        cx.update(|cx| {
+            settings::SettingsStore::update_global(cx, |store, _| {
+                store.register_setting::<feature_flags::FeatureFlagsSettings>();
+            });
+            feature_flags::FeatureFlagStore::init(cx);
+        });
+
+        let work_dirs = PathList::new(&[
+            std::path::PathBuf::from("/workspace-b"),
+            std::path::PathBuf::from("/workspace-a"),
+        ]);
+
+        let missing_capability = cx
+            .update(|cx| {
+                harness
+                    .connection
+                    .session_directories_from_work_dirs(&work_dirs, cx)
+            })
+            .expect("work dirs should convert");
+        assert!(missing_capability.additional_directories.is_empty());
+
+        Rc::get_mut(&mut harness.connection)
+            .expect("test harness should own the only ACP connection handle")
+            .agent_capabilities
+            .session_capabilities
+            .additional_directories = Some(acp::SessionAdditionalDirectoriesCapabilities::new());
+
+        cx.update(|cx| {
+            settings::SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |content| {
+                    content
+                        .feature_flags
+                        .get_or_insert_default()
+                        .insert("acp-beta".to_string(), "off".to_string());
+                });
+            });
+        });
+        let disabled = cx
+            .update(|cx| {
+                harness
+                    .connection
+                    .session_directories_from_work_dirs(&work_dirs, cx)
+            })
+            .expect("work dirs should convert");
+        assert!(disabled.additional_directories.is_empty());
+
+        cx.update(|cx| {
+            settings::SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |content| {
+                    content
+                        .feature_flags
+                        .get_or_insert_default()
+                        .insert("acp-beta".to_string(), "on".to_string());
+                });
+            });
+        });
+        let enabled = cx
+            .update(|cx| {
+                harness
+                    .connection
+                    .session_directories_from_work_dirs(&work_dirs, cx)
+            })
+            .expect("work dirs should convert");
+        assert_eq!(
+            enabled,
+            SessionDirectories {
+                cwd: std::path::PathBuf::from("/workspace-b"),
+                additional_directories: vec![std::path::PathBuf::from("/workspace-a")],
+            }
+        );
+    }
+
+    #[gpui::test]
+    async fn session_delete_support_requires_beta_flag_and_capability(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let deleted_sessions = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let connection = connect_session_delete_test_agent(deleted_sessions, cx).await;
+        let session_list = AcpSessionList::new(connection.clone(), true);
+        let missing_capability = AcpSessionList::new(connection, false);
+
+        cx.update(|cx| {
+            let store = settings::SettingsStore::test(cx);
+            cx.set_global(store);
+
+            assert_eq!(
+                session_list.supports_delete(cx),
+                cx.has_flag::<AcpBetaFeatureFlag>()
+            );
+            assert!(!missing_capability.supports_delete(cx));
+
+            cx.update_flags(false, vec![AcpBetaFeatureFlag::NAME.to_string()]);
+            assert!(session_list.supports_delete(cx));
+            assert!(!missing_capability.supports_delete(cx));
+        });
+    }
+
+    async fn connect_session_delete_test_agent(
+        deleted_sessions: Arc<std::sync::Mutex<Vec<acp::SessionId>>>,
+        cx: &mut gpui::TestAppContext,
+    ) -> ConnectionTo<Agent> {
+        let (client_transport, agent_transport) = agent_client_protocol::Channel::duplex();
+
+        cx.background_spawn(
+            Agent
+                .builder()
+                .name("delete-test-agent")
+                .on_receive_request(
+                    {
+                        let deleted_sessions = deleted_sessions.clone();
+                        async move |request: acp::DeleteSessionRequest, responder, _cx| {
+                            deleted_sessions
+                                .lock()
+                                .expect("deleted sessions lock should not be poisoned")
+                                .push(request.session_id);
+                            responder.respond(acp::DeleteSessionResponse::default())
+                        }
+                    },
+                    agent_client_protocol::on_receive_request!(),
+                )
+                .connect_to(agent_transport),
+        )
+        .detach();
+
+        let (connection_tx, connection_rx) = futures::channel::oneshot::channel();
+        cx.background_spawn(Client.builder().name("delete-test-client").connect_with(
+            client_transport,
+            move |connection: ConnectionTo<Agent>| async move {
+                connection_tx.send(connection).ok();
+                futures::future::pending::<Result<(), acp::Error>>().await
+            },
+        ))
+        .detach();
+
+        connection_rx
+            .await
+            .expect("failed to receive ACP connection")
+    }
+
+    #[gpui::test]
+    async fn session_list_delete_sends_session_delete_when_supported(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let deleted_sessions = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let connection = connect_session_delete_test_agent(deleted_sessions.clone(), cx).await;
+        let session_list = AcpSessionList::new(connection, true);
+        let session_id = acp::SessionId::new("session-to-delete");
+
+        cx.update(|cx| {
+            let store = settings::SettingsStore::test(cx);
+            cx.set_global(store);
+            cx.update_flags(false, vec![AcpBetaFeatureFlag::NAME.to_string()]);
+        });
+        cx.update(|cx| session_list.delete_session(&session_id, cx))
+            .await
+            .expect("delete_session failed");
+
+        assert_eq!(
+            *deleted_sessions
+                .lock()
+                .expect("deleted sessions lock should not be poisoned"),
+            vec![session_id]
+        );
+    }
+
+    #[gpui::test]
+    async fn session_list_delete_does_not_send_when_unsupported(cx: &mut gpui::TestAppContext) {
+        let deleted_sessions = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let connection = connect_session_delete_test_agent(deleted_sessions.clone(), cx).await;
+        let session_list = AcpSessionList::new(connection, false);
+        let session_id = acp::SessionId::new("session-to-delete");
+
+        cx.update(|cx| {
+            let store = settings::SettingsStore::test(cx);
+            cx.set_global(store);
+            cx.update_flags(false, vec![AcpBetaFeatureFlag::NAME.to_string()]);
+        });
+        let error = cx
+            .update(|cx| session_list.delete_session(&session_id, cx))
+            .await
+            .expect_err("delete_session should fail when unsupported");
+
+        assert!(
+            error.to_string().contains("delete_session not supported"),
+            "unexpected error: {error}"
+        );
+        assert!(
+            deleted_sessions
+                .lock()
+                .expect("deleted sessions lock should not be poisoned")
+                .is_empty()
+        );
+    }
+
+    #[gpui::test]
+    async fn logout_support_requires_agent_capability(cx: &mut gpui::TestAppContext) {
+        cx.update(|cx| set_acp_beta_override(cx, "off"));
+        assert!(!cx.update(|cx| cx.has_flag::<AcpBetaFeatureFlag>()));
+
+        let fs = fs::FakeFs::new(cx.executor());
+        fs.insert_tree("/", serde_json::json!({ "a": {} })).await;
+        let project = project::Project::test(fs, [std::path::Path::new("/a")], cx).await;
+        let mut harness = test_support::connect_fake_acp_connection(project, cx).await;
+
+        assert!(!harness.connection.supports_logout());
+        let unsupported_logout = cx.update(|cx| harness.connection.logout(cx));
+        let error = unsupported_logout
+            .await
+            .expect_err("logout should be rejected when the agent does not advertise support");
+        assert_eq!(error.to_string(), "Logout is not supported by this agent.");
+        assert_eq!(harness.logout_count.load(Ordering::SeqCst), 0);
+
+        Rc::get_mut(&mut harness.connection)
+            .expect("test harness should own the only ACP connection handle")
+            .agent_capabilities
+            .auth = acp::AgentAuthCapabilities::new().logout(acp::LogoutCapabilities::new());
+
+        assert!(harness.connection.supports_logout());
+        cx.update(|cx| harness.connection.logout(cx))
+            .await
+            .expect("logout should be sent when the agent advertises support");
+        assert_eq!(harness.logout_count.load(Ordering::SeqCst), 1);
+    }
+
+>>>>>>> 91531fad6d (acp: Add logout support (#57492))
     #[cfg(not(windows))]
     #[gpui::test]
     async fn startup_returns_error_when_agent_exits_before_initialization(

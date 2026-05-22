@@ -2557,6 +2557,32 @@ impl AgentPanel {
             }
             _ => false,
         };
+        let supports_logout = self
+            .active_conversation_view()
+            .is_some_and(|conversation_view| conversation_view.read(cx).supports_logout());
+
+        let project_agents_md_path: Option<PathBuf> = self
+            .project
+            .read(cx)
+            .visible_worktrees(cx)
+            .next()
+            .and_then(|worktree| {
+                let worktree = worktree.read(cx);
+                let rel_path = util::rel_path::RelPath::unix("AGENTS.md").ok()?;
+                let entry = worktree.entry_for_path(rel_path)?;
+                if entry.is_file() {
+                    Some(worktree.absolutize(rel_path))
+                } else {
+                    None
+                }
+            });
+
+        let global_agents_md_loaded = UserAgentsMd::global(cx)
+            .and_then(|md| md.content())
+            .is_some();
+
+        let workspace = self.workspace.clone();
+>>>>>>> 91531fad6d (acp: Add logout support (#57492))
 
         PopoverMenu::new("agent-options-menu")
             .trigger_with_tooltip(
