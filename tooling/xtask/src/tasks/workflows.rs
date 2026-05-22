@@ -194,6 +194,7 @@ pub fn run_workflows(args: GenerateWorkflowArgs) -> Result<()> {
 
     let workflows = [
         WorkflowFile::zed(compliance_check::compliance_check),
+        WorkflowFile::zed(extension_tests::extension_tests),
         WorkflowFile::zed(release::release),
         WorkflowFile::zed(run_tests::run_tests),
     ];
