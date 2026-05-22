@@ -126,6 +126,31 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
             ..Default::default()
         },
         LanguageInfo {
+            name: "gitattributes",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
+            name: "gitconfig",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
+            name: "gitignore",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
+            name: "gitmodules",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
+            name: "gitrebase",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
             name: "gomod",
             adapters: vec![go_lsp_adapter.clone()],
             context: Some(go_context_provider.clone()),
@@ -400,4 +425,36 @@ pub fn language(name: &str, grammar: tree_sitter::Language) -> Arc<Language> {
 fn load_config(name: &str) -> LanguageConfig {
     let grammars_loaded = cfg!(any(feature = "load-grammars", test));
     grammars::load_config_for_feature(name, grammars_loaded)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fs::FakeFs;
+    use gpui::TestAppContext;
+    use std::path::Path;
+
+    #[gpui::test]
+    async fn test_gitattributes_registered_for_file_matching(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        let settings = cx.update(SettingsStore::test);
+        cx.set_global(settings);
+
+        let languages = Arc::new(LanguageRegistry::new(cx.executor()));
+        cx.update(|cx| init(languages.clone(), fs, NodeRuntime::unavailable(), cx));
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new(".gitattributes"))
+                .map(|language| language.name()),
+            Some("Git Attributes".into())
+        );
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new(".git/info/attributes"))
+                .map(|language| language.name()),
+            Some("Git Attributes".into())
+        );
+    }
 }
