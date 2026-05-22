@@ -39,12 +39,14 @@ const DEFAULT_UI_TEXT: &str = "Editing file";
 
 /// This is a tool for creating a new file or editing an existing file. For moving or renaming files, you should generally use the `move_path` tool instead.
 ///
-/// Before using this tool:
+/// Before using this tool, use the `read_file` tool to understand the file's contents and context.
+/// To create a new file or overwrite an existing one with completely new contents, use the `write_file` tool instead.
 ///
-/// 1. Use the `read_file` tool to understand the file's contents and context
-///
-/// 2. Verify the directory path is correct (only applicable when creating new files):
-///    - Use the `list_directory` tool to verify the parent directory exists and is the correct location
+/// `read_file` prefixes each line of its output with a line number right-aligned in a
+/// 6-character field followed by a single tab, then the line's actual content. When you
+/// derive `old_text` or `new_text` from that output, strip this prefix and keep only what
+/// comes after the tab, preserving the original indentation (tabs and spaces) exactly.
+/// Never include any part of the line number prefix in `old_text` or `new_text`.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct EditFileToolInput {
     /// A one-line, user-friendly markdown description of the edit. This will be shown in the UI and also passed to another model to perform the edit.
