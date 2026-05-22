@@ -107,8 +107,6 @@ pub struct ExtensionManifest {
     #[serde(default)]
     pub context_servers: BTreeMap<Arc<str>, ContextServerManifestEntry>,
     #[serde(default)]
-    pub agent_servers: BTreeMap<Arc<str>, AgentServerManifestEntry>,
-    #[serde(default)]
     pub slash_commands: BTreeMap<Arc<str>, SlashCommandManifestEntry>,
     #[serde(default)]
     pub snippets: Option<ExtensionSnippets>,
@@ -148,10 +146,6 @@ impl ExtensionManifest {
 
         if !self.context_servers.is_empty() {
             provides.insert(ExtensionProvides::ContextServers);
-        }
-
-        if !self.agent_servers.is_empty() {
-            provides.insert(ExtensionProvides::AgentServers);
         }
 
         if self.snippets.is_some() {
@@ -212,46 +206,6 @@ pub struct LibManifestEntry {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
-pub struct AgentServerManifestEntry {
-    /// Display name for the agent (shown in menus).
-    pub name: String,
-    /// Environment variables to set when launching the agent server.
-    #[serde(default)]
-    pub env: HashMap<String, String>,
-    /// Optional icon path (relative to extension root, e.g., "ai.svg").
-    /// Should be a small SVG icon for display in menus.
-    #[serde(default)]
-    pub icon: Option<String>,
-    /// Per-target configuration for archive-based installation.
-    /// The key format is "{os}-{arch}" where:
-    /// - os: "darwin" (macOS), "linux", "windows"
-    /// - arch: "aarch64" (arm64), "x86_64"
-    ///
-    /// Example:
-    /// ```toml
-    /// [agent_servers.myagent.targets.darwin-aarch64]
-    /// archive = "https://example.com/myagent-darwin-arm64.zip"
-    /// cmd = "./myagent"
-    /// args = ["--serve"]
-    /// sha256 = "abc123..."  # optional
-    /// ```
-    ///
-    /// For Node.js-based agents, you can use "node" as the cmd to automatically
-    /// use Zed's managed Node.js runtime instead of relying on the user's PATH:
-    /// ```toml
-    /// [agent_servers.nodeagent.targets.darwin-aarch64]
-    /// archive = "https://example.com/nodeagent.zip"
-    /// cmd = "node"
-    /// args = ["index.js", "--port", "3000"]
-    /// ```
-    ///
-    /// Note: All commands are executed with the archive extraction directory as the
-    /// working directory, so relative paths in args (like "index.js") will resolve
-    /// relative to the extracted archive contents.
-    pub targets: HashMap<String, TargetConfig>,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct TargetConfig {
     /// URL to download the archive from (e.g., "https://github.com/owner/repo/releases/download/v1.0.0/myagent-darwin-arm64.zip")
     pub archive: String,
@@ -268,32 +222,6 @@ pub struct TargetConfig {
     /// These target-specific env vars will override any env vars set at the agent level.
     #[serde(default)]
     pub env: HashMap<String, String>,
-}
-
-impl TargetConfig {
-    pub fn from_proto(proto: proto::ExternalExtensionAgentTarget) -> Self {
-        Self {
-            archive: proto.archive,
-            cmd: proto.cmd,
-            args: proto.args,
-            sha256: proto.sha256,
-            env: proto.env.into_iter().collect(),
-        }
-    }
-
-    pub fn to_proto(&self) -> proto::ExternalExtensionAgentTarget {
-        proto::ExternalExtensionAgentTarget {
-            archive: self.archive.clone(),
-            cmd: self.cmd.clone(),
-            args: self.args.clone(),
-            sha256: self.sha256.clone(),
-            env: self
-                .env
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
@@ -433,7 +361,6 @@ fn manifest_from_old_manifest(
             .collect(),
         language_servers: Default::default(),
         context_servers: BTreeMap::default(),
-        agent_servers: BTreeMap::default(),
         slash_commands: BTreeMap::default(),
         snippets: None,
         capabilities: Vec::new(),
@@ -445,7 +372,6 @@ fn manifest_from_old_manifest(
 
 #[cfg(test)]
 mod tests {
-    use indoc::indoc;
     use pretty_assertions::assert_eq;
     use util::rel_path::rel_path_buf;
 
@@ -469,7 +395,6 @@ mod tests {
             grammars: BTreeMap::default(),
             language_servers: BTreeMap::default(),
             context_servers: BTreeMap::default(),
-            agent_servers: BTreeMap::default(),
             slash_commands: BTreeMap::default(),
             snippets: None,
             capabilities: vec![],
@@ -587,33 +512,5 @@ mod tests {
         "#};
         let manifest: ExtensionManifest = toml::from_str(&content).expect("manifest should parse");
         assert_eq!(manifest.languages, vec![rel_path_buf("foo/bar")]);
-    }
-
-    #[test]
-    fn parse_manifest_with_agent_server_archive_launcher() {
-        let toml_src = indoc! {r#"
-            id = "example.agent-server-ext"
-            name = "Agent Server Example"
-            version = "1.0.0"
-            schema_version = 0
-
-            [agent_servers.foo]
-            name = "Foo Agent"
-
-            [agent_servers.foo.targets.linux-x86_64]
-            archive = "https://example.com/agent-linux-x64.tar.gz"
-            cmd = "./agent"
-            args = ["--serve"]
-        "#};
-
-        let manifest: ExtensionManifest = toml::from_str(toml_src).expect("manifest should parse");
-        assert_eq!(manifest.id.as_ref(), "example.agent-server-ext");
-        assert!(manifest.agent_servers.contains_key("foo"));
-        let entry = manifest.agent_servers.get("foo").unwrap();
-        assert!(entry.targets.contains_key("linux-x86_64"));
-        let target = entry.targets.get("linux-x86_64").unwrap();
-        assert_eq!(target.archive, "https://example.com/agent-linux-x64.tar.gz");
-        assert_eq!(target.cmd, "./agent");
-        assert_eq!(target.args, vec!["--serve"]);
     }
 }

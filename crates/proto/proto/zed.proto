@@ -424,8 +424,6 @@ message Envelope {
 
     GitDeleteBranch git_delete_branch = 400;
 
-    ExternalExtensionAgentsUpdated external_extension_agents_updated = 401;
-
     GitCreateRemote git_create_remote = 402;
     GitRemoveRemote git_remove_remote = 403;
 
@@ -509,6 +507,7 @@ message Envelope {
   reserved 429 to 430;
   reserved 211 to 216, 232 to 233;
   reserved 397 to 398;
+  reserved 401;
 }
 
 message Hello {

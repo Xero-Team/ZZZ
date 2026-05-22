@@ -51,8 +51,6 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use collections::HashMap;
 use editor::{Editor, MultiBuffer};
-use extension::ExtensionEvents;
-use extension_host::ExtensionStore;
 use fs::Fs;
 use gpui::{
     Action, Anchor, Animation, AnimationExt, AnyElement, App, AsyncWindowContext, ClipboardItem,
@@ -980,23 +978,6 @@ impl AgentPanel {
             )
         });
 
-        // Subscribe to extension events to sync agent servers when extensions change
-        let extension_subscription = if let Some(extension_events) = ExtensionEvents::try_global(cx)
-        {
-            Some(
-                cx.subscribe(&extension_events, |this, _source, event, cx| match event {
-                    extension::Event::ExtensionInstalled(_)
-                    | extension::Event::ExtensionUninstalled(_)
-                    | extension::Event::ExtensionsInstalledChanged => {
-                        this.sync_agent_servers_from_extensions(cx);
-                    }
-                    _ => {}
-                }),
-            )
-        } else {
-            None
-        };
-
         let connection_store = cx.new(|cx| {
             let mut store = AgentConnectionStore::new(project.clone(), cx);
             // Register the native agent right away, so that it is available for
@@ -1028,7 +1009,7 @@ impl AgentPanel {
             },
         );
 
-        let mut panel = Self {
+        let panel = Self {
             workspace_id,
             base_view,
             overlay_view: None,
@@ -1047,7 +1028,7 @@ impl AgentPanel {
             new_thread_menu_handle: PopoverMenuHandle::default(),
             agent_panel_menu_handle: PopoverMenuHandle::default(),
 
-            _extension_subscription: extension_subscription,
+            _extension_subscription: None,
             _project_subscription,
             zoomed: false,
             pending_serialization: None,
@@ -1063,7 +1044,6 @@ impl AgentPanel {
         };
 
         // Initial sync of agent servers from extensions
-        panel.sync_agent_servers_from_extensions(cx);
         panel
     }
 
@@ -2173,31 +2153,6 @@ impl AgentPanel {
                 },
             )
         })
-    }
-
-    fn sync_agent_servers_from_extensions(&mut self, cx: &mut Context<Self>) {
-        if let Some(extension_store) = ExtensionStore::try_global(cx) {
-            let (manifests, extensions_dir) = {
-                let store = extension_store.read(cx);
-                let installed = store.installed_extensions();
-                let manifests: Vec<_> = installed
-                    .iter()
-                    .map(|(id, entry)| (id.clone(), entry.manifest.clone()))
-                    .collect();
-                let extensions_dir = paths::extensions_dir().join("installed");
-                (manifests, extensions_dir)
-            };
-
-            self.project.update(cx, |project, cx| {
-                project.agent_server_store().update(cx, |store, cx| {
-                    let manifest_refs: Vec<_> = manifests
-                        .iter()
-                        .map(|(id, manifest)| (id.as_ref(), manifest.as_ref()))
-                        .collect();
-                    store.sync_extension_agents(manifest_refs, extensions_dir, cx);
-                });
-            });
-        }
     }
 
     pub fn new_agent_thread_with_external_source_prompt(

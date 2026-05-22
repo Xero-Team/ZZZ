@@ -2,8 +2,10 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use strum::EnumString;
+
+use crate::KnownOrUnknown;
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct ExtensionApiManifest {
@@ -14,8 +16,24 @@ pub struct ExtensionApiManifest {
     pub repository: String,
     pub schema_version: Option<i32>,
     pub wasm_api_version: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_extension_provides")]
     pub provides: BTreeSet<ExtensionProvides>,
+}
+
+fn deserialize_extension_provides<'de, D>(
+    deserializer: D,
+) -> Result<BTreeSet<ExtensionProvides>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let provides = Vec::<KnownOrUnknown<ExtensionProvides, String>>::deserialize(deserializer)?;
+    Ok(provides
+        .into_iter()
+        .filter_map(|provides| match provides {
+            KnownOrUnknown::Known(provides) => Some(provides),
+            KnownOrUnknown::Unknown(_) => None,
+        })
+        .collect())
 }
 
 #[derive(
@@ -42,7 +60,6 @@ pub enum ExtensionProvides {
     Grammars,
     LanguageServers,
     ContextServers,
-    AgentServers,
     SlashCommands,
     IndexedDocsProviders,
     Snippets,

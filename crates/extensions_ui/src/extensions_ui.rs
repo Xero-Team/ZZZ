@@ -68,7 +68,6 @@ pub fn init(cx: &mut App) {
                         ExtensionCategoryFilter::ContextServers => {
                             ExtensionProvides::ContextServers
                         }
-                        ExtensionCategoryFilter::AgentServers => ExtensionProvides::AgentServers,
                         ExtensionCategoryFilter::Snippets => ExtensionProvides::Snippets,
                         ExtensionCategoryFilter::DebugAdapters => ExtensionProvides::DebugAdapters,
                     });
@@ -185,7 +184,6 @@ fn extension_provides_label(provides: ExtensionProvides) -> &'static str {
         ExtensionProvides::Grammars => "Grammars",
         ExtensionProvides::LanguageServers => "Language Servers",
         ExtensionProvides::ContextServers => "MCP Servers",
-        ExtensionProvides::AgentServers => "Agent Servers",
         ExtensionProvides::SlashCommands => "Slash Commands",
         ExtensionProvides::IndexedDocsProviders => "Indexed Docs Providers",
         ExtensionProvides::Snippets => "Snippets",
@@ -1476,12 +1474,7 @@ impl ExtensionsPage {
         div().pt_4().px_4().child(
             Banner::new()
                 .severity(Severity::Warning)
-                .child(
-                    Label::new(
-                        "Agent Server extensions will be deprecated in favor of the ACP registry.",
-                    )
-                    .mt_0p5(),
-                )
+                .child(Label::new("ACP registry available for supported external agents.").mt_0p5())
                 .action_slot(
                     h_flex()
                         .gap_1()
@@ -1799,11 +1792,9 @@ impl Render for ExtensionsPage {
                         )
                     })),
             )
-            .when(
-                self.provides_filter == Some(ExtensionProvides::AgentServers)
-                    || self.show_acp_registry_upsell,
-                |this| this.child(self.render_acp_registry_upsell(cx)),
-            )
+            .when(self.show_acp_registry_upsell, |this| {
+                this.child(self.render_acp_registry_upsell(cx))
+            })
             .child(self.render_feature_upsells(cx))
             .child(v_flex().px_4().size_full().overflow_y_hidden().map(|this| {
                 let mut count = self.filtered_remote_extension_indices.len();

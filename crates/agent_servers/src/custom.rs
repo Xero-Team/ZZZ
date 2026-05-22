@@ -100,10 +100,6 @@ impl AgentServer for CustomAgentServer {
                     favorite_config_option_values,
                     ..
                 }
-                | settings::CustomAgentServerSettings::Extension {
-                    favorite_config_option_values,
-                    ..
-                }
                 | settings::CustomAgentServerSettings::Registry {
                     favorite_config_option_values,
                     ..
@@ -138,7 +134,6 @@ impl AgentServer for CustomAgentServer {
 
             match settings {
                 settings::CustomAgentServerSettings::Custom { default_mode, .. }
-                | settings::CustomAgentServerSettings::Extension { default_mode, .. }
                 | settings::CustomAgentServerSettings::Registry { default_mode, .. } => {
                     *default_mode = mode_id.map(|m| m.to_string());
                 }
@@ -170,7 +165,6 @@ impl AgentServer for CustomAgentServer {
 
             match settings {
                 settings::CustomAgentServerSettings::Custom { default_model, .. }
-                | settings::CustomAgentServerSettings::Extension { default_model, .. }
                 | settings::CustomAgentServerSettings::Registry { default_model, .. } => {
                     *default_model = model_id.map(|m| m.to_string());
                 }
@@ -214,9 +208,6 @@ impl AgentServer for CustomAgentServer {
 
             let favorite_models = match settings {
                 settings::CustomAgentServerSettings::Custom {
-                    favorite_models, ..
-                }
-                | settings::CustomAgentServerSettings::Extension {
                     favorite_models, ..
                 }
                 | settings::CustomAgentServerSettings::Registry {
@@ -270,10 +261,6 @@ impl AgentServer for CustomAgentServer {
                     default_config_options,
                     ..
                 }
-                | settings::CustomAgentServerSettings::Extension {
-                    default_config_options,
-                    ..
-                }
                 | settings::CustomAgentServerSettings::Registry {
                     default_config_options,
                     ..
@@ -304,10 +291,6 @@ impl AgentServer for CustomAgentServer {
                 .get(self.agent_id().as_ref())
                 .map(|s| match s {
                     project::agent_server_store::CustomAgentServerSettings::Custom {
-                        default_config_options,
-                        ..
-                    }
-                    | project::agent_server_store::CustomAgentServerSettings::Extension {
                         default_config_options,
                         ..
                     }
@@ -436,10 +419,12 @@ fn default_settings_for_agent(
             favorite_config_option_values: Default::default(),
         }
     } else {
-        settings::CustomAgentServerSettings::Extension {
+        settings::CustomAgentServerSettings::Custom {
+            path: Default::default(),
+            args: Vec::new(),
+            env: Default::default(),
             default_model: None,
             default_mode: None,
-            env: Default::default(),
             favorite_models: Vec::new(),
             default_config_options: Default::default(),
             favorite_config_option_values: Default::default(),
@@ -549,39 +534,6 @@ mod tests {
     }
 
     #[gpui::test]
-    fn test_agent_with_extension_settings_type_is_not_registry(cx: &mut TestAppContext) {
-        init_test(cx);
-        set_agent_server_settings(
-            cx,
-            vec![(
-                "my-extension-agent",
-                settings::CustomAgentServerSettings::Extension {
-                    env: HashMap::default(),
-                    default_mode: None,
-                    default_model: None,
-                    favorite_models: Vec::new(),
-                    default_config_options: HashMap::default(),
-                    favorite_config_option_values: HashMap::default(),
-                },
-            )],
-        );
-        cx.update(|cx| {
-            assert!(!is_registry_agent("my-extension-agent", cx));
-        });
-    }
-
-    #[gpui::test]
-    fn test_default_settings_for_extension_agent(cx: &mut TestAppContext) {
-        init_test(cx);
-        cx.update(|cx| {
-            assert!(matches!(
-                default_settings_for_agent("some-extension-agent", cx),
-                settings::CustomAgentServerSettings::Extension { .. }
-            ));
-        });
-    }
-
-    #[gpui::test]
     fn test_default_settings_for_agent_in_registry(cx: &mut TestAppContext) {
         init_test(cx);
         init_registry_with_agents(cx, &["new-registry-agent"]);
@@ -592,7 +544,7 @@ mod tests {
             ));
             assert!(matches!(
                 default_settings_for_agent("not-in-registry", cx),
-                settings::CustomAgentServerSettings::Extension { .. }
+                settings::CustomAgentServerSettings::Custom { .. }
             ));
         });
     }
