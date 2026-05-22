@@ -115,6 +115,11 @@ pub trait AgentConnection {
         self.supports_load_session() || self.supports_resume_session()
     }
 
+    /// Whether this agent supports additional session directories.
+    fn supports_session_additional_directories(&self) -> bool {
+        false
+    }
+
     fn auth_methods(&self) -> &[acp::AuthMethod];
 
     fn terminal_auth_task(
@@ -857,6 +862,10 @@ mod test_support {
 
         fn supports_load_session(&self) -> bool {
             self.supports_load_session
+        }
+
+        fn supports_session_additional_directories(&self) -> bool {
+            self.supports_session_additional_directories
         }
 
         fn load_session(

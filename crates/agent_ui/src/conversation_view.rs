@@ -2796,7 +2796,6 @@ impl ConversationView {
             }
         }));
     }
->>>>>>> 91531fad6d (acp: Add logout support (#57492))
 }
 
 fn loading_contents_spinner(size: IconSize) -> AnyElement {

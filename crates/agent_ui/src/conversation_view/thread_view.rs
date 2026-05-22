@@ -8520,6 +8520,19 @@ impl ThreadView {
             return None;
         }
 
+        if self.as_native_connection(cx).is_some() {
+            return None;
+        }
+
+        if self
+            .thread
+            .read(cx)
+            .connection()
+            .supports_session_additional_directories()
+        {
+            return None;
+        }
+
         let project = self.project.upgrade()?;
         let worktree_count = project.read(cx).visible_worktrees(cx).count();
         if worktree_count <= 1 {

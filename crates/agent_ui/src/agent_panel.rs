@@ -2582,7 +2582,6 @@ impl AgentPanel {
             .is_some();
 
         let workspace = self.workspace.clone();
->>>>>>> 91531fad6d (acp: Add logout support (#57492))
 
         PopoverMenu::new("agent-options-menu")
             .trigger_with_tooltip(
