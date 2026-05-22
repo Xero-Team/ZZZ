@@ -15,14 +15,14 @@ on:
         type: string
 jobs:
   prerelease_gate:
-    runs-on: namespace-profile-2x4-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
     - name: release::release
       run: 'true'
   bundle_mac_aarch64:
     needs:
     - prerelease_gate
-    runs-on: namespace-profile-mac-large
+    runs-on: macos-latest
     env:
       CARGO_INCREMENTAL: 0
     steps:
@@ -59,7 +59,7 @@ jobs:
   bundle_windows_x86_64:
     needs:
     - prerelease_gate
-    runs-on: self-32vcpu-windows-2022
+    runs-on: windows-latest
     env:
       CARGO_INCREMENTAL: 0
     steps:
