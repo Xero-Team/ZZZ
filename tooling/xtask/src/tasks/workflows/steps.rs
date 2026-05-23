@@ -250,15 +250,13 @@ pub fn install_rustup_target(target: &str) -> Step<Run> {
 }
 
 pub fn cache_rust_dependencies_namespace() -> Step<Use> {
-    named::uses(
-        "actions",
-        "cache",
-        "v5",
-    )
-    .add_with(
+    named::uses("actions", "cache", "v5").add_with(
         Input::default()
             .add("path", "~/.rustup")
-            .add("key", "rustup-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}")
+            .add(
+                "key",
+                "rustup-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}",
+            )
             .add("restore-keys", "rustup-${{ runner.os }}-"),
     )
 }
@@ -287,30 +285,26 @@ pub fn show_sccache_stats(platform: Platform) -> Step<Run> {
 }
 
 pub fn cache_nix_dependencies_namespace() -> Step<Use> {
-    named::uses(
-        "actions",
-        "cache",
-        "v5",
-    )
-    .add_with(
+    named::uses("actions", "cache", "v5").add_with(
         Input::default()
             .add("path", "~/nix-cache")
-            .add("key", "nix-cache-${{ runner.os }}-${{ hashFiles('flake.lock') }}")
+            .add(
+                "key",
+                "nix-cache-${{ runner.os }}-${{ hashFiles('flake.lock') }}",
+            )
             .add("restore-keys", "nix-cache-${{ runner.os }}-"),
     )
 }
 
 pub fn cache_nix_store_macos() -> Step<Use> {
     // Cache user-writable local Nix store for incremental rebuilds.
-    named::uses(
-        "actions",
-        "cache",
-        "v5",
-    )
-    .add_with(
+    named::uses("actions", "cache", "v5").add_with(
         Input::default()
             .add("path", "~/nix-cache")
-            .add("key", "nix-cache-${{ runner.os }}-${{ hashFiles('flake.lock') }}")
+            .add(
+                "key",
+                "nix-cache-${{ runner.os }}-${{ hashFiles('flake.lock') }}",
+            )
             .add("restore-keys", "nix-cache-${{ runner.os }}-"),
     )
 }

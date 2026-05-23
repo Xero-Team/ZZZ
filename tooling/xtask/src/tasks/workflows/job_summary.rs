@@ -1,4 +1,4 @@
-use crate::tasks::workflows::{runners, steps::named, steps::NamedJob};
+use crate::tasks::workflows::{runners, steps::NamedJob, steps::named};
 use gh_workflow::Job;
 
 pub fn tests_pass(jobs: &[NamedJob], extra_job_names: &[&str]) -> NamedJob {

@@ -1,4 +1,4 @@
-use gh_workflow::{Step, Run, Use};
+use gh_workflow::{Run, Step, Use};
 use indoc::formatdoc;
 
 use crate::tasks::workflows::steps::named;

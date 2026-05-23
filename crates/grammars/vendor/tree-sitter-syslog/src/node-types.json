@@ -1,0 +1,457 @@
+[
+  {
+    "type": "app_name",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "app_name_value",
+          "named": true
+        },
+        {
+          "type": "nilvalue",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "app_name_value",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "hostname",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "hostname_value",
+          "named": true
+        },
+        {
+          "type": "nilvalue",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "hostname_value",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "message",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "message_text",
+          "named": true
+        },
+        {
+          "type": "utf8_message",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "msgid",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "msgid_value",
+          "named": true
+        },
+        {
+          "type": "nilvalue",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "msgid_value",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "param_name",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "param_value",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "escape_sequence",
+          "named": true
+        },
+        {
+          "type": "param_value_fragment",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "priority",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "prival",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "procid",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "nilvalue",
+          "named": true
+        },
+        {
+          "type": "procid_value",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "procid_value",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "sd_element",
+    "named": true,
+    "fields": {
+      "id": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "sd_id",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "sd_param",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "sd_id",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "sd_param",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "param_name",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "param_value",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "source_file",
+    "named": true,
+    "root": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "raw_line",
+          "named": true
+        },
+        {
+          "type": "syslog_message",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "structured_data",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "nilvalue",
+          "named": true
+        },
+        {
+          "type": "sd_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "syslog_message",
+    "named": true,
+    "fields": {
+      "app_name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "app_name",
+            "named": true
+          }
+        ]
+      },
+      "hostname": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "hostname",
+            "named": true
+          }
+        ]
+      },
+      "message": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "message",
+            "named": true
+          }
+        ]
+      },
+      "msgid": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "msgid",
+            "named": true
+          }
+        ]
+      },
+      "procid": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "procid",
+            "named": true
+          }
+        ]
+      },
+      "structured_data": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "structured_data",
+            "named": true
+          }
+        ]
+      },
+      "timestamp": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "timestamp",
+            "named": true
+          }
+        ]
+      },
+      "version": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "version",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "priority",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "timestamp",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "nilvalue",
+          "named": true
+        },
+        {
+          "type": "timestamp_value",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "utf8_message",
+    "named": true,
+    "fields": {
+      "text": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "message_text",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "bom",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": " ",
+    "named": false
+  },
+  {
+    "type": "\"",
+    "named": false
+  },
+  {
+    "type": "<",
+    "named": false
+  },
+  {
+    "type": "=",
+    "named": false
+  },
+  {
+    "type": ">",
+    "named": false
+  },
+  {
+    "type": "[",
+    "named": false
+  },
+  {
+    "type": "]",
+    "named": false
+  },
+  {
+    "type": "bom",
+    "named": true
+  },
+  {
+    "type": "escape_sequence",
+    "named": true
+  },
+  {
+    "type": "message_text",
+    "named": true
+  },
+  {
+    "type": "nilvalue",
+    "named": true
+  },
+  {
+    "type": "param_value_fragment",
+    "named": true
+  },
+  {
+    "type": "prival",
+    "named": true
+  },
+  {
+    "type": "raw_line",
+    "named": true
+  },
+  {
+    "type": "timestamp_value",
+    "named": true
+  },
+  {
+    "type": "version",
+    "named": true
+  }
+]

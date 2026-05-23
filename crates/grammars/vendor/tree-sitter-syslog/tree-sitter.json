@@ -1,0 +1,21 @@
+{
+  "grammars": [
+    {
+      "name": "syslog",
+      "camelcase": "Syslog",
+      "scope": "source.syslog",
+      "file-types": ["syslog"],
+      "highlights": ["queries/highlights.scm"],
+      "injection-regex": "^syslog$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "Syslog grammar for tree-sitter"
+  },
+  "bindings": {
+    "c": true,
+    "rust": true
+  }
+}

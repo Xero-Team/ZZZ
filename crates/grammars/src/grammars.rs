@@ -36,6 +36,7 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
         ("python", tree_sitter_python::LANGUAGE.into()),
         ("regex", tree_sitter_regex::LANGUAGE.into()),
         ("rust", tree_sitter_rust::LANGUAGE.into()),
+        ("syslog", tree_sitter_syslog::LANGUAGE.into()),
         ("toml", tree_sitter_toml::LANGUAGE.into()),
         ("tsx", tree_sitter_typescript::LANGUAGE_TSX.into()),
         (
@@ -173,6 +174,35 @@ mod tests {
         );
     }
 
+    fn parse_syslog(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_syslog::LANGUAGE.into())
+            .expect("load Syslog grammar");
+        parser.parse(source, None).expect("parse Syslog source")
+    }
+
+    fn assert_syslog_parses(source: &str) {
+        let tree = parse_syslog(source);
+        assert!(
+            !tree.root_node().has_error(),
+            "expected valid Syslog, got parse error for:\n{source}"
+        );
+    }
+
+    fn assert_syslog_parses_as_message(source: &str) {
+        let tree = parse_syslog(source);
+        assert!(
+            !tree.root_node().has_error(),
+            "expected valid Syslog, got parse error for:\n{source}"
+        );
+        let first_child = tree
+            .root_node()
+            .named_child(0)
+            .expect("syslog source should produce a named child");
+        assert_eq!(first_child.kind(), "syslog_message");
+    }
+
     #[test]
     fn xml_queries_include_shared_and_xml_specific_layers() {
         let config = load_config("xml");
@@ -247,6 +277,31 @@ mod tests {
         assert!(highlights.contains("^(l|label|t|reset|u|update-ref)$"));
         assert!(highlights.contains("(label) @constant\n  (message)? @comment)"));
         assert!(highlights.contains("(label) @constant.builtin\n  (label) @constant"));
+    }
+
+    #[test]
+    fn syslog_queries_highlight_rfc5424_fields() {
+        let queries = load_queries("syslog");
+        let highlights = queries.highlights.expect("syslog highlights query");
+
+        assert!(highlights.contains("(sd_id) @tag"));
+        assert!(highlights.contains("(param_name) @property"));
+        assert!(highlights.contains("(escape_sequence) @string.escape"));
+        assert!(highlights.contains("(ERROR) @error"));
+    }
+
+    #[test]
+    fn syslog_parser_accepts_rfc5424_examples() {
+        let first_source = "<34>1 2003-10-11T22:14:15.003Z mymachine.example.com su - ID47 - \u{FEFF}su root failed for lonvick on /dev/pts/8\n";
+        assert_syslog_parses_as_message(first_source);
+
+        for source in [
+            "<165>1 2003-08-24T05:14:15.000003-07:00 192.0.2.1 myproc 8710 - - %% It's time to make the do-nuts.\n",
+            "<165>1 2003-08-24T05:14:15.000003-07:00 host app 123 ID47 [exampleSDID@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1011\"][examplePriority@32473 class=\"high\"] message\n",
+            "<34>1 - - - - - -\n",
+        ] {
+            assert_syslog_parses(source);
+        }
     }
 
     #[test]

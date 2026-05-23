@@ -6,11 +6,11 @@ use crate::tasks::workflows::{
     extension_bump::compare_versions,
     job_summary::tests_pass,
     runners,
-    ts_query::{fetch_ts_query_ls, run_ts_query_ls},
     steps::{
         self, BASH_SHELL, CommonJobConditions, FluentBuilder, NamedJob,
         cache_rust_dependencies_namespace, named,
     },
+    ts_query::{fetch_ts_query_ls, run_ts_query_ls},
     vars::{PathCondition, StepOutput, WorkflowInput, one_workflow_per_non_main_branch_and_token},
 };
 
