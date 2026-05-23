@@ -222,6 +222,7 @@ pub(crate) fn bundle_windows(
             .when_some(release_channel, |job, release_channel| {
                 job.add_step(set_release_channel(platform, release_channel))
             })
+            .add_step(steps::script("./script/setup-dev-driver.ps1"))
             .add_step(bundle_windows(arch))
             .add_step(upload_artifact(&format!("target/{artifact_name}")))
             .add_step(upload_artifact(&format!(

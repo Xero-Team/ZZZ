@@ -74,6 +74,9 @@ jobs:
         "preview" | Set-Content -Path "crates/zed/RELEASE_CHANNEL"
       shell: pwsh
       working-directory: ${{ env.ZED_WORKSPACE }}
+    - name: ./script/setup-dev-driver.ps1
+      run: ./script/setup-dev-driver.ps1
+      shell: pwsh
     - name: run_bundling::bundle_windows::bundle_windows
       run: script/bundle-windows.ps1 -Architecture x86_64
       shell: pwsh
