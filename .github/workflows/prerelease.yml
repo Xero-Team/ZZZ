@@ -73,14 +73,12 @@ jobs:
         Write-Host "Publishing preview release"
         "preview" | Set-Content -Path "crates/zed/RELEASE_CHANNEL"
       shell: pwsh
-      working-directory: ${{ env.ZED_WORKSPACE }}
     - name: ./script/setup-dev-driver.ps1
       run: ./script/setup-dev-driver.ps1
       shell: pwsh
     - name: run_bundling::bundle_windows::bundle_windows
       run: script/bundle-windows.ps1 -Architecture x86_64
       shell: pwsh
-      working-directory: ${{ env.ZED_WORKSPACE }}
     - name: '@actions/upload-artifact Zed-x86_64.exe'
       uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
       with:
