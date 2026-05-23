@@ -32,8 +32,10 @@
 /crates/project_panel/benches/linux_repo_snapshot.txt
 /dev.zed.Zed*.json
 /node_modules/
+/.opencode/
 /plugins/bin
 /script/node_modules
+/script/syncflow/syncflow.egg-info/
 /snap
 /zed.xcworkspace
 DerivedData/
