@@ -1,8 +1,13 @@
 $ErrorActionPreference = 'Stop'
-$PSNativeCommandUseErrorActionPreference = $true
+$PSNativeCommandUseErrorActionPreference = $false
+$global:PSNativeCommandUseErrorActionPreference = $false
 
 $CARGO_ABOUT_VERSION="0.8.2"
-$outputFile=$args[0] ? $args[0] : "$(Get-Location)/assets/licenses.md"
+$outputFile = if ($args.Count -gt 0 -and $args[0]) {
+    $args[0]
+} else {
+    "$(Get-Location)/assets/licenses.md"
+}
 $templateFile="script/licenses/template.md.hbs"
 
 New-Item -Path "$outputFile" -ItemType File -Value "" -Force
@@ -34,7 +39,11 @@ if ($needsInstall) {
 
 Write-Host "Generating cargo licenses"
 
-$failFlag = $env:ALLOW_MISSING_LICENSES ? "--fail" : ""
+$failFlag = if ($env:ALLOW_MISSING_LICENSES) {
+    "--fail"
+} else {
+    ""
+}
 $args = @('about', 'generate', $failFlag, '-c', 'script/licenses/zed-licenses.toml', $templateFile, '-o', $outputFile) | Where-Object { $_ }
 cargo @args
 

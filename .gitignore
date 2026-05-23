@@ -3,6 +3,7 @@
 **/cargo-target
 **/target
 .webrtc-sys/
+/inno
 **/venv
 **/.direnv
 *.wasm

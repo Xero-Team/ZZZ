@@ -10,15 +10,108 @@ Param(
 
 # https://stackoverflow.com/questions/57949031/powershell-script-stops-if-program-fails-like-bash-set-o-errexit
 $ErrorActionPreference = 'Stop'
-$PSNativeCommandUseErrorActionPreference = $true
+$PSNativeCommandUseErrorActionPreference = $false
+$global:PSNativeCommandUseErrorActionPreference = $false
 
 $buildSuccess = $false
 
-$OSArchitecture = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
-    "X64" { "x86_64" }
-    "Arm64" { "aarch64" }
-    default { throw "Unsupported architecture" }
+function Invoke-NativeCommand {
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [string[]]$ArgumentList = @(),
+        [Parameter(Mandatory)][string]$Description
+    )
+
+    $standardOutputPath = [System.IO.Path]::GetTempFileName()
+    $standardErrorPath = [System.IO.Path]::GetTempFileName()
+
+    try {
+        $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -NoNewWindow -Wait -PassThru -RedirectStandardOutput $standardOutputPath -RedirectStandardError $standardErrorPath
+
+        if ((Get-Item $standardOutputPath).Length -gt 0) {
+            Get-Content $standardOutputPath
+        }
+
+        if ((Get-Item $standardErrorPath).Length -gt 0) {
+            Get-Content $standardErrorPath
+        }
+
+        if ($process.ExitCode -ne 0) {
+            throw "$Description failed with exit code $($process.ExitCode)"
+        }
+    }
+    finally {
+        Remove-Item $standardOutputPath -ErrorAction SilentlyContinue
+        Remove-Item $standardErrorPath -ErrorAction SilentlyContinue
+    }
 }
+
+function Invoke-NativeCommandWithOutput {
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [string[]]$ArgumentList = @(),
+        [Parameter(Mandatory)][string]$Description
+    )
+
+    $standardOutputPath = [System.IO.Path]::GetTempFileName()
+    $standardErrorPath = [System.IO.Path]::GetTempFileName()
+
+    try {
+        $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -NoNewWindow -Wait -PassThru -RedirectStandardOutput $standardOutputPath -RedirectStandardError $standardErrorPath
+        $standardError = Get-Content $standardErrorPath -ErrorAction SilentlyContinue
+
+        if ($standardError) {
+            Write-Output $standardError
+        }
+
+        if ($process.ExitCode -ne 0) {
+            throw "$Description failed with exit code $($process.ExitCode)"
+        }
+
+        return Get-Content $standardOutputPath -ErrorAction SilentlyContinue
+    }
+    finally {
+        Remove-Item $standardOutputPath -ErrorAction SilentlyContinue
+        Remove-Item $standardErrorPath -ErrorAction SilentlyContinue
+    }
+}
+
+function Get-ArchitectureTriple {
+    param(
+        [AllowNull()][string]$Architecture
+    )
+
+    switch ($Architecture) {
+        "X64" { "x86_64" }
+        "AMD64" { "x86_64" }
+        "Arm64" { "aarch64" }
+        "ARM64" { "aarch64" }
+        default {
+            if ($Architecture) {
+                throw "Unsupported architecture: $Architecture"
+            }
+
+            throw "Unable to determine operating system architecture"
+        }
+    }
+}
+
+$runtimeArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+$runtimeArchitectureName = if ($null -ne $runtimeArchitecture) {
+    $runtimeArchitecture.ToString()
+} else {
+    $null
+}
+
+$detectedArchitecture = if ($runtimeArchitectureName) {
+    $runtimeArchitectureName
+} elseif ($env:PROCESSOR_ARCHITEW6432) {
+    $env:PROCESSOR_ARCHITEW6432
+} else {
+    $env:PROCESSOR_ARCHITECTURE
+}
+
+$OSArchitecture = Get-ArchitectureTriple -Architecture $detectedArchitecture
 
 $Architecture = if ($Architecture) {
     $Architecture
@@ -36,6 +129,25 @@ if ($env:CARGO_HOME) {
 }
 
 $CargoOutDir = "./target/$Architecture-pc-windows-msvc/release"
+$CargoBuildJobs = if ($env:ZED_WINDOWS_BUNDLE_JOBS) {
+    $env:ZED_WINDOWS_BUNDLE_JOBS
+} elseif (-not $env:CI) {
+    '32'
+} else {
+    $null
+}
+
+function Get-CargoBuildArguments {
+    param(
+        [Parameter(Mandatory)][string[]]$Arguments
+    )
+
+    if ($CargoBuildJobs) {
+        return $Arguments + @('--jobs', $CargoBuildJobs)
+    }
+
+    return $Arguments
+}
 
 function Get-VSArch {
     param(
@@ -45,6 +157,7 @@ function Get-VSArch {
     switch ($Arch) {
         "x86_64" { "amd64" }
         "aarch64" { "arm64" }
+        default { throw "Unsupported Visual Studio architecture: $Arch" }
     }
 }
 
@@ -55,7 +168,15 @@ function Get-VSDevShellPath {
         throw "Unable to locate vswhere.exe at $vswhere"
     }
 
-    $installationPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    $installationPath = Invoke-NativeCommandWithOutput -FilePath $vswhere -ArgumentList @(
+        '-latest',
+        '-products',
+        '*',
+        '-requires',
+        'Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
+        '-property',
+        'installationPath'
+    ) -Description "Locate Visual Studio installation"
 
     if (-not $installationPath) {
         throw "Unable to locate a Visual Studio installation with C++ build tools"
@@ -125,7 +246,7 @@ function PrepareForBundle {
     New-Item -Path "$innoDir\bin" -ItemType Directory -Force
     New-Item -Path "$innoDir\tools" -ItemType Directory -Force
 
-    rustup target add $target
+    Invoke-NativeCommand -FilePath 'rustup' -ArgumentList @('target', 'add', $target) -Description "Add rustup target $target"
 }
 
 function GenerateLicenses {
@@ -135,19 +256,19 @@ function GenerateLicenses {
 function BuildZedAndItsFriends {
     Write-Output "Building Zed and its friends, for channel: $channel"
     # Build zed.exe and cli.exe
-    cargo build --release --package zed --package cli --target $target
+    Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'zed', '--package', 'cli', '--target', $target)) -Description "Build zed and cli for $target"
     Copy-Item -Path ".\$CargoOutDir\zed.exe" -Destination "$innoDir\Zed.exe" -Force
     Copy-Item -Path ".\$CargoOutDir\cli.exe" -Destination "$innoDir\cli.exe" -Force
     # Build explorer_command_injector.dll
     switch ($channel) {
         "stable" {
-            cargo build --release --features stable --no-default-features --package explorer_command_injector --target $target
+            Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--features', 'stable', '--no-default-features', '--package', 'explorer_command_injector', '--target', $target)) -Description "Build explorer_command_injector for stable $target"
         }
         "preview" {
-            cargo build --release --features preview --no-default-features --package explorer_command_injector --target $target
+            Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--features', 'preview', '--no-default-features', '--package', 'explorer_command_injector', '--target', $target)) -Description "Build explorer_command_injector for preview $target"
         }
         default {
-            cargo build --release --package explorer_command_injector --target $target
+            Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'explorer_command_injector', '--target', $target)) -Description "Build explorer_command_injector for $target"
         }
     }
     Copy-Item -Path ".\$CargoOutDir\explorer_command_injector.dll" -Destination "$innoDir\zed_explorer_command_injector.dll" -Force
@@ -155,7 +276,7 @@ function BuildZedAndItsFriends {
 
 function BuildRemoteServer {
     Write-Output "Building remote_server for $target"
-    cargo build --release --package remote_server --target $target
+    Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'remote_server', '--target', $target)) -Description "Build remote_server for $target"
 
     # Create zipped remote server binary
     $remoteServerSrc = (Resolve-Path ".\$CargoOutDir\remote_server.exe").Path
@@ -227,7 +348,7 @@ function MakeAppx {
     # Add makeAppx.exe to Path
     $sdk = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
     $env:Path += ';' + $sdk
-    makeAppx.exe pack /d "$innoDir\make_appx" /p "$innoDir\zed_explorer_command_injector.appx" /nv
+    Invoke-NativeCommand -FilePath 'makeAppx.exe' -ArgumentList @('pack', '/d', "$innoDir\make_appx", '/p', "$innoDir\zed_explorer_command_injector.appx", '/nv') -Description "Pack explorer command injector AppX"
 }
 
 function SignZedAndItsFriends {

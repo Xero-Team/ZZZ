@@ -6033,8 +6033,8 @@ dependencies = [
  "serde",
  "serde_json",
  "util",
- "windows 0.62.2",
- "windows-core 0.62.2",
+ "windows 0.61.3",
+ "windows-core 0.61.2",
  "workspace",
  "wprcontrol",
 ]
@@ -8591,6 +8591,7 @@ dependencies = [
  "anyhow",
  "async-compression",
  "async-fs",
+ "async-std",
  "async-tar",
  "bytes 1.11.1",
  "derive_more",
