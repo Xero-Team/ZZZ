@@ -2,7 +2,6 @@ use std::{path::PathBuf, time::Duration};
 
 use acp_thread::MentionUri;
 use agent_client_protocol::schema as acp;
-use editor::Editor;
 use gpui::{
     Animation, AnimationExt, AnyView, Context, IntoElement, WeakEntity, Window, pulsating_between,
 };
@@ -13,6 +12,7 @@ use theme_settings::ThemeSettings;
 use ui::{ButtonLike, TintColor, Tooltip, prelude::*};
 use workspace::{OpenOptions, Workspace};
 
+use crate::Agent;
 use crate::open_abs_path_at_point;
 
 #[derive(IntoElement)]

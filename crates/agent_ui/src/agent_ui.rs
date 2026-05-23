@@ -34,6 +34,7 @@ pub mod thread_worktree_archive;
 pub mod threads_archive_view;
 mod ui;
 
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -45,8 +46,7 @@ use editor::{Editor, SelectionEffects, scroll::Autoscroll};
 use feature_flags::FeatureFlagAppExt as _;
 use fs::Fs;
 use gpui::{
-    Action, App, Context, Entity, ImageSource, Resource, SharedString, SharedUri, TaskExt, Window,
-    actions,
+    Action, App, Context, Entity, ImageSource, Resource, SharedString, SharedUri, Window, actions,
 };
 use language::{
     LanguageRegistry,
@@ -56,7 +56,7 @@ use language_model::{
     ConfiguredModel, LanguageModelId, LanguageModelProviderId, LanguageModelRegistry,
 };
 use project::{AgentId, DisableAiSettings};
-use prompt_store::{PromptBuilder, rules_to_skills_migration};
+use prompt_store::PromptBuilder;
 use rope::Point;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

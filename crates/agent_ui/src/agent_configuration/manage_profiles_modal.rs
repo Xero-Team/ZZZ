@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use agent::ContextServerRegistry;
 use agent_settings::{AgentProfile, AgentProfileId, AgentSettings, builtin_profiles};
+use client::telemetry;
 use editor::Editor;
 use fs::Fs;
 use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Subscription, prelude::*};
@@ -415,8 +416,7 @@ impl ManageProfilesModal {
                 let name = mode.name_editor.read(cx).text(cx);
                 let base_profile_id = mode.base_profile_id.clone();
 
-                let profile_id =
-                    AgentProfile::create(name, base_profile_id.clone(), self.fs.clone(), cx);
+                let profile_id = AgentProfile::create(name, base_profile_id, self.fs.clone(), cx);
                 telemetry::event!(
                     "Agent Profile Created",
                     profile_id = profile_id.as_str(),

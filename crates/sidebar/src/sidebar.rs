@@ -46,9 +46,9 @@ use std::sync::Arc;
 use theme::ActiveTheme;
 use ui::{
     AgentThreadStatus, CommonAnimationExt, ContextMenu, ContextMenuEntry, Divider, GradientFade,
-    HighlightedLabel, KeyBinding, PopoverMenu, PopoverMenuHandle, ProjectEmptyState, ScrollAxes,
-    Scrollbars, Tab, ThreadItem, ThreadItemWorktreeInfo, TintColor, Tooltip, WithScrollbar,
-    prelude::*, render_modifiers,
+    HighlightedLabel, KeyBinding, PopoverMenu, PopoverMenuHandle, ScrollAxes, Scrollbars, Tab,
+    ThreadItem, ThreadItemWorktreeInfo, TintColor, Tooltip, WithScrollbar, prelude::*,
+    render_modifiers,
 };
 use util::ResultExt as _;
 use util::path_list::PathList;
@@ -985,7 +985,6 @@ impl Sidebar {
 
         let mut entries = Vec::new();
         let mut notified_threads = previous.notified_threads;
-        let mut notified_terminals: HashSet<TerminalId> = HashSet::new();
         let mut new_live_statuses: HashMap<acp::SessionId, (AgentThreadStatus, ThreadId)> =
             HashMap::new();
         let mut current_session_ids: HashSet<acp::SessionId> = HashSet::new();
@@ -1302,10 +1301,8 @@ impl Sidebar {
                     }
                 }
 
-                if is_active
-                    && let Some(ActiveEntry::Thread { thread_id, .. }) = self.active_entry.as_ref()
-                {
-                    notified_threads.remove(thread_id);
+                if is_active && let Some(active_entry) = self.active_entry.as_ref() {
+                    notified_threads.remove(&active_entry.thread_id);
                 }
             }
 
@@ -1364,9 +1361,7 @@ impl Sidebar {
                 let has_thread_notifications = matched_threads
                     .iter()
                     .any(|t| notified_threads.contains(&t.metadata.thread_id));
-                let has_terminal_notifications = matched_terminals
-                    .iter()
-                    .any(|t| notified_terminals.contains(&t.metadata.terminal_id));
+                let has_terminal_notifications = false;
 
                 project_header_indices.push(entries.len());
                 entries.push(ListEntry::ProjectHeader {
@@ -1388,9 +1383,7 @@ impl Sidebar {
                     entries.push(thread.into());
                 }
             } else {
-                let has_terminal_notifications = terminals
-                    .iter()
-                    .any(|t| notified_terminals.contains(&t.metadata.terminal_id));
+                let has_terminal_notifications = false;
 
                 // When collapsed, threads aren't loaded into `threads`, so we
                 // query the store for thread IDs to check notifications and

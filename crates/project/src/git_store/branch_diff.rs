@@ -115,15 +115,6 @@ impl BranchDiff {
         &self.diff_base
     }
 
-    pub fn set_diff_base(&mut self, diff_base: DiffBase, cx: &mut Context<Self>) {
-        self.diff_base = diff_base;
-        self.tree_diff = None;
-        self.base_commit = None;
-        self.head_commit = None;
-        cx.emit(BranchDiffEvent::FileListChanged);
-        *self.update_needed.borrow_mut() = ();
-    }
-
     pub fn set_repo(&mut self, repo: Option<Entity<Repository>>, cx: &mut Context<Self>) {
         let same_repo = match (self.repo.as_ref(), repo.as_ref()) {
             (Some(current), Some(new)) => current.read(cx).id == new.read(cx).id,

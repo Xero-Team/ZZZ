@@ -13,6 +13,13 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use worktree::{UpdatedEntriesSet, WorktreeId};
 
+#[macro_export]
+macro_rules! event {
+    ($($tokens:tt)*) => {};
+}
+
+pub use crate::event;
+
 #[cfg(any(test, target_os = "macos"))]
 use regex::Regex;
 
@@ -132,6 +139,11 @@ pub fn os_version() -> String {
 }
 
 impl Telemetry {
+    pub fn system_id(&self) -> Option<Arc<str>> {
+        let _ = self;
+        None
+    }
+
     pub fn new(
         _clock: Arc<dyn SystemClock>,
         _client: Arc<HttpClientWithUrl>,

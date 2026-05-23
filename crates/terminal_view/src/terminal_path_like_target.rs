@@ -1,7 +1,7 @@
 use super::{HoverTarget, HoveredWord, TerminalView};
 use anyhow::{Context as _, Result};
 use editor::Editor;
-use gpui::{Context, Task, TaskExt, WeakEntity, Window};
+use gpui::{Context, Task, WeakEntity, Window};
 use std::path::PathBuf;
 use terminal::PathLikeTarget;
 use util::{ResultExt, debug_panic};

@@ -1427,6 +1427,14 @@ enum SettingsUiFile {
 }
 
 impl SettingsUiFile {
+    fn setting_type(&self) -> &'static str {
+        match self {
+            SettingsUiFile::User => "user",
+            SettingsUiFile::Project(_) => "project",
+            SettingsUiFile::Server(_) => "server",
+        }
+    }
+
     fn is_server(&self) -> bool {
         matches!(self, SettingsUiFile::Server(_))
     }

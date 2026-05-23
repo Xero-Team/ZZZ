@@ -3992,7 +3992,7 @@ pub fn generate_random_commit_dag(
     num_commits: usize,
     adversarial: bool,
 ) -> Vec<Arc<InitialGraphCommitData>> {
-    use rand::Rng as _;
+    use rand::RngExt as _;
 
     if num_commits == 0 {
         return Vec::new();
@@ -4036,7 +4036,7 @@ fn generate_parents_from_oids(
     num_commits: usize,
     adversarial: bool,
 ) -> SmallVec<[Oid; 1]> {
-    use rand::{Rng as _, seq::SliceRandom as _};
+    use rand::{RngExt as _, seq::SliceRandom as _};
 
     let remaining = num_commits - current_idx - 1;
     if remaining == 0 {
@@ -4096,7 +4096,7 @@ mod tests {
     use gpui::{TestAppContext, UpdateGlobal, VisualTestContext};
     use project::Project;
     use project::git_store::{GitStoreEvent, RepositoryEvent};
-    use rand::prelude::*;
+    use rand::{RngExt as _, prelude::*};
     use serde_json::json;
     use settings::{SettingsStore, ThemeSettingsContent};
     use smallvec::{SmallVec, smallvec};

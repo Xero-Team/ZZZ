@@ -955,7 +955,7 @@ impl Client {
             #[cfg(any(test, feature = "test-support"))]
             let mut rng = StdRng::seed_from_u64(0);
             #[cfg(not(any(test, feature = "test-support")))]
-            let mut rng = StdRng::from_os_rng();
+            let mut rng = StdRng::from_rng(&mut rand::rng());
 
             let mut delay = INITIAL_RECONNECTION_DELAY;
             loop {

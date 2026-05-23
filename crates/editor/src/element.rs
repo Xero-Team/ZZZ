@@ -468,7 +468,21 @@ impl EditorElement {
         register_action(editor, window, Editor::unstage_and_next);
         register_action(editor, window, Editor::expand_all_diff_hunks);
         register_action(editor, window, Editor::collapse_all_diff_hunks);
-        register_action(editor, window, Editor::toggle_all_diff_hunks);
+        register_action(
+            editor,
+            window,
+            |editor, _: &crate::actions::ToggleAllDiffHunks, window, cx| {
+                if editor.has_any_expanded_diff_hunks(cx) {
+                    editor.collapse_all_diff_hunks(
+                        &crate::actions::CollapseAllDiffHunks,
+                        window,
+                        cx,
+                    );
+                } else {
+                    editor.expand_all_diff_hunks(&crate::actions::ExpandAllDiffHunks, window, cx);
+                }
+            },
+        );
         register_action(editor, window, Editor::toggle_review_comments_expanded);
         register_action(editor, window, Editor::submit_diff_review_comment_action);
         register_action(editor, window, Editor::edit_review_comment);
