@@ -1,4 +1,5 @@
 use std::{
+    sync::Mutex,
     sync::atomic::{AtomicBool, Ordering},
     thread::{ThreadId, current},
     time::{Duration, Instant},
@@ -52,10 +53,16 @@ impl WindowsDispatcher {
 
     fn dispatch_on_threadpool(&self, priority: WorkItemPriority, runnable: RunnableVariant) {
         let handler = {
-            let mut task_wrapper = Some(runnable);
+            let task_wrapper = Mutex::new(Some(runnable));
             WorkItemHandler::new(move |_| {
-                let runnable = task_wrapper.take().unwrap();
-                Self::execute_runnable(runnable);
+                if let Ok(mut task_wrapper) = task_wrapper.lock() {
+                    let runnable = task_wrapper.take();
+                    drop(task_wrapper);
+
+                    if let Some(runnable) = runnable {
+                        Self::execute_runnable(runnable);
+                    }
+                }
                 Ok(())
             })
         };
@@ -65,10 +72,16 @@ impl WindowsDispatcher {
 
     fn dispatch_on_threadpool_after(&self, runnable: RunnableVariant, duration: Duration) {
         let handler = {
-            let mut task_wrapper = Some(runnable);
+            let task_wrapper = Mutex::new(Some(runnable));
             TimerElapsedHandler::new(move |_| {
-                let runnable = task_wrapper.take().unwrap();
-                Self::execute_runnable(runnable);
+                if let Ok(mut task_wrapper) = task_wrapper.lock() {
+                    let runnable = task_wrapper.take();
+                    drop(task_wrapper);
+
+                    if let Some(runnable) = runnable {
+                        Self::execute_runnable(runnable);
+                    }
+                }
                 Ok(())
             })
         };
