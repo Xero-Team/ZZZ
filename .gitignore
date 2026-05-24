@@ -36,6 +36,8 @@
 /plugins/bin
 /script/node_modules
 /script/syncflow/syncflow.egg-info/
+/tooling/windows_msi_builder/bin/
+/tooling/windows_msi_builder/obj/
 /snap
 /zed.xcworkspace
 DerivedData/

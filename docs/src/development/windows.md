@@ -107,6 +107,16 @@ For a release build:
 cargo run --release
 ```
 
+To package an MSI installer from an existing Windows release build without rebuilding Rust artifacts:
+
+```powershell
+.\script\bundle-windows-msi.ps1 -Architecture x86_64 -ReleaseDir .\target\release
+```
+
+This path requires the `wix` .NET global tool (`dotnet tool install --global wix`). It stages the current release outputs, adds the same Windows helper files that the Inno Setup flow collects, and writes an MSI into `target\`.
+
+The generated MSI includes the standard WiX install UI with an install-directory page, so you can change the destination folder during interactive installation.
+
 And to run the tests:
 
 ```sh
