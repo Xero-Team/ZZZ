@@ -2489,7 +2489,7 @@ mod tests {
     use settings::{SaturatingBool, SettingsStore, watch_config_file};
     use std::{
         path::{Path, PathBuf},
-        sync::Arc,
+        sync::{Arc, Mutex, MutexGuard, OnceLock},
         time::Duration,
     };
     use theme::ThemeRegistry;
@@ -2529,6 +2529,11 @@ mod tests {
         multi_workspace_task.await;
         cx.background_executor.run_until_parked();
         cx.run_until_parked();
+    }
+
+    fn session_restore_test_guard() -> MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(())).lock().expect("session restore test lock")
     }
 
     #[gpui::test]
@@ -6185,6 +6190,7 @@ mod tests {
 
     #[gpui::test]
     async fn test_multi_workspace_session_restore(cx: &mut TestAppContext) {
+        let _guard = session_restore_test_guard();
         use collections::HashMap;
         use session::Session;
         use util::path_list::PathList;
@@ -6419,6 +6425,7 @@ mod tests {
 
     #[gpui::test]
     async fn test_restored_project_groups_survive_workspace_key_change(cx: &mut TestAppContext) {
+        let _guard = session_restore_test_guard();
         use session::Session;
         use util::path_list::PathList;
         use workspace::{OpenMode, ProjectGroupKey};

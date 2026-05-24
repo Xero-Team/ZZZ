@@ -80,8 +80,8 @@ impl merge_from::MergeFrom for AllLanguageSettingsContent {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum EditPredictionProvider {
-    None,
     #[default]
+    None,
     Copilot,
     Zed,
     Codestral,

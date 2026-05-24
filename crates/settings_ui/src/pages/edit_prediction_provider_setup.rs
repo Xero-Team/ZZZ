@@ -6,7 +6,7 @@ use edit_prediction::{
 };
 use edit_prediction_ui::{get_available_providers, set_completion_provider};
 use gpui::{App, Entity, ScrollHandle, prelude::*};
-use language::language_settings::AllLanguageSettings;
+use language::language_settings::{AllLanguageSettings, EditPredictionProvider};
 
 use settings::Settings as _;
 use ui::{ButtonLink, ConfiguredApiCard, ContextMenu, DropdownMenu, DropdownStyle, prelude::*};
@@ -120,6 +120,13 @@ fn render_provider_dropdown(window: &mut Window, cx: &mut App) -> AnyElement {
     let menu = ContextMenu::build(window, cx, move |mut menu, _, cx| {
         let available_providers = get_available_providers(cx);
         let fs = <dyn fs::Fs>::global(cx);
+
+        menu = menu.toggleable_entry("None", current_provider == EditPredictionProvider::None, IconPosition::Start, None, {
+            let fs = fs.clone();
+            move |_, cx| {
+                set_completion_provider(fs.clone(), cx, EditPredictionProvider::None);
+            }
+        });
 
         for provider in available_providers {
             let Some(name) = provider.display_name() else {
