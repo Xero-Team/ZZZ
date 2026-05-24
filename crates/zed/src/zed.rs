@@ -2533,7 +2533,9 @@ mod tests {
 
     fn session_restore_test_guard() -> MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(())).lock().expect("session restore test lock")
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("session restore test lock")
     }
 
     #[gpui::test]
