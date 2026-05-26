@@ -319,6 +319,49 @@ mod drag_handle {
     );
 }
 
+mod resizable_auto_sync {
+    use super::*;
+
+    #[test]
+    fn grows_auto_width_when_user_has_not_resized() {
+        let mut state = ResizableColumnsState::new(
+            2,
+            vec![AbsoluteLength::Pixels(px(120.0)), AbsoluteLength::Pixels(px(150.0))],
+            vec![TableResizeBehavior::Resizable, TableResizeBehavior::Resizable],
+        );
+
+        state.sync_auto_column_configuration(
+            1,
+            AbsoluteLength::Pixels(px(240.0)),
+            TableResizeBehavior::Resizable,
+        );
+
+        assert_eq!(state.initial_width(1), AbsoluteLength::Pixels(px(240.0)));
+        assert_eq!(state.width(1), AbsoluteLength::Pixels(px(240.0)));
+    }
+
+    #[test]
+    fn preserves_manual_width_while_updating_reset_baseline() {
+        let mut state = ResizableColumnsState::new(
+            2,
+            vec![AbsoluteLength::Pixels(px(120.0)), AbsoluteLength::Pixels(px(150.0))],
+            vec![TableResizeBehavior::Resizable, TableResizeBehavior::Resizable],
+        );
+
+        state.drag_to(1, px(320.0), px(16.0));
+        assert_eq!(state.width(1), AbsoluteLength::Pixels(px(200.0)));
+
+        state.sync_auto_column_configuration(
+            1,
+            AbsoluteLength::Pixels(px(260.0)),
+            TableResizeBehavior::Resizable,
+        );
+
+        assert_eq!(state.width(1), AbsoluteLength::Pixels(px(200.0)));
+        assert_eq!(state.initial_width(1), AbsoluteLength::Pixels(px(260.0)));
+    }
+}
+
 mod resizable_drag {
     use super::*;
 

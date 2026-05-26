@@ -5,7 +5,7 @@ description: "Configure PowerShell language support in Zed, including language s
 
 # PowerShell
 
-PowerShell language support in Zed is provided by the community-maintained [Zed PowerShell extension](https://github.com/wingyplus/zed-powershell). Please report issues to: [github.com/wingyplus/zed-powershell/issues](https://github.com/wingyplus/zed-powershell/issues)
+PowerShell language support in Zed is built in and uses [PowerShell Editor Services](https://github.com/PowerShell/PowerShellEditorServices).
 
 - Tree-sitter: [airbus-cert/tree-sitter-powershell](https://github.com/airbus-cert/tree-sitter-powershell)
 - Language Server: [PowerShell/PowerShellEditorServices](https://github.com/PowerShell/PowerShellEditorServices)
@@ -21,20 +21,10 @@ PowerShell language support in Zed is provided by the community-maintained [Zed 
 - Ubuntu: [Install PowerShell on RHEL](https://learn.microsoft.com/en-us/powershell/scripting/install/install-ubuntu)
 - Windows: [Install PowerShell on Windows](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows)
 
-The Zed PowerShell extension will default to the `pwsh` executable found in your path.
+Zed uses the `pwsh` executable found in your path. PowerShell Editor Services is a PowerShell 7+ module, so this setup works cross-platform anywhere `pwsh` is available.
 
-### Install PowerShell Editor Services (Optional) {#powershell-editor-services}
+### PowerShell Editor Services {#powershell-editor-services}
 
-The Zed PowerShell extensions will attempt to download [PowerShell Editor Services](https://github.com/PowerShell/PowerShellEditorServices) automatically.
+Zed downloads [PowerShell Editor Services](https://github.com/PowerShell/PowerShellEditorServices) automatically into its language-server cache.
 
-If want to use a specific binary, you can specify in your that in your Zed settings.json:
-
-```json [settings]
-  "lsp": {
-    "powershell-es": {
-      "binary": {
-        "path": "/path/to/PowerShellEditorServices"
-      }
-    }
-  }
-```
+You can still configure `powershell-es` through the normal `lsp` settings, including `settings` and `initialization_options` overrides.

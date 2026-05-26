@@ -62,8 +62,7 @@ impl CsvPreviewView {
         let cols = self.engine.contents.headers.cols() + 1;
         let line_number_width = self.calculate_row_identifier_column_width();
 
-        let mut widths: Vec<AbsoluteLength> = vec![AbsoluteLength::Pixels(px(150.)); cols];
-        widths[0] = AbsoluteLength::Pixels(px(line_number_width));
+        let widths = estimate_column_widths(&self.engine.contents, line_number_width);
 
         let mut resize_behaviors = vec![TableResizeBehavior::Resizable; cols];
         resize_behaviors[0] = TableResizeBehavior::None;
@@ -72,11 +71,15 @@ impl CsvPreviewView {
             if state.cols() != cols {
                 *state = ResizableColumnsState::new(cols, widths, resize_behaviors);
             } else {
-                state.set_column_configuration(
-                    0,
-                    AbsoluteLength::Pixels(px(line_number_width)),
-                    TableResizeBehavior::None,
-                );
+                for (column_index, (width, resize_behavior)) in
+                    widths.into_iter().zip(resize_behaviors.into_iter()).enumerate()
+                {
+                    if column_index == 0 {
+                        state.set_column_configuration(column_index, width, resize_behavior);
+                    } else {
+                        state.sync_auto_column_configuration(column_index, width, resize_behavior);
+                    }
+                }
             }
         });
     }
@@ -329,5 +332,96 @@ impl ColumnWidths {
                 )
             }),
         }
+    }
+}
+
+const DEFAULT_COLUMN_WIDTH_PX: f32 = 150.0;
+const MIN_DATA_COLUMN_WIDTH_PX: f32 = 96.0;
+const MAX_DATA_COLUMN_WIDTH_PX: f32 = 420.0;
+const ESTIMATED_CHAR_WIDTH_PX: f32 = 8.0;
+const CELL_HORIZONTAL_PADDING_PX: f32 = 24.0;
+const WIDTH_ESTIMATION_SAMPLE_ROWS: usize = 200;
+
+fn estimate_column_widths(
+    contents: &TableLikeContent,
+    row_identifier_width: f32,
+) -> Vec<AbsoluteLength> {
+    let mut widths = Vec::with_capacity(contents.number_of_cols + 1);
+    widths.push(AbsoluteLength::Pixels(px(row_identifier_width)));
+
+    for column_index in 0..contents.number_of_cols {
+        let content_width = estimate_data_column_width_px(contents, column_index);
+        widths.push(AbsoluteLength::Pixels(px(content_width)));
+    }
+
+    widths
+}
+
+fn estimate_data_column_width_px(contents: &TableLikeContent, column_index: usize) -> f32 {
+    let header_width = contents
+        .headers
+        .get(column_index)
+        .map(estimated_cell_width_px)
+        .unwrap_or(DEFAULT_COLUMN_WIDTH_PX);
+
+    let sample_width = contents
+        .rows
+        .iter()
+        .take(WIDTH_ESTIMATION_SAMPLE_ROWS)
+        .filter_map(|row| row.get(column_index))
+        .map(estimated_cell_width_px)
+        .fold(header_width, f32::max);
+
+    sample_width.clamp(MIN_DATA_COLUMN_WIDTH_PX, MAX_DATA_COLUMN_WIDTH_PX)
+}
+
+fn estimated_cell_width_px(cell: &crate::types::TableCell) -> f32 {
+    let Some(value) = cell.display_value() else {
+        return MIN_DATA_COLUMN_WIDTH_PX;
+    };
+
+    let longest_line_chars = value
+        .as_ref()
+        .lines()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(0);
+
+    if longest_line_chars == 0 {
+        MIN_DATA_COLUMN_WIDTH_PX
+    } else {
+        (longest_line_chars as f32) * ESTIMATED_CHAR_WIDTH_PX + CELL_HORIZONTAL_PADDING_PX
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn csv_preview_defaults_enable_multiline_variable_height() {
+        let settings = CsvPreviewSettings::default();
+
+        assert!(matches!(
+            settings.rendering_with,
+            crate::settings::RowRenderMechanism::VariableList
+        ));
+        assert!(settings.multiline_cells_enabled);
+    }
+
+    #[test]
+    fn csv_preview_estimates_column_widths_from_multiline_and_long_values() {
+        let contents = TableLikeContent::from_str(
+            "name,description,notes\nalpha,short,ok\nbeta,very very long content,wrapped value\ngamma,first line\nsecond line,end"
+                .to_string(),
+        );
+
+        let widths = estimate_column_widths(&contents, 60.0);
+
+        assert_eq!(widths.len(), 4);
+        assert_eq!(widths[0], AbsoluteLength::Pixels(px(60.0)));
+        assert!(matches!(widths[1], AbsoluteLength::Pixels(width) if width >= px(MIN_DATA_COLUMN_WIDTH_PX)));
+        assert!(matches!(widths[2], AbsoluteLength::Pixels(width) if width > px(150.0)));
+        assert!(matches!(widths[3], AbsoluteLength::Pixels(width) if width >= px(MIN_DATA_COLUMN_WIDTH_PX)));
     }
 }

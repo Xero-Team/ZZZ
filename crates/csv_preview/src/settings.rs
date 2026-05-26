@@ -1,10 +1,10 @@
-#[derive(Default, Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Default)]
 pub enum RowRenderMechanism {
     /// More correct for multiline content, but slower.
-    #[allow(dead_code)] // Will be used when settings ui is added
+    #[default]
     VariableList,
     /// Default behaviour for now while resizable columns are being stabilized.
-    #[default]
+    #[allow(dead_code)] // Exposed in dev-tools and kept for fallback rendering mode
     UniformList,
 }
 
@@ -19,14 +19,14 @@ pub enum VerticalAlignment {
 
 #[derive(Default, Clone, Copy)]
 pub enum RowIdentifiers {
-    /// Show original line numbers from CSV file
+    /// Show logical CSV row numbers, counting multiline records as a single row
     #[default]
     SrcLines,
     /// Show sequential row numbers starting from 1
     RowNum,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(crate) struct CsvPreviewSettings {
     pub(crate) rendering_with: RowRenderMechanism,
     pub(crate) vertical_alignment: VerticalAlignment,
@@ -35,4 +35,18 @@ pub(crate) struct CsvPreviewSettings {
     #[cfg(feature = "dev-tools")]
     pub(crate) show_perf_metrics_overlay: bool,
     pub(crate) multiline_cells_enabled: bool,
+}
+
+impl Default for CsvPreviewSettings {
+    fn default() -> Self {
+        Self {
+            rendering_with: RowRenderMechanism::VariableList,
+            vertical_alignment: VerticalAlignment::Top,
+            numbering_type: RowIdentifiers::SrcLines,
+            show_debug_info: false,
+            #[cfg(feature = "dev-tools")]
+            show_perf_metrics_overlay: false,
+            multiline_cells_enabled: true,
+        }
+    }
 }

@@ -58,6 +58,14 @@ impl ResizableColumnsState {
         self.widths.cols()
     }
 
+    pub fn width(&self, col_idx: usize) -> AbsoluteLength {
+        self.widths[col_idx]
+    }
+
+    pub fn initial_width(&self, col_idx: usize) -> AbsoluteLength {
+        self.initial_widths[col_idx]
+    }
+
     pub fn resize_behavior(&self) -> &TableRow<TableResizeBehavior> {
         &self.resize_behavior
     }
@@ -104,6 +112,33 @@ impl ResizableColumnsState {
         self.resize_behavior[col_idx] = resize_behavior;
     }
 
+    /// Updates the auto-sized baseline for a column without overriding a user-resized width.
+    ///
+    /// If the current width still matches the previous auto width, the visible width will grow to
+    /// the new auto width. If the user has manually resized the column, only the reset baseline is
+    /// updated, preserving the current width.
+    pub fn sync_auto_column_configuration(
+        &mut self,
+        col_idx: usize,
+        width: impl Into<AbsoluteLength>,
+        resize_behavior: TableResizeBehavior,
+    ) {
+        let width = width.into();
+        let current_width = self.widths[col_idx];
+        let previous_initial_width = self.initial_widths[col_idx];
+        let user_resized = current_width != previous_initial_width;
+
+        self.resize_behavior[col_idx] = resize_behavior;
+
+        if absolute_length_gt(width, previous_initial_width) {
+            self.initial_widths[col_idx] = width;
+
+            if !user_resized {
+                self.widths[col_idx] = width;
+            }
+        }
+    }
+
     pub fn reset_column_to_initial_width(&mut self, col_idx: usize) {
         self.widths[col_idx] = self.initial_widths[col_idx];
     }
@@ -121,6 +156,14 @@ impl ResizableColumnsState {
             }
             None => width,
         }
+    }
+}
+
+fn absolute_length_gt(left: AbsoluteLength, right: AbsoluteLength) -> bool {
+    match (left, right) {
+        (AbsoluteLength::Pixels(left), AbsoluteLength::Pixels(right)) => left > right,
+        (AbsoluteLength::Rems(left), AbsoluteLength::Rems(right)) => left.0 > right.0,
+        _ => false,
     }
 }
 
@@ -554,6 +597,8 @@ fn render_cell(width: Option<Length>, cell: AnyElement, ctx: &TableRenderContext
         div()
             .when_some(width, |this, width| this.w(width))
             .when(width.is_none(), |this| this.flex_1())
+            .flex()
+            .items_stretch()
             .overflow_hidden()
             .child(cell)
     } else {
@@ -619,8 +664,9 @@ pub fn render_table_row(
         // Applying `.flex().flex_row()` manually to overcome that
         .flex()
         .flex_row()
+        .items_stretch()
         .id(("table_row", row_index))
-        .size_full()
+        .w_full()
         .when_some(bg, |row, bg| row.bg(bg))
         .when(table_context.show_row_hover, |row| {
             row.hover(|s| s.bg(cx.theme().colors().element_hover.opacity(0.6)))
@@ -640,7 +686,7 @@ pub fn render_table_row(
         let scrollable_items: Vec<AnyElement> = items_vec.drain(pinned_cols..).collect();
         let scrollable_widths: Vec<Option<Length>> = widths_vec.drain(pinned_cols..).collect();
 
-        let pinned_section = div().flex().flex_row().flex_shrink_0().children(
+        let pinned_section = div().flex().flex_row().items_stretch().flex_shrink_0().children(
             items_vec
                 .into_iter()
                 .zip(widths_vec)
@@ -655,8 +701,9 @@ pub fn render_table_row(
             .flex_grow()
             .overflow_x_scroll()
             .flex()
+            .items_stretch()
             .child(
-                div().flex().flex_row().children(
+                div().flex().flex_row().items_stretch().children(
                     scrollable_items
                         .into_iter()
                         .zip(scrollable_widths)
@@ -687,7 +734,7 @@ pub fn render_table_row(
         row.into_any_element()
     };
 
-    div().size_full().child(row).into_any_element()
+    div().w_full().child(row).into_any_element()
 }
 
 pub fn render_table_header(

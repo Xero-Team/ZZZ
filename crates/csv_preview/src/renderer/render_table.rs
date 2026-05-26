@@ -129,10 +129,11 @@ impl CsvPreviewView {
 
             let display_cell_id = DisplayCellId::new(display_row, col);
 
-            let cell = div().size_full().whitespace_nowrap().text_ellipsis().child(
+            let cell = div().w_full().min_w_0().child(
                 CsvPreviewView::create_selectable_cell(
                     display_cell_id,
                     cell_content,
+                    this.settings.multiline_cells_enabled,
                     this.settings.vertical_alignment,
                     cx,
                 ),
@@ -140,7 +141,8 @@ impl CsvPreviewView {
 
             elements.push(
                 div()
-                    .size_full()
+                    .w_full()
+                    .min_w_0()
                     .when(this.settings.show_debug_info, |parent| {
                         parent.child(div().text_color(row_identifier_text_color).child(
                             match table_cell {

@@ -23,6 +23,7 @@ mod eslint;
 mod go;
 mod json;
 mod package_json;
+mod powershell;
 mod python;
 mod rust;
 mod tailwind;
@@ -66,6 +67,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
     let json_context_provider = Arc::new(JsonTaskProvider);
     let json_lsp_adapter = Arc::new(json::JsonLspAdapter::new(languages.clone(), node.clone()));
     let node_version_lsp_adapter = Arc::new(json::NodeVersionAdapter);
+    let powershell_lsp_adapter = Arc::new(powershell::PowerShellLspAdapter);
     let py_lsp_adapter = Arc::new(python::PyLspAdapter::new());
     let ty_lsp_adapter = Arc::new(python::TyLspAdapter::new(fs.clone()));
     let python_context_provider = Arc::new(python::PythonContextProvider);
@@ -98,6 +100,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
             ..Default::default()
         },
         LanguageInfo {
+            name: "cmd",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
             name: "cpp",
             adapters: vec![c_lsp_adapter],
             semantic_token_rules: Some(cpp::semantic_token_rules()),
@@ -106,6 +113,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
         LanguageInfo {
             name: "css",
             adapters: vec![css_lsp_adapter],
+            ..Default::default()
+        },
+        LanguageInfo {
+            name: "csv",
+            adapters: vec![],
             ..Default::default()
         },
         LanguageInfo {
@@ -197,6 +209,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
             toolchain: Some(python_toolchain_provider),
             manifest_name: Some(SharedString::new_static("pyproject.toml").into()),
             semantic_token_rules: Some(python::semantic_token_rules()),
+        },
+        LanguageInfo {
+            name: "powershell",
+            adapters: vec![powershell_lsp_adapter],
+            ..Default::default()
         },
         LanguageInfo {
             name: "rust",
@@ -490,5 +507,94 @@ mod tests {
                 .map(|language| language.name()),
             Some("TOML".into())
         );
+    }
+
+    #[gpui::test]
+    async fn test_powershell_registered_for_file_matching(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        let settings = cx.update(SettingsStore::test);
+        cx.set_global(settings);
+
+        let languages = Arc::new(LanguageRegistry::new(cx.executor()));
+        cx.update(|cx| init(languages.clone(), fs, NodeRuntime::unavailable(), cx));
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new("script.ps1"))
+                .map(|language| language.name()),
+            Some("PowerShell".into())
+        );
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new("module.psm1"))
+                .map(|language| language.name()),
+            Some("PowerShell".into())
+        );
+
+        if cfg!(feature = "load-grammars") {
+            let loaded_language = languages
+                .load_language_for_file_path(Path::new("script.ps1"))
+                .await
+                .expect("PowerShell language should load with built-in queries");
+            assert_eq!(loaded_language.name(), "PowerShell");
+        }
+    }
+
+    #[gpui::test]
+    async fn test_cmd_registered_for_file_matching(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        let settings = cx.update(SettingsStore::test);
+        cx.set_global(settings);
+
+        let languages = Arc::new(LanguageRegistry::new(cx.executor()));
+        cx.update(|cx| init(languages.clone(), fs, NodeRuntime::unavailable(), cx));
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new("build.cmd"))
+                .map(|language| language.name()),
+            Some("Windows Batch".into())
+        );
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new("build.bat"))
+                .map(|language| language.name()),
+            Some("Windows Batch".into())
+        );
+
+        if cfg!(feature = "load-grammars") {
+            let loaded_language = languages
+                .load_language_for_file_path(Path::new("build.cmd"))
+                .await
+                .expect("CMD language should load with built-in queries");
+            assert_eq!(loaded_language.name(), "Windows Batch");
+        }
+    }
+
+    #[gpui::test]
+    async fn test_csv_registered_for_file_matching(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        let settings = cx.update(SettingsStore::test);
+        cx.set_global(settings);
+
+        let languages = Arc::new(LanguageRegistry::new(cx.executor()));
+        cx.update(|cx| init(languages.clone(), fs, NodeRuntime::unavailable(), cx));
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new("table.csv"))
+                .map(|language| language.name()),
+            Some("CSV".into())
+        );
+
+        if cfg!(feature = "load-grammars") {
+            let loaded_language = languages
+                .load_language_for_file_path(Path::new("table.csv"))
+                .await
+                .expect("CSV language should load with built-in queries");
+            assert_eq!(loaded_language.name(), "CSV");
+        }
     }
 }

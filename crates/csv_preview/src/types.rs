@@ -10,8 +10,8 @@ mod table_like_content;
 /// Line number information for CSV rows
 #[derive(Debug, Clone, Copy)]
 pub enum LineNumber {
-    /// Single line row
+    /// Single logical CSV row number
     Line(usize),
-    /// Multi-line row spanning from start to end line. Incluisive
+    /// Logical CSV row number range. Inclusive.
     LineRange(usize, usize),
 }

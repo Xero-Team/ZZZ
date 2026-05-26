@@ -11,13 +11,12 @@ use crate::{
 };
 
 pub enum RowIdentDisplayMode {
-    /// E.g
+    /// Show only the logical row's starting source line.
+    /// E.g.
     /// ```text
-    /// 1
-    /// ...
-    /// 5
+    /// 4
     /// ```
-    Vertical,
+    StartLineOnly,
     /// E.g.
     /// ```text
     /// 1-5
@@ -30,13 +29,7 @@ impl LineNumber {
         match *self {
             LineNumber::Line(line) => line.to_string(),
             LineNumber::LineRange(start, end) => match mode {
-                RowIdentDisplayMode::Vertical => {
-                    if start + 1 == end {
-                        format!("{start}\n{end}")
-                    } else {
-                        format!("{start}\n...\n{end}")
-                    }
-                }
+                RowIdentDisplayMode::StartLineOnly => start.to_string(),
                 RowIdentDisplayMode::Horizontal => {
                     format!("{start}-{end}")
                 }
@@ -128,7 +121,7 @@ impl CsvPreviewView {
                 .style(ButtonStyle::Subtle)
                 .size(ButtonSize::Compact)
                 .tooltip(Tooltip::text(
-                    "Toggle between: file line numbers or sequential row numbers",
+                    "Toggle between: CSV row numbers or sequential preview row numbers",
                 ))
                 .on_click(move |_event, _window, cx| {
                     view.update(cx, |this, cx| {
@@ -158,7 +151,7 @@ impl CsvPreviewView {
                 .line_numbers
                 .get(*data_row)?
                 .display_string(if self.settings.multiline_cells_enabled {
-                    RowIdentDisplayMode::Vertical
+                    RowIdentDisplayMode::StartLineOnly
                 } else {
                     RowIdentDisplayMode::Horizontal
                 })
@@ -166,19 +159,59 @@ impl CsvPreviewView {
             RowIdentifiers::RowNum => (*display_row + 1).to_string().into(),
         };
 
-        let value = div()
-            .flex()
-            .px_1()
-            .border_b_1()
-            .border_color(cx.theme().colors().border_variant)
-            .h_full()
-            .text_ui(cx)
-            // Row identifiers are always centered
-            .items_center()
-            .justify_end()
-            .font_buffer(cx)
-            .child(row_identifier)
-            .into_any_element();
+        let value = match self.settings.vertical_alignment {
+            crate::settings::VerticalAlignment::Top => div()
+                .flex()
+                .w_full()
+                .px_1()
+                .border_b_1()
+                .border_color(cx.theme().colors().border_variant)
+                .text_ui(cx)
+                .justify_end()
+                .items_start()
+                .content_start()
+                .font_buffer(cx)
+                .child(row_identifier)
+                .into_any_element(),
+            crate::settings::VerticalAlignment::Center => div()
+                .flex()
+                .w_full()
+                .px_1()
+                .border_b_1()
+                .border_color(cx.theme().colors().border_variant)
+                .text_ui(cx)
+                .justify_end()
+                .items_center()
+                .content_center()
+                .font_buffer(cx)
+                .child(row_identifier)
+                .into_any_element(),
+        };
         Some(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn line_range_uses_start_line_for_multiline_row_identifiers() {
+        let line_number = LineNumber::LineRange(4, 5);
+
+        assert_eq!(
+            line_number.display_string(RowIdentDisplayMode::StartLineOnly),
+            "4"
+        );
+    }
+
+    #[test]
+    fn line_range_keeps_horizontal_range_display() {
+        let line_number = LineNumber::LineRange(4, 5);
+
+        assert_eq!(
+            line_number.display_string(RowIdentDisplayMode::Horizontal),
+            "4-5"
+        );
     }
 }

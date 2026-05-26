@@ -184,8 +184,8 @@ fn parse_csv_with_positions(
                 field_start_offset = current_offset + char_byte_len;
             }
             '\n' => {
-                current_line += 1;
                 if !in_quotes {
+                    current_line += 1;
                     // Row separator (only when not inside quotes)
                     let field_end_offset = current_offset;
                     if current_field.is_empty() && current_row.is_empty() {
@@ -224,9 +224,9 @@ fn parse_csv_with_positions(
                     current_offset += char_byte_len;
                     continue;
                 } else {
-                    // Standalone \r
-                    current_line += 1;
                     if !in_quotes {
+                        // Standalone \r row separator
+                        current_line += 1;
                         // Row separator (only when not inside quotes)
                         let field_end_offset = current_offset;
                         current_row.push((
@@ -396,19 +396,36 @@ Jane,"Simple name""#;
         // Check line numbers
         assert_eq!(parsed.line_numbers.len(), 2);
         match &parsed.line_numbers[0] {
-            LineNumber::LineRange(start, end) => {
-                assert_eq!(start, &2);
-                assert_eq!(end, &4);
+            LineNumber::Line(line) => {
+                assert_eq!(line, &2);
             }
-            _ => panic!("Expected LineRange for multiline row"),
+            _ => panic!("Expected logical row number for multiline row"),
         }
         match &parsed.line_numbers[1] {
-            LineNumber::LineRange(start, end) => {
-                assert_eq!(start, &5);
-                assert_eq!(end, &6);
+            LineNumber::Line(line) => {
+                assert_eq!(line, &3);
             }
-            _ => panic!("Expected LineRange for second multiline row"),
+            _ => panic!("Expected logical row number for second multiline row"),
         }
+    }
+
+    #[test]
+    fn test_csv_parsing_rfc4180_fixture_uses_logical_row_numbers() {
+        let csv_data = include_str!("../../grammars/src/csv/testdata/rfc4180.csv");
+        let parsed = TableLikeContent::from_str(csv_data.to_string());
+
+        let logical_rows = parsed
+            .line_numbers
+            .iter()
+            .map(|line_number| match line_number {
+                LineNumber::Line(line) => *line,
+                LineNumber::LineRange(start, end) => {
+                    panic!("expected logical line numbers only, got range {start}-{end}")
+                }
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(logical_rows, vec![2, 3, 4, 5]);
     }
 
     #[test]

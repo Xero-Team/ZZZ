@@ -8129,8 +8129,10 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
  "tree-sitter-c",
+ "tree-sitter-cmd",
  "tree-sitter-cpp",
  "tree-sitter-css",
+ "tree-sitter-csv",
  "tree-sitter-diff",
  "tree-sitter-git-config",
  "tree-sitter-git-rebase",
@@ -8143,6 +8145,7 @@ dependencies = [
  "tree-sitter-jsdoc",
  "tree-sitter-json",
  "tree-sitter-md",
+ "tree-sitter-powershell",
  "tree-sitter-python",
  "tree-sitter-regex",
  "tree-sitter-rust",
@@ -19272,6 +19275,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-cmd"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "tree-sitter",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-cpp"
 version = "0.23.4"
 source = "git+https://github.com/tree-sitter/tree-sitter-cpp?rev=5cb9b693cfd7bfacab1d9ff4acac1a4150700609#5cb9b693cfd7bfacab1d9ff4acac1a4150700609"
@@ -19287,6 +19299,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5cbc5e18f29a2c6d6435891f42569525cf95435a3e01c2f1947abcde178686f"
 dependencies = [
  "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-csv"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "tree-sitter",
  "tree-sitter-language",
 ]
 
@@ -19444,6 +19465,15 @@ version = "0.3.2"
 source = "git+https://github.com/tree-sitter-grammars/tree-sitter-markdown?rev=9a23c1a96c0513d8fc6520972beedd419a973539#9a23c1a96c0513d8fc6520972beedd419a973539"
 dependencies = [
  "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-powershell"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "tree-sitter",
  "tree-sitter-language",
 ]
 

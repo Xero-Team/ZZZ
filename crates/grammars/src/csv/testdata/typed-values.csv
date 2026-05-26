@@ -1,0 +1,4 @@
+value,number,flag,notes
+NULL,-12,true,NA
+na,0x10,false,plain text
+"quoted",-3.14,TRUE,"escaped ""quote"""
