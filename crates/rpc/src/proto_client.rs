@@ -415,6 +415,9 @@ impl AnyProtoClient {
                             Response::GetDocumentSymbolsResponse(response) => {
                                 to_any_envelope(&envelope, response)
                             }
+                            Response::GetDocumentLinksResponse(response) => {
+                                to_any_envelope(&envelope, response)
+                            }
                         };
                         Some(proto::ProtoLspResponse {
                             server_id,
