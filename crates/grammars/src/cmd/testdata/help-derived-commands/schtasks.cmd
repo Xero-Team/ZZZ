@@ -1,0 +1,2 @@
+schtasks /query /?
+schtasks /showsid /?

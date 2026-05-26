@@ -1,0 +1,2 @@
+setlocal enableextensions enabledelayedexpansion
+setlocal disableextensions
