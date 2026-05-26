@@ -1,0 +1,304 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/grammar.schema.json",
+  "name": "csv",
+  "rules": {
+    "source_file": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_line"
+          }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "record"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        }
+      ]
+    },
+    "_line": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "record"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "_eor"
+            }
+          ]
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_eor"
+        }
+      ]
+    },
+    "record": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_field"
+        },
+        {
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "_field"
+                },
+                {
+                  "type": "BLANK"
+                }
+              ]
+            },
+            {
+              "type": "REPEAT1",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_pair"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "_eor": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "\n"
+        },
+        {
+          "type": "STRING",
+          "value": "\r\n"
+        }
+      ]
+    },
+    "_pair": {
+      "type": "PREC",
+      "value": 1,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "FIELD",
+            "name": "sep",
+            "content": {
+              "type": "SYMBOL",
+              "name": "delimiter"
+            }
+          },
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "_field"
+              },
+              {
+                "type": "BLANK"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "delimiter": {
+      "type": "STRING",
+      "value": ","
+    },
+    "_field": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "null"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "na"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "boolean"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_number"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "string"
+        }
+      ]
+    },
+    "null": {
+      "type": "PATTERN",
+      "value": "null|NULL"
+    },
+    "na": {
+      "type": "PATTERN",
+      "value": "na|NA"
+    },
+    "boolean": {
+      "type": "PATTERN",
+      "value": "true|TRUE|false|FALSE"
+    },
+    "_number": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "hex"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "float"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "integer"
+        }
+      ]
+    },
+    "integer": {
+      "type": "PATTERN",
+      "value": "-?\\d+"
+    },
+    "hex": {
+      "type": "PATTERN",
+      "value": "0[xX][\\da-fA-F]+"
+    },
+    "float": {
+      "type": "PATTERN",
+      "value": "-?(0|[1-9]\\d*)\\.\\d+"
+    },
+    "string": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "quote"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "quote"
+            }
+          ]
+        },
+        {
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "quote"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "escaped"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "quote"
+            }
+          ]
+        },
+        {
+          "type": "SYMBOL",
+          "name": "non_escaped"
+        }
+      ]
+    },
+    "quote": {
+      "type": "STRING",
+      "value": "\""
+    },
+    "escaped": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "PREC_LEFT",
+        "value": 1,
+        "content": {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "escape_sequence"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "text"
+            }
+          ]
+        }
+      }
+    },
+    "non_escaped": {
+      "type": "PATTERN",
+      "value": "[^\\\\\"\\r\\n\\t,]+"
+    },
+    "text": {
+      "type": "PATTERN",
+      "value": "[^\\\\\"\\r\\n]+"
+    },
+    "escape_sequence": {
+      "type": "IMMEDIATE_TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 10,
+        "content": {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "STRING",
+              "value": "\"\""
+            },
+            {
+              "type": "STRING",
+              "value": "\n"
+            },
+            {
+              "type": "STRING",
+              "value": "\r\n"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "extras": [
+    {
+      "type": "PATTERN",
+      "value": "\\s"
+    }
+  ],
+  "conflicts": [],
+  "precedences": [],
+  "externals": [],
+  "inline": [],
+  "supertypes": [],
+  "reserved": {}
+}

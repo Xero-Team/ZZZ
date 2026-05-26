@@ -20,8 +20,10 @@ util.workspace = true
 tree-sitter = { workspace = true, optional = true }
 tree-sitter-bash = { workspace = true, optional = true }
 tree-sitter-c = { workspace = true, optional = true }
+tree-sitter-cmd = { workspace = true, optional = true }
 tree-sitter-cpp = { workspace = true, optional = true }
 tree-sitter-css = { workspace = true, optional = true }
+tree-sitter-csv = { workspace = true, optional = true }
 tree-sitter-diff = { workspace = true, optional = true }
 tree-sitter-git-config = { workspace = true, optional = true }
 tree-sitter-gitattributes = { workspace = true, optional = true }
@@ -34,6 +36,7 @@ tree-sitter-gowork = { workspace = true, optional = true }
 tree-sitter-jsdoc = { workspace = true, optional = true }
 tree-sitter-json = { workspace = true, optional = true }
 tree-sitter-md = { workspace = true, optional = true }
+tree-sitter-powershell = { workspace = true, optional = true }
 tree-sitter-python = { workspace = true, optional = true }
 tree-sitter-regex = { workspace = true, optional = true }
 tree-sitter-rust = { workspace = true, optional = true }
@@ -48,8 +51,10 @@ load-grammars = [
     "tree-sitter",
     "tree-sitter-bash",
     "tree-sitter-c",
+    "tree-sitter-cmd",
     "tree-sitter-cpp",
     "tree-sitter-css",
+    "tree-sitter-csv",
     "tree-sitter-diff",
     "tree-sitter-git-config",
     "tree-sitter-gitattributes",
@@ -62,6 +67,7 @@ load-grammars = [
     "tree-sitter-jsdoc",
     "tree-sitter-json",
     "tree-sitter-md",
+    "tree-sitter-powershell",
     "tree-sitter-python",
     "tree-sitter-regex",
     "tree-sitter-rust",
@@ -75,5 +81,7 @@ test-support = ["load-grammars"]
 
 [dev-dependencies]
 tree-sitter.workspace = true
+tree-sitter-cmd.workspace = true
+tree-sitter-csv.workspace = true
 tree-sitter-syslog.workspace = true
 tree-sitter-toml.workspace = true

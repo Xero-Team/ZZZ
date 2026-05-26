@@ -1,0 +1,9 @@
+name = "Windows Batch"
+grammar = "cmd"
+path_suffixes = ["bat", "cmd"]
+line_comments = ["REM ", ":: "]
+brackets = [
+    { start = "(", end = ")", close = true, newline = true },
+    { start = "\"", end = "\"", close = true, newline = false, not_in = ["string", "comment"] },
+]
+tab_size = 4

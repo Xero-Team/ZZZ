@@ -1,0 +1,21 @@
+{
+  "grammars": [
+    {
+      "name": "cmd",
+      "camelcase": "Cmd",
+      "scope": "source.cmd",
+      "file-types": ["cmd", "bat"],
+      "highlights": ["queries/highlights.scm"],
+      "injection-regex": "^(cmd|batch)$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "CMD batch grammar for tree-sitter"
+  },
+  "bindings": {
+    "c": true,
+    "rust": true
+  }
+}

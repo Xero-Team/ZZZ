@@ -1132,6 +1132,239 @@ mod tests {
     }
 
     #[test]
+    fn cmd_parser_handles_command_operators_and_pipes() {
+        let source = read_cmd_testdata("pipe-chain.cmd");
+        assert_cmd_parses(&source);
+
+        let sexp = cmd_sexp(&source);
+        // command_chain wraps each chained expression
+        assert!(sexp.contains("(command_chain"), "expected command_chain node:\n{sexp}");
+        // Each operator appears as a named (command_operator) node; test file uses all 4 types
+        // across 7 lines → at least 7 total operator nodes
+        let op_count = sexp.matches("operator: (command_operator)").count();
+        assert!(
+            op_count >= 7,
+            "expected ≥7 command_operator nodes (one per chained line), got {op_count}:\n{sexp}"
+        );
+    }
+
+    #[test]
+    fn cmd_parser_handles_descriptor_redirections() {
+        let source = read_cmd_testdata("redirect-edge.cmd");
+        assert_cmd_parses(&source);
+
+        let sexp = cmd_sexp(&source);
+        // Multiple redirection nodes present (one per source line)
+        let redir_count = sexp.matches("(redirection ").count();
+        assert!(
+            redir_count >= 5,
+            "expected ≥5 redirection nodes, got {redir_count}:\n{sexp}"
+        );
+        // Descriptor field present (from '2> error.txt', '1> out.txt', '2>nul', '1>>')
+        assert!(
+            sexp.contains("descriptor:"),
+            "expected descriptor field in sexp:\n{sexp}"
+        );
+        // Multiple descriptor redirections
+        let desc_count = sexp.matches("descriptor:").count();
+        assert!(
+            desc_count >= 2,
+            "expected ≥2 descriptor-qualified redirections, got {desc_count}:\n{sexp}"
+        );
+    }
+
+    #[test]
+    fn cmd_parser_handles_if_else_with_command_groups() {
+        let source = read_cmd_testdata("if-else-group.cmd");
+        assert_cmd_parses(&source);
+
+        let sexp = cmd_sexp(&source);
+        assert!(sexp.contains("(if_statement"), "expected if_statement:\n{sexp}");
+        assert!(
+            sexp.contains("(command_group"),
+            "expected command_group in if/else:\n{sexp}"
+        );
+        assert!(
+            sexp.contains("else_keyword:"),
+            "expected else_keyword field:\n{sexp}"
+        );
+        // Multiple if statements exercised (5 lines)
+        let if_count = sexp.matches("(if_statement").count();
+        assert!(
+            if_count >= 4,
+            "expected ≥4 if_statement nodes, got {if_count}:\n{sexp}"
+        );
+    }
+
+    #[test]
+    fn cmd_set_arith_line_by_line() {
+        let cases = [
+            // Unambiguous single-number assignments
+            ("set /a x=10", true),
+            ("set /a x=(10+2)", true),   // parenthesized additive
+            ("set /a x=(10-2)", true),
+            ("set /a x=(10*2)", true),
+            ("set /a x=(10/2)", true),
+            ("set /a x=10%y", true),     // modulo: %y → % op + identifier
+            ("set /a x=-5", true),       // unary minus
+            ("set /a x+=1", true),       // compound assignment
+            ("set /a x-=1", true),
+            ("set /a x*=2", true),
+            ("set /a x/=2", true),
+            // Bare additive without parens (known grammar limitation)
+            ("set /a x=10+2", false),
+            // Quoted expressions unlock all operators
+            (r#"set /a "x=10+2""#, true),
+            (r#"set /a "x=10>>1""#, true),
+            (r#"set /a "x=10<<1""#, true),
+            (r#"set /a "x=10&6""#, true),
+            (r#"set /a "x=10^6""#, true),
+            (r#"set /a "x=10|6""#, true),
+            (r#"set /a "x=!0""#, true),
+            (r#"set /a "x=~0""#, true),
+            (r#"set /a "x=a+b, y=c*d""#, true),
+        ];
+        for (line, should_pass) in cases {
+            let sexp = cmd_sexp(line);
+            let has_error = sexp.contains("ERROR");
+            if should_pass {
+                assert!(
+                    !has_error,
+                    "expected clean parse for {line:?}, got ERROR:\n{sexp}"
+                );
+            } else {
+                assert!(
+                    has_error,
+                    "expected parse limitation for {line:?}, but got clean parse:\n{sexp}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cmd_parser_handles_set_arithmetic_all_operators() {
+        let source = read_cmd_testdata("set-arithmetic-ops.cmd");
+        assert_cmd_parses(&source);
+
+        let sexp = cmd_sexp(&source);
+        assert!(sexp.contains("(set_statement"), "expected set_statement:\n{sexp}");
+        // Additive
+        assert!(
+            sexp.contains("(set_arithmetic_additive_expression"),
+            "expected additive expr:\n{sexp}"
+        );
+        // Multiplicative
+        assert!(
+            sexp.contains("(set_arithmetic_multiplicative_expression"),
+            "expected multiplicative expr:\n{sexp}"
+        );
+        // Shift
+        assert!(
+            sexp.contains("(set_arithmetic_shift_expression"),
+            "expected shift expr:\n{sexp}"
+        );
+        // Bitwise AND
+        assert!(
+            sexp.contains("(set_arithmetic_bitwise_and_expression"),
+            "expected bitwise_and expr:\n{sexp}"
+        );
+        // Bitwise XOR
+        assert!(
+            sexp.contains("(set_arithmetic_bitwise_xor_expression"),
+            "expected bitwise_xor expr:\n{sexp}"
+        );
+        // Bitwise OR
+        assert!(
+            sexp.contains("(set_arithmetic_bitwise_or_expression"),
+            "expected bitwise_or expr:\n{sexp}"
+        );
+        // Unary
+        assert!(
+            sexp.contains("(set_arithmetic_unary_expression"),
+            "expected unary expr:\n{sexp}"
+        );
+        // Assignment operator (+=, -=, *=, /=)
+        assert!(
+            sexp.contains("(set_arithmetic_assignment_expression"),
+            "expected assignment expr:\n{sexp}"
+        );
+        // Comma (multi-assignment)
+        assert!(
+            sexp.contains("(set_arithmetic_comma_expression"),
+            "expected comma expr:\n{sexp}"
+        );
+    }
+
+    #[test]
+    fn cmd_parser_handles_copy_plus_concatenated_sources() {
+        let source = read_cmd_testdata("copy-concat.cmd");
+        assert_cmd_parses(&source);
+
+        let sexp = cmd_sexp(&source);
+        assert!(sexp.contains("(copy_statement"), "expected copy_statement:\n{sexp}");
+        assert!(
+            sexp.contains("(copy_source_list"),
+            "expected copy_source_list:\n{sexp}"
+        );
+        // Multiple copy_source_spec nodes confirm concatenation was parsed
+        let count = sexp.matches("(copy_source_spec").count();
+        assert!(
+            count >= 3,
+            "expected at least 3 copy_source_spec nodes (3-way concat), got {count}:\n{sexp}"
+        );
+    }
+
+    #[test]
+    fn cmd_parser_handles_for_complex_options() {
+        let source = read_cmd_testdata("for-complex.cmd");
+        assert_cmd_parses(&source);
+
+        let sexp = cmd_sexp(&source);
+        assert!(sexp.contains("(for_f_default_statement"), "expected for_f_default:\n{sexp}");
+        assert!(sexp.contains("(for_f_usebackq_statement"), "expected for_f_usebackq:\n{sexp}");
+        // Group body in FOR DO clause
+        assert!(
+            sexp.contains("(command_group"),
+            "expected command_group in for body:\n{sexp}"
+        );
+    }
+
+    #[test]
+    fn cmd_parser_handles_at_prefix_suppression() {
+        let source = read_cmd_testdata("at-prefix.cmd");
+        assert_cmd_parses(&source);
+
+        let sexp = cmd_sexp(&source);
+        assert!(
+            sexp.contains("prefix: (command_prefix)"),
+            "expected command_prefix nodes:\n{sexp}"
+        );
+        // @ prefix appears on multiple commands
+        let count = sexp.matches("prefix: (command_prefix)").count();
+        assert!(
+            count >= 3,
+            "expected at least 3 @-prefixed commands, got {count}:\n{sexp}"
+        );
+    }
+
+    #[test]
+    fn cmd_parser_handles_label_name_variety() {
+        let source = read_cmd_testdata("label-edge.cmd");
+        assert_cmd_parses(&source);
+
+        let sexp = cmd_sexp(&source);
+        // Grammar uses 'label' rule (not 'label_statement')
+        assert!(sexp.contains("(label "), "expected label nodes:\n{sexp}");
+        assert!(sexp.contains("(goto_label_statement"), "expected goto_label_statement:\n{sexp}");
+        // Labels with hyphens, dots, digits and underscores all parse
+        let label_count = sexp.matches("(label_name)").count();
+        assert!(
+            label_count >= 5,
+            "expected at least 5 distinct label_name nodes, got {label_count}:\n{sexp}"
+        );
+    }
+
+    #[test]
     fn gitrebase_queries_highlight_bare_merge_labels() {
         let queries = load_queries("gitrebase");
         let highlights = queries.highlights.expect("gitrebase highlights query");

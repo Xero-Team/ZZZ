@@ -1,0 +1,19 @@
+set /a x=10
+set /a x=(10+2)
+set /a x=(10-2)
+set /a x=(10*2)
+set /a x=(10/2)
+set /a x=10%y
+set /a x=-5
+set /a x+=1
+set /a x-=1
+set /a x*=2
+set /a x/=2
+set /a "x=10>>1"
+set /a "x=10<<1"
+set /a "x=10&6"
+set /a "x=10^6"
+set /a "x=10|6"
+set /a "x=!0"
+set /a "x=~0"
+set /a "x=a+b, y=c*d"

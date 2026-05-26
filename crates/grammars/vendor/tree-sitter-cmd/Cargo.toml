@@ -1,0 +1,26 @@
+[package]
+name = "tree-sitter-cmd"
+description = "CMD batch grammar for tree-sitter"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+build = "bindings/rust/build.rs"
+include = [
+  "bindings/rust/*",
+  "grammar.js",
+  "queries/*",
+  "src/*",
+  "tree-sitter.json",
+]
+
+[lib]
+path = "bindings/rust/lib.rs"
+
+[dependencies]
+tree-sitter-language = "0.1"
+
+[build-dependencies]
+cc = "1.2"
+
+[dev-dependencies]
+tree-sitter = { workspace = true }
