@@ -21,8 +21,8 @@ impl CsvPreviewView {
             vertical_alignment,
             cx,
         )
-            // Mouse events handlers will be here
-            .into_any_element()
+        // Mouse events handlers will be here
+        .into_any_element()
     }
 }
 

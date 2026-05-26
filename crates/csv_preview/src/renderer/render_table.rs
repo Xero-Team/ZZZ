@@ -129,15 +129,16 @@ impl CsvPreviewView {
 
             let display_cell_id = DisplayCellId::new(display_row, col);
 
-            let cell = div().w_full().min_w_0().child(
-                CsvPreviewView::create_selectable_cell(
+            let cell = div()
+                .w_full()
+                .min_w_0()
+                .child(CsvPreviewView::create_selectable_cell(
                     display_cell_id,
                     cell_content,
                     this.settings.multiline_cells_enabled,
                     this.settings.vertical_alignment,
                     cx,
-                ),
-            );
+                ));
 
             elements.push(
                 div()

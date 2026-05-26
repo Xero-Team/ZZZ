@@ -1138,7 +1138,10 @@ mod tests {
 
         let sexp = cmd_sexp(&source);
         // command_chain wraps each chained expression
-        assert!(sexp.contains("(command_chain"), "expected command_chain node:\n{sexp}");
+        assert!(
+            sexp.contains("(command_chain"),
+            "expected command_chain node:\n{sexp}"
+        );
         // Each operator appears as a named (command_operator) node; test file uses all 4 types
         // across 7 lines → at least 7 total operator nodes
         let op_count = sexp.matches("operator: (command_operator)").count();
@@ -1179,7 +1182,10 @@ mod tests {
         assert_cmd_parses(&source);
 
         let sexp = cmd_sexp(&source);
-        assert!(sexp.contains("(if_statement"), "expected if_statement:\n{sexp}");
+        assert!(
+            sexp.contains("(if_statement"),
+            "expected if_statement:\n{sexp}"
+        );
         assert!(
             sexp.contains("(command_group"),
             "expected command_group in if/else:\n{sexp}"
@@ -1201,13 +1207,13 @@ mod tests {
         let cases = [
             // Unambiguous single-number assignments
             ("set /a x=10", true),
-            ("set /a x=(10+2)", true),   // parenthesized additive
+            ("set /a x=(10+2)", true), // parenthesized additive
             ("set /a x=(10-2)", true),
             ("set /a x=(10*2)", true),
             ("set /a x=(10/2)", true),
-            ("set /a x=10%y", true),     // modulo: %y → % op + identifier
-            ("set /a x=-5", true),       // unary minus
-            ("set /a x+=1", true),       // compound assignment
+            ("set /a x=10%y", true), // modulo: %y → % op + identifier
+            ("set /a x=-5", true),   // unary minus
+            ("set /a x+=1", true),   // compound assignment
             ("set /a x-=1", true),
             ("set /a x*=2", true),
             ("set /a x/=2", true),
@@ -1247,7 +1253,10 @@ mod tests {
         assert_cmd_parses(&source);
 
         let sexp = cmd_sexp(&source);
-        assert!(sexp.contains("(set_statement"), "expected set_statement:\n{sexp}");
+        assert!(
+            sexp.contains("(set_statement"),
+            "expected set_statement:\n{sexp}"
+        );
         // Additive
         assert!(
             sexp.contains("(set_arithmetic_additive_expression"),
@@ -1301,7 +1310,10 @@ mod tests {
         assert_cmd_parses(&source);
 
         let sexp = cmd_sexp(&source);
-        assert!(sexp.contains("(copy_statement"), "expected copy_statement:\n{sexp}");
+        assert!(
+            sexp.contains("(copy_statement"),
+            "expected copy_statement:\n{sexp}"
+        );
         assert!(
             sexp.contains("(copy_source_list"),
             "expected copy_source_list:\n{sexp}"
@@ -1320,8 +1332,14 @@ mod tests {
         assert_cmd_parses(&source);
 
         let sexp = cmd_sexp(&source);
-        assert!(sexp.contains("(for_f_default_statement"), "expected for_f_default:\n{sexp}");
-        assert!(sexp.contains("(for_f_usebackq_statement"), "expected for_f_usebackq:\n{sexp}");
+        assert!(
+            sexp.contains("(for_f_default_statement"),
+            "expected for_f_default:\n{sexp}"
+        );
+        assert!(
+            sexp.contains("(for_f_usebackq_statement"),
+            "expected for_f_usebackq:\n{sexp}"
+        );
         // Group body in FOR DO clause
         assert!(
             sexp.contains("(command_group"),
@@ -1355,7 +1373,10 @@ mod tests {
         let sexp = cmd_sexp(&source);
         // Grammar uses 'label' rule (not 'label_statement')
         assert!(sexp.contains("(label "), "expected label nodes:\n{sexp}");
-        assert!(sexp.contains("(goto_label_statement"), "expected goto_label_statement:\n{sexp}");
+        assert!(
+            sexp.contains("(goto_label_statement"),
+            "expected goto_label_statement:\n{sexp}"
+        );
         // Labels with hyphens, dots, digits and underscores all parse
         let label_count = sexp.matches("(label_name)").count();
         assert!(

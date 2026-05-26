@@ -41,10 +41,9 @@ impl PowerShellLspAdapter {
     async fn powershell_binary(
         delegate: &dyn LspAdapterDelegate,
     ) -> Result<(PathBuf, HashMap<String, String>)> {
-        let powershell_path = delegate
-            .which("pwsh".as_ref())
-            .await
-            .context("PowerShell 7+ (`pwsh`) must be installed to run PowerShell Editor Services")?;
+        let powershell_path = delegate.which("pwsh".as_ref()).await.context(
+            "PowerShell 7+ (`pwsh`) must be installed to run PowerShell Editor Services",
+        )?;
         let environment = delegate.shell_env().await;
         delegate
             .try_exec(LanguageServerBinary {
@@ -161,7 +160,9 @@ impl LspInstaller for PowerShellLspAdapter {
             let start_script_path = destination_path.join(START_SCRIPT_RELATIVE_PATH);
             let metadata_path = destination_path.with_extension("metadata");
 
-            let metadata = GithubBinaryMetadata::read_from_file(&metadata_path).await.ok();
+            let metadata = GithubBinaryMetadata::read_from_file(&metadata_path)
+                .await
+                .ok();
             if let Some(metadata) = metadata {
                 if let (Some(actual_digest), Some(expected_digest)) =
                     (&metadata.digest, &expected_digest)
@@ -178,7 +179,8 @@ impl LspInstaller for PowerShellLspAdapter {
                         ));
                     }
                 } else if Self::bundle_is_valid(&start_script_path).await.is_ok() {
-                    let (powershell_path, environment) = Self::powershell_binary(delegate.as_ref()).await?;
+                    let (powershell_path, environment) =
+                        Self::powershell_binary(delegate.as_ref()).await?;
                     return Ok(Self::server_binary(
                         powershell_path,
                         environment,

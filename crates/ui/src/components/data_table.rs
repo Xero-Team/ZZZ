@@ -686,12 +686,17 @@ pub fn render_table_row(
         let scrollable_items: Vec<AnyElement> = items_vec.drain(pinned_cols..).collect();
         let scrollable_widths: Vec<Option<Length>> = widths_vec.drain(pinned_cols..).collect();
 
-        let pinned_section = div().flex().flex_row().items_stretch().flex_shrink_0().children(
-            items_vec
-                .into_iter()
-                .zip(widths_vec)
-                .map(|(cell, width)| render_cell(width, cell, &table_context, cx)),
-        );
+        let pinned_section = div()
+            .flex()
+            .flex_row()
+            .items_stretch()
+            .flex_shrink_0()
+            .children(
+                items_vec
+                    .into_iter()
+                    .zip(widths_vec)
+                    .map(|(cell, width)| render_cell(width, cell, &table_context, cx)),
+            );
 
         // Scrollable section: overflow_x_scroll + track_scroll so GPUI handles the visual
         // shift natively without requiring per-scroll re-renders of list items.
