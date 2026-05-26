@@ -319,11 +319,34 @@ pub struct NewExternalAgentThread {
     agent: Option<Agent>,
 }
 
-#[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
-#[action(namespace = agent)]
-#[serde(deny_unknown_fields)]
-pub struct NewNativeAgentThreadFromSummary {
-    from_session_id: acp::SessionId,
+/// Stub server returned when old serialized data refers to the removed built-in Zed Agent.
+/// Attempting to connect will produce a clear error rather than a crash.
+struct RemovedNativeAgentServer;
+
+impl agent_servers::AgentServer for RemovedNativeAgentServer {
+    fn agent_id(&self) -> project::AgentId {
+        agent::ZED_AGENT_ID.clone()
+    }
+
+    fn logo(&self) -> IconName {
+        IconName::ZedAssistant
+    }
+
+    fn connect(
+        &self,
+        _delegate: agent_servers::AgentServerDelegate,
+        _project: gpui::Entity<project::Project>,
+        _cx: &mut gpui::App,
+    ) -> gpui::Task<anyhow::Result<std::rc::Rc<dyn acp_thread::AgentConnection>>> {
+        gpui::Task::ready(Err(anyhow::anyhow!(
+            "The built-in Zed Agent has been removed. \
+             Please configure an external agent in the agent settings."
+        )))
+    }
+
+    fn into_any(self: std::rc::Rc<Self>) -> std::rc::Rc<dyn std::any::Any> {
+        self
+    }
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
@@ -362,6 +385,10 @@ impl Agent {
         }
     }
 
+    /// Returns `true` if this is the legacy `NativeAgent` variant.
+    ///
+    /// The built-in Zed Agent runtime has been removed. This method exists only to detect stale
+    /// serialized data that still references the old agent so it can be handled safely.
     pub fn is_native(&self) -> bool {
         matches!(self, Self::NativeAgent)
     }
@@ -386,11 +413,15 @@ impl Agent {
 
     pub fn server(
         &self,
-        fs: Arc<dyn fs::Fs>,
-        thread_store: Entity<agent::ThreadStore>,
+        _fs: Arc<dyn fs::Fs>,
+        _thread_store: Entity<agent::ThreadStore>,
     ) -> Rc<dyn agent_servers::AgentServer> {
         match self {
-            Self::NativeAgent => Rc::new(agent::NativeAgentServer::new(fs, thread_store)),
+            Self::NativeAgent => {
+                // The built-in Zed Agent runtime has been removed. Return a server that fails
+                // gracefully when a stale reference to the native agent is encountered.
+                Rc::new(RemovedNativeAgentServer)
+            }
             Self::Custom { id: name } => {
                 Rc::new(agent_servers::CustomAgentServer::new(name.clone()))
             }
