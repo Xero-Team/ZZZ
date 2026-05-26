@@ -6,7 +6,7 @@ use db::AppDatabase;
 use extension::ExtensionHostProxy;
 use fs::RealFs;
 use gpui::http_client::read_proxy_from_env;
-use gpui::{App, AppContext as _, Entity};
+use gpui::{App, AppContext as _};
 use gpui_tokio::Tokio;
 use language::LanguageRegistry;
 use language_extension::LspAccess;
@@ -18,13 +18,7 @@ use reqwest_client::ReqwestClient;
 use settings::{Settings, SettingsStore};
 use util::ResultExt as _;
 
-pub struct AgentCliAppState {
-    pub languages: Arc<LanguageRegistry>,
-    pub client: Arc<Client>,
-    pub user_store: Entity<UserStore>,
-    pub fs: Arc<dyn fs::Fs>,
-    pub node_runtime: NodeRuntime,
-}
+pub struct AgentCliAppState;
 
 pub fn init(cx: &mut App) -> Arc<AgentCliAppState> {
     let app_commit_sha = option_env!("ZED_COMMIT_SHA").map(|s| AppCommitSha::new(s.to_owned()));
@@ -112,27 +106,14 @@ pub fn init(cx: &mut App) -> Arc<AgentCliAppState> {
     language_extension::init(LspAccess::Noop, extension_host_proxy, languages.clone());
     language_model::init(cx);
     RefreshLlmTokenListener::register(client.clone(), user_store.clone(), cx);
-    language_models::init(user_store.clone(), client.clone(), cx);
-    languages::init(languages.clone(), fs.clone(), node_runtime.clone(), cx);
+    language_models::init(user_store, client, cx);
+    languages::init(languages.clone(), fs.clone(), node_runtime, cx);
     prompt_store::init(cx);
     terminal_view::init(cx);
 
     let stdout_is_a_pty = false;
     let prompt_builder = PromptBuilder::load(fs.clone(), stdout_is_a_pty, cx);
-    agent_ui::init(
-        fs.clone(),
-        prompt_builder,
-        languages.clone(),
-        true,
-        true,
-        cx,
-    );
+    agent_ui::init(fs, prompt_builder, languages, true, true, cx);
 
-    Arc::new(AgentCliAppState {
-        languages,
-        client,
-        user_store,
-        fs,
-        node_runtime,
-    })
+    Arc::new(AgentCliAppState)
 }

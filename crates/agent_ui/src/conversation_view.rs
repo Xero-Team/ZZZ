@@ -6,9 +6,7 @@ use acp_thread::{
 };
 use acp_thread::{AgentConnection, Plan};
 use action_log::{ActionLog, ActionLogTelemetry, DiffStats};
-use agent::{
-    NoModelConfiguredError, SharedThread, ThreadStore,
-};
+use agent::{NoModelConfiguredError, ThreadStore};
 use agent_client_protocol::schema as acp;
 #[cfg(test)]
 use agent_servers::AgentServerDelegate;
@@ -25,6 +23,7 @@ use editor::{
 };
 use feature_flags::{AgentSharingFeatureFlag, FeatureFlagAppExt as _};
 use file_icons::FileIcons;
+#[cfg(test)]
 use fs::Fs;
 use futures::FutureExt as _;
 use gpui::{

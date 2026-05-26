@@ -42,9 +42,7 @@ use crate::{
     agent_configuration::{AgentConfiguration, AssistantConfigurationEvent},
     conversation_view::{AcpThreadViewEvent, ThreadView},
 };
-use crate::{
-    Agent, AgentInitialContent, ExternalSourcePrompt, NewExternalAgentThread,
-};
+use crate::{Agent, AgentInitialContent, ExternalSourcePrompt, NewExternalAgentThread};
 use agent_settings::AgentSettings;
 use ai_onboarding::AgentPanelOnboarding;
 use anyhow::Result;
@@ -53,9 +51,9 @@ use collections::HashMap;
 use editor::{Editor, MultiBuffer};
 use fs::Fs;
 use gpui::{
-    Action, Anchor, Animation, AnimationExt, AnyElement, App, AsyncWindowContext, ClipboardItem,
-    Entity, EventEmitter, ExternalPaths, FocusHandle, Focusable, KeyContext, Pixels, Subscription,
-    Task, UpdateGlobal, WeakEntity, prelude::*, pulsating_between,
+    Action, Anchor, Animation, AnimationExt, AnyElement, App, AsyncWindowContext, Entity,
+    EventEmitter, ExternalPaths, FocusHandle, Focusable, KeyContext, Pixels, Subscription, Task,
+    UpdateGlobal, WeakEntity, prelude::*, pulsating_between,
 };
 use language::LanguageRegistry;
 use language_model::LanguageModelRegistry;
@@ -944,9 +942,7 @@ impl AgentPanel {
             )
         });
 
-        let connection_store = cx.new(|cx| {
-            AgentConnectionStore::new(project.clone(), cx)
-        });
+        let connection_store = cx.new(|cx| AgentConnectionStore::new(project.clone(), cx));
         let _project_subscription =
             cx.subscribe(&project, |this, _project, event, cx| match event {
                 project::Event::WorktreeAdded(_)
@@ -2717,7 +2713,7 @@ impl AgentPanel {
                                 .collect::<Vec<_>>();
 
                             if !agent_items.is_empty() {
-                                menu = menu.separator().header("External Agents");
+                                menu = menu.header("External Agents");
                             }
                             for item in &agent_items {
                                 let mut entry = ContextMenuEntry::new(item.display_name.clone());
@@ -4510,9 +4506,9 @@ mod tests {
         cx.run_until_parked();
 
         let connection = SessionTrackingConnection::new();
-        let server = Rc::new(StubAgentServer::new(connection.clone()));
+        let server = Rc::new(StubAgentServer::new(connection));
         let agent_id = server.agent_id();
-        let ext_agent = Agent::Custom { id: agent_id.clone() };
+        let ext_agent = Agent::Custom { id: agent_id };
 
         panel.update(&mut cx, |panel, cx| {
             panel.connection_store.update(cx, |store, cx| {
@@ -6551,9 +6547,9 @@ mod tests {
 
         // Register a stub external agent and set it as selected.
         let connection = StubAgentConnection::new();
-        let server = Rc::new(StubAgentServer::new(connection.clone()));
+        let server = Rc::new(StubAgentServer::new(connection));
         let agent_id = server.agent_id();
-        let ext_agent = Agent::Custom { id: agent_id.clone() };
+        let ext_agent = Agent::Custom { id: agent_id };
 
         panel.update(&mut cx, |panel, cx| {
             panel.selected_agent = ext_agent.clone();

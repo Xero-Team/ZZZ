@@ -32,28 +32,21 @@ mod headless;
 
 use std::path::PathBuf;
 use std::process;
-use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use acp_thread::AgentConnection as _;
-use agent::{NativeAgent, NativeAgentConnection, Templates, ThreadStore};
-use agent_client_protocol::schema as acp;
 use anyhow::{Context, Result};
 use clap::Parser;
 use feature_flags::FeatureFlagAppExt as _;
 
-use futures::{FutureExt, select_biased};
-use gpui::{AppContext as _, AsyncApp, Entity, UpdateGlobal};
+use gpui::{AsyncApp, UpdateGlobal};
 use language_model::{
     ANTHROPIC_PROVIDER_ID, LanguageModel, LanguageModelId, LanguageModelProviderId,
     LanguageModelRegistry, SelectedModel,
 };
-use project::Project;
 use settings::SettingsStore;
-use util::path_list::PathList;
 
 use crate::headless::AgentCliAppState;
 
@@ -102,12 +95,6 @@ struct Args {
     thinking: Option<bool>,
 }
 
-enum AgentOutcome {
-    Completed,
-    Timeout { seconds: u64 },
-    Interrupted,
-}
-
 #[derive(serde::Serialize)]
 struct EvalResult {
     status: String,
@@ -129,8 +116,6 @@ struct EvalResult {
 
 const EXIT_OK: i32 = 0;
 const EXIT_ERROR: i32 = 1;
-const EXIT_TIMEOUT: i32 = 2;
-const EXIT_INTERRUPTED: i32 = 3;
 const MODEL_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(30);
 const MODEL_DISCOVERY_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -208,15 +193,7 @@ fn main() {
             let duration = start.elapsed();
 
             let (status, error, exit_code) = match &outcome {
-                Ok(AgentOutcome::Completed) => ("completed".to_string(), None, EXIT_OK),
-                Ok(AgentOutcome::Timeout { seconds }) => {
-                    eprintln!("Timeout: agent exceeded {seconds}s time limit");
-                    ("timeout".to_string(), None, EXIT_TIMEOUT)
-                }
-                Ok(AgentOutcome::Interrupted) => {
-                    eprintln!("Interrupted: received SIGTERM, saved partial output");
-                    ("interrupted".to_string(), None, EXIT_INTERRUPTED)
-                }
+                Ok(()) => ("completed".to_string(), None, EXIT_OK),
                 Err(e) => {
                     eprintln!("Error: {e:#}");
                     ("error".to_string(), Some(format!("{e:#}")), EXIT_ERROR)
@@ -459,7 +436,7 @@ async fn run_agent(
     reasoning_effort: Option<&str>,
     output_dir: Option<&std::path::Path>,
     cx: &mut AsyncApp,
-) -> (Result<AgentOutcome>, Option<language_model::TokenUsage>) {
+) -> (Result<()>, Option<language_model::TokenUsage>) {
     let selected = match SelectedModel::from_str(model_name).map_err(|e| anyhow::anyhow!("{e}")) {
         Ok(selected) => selected,
         Err(e) => return (Err(e), None),
@@ -526,226 +503,12 @@ async fn run_agent(
         return (Err(e), None);
     }
 
-    let project = cx.update(|cx| {
-        Project::local(
-            app_state.client.clone(),
-            app_state.node_runtime.clone(),
-            app_state.user_store.clone(),
-            app_state.languages.clone(),
-            app_state.fs.clone(),
-            None,
-            project::LocalProjectFlags {
-                init_worktree_trust: false,
-                ..Default::default()
-            },
-            cx,
-        )
-    });
+    let _ = (app_state, workdir, instruction, timeout, output_dir, cx);
 
-    let worktree = project.update(cx, |project, cx| project.create_worktree(workdir, true, cx));
-    let worktree = match worktree.await {
-        Ok(w) => w,
-        Err(e) => return (Err(e).context("creating worktree"), None),
-    };
-
-    let scan_result = worktree.update(cx, |tree, _cx| {
-        tree.as_local()
-            .context("expected local worktree")
-            .map(|local| local.scan_complete())
-    });
-    match scan_result {
-        Ok(future) => future.await,
-        Err(e) => return (Err(e), None),
-    };
-
-    let agent = cx.update(|cx| {
-        let thread_store = cx.new(|cx| ThreadStore::new(cx));
-        NativeAgent::new(
-            thread_store,
-            Templates::new(),
-            None,
-            app_state.fs.clone(),
-            cx,
-        )
-    });
-
-    let connection = Rc::new(NativeAgentConnection(agent.clone()));
-    let acp_thread = match cx
-        .update(|cx| {
-            connection
-                .clone()
-                .new_session(project, PathList::new(&[workdir]), cx)
-        })
-        .await
-    {
-        Ok(t) => t,
-        Err(e) => return (Err(e).context("creating ACP session"), None),
-    };
-
-    let _subscription = cx.subscribe(&acp_thread, |acp_thread, event, cx| {
-        log_acp_thread_event(&acp_thread, event, cx);
-    });
-
-    let message = vec![acp::ContentBlock::Text(acp::TextContent::new(
-        instruction.to_string(),
-    ))];
-
-    let send_future = acp_thread.update(cx, |acp_thread: &mut acp_thread::AcpThread, cx| {
-        acp_thread.send(message, cx)
-    });
-
-    let timeout_future = if let Some(timeout_secs) = timeout {
-        futures::future::Either::Left(
-            cx.background_executor()
-                .timer(Duration::from_secs(timeout_secs)),
-        )
-    } else {
-        futures::future::Either::Right(futures::future::pending::<()>())
-    };
-
-    let sigterm_future = {
-        let executor = cx.background_executor().clone();
-        async move {
-            while !TERMINATED.load(Ordering::Relaxed) {
-                executor.timer(Duration::from_millis(100)).await;
-            }
-        }
-    };
-
-    let outcome = select_biased! {
-        result = send_future.fuse() => match result {
-            Ok(Some(response)) => {
-                eprintln!("[eval-cli] stopped: {:?}", response.stop_reason);
-                if response.stop_reason == acp::StopReason::MaxTokens {
-                    Err(anyhow::anyhow!("Model hit maximum token limit"))
-                } else {
-                    Ok(AgentOutcome::Completed)
-                }
-            }
-            Ok(None) => {
-                eprintln!("[eval-cli] completed (no response)");
-                Ok(AgentOutcome::Completed)
-            }
-            Err(e) => Err(e).context("agent run failed"),
-        },
-        _ = sigterm_future.fuse() => {
-            eprintln!("[eval-cli] received SIGTERM, cancelling...");
-            acp_thread.update(cx, |t: &mut acp_thread::AcpThread, cx| t.cancel(cx)).await;
-            Ok(AgentOutcome::Interrupted)
-        },
-        _ = timeout_future.fuse() => {
-            acp_thread.update(cx, |t: &mut acp_thread::AcpThread, cx| t.cancel(cx)).await;
-            Ok(AgentOutcome::Timeout { seconds: timeout.unwrap_or(0) })
-        }
-    };
-
-    let thread = cx.update(|cx| {
-        let session_id = acp_thread.read(cx).session_id().clone();
-        connection.thread(&session_id, cx)
-    });
-
-    let cumulative_usage = if let Some(thread) = &thread {
-        let db_thread = thread.read_with(cx, |thread, cx| thread.to_db(cx));
-        let db_thread = db_thread.await;
-        let usage = db_thread.cumulative_token_usage;
-        if usage.input_tokens > 0 || usage.output_tokens > 0 {
-            Some(usage)
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    let acp_usage = cx.update(|cx| {
-        acp_thread
-            .read(cx)
-            .token_usage()
-            .map(|usage| language_model::TokenUsage {
-                input_tokens: usage.input_tokens,
-                output_tokens: usage.output_tokens,
-                ..Default::default()
-            })
-    });
-
-    let final_usage = cumulative_usage.or(acp_usage);
-
-    if let (Some(thread), Some(dir)) = (&thread, output_dir) {
-        let markdown = thread.read_with(cx, |thread, _cx| thread.to_markdown());
-        if let Err(e) = std::fs::write(dir.join("thread.md"), markdown) {
-            eprintln!("Error writing thread.md: {e:#}");
-        }
-
-        let db_thread = thread.read_with(cx, |thread, cx| thread.to_db(cx));
-        let db_thread = db_thread.await;
-        match serde_json::to_string_pretty(&db_thread) {
-            Ok(json) => {
-                if let Err(e) = std::fs::write(dir.join("thread.json"), json) {
-                    eprintln!("Error writing thread.json: {e:#}");
-                }
-            }
-            Err(e) => eprintln!("Error serializing thread.json: {e:#}"),
-        }
-    }
-
-    (outcome, final_usage)
-}
-
-fn log_acp_thread_event(
-    acp_thread: &Entity<acp_thread::AcpThread>,
-    event: &acp_thread::AcpThreadEvent,
-    cx: &mut gpui::App,
-) {
-    match event {
-        acp_thread::AcpThreadEvent::NewEntry => {
-            let entries = acp_thread.read(cx).entries();
-            if let Some(acp_thread::AgentThreadEntry::AssistantMessage(message)) = entries.last() {
-                for chunk in &message.chunks {
-                    if let acp_thread::AssistantMessageChunk::Message { block } = chunk {
-                        if let acp_thread::ContentBlock::Markdown { markdown } = block {
-                            let text = markdown.read(cx).source().to_string();
-                            if !text.is_empty() {
-                                eprint!("{text}");
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        acp_thread::AcpThreadEvent::EntryUpdated(index) => {
-            let entries = acp_thread.read(cx).entries();
-            if let Some(acp_thread::AgentThreadEntry::ToolCall(tool_call)) = entries.get(*index) {
-                if let Some(name) = &tool_call.tool_name {
-                    match &tool_call.status {
-                        acp_thread::ToolCallStatus::Completed => {
-                            eprintln!("[tool] {name} ✓");
-                        }
-                        acp_thread::ToolCallStatus::Failed => {
-                            eprintln!("[tool] {name} ✗");
-                        }
-                        acp_thread::ToolCallStatus::Rejected => {
-                            eprintln!("[tool] {name} rejected");
-                        }
-                        acp_thread::ToolCallStatus::Canceled => {
-                            eprintln!("[tool] {name} canceled");
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-        acp_thread::AcpThreadEvent::Stopped(reason) => {
-            eprintln!("\n[eval-cli] stopped: {reason:?}");
-        }
-        acp_thread::AcpThreadEvent::Error => {
-            eprintln!("[eval-cli] error event");
-        }
-        acp_thread::AcpThreadEvent::Retry(status) => {
-            eprintln!("[eval-cli] retry: {status:?}");
-        }
-        acp_thread::AcpThreadEvent::SubagentSpawned(session_id) => {
-            eprintln!("[eval-cli] subagent spawned: {session_id}");
-        }
-        _ => {}
-    }
+    (
+        Err(anyhow::anyhow!(
+            "eval-cli is unavailable because the native agent implementation has been removed"
+        )),
+        None,
+    )
 }

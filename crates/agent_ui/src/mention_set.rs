@@ -2,7 +2,6 @@ use crate::diagnostics::{DiagnosticsOptions, codeblock_fence_for_path, collect_d
 use acp_thread::{MentionUri, selection_name};
 use agent::{ThreadStore, outline};
 use agent_client_protocol::schema as acp;
-use agent_servers::AgentServer;
 use anyhow::{Context as _, Result, anyhow};
 use collections::{HashMap, HashSet};
 use editor::{
@@ -60,7 +59,6 @@ pub struct MentionImage {
 
 pub struct MentionSet {
     project: WeakEntity<Project>,
-    thread_store: Option<Entity<ThreadStore>>,
     prompt_store: Option<Entity<PromptStore>>,
     mentions: HashMap<CreaseId, (MentionUri, MentionTask)>,
 }
@@ -68,12 +66,11 @@ pub struct MentionSet {
 impl MentionSet {
     pub fn new(
         project: WeakEntity<Project>,
-        thread_store: Option<Entity<ThreadStore>>,
+        _thread_store: Option<Entity<ThreadStore>>,
         prompt_store: Option<Entity<PromptStore>>,
     ) -> Self {
         Self {
             project,
-            thread_store,
             prompt_store,
             mentions: HashMap::default(),
         }

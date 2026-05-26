@@ -971,7 +971,6 @@ pub struct Thread {
     thinking_effort: Option<String>,
     speed: Option<Speed>,
     prompt_capabilities_tx: watch::Sender<acp::PromptCapabilities>,
-    pub(crate) prompt_capabilities_rx: watch::Receiver<acp::PromptCapabilities>,
     pub(crate) project: Entity<Project>,
     pub(crate) action_log: Entity<ActionLog>,
     /// True if this thread was imported from a shared thread and can be synced.
@@ -1066,7 +1065,7 @@ impl Thread {
             .default_model
             .as_ref()
             .and_then(|model| model.speed);
-        let (prompt_capabilities_tx, prompt_capabilities_rx) =
+        let (prompt_capabilities_tx, _prompt_capabilities_rx) =
             watch::channel(Self::prompt_capabilities(model.as_deref()));
         Self {
             id: acp::SessionId::new(uuid::Uuid::new_v4().to_string()),
@@ -1101,7 +1100,6 @@ impl Thread {
             speed,
             thinking_effort,
             prompt_capabilities_tx,
-            prompt_capabilities_rx,
             project,
             action_log,
             imported: false,
@@ -1365,7 +1363,7 @@ impl Thread {
             });
         }
 
-        let (prompt_capabilities_tx, prompt_capabilities_rx) =
+        let (prompt_capabilities_tx, _prompt_capabilities_rx) =
             watch::channel(Self::prompt_capabilities(model.as_deref()));
 
         let action_log = cx.new(|_| ActionLog::new(project.clone()));
@@ -1404,7 +1402,6 @@ impl Thread {
             action_log,
             updated_at: db_thread.updated_at,
             prompt_capabilities_tx,
-            prompt_capabilities_rx,
             imported: db_thread.imported,
             subagent_context: db_thread.subagent_context,
             draft_prompt: db_thread.draft_prompt,
@@ -3028,18 +3025,23 @@ impl Thread {
         self.tools.contains_key(name)
     }
 
+    #[cfg(any(test, feature = "test-support"))]
+    #[allow(dead_code)]
     pub(crate) fn register_running_subagent(&mut self, subagent: WeakEntity<Thread>) {
         self.running_subagents.push(subagent);
     }
 
+    #[cfg(any(test, feature = "test-support"))]
+    #[allow(dead_code)]
     pub(crate) fn unregister_running_subagent(
         &mut self,
         subagent_session_id: &acp::SessionId,
         cx: &App,
     ) {
-        self.running_subagents.retain(|s| {
-            s.upgrade()
-                .map_or(false, |s| s.read(cx).id() != subagent_session_id)
+        self.running_subagents.retain(|subagent| {
+            subagent
+                .upgrade()
+                .is_some_and(|subagent| subagent.read(cx).id() != subagent_session_id)
         });
     }
 
