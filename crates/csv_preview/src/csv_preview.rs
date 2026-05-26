@@ -72,7 +72,7 @@ impl CsvPreviewView {
                 *state = ResizableColumnsState::new(cols, widths, resize_behaviors);
             } else {
                 for (column_index, (width, resize_behavior)) in
-                    widths.into_iter().zip(resize_behaviors.into_iter()).enumerate()
+                    widths.into_iter().zip(resize_behaviors).enumerate()
                 {
                     if column_index == 0 {
                         state.set_column_configuration(column_index, width, resize_behavior);

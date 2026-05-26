@@ -2475,6 +2475,7 @@ mod tests {
     use editor::{
         DisplayPoint, Editor, MultiBufferOffset, SelectionEffects, display_map::DisplayRow,
     };
+    use futures::lock::{Mutex, MutexGuard};
     use gpui::{
         Action, AnyWindowHandle, App, AssetSource, BorrowAppContext, Modifiers, TestAppContext,
         UpdateGlobal, VisualTestContext, WindowHandle, actions, point, px,
@@ -2489,7 +2490,7 @@ mod tests {
     use settings::{SaturatingBool, SettingsStore, watch_config_file};
     use std::{
         path::{Path, PathBuf},
-        sync::{Arc, Mutex, MutexGuard, OnceLock},
+        sync::{Arc, OnceLock},
         time::Duration,
     };
     use theme::ThemeRegistry;
@@ -2531,11 +2532,9 @@ mod tests {
         cx.run_until_parked();
     }
 
-    fn session_restore_test_guard() -> MutexGuard<'static, ()> {
+    async fn session_restore_test_guard() -> MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("session restore test lock")
+        LOCK.get_or_init(|| Mutex::new(())).lock().await
     }
 
     #[gpui::test]
@@ -6192,7 +6191,7 @@ mod tests {
 
     #[gpui::test]
     async fn test_multi_workspace_session_restore(cx: &mut TestAppContext) {
-        let _guard = session_restore_test_guard();
+        let _guard = session_restore_test_guard().await;
         use collections::HashMap;
         use session::Session;
         use util::path_list::PathList;
@@ -6427,7 +6426,7 @@ mod tests {
 
     #[gpui::test]
     async fn test_restored_project_groups_survive_workspace_key_change(cx: &mut TestAppContext) {
-        let _guard = session_restore_test_guard();
+        let _guard = session_restore_test_guard().await;
         use session::Session;
         use util::path_list::PathList;
         use workspace::{OpenMode, ProjectGroupKey};

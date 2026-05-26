@@ -61,7 +61,7 @@ fn create_table_cell(
             VerticalAlignment::Center => div.content_center(),
         })
         .font_buffer(cx)
-        .tooltip(Tooltip::text(cell_content.clone()))
+        .tooltip(Tooltip::text(cell_content))
         .child(cell_body)
 }
 
