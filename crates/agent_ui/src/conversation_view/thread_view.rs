@@ -866,11 +866,6 @@ impl ThreadView {
                 cx.defer(move |cx| {
                     let scroll_top = list_state.logical_scroll_top();
                     let _ = thread_view.update(cx, |this, cx| {
-                        if let Some(thread) = this.as_native_thread(cx) {
-                            thread.update(cx, |thread, _cx| {
-                                thread.set_ui_scroll_position(Some(scroll_top));
-                            });
-                        }
                         this.schedule_save(cx);
                     });
                 });
@@ -889,11 +884,7 @@ impl ThreadView {
             cx.background_executor()
                 .timer(SERIALIZATION_THROTTLE_TIME)
                 .await;
-            this.update(cx, |this, cx| {
-                if let Some(thread) = this.as_native_thread(cx) {
-                    thread.update(cx, |_thread, cx| cx.notify());
-                }
-            })
+            this.update(cx, |_this, _cx| {})
             .ok();
         }));
     }
@@ -917,20 +908,6 @@ impl ThreadView {
         }
     }
 
-    pub(crate) fn as_native_connection(
-        &self,
-        cx: &App,
-    ) -> Option<Rc<agent::NativeAgentConnection>> {
-        let acp_thread = self.thread.read(cx);
-        acp_thread.connection().clone().downcast()
-    }
-
-    pub fn as_native_thread(&self, cx: &App) -> Option<Entity<agent::Thread>> {
-        let acp_thread = self.thread.read(cx);
-        self.as_native_connection(cx)?
-            .thread(acp_thread.session_id(), cx)
-    }
-
     /// Resolves the message editor's contents into content blocks. For profiles
     /// that do not enable any tools, directory mentions are expanded to inline
     /// file contents since the agent can't read files on its own.
@@ -939,13 +916,7 @@ impl ThreadView {
         message_editor: &Entity<MessageEditor>,
         cx: &mut App,
     ) -> Task<Result<(Vec<acp::ContentBlock>, Vec<Entity<Buffer>>)>> {
-        let expand = self.as_native_thread(cx).is_some_and(|thread| {
-            let thread = thread.read(cx);
-            AgentSettings::get_global(cx)
-                .profiles
-                .get(thread.profile())
-                .is_some_and(|profile| profile.tools.is_empty())
-        });
+        let expand = false;
         message_editor.update(cx, |message_editor, cx| message_editor.contents(expand, cx))
     }
 
@@ -956,12 +927,8 @@ impl ThreadView {
     }
 
     pub fn current_mode_id(&self, cx: &App) -> Option<Arc<str>> {
-        if let Some(thread) = self.as_native_thread(cx) {
-            Some(thread.read(cx).profile().0.clone())
-        } else {
-            let mode_selector = self.mode_selector.as_ref()?;
-            Some(mode_selector.read(cx).mode().0)
-        }
+        let mode_selector = self.mode_selector.as_ref()?;
+        Some(mode_selector.read(cx).mode().0)
     }
 
     fn is_subagent(&self) -> bool {
@@ -989,11 +956,9 @@ impl ThreadView {
         !self.local_queued_messages.is_empty()
     }
 
-    pub fn is_imported_thread(&self, cx: &App) -> bool {
-        let Some(thread) = self.as_native_thread(cx) else {
-            return false;
-        };
-        thread.read(cx).is_imported()
+    pub fn is_imported_thread(&self, _cx: &App) -> bool {
+        // Imported threads were a native-agent-only feature; always false for external agents.
+        false
     }
 
     // events
@@ -1719,13 +1684,8 @@ impl ThreadView {
         }
     }
 
-    pub fn sync_queue_flag_to_native_thread(&self, cx: &mut Context<Self>) {
-        if let Some(native_thread) = self.as_native_thread(cx) {
-            let has_queued = self.has_queued_messages();
-            native_thread.update(cx, |thread, _| {
-                thread.set_has_queued_message(has_queued);
-            });
-        }
+    pub fn sync_queue_flag_to_native_thread(&self, _cx: &mut Context<Self>) {
+        // No-op: queue flag sync was only needed for native agent threads.
     }
 
     pub fn send_queued_message_at_index(
@@ -2194,59 +2154,19 @@ impl ThreadView {
     // thread stuff
 
     fn share_thread(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let Some((thread, project)) = self.as_native_thread(cx).zip(self.project.upgrade()) else {
-            return;
-        };
-
-        let client = project.read(cx).client();
-        let workspace = self.workspace.clone();
-        let session_id = thread.read(cx).id().to_string();
-
-        let load_task = thread.read(cx).to_db(cx);
-
-        cx.spawn(async move |_this, cx| {
-            let db_thread = load_task.await;
-
-            let shared_thread = SharedThread::from_db_thread(&db_thread);
-            let thread_data = shared_thread.to_bytes()?;
-            let title = shared_thread.title.to_string();
-
-            client
-                .request(proto::ShareAgentThread {
-                    session_id: session_id.clone(),
-                    title,
-                    thread_data,
-                })
-                .await?;
-
-            let share_url = client::zed_urls::shared_agent_thread_url(&session_id);
-
-            cx.update(|cx| {
-                if let Some(workspace) = workspace.upgrade() {
-                    workspace.update(cx, |workspace, cx| {
-                        struct ThreadSharedToast;
-                        workspace.show_toast(
-                            Toast::new(
-                                NotificationId::unique::<ThreadSharedToast>(),
-                                "Thread shared!",
-                            )
-                            .on_click(
-                                "Copy URL",
-                                move |_window, cx| {
-                                    cx.write_to_clipboard(ClipboardItem::new_string(
-                                        share_url.clone(),
-                                    ));
-                                },
-                            ),
-                            cx,
-                        );
-                    });
-                }
+        if let Some(workspace) = self.workspace.upgrade() {
+            workspace.update(cx, |workspace, cx| {
+                struct ThreadShareUnavailableToast;
+                workspace.show_toast(
+                    Toast::new(
+                        NotificationId::unique::<ThreadShareUnavailableToast>(),
+                        "Thread sharing is not available for external agents.",
+                    )
+                    .autohide(),
+                    cx,
+                );
             });
-
-            anyhow::Ok(())
-        })
-        .detach_and_log_err(cx);
+        }
     }
 
     pub fn sync_thread(
@@ -2256,59 +2176,7 @@ impl ThreadView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.is_imported_thread(cx) {
-            return;
-        }
-
-        let Some(session_list) = self
-            .as_native_connection(cx)
-            .and_then(|connection| connection.session_list(cx))
-            .and_then(|list| list.downcast::<NativeAgentSessionList>())
-        else {
-            return;
-        };
-        let thread_store = session_list.thread_store().clone();
-
-        let client = project.read(cx).client();
-        let session_id = self.thread.read(cx).session_id().clone();
-        cx.spawn_in(window, async move |this, cx| {
-            let response = client
-                .request(proto::GetSharedAgentThread {
-                    session_id: session_id.to_string(),
-                })
-                .await?;
-
-            let shared_thread = SharedThread::from_bytes(&response.thread_data)?;
-
-            let db_thread = shared_thread.to_db_thread();
-
-            thread_store
-                .update(&mut cx.clone(), |store, cx| {
-                    store.save_thread(session_id.clone(), db_thread, Default::default(), cx)
-                })
-                .await?;
-
-            server_view.update_in(cx, |server_view, window, cx| server_view.reset(window, cx))?;
-
-            this.update_in(cx, |this, _window, cx| {
-                if let Some(workspace) = this.workspace.upgrade() {
-                    workspace.update(cx, |workspace, cx| {
-                        struct ThreadSyncedToast;
-                        workspace.show_toast(
-                            Toast::new(
-                                NotificationId::unique::<ThreadSyncedToast>(),
-                                "Thread synced with latest version",
-                            )
-                            .autohide(),
-                            cx,
-                        );
-                    });
-                }
-            })?;
-
-            anyhow::Ok(())
-        })
-        .detach_and_log_err(cx);
+        // sync_thread was a native-agent-only feature (imported threads no longer exist).
     }
 
     pub fn restore_checkpoint(&mut self, message_id: &UserMessageId, cx: &mut Context<Self>) {
@@ -3713,10 +3581,8 @@ impl ThreadView {
             .into_any_element()
     }
 
-    fn supports_split_token_display(&self, cx: &App) -> bool {
-        self.as_native_thread(cx)
-            .and_then(|thread| thread.read(cx).model())
-            .is_some_and(|model| model.supports_split_token_display())
+    fn supports_split_token_display(&self, _cx: &App) -> bool {
+        false
     }
 
     fn render_token_usage(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
@@ -3763,35 +3629,11 @@ impl ThreadView {
 
         let tooltip_separator_color = Color::Custom(cx.theme().colors().text_disabled.opacity(0.6));
 
-        let (user_rules_count, first_user_rules_id, project_rules_count, project_entry_ids) = self
-            .as_native_thread(cx)
-            .map(|thread| {
-                let project_context = thread.read(cx).project_context().read(cx);
-                let user_rules_count = project_context.user_rules.len();
-                let first_user_rules_id = project_context.user_rules.first().map(|r| r.uuid.0);
-                let project_entry_ids = project_context
-                    .worktrees
-                    .iter()
-                    .filter_map(|wt| wt.rules_file.as_ref())
-                    .map(|rf| ProjectEntryId::from_usize(rf.project_entry_id))
-                    .collect::<Vec<_>>();
-                let project_rules_count = project_entry_ids.len();
-                (
-                    user_rules_count,
-                    first_user_rules_id,
-                    project_rules_count,
-                    project_entry_ids,
-                )
-            })
-            .unwrap_or_default();
+        let (user_rules_count, first_user_rules_id, project_rules_count, project_entry_ids): (usize, Option<uuid::Uuid>, usize, Vec<ProjectEntryId>) = Default::default();
 
         let workspace = self.workspace.clone();
 
-        let max_output_tokens = self
-            .as_native_thread(cx)
-            .and_then(|thread| thread.read(cx).model())
-            .and_then(|model| model.max_output_tokens())
-            .unwrap_or(0);
+        let max_output_tokens: u64 = 0;
         let input_max_label =
             crate::humanize_token_count(usage.max_tokens.saturating_sub(max_output_tokens));
         let output_max_label = crate::humanize_token_count(max_output_tokens);
@@ -3913,130 +3755,16 @@ impl ThreadView {
         }
     }
 
-    fn fast_mode_available(&self, cx: &Context<Self>) -> bool {
-        if !cx.is_staff() {
-            return false;
-        }
-        self.as_native_thread(cx)
-            .and_then(|thread| thread.read(cx).model())
-            .map(|model| model.supports_fast_mode())
-            .unwrap_or(false)
+    fn fast_mode_available(&self, _cx: &Context<Self>) -> bool {
+        false
     }
 
-    fn render_fast_mode_control(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if !self.fast_mode_available(cx) {
-            return None;
-        }
-
-        let thread = self.as_native_thread(cx)?.read(cx);
-
-        let (tooltip_label, color, icon) = if matches!(thread.speed(), Some(Speed::Fast)) {
-            ("Disable Fast Mode", Color::Accent, IconName::FastForward)
-        } else {
-            (
-                "Enable Fast Mode",
-                Color::Custom(cx.theme().colors().icon_disabled.opacity(0.8)),
-                IconName::FastForwardOff,
-            )
-        };
-
-        let focus_handle = self.message_editor.focus_handle(cx);
-
-        Some(
-            IconButton::new("fast-mode", icon)
-                .icon_size(IconSize::Small)
-                .icon_color(color)
-                .tooltip(move |_, cx| {
-                    Tooltip::for_action_in(tooltip_label, &ToggleFastMode, &focus_handle, cx)
-                })
-                .on_click(cx.listener(move |this, _, _window, cx| {
-                    this.toggle_fast_mode(cx);
-                }))
-                .into_any_element(),
-        )
+    fn render_fast_mode_control(&self, _cx: &mut Context<Self>) -> Option<AnyElement> {
+        None
     }
 
-    fn render_thinking_control(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let thread = self.as_native_thread(cx)?.read(cx);
-        let model = thread.model()?;
-
-        let supports_thinking = model.supports_thinking();
-        if !supports_thinking {
-            return None;
-        }
-
-        let thinking = thread.thinking_enabled();
-
-        let (tooltip_label, icon, color) = if thinking {
-            (
-                "Disable Thinking Mode",
-                IconName::ThinkingMode,
-                Color::Muted,
-            )
-        } else {
-            (
-                "Enable Thinking Mode",
-                IconName::ThinkingModeOff,
-                Color::Custom(cx.theme().colors().icon_disabled.opacity(0.8)),
-            )
-        };
-
-        let focus_handle = self.message_editor.focus_handle(cx);
-
-        let thinking_toggle = IconButton::new("thinking-mode", icon)
-            .icon_size(IconSize::Small)
-            .icon_color(color)
-            .tooltip(move |_, cx| {
-                Tooltip::for_action_in(tooltip_label, &ToggleThinkingMode, &focus_handle, cx)
-            })
-            .on_click(cx.listener(move |this, _, _window, cx| {
-                if let Some(thread) = this.as_native_thread(cx) {
-                    thread.update(cx, |thread, cx| {
-                        let enable_thinking = !thread.thinking_enabled();
-                        thread.set_thinking_enabled(enable_thinking, cx);
-
-                        let favorite_key = thread.model().map(|model| {
-                            (model.provider_id().0.to_string(), model.id().0.to_string())
-                        });
-                        let fs = thread.project().read(cx).fs().clone();
-                        update_settings_file(fs, cx, move |settings, _| {
-                            if let Some(agent) = settings.agent.as_mut() {
-                                if let Some(default_model) = agent.default_model.as_mut() {
-                                    default_model.enable_thinking = enable_thinking;
-                                }
-                                if let Some((provider_id, model_id)) = &favorite_key {
-                                    agent.update_favorite_model(
-                                        provider_id,
-                                        model_id,
-                                        |favorite| favorite.enable_thinking = enable_thinking,
-                                    );
-                                }
-                            }
-                        });
-                    });
-                }
-            }));
-
-        if model.supported_effort_levels().is_empty() {
-            return Some(thinking_toggle.into_any_element());
-        }
-
-        if !model.supported_effort_levels().is_empty() && !thinking {
-            return Some(thinking_toggle.into_any_element());
-        }
-
-        let left_btn = thinking_toggle;
-        let right_btn = self.render_effort_selector(
-            model.supported_effort_levels(),
-            thread.thinking_effort().cloned(),
-            cx,
-        );
-
-        Some(
-            SplitButton::new(left_btn, right_btn.into_any_element())
-                .style(SplitButtonStyle::Transparent)
-                .into_any_element(),
-        )
+    fn render_thinking_control(&self, _cx: &mut Context<Self>) -> Option<AnyElement> {
+        None
     }
 
     fn render_effort_selector(
@@ -4128,52 +3856,8 @@ impl ThreadView {
                             .toggleable(IconPosition::End, is_selected);
 
                         menu.push_item(entry.handler({
-                            let effort = effort_level.value.clone();
-                            let weak_self = weak_self.clone();
                             move |_window, cx| {
-                                let effort = effort.clone();
-                                weak_self
-                                    .update(cx, |this, cx| {
-                                        if let Some(thread) = this.as_native_thread(cx) {
-                                            thread.update(cx, |thread, cx| {
-                                                thread.set_thinking_effort(
-                                                    Some(effort.to_string()),
-                                                    cx,
-                                                );
-
-                                                let favorite_key = thread.model().map(|model| {
-                                                    (
-                                                        model.provider_id().0.to_string(),
-                                                        model.id().0.to_string(),
-                                                    )
-                                                });
-                                                let fs = thread.project().read(cx).fs().clone();
-                                                update_settings_file(fs, cx, move |settings, _| {
-                                                    if let Some(agent) = settings.agent.as_mut() {
-                                                        if let Some(default_model) =
-                                                            agent.default_model.as_mut()
-                                                        {
-                                                            default_model.effort =
-                                                                Some(effort.to_string());
-                                                        }
-                                                        if let Some((provider_id, model_id)) =
-                                                            &favorite_key
-                                                        {
-                                                            agent.update_favorite_model(
-                                                                provider_id,
-                                                                model_id,
-                                                                |favorite| {
-                                                                    favorite.effort =
-                                                                        Some(effort.to_string())
-                                                                },
-                                                            );
-                                                        }
-                                                    }
-                                                });
-                                            });
-                                        }
-                                    })
-                                    .ok();
+                                let _ = cx; // no-op: effort selection only applied to native threads
                             }
                         }));
                     }
@@ -6690,9 +6374,7 @@ impl ThreadView {
                     ))
                     .into_any(),
                 ToolCallStatus::Pending | ToolCallStatus::InProgress
-                    if is_edit
-                        && tool_call.content.is_empty()
-                        && self.as_native_connection(cx).is_some() =>
+                    if is_edit && tool_call.content.is_empty() =>
                 {
                     self.render_diff_loading(cx)
                 }
@@ -7874,7 +7556,7 @@ impl ThreadView {
             })
             .child(if let Some(editor) = revealed_diff_editor {
                 editor.into_any_element()
-            } else if tool_progress && self.as_native_connection(cx).is_some() {
+            } else if tool_progress {
                 self.render_diff_loading(cx)
             } else {
                 Empty.into_any()
@@ -8790,20 +8472,9 @@ impl ThreadView {
             }))
     }
 
-    fn current_model_name(&self, cx: &App) -> SharedString {
-        // For native agent (Zed Agent), use the specific model name (e.g., "Claude 3.5 Sonnet")
-        // For ACP agents, use the agent name (e.g., "Claude Agent", "Gemini CLI")
-        // This provides better clarity about what refused the request
-        if self.as_native_connection(cx).is_some() {
-            self.model_selector
-                .clone()
-                .and_then(|selector| selector.read(cx).active_model(cx))
-                .map(|model| model.name.clone())
-                .unwrap_or_else(|| SharedString::from("The model"))
-        } else {
-            // ACP agent - use the agent name (e.g., "Claude Agent", "Gemini CLI")
-            self.agent_id.0.clone()
-        }
+    fn current_model_name(&self, _cx: &App) -> SharedString {
+        // Use the agent name (e.g., "Claude Agent", "Gemini CLI")
+        self.agent_id.0.clone()
     }
 
     fn render_any_thread_error(
@@ -8953,10 +8624,6 @@ impl ThreadView {
             return None;
         }
 
-        if self.as_native_connection(cx).is_some() {
-            return None;
-        }
-
         let project = self.project.upgrade()?;
         let worktree_count = project.read(cx).visible_worktrees(cx).count();
         if worktree_count <= 1 {
@@ -9043,7 +8710,7 @@ impl ThreadView {
     }
 
     fn render_token_limit_callout(&self, cx: &mut Context<Self>) -> Option<Callout> {
-        if self.token_limit_callout_dismissed || self.as_native_thread(cx).is_none() {
+        if self.token_limit_callout_dismissed {
             return None;
         }
 
@@ -9064,30 +8731,12 @@ impl ThreadView {
             ),
         };
 
-        let description = "To continue, start a new thread from a summary.";
-
         Some(
             Callout::new()
                 .severity(severity)
                 .icon(icon)
                 .title(title)
-                .description(description)
-                .actions_slot(
-                    h_flex().gap_0p5().child(
-                        Button::new("start-new-thread", "Start New Thread")
-                            .label_size(LabelSize::Small)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                let session_id = this.thread.read(cx).session_id().clone();
-                                window.dispatch_action(
-                                    crate::NewNativeAgentThreadFromSummary {
-                                        from_session_id: session_id,
-                                    }
-                                    .boxed_clone(),
-                                    cx,
-                                );
-                            })),
-                    ),
-                )
+                .description("To continue, start a new thread.")
                 .dismiss_action(self.dismiss_error_button(cx)),
         )
     }
@@ -9120,87 +8769,11 @@ impl ThreadView {
         if !self.fast_mode_available(cx) {
             return;
         }
-        let Some(thread) = self.as_native_thread(cx) else {
-            return;
-        };
-        thread.update(cx, |thread, cx| {
-            let new_speed = thread
-                .speed()
-                .map(|speed| speed.toggle())
-                .unwrap_or(Speed::Fast);
-            thread.set_speed(new_speed, cx);
-
-            let favorite_key = thread
-                .model()
-                .map(|model| (model.provider_id().0.to_string(), model.id().0.to_string()));
-            let fs = thread.project().read(cx).fs().clone();
-            update_settings_file(fs, cx, move |settings, _| {
-                if let Some(agent) = settings.agent.as_mut() {
-                    if let Some(default_model) = agent.default_model.as_mut() {
-                        default_model.speed = Some(new_speed);
-                    }
-                    if let Some((provider_id, model_id)) = &favorite_key {
-                        agent.update_favorite_model(provider_id, model_id, |favorite| {
-                            favorite.speed = Some(new_speed)
-                        });
-                    }
-                }
-            });
-        });
+        // Fast mode was a native-agent-only feature; no-op for external agents.
     }
 
-    fn cycle_thinking_effort(&mut self, cx: &mut Context<Self>) {
-        let Some(thread) = self.as_native_thread(cx) else {
-            return;
-        };
-
-        let (effort_levels, current_effort) = {
-            let thread_ref = thread.read(cx);
-            let Some(model) = thread_ref.model() else {
-                return;
-            };
-            if !model.supports_thinking() || !thread_ref.thinking_enabled() {
-                return;
-            }
-            let effort_levels = model.supported_effort_levels();
-            if effort_levels.is_empty() {
-                return;
-            }
-            let current_effort = thread_ref.thinking_effort().cloned();
-            (effort_levels, current_effort)
-        };
-
-        let current_index = current_effort.and_then(|current| {
-            effort_levels
-                .iter()
-                .position(|level| level.value == current)
-        });
-        let next_index = match current_index {
-            Some(index) => (index + 1) % effort_levels.len(),
-            None => 0,
-        };
-        let next_effort = effort_levels[next_index].value.to_string();
-
-        thread.update(cx, |thread, cx| {
-            thread.set_thinking_effort(Some(next_effort.clone()), cx);
-
-            let favorite_key = thread
-                .model()
-                .map(|model| (model.provider_id().0.to_string(), model.id().0.to_string()));
-            let fs = thread.project().read(cx).fs().clone();
-            update_settings_file(fs, cx, move |settings, _| {
-                if let Some(agent) = settings.agent.as_mut() {
-                    if let Some(default_model) = agent.default_model.as_mut() {
-                        default_model.effort = Some(next_effort.clone());
-                    }
-                    if let Some((provider_id, model_id)) = &favorite_key {
-                        agent.update_favorite_model(provider_id, model_id, |favorite| {
-                            favorite.effort = Some(next_effort)
-                        });
-                    }
-                }
-            });
-        });
+    fn cycle_thinking_effort(&mut self, _cx: &mut Context<Self>) {
+        // Thinking effort cycling was a native-agent-only feature.
     }
 
     fn toggle_thinking_effort_menu(
@@ -9276,15 +8849,8 @@ impl Render for ThreadView {
             .on_action(cx.listener(|this, _: &ToggleFastMode, _window, cx| {
                 this.toggle_fast_mode(cx);
             }))
-            .on_action(cx.listener(|this, _: &ToggleThinkingMode, _window, cx| {
-                if this.thread.read(cx).status() != ThreadStatus::Idle {
-                    return;
-                }
-                if let Some(thread) = this.as_native_thread(cx) {
-                    thread.update(cx, |thread, cx| {
-                        thread.set_thinking_enabled(!thread.thinking_enabled(), cx);
-                    });
-                }
+            .on_action(cx.listener(|_this, _: &ToggleThinkingMode, _window, _cx| {
+                // Thinking mode toggle was a native-agent-only feature; no-op for external agents.
             }))
             .on_action(cx.listener(|this, _: &CycleThinkingEffort, _window, cx| {
                 if this.thread.read(cx).status() != ThreadStatus::Idle {

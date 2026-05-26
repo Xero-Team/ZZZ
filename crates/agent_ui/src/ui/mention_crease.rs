@@ -274,7 +274,9 @@ fn open_thread(
         return;
     };
 
-    // Right now we only support loading threads in the native agent
+    // Thread mentions from legacy data reference threads by session ID only.
+    // Use NativeAgent as the fallback agent key so stale mentions degrade gracefully
+    // (the removed-agent stub returns a clear error rather than crashing).
     panel.update(cx, |panel, cx| {
         panel.load_agent_thread(
             Agent::NativeAgent,

@@ -2,7 +2,7 @@ use crate::diagnostics::{DiagnosticsOptions, codeblock_fence_for_path, collect_d
 use acp_thread::{MentionUri, selection_name};
 use agent::{ThreadStore, outline};
 use agent_client_protocol::schema as acp;
-use agent_servers::{AgentServer, AgentServerDelegate};
+use agent_servers::AgentServer;
 use anyhow::{Context as _, Result, anyhow};
 use collections::{HashMap, HashSet};
 use editor::{
@@ -542,39 +542,12 @@ impl MentionSet {
 
     fn confirm_mention_for_thread(
         &mut self,
-        id: acp::SessionId,
-        cx: &mut Context<Self>,
+        _id: acp::SessionId,
+        _cx: &mut Context<Self>,
     ) -> Task<Result<Mention>> {
-        let Some(thread_store) = self.thread_store.clone() else {
-            return Task::ready(Err(anyhow!(
-                "Thread mentions are only supported for the native agent"
-            )));
-        };
-        let Some(project) = self.project.upgrade() else {
-            return Task::ready(Err(anyhow!("project not found")));
-        };
-
-        let server = Rc::new(agent::NativeAgentServer::new(
-            project.read(cx).fs().clone(),
-            thread_store,
-        ));
-        let delegate =
-            AgentServerDelegate::new(project.read(cx).agent_server_store().clone(), None);
-        let connection = server.connect(delegate, project.clone(), cx);
-        cx.spawn(async move |_, cx| {
-            let agent = connection.await?;
-            let agent = agent.downcast::<agent::NativeAgentConnection>().unwrap();
-            let summary = agent
-                .0
-                .update(cx, |agent, cx| {
-                    agent.thread_summary(id, project.clone(), cx)
-                })
-                .await?;
-            Ok(Mention::Text {
-                content: summary.to_string(),
-                tracked_buffers: Vec::new(),
-            })
-        })
+        Task::ready(Err(anyhow!(
+            "Thread mentions are no longer supported: the built-in Zed Agent has been removed."
+        )))
     }
 
     fn confirm_mention_for_diagnostics(
@@ -688,7 +661,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("Thread mentions are only supported for the native agent"),
+                .contains("Thread mentions are no longer supported"),
             "Unexpected error: {error:#}"
         );
     }

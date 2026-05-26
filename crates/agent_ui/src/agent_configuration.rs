@@ -474,7 +474,7 @@ impl AgentConfiguration {
             .w_full()
             .child(self.render_section_title(
                 "LLM Providers",
-                "Add at least one provider to use AI-powered features with Zed's native agent.",
+                "Add at least one provider to use AI-powered features in Zed.",
                 popover_menu.into_any_element(),
             ))
             .child(

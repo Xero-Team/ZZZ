@@ -7,7 +7,7 @@ use acp_thread::{
 use acp_thread::{AgentConnection, Plan};
 use action_log::{ActionLog, ActionLogTelemetry, DiffStats};
 use agent::{
-    NativeAgentServer, NativeAgentSessionList, NoModelConfiguredError, SharedThread, ThreadStore,
+    NoModelConfiguredError, SharedThread, ThreadStore,
 };
 use agent_client_protocol::schema as acp;
 #[cfg(test)]
@@ -845,9 +845,7 @@ impl ConversationView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> ServerState {
-        if project.read(cx).is_via_collab()
-            && agent.clone().downcast::<NativeAgentServer>().is_none()
-        {
+        if project.read(cx).is_via_collab() {
             return ServerState::LoadError {
                 error: LoadError::Other(
                     "External agents are not yet supported in shared projects.".into(),
@@ -1143,20 +1141,8 @@ impl ConversationView {
             .detach();
         }
 
-        let profile_selector: Option<Rc<agent::NativeAgentConnection>> =
-            connection.clone().downcast();
-        let profile_selector = profile_selector
-            .and_then(|native_connection| native_connection.thread(&session_id, cx))
-            .map(|native_thread| {
-                cx.new(|cx| {
-                    ProfileSelector::new(
-                        <dyn Fs>::global(cx),
-                        Arc::new(native_thread),
-                        self.focus_handle(cx),
-                        cx,
-                    )
-                })
-            });
+        // Profile selector was native-agent-only; external agents do not have it.
+        let profile_selector = None;
 
         let agent_display_name = self
             .agent_server_store
@@ -2193,22 +2179,6 @@ impl ConversationView {
             .into_any_element()
     }
 
-    pub(crate) fn as_native_connection(
-        &self,
-        cx: &App,
-    ) -> Option<Rc<agent::NativeAgentConnection>> {
-        self.root_thread(cx)?
-            .read(cx)
-            .connection()
-            .clone()
-            .downcast()
-    }
-
-    pub fn as_native_thread(&self, cx: &App) -> Option<Entity<agent::Thread>> {
-        self.as_native_connection(cx)?
-            .thread(self.root_session_id.as_ref()?, cx)
-    }
-
     fn queued_messages_len(&self, cx: &App) -> usize {
         self.root_thread_view()
             .map(|thread| thread.read(cx).local_queued_messages.len())
@@ -2747,19 +2717,10 @@ impl ConversationView {
     }
 
     fn current_model_name(&self, cx: &App) -> SharedString {
-        // For native agent (Zed Agent), use the specific model name (e.g., "Claude 3.5 Sonnet")
         // For ACP agents, use the agent name (e.g., "Claude Agent", "Gemini CLI")
-        // This provides better clarity about what refused the request
-        if self.as_native_connection(cx).is_some() {
-            self.root_thread_view()
-                .and_then(|active| active.read(cx).model_selector.clone())
-                .and_then(|selector| selector.read(cx).active_model(cx))
-                .map(|model| model.name.clone())
-                .unwrap_or_else(|| SharedString::from("The model"))
-        } else {
-            // ACP agent - use the agent name (e.g., "Claude Agent", "Gemini CLI")
-            self.agent.agent_id().0
-        }
+        // to provide clarity about what refused the request.
+        let _ = cx;
+        self.agent.agent_id().0
     }
 
     fn create_copy_button(&self, message: impl Into<String>) -> impl IntoElement {

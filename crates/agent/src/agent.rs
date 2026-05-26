@@ -1,7 +1,6 @@
 mod db;
 mod edit_agent;
 mod legacy_thread;
-mod native_agent_server;
 pub mod outline;
 mod pattern_extraction;
 mod templates;
@@ -15,7 +14,6 @@ mod tools;
 use context_server::ContextServerId;
 pub use db::*;
 use itertools::Itertools;
-pub use native_agent_server::NativeAgentServer;
 pub use pattern_extraction::*;
 pub use shell_command_parser::extract_commands;
 pub use templates::*;
@@ -92,7 +90,7 @@ struct PendingSession {
     ref_count: usize,
 }
 
-pub struct LanguageModels {
+pub(crate) struct LanguageModels {
     /// Access language model by ID
     models: HashMap<acp::ModelId, Arc<dyn LanguageModel>>,
     /// Cached list for returning language model information
@@ -168,7 +166,7 @@ impl LanguageModels {
         self.refresh_models_rx.clone()
     }
 
-    pub fn model_from_id(&self, model_id: &acp::ModelId) -> Option<Arc<dyn LanguageModel>> {
+    pub(crate) fn model_from_id(&self, model_id: &acp::ModelId) -> Option<Arc<dyn LanguageModel>> {
         self.models.get(model_id).cloned()
     }
 
@@ -250,7 +248,7 @@ impl LanguageModels {
     }
 }
 
-pub struct NativeAgent {
+pub(crate) struct NativeAgent {
     /// Session ID -> Session mapping
     sessions: HashMap<acp::SessionId, Session>,
     pending_sessions: HashMap<acp::SessionId, PendingSession>,
@@ -267,7 +265,7 @@ pub struct NativeAgent {
 }
 
 impl NativeAgent {
-    pub fn new(
+    pub(crate) fn new(
         thread_store: Entity<ThreadStore>,
         templates: Arc<Templates>,
         prompt_store: Option<Entity<PromptStore>>,
@@ -408,7 +406,7 @@ impl NativeAgent {
         acp_thread
     }
 
-    pub fn models(&self) -> &LanguageModels {
+    pub(crate) fn models(&self) -> &LanguageModels {
         &self.models
     }
 
@@ -896,7 +894,7 @@ impl NativeAgent {
             .collect()
     }
 
-    pub fn load_thread(
+    pub(crate) fn load_thread(
         &mut self,
         id: acp::SessionId,
         project: Entity<Project>,
@@ -937,7 +935,7 @@ impl NativeAgent {
         })
     }
 
-    pub fn open_thread(
+    pub(crate) fn open_thread(
         &mut self,
         id: acp::SessionId,
         project: Entity<Project>,
@@ -1007,7 +1005,7 @@ impl NativeAgent {
         cx.background_spawn(async move { shared_task.await.map_err(|err| anyhow!(err)) })
     }
 
-    pub fn thread_summary(
+    pub(crate) fn thread_summary(
         &mut self,
         id: acp::SessionId,
         project: Entity<Project>,
@@ -1214,10 +1212,10 @@ impl NativeAgent {
 
 /// Wrapper struct that implements the AgentConnection trait
 #[derive(Clone)]
-pub struct NativeAgentConnection(pub Entity<NativeAgent>);
+pub(crate) struct NativeAgentConnection(pub(crate) Entity<NativeAgent>);
 
 impl NativeAgentConnection {
-    pub fn thread(&self, session_id: &acp::SessionId, cx: &App) -> Option<Entity<Thread>> {
+    pub(crate) fn thread(&self, session_id: &acp::SessionId, cx: &App) -> Option<Entity<Thread>> {
         self.0
             .read(cx)
             .sessions
@@ -1225,7 +1223,7 @@ impl NativeAgentConnection {
             .map(|session| session.thread.clone())
     }
 
-    pub fn load_thread(
+    pub(crate) fn load_thread(
         &self,
         id: acp::SessionId,
         project: Entity<Project>,
@@ -1741,7 +1739,7 @@ impl acp_thread::AgentThreadSnapshotProvider for NativeAgentConnection {
     }
 }
 
-pub struct NativeAgentSessionList {
+pub(crate) struct NativeAgentSessionList {
     thread_store: Entity<ThreadStore>,
     updates_tx: async_channel::Sender<acp_thread::SessionListUpdate>,
     updates_rx: async_channel::Receiver<acp_thread::SessionListUpdate>,
@@ -1765,7 +1763,7 @@ impl NativeAgentSessionList {
         }
     }
 
-    pub fn thread_store(&self) -> &Entity<ThreadStore> {
+    pub(crate) fn thread_store(&self) -> &Entity<ThreadStore> {
         &self.thread_store
     }
 }
@@ -1867,7 +1865,7 @@ impl acp_thread::AgentSessionSetTitle for NativeAgentSessionSetTitle {
     }
 }
 
-pub struct NativeThreadEnvironment {
+pub(crate) struct NativeThreadEnvironment {
     agent: WeakEntity<NativeAgent>,
     thread: WeakEntity<Thread>,
     acp_thread: WeakEntity<AcpThread>,
@@ -2006,7 +2004,7 @@ enum SubagentPromptResult {
     Error(String),
 }
 
-pub struct NativeSubagentHandle {
+pub(crate) struct NativeSubagentHandle {
     session_id: acp::SessionId,
     parent_thread: WeakEntity<Thread>,
     subagent_thread: Entity<Thread>,
@@ -2150,7 +2148,7 @@ impl SubagentHandle for NativeSubagentHandle {
     }
 }
 
-pub struct AcpTerminalHandle {
+pub(crate) struct AcpTerminalHandle {
     terminal: Entity<acp_thread::Terminal>,
     _drop_tx: Option<oneshot::Sender<()>>,
 }
