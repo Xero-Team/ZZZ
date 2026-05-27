@@ -18,12 +18,14 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
     vec![
         ("bash", tree_sitter_bash::LANGUAGE.into()),
         ("c", tree_sitter_c::LANGUAGE.into()),
+        ("cmake", tree_sitter_cmake::LANGUAGE.into()),
         ("cmd", tree_sitter_cmd::LANGUAGE.into()),
         ("cpp", tree_sitter_cpp::LANGUAGE.into()),
         ("css", tree_sitter_css::LANGUAGE.into()),
         ("csv", tree_sitter_csv::LANGUAGE.into()),
         ("dtd", tree_sitter_xml::LANGUAGE_DTD.into()),
         ("diff", tree_sitter_diff::LANGUAGE.into()),
+        ("dockerfile", tree_sitter_dockerfile::LANGUAGE.into()),
         ("git_config", tree_sitter_git_config::LANGUAGE.into()),
         ("gitattributes", tree_sitter_gitattributes::LANGUAGE.into()),
         ("gitignore", tree_sitter_gitignore::LANGUAGE.into()),
@@ -171,12 +173,28 @@ mod tests {
         parser.parse(source, None).expect("parse CMD source")
     }
 
+    fn parse_cmake(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_cmake::LANGUAGE.into())
+            .expect("load CMake grammar");
+        parser.parse(source, None).expect("parse CMake source")
+    }
+
     fn parse_csv(source: &str) -> tree_sitter::Tree {
         let mut parser = Parser::new();
         parser
             .set_language(&tree_sitter_csv::LANGUAGE.into())
             .expect("load CSV grammar");
         parser.parse(source, None).expect("parse CSV source")
+    }
+
+    fn parse_dockerfile(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_dockerfile::LANGUAGE.into())
+            .expect("load Dockerfile grammar");
+        parser.parse(source, None).expect("parse Dockerfile source")
     }
 
     fn assert_toml_parses(source: &str) {
@@ -203,11 +221,27 @@ mod tests {
         );
     }
 
+    fn assert_cmake_parses(source: &str) {
+        let tree = parse_cmake(source);
+        assert!(
+            !tree.root_node().has_error(),
+            "expected valid CMake, got parse error for:\n{source}"
+        );
+    }
+
     fn assert_csv_parses(source: &str) {
         let tree = parse_csv(source);
         assert!(
             !tree.root_node().has_error(),
             "expected valid CSV, got parse error for:\n{source}"
+        );
+    }
+
+    fn assert_dockerfile_parses(source: &str) {
+        let tree = parse_dockerfile(source);
+        assert!(
+            !tree.root_node().has_error(),
+            "expected valid Dockerfile, got parse error for:\n{source}"
         );
     }
 
@@ -220,9 +254,19 @@ mod tests {
             .unwrap_or_else(|error| panic!("failed to read CMD testdata {name}: {error}"))
     }
 
+    fn read_cmake_testdata(name: &str) -> String {
+        std::fs::read_to_string(Path::new("src/cmake/testdata").join(name))
+            .unwrap_or_else(|error| panic!("failed to read CMake testdata {name}: {error}"))
+    }
+
     fn read_csv_testdata(name: &str) -> String {
         std::fs::read_to_string(Path::new("src/csv/testdata").join(name))
             .unwrap_or_else(|error| panic!("failed to read CSV testdata {name}: {error}"))
+    }
+
+    fn read_dockerfile_testdata(name: &str) -> String {
+        std::fs::read_to_string(Path::new("src/dockerfile/testdata").join(name))
+            .unwrap_or_else(|error| panic!("failed to read Dockerfile testdata {name}: {error}"))
     }
 
     fn parse_syslog(source: &str) -> tree_sitter::Tree {
@@ -1443,6 +1487,80 @@ mod tests {
         assert_csv_parses(&crlf_source);
 
         assert_csv_parses("header1,header2\r\nvalue1,value2");
+    }
+
+    #[test]
+    fn dockerfile_parser_accepts_reference_examples() {
+        assert_dockerfile_parses(&read_dockerfile_testdata("reference.Dockerfile"));
+        assert_dockerfile_parses(&read_dockerfile_testdata("json-copy-add.Dockerfile"));
+        assert_dockerfile_parses(&read_dockerfile_testdata("copy-flags.Dockerfile"));
+        assert_dockerfile_parses(&read_dockerfile_testdata("advanced-reference.Dockerfile"));
+    }
+
+    #[test]
+    fn dockerfile_parser_supports_json_copy_and_add_forms() {
+        let source = read_dockerfile_testdata("json-copy-add.Dockerfile");
+        let sexp = parse_dockerfile(&source).root_node().to_sexp();
+
+        assert!(sexp.contains("(copy_instruction"));
+        assert!(sexp.contains("(add_instruction"));
+        assert!(sexp.contains("(json_string_array"));
+    }
+
+    #[test]
+    fn dockerfile_parser_supports_bare_copy_flags() {
+        let source = read_dockerfile_testdata("copy-flags.Dockerfile");
+        let sexp = parse_dockerfile(&source).root_node().to_sexp();
+
+        assert!(sexp.contains("(param"));
+        assert!(sexp.contains("(copy_instruction"));
+        assert!(sexp.contains("(add_instruction"));
+    }
+
+    #[test]
+    fn dockerfile_parser_supports_healthcheck_none_and_onbuild_mounts() {
+        let source = read_dockerfile_testdata("advanced-reference.Dockerfile");
+        let sexp = parse_dockerfile(&source).root_node().to_sexp();
+
+        assert!(sexp.contains("(healthcheck_instruction"));
+        assert!(sexp.contains("(onbuild_instruction"));
+        assert!(sexp.contains("(mount_param"));
+        assert!(sexp.contains("(workdir_instruction"));
+    }
+
+    #[test]
+    fn dockerfile_queries_highlight_parser_directives() {
+        let queries = load_queries("dockerfile");
+        let highlights = queries.highlights.expect("dockerfile highlights query");
+
+        assert!(highlights.contains("\"NONE\""));
+        assert!(highlights.contains("syntax|escape|check"));
+        assert!(highlights.contains("@keyword.directive"));
+    }
+
+    #[test]
+    fn cmake_parser_accepts_reference_examples() {
+        let source = read_cmake_testdata("reference.CMakeLists.txt");
+        let sexp = parse_cmake(&source).root_node().to_sexp();
+
+        assert_cmake_parses(&source);
+        assert!(sexp.contains("(function_def"));
+        assert!(sexp.contains("(if_condition"));
+        assert!(sexp.contains("(normal_command"));
+    }
+
+    #[test]
+    fn cmake_queries_highlight_builtins_and_directives() {
+        let queries = load_queries("cmake");
+        let highlights = queries.highlights.expect("cmake highlights query");
+        let injections = queries.injections.expect("cmake injections query");
+
+        assert!(highlights.contains("@function.builtin"));
+        assert!(highlights.contains("@keyword.directive"));
+        assert!(highlights.contains(
+            "[cC][mM][aA][kK][eE]_[mM][iI][nN][iI][mM][uU][mM]_[rR][eE][qQ][uU][iI][rR][eE][dD]"
+        ));
+        assert!(injections.contains("injection.language \"comment\""));
     }
 
     #[test]

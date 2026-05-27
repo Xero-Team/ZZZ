@@ -8129,11 +8129,13 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
  "tree-sitter-c",
+ "tree-sitter-cmake",
  "tree-sitter-cmd",
  "tree-sitter-cpp",
  "tree-sitter-css",
  "tree-sitter-csv",
  "tree-sitter-diff",
+ "tree-sitter-dockerfile",
  "tree-sitter-git-config",
  "tree-sitter-git-rebase",
  "tree-sitter-gitattributes",
@@ -19275,6 +19277,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-cmake"
+version = "0.7.2"
+source = "git+https://github.com/uyha/tree-sitter-cmake?rev=c7b2a71e7f8ecb167fad4c97227c838439280175#c7b2a71e7f8ecb167fad4c97227c838439280175"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-cmd"
 version = "0.1.0"
 dependencies = [
@@ -19318,6 +19329,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfe1e5ca280a65dfe5ba4205c1bcc84edf486464fed315db53dee6da9a335889"
 dependencies = [
  "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-dockerfile"
+version = "0.2.0"
+dependencies = [
+ "cc",
+ "tree-sitter",
  "tree-sitter-language",
 ]
 

@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.20)
+project(Demo LANGUAGES C CXX)
+
+# Configure cache-backed options for the demo target.
+set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ standard")
+set(DEMO_SOURCES src/demo.cpp src/lib.cpp)
+
+add_library(demo STATIC ${DEMO_SOURCES})
+target_include_directories(demo PRIVATE include)
+
+function(configure_demo target_name)
+  if(TARGET ${target_name})
+    message(STATUS "Configuring ${target_name}")
+  endif()
+endfunction()
+
+configure_demo(demo)

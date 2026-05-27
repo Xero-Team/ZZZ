@@ -749,11 +749,13 @@ tower-http = "0.6.8"
 tree-sitter = { version = "0.26.9", features = ["wasm"] }
 tree-sitter-bash = "0.25.1"
 tree-sitter-c = "0.24.2"
+tree-sitter-cmake = { git = "https://github.com/uyha/tree-sitter-cmake", rev = "c7b2a71e7f8ecb167fad4c97227c838439280175" }
 tree-sitter-cmd = { path = "crates/grammars/vendor/tree-sitter-cmd" }
 tree-sitter-cpp = { git = "https://github.com/tree-sitter/tree-sitter-cpp", rev = "5cb9b693cfd7bfacab1d9ff4acac1a4150700609" }
 tree-sitter-css = "0.25"
 tree-sitter-csv = { path = "crates/grammars/vendor/tree-sitter-csv" }
 tree-sitter-diff = "0.1.0"
+tree-sitter-dockerfile = { path = "crates/grammars/vendor/tree-sitter-dockerfile" }
 tree-sitter-elixir = "0.3"
 tree-sitter-embedded-template = "0.25.0"
 tree-sitter-git-config = { path = "crates/grammars/vendor/tree-sitter-git-config" }

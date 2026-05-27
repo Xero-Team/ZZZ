@@ -1,0 +1,9 @@
+name = "CMake"
+grammar = "cmake"
+path_suffixes = ["cmake", "CMakeLists.txt"]
+line_comments = ["# "]
+brackets = [
+    { start = "(", end = ")", close = true, newline = false },
+    { start = "{", end = "}", close = true, newline = false },
+    { start = "\"", end = "\"", close = true, newline = false, not_in = ["string"] },
+]
