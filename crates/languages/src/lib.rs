@@ -19,6 +19,7 @@ mod bash;
 mod c;
 mod cpp;
 mod css;
+mod dockerfile;
 mod eslint;
 mod go;
 mod json;
@@ -61,6 +62,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
     let bash_lsp_adapter = Arc::new(bash::BashLspAdapter::new(node.clone()));
     let c_lsp_adapter = Arc::new(c::CLspAdapter);
     let css_lsp_adapter = Arc::new(css::CssLspAdapter::new(node.clone()));
+    let dockerfile_lsp_adapter = Arc::new(dockerfile::DockerfileLspAdapter::new(node.clone()));
     let eslint_adapter = Arc::new(eslint::EsLintLspAdapter::new(node.clone(), fs.clone()));
     let go_context_provider = Arc::new(go::GoContextProvider);
     let go_lsp_adapter = Arc::new(go::GoLspAdapter);
@@ -100,6 +102,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
             ..Default::default()
         },
         LanguageInfo {
+            name: "cmake",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
             name: "cmd",
             adapters: vec![],
             ..Default::default()
@@ -128,6 +135,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
         LanguageInfo {
             name: "diff",
             adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
+            name: "dockerfile",
+            adapters: vec![dockerfile_lsp_adapter],
             ..Default::default()
         },
         LanguageInfo {
@@ -595,6 +607,70 @@ mod tests {
                 .await
                 .expect("CSV language should load with built-in queries");
             assert_eq!(loaded_language.name(), "CSV");
+        }
+    }
+
+    #[gpui::test]
+    async fn test_dockerfile_registered_for_file_matching(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        let settings = cx.update(SettingsStore::test);
+        cx.set_global(settings);
+
+        let languages = Arc::new(LanguageRegistry::new(cx.executor()));
+        cx.update(|cx| init(languages.clone(), fs, NodeRuntime::unavailable(), cx));
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new("Dockerfile"))
+                .map(|language| language.name()),
+            Some("Dockerfile".into())
+        );
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new("Containerfile"))
+                .map(|language| language.name()),
+            Some("Dockerfile".into())
+        );
+
+        if cfg!(feature = "load-grammars") {
+            let loaded_language = languages
+                .load_language_for_file_path(Path::new("Dockerfile"))
+                .await
+                .expect("Dockerfile language should load with built-in queries");
+            assert_eq!(loaded_language.name(), "Dockerfile");
+        }
+    }
+
+    #[gpui::test]
+    async fn test_cmake_registered_for_file_matching(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        let settings = cx.update(SettingsStore::test);
+        cx.set_global(settings);
+
+        let languages = Arc::new(LanguageRegistry::new(cx.executor()));
+        cx.update(|cx| init(languages.clone(), fs, NodeRuntime::unavailable(), cx));
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new("CMakeLists.txt"))
+                .map(|language| language.name()),
+            Some("CMake".into())
+        );
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new("toolchain.cmake"))
+                .map(|language| language.name()),
+            Some("CMake".into())
+        );
+
+        if cfg!(feature = "load-grammars") {
+            let loaded_language = languages
+                .load_language_for_file_path(Path::new("CMakeLists.txt"))
+                .await
+                .expect("CMake language should load with built-in queries");
+            assert_eq!(loaded_language.name(), "CMake");
         }
     }
 }
