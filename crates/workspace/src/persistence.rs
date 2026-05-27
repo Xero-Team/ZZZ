@@ -301,12 +301,31 @@ impl From<WindowBoundsJson> for WindowBounds {
     }
 }
 
-fn read_multi_workspace_state(window_id: WindowId, cx: &App) -> model::MultiWorkspaceState {
+fn multi_workspace_state_key(window_id: WindowId, session_id: Option<&str>) -> String {
+    match session_id {
+        Some(session_id) => format!("{session_id}:{}", window_id.as_u64()),
+        None => window_id.as_u64().to_string(),
+    }
+}
+
+fn read_multi_workspace_state(
+    window_id: WindowId,
+    session_id: Option<&str>,
+    cx: &App,
+) -> model::MultiWorkspaceState {
     let kvp = KeyValueStore::global(cx);
-    kvp.scoped("multi_workspace_state")
-        .read(&window_id.as_u64().to_string())
+    let scoped = kvp.scoped("multi_workspace_state");
+
+    scoped
+        .read(&multi_workspace_state_key(window_id, session_id))
         .log_err()
         .flatten()
+        .or_else(|| {
+            scoped
+                .read(&multi_workspace_state_key(window_id, None))
+                .log_err()
+                .flatten()
+        })
         .and_then(|json| serde_json::from_str(&json).ok())
         .unwrap_or_default()
 }
@@ -314,11 +333,12 @@ fn read_multi_workspace_state(window_id: WindowId, cx: &App) -> model::MultiWork
 pub async fn write_multi_workspace_state(
     kvp: &KeyValueStore,
     window_id: WindowId,
+    session_id: Option<&str>,
     state: model::MultiWorkspaceState,
 ) {
     if let Ok(json_str) = serde_json::to_string(&state) {
         kvp.scoped("multi_workspace_state")
-            .write(window_id.as_u64().to_string(), json_str)
+            .write(multi_workspace_state_key(window_id, session_id), json_str)
             .await
             .log_err();
     }
@@ -326,6 +346,7 @@ pub async fn write_multi_workspace_state(
 
 pub fn read_serialized_multi_workspaces(
     session_workspaces: Vec<model::SessionWorkspace>,
+    session_id: Option<&str>,
     cx: &App,
 ) -> Vec<model::SerializedMultiWorkspace> {
     let mut window_groups: Vec<Vec<model::SessionWorkspace>> = Vec::new();
@@ -351,7 +372,7 @@ pub fn read_serialized_multi_workspaces(
         .filter_map(|group| {
             let window_id = group.first().and_then(|sw| sw.window_id);
             let state = window_id
-                .map(|wid| read_multi_workspace_state(wid, cx))
+                .map(|wid| read_multi_workspace_state(wid, session_id, cx))
                 .unwrap_or_default();
             let active_workspace = state
                 .active_workspace_id
@@ -2809,7 +2830,12 @@ mod tests {
         cx.run_until_parked();
 
         // Read back the persisted state and check that the active workspace ID was written.
-        let state_after_add = cx.update(|_, cx| read_multi_workspace_state(window_id, cx));
+        let session_id = multi_workspace
+            .read_with(cx, |mw, cx| mw.workspace().read(cx).session_id())
+            .unwrap();
+        let state_after_add = cx.update(|_, cx| {
+            read_multi_workspace_state(window_id, Some(session_id.as_str()), cx)
+        });
         let active_workspace2_db_id = workspace2.read_with(cx, |ws, _| ws.database_id());
         assert_eq!(
             state_after_add.active_workspace_id, active_workspace2_db_id,
@@ -2830,7 +2856,9 @@ mod tests {
 
         cx.run_until_parked();
 
-        let state_after_remove = cx.update(|_, cx| read_multi_workspace_state(window_id, cx));
+        let state_after_remove = cx.update(|_, cx| {
+            read_multi_workspace_state(window_id, Some(session_id.as_str()), cx)
+        });
         let remaining_db_id =
             multi_workspace.read_with(cx, |mw, cx| mw.workspace().read(cx).database_id());
         assert_eq!(
@@ -4566,6 +4594,7 @@ mod tests {
         write_multi_workspace_state(
             &kvp,
             window_10,
+            Some("session-a"),
             MultiWorkspaceState {
                 active_workspace_id: Some(WorkspaceId(2)),
                 project_groups: vec![],
@@ -4578,6 +4607,7 @@ mod tests {
         write_multi_workspace_state(
             &kvp,
             window_20,
+            Some("session-a"),
             MultiWorkspaceState {
                 active_workspace_id: Some(WorkspaceId(3)),
                 project_groups: vec![],
@@ -4615,7 +4645,8 @@ mod tests {
             },
         ];
 
-        let results = cx.update(|cx| read_serialized_multi_workspaces(session_workspaces, cx));
+        let results =
+            cx.update(|cx| read_serialized_multi_workspaces(session_workspaces, Some("session-a"), cx));
 
         // Should produce 3 results: window 10, window 20, and the orphan.
         assert_eq!(results.len(), 3);
@@ -4714,7 +4745,12 @@ mod tests {
         );
 
         // The multi-workspace state should record it as the active workspace.
-        let state = cx.update(|_, cx| read_multi_workspace_state(window_id, cx));
+        let session_id = multi_workspace
+            .read_with(cx, |mw, cx| mw.workspace().read(cx).session_id())
+            .unwrap();
+        let state = cx.update(|_, cx| {
+            read_multi_workspace_state(window_id, Some(session_id.as_str()), cx)
+        });
         assert_eq!(
             state.active_workspace_id, new_workspace_db_id,
             "Serialized active_workspace_id should match the new workspace's database_id"
@@ -5674,7 +5710,9 @@ mod tests {
         );
 
         let multi_workspaces =
-            cx.update(|_, cx| read_serialized_multi_workspaces(session_workspaces, cx));
+            cx.update(|_, cx| {
+                read_serialized_multi_workspaces(session_workspaces, Some(&session_id), cx)
+            });
         assert_eq!(
             multi_workspaces.len(),
             1,
