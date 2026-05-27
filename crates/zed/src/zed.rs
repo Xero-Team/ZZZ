@@ -2475,7 +2475,6 @@ mod tests {
     use editor::{
         DisplayPoint, Editor, MultiBufferOffset, SelectionEffects, display_map::DisplayRow,
     };
-    use futures::lock::{Mutex, MutexGuard};
     use gpui::{
         Action, AnyWindowHandle, App, AssetSource, BorrowAppContext, Modifiers, TestAppContext,
         UpdateGlobal, VisualTestContext, WindowHandle, actions, point, px,
@@ -2532,9 +2531,9 @@ mod tests {
         cx.run_until_parked();
     }
 
-    async fn session_restore_test_guard() -> MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(())).lock().await
+    fn session_restore_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<std::sync::Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap()
     }
 
     #[gpui::test]
@@ -6189,9 +6188,10 @@ mod tests {
         );
     }
 
+    #[allow(clippy::await_holding_lock)]
     #[gpui::test]
     async fn test_multi_workspace_session_restore(cx: &mut TestAppContext) {
-        let _guard = session_restore_test_guard().await;
+        let _guard = session_restore_test_guard();
         use collections::HashMap;
         use session::Session;
         use util::path_list::PathList;
@@ -6424,9 +6424,10 @@ mod tests {
             .unwrap();
     }
 
+    #[allow(clippy::await_holding_lock)]
     #[gpui::test]
     async fn test_restored_project_groups_survive_workspace_key_change(cx: &mut TestAppContext) {
-        let _guard = session_restore_test_guard().await;
+        let _guard = session_restore_test_guard();
         use session::Session;
         use util::path_list::PathList;
         use workspace::{OpenMode, ProjectGroupKey};

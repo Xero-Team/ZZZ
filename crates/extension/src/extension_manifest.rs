@@ -372,7 +372,6 @@ fn manifest_from_old_manifest(
 
 #[cfg(test)]
 mod tests {
-    use indoc::indoc;
     use pretty_assertions::assert_eq;
     use util::rel_path::rel_path_buf;
 

@@ -1566,7 +1566,7 @@ impl MultiWorkspace {
 
     pub fn serialize(&mut self, cx: &mut Context<Self>) {
         self._serialize_task = Some(cx.spawn(async move |this, cx| {
-            let Some((window_id, state)) = this
+            let Some((window_id, session_id, state)) = this
                 .read_with(cx, |this, cx| {
                     let state = MultiWorkspaceState {
                         active_workspace_id: this.workspace().read(cx).database_id(),
@@ -1583,14 +1583,20 @@ impl MultiWorkspace {
                         sidebar_open: this.sidebar_open,
                         sidebar_state: this.sidebar.as_ref().and_then(|s| s.serialized_state(cx)),
                     };
-                    (this.window_id, state)
+                    (this.window_id, this.workspace().read(cx).session_id(), state)
                 })
                 .ok()
             else {
                 return;
             };
             let kvp = cx.update(|cx| db::kvp::KeyValueStore::global(cx));
-            crate::persistence::write_multi_workspace_state(&kvp, window_id, state).await;
+            crate::persistence::write_multi_workspace_state(
+                &kvp,
+                window_id,
+                session_id.as_deref(),
+                state,
+            )
+            .await;
         }));
     }
 
