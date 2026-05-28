@@ -6,6 +6,7 @@ param(
     [Parameter()][string]$Channel,
     [Parameter()][string]$Version,
     [Parameter()][string]$WorkspaceRoot,
+    [Parameter()][string[]]$Language = @('en-US', 'zh-CN'),
     [Parameter()][switch]$DesktopShortcut,
     [Parameter()][Alias('h')][switch]$Help
 )
@@ -13,7 +14,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if ($Help) {
-    Write-Output 'Usage: bundle-windows-msi.ps1 [-Architecture x86_64|aarch64] [-ReleaseDir path] [-Output path] [-Channel name] [-Version x.y.z] [-WorkspaceRoot path] [-DesktopShortcut]'
+    Write-Output 'Usage: bundle-windows-msi.ps1 [-Architecture x86_64|aarch64] [-ReleaseDir path] [-Output path] [-Channel name] [-Version x.y.z] [-WorkspaceRoot path] [-Language en-US|zh-CN [...]] [-DesktopShortcut]'
     exit 0
 }
 
@@ -50,6 +51,12 @@ if ($Channel) {
 
 if ($Version) {
     $arguments += @('--version', $Version)
+}
+
+foreach ($entry in $Language) {
+    if ($entry) {
+        $arguments += @('--language', $entry)
+    }
 }
 
 if ($DesktopShortcut) {

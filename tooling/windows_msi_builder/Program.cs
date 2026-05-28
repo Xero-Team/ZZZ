@@ -18,6 +18,7 @@ internal static class WindowsMsiBuilder
     private const string ConptyArchiveName = "Microsoft.Windows.Console.ConPTY.1.23.251216003.nupkg";
     private const string AgsUrl = "https://codeload.github.com/GPUOpen-LibrariesAndSDKs/AGS_SDK/zip/refs/tags/v6.3.0";
     private const string AgsArchiveName = "AGS_SDK_v6.3.0.zip";
+    private static readonly string[] SupportedLanguages = ["en-US", "zh-CN"];
     private static readonly HttpClient HttpClient = new();
 
     public static async Task<int> RunAsync(string[] args)
@@ -50,6 +51,7 @@ internal static class WindowsMsiBuilder
                 ? await DiscoverVersionAsync(workspaceRoot)
                 : options.Version.Trim();
             var packageVersion = NormalizeMsiVersion(version);
+            var languages = ResolveLanguages(options.Languages);
 
             var targetRoot = Path.Combine(workspaceRoot, "target", "windows-msi", architecture);
             var stagingDirectory = Path.GetFullPath(options.StagingDirectory ?? Path.Combine(targetRoot, "staging"));
@@ -76,6 +78,7 @@ internal static class WindowsMsiBuilder
                 fileAssociations,
                 options.IncludeDesktopShortcut,
                 architecture);
+            var localizationFilePaths = GenerateLocalizationFiles(generatedDirectory, channelConfig, architecture, languages);
 
             Console.WriteLine("Building MSI with WiX");
             RunProcess(
@@ -86,9 +89,27 @@ internal static class WindowsMsiBuilder
                 throwOnFailure: false,
                 printOutput: false);
             var wixUiExtensionPath = EnsureWixUiExtension(workspaceRoot);
+            var wixBuildArguments = new List<string>
+            {
+                "build",
+                "-culture",
+                languages[0],
+                "-src",
+                wixSourcePath,
+                "-ext",
+                wixUiExtensionPath,
+            };
+            foreach (var localizationFilePath in localizationFilePaths)
+            {
+                wixBuildArguments.Add("-loc");
+                wixBuildArguments.Add(localizationFilePath);
+            }
+
+            wixBuildArguments.Add("-out");
+            wixBuildArguments.Add(outputPath);
             RunProcess(
                 "wix",
-                ["build", "-src", wixSourcePath, "-ext", wixUiExtensionPath, "-out", outputPath],
+                wixBuildArguments,
                 workspaceRoot,
                 "WiX build");
 
@@ -529,7 +550,6 @@ internal static class WindowsMsiBuilder
         string architecture)
     {
         XNamespace ns = "http://wixtoolset.org/schemas/v4/wxs";
-        XNamespace ui = "http://wixtoolset.org/schemas/v4/wxs/ui";
         var directoryNodes = BuildDirectoryTree(stagedFiles);
         var package = new XElement(
             ns + "Package",
@@ -540,11 +560,11 @@ internal static class WindowsMsiBuilder
 
         package.Add(new XElement(
             ns + "SummaryInformation",
-            new XAttribute("Description", $"{channelConfig.DisplayName} for Windows ({architecture})"),
+            new XAttribute("Description", "!(loc.SummaryDescription)"),
             new XAttribute("Manufacturer", "Zed Industries")));
         package.Add(new XElement(
             ns + "MajorUpgrade",
-            new XAttribute("DowngradeErrorMessage", $"A newer version of {channelConfig.DisplayName} is already installed.")));
+            new XAttribute("DowngradeErrorMessage", "!(loc.DowngradeErrorMessage)")));
         package.Add(new XElement(ns + "MediaTemplate", new XAttribute("EmbedCab", "yes")));
 
         var iconFile = stagedFiles.FirstOrDefault(file => file.RelativePath.Equals(channelConfig.AppIconName + ".ico", StringComparison.OrdinalIgnoreCase));
@@ -569,31 +589,42 @@ internal static class WindowsMsiBuilder
             new XAttribute("Id", "ARPHELPLINK"),
             new XAttribute("Value", "https://www.zed.dev/")));
         package.Add(new XElement(
-            ui + "WixUI",
-            new XAttribute("Id", "WixUI_FeatureTree")));
+            ns + "Property",
+            new XAttribute("Id", "WIXUI_INSTALLDIR"),
+            new XAttribute("Value", "INSTALLFOLDER")));
+        package.Add(new XElement(
+            ns + "Property",
+            new XAttribute("Id", "INSTALLFOLDER"),
+            new XElement(
+                ns + "RegistrySearch",
+                new XAttribute("Id", "RememberedInstallDir"),
+                new XAttribute("Root", "HKCU"),
+                new XAttribute("Key", $"Software\\Zed Industries\\{channelConfig.RegValueName}"),
+                new XAttribute("Name", "InstallDir"),
+                new XAttribute("Type", "directory"))));
+        package.Add(new XElement(
+            ns + "Property",
+            new XAttribute("Id", "DESKTOP_SHORTCUT"),
+            new XAttribute("Value", includeDesktopShortcut ? "1" : "0"),
+            new XElement(
+                ns + "RegistrySearch",
+                new XAttribute("Id", "RememberedDesktopShortcut"),
+                new XAttribute("Root", "HKCU"),
+                new XAttribute("Key", $"Software\\Zed Industries\\{channelConfig.RegValueName}"),
+                new XAttribute("Name", "DesktopShortcut"),
+                new XAttribute("Type", "raw"))));
 
         var feature = new XElement(
             ns + "Feature",
             new XAttribute("Id", "MainFeature"),
             new XAttribute("Title", channelConfig.DisplayName),
-            new XAttribute("Description", $"Install {channelConfig.DisplayName}"),
-            new XAttribute("Display", "expand"),
+            new XAttribute("Description", "!(loc.MainFeatureDescription)"),
             new XAttribute("ConfigurableDirectory", "INSTALLFOLDER"),
             new XAttribute("Level", "1"));
         package.Add(feature);
 
-        var desktopShortcutFeature = new XElement(
-            ns + "Feature",
-            new XAttribute("Id", "DesktopShortcutFeature"),
-            new XAttribute("Title", "Desktop shortcut"),
-            new XAttribute("Description", $"Add a desktop shortcut for {channelConfig.DisplayName}"),
-            new XAttribute("Level", includeDesktopShortcut ? "1" : "2"),
-            new XAttribute("AllowAdvertise", "no"));
-        feature.Add(desktopShortcutFeature);
-
         var wix = new XElement(
             ns + "Wix",
-            new XAttribute(XNamespace.Xmlns + "ui", ui.NamespaceName),
             package);
 
         wix.Add(CreateDirectoryFragment(ns, directoryNodes, channelConfig.DisplayName));
@@ -659,12 +690,232 @@ internal static class WindowsMsiBuilder
             feature.Add(new XElement(ns + "ComponentGroupRef", new XAttribute("Id", componentGroupId)));
         }
 
-        desktopShortcutFeature.Add(new XElement(ns + "ComponentGroupRef", new XAttribute("Id", "DesktopShortcutComponents")));
+        feature.Add(new XElement(ns + "ComponentGroupRef", new XAttribute("Id", "DesktopShortcutComponents")));
+        feature.Add(new XElement(ns + "ComponentGroupRef", new XAttribute("Id", "InstallStateComponents")));
+        wix.Add(CreateInstallerUiFragment(ns));
+        wix.Add(CreateVerifyReadyDialogFragment(ns));
         wix.Add(CreateDesktopShortcutFragment(ns, channelConfig));
+        wix.Add(CreateInstallStateFragment(ns, channelConfig));
 
         var document = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), wix);
         Directory.CreateDirectory(Path.GetDirectoryName(wixSourcePath) ?? throw new InvalidOperationException("WiX source directory is invalid."));
         document.Save(wixSourcePath);
+    }
+
+    private static XElement CreateInstallerUiFragment(XNamespace ns)
+    {
+        return new XElement(
+            ns + "Fragment",
+            new XElement(
+                ns + "UI",
+                new XAttribute("Id", "ZedWixUI_InstallDir"),
+                new XElement(ns + "TextStyle", new XAttribute("Id", "WixUI_Font_Normal"), new XAttribute("FaceName", "Tahoma"), new XAttribute("Size", "8")),
+                new XElement(ns + "TextStyle", new XAttribute("Id", "WixUI_Font_Bigger"), new XAttribute("FaceName", "Tahoma"), new XAttribute("Size", "12")),
+                new XElement(ns + "TextStyle", new XAttribute("Id", "WixUI_Font_Title"), new XAttribute("FaceName", "Tahoma"), new XAttribute("Size", "9"), new XAttribute("Bold", "yes")),
+                new XElement(ns + "Property", new XAttribute("Id", "DefaultUIFont"), new XAttribute("Value", "WixUI_Font_Normal")),
+                new XElement(ns + "DialogRef", new XAttribute("Id", "BrowseDlg")),
+                new XElement(ns + "DialogRef", new XAttribute("Id", "DiskCostDlg")),
+                new XElement(ns + "DialogRef", new XAttribute("Id", "ErrorDlg")),
+                new XElement(ns + "DialogRef", new XAttribute("Id", "FatalError")),
+                new XElement(ns + "DialogRef", new XAttribute("Id", "FilesInUse")),
+                new XElement(ns + "DialogRef", new XAttribute("Id", "MsiRMFilesInUse")),
+                new XElement(ns + "DialogRef", new XAttribute("Id", "PrepareDlg")),
+                new XElement(ns + "DialogRef", new XAttribute("Id", "ProgressDlg")),
+                new XElement(ns + "DialogRef", new XAttribute("Id", "ResumeDlg")),
+                new XElement(ns + "DialogRef", new XAttribute("Id", "UserExit")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "ExitDialog"), new XAttribute("Control", "Finish"), new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Order", "999")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "WelcomeDlg"), new XAttribute("Control", "Next"), new XAttribute("Event", "NewDialog"), new XAttribute("Value", "LicenseAgreementDlg"), new XAttribute("Condition", "NOT Installed")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "WelcomeDlg"), new XAttribute("Control", "Next"), new XAttribute("Event", "NewDialog"), new XAttribute("Value", "VerifyReadyDlg_WithDesktopShortcut"), new XAttribute("Condition", "Installed AND PATCH")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "LicenseAgreementDlg"), new XAttribute("Control", "Back"), new XAttribute("Event", "NewDialog"), new XAttribute("Value", "WelcomeDlg")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "LicenseAgreementDlg"), new XAttribute("Control", "Next"), new XAttribute("Event", "NewDialog"), new XAttribute("Value", "InstallDirDlg"), new XAttribute("Condition", "LicenseAccepted = \"1\"")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "InstallDirDlg"), new XAttribute("Control", "Back"), new XAttribute("Event", "NewDialog"), new XAttribute("Value", "LicenseAgreementDlg")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "InstallDirDlg"), new XAttribute("Control", "Next"), new XAttribute("Event", "CheckTargetPath"), new XAttribute("Value", "[WIXUI_INSTALLDIR]"), new XAttribute("Order", "1")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "InstallDirDlg"), new XAttribute("Control", "Next"), new XAttribute("Event", "SetTargetPath"), new XAttribute("Value", "[WIXUI_INSTALLDIR]"), new XAttribute("Order", "3")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "InstallDirDlg"), new XAttribute("Control", "Next"), new XAttribute("Event", "NewDialog"), new XAttribute("Value", "VerifyReadyDlg_WithDesktopShortcut"), new XAttribute("Order", "4")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "InstallDirDlg"), new XAttribute("Control", "ChangeFolder"), new XAttribute("Property", "_BrowseProperty"), new XAttribute("Value", "[WIXUI_INSTALLDIR]"), new XAttribute("Order", "1")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "InstallDirDlg"), new XAttribute("Control", "ChangeFolder"), new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "BrowseDlg"), new XAttribute("Order", "2")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "BrowseDlg"), new XAttribute("Control", "OK"), new XAttribute("Event", "CheckTargetPath"), new XAttribute("Value", "[WIXUI_INSTALLDIR]"), new XAttribute("Order", "1")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "BrowseDlg"), new XAttribute("Control", "OK"), new XAttribute("Event", "SetTargetPath"), new XAttribute("Value", "[_BrowseProperty]"), new XAttribute("Order", "3")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "BrowseDlg"), new XAttribute("Control", "OK"), new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Order", "4")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "VerifyReadyDlg_WithDesktopShortcut"), new XAttribute("Control", "Back"), new XAttribute("Event", "NewDialog"), new XAttribute("Value", "InstallDirDlg"), new XAttribute("Order", "1"), new XAttribute("Condition", "NOT Installed")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "VerifyReadyDlg_WithDesktopShortcut"), new XAttribute("Control", "Back"), new XAttribute("Event", "NewDialog"), new XAttribute("Value", "MaintenanceTypeDlg"), new XAttribute("Order", "2"), new XAttribute("Condition", "Installed AND NOT PATCH")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "VerifyReadyDlg_WithDesktopShortcut"), new XAttribute("Control", "Back"), new XAttribute("Event", "NewDialog"), new XAttribute("Value", "WelcomeDlg"), new XAttribute("Order", "2"), new XAttribute("Condition", "Installed AND PATCH")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "MaintenanceWelcomeDlg"), new XAttribute("Control", "Next"), new XAttribute("Event", "NewDialog"), new XAttribute("Value", "MaintenanceTypeDlg")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "MaintenanceTypeDlg"), new XAttribute("Control", "RepairButton"), new XAttribute("Event", "NewDialog"), new XAttribute("Value", "VerifyReadyDlg_WithDesktopShortcut")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "MaintenanceTypeDlg"), new XAttribute("Control", "RemoveButton"), new XAttribute("Event", "NewDialog"), new XAttribute("Value", "VerifyReadyDlg_WithDesktopShortcut")),
+                new XElement(ns + "Publish", new XAttribute("Dialog", "MaintenanceTypeDlg"), new XAttribute("Control", "Back"), new XAttribute("Event", "NewDialog"), new XAttribute("Value", "MaintenanceWelcomeDlg"))),
+            new XElement(ns + "UIRef", new XAttribute("Id", "WixUI_Common")));
+    }
+
+    private static XElement CreateVerifyReadyDialogFragment(XNamespace ns)
+    {
+        return new XElement(
+            ns + "Fragment",
+            new XElement(
+                ns + "UI",
+                new XElement(
+                    ns + "Dialog",
+                    new XAttribute("Id", "VerifyReadyDlg_WithDesktopShortcut"),
+                    new XAttribute("Width", "370"),
+                    new XAttribute("Height", "270"),
+                    new XAttribute("Title", "!(loc.VerifyReadyDlg_Title)"),
+                    new XAttribute("TrackDiskSpace", "yes"),
+                    new XElement(
+                        ns + "Control",
+                        new XAttribute("Id", "Install"),
+                        new XAttribute("Type", "PushButton"),
+                        new XAttribute("ElevationShield", "yes"),
+                        new XAttribute("X", "212"),
+                        new XAttribute("Y", "243"),
+                        new XAttribute("Width", "80"),
+                        new XAttribute("Height", "17"),
+                        new XAttribute("Default", "yes"),
+                        new XAttribute("Hidden", "yes"),
+                        new XAttribute("Disabled", "yes"),
+                        new XAttribute("Text", "!(loc.VerifyReadyDlgInstall)"),
+                        new XAttribute("ShowCondition", "NOT Installed AND ALLUSERS"),
+                        new XAttribute("EnableCondition", "NOT Installed"),
+                        new XAttribute("DefaultCondition", "NOT Installed"),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace <> 1")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfRbDiskDlg"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=\"P\" OR NOT PROMPTROLLBACKCOST)")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EnableRollback"), new XAttribute("Value", "False"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfDiskDlg"), new XAttribute("Condition", "(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=\"F\")"))),
+                    new XElement(
+                        ns + "Control",
+                        new XAttribute("Id", "InstallNoShield"),
+                        new XAttribute("Type", "PushButton"),
+                        new XAttribute("ElevationShield", "no"),
+                        new XAttribute("X", "212"),
+                        new XAttribute("Y", "243"),
+                        new XAttribute("Width", "80"),
+                        new XAttribute("Height", "17"),
+                        new XAttribute("Default", "yes"),
+                        new XAttribute("Hidden", "yes"),
+                        new XAttribute("Disabled", "yes"),
+                        new XAttribute("Text", "!(loc.VerifyReadyDlgInstall)"),
+                        new XAttribute("ShowCondition", "NOT Installed AND NOT ALLUSERS"),
+                        new XAttribute("EnableCondition", "NOT Installed"),
+                        new XAttribute("DefaultCondition", "NOT Installed"),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace <> 1")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfRbDiskDlg"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=\"P\" OR NOT PROMPTROLLBACKCOST)")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EnableRollback"), new XAttribute("Value", "False"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfDiskDlg"), new XAttribute("Condition", "(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=\"F\")"))),
+                    new XElement(
+                        ns + "Control",
+                        new XAttribute("Id", "Repair"),
+                        new XAttribute("Type", "PushButton"),
+                        new XAttribute("X", "212"),
+                        new XAttribute("Y", "243"),
+                        new XAttribute("Width", "80"),
+                        new XAttribute("Height", "17"),
+                        new XAttribute("Default", "yes"),
+                        new XAttribute("Hidden", "yes"),
+                        new XAttribute("Disabled", "yes"),
+                        new XAttribute("Text", "!(loc.VerifyReadyDlgRepair)"),
+                        new XAttribute("ShowCondition", "WixUI_InstallMode = \"Repair\""),
+                        new XAttribute("EnableCondition", "WixUI_InstallMode = \"Repair\""),
+                        new XAttribute("DefaultCondition", "WixUI_InstallMode = \"Repair\""),
+                        new XElement(ns + "Publish", new XAttribute("Event", "ReinstallMode"), new XAttribute("Value", "ecmus"), new XAttribute("Condition", "OutOfDiskSpace <> 1")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "Reinstall"), new XAttribute("Value", "All"), new XAttribute("Condition", "OutOfDiskSpace <> 1")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace <> 1")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfRbDiskDlg"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=\"P\" OR NOT PROMPTROLLBACKCOST)")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EnableRollback"), new XAttribute("Value", "False"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfDiskDlg"), new XAttribute("Condition", "(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=\"F\")"))),
+                    new XElement(
+                        ns + "Control",
+                        new XAttribute("Id", "Update"),
+                        new XAttribute("Type", "PushButton"),
+                        new XAttribute("ElevationShield", "yes"),
+                        new XAttribute("X", "212"),
+                        new XAttribute("Y", "243"),
+                        new XAttribute("Width", "80"),
+                        new XAttribute("Height", "17"),
+                        new XAttribute("Hidden", "yes"),
+                        new XAttribute("Disabled", "yes"),
+                        new XAttribute("Text", "!(loc.VerifyReadyDlgUpdate)"),
+                        new XAttribute("ShowCondition", "WixUI_InstallMode = \"Update\" AND ALLUSERS"),
+                        new XAttribute("EnableCondition", "WixUI_InstallMode = \"Update\""),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace <> 1")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfRbDiskDlg"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=\"P\" OR NOT PROMPTROLLBACKCOST)")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EnableRollback"), new XAttribute("Value", "False"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfDiskDlg"), new XAttribute("Condition", "(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=\"F\")"))),
+                    new XElement(
+                        ns + "Control",
+                        new XAttribute("Id", "UpdateNoShield"),
+                        new XAttribute("Type", "PushButton"),
+                        new XAttribute("ElevationShield", "no"),
+                        new XAttribute("X", "212"),
+                        new XAttribute("Y", "243"),
+                        new XAttribute("Width", "80"),
+                        new XAttribute("Height", "17"),
+                        new XAttribute("Hidden", "yes"),
+                        new XAttribute("Disabled", "yes"),
+                        new XAttribute("Text", "!(loc.VerifyReadyDlgUpdate)"),
+                        new XAttribute("ShowCondition", "WixUI_InstallMode = \"Update\" AND NOT ALLUSERS"),
+                        new XAttribute("EnableCondition", "WixUI_InstallMode = \"Update\""),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace <> 1")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfRbDiskDlg"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=\"P\" OR NOT PROMPTROLLBACKCOST)")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EnableRollback"), new XAttribute("Value", "False"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfDiskDlg"), new XAttribute("Condition", "(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=\"F\")"))),
+                    new XElement(
+                        ns + "Control",
+                        new XAttribute("Id", "Remove"),
+                        new XAttribute("Type", "PushButton"),
+                        new XAttribute("ElevationShield", "yes"),
+                        new XAttribute("X", "212"),
+                        new XAttribute("Y", "243"),
+                        new XAttribute("Width", "80"),
+                        new XAttribute("Height", "17"),
+                        new XAttribute("Hidden", "yes"),
+                        new XAttribute("Disabled", "yes"),
+                        new XAttribute("Text", "!(loc.VerifyReadyDlgRemove)"),
+                        new XAttribute("ShowCondition", "WixUI_InstallMode = \"Remove\" AND ALLUSERS"),
+                        new XAttribute("EnableCondition", "WixUI_InstallMode = \"Remove\""),
+                        new XElement(ns + "Publish", new XAttribute("Event", "Remove"), new XAttribute("Value", "All"), new XAttribute("Condition", "OutOfDiskSpace <> 1")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace <> 1")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfRbDiskDlg"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=\"P\" OR NOT PROMPTROLLBACKCOST)")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EnableRollback"), new XAttribute("Value", "False"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfDiskDlg"), new XAttribute("Condition", "(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=\"F\")"))),
+                    new XElement(
+                        ns + "Control",
+                        new XAttribute("Id", "RemoveNoShield"),
+                        new XAttribute("Type", "PushButton"),
+                        new XAttribute("ElevationShield", "no"),
+                        new XAttribute("X", "212"),
+                        new XAttribute("Y", "243"),
+                        new XAttribute("Width", "80"),
+                        new XAttribute("Height", "17"),
+                        new XAttribute("Hidden", "yes"),
+                        new XAttribute("Disabled", "yes"),
+                        new XAttribute("Text", "!(loc.VerifyReadyDlgRemove)"),
+                        new XAttribute("ShowCondition", "WixUI_InstallMode = \"Remove\" AND NOT ALLUSERS"),
+                        new XAttribute("EnableCondition", "WixUI_InstallMode = \"Remove\""),
+                        new XElement(ns + "Publish", new XAttribute("Event", "Remove"), new XAttribute("Value", "All"), new XAttribute("Condition", "OutOfDiskSpace <> 1")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace <> 1")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfRbDiskDlg"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=\"P\" OR NOT PROMPTROLLBACKCOST)")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EndDialog"), new XAttribute("Value", "Return"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "EnableRollback"), new XAttribute("Value", "False"), new XAttribute("Condition", "OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=\"D\"")),
+                        new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "OutOfDiskDlg"), new XAttribute("Condition", "(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=\"F\")"))),
+                    new XElement(ns + "Control", new XAttribute("Id", "InstallTitle"), new XAttribute("Type", "Text"), new XAttribute("X", "15"), new XAttribute("Y", "15"), new XAttribute("Width", "300"), new XAttribute("Height", "15"), new XAttribute("Transparent", "yes"), new XAttribute("NoPrefix", "yes"), new XAttribute("Hidden", "yes"), new XAttribute("Text", "!(loc.VerifyReadyDlgInstallTitle)"), new XAttribute("ShowCondition", "NOT Installed")),
+                    new XElement(ns + "Control", new XAttribute("Id", "InstallText"), new XAttribute("Type", "Text"), new XAttribute("X", "25"), new XAttribute("Y", "70"), new XAttribute("Width", "320"), new XAttribute("Height", "65"), new XAttribute("Hidden", "yes"), new XAttribute("Text", "!(loc.VerifyReadyDlgInstallText)"), new XAttribute("ShowCondition", "NOT Installed")),
+                    new XElement(ns + "Control", new XAttribute("Id", "RepairTitle"), new XAttribute("Type", "Text"), new XAttribute("X", "15"), new XAttribute("Y", "15"), new XAttribute("Width", "300"), new XAttribute("Height", "15"), new XAttribute("Transparent", "yes"), new XAttribute("NoPrefix", "yes"), new XAttribute("Hidden", "yes"), new XAttribute("Text", "!(loc.VerifyReadyDlgRepairTitle)"), new XAttribute("ShowCondition", "WixUI_InstallMode = \"Repair\"")),
+                    new XElement(ns + "Control", new XAttribute("Id", "RepairText"), new XAttribute("Type", "Text"), new XAttribute("X", "25"), new XAttribute("Y", "70"), new XAttribute("Width", "320"), new XAttribute("Height", "80"), new XAttribute("Hidden", "yes"), new XAttribute("NoPrefix", "yes"), new XAttribute("Text", "!(loc.VerifyReadyDlgRepairText)"), new XAttribute("ShowCondition", "WixUI_InstallMode = \"Repair\"")),
+                    new XElement(ns + "Control", new XAttribute("Id", "UpdateTitle"), new XAttribute("Type", "Text"), new XAttribute("X", "15"), new XAttribute("Y", "15"), new XAttribute("Width", "300"), new XAttribute("Height", "15"), new XAttribute("Transparent", "yes"), new XAttribute("NoPrefix", "yes"), new XAttribute("Hidden", "yes"), new XAttribute("Text", "!(loc.VerifyReadyDlgUpdateTitle)"), new XAttribute("ShowCondition", "WixUI_InstallMode = \"Update\"")),
+                    new XElement(ns + "Control", new XAttribute("Id", "UpdateText"), new XAttribute("Type", "Text"), new XAttribute("X", "25"), new XAttribute("Y", "70"), new XAttribute("Width", "320"), new XAttribute("Height", "80"), new XAttribute("Hidden", "yes"), new XAttribute("NoPrefix", "yes"), new XAttribute("Text", "!(loc.VerifyReadyDlgUpdateText)"), new XAttribute("ShowCondition", "WixUI_InstallMode = \"Update\"")),
+                    new XElement(ns + "Control", new XAttribute("Id", "RemoveTitle"), new XAttribute("Type", "Text"), new XAttribute("X", "15"), new XAttribute("Y", "15"), new XAttribute("Width", "300"), new XAttribute("Height", "15"), new XAttribute("Transparent", "yes"), new XAttribute("NoPrefix", "yes"), new XAttribute("Hidden", "yes"), new XAttribute("Text", "!(loc.VerifyReadyDlgRemoveTitle)"), new XAttribute("ShowCondition", "WixUI_InstallMode = \"Remove\"")),
+                    new XElement(ns + "Control", new XAttribute("Id", "RemoveText"), new XAttribute("Type", "Text"), new XAttribute("X", "25"), new XAttribute("Y", "70"), new XAttribute("Width", "320"), new XAttribute("Height", "80"), new XAttribute("Hidden", "yes"), new XAttribute("NoPrefix", "yes"), new XAttribute("Text", "!(loc.VerifyReadyDlgRemoveText)"), new XAttribute("ShowCondition", "WixUI_InstallMode = \"Remove\"")),
+                    new XElement(ns + "Control", new XAttribute("Id", "DesktopShortcutCheckBox"), new XAttribute("Type", "CheckBox"), new XAttribute("X", "25"), new XAttribute("Y", "150"), new XAttribute("Width", "220"), new XAttribute("Height", "18"), new XAttribute("Hidden", "yes"), new XAttribute("Property", "DESKTOP_SHORTCUT"), new XAttribute("CheckBoxValue", "1"), new XAttribute("Text", "!(loc.DesktopShortcutCheckboxText)"), new XAttribute("ShowCondition", "NOT Installed")),
+                    new XElement(ns + "Control", new XAttribute("Id", "Cancel"), new XAttribute("Type", "PushButton"), new XAttribute("X", "304"), new XAttribute("Y", "243"), new XAttribute("Width", "56"), new XAttribute("Height", "17"), new XAttribute("Cancel", "yes"), new XAttribute("Text", "!(loc.WixUICancel)"), new XElement(ns + "Publish", new XAttribute("Event", "SpawnDialog"), new XAttribute("Value", "CancelDlg"))),
+                    new XElement(ns + "Control", new XAttribute("Id", "Back"), new XAttribute("Type", "PushButton"), new XAttribute("X", "156"), new XAttribute("Y", "243"), new XAttribute("Width", "56"), new XAttribute("Height", "17"), new XAttribute("Text", "!(loc.WixUIBack)"), new XAttribute("DefaultCondition", "WixUI_InstallMode = \"Remove\"")),
+                    new XElement(ns + "Control", new XAttribute("Id", "BannerBitmap"), new XAttribute("Type", "Bitmap"), new XAttribute("X", "0"), new XAttribute("Y", "0"), new XAttribute("Width", "370"), new XAttribute("Height", "44"), new XAttribute("TabSkip", "no"), new XAttribute("Text", "!(loc.VerifyReadyDlgBannerBitmap)")),
+                    new XElement(ns + "Control", new XAttribute("Id", "BannerLine"), new XAttribute("Type", "Line"), new XAttribute("X", "0"), new XAttribute("Y", "44"), new XAttribute("Width", "373"), new XAttribute("Height", "0")),
+                    new XElement(ns + "Control", new XAttribute("Id", "BottomLine"), new XAttribute("Type", "Line"), new XAttribute("X", "0"), new XAttribute("Y", "234"), new XAttribute("Width", "373"), new XAttribute("Height", "0")))));
     }
 
     private static XElement CreateDirectoryFragment(XNamespace ns, DirectoryNode rootNode, string displayName)
@@ -716,9 +967,10 @@ internal static class WindowsMsiBuilder
                 ns + "ComponentGroup",
                 new XAttribute("Id", "DesktopShortcutComponents"),
                 new XAttribute("Directory", "INSTALLFOLDER"),
-                new XElement(
-                    ns + "Component",
-                    new XAttribute("Id", "DesktopShortcutComponent"),
+                    new XElement(
+                        ns + "Component",
+                        new XAttribute("Id", "DesktopShortcutComponent"),
+                        new XAttribute("Condition", "DESKTOP_SHORTCUT = \"1\""),
                     new XElement(
                         ns + "Shortcut",
                         new XAttribute("Id", "DesktopShortcut"),
@@ -731,10 +983,142 @@ internal static class WindowsMsiBuilder
                         ns + "RegistryValue",
                         new XAttribute("Root", "HKCU"),
                         new XAttribute("Key", $"Software\\Zed Industries\\{channelConfig.RegValueName}"),
-                        new XAttribute("Name", "DesktopShortcut"),
-                        new XAttribute("Type", "integer"),
+                        new XAttribute("Name", "DesktopShortcutInstalled"),
+                        new XAttribute("Type", "string"),
                         new XAttribute("Value", "1"),
                         new XAttribute("KeyPath", "yes")))));
+    }
+
+    private static XElement CreateInstallStateFragment(XNamespace ns, ChannelConfig channelConfig)
+    {
+        return new XElement(
+            ns + "Fragment",
+            new XElement(
+                ns + "ComponentGroup",
+                new XAttribute("Id", "InstallStateComponents"),
+                new XAttribute("Directory", "INSTALLFOLDER"),
+                new XElement(
+                    ns + "Component",
+                    new XAttribute("Id", "InstallStateComponent"),
+                    new XElement(
+                        ns + "RegistryValue",
+                        new XAttribute("Root", "HKCU"),
+                        new XAttribute("Key", $"Software\\Zed Industries\\{channelConfig.RegValueName}"),
+                        new XAttribute("Name", "InstallDir"),
+                        new XAttribute("Type", "string"),
+                        new XAttribute("Value", "[INSTALLFOLDER]"),
+                        new XAttribute("KeyPath", "yes")),
+                    new XElement(
+                        ns + "RegistryValue",
+                        new XAttribute("Root", "HKCU"),
+                        new XAttribute("Key", $"Software\\Zed Industries\\{channelConfig.RegValueName}"),
+                        new XAttribute("Name", "DesktopShortcut"),
+                        new XAttribute("Type", "string"),
+                        new XAttribute("Value", "[DESKTOP_SHORTCUT]")))));
+    }
+
+    private static IReadOnlyList<string> GenerateLocalizationFiles(string generatedDirectory, ChannelConfig channelConfig, string architecture)
+    {
+        return GenerateLocalizationFiles(generatedDirectory, channelConfig, architecture, SupportedLanguages);
+    }
+
+    private static IReadOnlyList<string> GenerateLocalizationFiles(
+        string generatedDirectory,
+        ChannelConfig channelConfig,
+        string architecture,
+        IReadOnlyList<string> languages)
+    {
+        var localizationFilePaths = new List<string>();
+
+        foreach (var language in languages)
+        {
+            var localizationPath = Path.Combine(generatedDirectory, $"Zed.{language}.wxl");
+            switch (language)
+            {
+                case "en-US":
+                    WriteLocalizationFile(
+                        localizationPath,
+                        "en-US",
+                        "1252",
+                        channelConfig,
+                        $"{channelConfig.DisplayName} for Windows ({architecture})",
+                        $"A newer version of {channelConfig.DisplayName} is already installed.",
+                        $"Install {channelConfig.DisplayName}",
+                        "Create a desktop shortcut");
+                    break;
+                case "zh-CN":
+                    WriteLocalizationFile(
+                        localizationPath,
+                        "zh-CN",
+                        "936",
+                        channelConfig,
+                        $"{channelConfig.DisplayName} Windows 版 ({architecture})",
+                        $"已安装更新版本的 {channelConfig.DisplayName}。",
+                        $"安装 {channelConfig.DisplayName}",
+                        "创建桌面快捷方式");
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unsupported localization language: {language}");
+            }
+
+            localizationFilePaths.Add(localizationPath);
+        }
+
+        return localizationFilePaths;
+    }
+
+    private static IReadOnlyList<string> ResolveLanguages(IReadOnlyList<string> requestedLanguages)
+    {
+        if (requestedLanguages.Count == 0)
+        {
+            return SupportedLanguages;
+        }
+
+        var languages = new List<string>();
+        foreach (var requestedLanguage in requestedLanguages)
+        {
+            var normalizedLanguage = SupportedLanguages.FirstOrDefault(language =>
+                language.Equals(requestedLanguage, StringComparison.OrdinalIgnoreCase));
+            if (normalizedLanguage is null)
+            {
+                throw new InvalidOperationException($"Unsupported language: {requestedLanguage}. Supported languages: {string.Join(", ", SupportedLanguages)}");
+            }
+
+            if (!languages.Contains(normalizedLanguage, StringComparer.OrdinalIgnoreCase))
+            {
+                languages.Add(normalizedLanguage);
+            }
+        }
+
+        return languages;
+    }
+
+    private static void WriteLocalizationFile(
+        string localizationPath,
+        string culture,
+        string codepage,
+        ChannelConfig channelConfig,
+        string summaryDescription,
+        string downgradeErrorMessage,
+        string mainFeatureDescription,
+        string desktopShortcutCheckboxText)
+    {
+        XNamespace localizationNamespace = "http://wixtoolset.org/schemas/v4/wxl";
+        var document = new XDocument(
+            new XDeclaration("1.0", "utf-8", "yes"),
+            new XElement(
+                localizationNamespace + "WixLocalization",
+                new XAttribute("Culture", culture),
+                new XAttribute("Codepage", codepage),
+                culture.Equals("en-US", StringComparison.OrdinalIgnoreCase)
+                    ? new XAttribute("ExtensionDefaultCulture", "yes")
+                    : null,
+                new XElement(localizationNamespace + "String", new XAttribute("Id", "ProductName"), new XAttribute("Value", channelConfig.DisplayName)),
+                new XElement(localizationNamespace + "String", new XAttribute("Id", "SummaryDescription"), new XAttribute("Value", summaryDescription)),
+                new XElement(localizationNamespace + "String", new XAttribute("Id", "DowngradeErrorMessage"), new XAttribute("Value", downgradeErrorMessage)),
+                new XElement(localizationNamespace + "String", new XAttribute("Id", "MainFeatureDescription"), new XAttribute("Value", mainFeatureDescription)),
+                new XElement(localizationNamespace + "String", new XAttribute("Id", "DesktopShortcutCheckboxText"), new XAttribute("Value", desktopShortcutCheckboxText))));
+        document.Save(localizationPath);
     }
 
     private static string AddPathIntegration(XNamespace ns, XElement wix, ChannelConfig channelConfig)
@@ -1219,6 +1603,8 @@ internal sealed record Options
 
     public string? Version { get; private init; }
 
+    public IReadOnlyList<string> Languages { get; private init; } = [];
+
     public bool IncludeDesktopShortcut { get; private init; }
 
     public static Options Parse(IReadOnlyList<string> args)
@@ -1255,6 +1641,9 @@ internal sealed record Options
                 case "--desktop-shortcut":
                     options = options with { IncludeDesktopShortcut = true };
                     break;
+                case "--language":
+                    options = options with { Languages = [.. options.Languages, ReadValue(args, ref index)] };
+                    break;
                 case "--help":
                 case "-h":
                     PrintUsage();
@@ -1289,6 +1678,7 @@ internal sealed record Options
         Console.WriteLine("  --output, -o          Output MSI path");
         Console.WriteLine("  --channel             Release channel override");
         Console.WriteLine("  --version             Product version override");
+        Console.WriteLine("  --language            MSI UI language to include (repeatable: en-US, zh-CN)");
         Console.WriteLine("  --desktop-shortcut    Add a desktop shortcut in the MSI");
     }
 }
