@@ -1,7 +1,7 @@
 use std::{
     any::Any,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, LazyLock},
     time::Duration,
 };
 
@@ -17,7 +17,7 @@ use rpc::{AnyProtoClient, TypedEnvelope, proto};
 use schemars::JsonSchema;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use settings::{RegisterSetting, SettingsStore};
+use settings::{RegisterSetting, SettingsStore, update_settings_file};
 use sha2::{Digest, Sha256};
 use url::Url;
 use util::{ResultExt as _, debug_panic};
@@ -182,7 +182,51 @@ pub struct AgentServersUpdated;
 
 impl EventEmitter<AgentServersUpdated> for AgentServerStore {}
 
+static EXTENSION_TO_REGISTRY_IDS: LazyLock<HashMap<&'static str, &'static str>> =
+    LazyLock::new(|| {
+        HashMap::from_iter([
+            ("opencode", "opencode"),
+            ("mistral-vibe", "mistral-vibe"),
+            ("auggie", "auggie"),
+            ("stakpak", "stakpak"),
+            ("codebuddy", "codebuddy-code"),
+            ("autohand-acp", "autohand"),
+            ("corust-agent", "corust-agent"),
+            ("factory-droid", "factory-droid"),
+        ])
+    });
+
 impl AgentServerStore {
+    pub fn migrate_agent_server_from_extensions(
+        &mut self,
+        id: Arc<str>,
+        fs: Arc<dyn Fs>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(registry_id) = EXTENSION_TO_REGISTRY_IDS.get(id.as_ref()) else {
+            return;
+        };
+
+        update_settings_file(fs, cx, move |settings, _| {
+            let agent_servers = settings.agent_servers.get_or_insert_default();
+            let settings = agent_servers.remove(id.as_ref());
+            if agent_servers.contains_key(*registry_id) {
+                return;
+            }
+            agent_servers.insert(
+                registry_id.to_string(),
+                settings.unwrap_or_else(|| settings::CustomAgentServerSettings::Registry {
+                    default_mode: None,
+                    default_model: None,
+                    env: Default::default(),
+                    favorite_models: Vec::new(),
+                    default_config_options: HashMap::default(),
+                    favorite_config_option_values: HashMap::default(),
+                }),
+            );
+        });
+    }
+
     pub fn agent_icon(&self, id: &AgentId) -> Option<SharedString> {
         self.external_agents
             .get(id)
@@ -1401,7 +1445,15 @@ impl settings::Settings for AllAgentServersSettings {
             agent_settings
                 .0
                 .into_iter()
-                .map(|(k, v)| (k, v.into()))
+                .map(|(k, v)| {
+                    (
+                        EXTENSION_TO_REGISTRY_IDS
+                            .get(&k.as_str())
+                            .map(|value| value.to_string())
+                            .unwrap_or(k),
+                        v.into(),
+                    )
+                })
                 .collect(),
         )
     }

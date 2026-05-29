@@ -7,7 +7,6 @@ use std::time::Duration;
 use std::{ops::Range, sync::Arc};
 
 use anyhow::Context as _;
-use client::zed_urls;
 use cloud_api_types::{ExtensionMetadata, ExtensionProvides};
 use collections::{BTreeMap, BTreeSet};
 use editor::{Editor, EditorElement, EditorStyle};
@@ -184,6 +183,7 @@ fn extension_provides_label(provides: ExtensionProvides) -> &'static str {
         ExtensionProvides::Grammars => "Grammars",
         ExtensionProvides::LanguageServers => "Language Servers",
         ExtensionProvides::ContextServers => "MCP Servers",
+        ExtensionProvides::AgentServers => "Agent Servers",
         ExtensionProvides::SlashCommands => "Slash Commands",
         ExtensionProvides::IndexedDocsProviders => "Indexed Docs Providers",
         ExtensionProvides::Snippets => "Snippets",
@@ -285,19 +285,6 @@ fn keywords_by_feature() -> &'static BTreeMap<Feature, Vec<&'static str>> {
     })
 }
 
-fn acp_registry_upsell_keywords() -> &'static [&'static str] {
-    &[
-        "opencode",
-        "mistral",
-        "auggie",
-        "stakpak",
-        "codebuddy",
-        "autohand",
-        "factory droid",
-        "corust",
-    ]
-}
-
 fn extension_button_id(extension_id: &Arc<str>, operation: ExtensionOperation) -> ElementId {
     (SharedString::from(extension_id.clone()), operation as usize).into()
 }
@@ -324,7 +311,6 @@ pub struct ExtensionsPage {
     _subscriptions: [gpui::Subscription; 2],
     extension_fetch_task: Option<Task<()>>,
     upsells: BTreeSet<Feature>,
-    show_acp_registry_upsell: bool,
 }
 
 impl ExtensionsPage {
@@ -387,7 +373,6 @@ impl ExtensionsPage {
                 _subscriptions: subscriptions,
                 query_editor,
                 upsells: BTreeSet::default(),
-                show_acp_registry_upsell: false,
             };
             this.fetch_extensions(
                 this.search_query(cx),
@@ -822,7 +807,8 @@ impl ExtensionsPage {
                                             .iter()
                                             .filter_map(|provides| {
                                                 match provides {
-                                                    ExtensionProvides::SlashCommands
+                                                    ExtensionProvides::AgentServers
+                                                    | ExtensionProvides::SlashCommands
                                                     | ExtensionProvides::IndexedDocsProviders => {
                                                         return None;
                                                     }
@@ -1411,13 +1397,11 @@ impl ExtensionsPage {
     fn refresh_feature_upsells(&mut self, cx: &mut Context<Self>) {
         let Some(search) = self.search_query(cx) else {
             self.upsells.clear();
-            self.show_acp_registry_upsell = false;
             return;
         };
 
         if let Some(id) = search.strip_prefix("id:") {
             self.upsells.clear();
-            self.show_acp_registry_upsell = false;
 
             let upsell = match id.to_lowercase().as_str() {
                 "ruff" => Some(Feature::ExtensionRuff),
@@ -1449,39 +1433,6 @@ impl ExtensionsPage {
                 self.upsells.remove(feature);
             }
         }
-
-        self.show_acp_registry_upsell = acp_registry_upsell_keywords()
-            .iter()
-            .any(|keyword| search_terms.iter().any(|term| keyword.contains(term)));
-    }
-
-    fn render_acp_registry_upsell(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let registry_url = zed_urls::acp_registry_blog(cx);
-
-        let view_registry = Button::new("view_registry", "View Registry")
-            .style(ButtonStyle::Tinted(ui::TintColor::Warning))
-            .on_click({
-                move |_, window, cx| window.dispatch_action(Box::new(zed_actions::AcpRegistry), cx)
-            });
-        let open_registry_button = Button::new("open_registry", "Learn More")
-            .end_icon(
-                Icon::new(IconName::ArrowUpRight)
-                    .size(IconSize::Small)
-                    .color(Color::Muted),
-            )
-            .on_click(move |_event, _window, cx| cx.open_url(&registry_url));
-
-        div().pt_4().px_4().child(
-            Banner::new()
-                .severity(Severity::Warning)
-                .child(Label::new("ACP registry available for supported external agents.").mt_0p5())
-                .action_slot(
-                    h_flex()
-                        .gap_1()
-                        .child(open_registry_button)
-                        .child(view_registry),
-                ),
-        )
     }
 
     fn render_feature_upsell_banner(
@@ -1768,7 +1719,8 @@ impl Render for ExtensionsPage {
                     )
                     .children(ExtensionProvides::iter().filter_map(|provides| {
                         match provides {
-                            ExtensionProvides::SlashCommands
+                            ExtensionProvides::AgentServers
+                            | ExtensionProvides::SlashCommands
                             | ExtensionProvides::IndexedDocsProviders => return None,
                             _ => {}
                         }
@@ -1792,9 +1744,6 @@ impl Render for ExtensionsPage {
                         )
                     })),
             )
-            .when(self.show_acp_registry_upsell, |this| {
-                this.child(self.render_acp_registry_upsell(cx))
-            })
             .child(self.render_feature_upsells(cx))
             .child(v_flex().px_4().size_full().overflow_y_hidden().map(|this| {
                 let mut count = self.filtered_remote_extension_indices.len();

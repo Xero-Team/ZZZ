@@ -8520,10 +8520,6 @@ impl ThreadView {
             return None;
         }
 
-        if self.as_native_connection(cx).is_some() {
-            return None;
-        }
-
         if self
             .thread
             .read(cx)

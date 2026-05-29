@@ -88,12 +88,12 @@ impl AgentServer for CustomAgentServer {
         let config_id = config_id.to_string();
         let value_id = value_id.to_string();
 
-        update_settings_file(fs, cx, move |settings, cx| {
+        update_settings_file(fs, cx, move |settings, _cx| {
             let settings = settings
                 .agent_servers
                 .get_or_insert_default()
                 .entry(agent_id.0.to_string())
-                .or_insert_with(|| default_settings_for_agent(agent_id, cx));
+                .or_insert_with(default_settings_for_agent);
 
             match settings {
                 settings::CustomAgentServerSettings::Custom {
@@ -125,12 +125,12 @@ impl AgentServer for CustomAgentServer {
 
     fn set_default_mode(&self, mode_id: Option<acp::SessionModeId>, fs: Arc<dyn Fs>, cx: &mut App) {
         let agent_id = self.agent_id();
-        update_settings_file(fs, cx, move |settings, cx| {
+        update_settings_file(fs, cx, move |settings, _cx| {
             let settings = settings
                 .agent_servers
                 .get_or_insert_default()
                 .entry(agent_id.0.to_string())
-                .or_insert_with(|| default_settings_for_agent(agent_id, cx));
+                .or_insert_with(default_settings_for_agent);
 
             match settings {
                 settings::CustomAgentServerSettings::Custom { default_mode, .. }
@@ -156,12 +156,12 @@ impl AgentServer for CustomAgentServer {
 
     fn set_default_model(&self, model_id: Option<acp::ModelId>, fs: Arc<dyn Fs>, cx: &mut App) {
         let agent_id = self.agent_id();
-        update_settings_file(fs, cx, move |settings, cx| {
+        update_settings_file(fs, cx, move |settings, _cx| {
             let settings = settings
                 .agent_servers
                 .get_or_insert_default()
                 .entry(agent_id.0.to_string())
-                .or_insert_with(|| default_settings_for_agent(agent_id, cx));
+                .or_insert_with(default_settings_for_agent);
 
             match settings {
                 settings::CustomAgentServerSettings::Custom { default_model, .. }
@@ -199,12 +199,12 @@ impl AgentServer for CustomAgentServer {
         cx: &App,
     ) {
         let agent_id = self.agent_id();
-        update_settings_file(fs, cx, move |settings, cx| {
+        update_settings_file(fs, cx, move |settings, _cx| {
             let settings = settings
                 .agent_servers
                 .get_or_insert_default()
                 .entry(agent_id.0.to_string())
-                .or_insert_with(|| default_settings_for_agent(agent_id, cx));
+                .or_insert_with(default_settings_for_agent);
 
             let favorite_models = match settings {
                 settings::CustomAgentServerSettings::Custom {
@@ -249,12 +249,12 @@ impl AgentServer for CustomAgentServer {
         let agent_id = self.agent_id();
         let config_id = config_id.to_string();
         let value_id = value_id.map(|s| s.to_string());
-        update_settings_file(fs, cx, move |settings, cx| {
+        update_settings_file(fs, cx, move |settings, _cx| {
             let settings = settings
                 .agent_servers
                 .get_or_insert_default()
                 .entry(agent_id.0.to_string())
-                .or_insert_with(|| default_settings_for_agent(agent_id, cx));
+                .or_insert_with(default_settings_for_agent);
 
             match settings {
                 settings::CustomAgentServerSettings::Custom {
@@ -405,30 +405,14 @@ fn is_registry_agent(agent_id: impl Into<AgentId>, cx: &App) -> bool {
     is_in_registry || is_settings_registry
 }
 
-fn default_settings_for_agent(
-    agent_id: impl Into<AgentId>,
-    cx: &App,
-) -> settings::CustomAgentServerSettings {
-    if is_registry_agent(agent_id, cx) {
-        settings::CustomAgentServerSettings::Registry {
-            default_model: None,
-            default_mode: None,
-            env: Default::default(),
-            favorite_models: Vec::new(),
-            default_config_options: Default::default(),
-            favorite_config_option_values: Default::default(),
-        }
-    } else {
-        settings::CustomAgentServerSettings::Custom {
-            path: Default::default(),
-            args: Vec::new(),
-            env: Default::default(),
-            default_model: None,
-            default_mode: None,
-            favorite_models: Vec::new(),
-            default_config_options: Default::default(),
-            favorite_config_option_values: Default::default(),
-        }
+fn default_settings_for_agent() -> settings::CustomAgentServerSettings {
+    settings::CustomAgentServerSettings::Registry {
+        default_model: None,
+        default_mode: None,
+        env: Default::default(),
+        favorite_models: Vec::new(),
+        default_config_options: Default::default(),
+        favorite_config_option_values: Default::default(),
     }
 }
 
@@ -533,19 +517,4 @@ mod tests {
         });
     }
 
-    #[gpui::test]
-    fn test_default_settings_for_agent_in_registry(cx: &mut TestAppContext) {
-        init_test(cx);
-        init_registry_with_agents(cx, &["new-registry-agent"]);
-        cx.update(|cx| {
-            assert!(matches!(
-                default_settings_for_agent("new-registry-agent", cx),
-                settings::CustomAgentServerSettings::Registry { .. }
-            ));
-            assert!(matches!(
-                default_settings_for_agent("not-in-registry", cx),
-                settings::CustomAgentServerSettings::Custom { .. }
-            ));
-        });
-    }
 }
