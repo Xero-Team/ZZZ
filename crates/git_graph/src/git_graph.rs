@@ -2,7 +2,6 @@ use collections::{BTreeMap, HashMap, IndexSet};
 use editor::Editor;
 use git::{
     BuildCommitPermalinkParams, GitHostingProviderRegistry, GitRemote, Oid, ParsedGitRemote,
-    commit::ParsedCommitMessage,
     parse_git_remote_url,
     repository::{
         CommitDiff, CommitFile, InitialGraphCommitData, LogOrder, LogSource, RepoPath,
@@ -10,15 +9,11 @@ use git::{
     },
     status::{FileStatus, StatusCode, TrackedStatus},
 };
-use git_ui::{
-    commit_tooltip::{CommitAvatar, CommitDetails, CommitTooltip},
-    commit_view::CommitView,
-    git_status_icon,
-};
+use git_ui::{commit_tooltip::CommitAvatar, commit_view::CommitView, git_status_icon};
 use gpui::{
     Action, Anchor, AnyElement, App, Bounds, ClickEvent, ClipboardItem, DefiniteLength,
     DismissEvent, DragMoveEvent, ElementId, Empty, Entity, EventEmitter, FocusHandle, Focusable,
-    Hsla, MouseButton, MouseDownEvent, PathBuilder, Pixels, Point, Rems, ScrollStrategy,
+    Hsla, MouseButton, MouseDownEvent, PathBuilder, Pixels, Point, ScrollStrategy,
     ScrollWheelEvent, SharedString, Subscription, Task, TextStyleRefinement,
     UniformListScrollHandle, WeakEntity, Window, actions, anchored, deferred, point, prelude::*,
     px, uniform_list,
@@ -27,7 +22,7 @@ use language::line_diff;
 use menu::{Cancel, SelectFirst, SelectLast, SelectNext, SelectPrevious};
 use picker::{Picker, PickerDelegate};
 use project::{
-    ProjectPath,
+    GIT_COMMAND_TASK_TAG, ProjectPath, TaskSourceKind,
     git_store::{
         CommitDataState, GitGraphEvent, GitStore, GitStoreEvent, GraphDataResponse, Repository,
         RepositoryEvent, RepositoryId,
@@ -46,6 +41,7 @@ use std::{
     sync::{Arc, OnceLock},
     time::{Duration, Instant},
 };
+use task::{ResolvedTask, TaskContext, TaskVariables, VariableName};
 use theme::AccentColors;
 use time::{OffsetDateTime, UtcOffset, format_description::BorrowedFormatItem};
 use ui::{
@@ -68,7 +64,6 @@ const LEFT_PADDING: Pixels = px(12.0);
 const LINE_WIDTH: Pixels = px(1.5);
 const RESIZE_HANDLE_WIDTH: f32 = 8.0;
 const COPIED_STATE_DURATION: Duration = Duration::from_secs(2);
-const COMMIT_TAG_LIST_WIDTH_IN_REMS: Rems = rems(10.0);
 // Extra vertical breathing room added to the UI line height when computing
 // the git graph's row height, so commit dots and lines have space around them.
 const ROW_VERTICAL_PADDING: Pixels = px(4.0);
@@ -122,9 +117,7 @@ impl Focusable for CommitTagPicker {
 
 impl Render for CommitTagPicker {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex()
-            .w(COMMIT_TAG_LIST_WIDTH_IN_REMS)
-            .child(self.picker.clone())
+        v_flex().w(rems(18.)).child(self.picker.clone())
     }
 }
 
@@ -916,8 +909,7 @@ pub fn init(cx: &mut App) {
                                 .ok();
                         }
                     })
-                    .on_action({
-                        let workspace = workspace.clone();
+                    .on_action(
                         move |action: &git_ui::git_panel::OpenAtCommit, window, cx| {
                             let sha = action.sha.clone();
                             workspace
@@ -942,28 +934,8 @@ pub fn init(cx: &mut App) {
                                     );
                                 })
                                 .ok();
-                        }
-                    })
-                    .on_action({
-                        move |_: &git::FileHistory, window, cx| {
-                            workspace
-                                .update(cx, |workspace, cx| {
-                                    let project = workspace.project();
-                                    let git_store = project.read(cx).git_store().clone();
-
-                                    let Some((repo_id, log_source)) =
-                                        resolve_file_history_target(workspace, window, cx)
-                                    else {
-                                        return;
-                                    };
-
-                                    open_or_reuse_graph(
-                                        workspace, repo_id, git_store, log_source, None, window, cx,
-                                    );
-                                })
-                                .ok();
-                        }
-                    })
+                        },
+                    )
                 },
             )
         });
@@ -1563,7 +1535,7 @@ impl GitGraph {
                 let subject: SharedString;
                 let author_name: SharedString;
 
-                if let CommitDataState::Loaded(ref data) = data {
+                if let CommitDataState::Loaded(data) = data {
                     subject = data.subject.clone();
                     author_name = data.author_name.clone();
                     formatted_time = format_timestamp(data.commit_timestamp);
@@ -1618,12 +1590,12 @@ impl GitGraph {
                             (!ranges.is_empty()).then_some(ranges)
                         })
                         .unwrap_or_default();
-                    HighlightedLabel::from_ranges(subject, highlight_ranges)
+                    HighlightedLabel::from_ranges(subject.clone(), highlight_ranges)
                         .when(!is_selected, |c| c.color(Color::Muted))
                         .truncate()
                         .into_any_element()
                 } else {
-                    column_label(subject)
+                    column_label(subject.clone())
                 };
 
                 vec![
@@ -1631,46 +1603,7 @@ impl GitGraph {
                         .id(ElementId::NamedInteger("commit-subject".into(), idx as u64))
                         .overflow_hidden()
                         .when(!has_context_menu, |this| {
-                            if let CommitDataState::Loaded(commit_data) = &data {
-                                let sha = commit.data.sha.to_string();
-                                let author_name = commit_data.author_name.clone();
-                                let author_email = commit_data.author_email.clone();
-                                let message = commit_data.message.clone();
-                                let commit_timestamp = commit_data.commit_timestamp;
-                                let workspace = self.workspace.clone();
-                                let repository = repository.clone();
-                                this.hoverable_tooltip(move |_window, cx| {
-                                    let remote_url = repository.read(cx).default_remote_url();
-                                    let provider_registry =
-                                        GitHostingProviderRegistry::default_global(cx);
-                                    let commit_details = CommitDetails {
-                                        sha: sha.clone().into(),
-                                        author_name: author_name.clone(),
-                                        author_email: author_email.clone(),
-                                        commit_time: OffsetDateTime::from_unix_timestamp(
-                                            commit_timestamp,
-                                        )
-                                        .unwrap_or_else(|_| OffsetDateTime::now_utc()),
-                                        message: Some(ParsedCommitMessage::parse(
-                                            sha.clone(),
-                                            message.to_string(),
-                                            remote_url.as_deref(),
-                                            Some(provider_registry),
-                                        )),
-                                    };
-                                    cx.new(|cx| {
-                                        CommitTooltip::new(
-                                            commit_details,
-                                            repository.clone(),
-                                            workspace.clone(),
-                                            cx,
-                                        )
-                                    })
-                                    .into()
-                                })
-                            } else {
-                                this
-                            }
+                            this.tooltip(Tooltip::text(subject))
                         })
                         .child(
                             h_flex()
@@ -2099,6 +2032,82 @@ impl GitGraph {
         self.copy_commit_tag(selected_entry_index, window, cx);
     }
 
+    fn git_task_context(&self, commit_sha: Oid, cx: &App) -> Option<TaskContext> {
+        let repository_path = self
+            .get_repository(cx)?
+            .read(cx)
+            .work_directory_abs_path
+            .to_path_buf();
+
+        let repository_name = repository_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(ToString::to_string);
+
+        let mut task_variables = TaskVariables::from_iter([
+            (VariableName::GitSha, commit_sha.to_string()),
+            (VariableName::GitShaShort, commit_sha.display_short()),
+            (
+                VariableName::GitRepositoryPath,
+                repository_path.to_string_lossy().into_owned(),
+            ),
+        ]);
+
+        if let Some(repository_name) = repository_name {
+            task_variables.insert(VariableName::GitRepositoryName, repository_name);
+        }
+
+        Some(TaskContext {
+            cwd: Some(repository_path),
+            task_variables,
+            ..TaskContext::default()
+        })
+    }
+
+    fn git_context_menu_tasks(
+        &self,
+        task_context: &TaskContext,
+        cx: &App,
+    ) -> Vec<(TaskSourceKind, ResolvedTask)> {
+        let Some(workspace) = self.workspace.upgrade() else {
+            return Vec::new();
+        };
+
+        let project = workspace.read(cx).project().clone();
+
+        let task_inventory = project.read_with(cx, |project, cx| {
+            project.task_store().read(cx).task_inventory().cloned()
+        });
+
+        let Some(task_inventory) = task_inventory else {
+            return Vec::new();
+        };
+
+        task_inventory
+            .read(cx)
+            .resolve_global_tasks_with_tag(GIT_COMMAND_TASK_TAG, task_context)
+    }
+
+    fn schedule_git_task(
+        &mut self,
+        task_source_kind: TaskSourceKind,
+        resolved_task: ResolvedTask,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.workspace
+            .update(cx, |workspace, cx| {
+                workspace.schedule_resolved_task(
+                    task_source_kind,
+                    resolved_task,
+                    false,
+                    window,
+                    cx,
+                );
+            })
+            .ok();
+    }
+
     fn deploy_entry_context_menu(
         &mut self,
         position: Point<Pixels>,
@@ -2111,6 +2120,14 @@ impl GitGraph {
         };
         let sha = commit.data.sha;
         let sha_short = sha.display_short();
+        let tag_names = commit.data.tag_names();
+        let copy_tag_label = "Copy Tag";
+        let copy_tag_label: SharedString = match tag_names.as_slice() {
+            [] => copy_tag_label.into(),
+            [tag_name] => format!("{copy_tag_label}: {tag_name}").into(),
+            _ => format!("{copy_tag_label}…").into(),
+        };
+        let copy_tag_disabled = tag_names.is_empty();
         let git_tasks = self
             .git_task_context(sha, cx)
             .map(|task_context| self.git_context_menu_tasks(&task_context, cx))
@@ -2136,50 +2153,14 @@ impl GitGraph {
                         this.copy_commit_sha(index, cx);
                     }),
                 )
-                .map(|menu| {
-                    let tag_names = commit
-                        .data
-                        .tag_names()
-                        .into_iter()
-                        .map(|tag_name| SharedString::from(tag_name.to_string()))
-                        .collect::<Vec<_>>();
-                    let copy_tag_label = "Copy Tag";
-
-                    match tag_names.as_slice() {
-                        [] => menu.item(
-                            ContextMenuEntry::new(copy_tag_label)
-                                .action(CopyCommitTag.boxed_clone())
-                                .disabled(true),
-                        ),
-                        [tag_name] => {
-                            let tag_name = tag_name.clone();
-                            let label = format!("{copy_tag_label}: {tag_name}");
-                            menu.entry(
-                                label,
-                                Some(CopyCommitTag.boxed_clone()),
-                                move |_window, cx| {
-                                    cx.write_to_clipboard(ClipboardItem::new_string(
-                                        tag_name.to_string(),
-                                    ));
-                                },
-                            )
-                        }
-                        _ => menu.submenu(copy_tag_label, move |menu, _window, _cx| {
-                            let mut menu = menu.fixed_width(COMMIT_TAG_LIST_WIDTH_IN_REMS.into());
-
-                            for tag_name in tag_names.clone() {
-                                let tag_name_to_copy = tag_name.clone();
-
-                                menu = menu.entry(tag_name, None, move |_window, cx| {
-                                    cx.write_to_clipboard(ClipboardItem::new_string(
-                                        tag_name_to_copy.to_string(),
-                                    ));
-                                });
-                            }
-                            menu
-                        }),
-                    }
-                })
+                .item(
+                    ContextMenuEntry::new(copy_tag_label)
+                        .action(CopyCommitTag.boxed_clone())
+                        .disabled(copy_tag_disabled)
+                        .handler(window.handler_for(&git_graph, move |this, window, cx| {
+                            this.copy_commit_tag(index, window, cx);
+                        })),
+                )
                 .when(!git_tasks.is_empty(), |mut menu| {
                     menu = menu.separator().header("Custom Git Commands");
 
@@ -2199,6 +2180,7 @@ impl GitGraph {
                             }),
                         );
                     }
+
                     menu
                 })
         });
@@ -2659,7 +2641,10 @@ impl GitGraph {
                             })
                             .when_some(remote.clone(), |this, remote| {
                                 let provider_name = remote.host.name();
-                                let icon = git_ui::get_provider_icon(provider_name.as_str());
+                                let icon = match provider_name.as_str() {
+                                    "GitHub" => IconName::Github,
+                                    _ => IconName::Link,
+                                };
                                 let parsed_remote = ParsedGitRemote {
                                     owner: remote.owner.as_ref().into(),
                                     repo: remote.repo.as_ref().into(),
@@ -3825,7 +3810,7 @@ mod persistence {
     };
     use git::{
         Oid,
-        repository::{LogOrder, LogSource},
+        repository::{LogOrder, LogSource, RepoPath},
     };
     use workspace::WorkspaceDb;
 
@@ -3916,7 +3901,7 @@ mod persistence {
             Some(LOG_SOURCE_PATH) => state
                 .log_source_value
                 .as_ref()
-                .and_then(|value| git::repository::RepoPath::new(value).ok())
+                .and_then(|v| RepoPath::new(v).ok())
                 .map(LogSource::Path)
                 .unwrap_or_default(),
             None | Some(_) => LogSource::default(),
@@ -3993,134 +3978,6 @@ mod persistence {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
-impl GitGraph {
-    pub fn search_for_test(&mut self, query: SharedString, cx: &mut Context<Self>) {
-        self.search(query, cx);
-    }
-
-    pub fn search_matches_for_test(&self) -> Vec<Oid> {
-        self.search_state.matches.iter().copied().collect()
-    }
-
-    pub fn initial_commit_data_for_test(&self) -> Vec<Arc<InitialGraphCommitData>> {
-        self.graph_data
-            .commits
-            .iter()
-            .map(|commit| commit.data.clone())
-            .collect()
-    }
-}
-
-/// Generates a random commit DAG suitable for testing git graph rendering.
-///
-/// The commits are ordered newest-first (like git log output), so:
-/// - Index 0 = most recent commit (HEAD)
-/// - Last index = oldest commit (root, has no parents)
-/// - Parents of commit at index I must have index > I
-///
-/// When `adversarial` is true, generates complex topologies with many branches
-/// and octopus merges. Otherwise generates more realistic linear histories
-/// with occasional branches.
-#[cfg(any(test, feature = "test-support"))]
-pub fn generate_random_commit_dag(
-    rng: &mut rand::rngs::StdRng,
-    num_commits: usize,
-    adversarial: bool,
-) -> Vec<Arc<InitialGraphCommitData>> {
-    use rand::RngExt as _;
-
-    if num_commits == 0 {
-        return Vec::new();
-    }
-
-    let mut commits: Vec<Arc<InitialGraphCommitData>> = Vec::with_capacity(num_commits);
-    let oids: Vec<Oid> = (0..num_commits).map(|_| Oid::random(rng)).collect();
-
-    for i in 0..num_commits {
-        let sha = oids[i];
-
-        let parents = if i == num_commits - 1 {
-            smallvec![]
-        } else {
-            generate_parents_from_oids(rng, &oids, i, num_commits, adversarial)
-        };
-
-        let ref_names = if i == 0 {
-            vec!["HEAD".into(), "main".into()]
-        } else if adversarial && rng.random_bool(0.1) {
-            vec![format!("branch-{i}").into()]
-        } else {
-            Vec::new()
-        };
-
-        commits.push(Arc::new(InitialGraphCommitData {
-            sha,
-            parents,
-            ref_names,
-        }));
-    }
-
-    commits
-}
-
-#[cfg(any(test, feature = "test-support"))]
-fn generate_parents_from_oids(
-    rng: &mut rand::rngs::StdRng,
-    oids: &[Oid],
-    current_idx: usize,
-    num_commits: usize,
-    adversarial: bool,
-) -> SmallVec<[Oid; 1]> {
-    use rand::{RngExt as _, seq::SliceRandom as _};
-
-    let remaining = num_commits - current_idx - 1;
-    if remaining == 0 {
-        return smallvec![];
-    }
-
-    if adversarial {
-        let merge_chance = 0.4;
-        let octopus_chance = 0.15;
-
-        if remaining >= 3 && rng.random_bool(octopus_chance) {
-            let num_parents = rng.random_range(3..=remaining.min(5));
-            let mut parent_indices: Vec<usize> = (current_idx + 1..num_commits).collect();
-            parent_indices.shuffle(rng);
-            parent_indices
-                .into_iter()
-                .take(num_parents)
-                .map(|idx| oids[idx])
-                .collect()
-        } else if remaining >= 2 && rng.random_bool(merge_chance) {
-            let mut parent_indices: Vec<usize> = (current_idx + 1..num_commits).collect();
-            parent_indices.shuffle(rng);
-            parent_indices
-                .into_iter()
-                .take(2)
-                .map(|idx| oids[idx])
-                .collect()
-        } else {
-            let parent_idx = rng.random_range(current_idx + 1..num_commits);
-            smallvec![oids[parent_idx]]
-        }
-    } else {
-        let merge_chance = 0.15;
-        let skip_chance = 0.1;
-
-        if remaining >= 2 && rng.random_bool(merge_chance) {
-            let first_parent = current_idx + 1;
-            let second_parent = rng.random_range(current_idx + 2..num_commits);
-            smallvec![oids[first_parent], oids[second_parent]]
-        } else if rng.random_bool(skip_chance) && remaining >= 2 {
-            let skip = rng.random_range(1..remaining.min(3));
-            smallvec![oids[current_idx + 1 + skip]]
-        } else {
-            smallvec![oids[current_idx + 1]]
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4129,10 +3986,10 @@ mod tests {
     use fs::FakeFs;
     use git::Oid;
     use git::repository::InitialGraphCommitData;
-    use gpui::{TestAppContext, UpdateGlobal, VisualTestContext};
-    use project::Project;
+    use gpui::{TestAppContext, UpdateGlobal};
     use project::git_store::{GitStoreEvent, RepositoryEvent};
-    use rand::{RngExt as _, prelude::*};
+    use project::{Project, TaskSourceKind, task_store::TaskSettingsLocation};
+    use rand::prelude::*;
     use serde_json::json;
     use settings::{SettingsStore, ThemeSettingsContent};
     use smallvec::{SmallVec, smallvec};
@@ -4141,8 +3998,6 @@ mod tests {
 
     fn init_test(cx: &mut TestAppContext) {
         cx.update(|cx| {
-            init(cx);
-            language_model::LanguageModelRegistry::test(cx);
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
@@ -4151,6 +4006,109 @@ mod tests {
             project_panel::init(cx);
             init(cx);
         });
+    }
+
+    /// Generates a random commit DAG suitable for testing git graph rendering.
+    ///
+    /// The commits are ordered newest-first (like git log output), so:
+    /// - Index 0 = most recent commit (HEAD)
+    /// - Last index = oldest commit (root, has no parents)
+    /// - Parents of commit at index I must have index > I
+    ///
+    /// When `adversarial` is true, generates complex topologies with many branches
+    /// and octopus merges. Otherwise generates more realistic linear histories
+    /// with occasional branches.
+    fn generate_random_commit_dag(
+        rng: &mut StdRng,
+        num_commits: usize,
+        adversarial: bool,
+    ) -> Vec<Arc<InitialGraphCommitData>> {
+        if num_commits == 0 {
+            return Vec::new();
+        }
+
+        let mut commits: Vec<Arc<InitialGraphCommitData>> = Vec::with_capacity(num_commits);
+        let oids: Vec<Oid> = (0..num_commits).map(|_| Oid::random(rng)).collect();
+
+        for i in 0..num_commits {
+            let sha = oids[i];
+
+            let parents = if i == num_commits - 1 {
+                smallvec![]
+            } else {
+                generate_parents_from_oids(rng, &oids, i, num_commits, adversarial)
+            };
+
+            let ref_names = if i == 0 {
+                vec!["HEAD".into(), "main".into()]
+            } else if adversarial && rng.random_bool(0.1) {
+                vec![format!("branch-{}", i).into()]
+            } else {
+                Vec::new()
+            };
+
+            commits.push(Arc::new(InitialGraphCommitData {
+                sha,
+                parents,
+                ref_names,
+            }));
+        }
+
+        commits
+    }
+
+    fn generate_parents_from_oids(
+        rng: &mut StdRng,
+        oids: &[Oid],
+        current_idx: usize,
+        num_commits: usize,
+        adversarial: bool,
+    ) -> SmallVec<[Oid; 1]> {
+        let remaining = num_commits - current_idx - 1;
+        if remaining == 0 {
+            return smallvec![];
+        }
+
+        if adversarial {
+            let merge_chance = 0.4;
+            let octopus_chance = 0.15;
+
+            if remaining >= 3 && rng.random_bool(octopus_chance) {
+                let num_parents = rng.random_range(3..=remaining.min(5));
+                let mut parent_indices: Vec<usize> = (current_idx + 1..num_commits).collect();
+                parent_indices.shuffle(rng);
+                parent_indices
+                    .into_iter()
+                    .take(num_parents)
+                    .map(|idx| oids[idx])
+                    .collect()
+            } else if remaining >= 2 && rng.random_bool(merge_chance) {
+                let mut parent_indices: Vec<usize> = (current_idx + 1..num_commits).collect();
+                parent_indices.shuffle(rng);
+                parent_indices
+                    .into_iter()
+                    .take(2)
+                    .map(|idx| oids[idx])
+                    .collect()
+            } else {
+                let parent_idx = rng.random_range(current_idx + 1..num_commits);
+                smallvec![oids[parent_idx]]
+            }
+        } else {
+            let merge_chance = 0.15;
+            let skip_chance = 0.1;
+
+            if remaining >= 2 && rng.random_bool(merge_chance) {
+                let first_parent = current_idx + 1;
+                let second_parent = rng.random_range(current_idx + 2..num_commits);
+                smallvec![oids[first_parent], oids[second_parent]]
+            } else if rng.random_bool(skip_chance) && remaining >= 2 {
+                let skip = rng.random_range(1..remaining.min(3));
+                smallvec![oids[current_idx + 1 + skip]]
+            } else {
+                smallvec![oids[current_idx + 1]]
+            }
+        }
     }
 
     fn build_oid_to_row_map(graph: &GraphData) -> HashMap<Oid, usize> {
@@ -5048,12 +5006,21 @@ mod tests {
         let workspace = workspace_window
             .read_with(cx, |multi, _| multi.workspace().clone())
             .expect("workspace should exist");
+
         let (weak_workspace, async_window_cx) = workspace_window
             .update(cx, |multi, window, cx| {
                 (multi.workspace().downgrade(), window.to_async(cx))
             })
             .expect("window should be available");
         cx.background_executor.allow_parking();
+        let project_panel = cx
+            .foreground_executor()
+            .clone()
+            .block_test(ProjectPanel::load(
+                weak_workspace.clone(),
+                async_window_cx.clone(),
+            ))
+            .expect("project panel should load");
         let git_panel = cx
             .foreground_executor()
             .clone()
@@ -5063,30 +5030,63 @@ mod tests {
             ))
             .expect("git panel should load");
         cx.background_executor.forbid_parking();
-        let cx = &mut VisualTestContext::from_window(workspace_window.into(), cx);
 
-        workspace.update_in(cx, |workspace, window, cx| {
-            workspace.add_panel(git_panel.clone(), window, cx);
-        });
-        cx.run_until_parked();
-        cx.update(|window, cx| {
-            window.draw(cx).clear();
-        });
+        workspace_window
+            .update(cx, |multi, window, cx| {
+                let workspace = multi.workspace();
+                workspace.update(cx, |workspace, cx| {
+                    workspace.add_panel(project_panel.clone(), window, cx);
+                    workspace.add_panel(git_panel.clone(), window, cx);
+                });
+            })
+            .expect("workspace window should be available");
         cx.run_until_parked();
 
-        workspace.update_in(cx, |workspace, window, cx| {
-            let git_store = workspace.project().read(cx).git_store().clone();
-            let repo_id = repository.read(cx).id;
-            open_or_reuse_graph(
-                workspace,
-                repo_id,
-                git_store,
-                LogSource::Path(tracked1_repo_path.clone()),
-                None,
-                window,
-                cx,
+        workspace_window
+            .update(cx, |multi, window, cx| {
+                let workspace = multi.workspace();
+                project_panel.update(cx, |panel, cx| {
+                    panel.select_path_for_test(tracked1.clone(), cx)
+                });
+                workspace.update(cx, |workspace, cx| {
+                    workspace.focus_panel::<ProjectPanel>(window, cx);
+                });
+            })
+            .expect("workspace window should be available");
+        cx.run_until_parked();
+        workspace_window
+            .update(cx, |_, window, cx| {
+                window.dispatch_action(Box::new(git::FileHistory), cx);
+            })
+            .expect("workspace window should be available");
+        cx.run_until_parked();
+
+        workspace.read_with(cx, |workspace, cx| {
+            let graphs = workspace.items_of_type::<GitGraph>(cx).collect::<Vec<_>>();
+            assert_eq!(graphs.len(), 1);
+            assert_eq!(
+                graphs[0].read(cx).log_source,
+                LogSource::Path(tracked1_repo_path.clone())
             );
         });
+
+        workspace_window
+            .update(cx, |multi, window, cx| {
+                let workspace = multi.workspace();
+                git_panel.update(cx, |panel, cx| {
+                    panel.select_entry_by_path(tracked1.clone(), window, cx);
+                });
+                workspace.update(cx, |workspace, cx| {
+                    workspace.focus_panel::<git_ui::git_panel::GitPanel>(window, cx);
+                });
+            })
+            .expect("workspace window should be available");
+        cx.run_until_parked();
+        workspace_window
+            .update(cx, |_, window, cx| {
+                window.dispatch_action(Box::new(git::FileHistory), cx);
+            })
+            .expect("workspace window should be available");
         cx.run_until_parked();
 
         workspace.read_with(cx, |workspace, cx| {
@@ -5106,52 +5106,63 @@ mod tests {
             .update(cx, |project, cx| project.open_buffer(tracked2.clone(), cx))
             .await
             .expect("tracked2 buffer should open");
-        workspace.update_in(cx, |workspace, window, cx| {
-            let multibuffer = cx.new(|cx| {
-                let mut multibuffer = editor::MultiBuffer::new(language::Capability::ReadWrite);
-                multibuffer.set_excerpts_for_buffer(
-                    tracked1_buffer.clone(),
-                    [Default::default()..tracked1_buffer.read(cx).max_point()],
-                    0,
-                    cx,
-                );
-                multibuffer.set_excerpts_for_buffer(
-                    tracked2_buffer.clone(),
-                    [Default::default()..tracked2_buffer.read(cx).max_point()],
-                    0,
-                    cx,
-                );
-                multibuffer
-            });
-            let editor = cx
-                .new(|cx| Editor::for_multibuffer(multibuffer, Some(project.clone()), window, cx));
-            workspace.add_item_to_active_pane(Box::new(editor.clone()), None, true, window, cx);
-            editor.update(cx, |editor, cx| {
-                let snapshot = editor.buffer().read(cx).snapshot(cx);
-                let second_excerpt_point = snapshot
-                    .range_for_buffer(tracked2_buffer.read(cx).remote_id())
-                    .expect("tracked2 excerpt should exist")
-                    .start;
-                let anchor = snapshot.anchor_before(second_excerpt_point);
-                editor.change_selections(
-                    editor::SelectionEffects::no_scroll(),
-                    window,
-                    cx,
-                    |selections| {
-                        selections.select_anchor_ranges([anchor..anchor]);
-                    },
-                );
-                window.focus(&editor.focus_handle(cx), cx);
-            });
-        });
+        workspace_window
+            .update(cx, |multi, window, cx| {
+                let workspace = multi.workspace();
+                let multibuffer = cx.new(|cx| {
+                    let mut multibuffer = editor::MultiBuffer::new(language::Capability::ReadWrite);
+                    multibuffer.set_excerpts_for_buffer(
+                        tracked1_buffer.clone(),
+                        [Default::default()..tracked1_buffer.read(cx).max_point()],
+                        0,
+                        cx,
+                    );
+                    multibuffer.set_excerpts_for_buffer(
+                        tracked2_buffer.clone(),
+                        [Default::default()..tracked2_buffer.read(cx).max_point()],
+                        0,
+                        cx,
+                    );
+                    multibuffer
+                });
+                let editor = cx.new(|cx| {
+                    Editor::for_multibuffer(multibuffer, Some(project.clone()), window, cx)
+                });
+                workspace.update(cx, |workspace, cx| {
+                    workspace.add_item_to_active_pane(
+                        Box::new(editor.clone()),
+                        None,
+                        true,
+                        window,
+                        cx,
+                    );
+                });
+                editor.update(cx, |editor, cx| {
+                    let snapshot = editor.buffer().read(cx).snapshot(cx);
+                    let second_excerpt_point = snapshot
+                        .range_for_buffer(tracked2_buffer.read(cx).remote_id())
+                        .expect("tracked2 excerpt should exist")
+                        .start;
+                    let anchor = snapshot.anchor_before(second_excerpt_point);
+                    editor.change_selections(
+                        editor::SelectionEffects::no_scroll(),
+                        window,
+                        cx,
+                        |selections| {
+                            selections.select_anchor_ranges([anchor..anchor]);
+                        },
+                    );
+                    window.focus(&editor.focus_handle(cx), cx);
+                });
+            })
+            .expect("workspace window should be available");
         cx.run_until_parked();
 
-        workspace.update_in(cx, |workspace, window, cx| {
-            let git_store = workspace.project().read(cx).git_store().clone();
-            let (repo_id, log_source) = resolve_file_history_target(workspace, window, cx)
-                .expect("editor focus should resolve to file history target");
-            open_or_reuse_graph(workspace, repo_id, git_store, log_source, None, window, cx);
-        });
+        workspace_window
+            .update(cx, |_, window, cx| {
+                window.dispatch_action(Box::new(git::FileHistory), cx);
+            })
+            .expect("workspace window should be available");
         cx.run_until_parked();
 
         workspace.read_with(cx, |workspace, cx| {
@@ -6026,5 +6037,159 @@ mod tests {
         git_graph.read_with(&*cx, |graph, _| {
             assert_eq!(graph.selected_entry_idx, Some(0));
         });
+    }
+
+    #[gpui::test]
+    async fn test_global_git_command_task_runs_from_context_menu(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            Path::new("/project"),
+            json!({
+                ".git": {},
+                "file.txt": "content",
+            }),
+        )
+        .await;
+
+        let commit_sha = Oid::try_from("abcdef1234567890abcdef1234567890abcdef12")
+            .expect("commit SHA should be valid");
+        fs.set_graph_commits(
+            Path::new("/project/.git"),
+            vec![Arc::new(InitialGraphCommitData {
+                sha: commit_sha,
+                parents: SmallVec::new(),
+                ref_names: Vec::new(),
+            })],
+        );
+
+        let project = Project::test(fs.clone(), [Path::new("/project")], cx).await;
+        cx.run_until_parked();
+
+        let repository = project.read_with(cx, |project, cx| {
+            project
+                .active_repository(cx)
+                .expect("project should have an active repository")
+        });
+        let task_inventory = project.read_with(cx, |project, cx| {
+            project
+                .task_store()
+                .read(cx)
+                .task_inventory()
+                .cloned()
+                .expect("project should have a task inventory")
+        });
+
+        task_inventory.update(cx, |inventory, _| {
+            inventory
+                .update_file_based_tasks(
+                    TaskSettingsLocation::Global(Path::new("/tasks.json")),
+                    Some(
+                        &serde_json::to_string(&json!([
+                            // Tagged global task that should be scheduled from the Git graph context menu.
+                            {
+                                "label": "Git Show $ZED_GIT_SHA_SHORT",
+                                "command": "git",
+                                "args": ["show", "$ZED_GIT_SHA"],
+                                "cwd": "$ZED_GIT_REPOSITORY_PATH",
+                                "env": {
+                                    "REPOSITORY": "$ZED_GIT_REPOSITORY_NAME",
+                                },
+                                "tags": [GIT_COMMAND_TASK_TAG],
+                            },
+                            // Untagged task that should not appear in the Git graph context menu.
+                            {
+                                "label": "Git Status",
+                                "command": "git",
+                                "args": ["status"],
+                            },
+                            // Tagged task that still should not appear because Git graph task contexts
+                            // do not provide editor-specific variables.
+                            {
+                                "label": "Print File $ZED_FILE",
+                                "command": "echo",
+                                "args": ["$ZED_FILE"],
+                                "tags": [GIT_COMMAND_TASK_TAG],
+                            },
+                        ]))
+                        .expect("tasks JSON should serialize"),
+                    ),
+                )
+                .expect("tasks should parse");
+        });
+
+        let (multi_workspace, cx) = cx.add_window_view(|window, cx| {
+            workspace::MultiWorkspace::test_new(project.clone(), window, cx)
+        });
+        let workspace = multi_workspace.read_with(&*cx, |multi_workspace, _| {
+            multi_workspace.workspace().clone()
+        });
+        let workspace_weak = workspace.downgrade();
+
+        let git_graph = cx.new_window_entity(|window, cx| {
+            GitGraph::new(
+                repository.read(cx).id,
+                project.read(cx).git_store().clone(),
+                workspace_weak,
+                None,
+                window,
+                cx,
+            )
+        });
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.add_item_to_active_pane(Box::new(git_graph.clone()), None, true, window, cx);
+        });
+        cx.run_until_parked();
+
+        git_graph.update_in(cx, |git_graph, window, cx| {
+            assert_eq!(git_graph.graph_data.commits.len(), 1);
+            git_graph.deploy_entry_context_menu(point(px(20.), px(20.)), 0, window, cx);
+        });
+        cx.run_until_parked();
+
+        let context_menu = git_graph.read_with(&*cx, |git_graph, _| {
+            git_graph
+                .context_menu
+                .as_ref()
+                .expect("context menu should be open")
+                .menu
+                .clone()
+        });
+        context_menu.update_in(cx, |context_menu, window, cx| {
+            context_menu
+                .select_last(window, cx)
+                .expect("custom Git task should be selectable");
+            context_menu.confirm(&menu::Confirm, window, cx);
+        });
+        cx.run_until_parked();
+
+        let (task_source_kind, resolved_task) = task_inventory.read_with(&*cx, |inventory, _| {
+            inventory
+                .last_scheduled_task(None)
+                .expect("custom Git task should be scheduled")
+        });
+
+        assert!(
+            matches!(task_source_kind, TaskSourceKind::AbsPath { .. }),
+            "scheduled task should come from global tasks"
+        );
+        assert_eq!(resolved_task.resolved_label, "Git Show abcdef1");
+        assert_eq!(resolved_task.resolved.command, Some("git".to_string()));
+        assert_eq!(
+            resolved_task.resolved.args,
+            vec![
+                "show".to_string(),
+                "abcdef1234567890abcdef1234567890abcdef12".to_string(),
+            ]
+        );
+        assert_eq!(
+            resolved_task.resolved.cwd,
+            Some(Path::new("/project").to_path_buf())
+        );
+        assert_eq!(
+            resolved_task.resolved.env.get("REPOSITORY"),
+            Some(&"project".to_string())
+        );
     }
 }
