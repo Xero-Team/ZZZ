@@ -246,7 +246,6 @@ dependencies = [
  "serde",
  "serde_json",
  "shell-words",
- "thiserror 2.0.18",
  "tokio",
  "tokio-util",
  "tracing",
@@ -6301,7 +6300,6 @@ name = "extensions_ui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "client",
  "cloud_api_types",
  "collections",
  "db",
@@ -7536,6 +7534,7 @@ dependencies = [
  "serde_json",
  "settings",
  "smallvec",
+ "task",
  "theme",
  "theme_settings",
  "time",
@@ -15200,6 +15199,7 @@ dependencies = [
  "smol",
  "sysinfo 0.38.4",
  "task",
+ "tempfile",
  "theme",
  "theme_settings",
  "thiserror 2.0.18",
