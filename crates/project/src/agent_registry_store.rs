@@ -8,7 +8,7 @@ use fs::Fs;
 use futures::{AsyncReadExt, future::join_all};
 use gpui::{
     App, AppContext as _, BackgroundExecutor, Context, Entity, FutureExt as _, Global,
-    SharedString, Task, TaskExt,
+    SharedString, Task,
 };
 use http_client::{AsyncBody, HttpClient, StatusCode};
 use serde::Deserialize;

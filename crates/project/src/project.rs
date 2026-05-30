@@ -13,9 +13,9 @@ pub mod lsp_command;
 pub mod lsp_store;
 pub mod manifest_tree;
 pub mod prettier_store;
+pub mod project_snapshot;
 pub mod project_search;
 pub mod project_settings;
-pub mod project_snapshot;
 pub mod search;
 pub mod task_inventory;
 pub mod task_store;
@@ -2264,14 +2264,7 @@ impl Project {
 
     #[inline]
     pub fn supports_terminal(&self, _cx: &App) -> bool {
-        if self.is_local() {
-            return true;
-        }
-        if self.is_via_remote_server() {
-            return true;
-        }
-
-        false
+        self.is_local() || self.is_via_remote_server()
     }
 
     #[inline]
@@ -3756,6 +3749,9 @@ impl Project {
             WorktreeStoreEvent::WorktreeOrderChanged => cx.emit(Event::WorktreeOrderChanged),
             WorktreeStoreEvent::WorktreeUpdateSent(_) => {}
             WorktreeStoreEvent::WorktreeUpdatedEntries(worktree_id, changes) => {
+                self.client()
+                    .telemetry()
+                    .report_discovered_project_type_events(*worktree_id, changes);
                 cx.emit(Event::WorktreeUpdatedEntries(*worktree_id, changes.clone()))
             }
             WorktreeStoreEvent::WorktreeDeletedEntry(worktree_id, id) => {
@@ -5493,7 +5489,7 @@ impl Project {
         mut cx: AsyncApp,
     ) -> Result<()> {
         let toggled_log_kind =
-            match proto::toggle_lsp_logs::LogType::try_from(envelope.payload.log_type)
+            match proto::toggle_lsp_logs::LogType::from_i32(envelope.payload.log_type)
                 .context("invalid log type")?
             {
                 proto::toggle_lsp_logs::LogType::Log => LogKind::Logs,
