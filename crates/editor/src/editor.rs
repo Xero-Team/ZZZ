@@ -17168,9 +17168,9 @@ impl Editor {
 
         let url_finder = cx.spawn_in(window, async move |_editor, cx| {
             let url = if let Some(end_pos) = end_position {
-                find_url_from_range(&buffer, start_position..end_pos, cx.clone())
+                find_url_from_range(&buffer, start_position..end_pos, &cx.clone())
             } else {
-                find_url(&buffer, start_position, cx.clone()).map(|(_, url)| url)
+                find_url(&buffer, start_position, &cx.clone()).map(|(_, url)| url)
             };
 
             if let Some(url) = url {
@@ -17241,7 +17241,7 @@ impl Editor {
             .into_iter()
             .filter_map(|def| match def {
                 HoverLink::Text(link) => Some(Task::ready(anyhow::Ok(Some(link.target)))),
-                HoverLink::InlayHint(lsp_location, server_id) => {
+                HoverLink::LspLocation(lsp_location, server_id) => {
                     let computation =
                         self.compute_target_location(lsp_location, server_id, window, cx);
                     Some(cx.background_spawn(computation))
