@@ -1529,4 +1529,35 @@ mod tests {
             "worktree should be removed by explicit force delete"
         );
     }
+
+    #[gpui::test]
+    async fn test_current_branch_create_target_is_shown_without_default_branch(
+        cx: &mut TestAppContext,
+    ) {
+        let (_fs, worktree_picker, _repository, _worktree_path, mut cx) =
+            init_worktree_picker_test(cx).await;
+
+        worktree_picker.update_in(&mut cx, |worktree_picker, window, cx| {
+            worktree_picker.picker.update(cx, |picker, cx| {
+                picker.delegate.default_branch_name = None;
+                picker.refresh(window, cx);
+            });
+        });
+        cx.run_until_parked();
+
+        worktree_picker.update(&mut cx, |worktree_picker, cx| {
+            worktree_picker.picker.update(cx, |picker, _| {
+                assert!(matches!(
+                    picker.delegate.matches.first(),
+                    Some(WorktreeEntry::CreateFromCurrentBranch)
+                ));
+                assert!(
+                    !picker.delegate.matches.iter().any(|entry| matches!(
+                        entry,
+                        WorktreeEntry::CreateFromDefaultBranch { .. }
+                    ))
+                );
+            });
+        });
+    }
 }
