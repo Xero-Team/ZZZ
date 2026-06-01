@@ -3981,7 +3981,6 @@ pub(crate) mod tests {
                 "Logout should be hidden after logout"
             );
         });
-
     }
 
     #[gpui::test]

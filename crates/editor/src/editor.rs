@@ -17556,6 +17556,19 @@ impl Editor {
         })
     }
 
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn navigate_to_hover_links_for_test(
+        &mut self,
+        kind: Option<GotoDefinitionKind>,
+        definitions: Vec<HoverLink>,
+        origin: Option<NavigationEntry>,
+        split: bool,
+        window: &mut Window,
+        cx: &mut Context<Editor>,
+    ) -> Task<Result<Navigated>> {
+        self.navigate_to_hover_links(kind, definitions, origin, split, window, cx)
+    }
+
     fn compute_target_location(
         &self,
         lsp_location: lsp::Location,

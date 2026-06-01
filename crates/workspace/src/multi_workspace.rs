@@ -1583,7 +1583,11 @@ impl MultiWorkspace {
                         sidebar_open: this.sidebar_open,
                         sidebar_state: this.sidebar.as_ref().and_then(|s| s.serialized_state(cx)),
                     };
-                    (this.window_id, this.workspace().read(cx).session_id(), state)
+                    (
+                        this.window_id,
+                        this.workspace().read(cx).session_id(),
+                        state,
+                    )
                 })
                 .ok()
             else {

@@ -1053,7 +1053,12 @@ mod tests {
     #[test]
     fn test_html_comments() {
         assert_eq!(
-            parse_markdown_with_options("  <!--\nrdoc-file=string.c\n-->\nReturns", false, false, false),
+            parse_markdown_with_options(
+                "  <!--\nrdoc-file=string.c\n-->\nReturns",
+                false,
+                false,
+                false
+            ),
             ParsedMarkdownData {
                 events: vec![
                     (2..30, RootStart),
@@ -1192,7 +1197,12 @@ mod tests {
     #[test]
     fn test_code_block_metadata() {
         assert_eq!(
-            parse_markdown_with_options("```rust\nfn main() {\n let a = 1;\n}\n```", false, false, false),
+            parse_markdown_with_options(
+                "```rust\nfn main() {\n let a = 1;\n}\n```",
+                false,
+                false,
+                false
+            ),
             ParsedMarkdownData {
                 events: vec![
                     (0..37, RootStart),
@@ -1299,7 +1309,12 @@ mod tests {
     #[test]
     fn test_metadata_blocks_are_root_blocks() {
         assert_eq!(
-            parse_markdown_with_options("+++\ntitle = \"Example\"\n+++\n\nParagraph", false, false, true),
+            parse_markdown_with_options(
+                "+++\ntitle = \"Example\"\n+++\n\nParagraph",
+                false,
+                false,
+                true
+            ),
             ParsedMarkdownData {
                 events: vec![
                     (0..25, RootStart),
@@ -1307,7 +1322,9 @@ mod tests {
                     (4..22, Text),
                     (
                         0..25,
-                        End(MarkdownTagEnd::MetadataBlock(MetadataBlockKind::PlusesStyle))
+                        End(MarkdownTagEnd::MetadataBlock(
+                            MetadataBlockKind::PlusesStyle
+                        ))
                     ),
                     (0..25, RootEnd(0)),
                     (27..36, RootStart),
@@ -1332,7 +1349,12 @@ mod tests {
     #[test]
     fn test_metadata_blocks_are_omitted_by_default() {
         assert_eq!(
-            parse_markdown_with_options("+++\ntitle = \"Example\"\n+++\n\nParagraph", false, false, false),
+            parse_markdown_with_options(
+                "+++\ntitle = \"Example\"\n+++\n\nParagraph",
+                false,
+                false,
+                false
+            ),
             ParsedMarkdownData {
                 events: vec![
                     (27..36, RootStart),

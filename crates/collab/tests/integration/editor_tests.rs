@@ -2983,7 +2983,7 @@ async fn test_lsp_document_links(cx_a: &mut TestAppContext, cx_b: &mut TestAppCo
                 &click_target,
                 click_server_id,
             );
-            editor.navigate_to_hover_links(None, vec![hover_link], None, false, window, cx)
+            editor.navigate_to_hover_links_for_test(None, vec![hover_link], None, false, window, cx)
         })
         .await
         .expect("navigation task should complete");

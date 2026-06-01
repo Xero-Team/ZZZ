@@ -1402,7 +1402,13 @@ async fn restorable_workspaces(
 ) -> Option<Vec<workspace::SerializedMultiWorkspace>> {
     let locations = restorable_workspace_locations(cx, app_state).await?;
     let session_id = locations.first().and_then(|_| {
-        cx.update(|cx| app_state.session.read(cx).last_session_id().map(str::to_string))
+        cx.update(|cx| {
+            app_state
+                .session
+                .read(cx)
+                .last_session_id()
+                .map(str::to_string)
+        })
     });
     Some(cx.update(|cx| {
         workspace::read_serialized_multi_workspaces(locations, session_id.as_deref(), cx)

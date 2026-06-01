@@ -1144,13 +1144,10 @@ impl AcpConnection {
                         },
                     );
 
-                    let response = match rpc_call(
-                        this.connection.clone(),
-                        session_id.clone(),
-                        directories,
-                    )
-                    .await
-                    {
+                    let response =
+                        match rpc_call(this.connection.clone(), session_id.clone(), directories)
+                            .await
+                        {
                             Ok(response) => response,
                             Err(err) => {
                                 this.sessions.borrow_mut().remove(&session_id);
@@ -1667,11 +1664,9 @@ impl AgentConnection for AcpConnection {
             title,
             move |connection, session_id, directories| {
                 Box::pin(async move {
-                    let response = into_foreground_future(
-                        connection.send_request(
-                            directories.into_load_session_request(session_id.clone(), mcp_servers),
-                        ),
-                    )
+                    let response = into_foreground_future(connection.send_request(
+                        directories.into_load_session_request(session_id.clone(), mcp_servers),
+                    ))
                     .await
                     .map_err(map_acp_error)?;
                     Ok(SessionConfigResponse {
@@ -1712,12 +1707,9 @@ impl AgentConnection for AcpConnection {
             title,
             move |connection, session_id, directories| {
                 Box::pin(async move {
-                    let response = into_foreground_future(
-                        connection.send_request(
-                            directories
-                                .into_resume_session_request(session_id.clone(), mcp_servers),
-                        ),
-                    )
+                    let response = into_foreground_future(connection.send_request(
+                        directories.into_resume_session_request(session_id.clone(), mcp_servers),
+                    ))
                     .await
                     .map_err(map_acp_error)?;
                     Ok(SessionConfigResponse {

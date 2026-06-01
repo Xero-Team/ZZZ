@@ -13,9 +13,9 @@ pub mod lsp_command;
 pub mod lsp_store;
 pub mod manifest_tree;
 pub mod prettier_store;
-pub mod project_snapshot;
 pub mod project_search;
 pub mod project_settings;
+pub mod project_snapshot;
 pub mod search;
 pub mod task_inventory;
 pub mod task_store;
@@ -5489,7 +5489,7 @@ impl Project {
         mut cx: AsyncApp,
     ) -> Result<()> {
         let toggled_log_kind =
-            match proto::toggle_lsp_logs::LogType::from_i32(envelope.payload.log_type)
+            match proto::toggle_lsp_logs::LogType::try_from(envelope.payload.log_type)
                 .context("invalid log type")?
             {
                 proto::toggle_lsp_logs::LogType::Log => LogKind::Logs,

@@ -2214,7 +2214,9 @@ impl Element for MarkdownElement {
                             builder.push_div(div().flex_1().w_0(), range, markdown_end);
                         }
                         MarkdownTag::MetadataBlock(_) => {
-                            if let Some(metadata_block) = parsed_markdown.metadata_blocks.get(&range.start) {
+                            if let Some(metadata_block) =
+                                parsed_markdown.metadata_blocks.get(&range.start)
+                            {
                                 self.push_metadata_block(
                                     &mut builder,
                                     &parsed_markdown.source,
@@ -3980,7 +3982,8 @@ mod tests {
     #[test]
     fn test_table_checkbox_marker_source_range() {
         let markdown = "| Done |\n|------|\n|  [x]  |\n| [ ] |";
-        let events = crate::parser::parse_markdown_with_options(markdown, false, false, false).events;
+        let events =
+            crate::parser::parse_markdown_with_options(markdown, false, false, false).events;
 
         let mut in_cell = false;
         let mut pending_text = String::new();

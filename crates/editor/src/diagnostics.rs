@@ -207,7 +207,8 @@ impl Editor {
 
         let mut found: Option<DiagnosticEntryRef<MultiBufferOffset>> = None;
         if direction == Direction::Prev {
-            'outer: for prev_diagnostics in [before.collect::<Vec<_>>(), after.collect::<Vec<_>>()] {
+            'outer: for prev_diagnostics in [before.collect::<Vec<_>>(), after.collect::<Vec<_>>()]
+            {
                 for diagnostic in prev_diagnostics.into_iter().rev() {
                     if diagnostic.range.start != selection.start
                         || active_group_id

@@ -1114,8 +1114,15 @@ impl RealGitRepository {
             "opening git repository at {dotgit_path:?} using git binary {any_git_binary_path:?}"
         );
         let workdir_root = dotgit_path.parent().context(".git has no parent")?;
-        let repository =
-            git2::Repository::open(workdir_root).context("creating libgit2 repository")?;
+        let repository = git2::Repository::open(workdir_root).map_err(|error| {
+            log::error!(
+                "libgit2 failed opening repository at {:?} (dotgit {:?}): {}",
+                workdir_root,
+                dotgit_path,
+                error
+            );
+            anyhow::Error::new(error).context("creating libgit2 repository")
+        })?;
         Ok(Self {
             repository: Arc::new(Mutex::new(repository)),
             system_git_binary_path,

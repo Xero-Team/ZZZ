@@ -522,6 +522,11 @@ pub struct GitSettings {
     ///
     /// Default: true
     pub show_stage_restore_buttons: Option<bool>,
+    /// Explicit path to the Git executable.
+    ///
+    /// On Windows, prefer this when Git is not available in the process PATH
+    /// visible to GUI applications.
+    pub git_path: Option<String>,
     /// Directory where git worktrees are created, relative to the repository
     /// working directory.
     ///

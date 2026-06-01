@@ -516,5 +516,4 @@ mod tests {
             assert!(is_registry_agent("agent-from-settings", cx));
         });
     }
-
 }

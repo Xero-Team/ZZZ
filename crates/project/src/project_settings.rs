@@ -487,6 +487,8 @@ pub struct GitSettings {
     ///
     /// Default: true
     pub show_stage_restore_buttons: bool,
+    /// Explicit path to the Git executable.
+    pub git_path: Option<String>,
     /// Directory where git worktrees are created, relative to the repository
     /// working directory. When the resolved directory is outside the project
     /// root, the project's directory name is automatically appended so that
@@ -684,6 +686,7 @@ impl Settings for ProjectSettings {
             hunk_style: git.hunk_style.unwrap(),
             path_style: git.path_style.unwrap().into(),
             show_stage_restore_buttons: git.show_stage_restore_buttons.unwrap_or(true),
+            git_path: git.git_path.clone(),
             worktree_directory: git
                 .worktree_directory
                 .clone()

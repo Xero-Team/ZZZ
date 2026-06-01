@@ -70,6 +70,7 @@ use smol::future::yield_now;
 use std::{
     cmp::Ordering,
     collections::{BTreeSet, HashSet, VecDeque, hash_map::Entry},
+    ffi::OsStr,
     future::Future,
     mem,
     ops::Range,
@@ -429,17 +430,59 @@ impl LocalRepositoryState {
                     log::error!("failed to get working directory environment for repository {work_directory_abs_path:?}");
                     HashMap::default()
                 });
+        let configured_git_path =
+            cx.update(|cx| ProjectSettings::get_global(cx).git.git_path.clone());
+        let git_path_from_environment = environment
+            .get("GIT_PATH")
+            .cloned()
+            .or_else(|| std::env::var("GIT_PATH").ok());
         let search_paths = environment.get("PATH").map(|val| val.to_owned());
         let backend = cx
             .background_spawn({
                 let fs = fs.clone();
                 async move {
-                    let system_git_binary_path = search_paths
+                    let path_from_environment = search_paths.clone();
+                    let git_from_settings = configured_git_path
+                        .as_deref()
+                        .and_then(|configured_path| {
+                            resolve_configured_git_binary(
+                                configured_path,
+                                search_paths.as_deref(),
+                                &work_directory_abs_path,
+                            )
+                        });
+                    let git_from_env_var = git_path_from_environment
+                        .as_deref()
+                        .and_then(|configured_path| {
+                            resolve_configured_git_binary(
+                                configured_path,
+                                search_paths.as_deref(),
+                                &work_directory_abs_path,
+                            )
+                        });
+                    let git_from_environment = search_paths
                         .and_then(|search_paths| {
                             which::which_in("git", Some(search_paths), &work_directory_abs_path)
                                 .ok()
-                        })
-                        .or_else(|| which::which("git").ok());
+                        });
+                    let git_from_process = which::which("git").ok();
+
+                    let system_git_binary_path = git_from_settings
+                        .clone()
+                        .or(git_from_env_var.clone())
+                        .or(git_from_environment.clone())
+                        .or(git_from_process.clone());
+
+                    log::info!(
+                        "git binary lookup for {:?}: configured_git={:?}, env_git_path={:?}, env_path_present={}, env_git={:?}, process_git={:?}",
+                        work_directory_abs_path,
+                        git_from_settings,
+                        git_from_env_var,
+                        path_from_environment.is_some(),
+                        git_from_environment,
+                        git_from_process,
+                    );
+
                     fs.open_repo(&dot_git_abs_path, system_git_binary_path.as_deref())
                         .with_context(|| format!("opening repository at {dot_git_abs_path:?}"))
                 }
@@ -452,6 +495,36 @@ impl LocalRepositoryState {
             fs,
         })
     }
+}
+
+fn resolve_configured_git_binary(
+    configured_path: &str,
+    search_paths: Option<&str>,
+    work_directory_abs_path: &Path,
+) -> Option<PathBuf> {
+    let configured_path = shellexpand::tilde(configured_path).into_owned();
+    let path = PathBuf::from(&configured_path);
+
+    if path.is_absolute() || path.components().count() > 1 {
+        let resolved = if path.is_absolute() {
+            path
+        } else {
+            work_directory_abs_path.join(path)
+        };
+
+        return resolved.is_file().then_some(resolved);
+    }
+
+    search_paths
+        .and_then(|search_paths| {
+            which::which_in(
+                OsStr::new(&configured_path),
+                Some(search_paths),
+                work_directory_abs_path,
+            )
+            .ok()
+        })
+        .or_else(|| which::which(OsStr::new(&configured_path)).ok())
 }
 
 #[derive(Clone)]
@@ -4568,7 +4641,10 @@ impl Repository {
                     cx,
                 )
                 .await
-                .map_err(|err| err.to_string())
+                .map_err(|err| {
+                    log::error!("failed to initialize local git repository: {err:#}");
+                    err.to_string()
+                })
             })
             .shared();
         self.job_sender.close_channel();
@@ -9267,7 +9343,6 @@ async fn compute_snapshot(
 
     let branch = branches.iter().find(|branch| branch.is_head).cloned();
     let branch_list: Arc<[Branch]> = branches.into();
-
 
     let linked_worktrees: Arc<[GitWorktree]> = all_worktrees
         .into_iter()
