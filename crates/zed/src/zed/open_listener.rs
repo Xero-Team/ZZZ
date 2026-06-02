@@ -1045,15 +1045,23 @@ pub async fn derive_paths_with_position(
     for path_str in path_strings {
         let original_path = Path::new(path_str.as_ref());
         let mut parsed = PathWithPosition::parse_str(path_str.as_ref());
+        let original_metadata = if parsed.path != original_path {
+            fs.metadata(original_path).await.ok().flatten()
+        } else {
+            None
+        };
 
-        // If the unparsed path string actually points to a file, use that file instead of parsing out the line/col number.
-        // Note: The colon syntax is also used to open NTFS alternate data streams (e.g., `file.txt:stream`), which would cause issues.
-        // However, the colon is not valid in NTFS file names, so we can just skip this logic.
-        if !cfg!(windows)
-            && parsed.row.is_some()
-            && parsed.path != original_path
-            && fs.is_file(original_path).await
-        {
+        // Prefer the original path when it already exists and parsing only
+        // changed the final `(row,column)`-looking segment. This keeps
+        // directory and file names like `New Folder (2)` or `foo(1,2)` intact.
+        //
+        // On non-Windows platforms, keep the older "existing file wins"
+        // behavior for `path:row[:column]`, because `:` is a legal POSIX
+        // filename character.
+        if original_metadata.is_some_and(|metadata| {
+            looks_like_parenthesized_position_suffix(original_path)
+                || (!cfg!(windows) && parsed.row.is_some() && !metadata.is_dir)
+        }) {
             parsed = PathWithPosition::from_path(original_path.to_path_buf());
         }
 
@@ -1064,6 +1072,35 @@ pub async fn derive_paths_with_position(
         result.push(parsed);
     }
     result
+}
+
+fn looks_like_parenthesized_position_suffix(path: &Path) -> bool {
+    let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    let trimmed = file_name.trim_end_matches(':');
+    let Some(without_closing_paren) = trimmed.strip_suffix(')') else {
+        return false;
+    };
+    let Some((_, suffix)) = without_closing_paren.rsplit_once('(') else {
+        return false;
+    };
+
+    let mut parts = suffix.split([':', ',']);
+    let Some(first) = parts.next() else {
+        return false;
+    };
+    if first.is_empty() || first.parse::<u32>().is_err() {
+        return false;
+    }
+
+    match parts.next() {
+        Some(second) if !second.is_empty() && second.parse::<u32>().is_ok() => {
+            parts.next().is_none()
+        }
+        None => true,
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -1182,6 +1219,79 @@ mod tests {
         for (input, expected_url, host, username, port, path) in cases {
             assert_ssh_parse(cx, input, expected_url, host, username, port, path);
         }
+    }
+
+    #[gpui::test]
+    async fn test_derive_paths_with_position_preserves_parenthesized_directory_names(
+        cx: &mut TestAppContext,
+    ) {
+        let app_state = init_test(cx);
+        app_state
+            .fs
+            .as_fake()
+            .insert_tree(
+                path!("/project"),
+                serde_json::json!({
+                    "New Folder (2)": {},
+                    "foo(1)": {},
+                    "foo(1,2)": {},
+                    "foo(1:2)": {},
+                    "测试(2)": {},
+                    "测试目录 (2)": {}
+                }),
+            )
+            .await;
+
+        let parsed = derive_paths_with_position(
+            app_state.fs.as_ref(),
+            [
+                path!("/project/New Folder (2)"),
+                path!("/project/foo(1)"),
+                path!("/project/foo(1,2)"),
+                path!("/project/foo(1:2)"),
+                path!("/project/测试(2)"),
+                path!("/project/测试目录 (2)"),
+            ],
+        )
+        .await;
+
+        assert_eq!(
+            parsed,
+            vec![
+                PathWithPosition::from_path(PathBuf::from(path!("/project/New Folder (2)"))),
+                PathWithPosition::from_path(PathBuf::from(path!("/project/foo(1)"))),
+                PathWithPosition::from_path(PathBuf::from(path!("/project/foo(1,2)"))),
+                PathWithPosition::from_path(PathBuf::from(path!("/project/foo(1:2)"))),
+                PathWithPosition::from_path(PathBuf::from(path!("/project/测试(2)"))),
+                PathWithPosition::from_path(PathBuf::from(path!("/project/测试目录 (2)"))),
+            ]
+        );
+    }
+
+    #[gpui::test]
+    async fn test_derive_paths_with_position_keeps_parenthesized_file_positions(
+        cx: &mut TestAppContext,
+    ) {
+        let app_state = init_test(cx);
+        app_state
+            .fs
+            .as_fake()
+            .insert_tree(path!("/project"), serde_json::json!({ "main.rs": "" }))
+            .await;
+
+        let parsed =
+            derive_paths_with_position(app_state.fs.as_ref(), [path!("/project/main.rs(7,15)")])
+                .await;
+
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(
+            parsed[0],
+            PathWithPosition {
+                path: PathBuf::from(path!("/project/main.rs")),
+                row: Some(7),
+                column: Some(15),
+            }
+        );
     }
 
     #[gpui::test]

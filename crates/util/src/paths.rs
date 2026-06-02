@@ -683,6 +683,35 @@ pub struct PathWithPosition {
     pub column: Option<u32>,
 }
 
+fn has_whitespace_before_trailing_parenthesized_numbers(file_name: &str) -> bool {
+    let trimmed = file_name.trim_end_matches(':');
+    let Some(without_closing_paren) = trimmed.strip_suffix(')') else {
+        return false;
+    };
+    let Some((prefix, suffix)) = without_closing_paren.rsplit_once('(') else {
+        return false;
+    };
+    if !prefix.chars().last().is_some_and(char::is_whitespace) {
+        return false;
+    }
+
+    let mut parts = suffix.split([':', ',']);
+    let Some(first) = parts.next() else {
+        return false;
+    };
+    if first.is_empty() || first.parse::<u32>().is_err() {
+        return false;
+    }
+
+    match parts.next() {
+        Some(second) if !second.is_empty() && second.parse::<u32>().is_ok() => {
+            parts.next().is_none()
+        }
+        None => true,
+        _ => false,
+    }
+}
+
 impl PathWithPosition {
     /// Returns a PathWithPosition from a path.
     pub fn from_path(path: PathBuf) -> Self {
@@ -790,6 +819,13 @@ impl PathWithPosition {
             };
         };
         if maybe_file_name_with_row_col.is_empty() {
+            return Self {
+                path: Path::new(s).to_path_buf(),
+                row: None,
+                column: None,
+            };
+        }
+        if has_whitespace_before_trailing_parenthesized_numbers(maybe_file_name_with_row_col) {
             return Self {
                 path: Path::new(s).to_path_buf(),
                 row: None,
@@ -2523,6 +2559,15 @@ mod tests {
                 column: None
             }
         );
+
+        assert_eq!(
+            PathWithPosition::parse_str("New Folder (2)"),
+            PathWithPosition {
+                path: PathBuf::from("New Folder (2)"),
+                row: None,
+                column: None
+            }
+        );
     }
 
     #[perf]
@@ -2606,6 +2651,15 @@ mod tests {
             PathWithPosition::parse_str("C:\\Users\\someone\\main (1).log"),
             PathWithPosition {
                 path: PathBuf::from("C:\\Users\\someone\\main (1).log"),
+                row: None,
+                column: None
+            }
+        );
+
+        assert_eq!(
+            PathWithPosition::parse_str("C:\\Users\\someone\\New Folder (2)"),
+            PathWithPosition {
+                path: PathBuf::from("C:\\Users\\someone\\New Folder (2)"),
                 row: None,
                 column: None
             }
