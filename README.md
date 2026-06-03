@@ -2,6 +2,8 @@
 
 > Zedless, Zeroed, Zen. — Zed, without the noise.
 
+![ZZZ Logo](crates/zed/resources/app-icon.png)
+
 ZZZ is a community fork of [Zed](https://github.com/zed-industries/zed),
 a high-performance code editor originally built by the creators of
 [Atom](https://github.com/atom/atom) and [Tree-sitter](https://github.com/tree-sitter/tree-sitter).
