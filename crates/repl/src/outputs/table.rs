@@ -134,16 +134,18 @@ impl TableView {
         Self {
             table: table.clone(),
             widths,
-            cached_clipboard_content: ClipboardItem::new_string(cached_clipboard_content),
+            cached_clipboard_content,
         }
     }
 
-    fn create_clipboard_content(table: &TabularDataResource) -> String {
-        let data = match table.data.as_ref() {
-            Some(data) => data,
-            None => &Vec::new(),
-        };
-        let schema = table.schema.clone();
+    fn create_clipboard_content(table: &TabularDataResource) -> ClipboardItem {
+        let plain_text = Self::create_plain_text_clipboard_content(table);
+        let html = Self::create_html_clipboard_content(table);
+        ClipboardItem::new_string_with_html(plain_text, html)
+    }
+
+    fn create_plain_text_clipboard_content(table: &TabularDataResource) -> String {
+        let data = table.data.as_deref().unwrap_or(&[]);
 
         let mut markdown = format!(
             "| {} |\n",
@@ -165,7 +167,8 @@ impl TableView {
         let body = data
             .iter()
             .map(|record: &Value| {
-                let row_content = schema
+                let row_content = table
+                    .schema
                     .fields
                     .iter()
                     .map(|field| MarkdownEscaped(&cell_content(record, &field.name)).to_string())
@@ -180,6 +183,33 @@ impl TableView {
         }
 
         markdown
+    }
+
+    fn create_html_clipboard_content(table: &TabularDataResource) -> String {
+        let mut html = String::from("<table><thead><tr>");
+        for field in &table.schema.fields {
+            html.push_str("<th>");
+            push_html_escaped(&field.name, &mut html);
+            html.push_str("</th>");
+        }
+        html.push_str("</tr></thead>");
+
+        if let Some(data) = table.data.as_ref() {
+            html.push_str("<tbody>");
+            for row in data {
+                html.push_str("<tr>");
+                for field in &table.schema.fields {
+                    html.push_str("<td>");
+                    push_html_escaped(&cell_content(row, &field.name), &mut html);
+                    html.push_str("</td>");
+                }
+                html.push_str("</tr>");
+            }
+            html.push_str("</tbody>");
+        }
+
+        html.push_str("</table>");
+        html
     }
 
     pub fn render_row(
@@ -286,5 +316,77 @@ impl OutputContent for TableView {
 
     fn has_clipboard_content(&self, _window: &Window, _cx: &App) -> bool {
         true
+    }
+}
+
+fn push_html_escaped(text: &str, html: &mut String) {
+    for ch in text.chars() {
+        match ch {
+            '&' => html.push_str("&amp;"),
+            '<' => html.push_str("&lt;"),
+            '>' => html.push_str("&gt;"),
+            '"' => html.push_str("&quot;"),
+            '\'' => html.push_str("&#39;"),
+            _ => html.push(ch),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn sample_table() -> TabularDataResource {
+        serde_json::from_value(json!({
+            "schema": {
+                "fields": [
+                    {"name": "name", "type": "string"},
+                    {"name": "note", "type": "string"}
+                ]
+            },
+            "data": [
+                {"name": "Alice", "note": "A&B <ok>"},
+                {"name": "Bob", "note": "\"quoted\""}
+            ]
+        }))
+        .expect("valid table resource")
+    }
+
+    #[test]
+    fn plain_text_clipboard_content_stays_markdown_compatible() {
+        let table = sample_table();
+
+        assert_eq!(
+            TableView::create_plain_text_clipboard_content(&table),
+            "| name | note |\n|---|---|\n| Alice | A\\&B &lt;ok&gt; |\n| Bob | \"quoted\" |\n"
+        );
+    }
+
+    #[test]
+    fn html_clipboard_content_serializes_table_structure() {
+        let table = sample_table();
+
+        assert_eq!(
+            TableView::create_html_clipboard_content(&table),
+            "<table><thead><tr><th>name</th><th>note</th></tr></thead><tbody><tr><td>Alice</td><td>A&amp;B &lt;ok&gt;</td></tr><tr><td>Bob</td><td>&quot;quoted&quot;</td></tr></tbody></table>"
+        );
+    }
+
+    #[test]
+    fn html_clipboard_content_without_rows_keeps_headers() {
+        let table: TabularDataResource = serde_json::from_value(json!({
+            "schema": {
+                "fields": [
+                    {"name": "id", "type": "integer"}
+                ]
+            }
+        }))
+        .expect("valid header-only table resource");
+
+        assert_eq!(
+            TableView::create_html_clipboard_content(&table),
+            "<table><thead><tr><th>id</th></tr></thead></table>"
+        );
     }
 }

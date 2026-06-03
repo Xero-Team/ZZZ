@@ -430,7 +430,14 @@ impl Output {
             },
             Some(MimeType::Html(html_content)) => match html::html_to_markdown(html_content) {
                 Ok(markdown_text) => {
-                    let content = cx.new(|cx| MarkdownView::from(markdown_text, cx));
+                    let original_html = html_content.clone();
+                    let content = cx.new(|cx| {
+                        MarkdownView::from_with_clipboard_html(
+                            markdown_text,
+                            Some(original_html),
+                            cx,
+                        )
+                    });
                     Output::Markdown {
                         content,
                         display_id,
@@ -847,11 +854,12 @@ impl Render for ExecutionView {
 mod tests {
     use super::*;
     use gpui::TestAppContext;
-    use jupyter_protocol::media::MediaType as MimeType;
+    use jupyter_protocol::media::{Media, MediaType as MimeType, TabularDataResource};
     use runtimelib::{
         ClearOutput, ErrorOutput, ExecutionState, InputRequest, JupyterMessage,
         JupyterMessageContent, Status, Stdio, StreamContent,
     };
+    use serde_json::json;
     use settings::SettingsStore;
     use std::path::Path;
     use std::sync::Arc;
@@ -918,6 +926,96 @@ mod tests {
         cx.update(|_window, cx| {
             cx.new(|cx| ExecutionView::new(ExecutionStatus::Queued, weak_workspace, cx))
         })
+    }
+
+    fn sample_tabular_data_resource() -> TabularDataResource {
+        serde_json::from_value(json!({
+            "schema": {
+                "fields": [
+                    {"name": "name", "type": "string"},
+                    {"name": "score", "type": "integer"}
+                ]
+            },
+            "data": [
+                {"name": "Alice", "score": 7},
+                {"name": "Bob & Co", "score": 9}
+            ]
+        }))
+        .expect("valid table resource")
+    }
+
+    #[gpui::test]
+    async fn test_markdown_output_copies_rendered_content_with_html(cx: &mut TestAppContext) {
+        let (mut cx, _workspace) = init_test(cx).await;
+        let markdown_view = cx.update(|_window, cx| {
+            cx.new(|cx| {
+                MarkdownView::from("**bold**\n\n[link](https://example.com)".to_string(), cx)
+            })
+        });
+        cx.run_until_parked();
+
+        cx.update(|window, cx| {
+            let item = markdown_view
+                .read(cx)
+                .clipboard_content(window, cx)
+                .expect("markdown clipboard content");
+
+            assert_eq!(item.text().as_deref(), Some("bold\nlink"));
+            assert_eq!(
+                item.html().map(String::as_str),
+                Some("<p><strong>bold</strong></p><p><a href=\"https://example.com\">link</a></p>")
+            );
+        });
+    }
+
+    #[gpui::test]
+    async fn test_table_output_copies_plain_text_and_html(cx: &mut TestAppContext) {
+        let (mut cx, _workspace) = init_test(cx).await;
+        let table = sample_tabular_data_resource();
+        let table_view = cx.update(|window, cx| cx.new(|cx| TableView::new(&table, window, cx)));
+
+        cx.update(|window, cx| {
+            let item = table_view
+                .read(cx)
+                .clipboard_content(window, cx)
+                .expect("table clipboard content");
+
+            assert_eq!(
+                item.text().as_deref(),
+                Some("| name | score |\n|---|---|\n| Alice | 7 |\n| Bob \\& Co | 9 |\n")
+            );
+            assert_eq!(
+                item.html().map(String::as_str),
+                Some(
+                    "<table><thead><tr><th>name</th><th>score</th></tr></thead><tbody><tr><td>Alice</td><td>7</td></tr><tr><td>Bob &amp; Co</td><td>9</td></tr></tbody></table>"
+                )
+            );
+        });
+    }
+
+    #[gpui::test]
+    async fn test_html_output_preserves_original_html_in_clipboard(cx: &mut TestAppContext) {
+        let (mut cx, _workspace) = init_test(cx).await;
+        let html = "<h1>Title</h1><p>Hello <strong>world</strong></p>".to_string();
+        let bundle = Media::new(vec![MimeType::Html(html.clone())]);
+
+        let output = cx.update(|window, cx| Output::new(&bundle, None, window, cx));
+
+        let Output::Markdown { content, .. } = output else {
+            panic!("expected html output to render as markdown");
+        };
+
+        cx.run_until_parked();
+
+        cx.update(|window, cx| {
+            let item = content
+                .read(cx)
+                .clipboard_content(window, cx)
+                .expect("html clipboard content");
+
+            assert_eq!(item.text().as_deref(), Some("Title\nHello world"));
+            assert_eq!(item.html().map(String::as_str), Some(html.as_str()));
+        });
     }
 
     #[gpui::test]

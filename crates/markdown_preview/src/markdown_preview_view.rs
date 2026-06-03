@@ -6,12 +6,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use base64::Engine as _;
+use editor::actions::SelectAll as EditorSelectAll;
 use editor::scroll::Autoscroll;
 use editor::{Editor, EditorEvent, MultiBufferOffset, SelectionEffects};
 use gpui::{
     App, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable, ImageSource,
     InteractiveElement, IntoElement, IsZero, Pixels, Render, Resource, RetainAllImageCache,
-    ScrollHandle, SharedString, SharedUri, Subscription, Task, WeakEntity, Window, point,
+    SMOOTH_SVG_SCALE_FACTOR, ScrollHandle, SharedString, SharedUri, Subscription, Task, WeakEntity,
+    Window, point,
 };
 use language::LanguageRegistry;
 use markdown::{
@@ -49,6 +52,7 @@ pub struct MarkdownPreviewView {
     scroll_handle: ScrollHandle,
     image_cache: Entity<RetainAllImageCache>,
     base_directory: Option<PathBuf>,
+    workspace_directory: Option<PathBuf>,
     pending_update_task: Option<Task<Result<()>>>,
     mode: MarkdownPreviewMode,
 }
@@ -176,11 +180,18 @@ impl MarkdownPreviewView {
         cx: &mut Context<Workspace>,
     ) -> Entity<MarkdownPreviewView> {
         let language_registry = workspace.project().read(cx).languages().clone();
+        let workspace_directory = workspace
+            .project()
+            .read(cx)
+            .worktrees(cx)
+            .next()
+            .map(|tree| tree.read(cx).abs_path().to_path_buf());
         let workspace_handle = workspace.weak_handle();
         MarkdownPreviewView::new(
             MarkdownPreviewMode::Default,
             editor,
             workspace_handle,
+            workspace_directory,
             language_registry,
             window,
             cx,
@@ -194,11 +205,18 @@ impl MarkdownPreviewView {
         cx: &mut Context<Workspace>,
     ) -> Entity<MarkdownPreviewView> {
         let language_registry = workspace.project().read(cx).languages().clone();
+        let workspace_directory = workspace
+            .project()
+            .read(cx)
+            .worktrees(cx)
+            .next()
+            .map(|tree| tree.read(cx).abs_path().to_path_buf());
         let workspace_handle = workspace.weak_handle();
         MarkdownPreviewView::new(
             MarkdownPreviewMode::Follow,
             editor,
             workspace_handle,
+            workspace_directory,
             language_registry,
             window,
             cx,
@@ -209,6 +227,7 @@ impl MarkdownPreviewView {
         mode: MarkdownPreviewMode,
         active_editor: Entity<Editor>,
         workspace: WeakEntity<Workspace>,
+        workspace_directory: Option<PathBuf>,
         language_registry: Arc<LanguageRegistry>,
         window: &mut Window,
         cx: &mut Context<Workspace>,
@@ -244,6 +263,7 @@ impl MarkdownPreviewView {
                 scroll_handle: ScrollHandle::new(),
                 image_cache: RetainAllImageCache::new(cx),
                 base_directory: None,
+                workspace_directory,
                 pending_update_task: None,
                 mode,
             };
@@ -329,8 +349,29 @@ impl MarkdownPreviewView {
             editor,
             _subscription: subscription,
         });
+        self.update_clipboard_image_src_resolver(cx);
 
         self.update_markdown_from_active_editor(false, true, window, cx);
+    }
+
+    fn update_clipboard_image_src_resolver(&mut self, cx: &mut Context<Self>) {
+        let base_directory = self.base_directory.clone();
+        let workspace_directory = self.workspace_directory.clone();
+
+        self.markdown.update(cx, |markdown, _cx| {
+            markdown.set_clipboard_image_src_resolver({
+                let base_directory = base_directory.clone();
+                let workspace_directory = workspace_directory.clone();
+                move |dest_url, app| {
+                    resolve_preview_clipboard_image_src(
+                        dest_url,
+                        base_directory.as_deref(),
+                        workspace_directory.as_deref(),
+                        app,
+                    )
+                }
+            });
+        });
     }
 
     fn update_markdown_from_active_editor(
@@ -601,14 +642,6 @@ impl MarkdownPreviewView {
             .as_ref()
             .map(|state| state.editor.clone());
 
-        let mut workspace_directory = None;
-        if let Some(workspace_entity) = self.workspace.upgrade() {
-            let project = workspace_entity.read(cx).project();
-            if let Some(tree) = project.read(cx).worktrees(cx).next() {
-                workspace_directory = Some(tree.read(cx).abs_path().to_path_buf());
-            }
-        }
-
         let markdown_style = if let Some(theme) = preview_theme {
             MarkdownStyle::themed_with_overrides(
                 MarkdownFont::Preview,
@@ -631,6 +664,7 @@ impl MarkdownPreviewView {
             .show_root_block_markers()
             .image_resolver({
                 let base_directory = self.base_directory.clone();
+                let workspace_directory = self.workspace_directory.clone();
                 move |dest_url| {
                     resolve_preview_image(
                         dest_url,
@@ -883,6 +917,140 @@ fn resolve_preview_image(
         .then(|| ImageSource::Resource(Resource::Path(Arc::from(path.as_path()))))
 }
 
+fn resolve_preview_clipboard_image_src(
+    dest_url: &str,
+    base_directory: Option<&Path>,
+    workspace_directory: Option<&Path>,
+    cx: &App,
+) -> Option<String> {
+    if dest_url.starts_with("data:")
+        || dest_url.starts_with("http://")
+        || dest_url.starts_with("https://")
+    {
+        return None;
+    }
+
+    let resolved = resolve_preview_image(dest_url, base_directory, workspace_directory)?;
+    let ImageSource::Resource(resource) = resolved else {
+        return None;
+    };
+    let Resource::Path(path) = resource else {
+        return None;
+    };
+
+    embed_local_image_for_clipboard(path.as_ref(), cx).or_else(|| file_url_for_path(path.as_ref()))
+}
+
+fn embed_local_image_for_clipboard(path: &Path, cx: &App) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    if path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("svg"))
+    {
+        let png_bytes = rasterize_svg_to_png_data_uri(&bytes, cx)?;
+        return Some(png_bytes);
+    }
+
+    let mime_type = mime_type_for_image_path(path, &bytes)?;
+    Some(data_uri_for_bytes(mime_type, &bytes))
+}
+
+fn rasterize_svg_to_png_data_uri(bytes: &[u8], cx: &App) -> Option<String> {
+    // Rich-text targets handle PNG data URIs far more consistently than SVG ones.
+    let render_image = cx.svg_renderer().render_single_frame(bytes, 1.0).ok()?;
+    let size = render_image.size(0);
+    let rendered_width = u32::try_from(size.width.0).ok()?;
+    let rendered_height = u32::try_from(size.height.0).ok()?;
+    let bgra = render_image.as_bytes(0)?;
+    let mut rgba = bgra.to_vec();
+    for pixel in rgba.chunks_exact_mut(4) {
+        pixel.swap(0, 2);
+    }
+
+    let target_width = ((rendered_width as f32) / SMOOTH_SVG_SCALE_FACTOR).round() as u32;
+    let target_height = ((rendered_height as f32) / SMOOTH_SVG_SCALE_FACTOR).round() as u32;
+    let rgba = if target_width == rendered_width && target_height == rendered_height {
+        rgba
+    } else {
+        let image: image::RgbaImage =
+            image::ImageBuffer::from_raw(rendered_width, rendered_height, rgba)?;
+        image::imageops::resize(
+            &image,
+            target_width.max(1),
+            target_height.max(1),
+            image::imageops::FilterType::Triangle,
+        )
+        .into_raw()
+    };
+
+    let mut png = Vec::new();
+    {
+        use image::ImageEncoder as _;
+
+        let encoder = image::codecs::png::PngEncoder::new(&mut png);
+        encoder
+            .write_image(
+                &rgba,
+                target_width.max(1),
+                target_height.max(1),
+                image::ExtendedColorType::Rgba8,
+            )
+            .ok()?;
+    }
+
+    Some(data_uri_for_bytes("image/png", &png))
+}
+
+fn data_uri_for_bytes(mime_type: &str, bytes: &[u8]) -> String {
+    format!(
+        "data:{mime_type};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    )
+}
+
+fn mime_type_for_image_path(path: &Path, bytes: &[u8]) -> Option<&'static str> {
+    mime_type_for_image_extension(path).or_else(|| {
+        image::guess_format(bytes)
+            .ok()
+            .and_then(mime_type_for_guessed_image_format)
+    })
+}
+
+fn mime_type_for_image_extension(path: &Path) -> Option<&'static str> {
+    match path.extension()?.to_str()?.to_ascii_lowercase().as_str() {
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "webp" => Some("image/webp"),
+        "gif" => Some("image/gif"),
+        "bmp" => Some("image/bmp"),
+        "tif" | "tiff" => Some("image/tiff"),
+        "ico" => Some("image/x-icon"),
+        "pnm" | "pbm" | "pgm" | "ppm" | "pam" => Some("image/x-portable-anymap"),
+        _ => None,
+    }
+}
+
+fn mime_type_for_guessed_image_format(format: image::ImageFormat) -> Option<&'static str> {
+    match format {
+        image::ImageFormat::Png => Some("image/png"),
+        image::ImageFormat::Jpeg => Some("image/jpeg"),
+        image::ImageFormat::WebP => Some("image/webp"),
+        image::ImageFormat::Gif => Some("image/gif"),
+        image::ImageFormat::Bmp => Some("image/bmp"),
+        image::ImageFormat::Tiff => Some("image/tiff"),
+        image::ImageFormat::Ico => Some("image/x-icon"),
+        image::ImageFormat::Pnm => Some("image/x-portable-anymap"),
+        _ => None,
+    }
+}
+
+fn file_url_for_path(path: &Path) -> Option<String> {
+    url::Url::from_file_path(path)
+        .ok()
+        .map(|url| url.to_string())
+}
+
 impl Focusable for MarkdownPreviewView {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus_handle.clone()
@@ -891,6 +1059,13 @@ impl Focusable for MarkdownPreviewView {
 
 impl EventEmitter<()> for MarkdownPreviewView {}
 impl EventEmitter<SearchEvent> for MarkdownPreviewView {}
+
+impl MarkdownPreviewView {
+    fn select_all(&mut self, _: &EditorSelectAll, _window: &mut Window, cx: &mut Context<Self>) {
+        self.markdown
+            .update(cx, |markdown, cx| markdown.select_all(cx));
+    }
+}
 
 impl Item for MarkdownPreviewView {
     type Event = ();
@@ -1014,6 +1189,7 @@ impl Render for MarkdownPreviewView {
             .id("MarkdownPreview")
             .key_context("MarkdownPreview")
             .track_focus(&self.focus_handle(cx))
+            .on_action(cx.listener(MarkdownPreviewView::select_all))
             .on_action(cx.listener(MarkdownPreviewView::scroll_page_up))
             .on_action(cx.listener(MarkdownPreviewView::scroll_page_down))
             .on_action(cx.listener(MarkdownPreviewView::scroll_up))
@@ -1200,11 +1376,11 @@ impl SearchableItem for MarkdownPreviewView {
 
 #[cfg(test)]
 mod tests {
-    use crate::markdown_preview_view::ImageSource;
-    use crate::markdown_preview_view::Resource;
-    use crate::markdown_preview_view::resolve_preview_image;
+    use base64::Engine as _;
     use editor::Editor;
-    use gpui::{Entity, TestAppContext};
+    use gpui::{AppContext, Entity, TestAppContext};
+    use image::ImageEncoder as _;
+    use markdown::Markdown;
     use serde_json::json;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -1212,7 +1388,10 @@ mod tests {
     use util::test::TempTree;
     use workspace::{AppState, MultiWorkspace, SaveIntent, Workspace, open_paths};
 
-    use super::{MarkdownPreviewView, resolve_preview_path};
+    use super::{
+        ImageSource, MarkdownPreviewView, Resource, resolve_preview_clipboard_image_src,
+        resolve_preview_image, resolve_preview_path,
+    };
 
     #[test]
     fn resolves_relative_preview_path_and_missing_cases() {
@@ -1260,6 +1439,27 @@ mod tests {
         assert_eq!(resolve_preview_path("http://example.com", None), None);
     }
 
+    #[gpui::test]
+    async fn leaves_remote_and_data_image_sources_to_default_clipboard_html_handling(
+        cx: &mut TestAppContext,
+    ) {
+        cx.update(|cx| {
+            assert_eq!(
+                resolve_preview_clipboard_image_src("https://zed.dev/image.png", None, None, cx),
+                None
+            );
+            assert_eq!(
+                resolve_preview_clipboard_image_src(
+                    "data:image/png;base64,abc123",
+                    None,
+                    None,
+                    cx,
+                ),
+                None
+            );
+        });
+    }
+
     #[test]
     fn resolves_workspace_absolute_preview_image_path_and_rejects_missing() {
         let tree = TempTree::new(json!({
@@ -1285,6 +1485,170 @@ mod tests {
             Some(workspace_directory),
         );
         assert!(missing.is_none());
+    }
+
+    #[gpui::test]
+    async fn embeds_local_png_preview_image_in_clipboard_html(cx: &mut TestAppContext) {
+        let tree = TempTree::new(json!({
+            "docs": {}
+        }));
+        let base_directory = markdown_fixture_directory(&tree);
+        let png_path = base_directory.join("image.png");
+        let png_bytes = create_test_png_bytes([0x12, 0x34, 0x56, 0xFF]);
+        std::fs::write(&png_path, &png_bytes).expect("write test png");
+
+        cx.update(|cx| {
+            let src = resolve_preview_clipboard_image_src(
+                "image.png",
+                Some(base_directory.as_path()),
+                Some(tree.path()),
+                cx,
+            )
+            .expect("clipboard image src");
+
+            let encoded = src
+                .strip_prefix("data:image/png;base64,")
+                .expect("png data uri");
+            let decoded = base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .expect("decode png data uri");
+            assert_eq!(decoded, png_bytes);
+        });
+    }
+
+    #[gpui::test]
+    async fn rendered_markdown_clipboard_item_embeds_local_preview_png(cx: &mut TestAppContext) {
+        let tree = TempTree::new(json!({
+            "docs": {}
+        }));
+        let base_directory = markdown_fixture_directory(&tree);
+        let png_path = base_directory.join("image.png");
+        let png_bytes = create_test_png_bytes([0xAB, 0xCD, 0xEF, 0xFF]);
+        std::fs::write(&png_path, &png_bytes).expect("write test png");
+
+        let markdown = cx.new(|cx| Markdown::new("![Alt](image.png)".into(), None, None, cx));
+        markdown.update(cx, |markdown, _cx| {
+            let base_directory = base_directory.clone();
+            let workspace_directory = tree.path().to_path_buf();
+            markdown.set_clipboard_image_src_resolver(move |dest_url, app| {
+                resolve_preview_clipboard_image_src(
+                    dest_url,
+                    Some(base_directory.as_path()),
+                    Some(workspace_directory.as_path()),
+                    app,
+                )
+            });
+        });
+        cx.run_until_parked();
+
+        let item = markdown.read_with(cx, |markdown, cx| {
+            markdown.rendered_clipboard_item_for_document(cx)
+        });
+        let html = item.html().expect("html clipboard payload");
+        let prefix = "<p><img src=\"data:image/png;base64,";
+        let suffix = "\" alt=\"Alt\"></p>";
+        assert!(html.starts_with(prefix), "unexpected html: {html}");
+        assert!(html.ends_with(suffix), "unexpected html: {html}");
+
+        let encoded = &html[prefix.len()..html.len() - suffix.len()];
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .expect("decode png data uri");
+        assert_eq!(decoded, png_bytes);
+        assert_eq!(item.text().as_deref(), Some("Alt"));
+    }
+
+    #[gpui::test]
+    async fn rasterizes_local_svg_preview_image_for_clipboard_html(cx: &mut TestAppContext) {
+        let tree = TempTree::new(json!({
+            "docs": {}
+        }));
+        let base_directory = markdown_fixture_directory(&tree);
+        let svg_path = base_directory.join("image.svg");
+        std::fs::write(
+            &svg_path,
+            br##"<svg xmlns="http://www.w3.org/2000/svg" width="2" height="1">
+<rect width="2" height="1" fill="#38BDF8"/>
+</svg>"##,
+        )
+        .expect("write test svg");
+
+        cx.update(|cx| {
+            let src = resolve_preview_clipboard_image_src(
+                "image.svg",
+                Some(base_directory.as_path()),
+                Some(tree.path()),
+                cx,
+            )
+            .expect("clipboard image src");
+
+            let encoded = src
+                .strip_prefix("data:image/png;base64,")
+                .expect("png data uri");
+            let decoded = base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .expect("decode png data uri");
+            assert_eq!(&decoded[..8], b"\x89PNG\r\n\x1a\n");
+
+            let image = image::load_from_memory_with_format(&decoded, image::ImageFormat::Png)
+                .expect("decode generated png");
+            assert_eq!(image.width(), 2);
+            assert_eq!(image.height(), 1);
+        });
+    }
+
+    #[gpui::test]
+    async fn falls_back_to_file_url_for_unknown_local_clipboard_image(cx: &mut TestAppContext) {
+        let tree = TempTree::new(json!({
+            "docs": {}
+        }));
+        let base_directory = markdown_fixture_directory(&tree);
+        let image_path = base_directory.join("image.unknown");
+        std::fs::write(&image_path, b"not-an-image").expect("write unknown image file");
+
+        cx.update(|cx| {
+            let src = resolve_preview_clipboard_image_src(
+                "image.unknown",
+                Some(base_directory.as_path()),
+                Some(tree.path()),
+                cx,
+            )
+            .expect("clipboard image src");
+
+            assert_eq!(
+                src,
+                url::Url::from_file_path(&image_path)
+                    .expect("valid file url")
+                    .to_string()
+            );
+        });
+    }
+
+    #[gpui::test]
+    async fn falls_back_to_file_url_for_invalid_local_svg_clipboard_image(cx: &mut TestAppContext) {
+        let tree = TempTree::new(json!({
+            "docs": {}
+        }));
+        let base_directory = markdown_fixture_directory(&tree);
+        let image_path = base_directory.join("broken.svg");
+        std::fs::write(&image_path, b"<svg><broken>").expect("write invalid svg file");
+
+        cx.update(|cx| {
+            let src = resolve_preview_clipboard_image_src(
+                "broken.svg",
+                Some(base_directory.as_path()),
+                Some(tree.path()),
+                cx,
+            )
+            .expect("clipboard image src");
+
+            assert_eq!(
+                src,
+                url::Url::from_file_path(&image_path)
+                    .expect("valid file url")
+                    .to_string()
+            );
+        });
     }
 
     #[gpui::test]
@@ -1484,5 +1848,14 @@ mod tests {
             }
             _ => panic!("Expected preview image to resolve to a local path"),
         }
+    }
+
+    fn create_test_png_bytes(color: [u8; 4]) -> Vec<u8> {
+        let mut png = Vec::new();
+        let encoder = image::codecs::png::PngEncoder::new(&mut png);
+        encoder
+            .write_image(&color, 1, 1, image::ExtendedColorType::Rgba8)
+            .expect("encode png");
+        png
     }
 }

@@ -10771,9 +10771,11 @@ name = "markdown_preview"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "editor",
  "fs",
  "gpui",
+ "image",
  "language",
  "log",
  "markdown",
@@ -10784,6 +10786,7 @@ dependencies = [
  "theme",
  "theme_settings",
  "ui",
+ "url",
  "urlencoding",
  "util",
  "workspace",

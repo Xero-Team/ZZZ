@@ -1,3 +1,4 @@
+mod clipboard_html;
 pub mod html;
 mod mermaid;
 pub mod parser;
@@ -52,6 +53,9 @@ use ui::{ScrollAxes, Scrollbars, Tooltip, WithScrollbar, prelude::*};
 use util::ResultExt;
 
 use crate::parser::CodeBlockKind;
+use clipboard_html::{
+    basic_html_from_plain_text, html_fragment_for_selection, plain_text_for_selection,
+};
 
 /// A callback function that can be used to customize the style of links based on the destination URL.
 /// If the callback returns `None`, the default link style will be used.
@@ -59,6 +63,7 @@ type LinkStyleCallback = Rc<dyn Fn(&str, &App) -> Option<TextStyleRefinement>>;
 pub type CodeSpanLinkCallback = Arc<dyn Fn(&str, &App) -> Option<SharedString> + 'static>;
 type SourceClickCallback = Box<dyn Fn(usize, usize, &mut Window, &mut App) -> bool>;
 type CheckboxToggleCallback = Rc<dyn Fn(Range<usize>, bool, &mut Window, &mut App)>;
+type ClipboardImageSrcResolver = Arc<dyn Fn(&str, &App) -> Option<String> + 'static>;
 
 #[derive(Clone, Copy, Default)]
 pub struct BlockQuoteKindColors {
@@ -343,6 +348,7 @@ pub struct Markdown {
     context_menu_selected_text: Option<String>,
     search_highlights: Vec<Range<usize>>,
     active_search_highlight: Option<usize>,
+    clipboard_image_src_resolver: Option<ClipboardImageSrcResolver>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -399,6 +405,8 @@ pub type CodeBlockTransformFn =
 actions!(
     markdown,
     [
+        /// Selects all rendered markdown content.
+        SelectAll,
         /// Copies the selected text to the clipboard.
         Copy,
         /// Copies the selected text as markdown to the clipboard.
@@ -523,6 +531,7 @@ impl Markdown {
             context_menu_selected_text: None,
             search_highlights: Vec::new(),
             active_search_highlight: None,
+            clipboard_image_src_resolver: None,
         };
         this.parse(cx);
         this
@@ -609,6 +618,32 @@ impl Markdown {
 
     pub fn source(&self) -> &str {
         &self.source
+    }
+
+    pub fn rendered_clipboard_item_for_document(&self, cx: &App) -> ClipboardItem {
+        let plain_text = if self.parsed_markdown.source.len() == self.source.len() {
+            plain_text_for_selection(&self.parsed_markdown, 0..self.source.len())
+        } else {
+            self.source.to_string()
+        };
+
+        let html = if self.parsed_markdown.source.len() == self.source.len() {
+            let resolve_image_src = |src: &str| {
+                self.clipboard_image_src_resolver
+                    .as_ref()
+                    .and_then(|resolver| resolver(src, cx))
+            };
+            html_fragment_for_selection(
+                &self.parsed_markdown,
+                0..self.source.len(),
+                &plain_text,
+                Some(&resolve_image_src),
+            )
+        } else {
+            basic_html_from_plain_text(&plain_text)
+        };
+
+        ClipboardItem::new_string_with_html(plain_text, html)
     }
 
     pub fn first_code_block_language(&self) -> Option<Arc<Language>> {
@@ -754,12 +789,46 @@ impl Markdown {
         self.active_search_highlight
     }
 
+    pub fn set_clipboard_image_src_resolver(
+        &mut self,
+        resolver: impl Fn(&str, &App) -> Option<String> + 'static,
+    ) {
+        self.clipboard_image_src_resolver = Some(Arc::new(resolver));
+    }
+
+    pub fn clear_clipboard_image_src_resolver(&mut self) {
+        self.clipboard_image_src_resolver = None;
+    }
+
+    pub fn select_all(&mut self, cx: &mut Context<Self>) {
+        self.selection = Selection {
+            start: 0,
+            end: self.source.len(),
+            reversed: false,
+            pending: false,
+            mode: SelectMode::All,
+        };
+        cx.notify();
+    }
+
     fn copy(&self, text: &RenderedText, _: &mut Window, cx: &mut Context<Self>) {
         if self.selection.end <= self.selection.start {
             return;
         }
-        let text = text.text_for_range(self.selection.start..self.selection.end);
-        cx.write_to_clipboard(ClipboardItem::new_string(text));
+        let selection = self.selection.start..self.selection.end;
+        let plain_text = text.text_for_range(selection.clone());
+        let resolve_image_src = |src: &str| {
+            self.clipboard_image_src_resolver
+                .as_ref()
+                .and_then(|resolver| resolver(src, cx))
+        };
+        let html = html_fragment_for_selection(
+            &self.parsed_markdown,
+            selection,
+            &plain_text,
+            Some(&resolve_image_src),
+        );
+        cx.write_to_clipboard(ClipboardItem::new_string_with_html(plain_text, html));
     }
 
     fn copy_as_markdown(&mut self, _: &mut Window, cx: &mut Context<Self>) {
@@ -2575,6 +2644,14 @@ impl Element for MarkdownElement {
                 }
             }
         });
+        window.on_action(std::any::TypeId::of::<crate::SelectAll>(), {
+            let entity = self.markdown.clone();
+            move |_, phase, _window, cx| {
+                if phase == DispatchPhase::Bubble {
+                    entity.update(cx, move |this, cx| this.select_all(cx))
+                }
+            }
+        });
         window.on_action(std::any::TypeId::of::<crate::CopyAsMarkdown>(), {
             let entity = self.markdown.clone();
             move |_, phase, window, cx| {
@@ -3702,6 +3779,103 @@ mod tests {
             cx,
         );
         assert_eq!(rendered.text_for_range(0..26), "tags:\n  - zed\nBody");
+    }
+
+    #[gpui::test]
+    fn test_rendered_clipboard_item_for_document(cx: &mut TestAppContext) {
+        struct TestWindow;
+
+        impl Render for TestWindow {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                div()
+            }
+        }
+
+        ensure_theme_initialized(cx);
+
+        let (_, cx) = cx.add_window_view(|_, _| TestWindow);
+        let markdown = cx.new(|cx| {
+            Markdown::new(
+                "**bold**\n\n[link](https://example.com)".into(),
+                None,
+                None,
+                cx,
+            )
+        });
+        cx.run_until_parked();
+
+        let item = markdown.read_with(cx, |markdown, cx| {
+            markdown.rendered_clipboard_item_for_document(cx)
+        });
+
+        assert_eq!(item.text().as_deref(), Some("bold\nlink"));
+        assert_eq!(
+            item.html().map(String::as_str),
+            Some("<p><strong>bold</strong></p><p><a href=\"https://example.com\">link</a></p>")
+        );
+    }
+
+    #[gpui::test]
+    fn test_rendered_clipboard_item_for_document_uses_image_src_resolver(cx: &mut TestAppContext) {
+        struct TestWindow;
+
+        impl Render for TestWindow {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                div()
+            }
+        }
+
+        ensure_theme_initialized(cx);
+
+        let (_, cx) = cx.add_window_view(|_, _| TestWindow);
+        let markdown = cx.new(|cx| Markdown::new("![Alt](./image.png)".into(), None, None, cx));
+        markdown.update(cx, |markdown, _cx| {
+            markdown.set_clipboard_image_src_resolver(|src, _cx| {
+                (src == "./image.png").then(|| "data:image/png;base64,abc123".to_string())
+            });
+        });
+        cx.run_until_parked();
+
+        let item = markdown.read_with(cx, |markdown, cx| {
+            markdown.rendered_clipboard_item_for_document(cx)
+        });
+
+        assert_eq!(item.text().as_deref(), Some("Alt"));
+        assert_eq!(
+            item.html().map(String::as_str),
+            Some("<p><img src=\"data:image/png;base64,abc123\" alt=\"Alt\"></p>")
+        );
+    }
+
+    #[gpui::test]
+    fn test_select_all_action_selects_entire_document(cx: &mut TestAppContext) {
+        struct TestWindow {
+            markdown: Entity<Markdown>,
+        }
+
+        impl Render for TestWindow {
+            fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+                MarkdownElement::new(
+                    self.markdown.clone(),
+                    MarkdownStyle::themed(MarkdownFont::Editor, window, cx),
+                )
+            }
+        }
+
+        ensure_theme_initialized(cx);
+
+        let source = "**bold**\n\n[link](https://example.com)";
+        let (view, cx) = cx.add_window_view(|_, cx| TestWindow {
+            markdown: cx.new(|cx| Markdown::new(source.into(), None, None, cx)),
+        });
+
+        cx.dispatch_action(SelectAll);
+
+        let markdown = view.read_with(cx, |view, _| view.markdown.clone());
+        assert_eq!(
+            markdown.read_with(cx, |markdown, _| markdown.selected_text()),
+            Some(source.to_string())
+        );
     }
 
     fn render_markdown_with_options(
