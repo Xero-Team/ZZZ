@@ -1406,5 +1406,12 @@ mod tests {
         let item = ClipboardItem::new_string_with_json_metadata("abcdef".to_string(), vec![3, 4]);
         write_to_clipboard(item.clone());
         assert_eq!(read_from_clipboard(), Some(item));
+
+        let item = ClipboardItem::new_string_with_html(
+            "plain".to_string(),
+            "<p>中文 😄 &amp; &lt;&gt;</p>".to_string(),
+        );
+        write_to_clipboard(item.clone());
+        assert_eq!(read_from_clipboard(), Some(item));
     }
 }

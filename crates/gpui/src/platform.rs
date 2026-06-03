@@ -1856,11 +1856,21 @@ impl ClipboardItem {
         }
     }
 
+    /// Create a new ClipboardItem::String with plain text and an HTML representation.
+    pub fn new_string_with_html(text: String, html: String) -> Self {
+        Self {
+            entries: vec![ClipboardEntry::String(
+                ClipboardString::new(text).with_html(html),
+            )],
+        }
+    }
+
     /// Create a new ClipboardItem::String with the given text and associated metadata
     pub fn new_string_with_metadata(text: String, metadata: String) -> Self {
         Self {
             entries: vec![ClipboardEntry::String(ClipboardString {
                 text,
+                html: None,
                 metadata: Some(metadata),
             })],
         }
@@ -1888,7 +1898,12 @@ impl ClipboardItem {
         let mut answer = String::new();
 
         for entry in self.entries.iter() {
-            if let ClipboardEntry::String(ClipboardString { text, metadata: _ }) = entry {
+            if let ClipboardEntry::String(ClipboardString {
+                text,
+                html: _,
+                metadata: _,
+            }) = entry
+            {
                 answer.push_str(text);
             }
         }
@@ -1917,6 +1932,16 @@ impl ClipboardItem {
         match self.entries().first() {
             Some(ClipboardEntry::String(clipboard_string)) if self.entries.len() == 1 => {
                 clipboard_string.metadata.as_ref()
+            }
+            _ => None,
+        }
+    }
+
+    /// If this item is one ClipboardEntry::String, returns its HTML representation.
+    pub fn html(&self) -> Option<&String> {
+        match self.entries().first() {
+            Some(ClipboardEntry::String(clipboard_string)) if self.entries.len() == 1 => {
+                clipboard_string.html.as_ref()
             }
             _ => None,
         }
@@ -2172,6 +2197,8 @@ impl Image {
 pub struct ClipboardString {
     /// The text content.
     pub text: String,
+    /// Optional HTML representation associated with this clipboard string.
+    pub html: Option<String>,
     /// Optional metadata associated with this clipboard string.
     pub metadata: Option<String>,
 }
@@ -2181,8 +2208,15 @@ impl ClipboardString {
     pub fn new(text: String) -> Self {
         Self {
             text,
+            html: None,
             metadata: None,
         }
+    }
+
+    /// Return a new clipboard string with the HTML representation replaced.
+    pub fn with_html(mut self, html: String) -> Self {
+        self.html = Some(html);
+        self
     }
 
     /// Return a new clipboard item with the metadata replaced by the given metadata,
@@ -2200,6 +2234,11 @@ impl ClipboardString {
     /// Get the owned text of the clipboard string
     pub fn into_text(self) -> String {
         self.text
+    }
+
+    /// Get the HTML representation of the clipboard string.
+    pub fn html(&self) -> Option<&String> {
+        self.html.as_ref()
     }
 
     /// Get the metadata of the clipboard string, formatted as JSON
@@ -2225,6 +2264,7 @@ impl From<String> for ClipboardString {
     fn from(value: String) -> Self {
         Self {
             text: value,
+            html: None,
             metadata: None,
         }
     }
@@ -2251,6 +2291,27 @@ mod image_tests {
         for pixel in bytes.chunks_exact(4) {
             assert_eq!(pixel, &[0xF8, 0xBD, 0x38, 0xFF]);
         }
+    }
+
+    #[test]
+    fn test_clipboard_string_html_helpers() {
+        let item = ClipboardItem::new_string_with_html(
+            "plain".to_string(),
+            "<p><strong>plain</strong></p>".to_string(),
+        );
+
+        assert_eq!(item.text().as_deref(), Some("plain"));
+        assert_eq!(
+            item.html().map(String::as_str),
+            Some("<p><strong>plain</strong></p>")
+        );
+        assert_eq!(
+            ClipboardString::new("plain".to_string())
+                .with_html("<p>plain</p>".to_string())
+                .html()
+                .map(String::as_str),
+            Some("<p>plain</p>")
+        );
     }
 }
 

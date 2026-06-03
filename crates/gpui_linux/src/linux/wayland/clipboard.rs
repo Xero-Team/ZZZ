@@ -13,9 +13,10 @@ use wayland_protocols::wp::primary_selection::zv1::client::zwp_primary_selection
 use crate::linux::{WaylandClientStatePtr, platform::read_fd};
 use gpui::{ClipboardEntry, ClipboardItem, Image, ImageFormat, hash};
 
-/// Text mime types that we'll offer to other programs.
-pub(crate) const TEXT_MIME_TYPES: [&str; 3] =
+/// Plain-text mime types that we'll offer to other programs.
+pub(crate) const PLAIN_TEXT_MIME_TYPES: [&str; 3] =
     ["text/plain;charset=utf-8", "UTF8_STRING", "text/plain"];
+pub(crate) const HTML_MIME_TYPE: &str = "text/html";
 pub(crate) const FILE_LIST_MIME_TYPE: &str = "text/uri-list";
 
 /// Text mime types that we'll accept from other programs.
@@ -114,7 +115,16 @@ impl<T: ReceiveData> DataOffer<T> {
         // copying from eg: firefox inserts a lot of blank
         // lines, and that is super annoying.
         let result = text_content.replace("\r\n", "\n");
-        Some(ClipboardItem::new_string(result))
+        let html = self
+            .has_mime_type(HTML_MIME_TYPE)
+            .then(|| self.read_bytes(connection, HTML_MIME_TYPE))
+            .flatten()
+            .and_then(|bytes| String::from_utf8(bytes).ok());
+
+        Some(match html {
+            Some(html) => ClipboardItem::new_string_with_html(result, html),
+            None => ClipboardItem::new_string(result),
+        })
     }
 
     fn read_image(&self, connection: &Connection) -> Option<ClipboardItem> {
@@ -177,19 +187,19 @@ impl Clipboard {
         self.self_mime.clone()
     }
 
-    pub fn send(&self, _mime_type: String, fd: OwnedFd) {
-        if let Some(text) = self.contents.as_ref().and_then(|contents| contents.text()) {
-            self.send_internal(fd, text.as_bytes().to_owned());
+    pub fn send(&self, mime_type: String, fd: OwnedFd) {
+        if let Some(item) = self.contents.as_ref()
+            && let Some(bytes) = bytes_for_mime(item, &mime_type)
+        {
+            self.send_internal(fd, bytes);
         }
     }
 
-    pub fn send_primary(&self, _mime_type: String, fd: OwnedFd) {
-        if let Some(text) = self
-            .primary_contents
-            .as_ref()
-            .and_then(|contents| contents.text())
+    pub fn send_primary(&self, mime_type: String, fd: OwnedFd) {
+        if let Some(item) = self.primary_contents.as_ref()
+            && let Some(bytes) = bytes_for_mime(item, &mime_type)
         {
-            self.send_internal(fd, text.as_bytes().to_owned());
+            self.send_internal(fd, bytes);
         }
     }
 
@@ -256,5 +266,57 @@ impl Clipboard {
                 },
             )
             .unwrap();
+    }
+}
+
+fn bytes_for_mime(item: &ClipboardItem, mime_type: &str) -> Option<Vec<u8>> {
+    if mime_type == HTML_MIME_TYPE {
+        return item
+            .html()
+            .cloned()
+            .or_else(|| item.text())
+            .map(String::into_bytes);
+    }
+
+    if PLAIN_TEXT_MIME_TYPES
+        .iter()
+        .any(|plain_text_mime_type| *plain_text_mime_type == mime_type)
+    {
+        return item.text().map(String::into_bytes);
+    }
+
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::ClipboardItem;
+
+    use super::{HTML_MIME_TYPE, PLAIN_TEXT_MIME_TYPES, bytes_for_mime};
+
+    #[test]
+    fn html_mime_prefers_html_and_plain_text_mimes_use_text() {
+        let item = ClipboardItem::new_string_with_html(
+            "plain".to_string(),
+            "<p><strong>plain</strong></p>".to_string(),
+        );
+
+        assert_eq!(
+            bytes_for_mime(&item, HTML_MIME_TYPE),
+            Some(b"<p><strong>plain</strong></p>".to_vec())
+        );
+        assert_eq!(
+            bytes_for_mime(&item, PLAIN_TEXT_MIME_TYPES[0]),
+            Some(b"plain".to_vec())
+        );
+    }
+
+    #[test]
+    fn html_mime_falls_back_to_plain_text_when_html_missing() {
+        let item = ClipboardItem::new_string("plain".to_string());
+        assert_eq!(
+            bytes_for_mime(&item, HTML_MIME_TYPE),
+            Some(b"plain".to_vec())
+        );
     }
 }

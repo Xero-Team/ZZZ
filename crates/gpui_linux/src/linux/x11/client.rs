@@ -59,10 +59,10 @@ use crate::linux::{
 use crate::linux::{LinuxCommon, LinuxKeyboardLayout, X11Window, modifiers_from_xinput_info};
 
 use gpui::{
-    AnyWindowHandle, Bounds, ClipboardItem, CursorStyle, DisplayId, FileDropEvent, Keystroke,
-    Modifiers, ModifiersChangedEvent, MouseButton, Pixels, PlatformDisplay, PlatformInput,
-    PlatformKeyboardLayout, PlatformWindow, Point, RequestFrameOptions, ScrollDelta, Size,
-    TouchPhase, WindowButtonLayout, WindowParams, point, px,
+    AnyWindowHandle, Bounds, ClipboardItem, ClipboardString, CursorStyle, DisplayId, FileDropEvent,
+    Keystroke, Modifiers, ModifiersChangedEvent, MouseButton, Pixels, PlatformDisplay,
+    PlatformInput, PlatformKeyboardLayout, PlatformWindow, Point, RequestFrameOptions, ScrollDelta,
+    Size, TouchPhase, WindowButtonLayout, WindowParams, point, px,
 };
 use gpui_wgpu::{CompositorGpuHint, GpuContext};
 
@@ -1730,10 +1730,14 @@ impl LinuxClient for X11Client {
 
     fn write_to_primary(&self, item: gpui::ClipboardItem) {
         let state = self.0.borrow_mut();
+        let mut string = ClipboardString::new(item.text().unwrap_or_default());
+        if let Some(html) = item.html().cloned() {
+            string = string.with_html(html);
+        }
         state
             .clipboard
-            .set_text(
-                std::borrow::Cow::Owned(item.text().unwrap_or_default()),
+            .set_string(
+                string,
                 clipboard::ClipboardKind::Primary,
                 clipboard::WaitConfig::None,
             )
@@ -1743,10 +1747,14 @@ impl LinuxClient for X11Client {
 
     fn write_to_clipboard(&self, item: gpui::ClipboardItem) {
         let mut state = self.0.borrow_mut();
+        let mut string = ClipboardString::new(item.text().unwrap_or_default());
+        if let Some(html) = item.html().cloned() {
+            string = string.with_html(html);
+        }
         state
             .clipboard
-            .set_text(
-                std::borrow::Cow::Owned(item.text().unwrap_or_default()),
+            .set_string(
+                string,
                 clipboard::ClipboardKind::Clipboard,
                 clipboard::WaitConfig::None,
             )

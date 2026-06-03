@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use cocoa::{
     appkit::{
-        NSFilenamesPboardType, NSPasteboard, NSPasteboardTypePNG, NSPasteboardTypeString,
-        NSPasteboardTypeTIFF,
+        NSFilenamesPboardType, NSPasteboard, NSPasteboardTypeHTML, NSPasteboardTypePNG,
+        NSPasteboardTypeString, NSPasteboardTypeTIFF,
     },
     base::{id, nil},
     foundation::{NSArray, NSData, NSFastEnumeration, NSString},
@@ -144,7 +144,15 @@ impl Pasteboard {
                     }
                 });
 
-            Some(ClipboardEntry::String(ClipboardString { text, metadata }))
+            let html = self
+                .data_for_type(NSPasteboardTypeHTML)
+                .and_then(|html_bytes| String::from_utf8(html_bytes.to_vec()).ok());
+
+            Some(ClipboardEntry::String(ClipboardString {
+                text,
+                html,
+                metadata,
+            }))
         }
     }
 
@@ -186,6 +194,7 @@ impl Pasteboard {
 
                     let mut combined = ClipboardString {
                         text: String::new(),
+                        html: None,
                         metadata: None,
                     };
 
@@ -193,6 +202,9 @@ impl Pasteboard {
                         match entry {
                             ClipboardEntry::String(text) => {
                                 combined.text.push_str(&text.text());
+                                if combined.html.is_none() {
+                                    combined.html = text.html.clone();
+                                }
                                 if combined.metadata.is_none() {
                                     combined.metadata = text.metadata;
                                 }
@@ -218,6 +230,15 @@ impl Pasteboard {
             );
             self.inner
                 .setData_forType(text_bytes, NSPasteboardTypeString);
+
+            if let Some(html) = string.html.as_ref() {
+                let html_bytes = NSData::dataWithBytes_length_(
+                    nil,
+                    html.as_ptr() as *const c_void,
+                    html.len() as u64,
+                );
+                self.inner.setData_forType(html_bytes, NSPasteboardTypeHTML);
+            }
 
             if let Some(metadata) = string.metadata.as_ref() {
                 let hash_bytes = ClipboardString::text_hash(&string.text).to_be_bytes();
@@ -338,7 +359,9 @@ impl UTType {
 #[cfg(test)]
 mod tests {
     use cocoa::{
-        appkit::{NSFilenamesPboardType, NSPasteboard, NSPasteboardTypeString},
+        appkit::{
+            NSFilenamesPboardType, NSPasteboard, NSPasteboardTypeHTML, NSPasteboardTypeString,
+        },
         base::{id, nil},
         foundation::{NSArray, NSData},
     };
@@ -392,6 +415,13 @@ mod tests {
         pasteboard.write(item.clone());
         assert_eq!(pasteboard.read(), Some(item));
 
+        let item = ClipboardItem::new_string_with_html(
+            "3".to_string(),
+            "<p><strong>3</strong></p>".to_string(),
+        );
+        pasteboard.write(item.clone());
+        assert_eq!(pasteboard.read(), Some(item));
+
         let text_from_other_app = "text from other app";
         unsafe {
             let bytes = NSData::dataWithBytes_length_(
@@ -406,6 +436,41 @@ mod tests {
         assert_eq!(
             pasteboard.read(),
             Some(ClipboardItem::new_string(text_from_other_app.to_string()))
+        );
+    }
+
+    #[test]
+    fn test_reads_external_html() {
+        let pasteboard = Pasteboard::unique();
+
+        unsafe {
+            let text = "plain";
+            let text_bytes = NSData::dataWithBytes_length_(
+                nil,
+                text.as_ptr() as *const c_void,
+                text.len() as u64,
+            );
+            pasteboard
+                .inner
+                .setData_forType(text_bytes, NSPasteboardTypeString);
+
+            let html = "<p><em>plain</em></p>";
+            let html_bytes = NSData::dataWithBytes_length_(
+                nil,
+                html.as_ptr() as *const c_void,
+                html.len() as u64,
+            );
+            pasteboard
+                .inner
+                .setData_forType(html_bytes, NSPasteboardTypeHTML);
+        }
+
+        assert_eq!(
+            pasteboard.read(),
+            Some(ClipboardItem::new_string_with_html(
+                "plain".to_string(),
+                "<p><em>plain</em></p>".to_string(),
+            ))
         );
     }
 

@@ -28,6 +28,8 @@ static CLIPBOARD_HASH_FORMAT: LazyLock<u32> =
     LazyLock::new(|| register_clipboard_format(windows::core::w!("GPUI internal text hash")));
 static CLIPBOARD_METADATA_FORMAT: LazyLock<u32> =
     LazyLock::new(|| register_clipboard_format(windows::core::w!("GPUI internal metadata")));
+static CLIPBOARD_HTML_FORMAT: LazyLock<u32> =
+    LazyLock::new(|| register_clipboard_format(windows::core::w!("HTML Format")));
 static CLIPBOARD_SVG_FORMAT: LazyLock<u32> =
     LazyLock::new(|| register_clipboard_format(windows::core::w!("image/svg+xml")));
 static CLIPBOARD_GIF_FORMAT: LazyLock<u32> =
@@ -181,6 +183,11 @@ fn write_string(item: &ClipboardString) -> Result<()> {
     let wide: Vec<u16> = item.text.encode_utf16().chain(Some(0)).collect_vec();
     set_clipboard_bytes(&wide, CF_UNICODETEXT.0 as u32)?;
 
+    if let Some(html) = item.html.as_ref() {
+        let html = build_cf_html(html);
+        set_clipboard_bytes(&html, *CLIPBOARD_HTML_FORMAT)?;
+    }
+
     if let Some(metadata) = item.metadata.as_ref() {
         let hash_bytes = ClipboardString::text_hash(&item.text).to_ne_bytes();
         set_clipboard_bytes(&hash_bytes, *CLIPBOARD_HASH_FORMAT)?;
@@ -228,8 +235,14 @@ fn convert_to_png(bytes: &[u8], format: ImageFormat) -> Option<Vec<u8>> {
 
 fn read_string() -> Option<ClipboardEntry> {
     let text = get_clipboard_string(CF_UNICODETEXT.0 as u32)?;
+    let html = get_clipboard_data(*CLIPBOARD_HTML_FORMAT)
+        .and_then(|locked| parse_cf_html(locked.as_bytes()));
     let metadata = read_clipboard_metadata(&text);
-    Some(ClipboardEntry::String(ClipboardString { text, metadata }))
+    Some(ClipboardEntry::String(ClipboardString {
+        text,
+        html,
+        metadata,
+    }))
 }
 
 fn read_clipboard_metadata(text: &str) -> Option<String> {
@@ -334,6 +347,59 @@ fn gpui_to_image_format(value: ImageFormat) -> Option<image::ImageFormat> {
     }
 }
 
+pub(crate) fn build_cf_html(fragment: &str) -> Vec<u8> {
+    const START_MARKER: &str = "<!--StartFragment-->";
+    const END_MARKER: &str = "<!--EndFragment-->";
+
+    let html = format!("<html><body>{START_MARKER}{fragment}{END_MARKER}</body></html>");
+    let header_template = concat!(
+        "Version:0.9\r\n",
+        "StartHTML:0000000000\r\n",
+        "EndHTML:0000000000\r\n",
+        "StartFragment:0000000000\r\n",
+        "EndFragment:0000000000\r\n",
+    );
+
+    let start_html = header_template.len();
+    let start_fragment = start_html + "<html><body>".len() + START_MARKER.len();
+    let end_fragment = start_fragment + fragment.len();
+    let end_html = start_html + html.len();
+
+    format!(
+        concat!(
+            "Version:0.9\r\n",
+            "StartHTML:{start_html:010}\r\n",
+            "EndHTML:{end_html:010}\r\n",
+            "StartFragment:{start_fragment:010}\r\n",
+            "EndFragment:{end_fragment:010}\r\n",
+            "{html}"
+        ),
+        start_html = start_html,
+        end_html = end_html,
+        start_fragment = start_fragment,
+        end_fragment = end_fragment,
+        html = html,
+    )
+    .into_bytes()
+}
+
+pub(crate) fn parse_cf_html(bytes: &[u8]) -> Option<String> {
+    let text = std::str::from_utf8(bytes).ok()?;
+    let start_fragment = parse_cf_html_offset(text, "StartFragment:")?;
+    let end_fragment = parse_cf_html_offset(text, "EndFragment:")?;
+    let fragment = bytes.get(start_fragment..end_fragment)?;
+    String::from_utf8(fragment.to_vec()).ok()
+}
+
+fn parse_cf_html_offset(text: &str, key: &str) -> Option<usize> {
+    let start = text.find(key)? + key.len();
+    let end = text[start..]
+        .find(|character: char| !character.is_ascii_digit())
+        .map(|offset| start + offset)
+        .unwrap_or(text.len());
+    text[start..end].parse().ok()
+}
+
 struct ClipboardGuard;
 
 impl ClipboardGuard {
@@ -353,6 +419,56 @@ impl Drop for ClipboardGuard {
         if let Err(e) = unsafe { CloseClipboard() } {
             log::error!("Failed to close clipboard: {e}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::{ClipboardItem, ClipboardString};
+
+    use super::{build_cf_html, parse_cf_html};
+
+    #[test]
+    fn cf_html_roundtrip_preserves_utf8_fragment() {
+        let fragment = "<p>中文 😄 &amp; &lt;test&gt;</p>";
+        let bytes = build_cf_html(fragment);
+        assert_eq!(parse_cf_html(&bytes).as_deref(), Some(fragment));
+    }
+
+    #[test]
+    fn cf_html_contains_expected_markers() {
+        let fragment = "<p>Hello</p>";
+        let payload = String::from_utf8(build_cf_html(fragment)).unwrap();
+        assert!(payload.contains("Version:0.9"));
+        assert!(payload.contains("StartHTML:"));
+        assert!(payload.contains("StartFragment:"));
+        assert!(payload.contains("<!--StartFragment-->"));
+        assert!(payload.contains("<!--EndFragment-->"));
+    }
+
+    #[test]
+    fn clipboard_item_html_helper_roundtrip() {
+        let item = ClipboardItem::new_string_with_html(
+            "plain".to_string(),
+            "<p><strong>plain</strong></p>".to_string(),
+        );
+        let string = match item.entries.into_iter().next().unwrap() {
+            gpui::ClipboardEntry::String(string) => string,
+            other => panic!("expected string entry, got {other:?}"),
+        };
+
+        assert_eq!(string.text, "plain");
+        assert_eq!(
+            string.html.as_deref(),
+            Some("<p><strong>plain</strong></p>")
+        );
+        assert_eq!(
+            ClipboardString::new(string.text.clone())
+                .with_html(string.html.as_deref().unwrap().to_string())
+                .html()
+                .map(String::as_str),
+            Some("<p><strong>plain</strong></p>")
+        );
     }
 }
 
