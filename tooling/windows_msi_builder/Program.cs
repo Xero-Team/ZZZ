@@ -184,6 +184,14 @@ internal static class WindowsMsiBuilder
             stagedFiles.Add(new StagedFile(stagedPath, Path.Combine("bin", "zed")));
         }
 
+        var zedCmdPath = Path.Combine(workspaceRoot, "crates", "zed", "resources", "windows", "zed.cmd");
+        if (File.Exists(zedCmdPath))
+        {
+            var stagedPath = Path.Combine(stagingDirectory, "bin", "zed.cmd");
+            CopyFile(zedCmdPath, stagedPath);
+            stagedFiles.Add(new StagedFile(stagedPath, Path.Combine("bin", "zed.cmd")));
+        }
+
         var iconPath = Path.Combine(workspaceRoot, "crates", "zed", "resources", "windows", channelConfig.AppIconName + ".ico");
         if (File.Exists(iconPath))
         {
