@@ -16,7 +16,7 @@ use crate::{SettingsWindow, components::SettingsInputField};
 
 const HARDCODED_RULES_DESCRIPTION: &str =
     "`rm -rf` commands are always blocked when run on `$HOME`, `~`, `.`, `..`, or `/`";
-const SETTINGS_DISCLAIMER: &str = "Note: custom tool permissions apply to all agents in Zed, including external agents connected through the Agent Client Protocol (ACP).";
+const SETTINGS_DISCLAIMER: &str = "Note: custom tool permissions apply to all agents in ZZZ, including external agents connected through the Agent Client Protocol (ACP).";
 
 /// Tools that support permission rules
 const TOOLS: &[ToolInfo] = &[

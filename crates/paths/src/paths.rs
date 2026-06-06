@@ -1,4 +1,4 @@
-//! Paths to locations used by Zed.
+//! Paths to locations used by ZZZ.
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -14,8 +14,14 @@ pub const EDITORCONFIG_NAME: &str = ".editorconfig";
 /// The application name, used to derive platform-specific data, config, cache,
 /// and state directory paths.
 ///
-/// Forks should change this to avoid colliding with Zed's user data.
-pub const APP_NAME: &str = "Zed";
+/// Forks should change this to avoid colliding with ZZZ's user data.
+pub const APP_NAME: &str = "ZZZ";
+
+/// The directory name used for user configuration files.
+pub const CONFIG_DIR_NAME: &str = "ZZZ";
+
+/// The directory name used for project-local configuration files.
+pub const LOCAL_SETTINGS_DIR_NAME: &str = ".ZZZ";
 
 /// Lowercased form of [`APP_NAME`], for use in XDG-style paths on
 /// Linux/FreeBSD and the macOS `~/.config` fallback.
@@ -53,16 +59,16 @@ static CUSTOM_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// The resolved data directory, combining custom override or platform defaults.
 /// This is set once and cached for subsequent calls.
-/// On macOS, this is `~/Library/Application Support/Zed`.
-/// On Linux/FreeBSD, this is `$XDG_DATA_HOME/zed`.
-/// On Windows, this is `%LOCALAPPDATA%\Zed`.
+/// On macOS, this is `~/Library/Application Support/ZZZ`.
+/// On Linux/FreeBSD, this is `$XDG_DATA_HOME/zzz`.
+/// On Windows, this is `%LOCALAPPDATA%\ZZZ`.
 static CURRENT_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// The resolved config directory, combining custom override or platform defaults.
 /// This is set once and cached for subsequent calls.
-/// On macOS, this is `~/.config/zed`.
-/// On Linux/FreeBSD, this is `$XDG_CONFIG_HOME/zed`.
-/// On Windows, this is `%APPDATA%\Zed`.
+/// On macOS, this is `~/.config/ZZZ`.
+/// On Linux/FreeBSD, this is `$XDG_CONFIG_HOME/ZZZ`.
+/// On Windows, this is `%APPDATA%\ZZZ`.
 static CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// Returns the relative path to the zed_server directory on the ssh host.
@@ -118,7 +124,7 @@ pub fn set_custom_data_dir(dir: &str) -> &'static PathBuf {
     })
 }
 
-/// Returns the path to the configuration directory used by Zed.
+/// Returns the path to the configuration directory used by ZZZ.
 pub fn config_dir() -> &'static PathBuf {
     CONFIG_DIR.get_or_init(|| {
         if let Some(custom_dir) = CUSTOM_DATA_DIR.get() {
@@ -126,16 +132,16 @@ pub fn config_dir() -> &'static PathBuf {
         } else if cfg!(target_os = "windows") {
             dirs::config_dir()
                 .expect("failed to determine RoamingAppData directory")
-                .join(APP_NAME)
+                .join(CONFIG_DIR_NAME)
         } else if cfg!(any(target_os = "linux", target_os = "freebsd")) {
             if let Ok(flatpak_xdg_config) = std::env::var("FLATPAK_XDG_CONFIG_HOME") {
                 flatpak_xdg_config.into()
             } else {
                 dirs::config_dir().expect("failed to determine XDG_CONFIG_HOME directory")
             }
-            .join(APP_NAME_LOWERCASE)
+            .join(CONFIG_DIR_NAME)
         } else {
-            home_dir().join(".config").join(APP_NAME_LOWERCASE)
+            home_dir().join(".config").join(CONFIG_DIR_NAME)
         }
     })
 }
@@ -443,9 +449,9 @@ pub fn devcontainer_dir() -> &'static PathBuf {
     DEVCONTAINER_DIR.get_or_init(|| data_dir().join("devcontainer"))
 }
 
-/// Returns the relative path to a `.zed` folder within a project.
+/// Returns the relative path to a `.ZZZ` folder within a project.
 pub fn local_settings_folder_name() -> &'static str {
-    ".zed"
+    LOCAL_SETTINGS_DIR_NAME
 }
 
 /// Returns the relative path to a `.vscode` folder within a project.
@@ -456,14 +462,14 @@ pub fn local_vscode_folder_name() -> &'static str {
 /// Returns the relative path to a `settings.json` file within a project.
 pub fn local_settings_file_relative_path() -> &'static RelPath {
     static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(".zed/settings.json").unwrap());
+        LazyLock::new(|| RelPath::unix(".ZZZ/settings.json").unwrap());
     *CACHED
 }
 
 /// Returns the relative path to a `tasks.json` file within a project.
 pub fn local_tasks_file_relative_path() -> &'static RelPath {
     static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(".zed/tasks.json").unwrap());
+        LazyLock::new(|| RelPath::unix(".ZZZ/tasks.json").unwrap());
     *CACHED
 }
 
@@ -483,10 +489,10 @@ pub fn task_file_name() -> &'static str {
 }
 
 /// Returns the relative path to a `debug.json` file within a project.
-/// .zed/debug.json
+/// .ZZZ/debug.json
 pub fn local_debug_file_relative_path() -> &'static RelPath {
     static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(".zed/debug.json").unwrap());
+        LazyLock::new(|| RelPath::unix(".ZZZ/debug.json").unwrap());
     *CACHED
 }
 

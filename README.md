@@ -1,6 +1,6 @@
 # ZZZ
 
-> Zedless, Zeroed, Zen. — Zed, without the noise.
+> Zedless, Zeroed, Zen. — ZZZ, without the noise.
 
 ![ZZZ Logo](crates/zed/resources/app-icon.png)
 
@@ -14,8 +14,8 @@ This fork exists because some things should not be configurable — they should 
 
 ## Philosophy
 
-> _无 Zed 之 Zed，是为真 Zed。_
-> In English: Zed without Zed is true Zed.
+> _无 ZZZ 之 ZZZ，是为真 ZZZ。_
+> In English: ZZZ without ZZZ is true ZZZ.
 >
 > Strip away the telemetry, the upsells, the proprietary coupling —
 > what remains is the editor.
@@ -84,7 +84,7 @@ If a patch conflicts with upstream, opening an issue or PR is welcome.
 
 ## Acknowledgements
 
-[Gram](https://codeberg.org/GramEditor/gram) proved that a Zed fork built
+[Gram](https://codeberg.org/GramEditor/gram) proved that a ZZZ fork built
 on genuine principles — not just preferences — is worth doing.
 This project would not exist without that precedent.
 
@@ -102,3 +102,4 @@ ZZZ inherits Zed's license structure.
 See [LICENSE-GPL](./LICENSE-GPL) and [LICENSE-APACHE](./LICENSE-APACHE).
 
 The original Zed README is preserved at [README.ORIGINAL.md](./README.ORIGINAL.md).
+

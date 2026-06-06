@@ -82,7 +82,7 @@ use crate::zed::{OpenRequestKind, eager_load_active_theme_and_icon_theme};
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn files_not_created_on_launch(errors: HashMap<io::ErrorKind, Vec<&Path>>) {
-    let message = "Zed failed to launch";
+    let message = "ZZZ failed to launch";
     let error_details = errors
         .into_iter()
         .flat_map(|(kind, paths)| {
@@ -144,7 +144,7 @@ fn fail_to_open_window_async(e: anyhow::Error, cx: &mut AsyncApp) {
 
 fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
     eprintln!(
-        "Zed failed to open a window: {e:?}. See https://zed.dev/docs/linux for troubleshooting steps."
+        "ZZZ failed to open a window: {e:?}. See https://zed.dev/docs/linux for troubleshooting steps."
     );
     #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
     {
@@ -164,7 +164,7 @@ fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
             proxy
                 .add_notification(
                     notification_id,
-                    Notification::new("Zed failed to launch")
+                    Notification::new("ZZZ failed to launch")
                         .body(Some(
                             format!(
                                 "{e:?}. See https://zed.dev/docs/linux for troubleshooting steps."
@@ -302,7 +302,7 @@ fn main() {
             app_commit_sha,
             *release_channel::RELEASE_CHANNEL,
         );
-        println!("Zed System Specs (from CLI):\n{}", system_specs);
+        println!("ZZZ System Specs (from CLI):\n{}", system_specs);
         return;
     }
 
@@ -1517,14 +1517,14 @@ fn stdout_is_a_pty() -> bool {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "zed", disable_version_flag = true, max_term_width = 100)]
+#[command(name = "zzz", disable_version_flag = true, max_term_width = 100)]
 struct Args {
     /// A sequence of space-separated paths or urls that you want to open.
     ///
     /// Use `path:line:row` syntax to open a file at a specific location.
     /// Non-existing paths and directories will ignore `:line:row` suffix.
     ///
-    /// URLs can either be `file://` or `zed://` scheme, or relative to <https://zed.dev>.
+    /// URLs can either be `file://` or `zzz://` scheme, or relative to <https://zed.dev>.
     paths_or_urls: Vec<String>,
 
     /// Pairs of file paths to diff. Can be specified multiple times.
@@ -1644,8 +1644,8 @@ fn parse_url_arg(arg: &str) -> String {
         Ok(path) => format!("file://{}", path.display()),
         Err(_) => {
             if arg.starts_with("file://")
-                || arg.starts_with("zed://")
-                || arg.starts_with("zed-cli://")
+                || arg.starts_with("zzz://")
+                || arg.starts_with("zzz-cli://")
                 || arg.starts_with("ssh://")
             {
                 arg.into()

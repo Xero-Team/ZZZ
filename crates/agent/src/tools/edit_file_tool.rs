@@ -1918,13 +1918,13 @@ mod tests {
         ));
         fs.insert_tree("/root", json!({})).await;
 
-        // Test 1: Path with .zed component should require confirmation
+        // Test 1: Path with .ZZZ component should require confirmation
         let (stream_tx, mut stream_rx) = ToolCallEventStream::test();
         let _auth = cx.update(|cx| {
             tool.authorize(
                 &EditFileToolInput {
                     display_description: "test 1".into(),
-                    path: ".zed/settings.json".into(),
+                    path: ".ZZZ/settings.json".into(),
                     mode: EditFileMode::Edit,
                     content: None,
                     edits: None,
@@ -1959,7 +1959,7 @@ mod tests {
         let event = stream_rx.expect_authorization().await;
         assert_eq!(event.tool_call.fields.title, Some("test 2".into()));
 
-        // Test 3: Relative path without .zed should not require confirmation
+        // Test 3: Relative path without .ZZZ should not require confirmation
         let (stream_tx, mut stream_rx) = ToolCallEventStream::test();
         cx.update(|cx| {
             tool.authorize(
@@ -1978,13 +1978,13 @@ mod tests {
         .unwrap();
         assert!(stream_rx.try_recv().is_err());
 
-        // Test 4: Path with .zed in the middle should require confirmation
+        // Test 4: Path with .ZZZ in the middle should require confirmation
         let (stream_tx, mut stream_rx) = ToolCallEventStream::test();
         let _auth = cx.update(|cx| {
             tool.authorize(
                 &EditFileToolInput {
                     display_description: "test 4".into(),
-                    path: "root/.zed/tasks.json".into(),
+                    path: "root/.ZZZ/tasks.json".into(),
                     mode: EditFileMode::Edit,
                     content: None,
                     edits: None,
@@ -2007,13 +2007,13 @@ mod tests {
             agent_settings::AgentSettings::override_global(settings, cx);
         });
 
-        // 5.1: .zed/settings.json is a sensitive path — still prompts
+        // 5.1: .ZZZ/settings.json is a sensitive path — still prompts
         let (stream_tx, mut stream_rx) = ToolCallEventStream::test();
         let _auth = cx.update(|cx| {
             tool.authorize(
                 &EditFileToolInput {
                     display_description: "test 5.1".into(),
-                    path: ".zed/settings.json".into(),
+                    path: ".ZZZ/settings.json".into(),
                     mode: EditFileMode::Edit,
                     content: None,
                     edits: None,
@@ -2502,7 +2502,7 @@ mod tests {
         fs.insert_tree(
             "/workspace/shared",
             json!({
-                ".zed": {
+                ".ZZZ": {
                     "settings.json": "{}"
                 }
             }),
@@ -2546,9 +2546,9 @@ mod tests {
             ("frontend/src/main.js", false, "File in first worktree"),
             ("backend/src/main.rs", false, "File in second worktree"),
             (
-                "shared/.zed/settings.json",
+                "shared/.ZZZ/settings.json",
                 true,
-                ".zed file in third worktree",
+                ".ZZZ file in third worktree",
             ),
             ("/etc/hosts", true, "Absolute path outside all worktrees"),
             (
@@ -2595,11 +2595,11 @@ mod tests {
         fs.insert_tree(
             "/project",
             json!({
-                ".zed": {
+                ".ZZZ": {
                     "settings.json": "{}"
                 },
                 "src": {
-                    ".zed": {
+                    ".ZZZ": {
                         "local.json": "{}"
                     }
                 }
@@ -2692,7 +2692,7 @@ mod tests {
             "/project",
             json!({
                 "existing.txt": "content",
-                ".zed": {
+                ".ZZZ": {
                     "settings.json": "{}"
                 }
             }),
@@ -2728,13 +2728,13 @@ mod tests {
         ];
 
         for mode in modes {
-            // Test .zed path with different modes
+            // Test .ZZZ path with different modes
             let (stream_tx, mut stream_rx) = ToolCallEventStream::test();
             let _auth = cx.update(|cx| {
                 tool.authorize(
                     &EditFileToolInput {
                         display_description: "Edit settings".into(),
-                        path: "project/.zed/settings.json".into(),
+                        path: "project/.ZZZ/settings.json".into(),
                         mode: mode.clone(),
                         content: None,
                         edits: None,

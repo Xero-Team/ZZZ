@@ -314,7 +314,7 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
     let settings_c = settings_for("c.js", cx).await;
     let settings_d = settings_for("d/d.rs", cx).await;
     let settings_readme = settings_for("README.json", cx).await;
-    // .editorconfig overrides .zed/settings
+    // .editorconfig overrides .ZZZ/settings
     assert_eq!(Some(settings_a.tab_size), NonZeroU32::new(3));
     assert_eq!(settings_a.hard_tabs, true);
     assert_eq!(settings_a.ensure_final_newline_on_save, true);
@@ -331,7 +331,7 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
     // "indent_size" is not set, so "tab_width" is used
     assert_eq!(Some(settings_c.tab_size), NonZeroU32::new(10));
 
-    // When max_line_length is "off", default to .zed/settings.json
+    // When max_line_length is "off", default to .ZZZ/settings.json
     assert_eq!(settings_b.preferred_line_length, 64);
     assert_eq!(settings_c.preferred_line_length, 64);
 
@@ -941,7 +941,7 @@ async fn test_git_provider_project_setting(cx: &mut gpui::TestAppContext) {
     });
 
     fs.atomic_write(
-        Path::new(path!("/dir/.zed/settings.json")).to_owned(),
+        Path::new(path!("/dir/.ZZZ/settings.json")).to_owned(),
         "{}".into(),
     )
     .await
@@ -1168,7 +1168,7 @@ async fn test_invalid_local_tasks_shows_toast_with_doc_link(cx: &mut gpui::TestA
     init_test(cx);
     TaskStore::init(None);
 
-    // We need to start with a valid `.zed/tasks.json` file as otherwise the
+    // We need to start with a valid `.ZZZ/tasks.json` file as otherwise the
     // event is emitted before we havd a chance to setup the event subscription.
     let fs = FakeFs::new(cx.executor());
     fs.insert_tree(
@@ -1185,10 +1185,10 @@ async fn test_invalid_local_tasks_shows_toast_with_doc_link(cx: &mut gpui::TestA
     let project = Project::test(fs.clone(), [path!("/dir").as_ref()], cx).await;
     let saw_toast = Rc::new(RefCell::new(false));
 
-    // Update the `.zed/tasks.json` file with an invalid variable, so we can
+    // Update the `.ZZZ/tasks.json` file with an invalid variable, so we can
     // later assert that the `Event::Toast` even is emitted.
     fs.save(
-        path!("/dir/.zed/tasks.json").as_ref(),
+        path!("/dir/.ZZZ/tasks.json").as_ref(),
         &r#"[{ "label": "test $ZED_FOO", "command": "echo" }]"#.into(),
         Default::default(),
     )

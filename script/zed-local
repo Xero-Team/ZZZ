@@ -2,25 +2,25 @@
 
 const HELP = `
 USAGE
-  zed-local  [options]  [zed args]
+  zed-local  [options]  [zzz args]
 
 SUMMARY
-  Runs 1-6 instances of Zed using a locally-running collaboration server.
-  Each instance of Zed will be signed in as a different user specified in
+  Runs 1-6 instances of ZZZ using a locally-running collaboration server.
+  Each instance of ZZZ will be signed in as a different user specified in
   either \`.admins.json\` or \`.admins.default.json\`.
 
   All arguments after the initial options will be passed through to the first
-  instance of Zed. This can be used to test SSH remoting along with collab, like
+  instance of ZZZ. This can be used to test SSH remoting along with collab, like
   so:
 
   $ script/zed-local -2 ssh://your-ssh-uri-here
 
 OPTIONS
   --help            Print this help message
-  --release         Build Zed in release mode
-  -2, -3, -4, ...   Spawn multiple Zed instances, with their windows tiled.
-  --top             Arrange the Zed windows so they take up the top half of the screen.
-  --stable          Use stable Zed release installed on local machine for all instances (except for the first one).
+  --release         Build ZZZ in release mode
+  -2, -3, -4, ...   Spawn multiple ZZZ instances, with their windows tiled.
+  --top             Arrange the ZZZ windows so they take up the top half of the screen.
+  --stable          Use stable ZZZ release installed on local machine for all instances (except for the first one).
   --preview         Like --stable, but uses the locally-installed preview release instead.
 `.trim();
 
@@ -164,10 +164,10 @@ if (user) {
 }
 
 let buildArgs = ["build"];
-let zedBinary = "target/debug/zed";
+let zedBinary = "target/debug/zzz";
 if (isReleaseMode) {
   buildArgs.push("--release");
-  zedBinary = "target/release/zed";
+  zedBinary = "target/release/zzz";
 }
 
 try {
@@ -194,9 +194,9 @@ setTimeout(() => {
     const size = [instanceWidth, instanceHeight].join(",");
     let binaryPath = zedBinary;
     if (i != 0 && othersOnStable) {
-      binaryPath = "/Applications/Zed.app/Contents/MacOS/zed";
+      binaryPath = "/Applications/ZZZ.app/Contents/MacOS/zzz";
     } else if (i != 0 && othersOnPreview) {
-      binaryPath = "/Applications/Zed Preview.app/Contents/MacOS/zed";
+      binaryPath = "/Applications/ZZZ Preview.app/Contents/MacOS/zzz";
     }
     spawn(binaryPath, i == 0 ? args : [], {
       stdio: "inherit",

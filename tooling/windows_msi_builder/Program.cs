@@ -36,7 +36,7 @@ internal static class WindowsMsiBuilder
                 throw new InvalidOperationException($"Release directory was not found: {releaseDirectory}");
             }
 
-            var mainBinaryPath = Path.Combine(releaseDirectory, "zed.exe");
+            var mainBinaryPath = Path.Combine(releaseDirectory, "zzz.exe");
             if (!File.Exists(mainBinaryPath))
             {
                 throw new InvalidOperationException($"Expected release binary was not found: {mainBinaryPath}");
@@ -158,9 +158,9 @@ internal static class WindowsMsiBuilder
             }
 
             var relativePath = Path.GetRelativePath(releaseDirectory, filePath);
-            if (relativePath.Equals("zed.exe", StringComparison.OrdinalIgnoreCase))
+            if (relativePath.Equals("zzz.exe", StringComparison.OrdinalIgnoreCase))
             {
-                relativePath = "Zed.exe";
+                relativePath = "ZZZ.exe";
             }
 
             var stagedPath = Path.Combine(stagingDirectory, relativePath);
@@ -171,25 +171,25 @@ internal static class WindowsMsiBuilder
         var cliPath = ResolveArtifactPath(workspaceRoot, releaseDirectory, architecture, "cli.exe");
         if (File.Exists(cliPath))
         {
-            var stagedPath = Path.Combine(stagingDirectory, "bin", "zed.exe");
+            var stagedPath = Path.Combine(stagingDirectory, "bin", "zzz.exe");
             CopyFile(cliPath, stagedPath);
-            stagedFiles.Add(new StagedFile(stagedPath, Path.Combine("bin", "zed.exe")));
+            stagedFiles.Add(new StagedFile(stagedPath, Path.Combine("bin", "zzz.exe")));
         }
 
         var zedShPath = Path.Combine(workspaceRoot, "crates", "zed", "resources", "windows", "zed.sh");
         if (File.Exists(zedShPath))
         {
-            var stagedPath = Path.Combine(stagingDirectory, "bin", "zed");
+            var stagedPath = Path.Combine(stagingDirectory, "bin", "zzz");
             CopyFile(zedShPath, stagedPath);
-            stagedFiles.Add(new StagedFile(stagedPath, Path.Combine("bin", "zed")));
+            stagedFiles.Add(new StagedFile(stagedPath, Path.Combine("bin", "zzz")));
         }
 
         var zedCmdPath = Path.Combine(workspaceRoot, "crates", "zed", "resources", "windows", "zed.cmd");
         if (File.Exists(zedCmdPath))
         {
-            var stagedPath = Path.Combine(stagingDirectory, "bin", "zed.cmd");
+            var stagedPath = Path.Combine(stagingDirectory, "bin", "zzz.cmd");
             CopyFile(zedCmdPath, stagedPath);
-            stagedFiles.Add(new StagedFile(stagedPath, Path.Combine("bin", "zed.cmd")));
+            stagedFiles.Add(new StagedFile(stagedPath, Path.Combine("bin", "zzz.cmd")));
         }
 
         var iconPath = Path.Combine(workspaceRoot, "crates", "zed", "resources", "windows", channelConfig.AppIconName + ".ico");
@@ -392,7 +392,7 @@ internal static class WindowsMsiBuilder
         using var document = JsonDocument.Parse(output);
         foreach (var package in document.RootElement.GetProperty("packages").EnumerateArray())
         {
-            if (package.GetProperty("name").GetString() == "zed")
+            if (package.GetProperty("name").GetString() == "zzz")
             {
                 var version = package.GetProperty("version").GetString();
                 if (!string.IsNullOrWhiteSpace(version))
@@ -426,8 +426,8 @@ internal static class WindowsMsiBuilder
 
         foreach (var candidateDirectory in candidateDirectories)
         {
-            if (File.Exists(Path.Combine(candidateDirectory, "zed.exe")) ||
-                File.Exists(Path.Combine(candidateDirectory, "Zed.exe")))
+            if (File.Exists(Path.Combine(candidateDirectory, "zzz.exe")) ||
+                File.Exists(Path.Combine(candidateDirectory, "ZZZ.exe")))
             {
                 return candidateDirectory;
             }
@@ -613,6 +613,7 @@ internal static class WindowsMsiBuilder
         package.Add(new XElement(
             ns + "Property",
             new XAttribute("Id", "DESKTOP_SHORTCUT"),
+            new XAttribute("Secure", "yes"),
             new XAttribute("Value", includeDesktopShortcut ? "1" : "0"),
             new XElement(
                 ns + "RegistrySearch",
@@ -661,7 +662,7 @@ internal static class WindowsMsiBuilder
                     new XAttribute("Id", MakeId("FIL", stagedFile.RelativePath)),
                     new XAttribute("Source", stagedFile.SourcePath));
 
-                if (stagedFile.RelativePath.Equals("Zed.exe", StringComparison.OrdinalIgnoreCase))
+                if (stagedFile.RelativePath.Equals("ZZZ.exe", StringComparison.OrdinalIgnoreCase))
                 {
                     fileElement.Add(new XAttribute("KeyPath", "yes"));
                     component.Add(fileElement);
@@ -670,7 +671,7 @@ internal static class WindowsMsiBuilder
                         new XAttribute("Id", "StartMenuShortcut"),
                         new XAttribute("Directory", "PROGRAM_MENU_DIR"),
                         new XAttribute("Name", channelConfig.DisplayName),
-                        new XAttribute("Target", "[INSTALLFOLDER]Zed.exe"),
+                        new XAttribute("Target", "[INSTALLFOLDER]ZZZ.exe"),
                         new XAttribute("WorkingDirectory", "INSTALLFOLDER"),
                         new XAttribute("Description", channelConfig.DisplayName)));
                 }
@@ -978,13 +979,14 @@ internal static class WindowsMsiBuilder
                     new XElement(
                         ns + "Component",
                         new XAttribute("Id", "DesktopShortcutComponent"),
+                        new XAttribute("Transitive", "yes"),
                         new XAttribute("Condition", "DESKTOP_SHORTCUT = \"1\""),
                     new XElement(
                         ns + "Shortcut",
                         new XAttribute("Id", "DesktopShortcut"),
                         new XAttribute("Directory", "DesktopFolder"),
                         new XAttribute("Name", channelConfig.DisplayName),
-                        new XAttribute("Target", "[INSTALLFOLDER]Zed.exe"),
+                        new XAttribute("Target", "[INSTALLFOLDER]ZZZ.exe"),
                         new XAttribute("WorkingDirectory", "INSTALLFOLDER"),
                         new XAttribute("Description", channelConfig.DisplayName)),
                     new XElement(
@@ -1172,11 +1174,11 @@ internal static class WindowsMsiBuilder
             new XElement(
                 ns + "RegistryKey",
                 new XAttribute("Root", "HKCU"),
-                new XAttribute("Key", "Software\\Classes\\zed"),
+                new XAttribute("Key", "Software\\Classes\\zzz"),
                 new XElement(
                     ns + "RegistryValue",
                     new XAttribute("Type", "string"),
-                    new XAttribute("Value", "URL:zed Protocol"),
+                    new XAttribute("Value", "URL:zzz Protocol"),
                     new XAttribute("KeyPath", "yes")),
                 new XElement(
                     ns + "RegistryValue",
@@ -1186,19 +1188,19 @@ internal static class WindowsMsiBuilder
             new XElement(
                 ns + "RegistryKey",
                 new XAttribute("Root", "HKCU"),
-                new XAttribute("Key", "Software\\Classes\\zed\\DefaultIcon"),
+                new XAttribute("Key", "Software\\Classes\\zzz\\DefaultIcon"),
                 new XElement(
                     ns + "RegistryValue",
                     new XAttribute("Type", "string"),
-                    new XAttribute("Value", "[INSTALLFOLDER]Zed.exe,1"))),
+                    new XAttribute("Value", "[INSTALLFOLDER]ZZZ.exe,1"))),
             new XElement(
                 ns + "RegistryKey",
                 new XAttribute("Root", "HKCU"),
-                new XAttribute("Key", "Software\\Classes\\zed\\shell\\open\\command"),
+                new XAttribute("Key", "Software\\Classes\\zzz\\shell\\open\\command"),
                 new XElement(
                     ns + "RegistryValue",
                     new XAttribute("Type", "string"),
-                    new XAttribute("Value", "\"[INSTALLFOLDER]Zed.exe\" \"%1\""))));
+                    new XAttribute("Value", "\"[INSTALLFOLDER]ZZZ.exe\" \"%1\""))));
 
         wix.Add(new XElement(
             ns + "Fragment",
@@ -1218,8 +1220,8 @@ internal static class WindowsMsiBuilder
             new XAttribute("Id", componentGroupId),
             new XAttribute("Directory", "INSTALLFOLDER"));
 
-        var fileCommand = "\"[INSTALLFOLDER]Zed.exe\" \"%1\"";
-        var folderCommand = "\"[INSTALLFOLDER]Zed.exe\" \"%V\"";
+        var fileCommand = "\"[INSTALLFOLDER]ZZZ.exe\" \"%1\"";
+        var folderCommand = "\"[INSTALLFOLDER]ZZZ.exe\" \"%V\"";
 
         group.Add(CreateShellComponent(ns, "ShellFilesComponent", $"Software\\Classes\\*\\shell\\{channelConfig.RegValueName}", channelConfig.ShellNameShort, fileCommand));
         group.Add(CreateShellComponent(ns, "ShellFoldersComponent", $"Software\\Classes\\directory\\shell\\{channelConfig.RegValueName}", channelConfig.ShellNameShort, folderCommand));
@@ -1248,7 +1250,7 @@ internal static class WindowsMsiBuilder
                     ns + "RegistryValue",
                     new XAttribute("Name", "Icon"),
                     new XAttribute("Type", "string"),
-                    new XAttribute("Value", "[INSTALLFOLDER]Zed.exe"))),
+                    new XAttribute("Value", "[INSTALLFOLDER]ZZZ.exe"))),
             new XElement(
                 ns + "RegistryKey",
                 new XAttribute("Root", "HKCU"),
@@ -1306,7 +1308,7 @@ internal static class WindowsMsiBuilder
                         new XElement(
                             ns + "RegistryValue",
                             new XAttribute("Type", "string"),
-                            new XAttribute("Value", "[INSTALLFOLDER]Zed.exe"))),
+                            new XAttribute("Value", "[INSTALLFOLDER]ZZZ.exe"))),
                     new XElement(
                         ns + "RegistryKey",
                         new XAttribute("Root", "HKCU"),
@@ -1314,7 +1316,7 @@ internal static class WindowsMsiBuilder
                         new XElement(
                             ns + "RegistryValue",
                             new XAttribute("Type", "string"),
-                            new XAttribute("Value", "\"[INSTALLFOLDER]Zed.exe\" \"%1\"")))));
+                            new XAttribute("Value", "\"[INSTALLFOLDER]ZZZ.exe\" \"%1\"")))));
         }
 
         wix.Add(new XElement(ns + "Fragment", group));
@@ -1557,37 +1559,37 @@ internal sealed class ChannelConfig
             "stable" => new ChannelConfig(
                 "stable",
                 "app-icon",
-                "Zed",
-                "Zed",
-                "ZedIndustries.Zed",
-                "Z&ed",
+                "ZZZ",
+                "ZZZ",
+                "ZZZIndustries.ZZZ",
+                "Z&ZZ",
                 "2DB0DA96-CA55-49BB-AF4F-64AF36A86712",
                 "Zed"),
             "preview" => new ChannelConfig(
                 "preview",
                 "app-icon-preview",
-                "Zed Preview",
-                "ZedPreview",
-                "ZedIndustries.Zed.Preview",
-                "Z&ed Preview",
+                "ZZZ Preview",
+                "ZZZPreview",
+                "ZZZIndustries.ZZZ.Preview",
+                "Z&ZZ Preview",
                 "F70E4811-D0E2-4D88-AC99-D63752799F95",
                 "ZedPreview"),
             "nightly" => new ChannelConfig(
                 "nightly",
                 "app-icon-nightly",
-                "Zed Nightly",
-                "ZedNightly",
-                "ZedIndustries.Zed.Nightly",
-                "Z&ed Editor Nightly",
+                "ZZZ Nightly",
+                "ZZZNightly",
+                "ZZZIndustries.ZZZ.Nightly",
+                "Z&ZZ Editor Nightly",
                 "1BDB21D3-14E7-433C-843C-9C97382B2FE0",
                 "ZedNightly"),
             "dev" => new ChannelConfig(
                 "dev",
                 "app-icon-dev",
-                "Zed Dev",
-                "ZedDev",
-                "ZedIndustries.Zed.Dev",
-                "Z&ed Dev",
+                "ZZZ Dev",
+                "ZZZDev",
+                "ZZZIndustries.ZZZ.Dev",
+                "Z&ZZ Dev",
                 "8357632E-24A4-4F32-BA97-E575B4D1FE5D",
                 "ZedDev"),
             _ => throw new InvalidOperationException($"Unsupported release channel: {channel}"),

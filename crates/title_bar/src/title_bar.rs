@@ -1043,7 +1043,7 @@ impl TitleBar {
                     .into_any_element(),
             ),
             client::Status::UpgradeRequired => Some(
-                Button::new("connection-status", "Please update Zed to Collaborate")
+                Button::new("connection-status", "Please update ZZZ to Collaborate")
                     .label_size(LabelSize::Small)
                     .disabled(true)
                     .into_any_element(),

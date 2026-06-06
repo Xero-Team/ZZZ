@@ -670,7 +670,7 @@ pub fn open_settings_editor(
         cx.open_window(
             WindowOptions {
                 titlebar: Some(TitlebarOptions {
-                    title: Some("Zed — Settings".into()),
+                    title: Some("ZZZ — Settings".into()),
                     appears_transparent: true,
                     traffic_light_position: Some(point(px(12.0), px(12.0))),
                 }),
@@ -5250,7 +5250,7 @@ mod project_settings_update_tests {
         let fs = FakeFs::new(cx.executor());
         let tree = if let Some(settings_content) = initial_settings {
             json!({
-                ".zed": {
+                ".ZZZ": {
                     "settings.json": settings_content
                 },
                 "src": { "main.rs": "" }
@@ -5267,7 +5267,7 @@ mod project_settings_update_tests {
             (worktree.read(cx).id(), worktree.downgrade())
         });
 
-        let rel_path: Arc<RelPath> = RelPath::unix(".zed/settings.json")
+        let rel_path: Arc<RelPath> = RelPath::unix(".ZZZ/settings.json")
             .expect("valid path")
             .into_arc();
         let project_path = ProjectPath {
@@ -5497,7 +5497,7 @@ mod project_settings_update_tests {
 
         let file_content = setup
             .fs
-            .load("/project/.zed/settings.json".as_ref())
+            .load("/project/.ZZZ/settings.json".as_ref())
             .await
             .unwrap();
         assert_eq!(
@@ -5530,7 +5530,7 @@ mod project_settings_update_tests {
         setup
             .fs
             .save(
-                "/project/.zed/settings.json".as_ref(),
+                "/project/.ZZZ/settings.json".as_ref(),
                 &r#"{ "tab_size": 99 }"#.into(),
                 Default::default(),
             )

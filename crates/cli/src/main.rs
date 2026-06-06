@@ -27,7 +27,7 @@ use walkdir::WalkDir;
 
 use std::io::IsTerminal;
 
-const URL_PREFIX: [&'static str; 5] = ["zed://", "http://", "https://", "file://", "ssh://"];
+const URL_PREFIX: [&'static str; 5] = ["zzz://", "http://", "https://", "file://", "ssh://"];
 
 struct Detect;
 
@@ -44,21 +44,21 @@ trait InstalledApp {
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "zed",
+    name = "zzz",
     disable_version_flag = true,
-    before_help = "The Zed CLI binary.
-This CLI is a separate binary that invokes Zed.
+    before_help = "The ZZZ CLI binary.
+This CLI is a separate binary that invokes ZZZ.
 
 Examples:
-    `zed`
-          Simply opens Zed
-    `zed --foreground`
+    `zzz`
+          Simply opens ZZZ
+    `zzz --foreground`
           Runs in foreground (shows all logs)
-    `zed path-to-your-project`
-          Open your project in Zed
-    `zed -n path-to-file `
+    `zzz path-to-your-project`
+          Open your project in ZZZ
+    `zzz -n path-to-file `
           Open file/folder in a new window",
-    after_help = "To read from stdin, append '-', e.g. 'ps axf | zed -'"
+    after_help = "To read from stdin, append '-', e.g. 'ps axf | zzz -'"
 )]
 struct Args {
     /// Wait for all of the given paths to be opened/closed before exiting.
@@ -75,7 +75,7 @@ struct Args {
     /// Reuse an existing window, replacing its workspace
     #[arg(short, long, overrides_with_all = ["add", "new", "existing", "classic"], hide = true)]
     reuse: bool,
-    /// Open in existing Zed window
+    /// Open in existing ZZZ window
     #[arg(short = 'e', long = "existing", overrides_with_all = ["add", "new", "reuse", "classic"])]
     existing: bool,
     /// Use the classic open behavior: new window for directories, reuse for files
@@ -91,20 +91,20 @@ struct Args {
     )]
     #[arg(long, value_name = "DIR")]
     user_data_dir: Option<String>,
-    /// The paths to open in Zed (space-separated).
+    /// The paths to open in ZZZ (space-separated).
     ///
     /// Use `path:line:column` syntax to open a file at the given line and column.
     paths_with_position: Vec<String>,
-    /// Print Zed's version and the app path.
+    /// Print ZZZ's version and the app path.
     #[arg(short, long)]
     version: bool,
-    /// Run zed in the foreground (useful for debugging)
+    /// Run zzz in the foreground (useful for debugging)
     #[arg(long)]
     foreground: bool,
-    /// Custom path to Zed.app or the zed binary
-    #[arg(long)]
-    zed: Option<PathBuf>,
-    /// Run zed in dev-server mode
+    /// Custom path to ZZZ.app or the zzz binary
+    #[arg(long = "zzz")]
+    zzz: Option<PathBuf>,
+    /// Run zzz in dev-server mode
     #[arg(long)]
     dev_server_token: Option<String>,
     /// The username and WSL distribution to use when opening paths. If not specified,
@@ -133,7 +133,7 @@ struct Args {
     /// When directories are provided, recurses into them and shows all changed files in a single multi-diff view.
     #[arg(long, action = clap::ArgAction::Append, num_args = 2, value_names = ["OLD_PATH", "NEW_PATH"])]
     diff: Vec<String>,
-    /// Uninstall Zed from user system
+    /// Uninstall ZZZ from user system
     #[cfg(all(
         any(target_os = "linux", target_os = "macos"),
         not(feature = "no-bundled-uninstall")
@@ -515,7 +515,7 @@ fn run() -> Result<()> {
     #[cfg(target_os = "linux")]
     let args = flatpak::set_bin_if_no_escape(args);
 
-    let app = Detect::detect(args.zed.as_deref()).context("Bundle detection")?;
+    let app = Detect::detect(args.zzz.as_deref()).context("Bundle detection")?;
 
     if args.version {
         println!("{}", app.zed_version_string());
@@ -1043,12 +1043,12 @@ mod flatpak {
             let mut is_app_location_set = false;
             for arg in &env::args_os().collect::<Vec<_>>()[1..] {
                 args.push(arg.clone());
-                is_app_location_set |= arg == "--zed";
+                is_app_location_set |= arg == "--zzz";
             }
 
             if !is_app_location_set {
-                args.push("--zed".into());
-                args.push(flatpak_dir.join("libexec").join("zed-editor").into());
+                args.push("--zzz".into());
+                args.push(flatpak_dir.join("libexec").join("zzz-editor").into());
             }
 
             let error = exec::execvp("/usr/bin/flatpak-spawn", args);
@@ -1059,10 +1059,10 @@ mod flatpak {
 
     pub fn set_bin_if_no_escape(mut args: super::Args) -> super::Args {
         if env::var(NO_ESCAPE_ENV_NAME).is_ok()
-            && env::var("FLATPAK_ID").is_ok_and(|id| id.starts_with("dev.zed.Zed"))
-            && args.zed.is_none()
+            && env::var("FLATPAK_ID").is_ok_and(|id| id.starts_with("dev.zzz.ZZZ"))
+            && args.zzz.is_none()
         {
-            args.zed = Some("/app/libexec/zed-editor".into());
+            args.zzz = Some("/app/libexec/zzz-editor".into());
             unsafe { env::set_var("ZED_UPDATE_EXPLANATION", "Please use flatpak to update zed") };
         }
         args
@@ -1074,7 +1074,7 @@ mod flatpak {
         }
 
         if let Ok(flatpak_id) = env::var("FLATPAK_ID") {
-            if !flatpak_id.starts_with("dev.zed.Zed") {
+            if !flatpak_id.starts_with("dev.zzz.ZZZ") {
                 return None;
             }
 
@@ -1218,9 +1218,9 @@ mod windows {
                 let cli = std::env::current_exe()?;
                 let dir = cli.parent().context("no parent path for cli")?;
 
-                // ../Zed.exe is the standard, lib/zed is for MSYS2, ./zed.exe is for the target
+                // ../ZZZ.exe is the standard, lib/zzz is for MSYS2, ./zzz.exe is for the target
                 // directory in development builds.
-                let possible_locations = ["../Zed.exe", "../lib/zed/zed-editor.exe", "./zed.exe"];
+                let possible_locations = ["../ZZZ.exe", "../lib/zzz/zzz-editor.exe", "./zzz.exe"];
                 possible_locations
                     .iter()
                     .find_map(|p| dir.join(p).canonicalize().ok().filter(|path| path != &cli))
@@ -1396,7 +1396,7 @@ mod mac_os {
             user_data_dir: Option<&str>,
         ) -> io::Result<ExitStatus> {
             let path = match self {
-                Bundle::App { app_bundle, .. } => app_bundle.join("Contents/MacOS/zed"),
+                Bundle::App { app_bundle, .. } => app_bundle.join("Contents/MacOS/zzz"),
                 Bundle::LocalPath { executable, .. } => executable.clone(),
             };
 
@@ -1410,7 +1410,7 @@ mod mac_os {
 
         fn path(&self) -> PathBuf {
             match self {
-                Bundle::App { app_bundle, .. } => app_bundle.join("Contents/MacOS/zed"),
+                Bundle::App { app_bundle, .. } => app_bundle.join("Contents/MacOS/zzz"),
                 Bundle::LocalPath { executable, .. } => executable.clone(),
             }
         }

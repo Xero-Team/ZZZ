@@ -5105,14 +5105,14 @@ async fn test_edit_file_tool_allow_still_prompts_for_local_settings(cx: &mut Tes
         templates,
     ));
 
-    // Editing a file inside .zed/ should still prompt even with global default: allow,
+    // Editing a file inside .ZZZ/ should still prompt even with global default: allow,
     // because local settings paths are sensitive and require confirmation regardless.
     let (event_stream, mut rx) = crate::ToolCallEventStream::test();
     let _task = cx.update(|cx| {
         tool.run(
             ToolInput::resolved(crate::EditFileToolInput {
                 display_description: "Edit local settings".to_string(),
-                path: "root/.zed/settings.json".into(),
+                path: "root/.ZZZ/settings.json".into(),
                 mode: crate::EditFileMode::Edit,
                 content: None,
                 edits: None,

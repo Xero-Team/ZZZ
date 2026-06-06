@@ -8,9 +8,9 @@ ZED_PATH="$(dirname "$(realpath "$0")")"
 
 resolve_zed_exe() {
     for candidate in \
-        "$ZED_PATH/zed.exe" \
-        "$ZED_PATH/../Zed.exe" \
-        "$ZED_PATH/../zed.exe"
+        "$ZED_PATH/zzz.exe" \
+        "$ZED_PATH/../ZZZ.exe" \
+        "$ZED_PATH/../zzz.exe"
     do
         if [ -f "$candidate" ]; then
             printf '%s\n' "$candidate"
@@ -18,11 +18,11 @@ resolve_zed_exe() {
         fi
     done
 
-    echo "zed: could not find Zed executable" >&2
+    echo "zzz: could not find ZZZ executable" >&2
     echo "Looked for:" >&2
-    echo "  $ZED_PATH/zed.exe" >&2
-    echo "  $ZED_PATH/../Zed.exe" >&2
-    echo "  $ZED_PATH/../zed.exe" >&2
+    echo "  $ZED_PATH/zzz.exe" >&2
+    echo "  $ZED_PATH/../ZZZ.exe" >&2
+    echo "  $ZED_PATH/../zzz.exe" >&2
     return 1
 }
 

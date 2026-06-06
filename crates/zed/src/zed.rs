@@ -1517,7 +1517,7 @@ fn open_about_window(cx: &mut App) {
     cx.open_window(
         WindowOptions {
             titlebar: Some(TitlebarOptions {
-                title: Some("About Zed".into()),
+                title: Some("About ZZZ".into()),
                 appears_transparent: true,
                 traffic_light_position: Some(point(px(12.), px(12.))),
             }),
@@ -5509,8 +5509,6 @@ mod tests {
         // Use the proper initialization for runtime state
         let app_state = init_keymap_test(cx);
 
-        eprintln!("Running test_opening_project_settings_when_excluded");
-
         // 1. Set up a project with some project settings
         let settings_init =
             r#"{ "UNIQUEVALUE": true, "git": { "inline_blame": { "enabled": false } } }"#;
@@ -5520,14 +5518,12 @@ mod tests {
             .insert_tree(
                 Path::new("/root"),
                 json!({
-                    ".zed": {
+                    ".ZZZ": {
                         "settings.json": settings_init
                     }
                 }),
             )
             .await;
-
-        eprintln!("Created project with .zed/settings.json containing UNIQUEVALUE");
 
         // 2. Create a project with the file system and load it
         let project = Project::test(app_state.fs.clone(), [Path::new("/root")], cx).await;
@@ -5535,48 +5531,40 @@ mod tests {
         // Save original settings content for comparison
         let original_settings = app_state
             .fs
-            .load(Path::new("/root/.zed/settings.json"))
+            .load(Path::new("/root/.ZZZ/settings.json"))
             .await
             .unwrap();
 
         let original_settings_str = original_settings.clone();
 
         // Verify settings exist on disk and have expected content
-        eprintln!("Original settings content: {}", original_settings_str);
         assert!(
             original_settings_str.contains("UNIQUEVALUE"),
             "Test setup failed - settings file doesn't contain our marker"
         );
 
-        // 3. Add .zed to file scan exclusions in user settings
+        // 3. Add .ZZZ to file scan exclusions in user settings
         cx.update_global::<SettingsStore, _>(|store, cx| {
             store.update_user_settings(cx, |worktree_settings| {
                 worktree_settings.project.worktree.file_scan_exclusions =
-                    Some(vec![".zed".to_string()]);
+                    Some(vec![".ZZZ".to_string()]);
             });
         });
-
-        eprintln!("Added .zed to file_scan_exclusions in settings");
 
         // 4. Run tasks to apply settings
         cx.background_executor.run_until_parked();
 
-        // 5. Critical: Verify .zed is actually excluded from worktree
+        // 5. Critical: Verify .ZZZ is actually excluded from worktree
         let worktree = cx.update(|cx| project.read(cx).worktrees(cx).next().unwrap());
 
         let has_zed_entry =
-            cx.update(|cx| worktree.read(cx).entry_for_path(rel_path(".zed")).is_some());
-
-        eprintln!(
-            "Is .zed directory visible in worktree after exclusion: {}",
-            has_zed_entry
-        );
+            cx.update(|cx| worktree.read(cx).entry_for_path(rel_path(".ZZZ")).is_some());
 
         // This assertion verifies the test is set up correctly to show the bug
-        // If .zed is not excluded, the test will fail here
+        // If .ZZZ is not excluded, the test will fail here
         assert!(
             !has_zed_entry,
-            "Test precondition failed: .zed directory should be excluded but was found in worktree"
+            "Test precondition failed: .ZZZ directory should be excluded but was found in worktree"
         );
 
         // 6. Create workspace and trigger the actual function that causes the bug
@@ -5589,7 +5577,6 @@ mod tests {
             .update(cx, |_, window, cx| {
                 workspace.update(cx, |workspace, cx| {
                     // Call the exact function that contains the bug
-                    eprintln!("About to call open_project_settings_file");
                     open_project_settings_file(workspace, &OpenProjectSettingsFile, window, cx);
                 });
             })
@@ -5601,18 +5588,14 @@ mod tests {
         // 8. Verify file contents after calling function
         let new_content = app_state
             .fs
-            .load(Path::new("/root/.zed/settings.json"))
+            .load(Path::new("/root/.ZZZ/settings.json"))
             .await
             .unwrap();
 
         let new_content_str = new_content;
-        eprintln!("New settings content: {}", new_content_str);
 
         // The bug causes the settings to be overwritten with empty settings
         // So if the unique value is no longer present, the bug has been reproduced
-        let bug_exists = !new_content_str.contains("UNIQUEVALUE");
-        eprintln!("Bug reproduced: {}", bug_exists);
-
         // This assertion should fail if the bug exists - showing the bug is real
         assert!(
             new_content_str.contains("UNIQUEVALUE"),

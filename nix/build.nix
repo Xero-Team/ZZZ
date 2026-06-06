@@ -199,7 +199,7 @@ let
         (darwinMinVersionHook "10.15")
       ];
 
-      cargoExtraArgs = "-p zed -p cli --locked --features=gpui_platform/runtime_shaders";
+      cargoExtraArgs = "-p zzz -p cli --locked --features=gpui_platform/runtime_shaders";
 
       stdenv =
         pkgs:
@@ -225,7 +225,7 @@ let
             ../assets/fonts/ibm-plex-sans
           ];
         };
-        ZED_UPDATE_EXPLANATION = "Zed has been installed using Nix. Auto-updates have thus been disabled.";
+        ZED_UPDATE_EXPLANATION = "ZZZ has been installed using Nix. Auto-updates have thus been disabled.";
         RELEASE_VERSION = version;
         ZED_COMMIT_SHA = lib.optionalString (commitSha != null) "${commitSha}";
         LK_CUSTOM_WEBRTC = pkgs.callPackage ./livekit-libwebrtc/package.nix { };
@@ -325,14 +325,14 @@ craneLib.buildPackage (
           popd
 
           mkdir -p $out/Applications $out/bin
-          # Zed expects git next to its own binary
+          # ZZZ expects git next to its own binary
           ln -s ${git}/bin/git "$app_path/Contents/MacOS/git"
           mv $TARGET_DIR/cli "$app_path/Contents/MacOS/cli"
           mv "$app_path" $out/Applications/
 
           # Physical location of the CLI must be inside the app bundle as this is used
           # to determine which app to start
-          ln -s "$out/Applications/Zed Nightly.app/Contents/MacOS/cli" $out/bin/zed
+          ln -s "$out/Applications/ZZZ Nightly.app/Contents/MacOS/cli" $out/bin/zzz
 
           runHook postInstall
         ''
@@ -341,26 +341,26 @@ craneLib.buildPackage (
           runHook preInstall
 
           mkdir -p $out/bin $out/libexec
-          cp $TARGET_DIR/zed $out/libexec/zed-editor
-          cp $TARGET_DIR/cli  $out/bin/zed
-          ln -s $out/bin/zed $out/bin/zeditor  # home-manager expects the CLI binary to be here
+          cp $TARGET_DIR/zzz $out/libexec/zzz-editor
+          cp $TARGET_DIR/cli  $out/bin/zzz
+          ln -s $out/bin/zzz $out/bin/zeditor  # home-manager expects the CLI binary to be here
 
 
           install -D "crates/zed/resources/app-icon-nightly@2x.png" \
-            "$out/share/icons/hicolor/1024x1024@2x/apps/zed.png"
+            "$out/share/icons/hicolor/1024x1024@2x/apps/zzz.png"
           install -D crates/zed/resources/app-icon-nightly.png \
-            $out/share/icons/hicolor/512x512/apps/zed.png
+            $out/share/icons/hicolor/512x512/apps/zzz.png
 
           # TODO: icons should probably be named "zed-nightly"
           (
             export DO_STARTUP_NOTIFY="true"
-            export APP_CLI="zed"
-            export APP_ICON="zed"
-            export APP_NAME="Zed Nightly"
+            export APP_CLI="zzz"
+            export APP_ICON="zzz"
+            export APP_NAME="ZZZ Nightly"
             export APP_ARGS="%U"
             mkdir -p "$out/share/applications"
-            ${lib.getExe envsubst} < "crates/zed/resources/zed.desktop.in" > "$out/share/applications/dev.zed.Zed-Nightly.desktop"
-            chmod +x "$out/share/applications/dev.zed.Zed-Nightly.desktop"
+            ${lib.getExe envsubst} < "crates/zed/resources/zed.desktop.in" > "$out/share/applications/dev.zzz.ZZZ-Nightly.desktop"
+            chmod +x "$out/share/applications/dev.zzz.ZZZ-Nightly.desktop"
           )
 
           runHook postInstall
@@ -368,7 +368,7 @@ craneLib.buildPackage (
 
     # TODO: why isn't this also done on macOS?
     postFixup = lib.optionalString stdenv.hostPlatform.isLinux ''
-      wrapProgram $out/libexec/zed-editor --suffix PATH : ${lib.makeBinPath [ nodejs_22 ]}
+      wrapProgram $out/libexec/zzz-editor --suffix PATH : ${lib.makeBinPath [ nodejs_22 ]}
     '';
 
     meta = {
@@ -376,7 +376,7 @@ craneLib.buildPackage (
       homepage = "https://zed.dev";
       changelog = "https://zed.dev/releases/preview";
       license = lib.licenses.gpl3Only;
-      mainProgram = "zed";
+      mainProgram = "zzz";
       platforms = lib.platforms.linux ++ lib.platforms.darwin;
     };
   }
