@@ -36,7 +36,7 @@ struct ResolvedOutputs {
 fn resolve_versions() -> (steps::NamedJob, ResolvedOutputs) {
     fn extract_versions() -> Step<Run> {
         named::bash(indoc::indoc! {r#"
-            version=$(script/get-crate-version zed)
+            version=$(script/get-crate-version zzz)
             major=$(echo "$version" | cut -d. -f1)
             minor=$(echo "$version" | cut -d. -f2)
 
@@ -130,7 +130,7 @@ fn bump_main(
     outputs: &ResolvedOutputs,
 ) -> steps::NamedJob {
     fn bump_version() -> Step<Run> {
-        named::bash("cargo set-version -p zed --bump minor")
+        named::bash("cargo set-version -p zzz --bump minor")
     }
 
     let (authenticate, token) = steps::authenticate_as_zippy().into();
@@ -221,7 +221,7 @@ fn promote_to_stable(
     let (authenticate, token) = steps::authenticate_as_zippy().into();
 
     let read_version_step = named::bash(indoc::indoc! {r#"
-            stable_version=$(script/get-crate-version zed)
+            stable_version=$(script/get-crate-version zzz)
             {
                 echo "stable_tag=v${stable_version}"
             } >> "$GITHUB_OUTPUT"

@@ -1,21 +1,21 @@
 ---
-title: AI Code Completion in Zed - Zeta, Copilot, Codestral, Mercury Coder
-description: Set up AI code completions in Zed with Zeta (built-in), GitHub Copilot, Codestral, or Mercury Coder. Multi-line predictions on every keystroke.
+title: AI Code Completion in ZZZ - Zeta, Copilot, Codestral, Mercury Coder
+description: Set up AI code completions in ZZZ with Zeta (built-in), GitHub Copilot, Codestral, or Mercury Coder. Multi-line predictions on every keystroke.
 ---
 
 # Edit Prediction
 
-Edit Prediction is how Zed's AI code completions work: an LLM predicts the code you want to write.
+Edit Prediction is how ZZZ's AI code completions work: an LLM predicts the code you want to write.
 Each keystroke sends a new request to the edit prediction provider, which returns individual or multi-line suggestions you accept by pressing `tab`.
 
-The default provider is [Zeta, an open source model developed by Zed](https://zed.dev/blog/zeta2), but you can also use [other providers](#other-providers) like GitHub Copilot, Mercury Coder, and Codestral.
+The default provider is [Zeta, an open source model developed by ZZZ](https://zed.dev/blog/zeta2), but you can also use [other providers](#other-providers) like GitHub Copilot, Mercury Coder, and Codestral.
 
 ## Configuring Zeta
 
 To use Zeta, [sign in](../authentication.md#what-features-require-signing-in).
 Once signed in, predictions appear as you type.
 
-You can confirm that Zeta is properly configured by opening the [Settings Editor](zed://settings/edit_predictions.providers) (`Cmd+,` on macOS or `Ctrl+,` on Linux/Windows) and searching for `edit_predictions`. The `provider` field should be set to `Zed AI`.
+You can confirm that Zeta is properly configured by opening the [Settings Editor](zzz://settings/edit_predictions.providers) (`Cmd+,` on macOS or `Ctrl+,` on Linux/Windows) and searching for `edit_predictions`. The `provider` field should be set to `zzz://`.
 
 Or verify this in your settings.json:
 
@@ -31,7 +31,7 @@ The Z icon in the status bar also indicates Zeta is active.
 
 ### Pricing and Plans
 
-The free plan includes 2,000 Zeta predictions per month. The [Pro plan](../ai/plans-and-usage.md) removes this limit. See [Zed's pricing page](https://zed.dev/pricing) for details.
+The free plan includes 2,000 Zeta predictions per month. The [Pro plan](../ai/plans-and-usage.md) removes this limit. See [ZZZ's pricing page](https://zed.dev/pricing) for details.
 
 ### Switching Modes {#switching-modes}
 
@@ -136,11 +136,11 @@ In this case, because the binding contains the modifier `ctrl`, it will be used 
 
 ### Cleaning Up Older Keymap Entries
 
-If you configured edit prediction keybindings before Zed `v0.229.0`, your `keymap.json` may have entries that are now redundant.
+If you configured edit prediction keybindings before ZZZ `v0.229.0`, your `keymap.json` may have entries that are now redundant.
 
 **Old tab workaround**: Before `unbind` existed, the only way to prevent `tab` from accepting edit predictions was to copy all the default non-edit-prediction `tab` bindings into your keymap alongside a custom `AcceptEditPrediction` binding. If your keymap still contains those copy-pasted entries, delete them and use a single `"unbind"` entry as shown in the examples above.
 
-**Renamed context**: The `edit_prediction_conflict` context has been replaced by `edit_prediction && (showing_completions || in_leading_whitespace)`. Zed automatically migrates any bindings that used `edit_prediction_conflict`, so no changes are required on your end.
+**Renamed context**: The `edit_prediction_conflict` context has been replaced by `edit_prediction && (showing_completions || in_leading_whitespace)`. ZZZ automatically migrates any bindings that used `edit_prediction_conflict`, so no changes are required on your end.
 
 ## Disabling Automatic Edit Prediction
 
@@ -182,7 +182,7 @@ To disable edit predictions for specific directories or files, set this in your 
 ```json [settings]
 {
   "edit_predictions": {
-    "disabled_globs": ["~/.config/zed/settings.json"]
+    "disabled_globs": ["~/.config/ZZZ/settings.json"]
   }
 }
 ```
@@ -219,7 +219,7 @@ To sign in to GitHub Copilot, click on the Copilot icon in the status bar. A pop
 
 #### Using GitHub Copilot Enterprise
 
-If your organization uses GitHub Copilot Enterprise, you can configure Zed to use your enterprise instance by specifying the enterprise URI in your settings file ([how to edit](../configuring-zed.md#settings-files)):
+If your organization uses GitHub Copilot Enterprise, you can configure ZZZ to use your enterprise instance by specifying the enterprise URI in your settings file ([how to edit](../configuring-zed.md#settings-files)):
 
 ```json [settings]
 {
@@ -233,7 +233,7 @@ If your organization uses GitHub Copilot Enterprise, you can configure Zed to us
 
 Replace `"https://your.enterprise.domain"` with the URL provided by your GitHub Enterprise administrator (e.g., `https://foo.ghe.com`).
 
-Once set, Zed routes Copilot requests through your enterprise endpoint.
+Once set, ZZZ routes Copilot requests through your enterprise endpoint.
 When you sign in by clicking the Copilot icon in the status bar, you are redirected to your configured enterprise URL to complete authentication.
 All other Copilot features and usage remain the same.
 
@@ -340,7 +340,7 @@ The `prompt_format` setting controls how code context is formatted for the model
 - `glm` - GLM-4 format with code markers
 - `infer` - Auto-detect from model name (default)
 
-With `"prompt_format": "infer"`, Zed automatically uses Zeta 2 format for models named `zeta2` and Zeta 2.1 format for models named `zeta2.1`.
+With `"prompt_format": "infer"`, ZZZ automatically uses Zeta 2 format for models named `zeta2` and Zeta 2.1 format for models named `zeta2.1`.
 
 For example, to use Zeta 2 with Ollama:
 

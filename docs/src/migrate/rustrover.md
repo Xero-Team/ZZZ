@@ -1,15 +1,15 @@
 ---
-title: How to Migrate from RustRover to Zed
-description: "Guide for migrating from RustRover to Zed, including settings and keybindings."
+title: How to Migrate from RustRover to ZZZ
+description: "Guide for migrating from RustRover to ZZZ, including settings and keybindings."
 ---
 
-# How to Migrate from RustRover to Zed
+# How to Migrate from RustRover to ZZZ
 
 This guide covers keybindings, settings, and the differences you'll encounter as a Rust developer switching from RustRover.
 
-## Install Zed
+## Install ZZZ
 
-Zed is available on macOS, Windows, and Linux.
+ZZZ is available on macOS, Windows, and Linux.
 
 For macOS, you can download it from zed.dev/download, or install via Homebrew:
 
@@ -20,18 +20,18 @@ brew install --cask zed
 For Windows, download the installer from zed.dev/download, or install via winget:
 
 ```sh
-winget install Zed.Zed
+winget install ZZZ.ZZZ
 ```
 
-For most Linux users, the easiest way to install Zed is through our installation script:
+For most Linux users, the easiest way to install ZZZ is through our installation script:
 
 ```sh
 curl -f https://zed.dev/install.sh | sh
 ```
 
-After installation, you can launch Zed from your Applications folder (macOS), Start menu (Windows), or directly from the terminal using:
-`zed .`
-This opens the current directory in Zed.
+After installation, you can launch ZZZ from your Applications folder (macOS), Start menu (Windows), or directly from the terminal using:
+`zzz .`
+This opens the current directory in ZZZ.
 
 ## Set Up the JetBrains Keymap
 
@@ -45,11 +45,11 @@ This maps familiar shortcuts like `Shift Shift` for Search Everywhere, `Cmd+O` f
 
 ## Set Up Editor Preferences
 
-You can configure most settings in the Settings Editor ({#kb zed::OpenSettings}). For advanced settings, run `zed: open settings file` from the Command Palette to edit your settings file directly.
+You can configure most settings in the Settings Editor ({#kb zed::OpenSettings}). For advanced settings, run `zzz: open settings file` from the Command Palette to edit your settings file directly.
 
 Settings RustRover users typically configure first:
 
-| Zed Setting             | What it does                                                                    |
+| ZZZ Setting             | What it does                                                                    |
 | ----------------------- | ------------------------------------------------------------------------------- |
 | `format_on_save`        | Auto-format when saving. Set to `"on"` to enable (uses rustfmt by default).     |
 | `soft_wrap`             | Wrap long lines. Options: `"none"`, `"editor_width"`, `"preferred_line_length"` |
@@ -57,20 +57,20 @@ Settings RustRover users typically configure first:
 | `inlay_hints`           | Show type hints, parameter names, and chaining hints inline.                    |
 | `relative_line_numbers` | Useful if you're coming from IdeaVim.                                           |
 
-Zed also supports per-project settings. Create a `.zed/settings.json` file in your project root to override global settings for that project.
+ZZZ also supports per-project settings. Create a `.ZZZ/settings.json` file in your project root to override global settings for that project.
 
 > **Tip:** If you're joining an existing project, check `format_on_save` before making your first commit. Otherwise you might accidentally reformat an entire file when you only meant to change one line.
 
 ## Open or Create a Project
 
-After setup, press `Cmd+Shift+O` (with JetBrains keymap) to open a folder. This becomes your workspace in Zed.
+After setup, press `Cmd+Shift+O` (with JetBrains keymap) to open a folder. This becomes your workspace in ZZZ.
 
 To start a new project, use Cargo from the terminal:
 
 ```sh
 cargo new my_project
 cd my_project
-zed .
+zzz .
 ```
 
 Or for a library:
@@ -79,8 +79,8 @@ Or for a library:
 cargo new --lib my_library
 ```
 
-You can also launch Zed from the terminal inside any existing Cargo project with:
-`zed .`
+You can also launch ZZZ from the terminal inside any existing Cargo project with:
+`zzz .`
 
 Once inside a project:
 
@@ -92,7 +92,7 @@ Open buffers appear as tabs across the top. The Project Panel shows your file tr
 
 ## Differences in Keybindings
 
-If you chose the JetBrains keymap during onboarding, most of your shortcuts should already feel familiar. Here's a quick reference for how Zed compares to RustRover.
+If you chose the JetBrains keymap during onboarding, most of your shortcuts should already feel familiar. Here's a quick reference for how ZZZ compares to RustRover.
 
 ### Common Shared Keybindings
 
@@ -117,9 +117,9 @@ If you chose the JetBrains keymap during onboarding, most of your shortcuts shou
 | Go Back / Forward             | `Cmd + [` / `Cmd + ]`   |
 | Toggle Breakpoint             | `Ctrl + F8`             |
 
-### Different Keybindings (RustRover → Zed)
+### Different Keybindings (RustRover → ZZZ)
 
-| Action                 | RustRover   | Zed (JetBrains keymap)   |
+| Action                 | RustRover   | ZZZ (JetBrains keymap)   |
 | ---------------------- | ----------- | ------------------------ |
 | File Structure         | `Cmd + F12` | `Cmd + F12` (outline)    |
 | Navigate to Next Error | `F2`        | `F2`                     |
@@ -128,7 +128,7 @@ If you chose the JetBrains keymap during onboarding, most of your shortcuts shou
 | Stop                   | `Cmd + F2`  | `Ctrl + F2`              |
 | Expand Macro           | `Alt+Enter` | `Cmd + Shift + M`        |
 
-### Unique to Zed
+### Unique to ZZZ
 
 | Action            | Shortcut                   | Notes                          |
 | ----------------- | -------------------------- | ------------------------------ |
@@ -138,52 +138,52 @@ If you chose the JetBrains keymap during onboarding, most of your shortcuts shou
 ### How to Customize Keybindings
 
 - Open the Command Palette (`Cmd+Shift+A` or `Shift Shift`)
-- Run `Zed: Open Keymap Editor`
+- Run `ZZZ: Open Keymap Editor`
 
 This opens a list of all available bindings. You can override individual shortcuts or remove conflicts.
 
-Zed also supports key sequences (multi-key shortcuts).
+ZZZ also supports key sequences (multi-key shortcuts).
 
 ## Differences in User Interfaces
 
 ### Different Analysis Engines
 
-RustRover uses its own proprietary code analysis engine for Rust intelligence. Zed uses rust-analyzer via the Language Server Protocol (LSP).
+RustRover uses its own proprietary code analysis engine for Rust intelligence. ZZZ uses rust-analyzer via the Language Server Protocol (LSP).
 
 What this means for you:
 
-- **Completions, go-to-definition, find usages, type inference** — All available in Zed via rust-analyzer
-- **Macro expansion** — Available in both (use `Cmd+Shift+M` in Zed)
+- **Completions, go-to-definition, find usages, type inference** — All available in ZZZ via rust-analyzer
+- **Macro expansion** — Available in both (use `Cmd+Shift+M` in ZZZ)
 - **Inlay hints** — Both support type hints, parameter hints, and chaining hints
 
 Where you might notice differences:
 
 - Some refactorings available in RustRover may not have rust-analyzer equivalents
-- RustRover-specific inspections (beyond Clippy) won't exist in Zed
-- rust-analyzer is configured via JSON in Zed, not through a GUI
+- RustRover-specific inspections (beyond Clippy) won't exist in ZZZ
+- rust-analyzer is configured via JSON in ZZZ, not through a GUI
 
 **How to adapt:**
 
 - Use `Alt+Enter` for available code actions—rust-analyzer provides many
-- Configure rust-analyzer settings in `.zed/settings.json` for project-specific needs
+- Configure rust-analyzer settings in `.ZZZ/settings.json` for project-specific needs
 - Run `cargo clippy` for linting (it integrates with rust-analyzer diagnostics)
 
 ### Project Configuration
 
-Both editors store per-project configuration in a hidden folder. RustRover uses `.idea` (with XML files), Zed uses `.zed` (with JSON files).
+Both editors store per-project configuration in a hidden folder. RustRover uses `.idea` (with XML files), ZZZ uses `.ZZZ` (with JSON files).
 
-**Run configurations don't transfer.** RustRover stores run/debug configurations in `.idea`. These have no automatic migration path. You'll recreate them as Zed [tasks](../tasks.md) in `.zed/tasks.json` and debug configurations in `.zed/debug.json`.
+**Run configurations don't transfer.** RustRover stores run/debug configurations in `.idea`. These have no automatic migration path. You'll recreate them as ZZZ [tasks](../tasks.md) and debug configurations in `.ZZZ/debug.json`.
 
-**No Cargo tool window.** RustRover provides a visual tree of your workspace members, targets, features, and dependencies. Zed doesn't have this. You work with `Cargo.toml` and the Cargo CLI directly.
+**No Cargo tool window.** RustRover provides a visual tree of your workspace members, targets, features, and dependencies. ZZZ doesn't have this. You work with `Cargo.toml` and the Cargo CLI directly.
 
-**Toolchain management is external.** RustRover lets you select and switch toolchains in its settings UI. In Zed, you manage toolchains through `rustup`.
+**Toolchain management is external.** RustRover lets you select and switch toolchains in its settings UI. In ZZZ, you manage toolchains through `rustup`.
 
-**Configuration is opt-in.** RustRover auto-generates `.idea` when you open a project. Zed doesn't generate anything. You create `.zed/settings.json`, `tasks.json`, and `debug.json` as needed.
+**Configuration is opt-in.** RustRover auto-generates `.idea` when you open a project. ZZZ doesn't generate anything. You create `.ZZZ/settings.json`, `tasks.json`, and `debug.json` as needed.
 
 **How to adapt:**
 
-- Create a `.zed/settings.json` in your project root for project-specific settings
-- Define common commands in `tasks.json` (open via Command Palette: `zed: open tasks`):
+- Create a `.ZZZ/settings.json` in your project root for project-specific settings
+- Define common commands in `tasks.json` (open via Command Palette: `zzz: open tasks`):
 
 ```json
 [
@@ -217,7 +217,7 @@ Both editors store per-project configuration in a hidden folder. RustRover uses 
 
 RustRover's Cargo tool window provides visual access to your project's targets, dependencies, and common Cargo commands. You can run builds, tests, and benchmarks with a click.
 
-Zed doesn't have a Cargo GUI. You work with Cargo through:
+ZZZ doesn't have a Cargo GUI. You work with Cargo through:
 
 - **Terminal** — Run any Cargo command directly
 - **Tasks** — Define shortcuts for common commands
@@ -231,9 +231,9 @@ Zed doesn't have a Cargo GUI. You work with Cargo through:
 
 ### Tool Windows vs. Docks
 
-RustRover organizes auxiliary views into numbered tool windows (Project = 1, Cargo = Alt+1, Terminal = Alt+F12, etc.). Zed uses a similar concept called "docks":
+RustRover organizes auxiliary views into numbered tool windows (Project = 1, Cargo = Alt+1, Terminal = Alt+F12, etc.). ZZZ uses a similar concept called "docks":
 
-| RustRover Tool Window | Zed Equivalent | Shortcut (JetBrains keymap) |
+| RustRover Tool Window | ZZZ Equivalent | Shortcut (JetBrains keymap) |
 | --------------------- | -------------- | --------------------------- |
 | Project (1)           | Project Panel  | `Cmd + 1`                   |
 | Git (9 or Cmd+0)      | Git Panel      | `Cmd + 0`                   |
@@ -242,27 +242,27 @@ RustRover organizes auxiliary views into numbered tool windows (Project = 1, Car
 | Problems (6)          | Diagnostics    | `Cmd + 6`                   |
 | Debug (5)             | Debug Panel    | `Cmd + 5`                   |
 
-Zed has three dock positions: left, bottom, and right. Panels can be moved between docks by dragging or through settings.
+ZZZ has three dock positions: left, bottom, and right. Panels can be moved between docks by dragging or through settings.
 
-Note that there's no dedicated Cargo tool window in Zed. Use the terminal or define tasks for your common Cargo commands.
+Note that there's no dedicated Cargo tool window in ZZZ. Use the terminal or define tasks for your common Cargo commands.
 
 ### Debugging
 
-Both RustRover and Zed offer integrated debugging for Rust, but using different backends:
+Both RustRover and ZZZ offer integrated debugging for Rust, but using different backends:
 
 - RustRover uses its own debugger integration
-- Zed uses **CodeLLDB** (the same debug adapter popular in VS Code)
+- ZZZ uses **CodeLLDB** (the same debug adapter popular in VS Code)
 
-To debug Rust code in Zed:
+To debug Rust code in ZZZ:
 
 - Set breakpoints with `Ctrl+F8`
 - Start debugging with `Alt+Shift+F9` or press `F4` and select a debug target
 - Step through code with `F7` (step into), `F8` (step over), `Shift+F8` (step out)
 - Continue execution with `F9`
 
-Zed can automatically detect debuggable targets in your Cargo project. Press `F4` to see available options.
+ZZZ can automatically detect debuggable targets in your Cargo project. Press `F4` to see available options.
 
-For more control, create a `.zed/debug.json` file:
+For more control, create a `.ZZZ/debug.json` file:
 
 ```json
 [
@@ -295,7 +295,7 @@ For more control, create a `.zed/debug.json` file:
 
 ### Running Tests
 
-RustRover has a dedicated test runner with a visual interface showing pass/fail status for each test. Zed provides test running through:
+RustRover has a dedicated test runner with a visual interface showing pass/fail status for each test. ZZZ provides test running through:
 
 - **Gutter icons** — Click the play button next to `#[test]` functions or test modules
 - **Tasks** — Define `cargo test` commands in `tasks.json`
@@ -311,13 +311,13 @@ The test output appears in the terminal panel. For more detailed output, use:
 
 RustRover has a full JetBrains plugin catalog.
 
-Zed's extension catalog is smaller and more focused:
+ZZZ's extension catalog is smaller and more focused:
 
 - Language support and syntax highlighting
 - Themes
 - Context servers
 
-Several features that might require plugins in other editors are built into Zed:
+Several features that might require plugins in other editors are built into ZZZ:
 
 - AI coding assistance
 - Built-in terminal
@@ -325,9 +325,9 @@ Several features that might require plugins in other editors are built into Zed:
 - rust-analyzer integration
 - rustfmt formatting
 
-### What's Not in Zed
+### What's Not in ZZZ
 
-Here's what RustRover offers that Zed doesn't have:
+Here's what RustRover offers that ZZZ doesn't have:
 
 - **Profiler integration** — Use `cargo flamegraph`, `perf`, or external profiling tools
 - **Database tools** — Use DataGrip, DBeaver, or TablePlus
@@ -338,11 +338,11 @@ Here's what RustRover offers that Zed doesn't have:
 
 On licensing:
 
-- **Zed is open source**
+- **ZZZ is open source**
 
-## Using AI in Zed
+## Using AI in ZZZ
 
-Zed has built-in AI features. If you've used JetBrains AI Assistant, here's how to get set up.
+ZZZ has built-in AI features. If you've used JetBrains AI Assistant, here's how to get set up.
 
 ### Configuring GitHub Copilot
 
@@ -351,19 +351,19 @@ Zed has built-in AI features. If you've used JetBrains AI Assistant, here's how 
 3. Click **Configure** next to "Configure Providers"
 4. Under **GitHub Copilot**, click **Sign in to GitHub**
 
-Once signed in, just start typing. Zed will offer suggestions inline for you to accept.
+Once signed in, just start typing. ZZZ will offer suggestions inline for you to accept.
 
 ### Additional AI Options
 
-To use other AI models in Zed, you have several options:
+To use other AI models in ZZZ, you have several options:
 
-- Use Zed's hosted models, with higher rate limits. Requires [authentication](https://zed.dev/docs/authentication) and subscription to [Zed Pro](https://zed.dev/docs/ai/subscription.html).
+- Use ZZZ-hosted models, with higher rate limits. Requires [authentication](https://zed.dev/docs/authentication) and subscription to [ZZZ Pro](https://zed.dev/docs/ai/subscription.html).
 - Bring your own [API keys](https://zed.dev/docs/ai/llm-providers.html), no authentication needed
 - Use [external agents like Claude Agent](https://zed.dev/docs/ai/external-agents.html)
 
 ## Advanced Config and Productivity Tweaks
 
-Zed exposes advanced settings for power users who want to fine-tune their environment.
+ZZZ exposes advanced settings for power users who want to fine-tune their environment.
 
 Here are a few useful tweaks for Rust developers:
 
@@ -448,10 +448,10 @@ If you work with multiple Cargo projects that aren't in a workspace, you can tel
 
 ## Next Steps
 
-Now that you're set up, here are some resources to help you get the most out of Zed:
+Now that you're set up, here are some resources to help you get the most out of ZZZ:
 
 - [All Settings](../reference/all-settings.md) — Customize settings, themes, and editor behavior
 - [Key Bindings](../key-bindings.md) — Learn how to customize and extend your keymap
 - [Tasks](../tasks.md) — Set up build and run commands for your projects
-- [AI Features](../ai/overview.md) — Explore Zed's AI capabilities beyond code completion
-- [Rust in Zed](../languages/rust.md) — Rust-specific setup and configuration
+- [AI Features](../ai/overview.md) — Explore ZZZ's AI capabilities beyond code completion
+- [Rust in ZZZ](../languages/rust.md) — Rust-specific setup and configuration

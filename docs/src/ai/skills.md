@@ -1,6 +1,6 @@
 ---
-title: Agent Skills - Zed
-description: Extend Zed's AI agent with reusable, on-demand skill files for specialized tasks.
+title: Agent Skills - ZZZ
+description: Extend ZZZ's AI agent with reusable, on-demand skill files for specialized tasks.
 ---
 
 # Skills {#skills}
@@ -13,7 +13,7 @@ A skill is a folder containing a `SKILL.md` file with metadata and instructions.
 
 ### Create your own {#create-your-own}
 
-Zed includes a built-in `create-skill` skill — invoke it with `/create-skill` and the agent walks you through the process.
+ZZZ includes a built-in `create-skill` skill — invoke it with `/create-skill` and the agent walks you through the process.
 
 You can also open the Skill Creator from the Agent Panel using {#kb agent::OpenRulesLibrary}, or by clicking `...` and selecting **Skills**. Outside the panel, use the {#action agent::OpenSkillCreator} action from the command palette. It opens a window where you fill in the skill's name, description, scope (global or project-local), body, and optionally toggle `disable-model-invocation`.
 
@@ -31,7 +31,7 @@ To install a skill, copy the skill's folder into `~/.agents/skills/` for global 
 
 ## Managing Skills {#managing-skills}
 
-Open the Settings Editor (`Cmd+,` on macOS, `Ctrl+,` on Linux/Windows) and navigate to **AI > Skills**, or go directly to [agent.skills](zed://settings/agent.skills).
+Open the Settings Editor (`Cmd+,` on macOS, `Ctrl+,` on Linux/Windows) and navigate to **AI > Skills**, or go directly to [agent.skills](zzz://settings/agent.skills).
 
 The **User** tab shows your global skills. The **Project** tab shows skills for the current project.
 
@@ -44,7 +44,7 @@ If no skills are installed, the page shows a **Create a Skill** button that open
 
 ## Managing Skills {#managing-skills}
 
-Open the Settings Editor (`Cmd+,` on macOS, `Ctrl+,` on Linux/Windows) and navigate to **AI > Skills**, or go directly to [agent.skills](zed://settings/agent.skills).
+Open the Settings Editor (`Cmd+,` on macOS, `Ctrl+,` on Linux/Windows) and navigate to **AI > Skills**, or go directly to [agent.skills](zzz://settings/agent.skills).
 
 The **User** tab shows your global skills. The **Project** tab shows skills for the current project.
 
@@ -59,7 +59,7 @@ If no skills are installed, the page shows a **Create a Skill** button that open
 
 By default, the agent picks up skills autonomously. It sees a catalog of every installed skill (name and description) in its system prompt, and calls the `skill` tool when a task matches a skill's description.
 
-When the agent invokes a skill, Zed prompts you to allow or deny it, using the same permission flow as other tools. You can set per-skill defaults in [Tool Permissions](./tool-permissions.md) so you're not prompted for skills you always trust.
+When the agent invokes a skill, ZZZ prompts you to allow or deny it, using the same permission flow as other tools. You can set per-skill defaults in [Tool Permissions](./tool-permissions.md) so you're not prompted for skills you always trust.
 
 ### Manual Invocation {#manual-invocation}
 
@@ -166,7 +166,7 @@ See the [Agent Skills specification](https://agentskills.io/specification) for t
 
 ## Where Skills Live {#where-skills-live}
 
-Zed loads skills from two locations:
+ZZZ loads skills from two locations:
 
 | Scope         | Path                         | When it applies          |
 | ------------- | ---------------------------- | ------------------------ |
@@ -193,7 +193,7 @@ The agent cannot edit `SKILL.md` files or their bundled resources without your e
 
 - **Flat layout only.** Skills must be direct children of the skills root. Nested folders like `~/.agents/skills/group/my-skill/` are not discovered.
 - **50KB catalog budget.** The total size of all skill names and descriptions is capped at 50KB. Skills that don't fit are dropped from the catalog with a warning in the UI. Keep descriptions concise.
-- **No remote registry.** Zed does not fetch skills from URLs or support custom search paths. Skills come from `~/.agents/skills/` and `<worktree>/.agents/skills/` only. Use a symlink if you need to point at another location.
+- **No remote registry.** ZZZ does not fetch skills from URLs or support custom search paths. Skills come from `~/.agents/skills/` and `<worktree>/.agents/skills/` only. Use a symlink if you need to point at another location.
 - **Live reload.** Adding, removing, or editing a `SKILL.md` takes effect immediately without restarting your session. Changes to a skill's `name` or `description` invalidate the model's prompt cache for the current session.
 
 ## See also

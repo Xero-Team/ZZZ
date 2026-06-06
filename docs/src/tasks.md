@@ -1,11 +1,11 @@
 ---
-title: Tasks - Run Commands in Zed
-description: Run and rerun shell commands from Zed with task definitions. Supports variables, templates, and language-specific tasks.
+title: Tasks - Run Commands in ZZZ
+description: Run and rerun shell commands from ZZZ with task definitions. Supports variables, templates, and language-specific tasks.
 ---
 
 # Tasks
 
-Zed supports ways to spawn (and rerun) commands using its integrated [terminal](./terminal.md) to output the results. These commands can read a limited subset of Zed state (such as a path to the file currently being edited or selected text).
+ZZZ supports ways to spawn (and rerun) commands using its integrated [terminal](./terminal.md) to output the results. These commands can read a limited subset of ZZZ state (such as a path to the file currently being edited or selected text).
 
 ```json [tasks]
 [
@@ -74,14 +74,14 @@ Keep `"use_new_terminal": false` and set `"allow_concurrent_runs": true` to allo
 
 Tasks can be defined:
 
-- in the global `tasks.json` file; such tasks are available in all Zed projects you work on. This file is usually located in `~/.config/zed/tasks.json`. You can edit them by using the {#action zed::OpenTasks} action.
-- in the worktree-specific (local) `.zed/tasks.json` file; such tasks are available only when working on a project with that worktree included. You can edit worktree-specific tasks by using the {#action zed::OpenProjectTasks} action.
+- in the global `tasks.json` file; such tasks are available in all ZZZ projects you work on. This file is usually located in `~/.config/ZZZ/tasks.json`. You can edit them by using the {#action zed::OpenTasks} action.
+- in the worktree-specific (local) `.ZZZ/tasks.json` file; such tasks are available only when working on a project with that worktree included. You can edit worktree-specific tasks by using the {#action zed::OpenProjectTasks} action.
 - on the fly with [oneshot tasks](#oneshot-tasks). These tasks are project-specific and do not persist across sessions.
 - by language extension.
 
 ## Variables
 
-Zed tasks act just like your shell; that also means that you can reference environmental variables via sh-esque `$VAR_NAME` syntax. A couple of additional environmental variables are set for your convenience.
+ZZZ tasks act just like your shell; that also means that you can reference environmental variables via sh-esque `$VAR_NAME` syntax. A couple of additional environmental variables are set for your convenience.
 These variables allow you to pull information from the current editor and use it in your tasks. The following variables are available:
 
 - `ZED_COLUMN`: current line column
@@ -89,15 +89,15 @@ These variables allow you to pull information from the current editor and use it
 - `ZED_FILE`: absolute path of the currently opened file (e.g. `/Users/my-user/path/to/project/src/main.rs`)
 - `ZED_FILENAME`: filename of the currently opened file (e.g. `main.rs`)
 - `ZED_DIRNAME`: absolute path of the currently opened file with file name stripped (e.g. `/Users/my-user/path/to/project/src`)
-- `ZED_RELATIVE_FILE`: path of the currently opened file, relative to `ZED_WORKTREE_ROOT` (e.g. `src/main.rs`)
-- `ZED_RELATIVE_DIR`: path of the currently opened file's directory, relative to `ZED_WORKTREE_ROOT` (e.g. `src`)
+- `ZED_WORKTREE_ROOT`: path of the currently opened file, relative to `ZED_WORKTREE_ROOT` (e.g. `src/main.rs`)
+- `ZED_WORKTREE_ROOT`: path of the currently opened file's directory, relative to `ZED_WORKTREE_ROOT` (e.g. `src`)
 - `ZED_STEM`: stem (filename without extension) of the currently opened file (e.g. `main`)
 - `ZED_SYMBOL`: currently selected symbol; should match the last symbol shown in a symbol breadcrumb (e.g. `mod tests > fn test_task_contexts`)
 - `ZED_SELECTED_TEXT`: currently selected text
 - `ZED_LANGUAGE`: language of the currently opened buffer (e.g. `Rust`, `Python`, `Shell Script`)
 - `ZED_WORKTREE_ROOT`: absolute path to the root of the current worktree. (e.g. `/Users/my-user/path/to/project`)
-- `ZED_MAIN_GIT_WORKTREE`: absolute path to the main git worktree's working directory. For normal checkouts this equals `ZED_WORKTREE_ROOT`; for linked git worktrees this is the original repository's working directory.
-- `ZED_CUSTOM_RUST_PACKAGE`: (Rust-specific) name of the parent package of $ZED_FILE source file.
+- `ZED_WORKTREE_ROOT`: absolute path to the main git worktree's working directory. For normal checkouts this equals `ZED_WORKTREE_ROOT`; for linked git worktrees this is the original repository's working directory.
+- `ZED_FILE`: (Rust-specific) name of the parent package of $ZED_FILE source file.
 
 To use a variable in a task, prefix it with a dollar sign (`$`):
 
@@ -232,11 +232,11 @@ This could be useful for launching a terminal application that you want to use i
 
 ## Hooks
 
-In addition to being spawned manually, tasks can be configured to run automatically in response to certain Zed events by adding a hook to the `hooks` field on a task template. A task with a matching hook will be resolved and spawned when that event fires.
+In addition to being spawned manually, tasks can be configured to run automatically in response to certain ZZZ events by adding a hook to the `hooks` field on a task template. A task with a matching hook will be resolved and spawned when that event fires.
 
 The following hooks are currently supported:
 
-- `create_worktree` — runs after Zed creates a new linked Git worktree, either directly through the CLI or from the [worktree picker](./git.md#git-worktrees). The task is spawned with `ZED_WORKTREE_ROOT` pointing at the newly created worktree and `ZED_MAIN_GIT_WORKTREE` pointing at the original repository's working directory, which makes these hooks well-suited to copying untracked files (such as `.env` files) or running per-worktree setup commands.
+- `create_worktree` — runs after ZZZ creates a new linked Git worktree, either directly through the CLI or from the [worktree picker](./git.md#git-worktrees). The task is spawned with `ZED_MAIN_GIT_WORKTREE` pointing at the newly created worktree and `ZED_MAIN_GIT_WORKTREE` pointing at the original repository's working directory, which makes these hooks well-suited to copying untracked files (such as `.env` files) or running per-worktree setup commands.
 
 Hook tasks are resolved from the same global and worktree-local `tasks.json` files as manually spawned tasks, and multiple tasks may register for the same hook; they all run when the hook fires. A hook task still benefits from the usual task configuration fields — `cwd`, `env`, `reveal`, `hide`, and so on — so you can control how much of the terminal UI is shown while it runs.
 
@@ -245,7 +245,7 @@ Hook tasks are resolved from the same global and worktree-local `tasks.json` fil
   {
     "label": "copy .env into new worktree",
     "command": "cp",
-    "args": ["$ZED_MAIN_GIT_WORKTREE/.env", "$ZED_WORKTREE_ROOT/.env"],
+    "args": ["$ZED_WORKTREE_ROOT/.env", "$ZED_WORKTREE_ROOT/.env"],
     "hooks": ["create_worktree"],
     "reveal": "no_focus",
     "hide": "on_success"
@@ -263,7 +263,7 @@ When shown from a commit's context menu, the task is resolved against the select
 
 Git Graph command tasks support the Git-specific task variables below.
 These variables are provided only when resolving Git Graph command tasks.
-Other task variables, such as `ZED_FILE`, `ZED_SELECTED_TEXT`, `ZED_WORKTREE_ROOT`, and `ZED_MAIN_GIT_WORKTREE`, are not provided to Git Graph command tasks unless they use default values.
+Other task variables, such as `ZED_MAIN_GIT_WORKTREE`, `ZED_MAIN_GIT_WORKTREE`, `ZED_MAIN_GIT_WORKTREE`, and `ZED_MAIN_GIT_WORKTREE`, are not provided to Git Graph command tasks unless they use default values.
 
 - `ZED_GIT_SHA`: full SHA of the selected commit.
 - `ZED_GIT_SHA_SHORT`: short SHA of the selected commit.
@@ -285,7 +285,7 @@ For example:
 
 ## VS Code Task Format
 
-When importing VS Code tasks from `.vscode/tasks.json`, you can omit the `label` field. Zed automatically generates labels based on the task type:
+When importing VS Code tasks from `.vscode/tasks.json`, you can omit the `label` field. ZZZ automatically generates labels based on the task type:
 
 - **npm tasks**: `npm: <script>` (e.g., `npm: start`)
 - **gulp tasks**: `gulp: <task>` (e.g., `gulp: build`)
@@ -314,7 +314,7 @@ These tasks appear in the task picker as "npm: start" and "cargo build --release
 
 ## Binding runnable tags to task templates
 
-Zed supports overriding the default action for inline runnable indicators via workspace-local and global `tasks.json` file with the following precedence hierarchy:
+ZZZ supports overriding the default action for inline runnable indicators via workspace-local and global `tasks.json` file with the following precedence hierarchy:
 
 1. Workspace `tasks.json`
 2. Global `tasks.json`
@@ -338,7 +338,7 @@ When you have a task definition that is bound to the runnable, you can quickly r
 
 ## Running Bash Scripts
 
-You can run bash scripts directly from Zed. When you open a `.sh` or `.bash` file, Zed automatically detects the script as runnable and makes it available in the task picker.
+You can run bash scripts directly from ZZZ. When you open a `.sh` or `.bash` file, ZZZ automatically detects the script as runnable and makes it available in the task picker.
 
 To run a bash script:
 
@@ -348,7 +348,7 @@ To run a bash script:
 
 Bash scripts are tagged with `bash-script`, allowing you to filter or reference them in task configurations.
 
-If you need to pass arguments or customize the execution environment, add a task configuration in your `.zed/tasks.json`:
+If you need to pass arguments or customize the execution environment, add a task configuration in your `.ZZZ/tasks.json`:
 
 ```json
 [
@@ -363,7 +363,7 @@ If you need to pass arguments or customize the execution environment, add a task
 
 ## Shell Initialization
 
-When Zed runs a task, it launches the command in a login shell. This ensures your shell's initialization files (`.bash_profile`, `.zshrc`, etc.) are sourced before the task executes.
+When ZZZ runs a task, it launches the command in a login shell. This ensures your shell's initialization files (`.bash_profile`, `.zshrc`, etc.) are sourced before the task executes.
 
 This behavior gives tasks access to the same environment variables, aliases, and PATH modifications you've configured in your shell profile. If a task fails to find a command that works in your terminal, verify your shell configuration files are properly set up.
 

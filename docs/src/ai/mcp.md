@@ -12,7 +12,7 @@ ZZZ uses the [Model Context Protocol](https://modelcontextprotocol.io/) to inter
 ## Supported Features
 
 ZZZ currently supports MCP's [Tools](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) and [Prompts](https://modelcontextprotocol.io/specification/2025-11-25/server/prompts) features.
-We welcome contributions that help advance Zed's MCP feature coverage (Discovery, Sampling, Elicitation, etc).
+We welcome contributions that help advance ZZZ's MCP feature coverage (Discovery, Sampling, Elicitation, etc).
 
 ZZZ also handles the `notifications/tools/list_changed` notification from MCP servers. When a server adds, removes, or modifies its available tools at runtime, ZZZ automatically reloads the tool list without requiring a server restart.
 
@@ -23,7 +23,7 @@ ZZZ also handles the `notifications/tools/list_changed` notification from MCP se
 One of the ways you can use MCP servers in ZZZ is by exposing them as an extension.
 Check out the [MCP Server Extensions](../extensions/mcp-extensions.md) page to learn how to create your own.
 
-MCP servers can be packaged as extensions. Find them in the app by opening the Command Palette and running `zed: extensions`, or from the Agent Panel menu item for server extensions.
+MCP servers can be packaged as extensions. Find them in the app by opening the Command Palette and running `zzz: extensions`, or from the Agent Panel menu item for server extensions.
 
 Examples include Context7, GitHub, Puppeteer, Brave Search, Prisma, Figma, and other community-maintained servers.
 
@@ -127,7 +127,7 @@ As an example, the Dagger team suggests doing that with their Container Use MCP 
 
 ### Tool Permissions
 
-> **Note:** In Zed v0.224.0 and above, tool approval is controlled by `agent.tool_permissions.default`.
+> **Note:** In ZZZ v0.224.0 and above, tool approval is controlled by `agent.tool_permissions.default`.
 > In earlier versions, it was controlled by the `agent.always_allow_tool_actions` boolean (default `false`).
 
 ZZZ's Agent Panel provides the `agent.tool_permissions.default` setting to control tool approval behavior for the built-in agent:
@@ -148,7 +148,7 @@ MCP servers configured in ZZZ are forwarded to [external agents](./external-agen
 
 Actual availability depends on what the external agent supports.
 
-For details on what Zed forwards and what stays in the agent's own config, see
+For details on what ZZZ forwards and what stays in the agent's own config, see
 [Configuration Boundaries](./external-agents.md#configuration-boundaries).
 
 ### Error Handling

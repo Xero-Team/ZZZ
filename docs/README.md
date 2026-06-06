@@ -1,6 +1,6 @@
-# Zed Docs
+# ZZZ Docs
 
-Welcome to Zed's documentation.
+Welcome to ZZZ's documentation.
 
 This is built on push to `main` and published automatically to [https://zed.dev/docs](https://zed.dev/docs).
 
@@ -157,3 +157,4 @@ title: "Some title"
 
 - The front matter must be at the top of the file, with only white-space preceding it.
 - The contents of the `title` and `description` will not be HTML escaped. They should be simple ASCII text with no unicode or emoji characters.
+

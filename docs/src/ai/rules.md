@@ -1,17 +1,17 @@
 ---
-title: AI Rules in Zed - .rules, .cursorrules, CLAUDE.md
-description: Configure AI behavior in Zed with .rules files, .cursorrules, CLAUDE.md, AGENTS.md, and the Rules Library for project-level instructions.
+title: AI Rules in ZZZ - .rules, .cursorrules, CLAUDE.md
+description: Configure AI behavior in ZZZ with .rules files, .cursorrules, CLAUDE.md, AGENTS.md, and the Rules Library for project-level instructions.
 ---
 
 # Rules {#rules}
 
 Rules are prompts that can be inserted either automatically at the beginning of each [Agent Panel](./agent-panel.md) interaction, through `.rules` files available in your project's file tree, or on-demand, through @-mentioning, via the Rules Library.
 
-> **Note:** Starting in Zed v1.4.0, on-demand rules (and the rules library) have been replaced by [Skills](./skills.md). Skills are the recommended way to package reusable agent instructions. Learn more about [the rules -> skills migration](#migrating-to-skills).
+> **Note:** Starting in ZZZ v1.4.0, on-demand rules (and the rules library) have been replaced by [Skills](./skills.md). Skills are the recommended way to package reusable agent instructions. Learn more about [the rules -> skills migration](#migrating-to-skills).
 
 ## `.rules` files
 
-Zed supports including `.rules` files at the root of a project's file tree, and they act as project-level instructions that are auto-included in all of your interactions with the Agent Panel.
+ZZZ supports including `.rules` files at the root of a project's file tree, and they act as project-level instructions that are auto-included in all of your interactions with the Agent Panel.
 
 Other names for this file are also supported for compatibility with other agents, but note that the first file which matches in this list will be used:
 
@@ -32,7 +32,7 @@ It's a full editor with syntax highlighting and all standard keybindings.
 
 You can also use the inline assistant right in the rules editor, allowing you to get quick LLM support for writing rules.
 
-> **Note:** Starting in Zed v1.4.0, the rules library has been replaced by [Skills](./skills.md). Skills are the recommended way to package reusable agent instructions. Learn more about [the rules -> skills migration](#migrating-to-skills).
+> **Note:** Starting in ZZZ v1.4.0, the rules library has been replaced by [Skills](./skills.md). Skills are the recommended way to package reusable agent instructions. Learn more about [the rules -> skills migration](#migrating-to-skills).
 
 ### Opening the Rules Library
 
@@ -72,9 +72,9 @@ You can set any rule as the default by clicking the paper clip icon button in th
 
 ## Migrating to Skills {#migrating-to-skills}
 
-When you update to Zed v1.4.0, your existing Rules are migrated to Skills automatically:
+When you update to ZZZ v1.4.0, your existing Rules are migrated to Skills automatically:
 
 - **Non-default Rules** become global skills in `~/.agents/skills/`, each with `disable-model-invocation: true`. They remain user-invocable via `/skill-name` or `@`-mention.
-- **Default Rules** are appended to your global `AGENTS.md` file (`~/.config/zed/AGENTS.md` on macOS and Linux, `%APPDATA%\Zed\AGENTS.md` on Windows), preserving their behavior of being included in every conversation.
+- **Default Rules** are appended to your global `AGENTS.md` file (`~/.config/ZZZ/AGENTS.md` on macOS and Linux, `%APPDATA%\ZZZ\AGENTS.md` on Windows), preserving their behavior of being included in every conversation.
 
-A banner in the title bar announces the migration when it runs. Your original Rule data is not deleted, so downgrading to an earlier version of Zed leaves your Rules intact.
+A banner in the title bar announces the migration when it runs. Your original Rule data is not deleted, so downgrading to an earlier version of ZZZ leaves your Rules intact.

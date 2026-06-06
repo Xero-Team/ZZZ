@@ -101,7 +101,7 @@ echo "URL=$URL" >> "$GITHUB_OUTPUT"
         .add_with((
             "stringToTruncate",
             format!(
-                "📣 Zed [{TAG_NAME}](<${{{{ steps.get-release-url.outputs.URL }}}}>)  was just released!\n\n{RELEASE_BODY}\n"
+                "📣 ZZZ [{TAG_NAME}](<${{{{ steps.get-release-url.outputs.URL }}}}>)  was just released!\n\n{RELEASE_BODY}\n"
             ),
         ))
         .add_with(("maxLength", 2000))
@@ -149,9 +149,9 @@ fn publish_winget() -> NamedJob {
 
     fn set_package_name() -> (Step<Run>, StepOutput) {
         let script = r#"if ($env:IS_PRERELEASE -eq "true") {
-    $PACKAGE_NAME = "ZedIndustries.Zed.Preview"
+    $PACKAGE_NAME = "ZZZIndustries.ZZZ.Preview"
 } else {
-    $PACKAGE_NAME = "ZedIndustries.Zed"
+    $PACKAGE_NAME = "ZZZIndustries.ZZZ"
 }
 
 echo "PACKAGE_NAME=$PACKAGE_NAME" >> $env:GITHUB_OUTPUT

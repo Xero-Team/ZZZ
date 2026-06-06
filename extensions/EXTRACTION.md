@@ -1,6 +1,6 @@
 # Extracting an extension to dedicated repo
 
-These are some notes of how to extract an extension from the main zed repository and generate a new repository which preserves the history as best as possible. In the this example we will be extracting the `ruby` extension, substitute as appropriate.
+These are some notes of how to extract an extension from the main ZZZ repository and generate a new repository which preserves the history as best as possible. In this example we will be extracting the `ruby` extension; substitute as appropriate.
 
 ## Pre-requisites
 
@@ -18,7 +18,7 @@ We are going to use a `$LANGNAME` variable for all these steps. Make sure it is 
 > If you get `zsh: command not found: #` errors, run:
 > `setopt interactive_comments && echo "setopt interactive_comments" >> ~/.zshrc`
 
-1. Create a clean clone the zed repository, delete tags and delete branches.
+1. Create a clean clone of the ZZZ repository, delete tags and delete branches.
 
 ```sh
 LANGNAME=your_language_name_here
@@ -139,7 +139,7 @@ git tag v${NEW_VERSION}
 git push origin v${NEW_VERSION}
 ```
 
-7. In zed repository, remove the old extension and push a PR.
+7. In the ZZZ repository, remove the old extension and push a PR.
 
 ```sh
 rm -rf extensions/$LANGNAME
@@ -178,4 +178,4 @@ git commit -m "Bump ${LANGNAME} to v${NEW_VERSION}"
 git push
 ```
 
-Create PR and reference the Zed PR with removal from tree.
+Create a PR and reference the ZZZ PR with removal from tree.

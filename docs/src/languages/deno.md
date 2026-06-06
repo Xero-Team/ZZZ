@@ -1,6 +1,6 @@
 ---
 title: Deno
-description: "Configure Deno language support in Zed, including language servers, formatting, and debugging."
+description: "Configure Deno language support in ZZZ, including language servers, formatting, and debugging."
 ---
 
 # Deno
@@ -58,7 +58,7 @@ Configure language servers and formatters in Settings ({#kb zed::OpenSettings}) 
 }
 ```
 
-See [Configuring supported languages](../configuring-languages.md) in the Zed documentation for more information.
+See [Configuring supported languages](../configuring-languages.md) in the ZZZ documentation for more information.
 
 <!--
 TBD: Deno TypeScript REPL instructions [docs/repl#typescript-deno](../repl.md#typescript-deno)
@@ -96,7 +96,7 @@ To get completions for `deno.json` or `package.json`, add the following to your 
 
 ## DAP support
 
-To debug deno programs, add this to `.zed/debug.json`
+To debug deno programs, add this to `.ZZZ/debug.json`
 
 ```json [debug]
 [
@@ -116,7 +116,7 @@ To debug deno programs, add this to `.zed/debug.json`
 
 ## Runnable support
 
-To run deno tasks like tests from the ui, add this to `.zed/tasks.json`
+To run deno tasks like tests from the ui, add this to `.ZZZ/tasks.json`
 
 ```json [tasks]
 [

@@ -1,6 +1,6 @@
 ---
-title: Inline AI Code Editing - Zed
-description: Transform code inline with AI in Zed. Send selections to any LLM for refactoring, generation, or editing with multi-cursor support.
+title: Inline AI Code Editing - ZZZ
+description: Transform code inline with AI in ZZZ. Send selections to any LLM for refactoring, generation, or editing with multi-cursor support.
 ---
 
 # Inline Assistant
@@ -99,7 +99,7 @@ One with Claude Sonnet 4.5 (the default model), another with GPT-5-mini, and ano
 Both features generate inline code, but they work differently:
 
 - **Inline Assistant**: You write a prompt and select what to transform. You control the context.
-- **[Edit Prediction](./edit-prediction.md)**: Zed automatically suggests edits based on your recent changes, visited files, and cursor position. No prompting required.
+- **[Edit Prediction](./edit-prediction.md)**: ZZZ automatically suggests edits based on your recent changes, visited files, and cursor position. No prompting required.
 
 The key difference: Inline Assistant is explicit and prompt-driven; Edit Prediction is automatic and context-inferred.
 

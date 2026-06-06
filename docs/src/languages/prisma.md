@@ -1,6 +1,6 @@
 ---
 title: Prisma
-description: "Configure Prisma language support in Zed, including language servers, formatting, and debugging."
+description: "Configure Prisma language support in ZZZ, including language servers, formatting, and debugging."
 ---
 
 # Prisma

@@ -22,7 +22,7 @@ Under the hood we run Gemini CLI in the background, and talk to it over ACP.
 
 First open the agent panel with {#kb agent::ToggleFocus}, and then use the `+` button in the top right to start a new Gemini CLI thread.
 
-If you'd like to bind this to a keyboard shortcut, you can do so by editing your `keymap.json` file via the `zed: open keymap file` command to include:
+If you'd like to bind this to a keyboard shortcut, you can do so by editing your `keymap.json` file via the `zzz: open keymap file` command to include:
 
 ```json [keymap]
 [
@@ -55,7 +55,7 @@ For more information, see the [Gemini CLI docs](https://github.com/google-gemini
 
 ### Usage
 
-Gemini CLI supports the same workflows as Zed's first-party agent: code generation, refactoring, debugging, and Q&A. Add context by @-mentioning files, recent threads, or symbols.
+Gemini CLI supports the same workflows as ZZZ's first-party agent: code generation, refactoring, debugging, and Q&A. Add context by @-mentioning files, recent threads, or symbols.
 
 > Some agent panel features are not yet available with Gemini CLI: editing past messages, resuming threads from history, and checkpointing.
 
@@ -68,7 +68,7 @@ Under the hood, ZZZ runs the Claude Agent SDK, which runs Claude Code under the 
 
 Open the agent panel with {#kb agent::ToggleFocus}, and then use the `+` button in the top right to start a new Claude Agent thread.
 
-If you'd like to bind this to a keyboard shortcut, you can do so by editing your `keymap.json` file via the `zed: open keymap file` command to include:
+If you'd like to bind this to a keyboard shortcut, you can do so by editing your `keymap.json` file via the `zzz: open keymap file` command to include:
 
 ```json [keymap]
 [
@@ -115,9 +115,9 @@ If you want to override the executable used by the adapter, you can set the `CLA
 
 ### Usage
 
-Claude Agent supports the same workflows as Zed's first-party agent. Add context by @-mentioning files, recent threads, diagnostics, or symbols.
+Claude Agent supports the same workflows as ZZZ's first-party agent. Add context by @-mentioning files, recent threads, diagnostics, or symbols.
 
-In complement to talking to it [over ACP](https://agentclientprotocol.com), Zed relies on the [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview) to support some of its specific features.
+In complement to talking to it [over ACP](https://agentclientprotocol.com), ZZZ relies on the [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview) to support some of its specific features.
 However, the SDK doesn't yet expose everything needed to fully support all of them:
 
 - Slash Commands: [Custom slash commands](https://code.claude.com/docs/en/slash-commands#custom-slash-commands) are fully supported, and have been merged into skills. A subset of [built-in commands](https://code.claude.com/docs/en/slash-commands#built-in-slash-commands) are supported.
@@ -129,7 +129,7 @@ However, the SDK doesn't yet expose everything needed to fully support all of th
 
 #### CLAUDE.md
 
-Claude Agent in Zed will automatically use any `CLAUDE.md` file found in your project root, project subdirectories, or root `.claude` directory.
+Claude Agent in ZZZ will automatically use any `CLAUDE.md` file found in your project root, project subdirectories, or root `.claude` directory.
 
 If you don't have a `CLAUDE.md` file, you can ask Claude Agent to create one for you through the `init` slash command.
 
@@ -143,7 +143,7 @@ Under the hood, ZZZ runs Codex CLI and communicates to it over ACP, through [a d
 As of version `0.208`, you should be able to use Codex directly from ZZZ.
 Open the agent panel with {#kb agent::ToggleFocus}, and then use the `+` button in the top right to start a new Codex thread.
 
-If you'd like to bind this to a keyboard shortcut, you can do so by editing your `keymap.json` file via the `zed: open keymap file` command to include:
+If you'd like to bind this to a keyboard shortcut, you can do so by editing your `keymap.json` file via the `zzz: open keymap file` command to include:
 
 ```json
 [
@@ -183,7 +183,7 @@ ZZZ will always use this managed version of Codex even if you have it installed 
 
 ### Usage
 
-Codex supports the same workflows as Zed's first-party agent. Add context by @-mentioning files or symbols.
+Codex supports the same workflows as ZZZ's first-party agent. Add context by @-mentioning files or symbols.
 
 > Some agent panel features are not yet available with Codex: editing past messages, resuming threads from history, and checkpointing.
 
@@ -199,7 +199,7 @@ At the moment, the registry is a curated set of agents, including only the ones 
 
 #### Using it in ZZZ
 
-Use the `zed: acp registry` command to quickly go to the ACP Registry page.
+Use the `zzz: acp registry` command to quickly go to the ACP Registry page.
 There's also a button ("Add Agent") that takes you there in the agent panel's configuration view.
 
 From there, you can click to install your preferred agent and it will become available right away in the `+` icon button in the agent panel.
@@ -228,7 +228,7 @@ It's also possible to customize environment variables for registry-installed age
 ## Debugging Agents
 
 When using external agents in ZZZ, you can access the debug view with `dev: open acp logs` from the Command Palette.
-This lets you see the messages being sent and received between Zed and the agent.
+This lets you see the messages being sent and received between ZZZ and the agent.
 
 ![The debug view for ACP logs.](https://zed.dev/img/acp/acp-logs.webp)
 
@@ -239,7 +239,7 @@ problems with external agents.
 
 External agents run as separate processes that communicate with ZZZ via the [Agent Client Protocol (ACP)](https://agentclientprotocol.com). This creates important boundaries between ZZZ's configuration and the agent's native configuration.
 
-### What Zed Forwards to External Agents
+### What ZZZ Forwards to External Agents
 
 When you start an external agent thread, ZZZ sends:
 
@@ -270,9 +270,9 @@ Claude Agent runs Claude Code under the hood, which reads its standard configura
 | `~/.claude/` directory              | Yes — Claude Code reads its own settings and memory               |
 | CLAUDE.md files                     | Yes — Claude Code reads these directly from the project           |
 | Skills                              | Yes — exposed via the Claude Agent SDK                            |
-| MCP servers from Claude Code config | Yes — but Zed also forwards its own MCP servers via ACP           |
+| MCP servers from Claude Code config | Yes — but ZZZ also forwards its own MCP servers via ACP           |
 | Hooks                               | No — [not supported](https://code.claude.com/docs/en/hooks-guide) |
-| Authentication                      | Separate — you must authenticate via `/login` in Zed              |
+| Authentication                      | Separate — you must authenticate via `/login` in ZZZ              |
 
 > **Why separate authentication?** ZZZ isolates Claude Agent authentication to give you control over which account and billing method you use.
 
@@ -283,12 +283,12 @@ Codex runs the Codex CLI under the hood, which reads its standard configuration:
 | Config                        | Read by Codex?                                  |
 | ----------------------------- | ----------------------------------------------- |
 | `~/.codex/config.toml`        | Yes — Codex CLI reads its own config            |
-| MCP servers from Codex config | Yes — but Zed also forwards its own MCP servers |
+| MCP servers from Codex config | Yes — but ZZZ also forwards its own MCP servers |
 | `CODEX_API_KEY` env var       | Yes — inherited from your shell environment     |
 | `OPENAI_API_KEY` env var      | Yes — inherited from your shell environment     |
-| ChatGPT OAuth login           | Separate — you must re-authenticate in Zed      |
+| ChatGPT OAuth login           | Separate — you must re-authenticate in ZZZ      |
 
-You can also pass environment variables through Zed settings:
+You can also pass environment variables through ZZZ settings:
 
 ```json [settings]
 {

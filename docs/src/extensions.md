@@ -1,11 +1,11 @@
 ---
 title: Extensions
-description: "Extend Zed with themes, language support, AI tools, and more through the extension system."
+description: "Extend ZZZ with themes, language support, AI tools, and more through the extension system."
 ---
 
 # Extensions
 
-Zed lets you add new functionality using user-defined extensions.
+ZZZ lets you add new functionality using user-defined extensions.
 
 - [Installing Extensions](./extensions/installing-extensions.md)
 - [Extension Capabilities](./extensions/capabilities.md)

@@ -1,11 +1,11 @@
 ---
-title: Multibuffers - Edit Multiple Files at Once in Zed
-description: Edit multiple files simultaneously in Zed using multibuffers. Combine with multi-cursor for fast cross-file refactoring.
+title: Multibuffers - Edit Multiple Files at Once in ZZZ
+description: Edit multiple files simultaneously in ZZZ using multibuffers. Combine with multi-cursor for fast cross-file refactoring.
 ---
 
 # Multibuffers
 
-One of the superpowers Zed gives you is the ability to edit multiple files simultaneously. When combined with multiple cursors, this makes wide-ranging refactors significantly faster.
+One of the superpowers ZZZ gives you is the ability to edit multiple files simultaneously. When combined with multiple cursors, this makes wide-ranging refactors significantly faster.
 
 ## Editing in a multibuffer
 

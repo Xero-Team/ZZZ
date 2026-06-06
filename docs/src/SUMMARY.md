@@ -185,9 +185,9 @@
   - [Worktree Trust](./worktree-trust.md)
   - [AI Improvement](./ai/ai-improvement.md)
 
-# Developing Zed
+# Developing ZZZ
 
-- [Developing Zed](./development.md)
+- [Developing ZZZ](./development.md)
   - [macOS](./development/macos.md)
   - [Linux](./development/linux.md)
   - [Windows](./development/windows.md)

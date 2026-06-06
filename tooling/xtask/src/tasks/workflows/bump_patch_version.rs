@@ -45,7 +45,7 @@ fn run_bump_patch_version(branch: &WorkflowInput) -> steps::NamedJob {
                 ;;
             esac
 
-            version=$(script/get-crate-version zed)
+            version=$(script/get-crate-version zzz)
 
             {
                 echo "channel=$channel"
@@ -58,7 +58,7 @@ fn run_bump_patch_version(branch: &WorkflowInput) -> steps::NamedJob {
 
     fn bump_version() -> Step<Run> {
         named::bash(indoc::indoc! {r#"
-            version="$(cargo set-version -p zed --bump patch 2>&1 | sed 's/.* //')"
+            version="$(cargo set-version -p zzz --bump patch 2>&1 | sed 's/.* //')"
             echo "version=$version" >> "$GITHUB_OUTPUT"
         "#})
         .id("bump-version")

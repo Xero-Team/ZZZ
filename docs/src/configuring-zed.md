@@ -1,22 +1,22 @@
 ---
-title: Configuring Zed - Settings and Preferences
-description: Configure Zed with the Settings Editor, JSON files, and project-specific overrides. Covers all settings options.
+title: Configuring ZZZ - Settings and Preferences
+description: Configure ZZZ with the Settings Editor, JSON files, and project-specific overrides. Covers all settings options.
 ---
 
-# Configuring Zed
+# Configuring ZZZ
 
-This guide explains how Zed's settings system works, including the Settings Editor, JSON configuration files, and project-specific settings.
+This guide explains how ZZZ's settings system works, including the Settings Editor, JSON configuration files, and project-specific settings.
 
 For visual customization (themes, fonts, icons), see [Appearance](./appearance.md).
 
 ## Settings Editor
 
-The **Settings Editor** ({#kb zed::OpenSettings}) is the primary way to configure Zed. It provides a searchable interface where you can browse available settings, see their current values, and make changes.
+The **Settings Editor** ({#kb zed::OpenSettings}) is the primary way to configure ZZZ. It provides a searchable interface where you can browse available settings, see their current values, and make changes.
 
 To open it:
 
 - Press {#kb zed::OpenSettings}
-- Or run `zed: open settings` from the command palette
+- Or run `zzz: open settings` from the command palette
 
 As you type in the search box, matching settings appear with descriptions and controls to modify them. Changes save automatically to your settings file.
 
@@ -26,13 +26,13 @@ As you type in the search box, matching settings appear with descriptions and co
 
 ### User Settings
 
-Your user settings apply globally across all projects. Open the file with {#kb zed::OpenSettingsFile} or run `zed: open settings file` from the command palette.
+Your user settings apply globally across all projects. Open the file with {#kb zed::OpenSettingsFile} or run `zzz: open settings file` from the command palette.
 
 The file is located at:
 
-- macOS: `~/.config/zed/settings.json`
-- Linux: `~/.config/zed/settings.json` (or `$XDG_CONFIG_HOME/zed/settings.json`)
-- Windows: `%APPDATA%\Zed\settings.json`
+- macOS: `~/.config/ZZZ/settings.json`
+- Linux: `$XDG_CONFIG_HOME/ZZZ/settings.json` (or `$XDG_CONFIG_HOME/ZZZ/settings.json`)
+- Windows: `%APPDATA%\ZZZ\settings.json`
 
 The syntax is JSON with support for `//` comments.
 
@@ -42,12 +42,12 @@ To see all available settings with their default values, run {#action zed::OpenD
 
 ### Project Settings
 
-Override user settings for a specific project by creating a `.zed/settings.json` file in your project root. Run {#action zed::OpenProjectSettings} to create this file.
+Override user settings for a specific project by creating a `.ZZZ/settings.json` file in your project root. Run {#action zed::OpenProjectSettings} to create this file.
 
 Project settings take precedence over user settings for that project only.
 
 ```json [settings]
-// .zed/settings.json
+// .ZZZ/settings.json
 {
   "tab_size": 2,
   "formatter": "prettier",
@@ -63,7 +63,7 @@ You can also add settings files in subdirectories for more granular control.
 
 Settings are applied in layers:
 
-1. **Default settings** — Zed's built-in defaults
+1. **Default settings** — ZZZ's built-in defaults
 2. **User settings** — Your global preferences
 3. **Project settings** — Project-specific overrides
 
@@ -71,7 +71,7 @@ Later layers override earlier ones. For object settings (like `terminal`), prope
 
 ## Per-file Settings
 
-Zed has some compatibility support for Emacs and Vim [modelines](./modelines.md), so you can set some settings per-file.
+ZZZ has some compatibility support for Emacs and Vim [modelines](./modelines.md), so you can set some settings per-file.
 
 ## Per-Release Channel Overrides
 
@@ -97,12 +97,12 @@ Changes made in the Settings Editor apply across your settings profile.
 
 ## Settings Deep Links
 
-Zed supports deep links that open specific settings directly:
+ZZZ supports deep links that open specific settings directly:
 
 ```
-zed://settings/theme
-zed://settings/vim_mode
-zed://settings/buffer_font_size
+zzz://settings/theme
+zzz://settings/vim_mode
+zzz://settings/buffer_font_size
 ```
 
 These are useful for sharing configuration tips or linking from documentation.

@@ -1,22 +1,22 @@
 ---
 title: Windows & Projects
-description: "How Zed handles multiple projects in windows, including the threads sidebar and options for opening in new windows."
+description: "How ZZZ handles multiple projects in windows, including the threads sidebar and options for opening in new windows."
 ---
 
 # Windows & Projects
 
-Zed lets you work on multiple projects in a single window. Projects appear in the threads sidebar on the left, and you can switch between them while keeping your context intact.
+ZZZ lets you work on multiple projects in a single window. Projects appear in the threads sidebar on the left, and you can switch between them while keeping your context intact.
 
 ## How Projects Open
 
-By default, when you open a folder in Zed, it opens as a new project in your current window's threads sidebar rather than creating a new window. This keeps related work together and preserves your agent threads and layout.
+By default, when you open a folder in ZZZ, it opens as a new project in your current window's threads sidebar rather than creating a new window. This keeps related work together and preserves your agent threads and layout.
 
 | Action             | Result                                    |
 | ------------------ | ----------------------------------------- |
 | File > Open        | Opens in current window (threads sidebar) |
 | File > Open Recent | Opens in current window (threads sidebar) |
-| Drag folder to Zed | Opens in current window (threads sidebar) |
-| `zed ~/project`    | Opens in current window (threads sidebar) |
+| Drag folder to ZZZ | Opens in current window (threads sidebar) |
+| `zzz ~/project`    | Opens in current window (threads sidebar) |
 
 ## Working with Multiple Projects
 
@@ -45,7 +45,7 @@ When using File > Open Recent ({#kb projects::OpenRecent}):
 Use the `-n` flag to force a new window:
 
 ```sh
-zed -n ~/projects/other-project
+zzz -n ~/projects/other-project
 ```
 
 Other CLI options for controlling window behavior:
@@ -89,4 +89,4 @@ This adds the folder as an additional root in your current project's file tree, 
 
 - [Threads Sidebar](./ai/parallel-agents.md#threads-sidebar): Managing threads across projects
 - [Getting Started](./getting-started.md): Essential commands and setup
-- [VS Code Migration](./migrate/vs-code.md): How Zed's project model differs from VS Code
+- [VS Code Migration](./migrate/vs-code.md): How ZZZ's project model differs from VS Code

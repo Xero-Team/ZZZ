@@ -1,6 +1,6 @@
 ---
-title: Project Panel - Zed
-description: Navigate workspace files and directories with Zed's project panel. Create, rename, trash and delete file and directories.
+title: Project Panel - ZZZ
+description: Navigate workspace files and directories with ZZZ's project panel. Create, rename, trash and delete file and directories.
 ---
 
 # Project Panel
@@ -90,7 +90,7 @@ cancel.
 - {#action project_panel::Paste} ({#kb project_panel::Paste}) places them in the
   selected directory.
 
-When pasting would create a name conflict, Zed appends a "copy" suffix (e.g.,
+When pasting would create a name conflict, ZZZ appends a "copy" suffix (e.g.,
 `file copy.txt`, `file copy 2.txt`). If a single file is pasted with a generated
 suffix, the rename editor opens automatically so you can adjust the name.
 

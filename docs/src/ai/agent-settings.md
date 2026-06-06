@@ -1,17 +1,17 @@
 ---
-title: AI Agent Settings - Zed
-description: "Customize Zed's AI agent: default models, temperature, tool approval, auto-run commands, notifications, and panel options."
+title: AI Agent Settings - ZZZ
+description: "Customize ZZZ's AI agent: default models, temperature, tool approval, auto-run commands, notifications, and panel options."
 ---
 
 # Agent Settings
 
-Settings for Zed's Agent Panel, including model selection, UI preferences, and tool permissions.
+Settings for ZZZ's Agent Panel, including model selection, UI preferences, and tool permissions.
 
 ## Model Settings {#model-settings}
 
 ### Default Model {#default-model}
 
-If you're using [Zed's hosted LLM service](./subscription.md), it sets `claude-sonnet-4-5` as the default model for agentic work (agent panel, inline assistant) and `gpt-5-nano` as the default "fast" model (thread summarization, git commit messages). If you're not subscribed or want to change these defaults, you can manually edit the `default_model` object in your settings:
+If you're using [ZZZ's hosted LLM service](./subscription.md), it sets `claude-sonnet-4-5` as the default model for agentic work (agent panel, inline assistant) and `gpt-5-nano` as the default "fast" model (thread summarization, git commit messages). If you're not subscribed or want to change these defaults, you can manually edit the `default_model` object in your settings:
 
 ```json [settings]
 {
@@ -159,9 +159,9 @@ Use the `agent_ui_font_size` setting to change the font size of rendered agent r
 
 ### Default Tool Permissions
 
-> **Note:** In Zed v0.224.0 and above, tool approval uses the `agent.tool_permissions` settings described below.
+> **Note:** In ZZZ v0.224.0 and above, tool approval uses the `agent.tool_permissions` settings described below.
 
-The `agent.tool_permissions.default` setting controls the baseline tool approval behavior for Zed's native agent:
+The `agent.tool_permissions.default` setting controls the baseline tool approval behavior for ZZZ's native agent:
 
 - `"confirm"` (default) — Prompts for approval before running any tool action
 - `"allow"` — Auto-approves tool actions without prompting
@@ -280,7 +280,7 @@ The `default` key on each MCP tool entry is the primary mechanism for controllin
 
 See the [Tool Permissions](./tool-permissions.md) documentation for more examples and complete details.
 
-> **Note:** Before Zed v0.224.0, tool approval was controlled by the `agent.always_allow_tool_actions` boolean (default `false`). Set it to `true` to auto-approve tool actions, or leave it `false` to require confirmation for edits and tool calls.
+> **Note:** Before ZZZ v0.224.0, tool approval was controlled by the `agent.always_allow_tool_actions` boolean (default `false`). Set it to `true` to auto-approve tool actions, or leave it `false` to require confirmation for edits and tool calls.
 
 ### Edit Display Mode
 
@@ -365,7 +365,7 @@ It is set to `true` by default, but if set to false, the card will be fully coll
 
 ### Feedback Controls
 
-Control whether to display the thumbs up/down buttons at the bottom of each agent response, allowing you to give Zed feedback about the agent's performance.
+Control whether to display the thumbs up/down buttons at the bottom of each agent response, allowing you to give ZZZ feedback about the agent's performance.
 The default value is `true`.
 
 ```json [settings]
