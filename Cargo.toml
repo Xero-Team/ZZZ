@@ -958,12 +958,15 @@ ui_input = { codegen-units = 1 }
 zed_actions = { codegen-units = 1 }
 
 [profile.release]
-debug = "limited"
-lto = "thin"
+opt-level = 3
+debug = false
+lto = "fat"
 codegen-units = 1
+panic = "abort"
+strip = true
 
 [profile.release.package]
-zed = { codegen-units = 16 }
+zzz = { codegen-units = 16 }
 
 [profile.release-fast]
 inherits = "release"
