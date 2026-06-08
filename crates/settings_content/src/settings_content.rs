@@ -622,7 +622,7 @@ pub struct GitPanelSettingsContent {
     pub button: Option<bool>,
     /// Where to dock the panel.
     ///
-    /// Default: right
+    /// Default: right (Agentic layout), left (Classic layout)
     pub dock: Option<DockPosition>,
     /// Default width of the panel in pixels.
     ///
@@ -731,7 +731,7 @@ pub struct PanelSettingsContent {
     pub button: Option<bool>,
     /// Where to dock the panel.
     ///
-    /// Default: right
+    /// Default: right (Agentic layout), left (Classic layout)
     pub dock: Option<DockPosition>,
     /// Default width of the panel in pixels.
     ///
@@ -976,7 +976,7 @@ pub struct OutlinePanelSettingsContent {
     pub default_width: Option<f32>,
     /// The position of outline panel
     ///
-    /// Default: right
+    /// Default: right (Agentic layout), left (Classic layout)
     pub dock: Option<DockSide>,
     /// Whether to show file icons in the outline panel.
     ///
