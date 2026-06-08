@@ -225,17 +225,6 @@ fn main() {
         return;
     }
 
-    // `zed --nc` Makes zed operate in nc/netcat mode for use with MCP
-    if let Some(socket) = &args.nc {
-        match nc::main(socket) {
-            Ok(()) => return,
-            Err(err) => {
-                eprintln!("Error: {}", err);
-                process::exit(1);
-            }
-        }
-    }
-
     #[cfg(all(not(debug_assertions), target_os = "windows"))]
     unsafe {
         use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
@@ -1572,11 +1561,6 @@ struct Args {
     /// clipboard`
     #[arg(long)]
     system_specs: bool,
-
-    /// Used for the MCP Server, to remove the need for netcat as a dependency,
-    /// by having Zed act like netcat communicating over a Unix socket.
-    #[arg(long, hide = true)]
-    nc: Option<String>,
 
     /// Run zed in the foreground, only used on Windows, to match the behavior on macOS.
     #[arg(long)]

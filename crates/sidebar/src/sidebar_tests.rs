@@ -11204,3 +11204,29 @@ async fn test_cmd_click_project_header_returns_to_last_active_linked_worktree_wo
          linked-worktree workspace was the last-active one for the group"
     );
 }
+
+#[test]
+fn test_split_leading_icon_char() {
+    let (icon, title, positions) =
+        split_leading_icon_char(&"✳ Implement separate config".into(), &[]).unwrap();
+    assert_eq!(icon.as_ref(), "✳");
+    assert_eq!(title.as_ref(), "Implement separate config");
+    assert_eq!(positions, Vec::<usize>::new());
+
+    assert!(split_leading_icon_char(&"Implement separate config".into(), &[]).is_none());
+    assert!(split_leading_icon_char(&" leading space".into(), &[]).is_none());
+
+    let (icon, title, _) = split_leading_icon_char(&"1 first".into(), &[]).unwrap();
+    assert_eq!(icon.as_ref(), "1");
+    assert_eq!(title.as_ref(), "first");
+
+    assert!(split_leading_icon_char(&"✳".into(), &[]).is_none());
+
+    let title: SharedString = "# abc".into();
+    let abc_offset = title.find('a').unwrap();
+    let (icon, trimmed, positions) =
+        split_leading_icon_char(&title, &[0, abc_offset, abc_offset + 1]).unwrap();
+    assert_eq!(icon.as_ref(), "#");
+    assert_eq!(trimmed.as_ref(), "abc");
+    assert_eq!(positions, vec![0, 1]);
+}

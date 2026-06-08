@@ -35,6 +35,7 @@ pub struct ThreadItemWorktreeInfo {
 pub struct ThreadItem {
     id: ElementId,
     icon: IconName,
+    icon_char: Option<SharedString>,
     icon_color: Option<Color>,
     icon_visible: bool,
     custom_icon_from_external_svg: Option<SharedString>,
@@ -67,6 +68,7 @@ impl ThreadItem {
         Self {
             id: id.into(),
             icon: IconName::ZedAgent,
+            icon_char: None,
             icon_color: None,
             icon_visible: true,
             custom_icon_from_external_svg: None,
@@ -102,6 +104,12 @@ impl ThreadItem {
 
     pub fn icon(mut self, icon: IconName) -> Self {
         self.icon = icon;
+        self
+    }
+
+    /// Renders a character in place of the default icon.
+    pub fn icon_char(mut self, icon_char: impl Into<SharedString>) -> Self {
+        self.icon_char = Some(icon_char.into());
         self
     }
 
@@ -269,12 +277,21 @@ impl RenderOnce for ThreadItem {
                 .when(!icon_visible, |this| this.invisible())
         };
         let icon_color = self.icon_color.unwrap_or(Color::Muted);
-        let agent_icon = if let Some(custom_svg) = self.custom_icon_from_external_svg {
+        let agent_icon = if let Some(icon_char) = self.icon_char {
+            Label::new(icon_char)
+                .size(LabelSize::Small)
+                .color(icon_color)
+                .into_any_element()
+        } else if let Some(custom_svg) = self.custom_icon_from_external_svg {
             Icon::from_external_svg(custom_svg)
                 .color(icon_color)
                 .size(IconSize::Small)
+                .into_any_element()
         } else {
-            Icon::new(self.icon).color(icon_color).size(IconSize::Small)
+            Icon::new(self.icon)
+                .color(icon_color)
+                .size(IconSize::Small)
+                .into_any_element()
         };
 
         let status_icon = if self.status == AgentThreadStatus::Error {

@@ -985,7 +985,7 @@ impl Terminal {
             AlacTermEvent::Bell => {
                 cx.emit(Event::Bell);
             }
-            AlacTermEvent::Exit => self.register_task_finished(Some(9), cx),
+            AlacTermEvent::Exit => self.register_task_finished(None, cx),
             AlacTermEvent::MouseCursorDirty => {
                 //NOOP, Handled in render
             }

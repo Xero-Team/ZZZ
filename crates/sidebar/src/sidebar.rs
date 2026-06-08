@@ -189,6 +189,36 @@ impl ThreadEntryWorkspace {
     }
 }
 
+/// If the title begins with a non-letter, non-whitespace character, split that
+/// character out so it can be displayed in place of the default terminal icon.
+fn split_leading_icon_char(
+    title: &SharedString,
+    highlight_positions: &[usize],
+) -> Option<(SharedString, SharedString, Vec<usize>)> {
+    let first_char = title.chars().next()?;
+    if first_char.is_alphabetic() || first_char.is_whitespace() {
+        return None;
+    }
+
+    let trimmed_title = title[first_char.len_utf8()..].trim_start();
+    if trimmed_title.is_empty() {
+        return None;
+    }
+
+    let stripped_len = title.len() - trimmed_title.len();
+    let adjusted_positions = highlight_positions
+        .iter()
+        .filter(|&&position| position >= stripped_len)
+        .map(|&position| position - stripped_len)
+        .collect();
+
+    Some((
+        first_char.to_string().into(),
+        trimmed_title.to_string().into(),
+        adjusted_positions,
+    ))
+}
+
 #[derive(Clone)]
 struct ThreadEntry {
     metadata: ThreadMetadata,
@@ -1603,6 +1633,7 @@ impl Sidebar {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let host = key.host();
+        let has_filter = self.has_filter_query(cx);
 
         let id_prefix = if is_sticky { "sticky-" } else { "" };
         let id = SharedString::from(format!("{id_prefix}project-header-{ix}"));
@@ -1643,16 +1674,18 @@ impl Sidebar {
         let group_name_for_gradient = group_name.clone();
         let gradient_overlay = move || {
             GradientFade::new(base_bg, hover_solid, hover_solid)
-                .width(px(64.0))
+                .width(px(92.0))
                 .right(px(-2.0))
-                .gradient_stop(0.75)
-                .group_name(group_name_for_gradient.clone())
+                .gradient_stop(0.7)
+                .when(!has_filter, |this| {
+                    this.group_name(group_name_for_gradient.clone())
+                })
         };
 
         let header = h_flex()
             .id(id)
             .group(&group_name)
-            .cursor_pointer()
+            .when(!has_filter, |this| this.cursor_pointer())
             .relative()
             .h(Tab::content_height(cx))
             .w_full()
@@ -1667,7 +1700,7 @@ impl Sidebar {
                     this.border_color(gpui::transparent_black())
                 }
             })
-            .hover(|s| s.bg(hover_solid))
+            .when(!has_filter, |this| this.hover(|s| s.bg(hover_solid)))
             .child(
                 h_flex()
                     .relative()
@@ -1718,15 +1751,17 @@ impl Sidebar {
                             },
                         )
                     })
-                    .child(
-                        div()
-                            .when(!is_focused, |this| this.visible_on_hover(&group_name))
-                            .child(
-                                Icon::new(disclosure_icon)
-                                    .size(IconSize::Small)
-                                    .color(Color::Muted),
-                            ),
-                    ),
+                    .when(!has_filter, |this| {
+                        this.child(
+                            div()
+                                .when(!is_focused, |this| this.visible_on_hover(&group_name))
+                                .child(
+                                    Icon::new(disclosure_icon)
+                                        .size(IconSize::Small)
+                                        .color(Color::Muted),
+                                ),
+                        )
+                    }),
             )
             .child(gradient_overlay())
             .child(
@@ -1793,7 +1828,7 @@ impl Sidebar {
                 cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
                     if event.modifiers().secondary() {
                         this.activate_or_open_workspace_for_group(&key_for_focus, window, cx);
-                    } else {
+                    } else if !this.has_filter_query(cx) {
                         this.toggle_collapse(&key_for_toggle, window, cx);
                     }
                 }),
@@ -4008,7 +4043,16 @@ impl Sidebar {
     ) -> AnyElement {
         let has_notification = self.contents.is_thread_notified(&thread.metadata.thread_id);
 
-        let title: SharedString = thread.metadata.display_title();
+        let display_title: SharedString = thread.metadata.display_title();
+        let (icon_char, title, highlight_positions) =
+            if thread.icon == IconName::Terminal && thread.icon_from_external_svg.is_none() {
+                match split_leading_icon_char(&display_title, &thread.highlight_positions) {
+                    Some((icon_char, title, positions)) => (Some(icon_char), title, positions),
+                    None => (None, display_title, thread.highlight_positions.to_vec()),
+                }
+            } else {
+                (None, display_title, thread.highlight_positions.to_vec())
+            };
         let metadata = thread.metadata.clone();
         let thread_workspace = thread.workspace.clone();
 
@@ -4042,6 +4086,7 @@ impl Sidebar {
         ThreadItem::new(id, title)
             .base_bg(sidebar_bg)
             .icon(thread.icon)
+            .when_some(icon_char, |this, icon_char| this.icon_char(icon_char))
             .status(thread.status)
             .is_remote(is_remote)
             .when_some(thread.icon_from_external_svg.clone(), |this, svg| {
@@ -4049,7 +4094,7 @@ impl Sidebar {
             })
             .worktrees(worktrees)
             .timestamp(timestamp)
-            .highlight_positions(thread.highlight_positions.to_vec())
+            .highlight_positions(highlight_positions)
             .title_generating(thread.is_title_generating)
             .notified(has_notification)
             .when(thread.diff_stats.lines_added > 0, |this| {
