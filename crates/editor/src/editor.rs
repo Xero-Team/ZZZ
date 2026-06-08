@@ -61,6 +61,7 @@ pub mod test;
 
 mod config;
 mod diagnostics;
+mod markdown_actions;
 mod rewrap;
 mod selection;
 
@@ -109,6 +110,7 @@ use code_context_menus::{
     CompletionsMenu, ContextMenuOrigin,
 };
 use code_lens::CodeLensState;
+use collections::TypeIdHashMap;
 use collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use convert_case::{Case, Casing};
 use dap::TelemetrySpawnLocation;
@@ -816,6 +818,40 @@ impl MinimapVisibility {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct BreadcrumbsVisibility {
+    setting_configuration: bool,
+    toggle_override: bool,
+}
+
+impl BreadcrumbsVisibility {
+    fn from_settings(cx: &App) -> Self {
+        Self::new(EditorSettings::get_global(cx).toolbar.breadcrumbs)
+    }
+
+    fn new(setting_configuration: bool) -> Self {
+        Self {
+            setting_configuration,
+            toggle_override: false,
+        }
+    }
+
+    fn settings_visibility(&self) -> bool {
+        self.setting_configuration
+    }
+
+    fn visible(&self) -> bool {
+        self.setting_configuration ^ self.toggle_override
+    }
+
+    fn toggle_visibility(&self) -> Self {
+        Self {
+            setting_configuration: self.setting_configuration,
+            toggle_override: !self.toggle_override,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BufferSerialization {
     All,
@@ -1145,7 +1181,7 @@ pub struct Editor {
     hovered_cursors: HashMap<HoveredCursor, Task<()>>,
     pub show_local_selections: bool,
     mode: EditorMode,
-    show_breadcrumbs: bool,
+    breadcrumbs_visibility: BreadcrumbsVisibility,
     show_gutter: bool,
     show_scrollbars: ScrollbarAxes,
     minimap_visibility: MinimapVisibility,
@@ -1171,10 +1207,10 @@ pub struct Editor {
     show_indent_guides: Option<bool>,
     buffers_with_disabled_indent_guides: HashSet<BufferId>,
     highlight_order: usize,
-    highlighted_rows: HashMap<TypeId, Vec<RowHighlight>>,
+    highlighted_rows: TypeIdHashMap<Vec<RowHighlight>>,
     background_highlights: HashMap<HighlightKey, BackgroundHighlight>,
     navigation_overlays: HashMap<NavigationOverlayKey, Arc<[NavigationTargetOverlay]>>,
-    gutter_highlights: HashMap<TypeId, GutterHighlight>,
+    gutter_highlights: TypeIdHashMap<GutterHighlight>,
     scrollbar_marker_state: ScrollbarMarkerState,
     active_indent_guides_state: ActiveIndentGuidesState,
     nav_history: Option<ItemNavHistory>,
@@ -1294,7 +1330,7 @@ pub struct Editor {
     breadcrumb_header: Option<String>,
     focused_block: Option<FocusedBlock>,
     next_scroll_position: NextScrollCursorCenterTopBottom,
-    addons: HashMap<TypeId, Box<dyn Addon>>,
+    addons: TypeIdHashMap<Box<dyn Addon>>,
     registered_buffers: HashMap<BufferId, OpenLspBufferHandle>,
     load_diff_task: Option<Shared<Task<()>>>,
     /// Whether we are temporarily displaying a diff other than git's
@@ -2033,8 +2069,10 @@ impl Editor {
         self.sticky_headers_task = cx.spawn(async move |this, cx| {
             let sticky_headers = background_task.await;
             this.update(cx, |this, cx| {
-                this.sticky_headers = Some(sticky_headers);
-                cx.notify();
+                if this.sticky_headers.as_ref() != Some(&sticky_headers) {
+                    this.sticky_headers = Some(sticky_headers);
+                    cx.notify();
+                }
             })
             .ok();
         });
@@ -2404,7 +2442,7 @@ impl Editor {
             },
             minimap_visibility: MinimapVisibility::for_mode(&mode, cx),
             offset_content: !matches!(mode, EditorMode::SingleLine),
-            show_breadcrumbs: EditorSettings::get_global(cx).toolbar.breadcrumbs,
+            breadcrumbs_visibility: BreadcrumbsVisibility::from_settings(cx),
             show_gutter: full_mode,
             show_line_numbers: (!full_mode).then_some(false),
             use_relative_line_numbers: None,
@@ -2427,10 +2465,10 @@ impl Editor {
             show_indent_guides,
             buffers_with_disabled_indent_guides: HashSet::default(),
             highlight_order: 0,
-            highlighted_rows: HashMap::default(),
+            highlighted_rows: Default::default(),
             background_highlights: HashMap::default(),
             navigation_overlays: HashMap::default(),
-            gutter_highlights: HashMap::default(),
+            gutter_highlights: Default::default(),
             scrollbar_marker_state: ScrollbarMarkerState::default(),
             active_indent_guides_state: ActiveIndentGuidesState::default(),
             nav_history: None,
@@ -2573,7 +2611,7 @@ impl Editor {
             breadcrumb_header: None,
             focused_block: None,
             next_scroll_position: NextScrollCursorCenterTopBottom::default(),
-            addons: HashMap::default(),
+            addons: Default::default(),
             registered_buffers: HashMap::default(),
             _scroll_cursor_center_top_bottom_task: Task::ready(()),
             selection_mark_mode: false,
@@ -3595,6 +3633,8 @@ impl Editor {
         self.use_modal_editing
     }
 
+    /// Inserted text is normalized to LF line endings before being applied.
+    /// Normalize before measuring inserted text for post-edit offsets.
     pub fn edit<I, S, T>(&mut self, edits: I, cx: &mut Context<Self>)
     where
         I: IntoIterator<Item = (Range<S>, T)>,
@@ -4402,11 +4442,11 @@ impl Editor {
                                 let row_start =
                                     buffer.point_to_offset(Point::new(start_point.row, 0));
                                 let tab_size = buffer.language_settings_at(start, cx).tab_size;
-                                let tab_size_indent = IndentSize::spaces(tab_size.get());
-                                let reduced_indent =
-                                    existing_indent.with_delta(Ordering::Less, tab_size_indent);
+                                existing_indent.len = existing_indent
+                                    .len
+                                    .saturating_sub(existing_indent.outdent_len(tab_size));
                                 let mut new_text = String::new();
-                                new_text.extend(reduced_indent.chars());
+                                new_text.extend(existing_indent.chars());
                                 new_text.push_str(continuation);
                                 (row_start, new_text, true)
                             }
@@ -4595,7 +4635,7 @@ impl Editor {
         }
 
         let mut buffer_edits: HashMap<EntityId, (Entity<Buffer>, Vec<Point>)> = HashMap::default();
-        let mut rows = Vec::new();
+        let mut rows: Vec<Option<u32>> = Vec::new();
         let mut rows_inserted = 0;
 
         for selection in self.selections.all_adjusted(&self.display_snapshot(cx)) {
@@ -4606,6 +4646,7 @@ impl Editor {
             let Some((buffer_handle, buffer_point)) =
                 self.buffer.read(cx).point_to_buffer_point(point, cx)
             else {
+                rows.push(None);
                 continue;
             };
 
@@ -4616,7 +4657,7 @@ impl Editor {
                 .push(buffer_point);
 
             rows_inserted += 1;
-            rows.push(row + rows_inserted);
+            rows.push(Some(row + rows_inserted));
         }
 
         self.transact(window, cx, |editor, window, cx| {
@@ -4636,21 +4677,21 @@ impl Editor {
 
             editor.change_selections(Default::default(), window, cx, |s| {
                 let mut index = 0;
-                s.move_cursors_with(&mut |map, _, _| {
-                    let row = rows[index];
+                s.maybe_move_cursors_with(&mut |map, _, _| {
+                    let row = rows.get(index).copied().flatten();
                     index += 1;
 
-                    let point = Point::new(row, 0);
+                    let point = Point::new(row?, 0);
                     let boundary = map.next_line_boundary(point).1;
                     let clipped = map.clip_point(boundary, Bias::Left);
 
-                    (clipped, SelectionGoal::None)
+                    Some((clipped, SelectionGoal::None))
                 });
             });
 
             let mut indent_edits = Vec::new();
             let multibuffer_snapshot = editor.buffer.read(cx).snapshot(cx);
-            for row in rows {
+            for row in rows.into_iter().flatten() {
                 let indents = multibuffer_snapshot.suggested_indents(row..row + 1, cx);
                 for (row, indent) in indents {
                     if indent.len == 0 {
@@ -10512,7 +10553,7 @@ impl Editor {
             let snapshot = buffer.snapshot(cx);
             for selection in &selections {
                 let settings = buffer.language_settings_at(selection.start, cx);
-                let tab_size = settings.tab_size.get();
+                let tab_size = settings.tab_size;
                 let mut rows = selection.spanned_rows(false, &display_map);
 
                 // Avoid re-outdenting a row that has already been outdented by a
@@ -10526,17 +10567,7 @@ impl Editor {
                 for row in rows.iter_rows() {
                     let indent_size = snapshot.indent_size_for_line(row);
                     if indent_size.len > 0 {
-                        let deletion_len = match indent_size.kind {
-                            IndentKind::Space => {
-                                let columns_to_prev_tab_stop = indent_size.len % tab_size;
-                                if columns_to_prev_tab_stop == 0 {
-                                    tab_size
-                                } else {
-                                    columns_to_prev_tab_stop
-                                }
-                            }
-                            IndentKind::Tab => 1,
-                        };
+                        let deletion_len = indent_size.outdent_len(tab_size);
                         let start = if has_multiple_rows
                             || deletion_len > selection.start.column
                             || indent_size.len < selection.start.column
@@ -18054,6 +18085,9 @@ impl Editor {
                 }))
             }
 
+            let final_snapshot = multibuffer.snapshot(cx);
+            ranges.sort_by(|a, b| a.start.cmp(&b.start, &final_snapshot));
+
             multibuffer.with_title(title)
         });
         let existing = workspace.active_pane().update(cx, |pane, cx| {
@@ -22206,12 +22240,17 @@ impl Editor {
         self.refresh_inline_values(cx);
 
         let old_cursor_shape = self.cursor_shape;
-        let old_show_breadcrumbs = self.show_breadcrumbs;
+        let old_breadcrumbs_visible = self.breadcrumbs_visible();
 
         {
             let editor_settings = EditorSettings::get_global(cx);
             self.scroll_manager.vertical_scroll_margin = editor_settings.vertical_scroll_margin;
-            self.show_breadcrumbs = editor_settings.toolbar.breadcrumbs;
+            if self.breadcrumbs_visibility.settings_visibility()
+                != editor_settings.toolbar.breadcrumbs
+            {
+                self.breadcrumbs_visibility =
+                    BreadcrumbsVisibility::new(editor_settings.toolbar.breadcrumbs);
+            }
             self.cursor_shape = editor_settings.cursor_shape.unwrap_or_default();
         }
 
@@ -22219,7 +22258,7 @@ impl Editor {
             cx.emit(EditorEvent::CursorShapeChanged);
         }
 
-        if old_show_breadcrumbs != self.show_breadcrumbs {
+        if old_breadcrumbs_visible != self.breadcrumbs_visible() {
             cx.emit(EditorEvent::BreadcrumbsChanged);
         }
 

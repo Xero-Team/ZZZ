@@ -147,6 +147,31 @@ impl Editor {
         self.set_minimap_visibility(self.minimap_visibility.hidden(), window, cx);
     }
 
+    pub fn breadcrumbs_visible(&self) -> bool {
+        self.breadcrumbs_visibility.visible()
+    }
+
+    fn set_breadcrumbs_visibility(
+        &mut self,
+        breadcrumbs_visibility: BreadcrumbsVisibility,
+        cx: &mut Context<Self>,
+    ) {
+        if self.breadcrumbs_visibility != breadcrumbs_visibility {
+            self.breadcrumbs_visibility = breadcrumbs_visibility;
+            cx.emit(EditorEvent::BreadcrumbsChanged);
+            cx.notify();
+        }
+    }
+
+    pub fn toggle_breadcrumb(
+        &mut self,
+        _: &ToggleBreadcrumb,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_breadcrumbs_visibility(self.breadcrumbs_visibility.toggle_visibility(), cx);
+    }
+
     /// Normally the text in full mode and auto height editors is padded on the
     /// left side by roughly half a character width for improved hit testing.
     ///

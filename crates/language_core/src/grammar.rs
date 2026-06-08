@@ -137,14 +137,16 @@ pub struct RedactionConfig {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum RunnableCapture {
-    Named(SharedString),
     Run,
+    RunItem,
+    Named(SharedString),
 }
 
 pub struct RunnableConfig {
     pub query: Query,
     /// A mapping from capture index to capture kind
     pub extra_captures: Vec<RunnableCapture>,
+    pub supports_grouped_runnables: bool,
 }
 
 pub struct OverrideConfig {
@@ -388,13 +390,18 @@ impl Grammar {
             .iter()
             .map(|&name| match name {
                 "run" => RunnableCapture::Run,
+                "run_item" => RunnableCapture::RunItem,
                 name => RunnableCapture::Named(name.to_string().into()),
             })
             .collect();
+        let supports_grouped_runnables = extra_captures
+            .iter()
+            .any(|capture| matches!(capture, RunnableCapture::RunItem));
 
         self.runnable_config = Some(RunnableConfig {
             extra_captures,
             query,
+            supports_grouped_runnables,
         });
 
         Ok(self)
