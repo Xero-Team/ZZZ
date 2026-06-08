@@ -26,7 +26,7 @@ use buffer_diff::{
 };
 use collections::{BTreeSet, HashMap, HashSet};
 use encoding_rs;
-use fs::{FakeFs, PathEventKind};
+use fs::{FakeFs, Fs, PathEventKind, RealFs};
 use futures::{StreamExt, future};
 use git::{
     GitHostingProviderRegistry,
@@ -68,7 +68,7 @@ use project::{
 };
 use rand::{RngExt, rngs::StdRng};
 use serde_json::json;
-use settings::SettingsStore;
+use settings::{Settings, SettingsStore};
 #[cfg(not(windows))]
 use std::os;
 use std::{
@@ -84,7 +84,8 @@ use std::{
     time::Duration,
 };
 use sum_tree::SumTree;
-use task::{ResolvedTask, ShellKind, TaskContext};
+use task::{ResolvedTask, Shell, ShellKind, SpawnInTerminal, TaskContext};
+use terminal::terminal_settings::TerminalSettings;
 use text::{Anchor, PointUtf16, ReplicaId, ToOffset, Unclipped};
 use unindent::Unindent as _;
 use util::{
@@ -3355,6 +3356,68 @@ async fn test_toggling_enable_language_server(cx: &mut gpui::TestAppContext) {
         .await;
 }
 
+#[gpui::test]
+async fn test_updating_lsp_settings_sends_one_did_change_configuration(
+    cx: &mut gpui::TestAppContext,
+) {
+    init_test(cx);
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(path!("/dir"), json!({ "a.rs": "" })).await;
+
+    let project = Project::test(fs, [path!("/dir").as_ref()], cx).await;
+    let language_registry = project.read_with(cx, |project, _| project.languages().clone());
+
+    let mut fake_rust_servers = language_registry.register_fake_lsp(
+        "Rust",
+        FakeLspAdapter {
+            name: "rust-lsp",
+            ..Default::default()
+        },
+    );
+    language_registry.add(rust_lang());
+
+    let _rs_buffer = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(path!("/dir/a.rs"), cx)
+        })
+        .await
+        .unwrap();
+
+    let fake_rust_server = fake_rust_servers.next().await.unwrap();
+
+    let did_change_count = Arc::new(atomic::AtomicUsize::new(0));
+    fake_rust_server.handle_notification::<lsp::notification::DidChangeConfiguration, _>({
+        let did_change_count = did_change_count.clone();
+        move |_, _| {
+            did_change_count.fetch_add(1, atomic::Ordering::SeqCst);
+        }
+    });
+    cx.executor().run_until_parked();
+    did_change_count.store(0, atomic::Ordering::SeqCst);
+
+    cx.update(|cx| {
+        SettingsStore::update_global(cx, |settings, cx| {
+            settings.update_user_settings(cx, |settings| {
+                settings.project.lsp.0.insert(
+                    "rust-lsp".into(),
+                    settings::LspSettings {
+                        settings: Some(json!({ "foo": true })),
+                        ..Default::default()
+                    },
+                );
+            });
+        })
+    });
+    cx.executor().run_until_parked();
+
+    assert_eq!(
+        did_change_count.load(atomic::Ordering::SeqCst),
+        1,
+        "expected exactly one workspace/didChangeConfiguration after a settings change"
+    );
+}
+
 #[gpui::test(iterations = 3)]
 async fn test_transforming_diagnostics(cx: &mut gpui::TestAppContext) {
     init_test(cx);
@@ -6311,6 +6374,167 @@ async fn test_buffer_file_change_to_binary_fails(cx: &mut gpui::TestAppContext) 
 }
 
 #[gpui::test]
+async fn test_terminal_toolchain_lookup_is_scoped_to_terminal_worktree(
+    cx: &mut gpui::TestAppContext,
+) {
+    init_test(cx);
+    cx.executor().allow_parking();
+
+    let root = TempTree::new(json!({
+        "project-a": {
+            "pyproject.toml": "",
+            ".venv": {},
+            "a.py": "print('a')",
+        },
+        "project-b": {
+            "pyproject.toml": "",
+            "b.py": "print('b')",
+        }
+    }));
+    let project_a_path = root.path().join("project-a");
+    let project_b_path = root.path().join("project-b");
+
+    let fs: Arc<dyn Fs> = Arc::new(RealFs::new(None, cx.executor()));
+    let project = Project::test(
+        fs.clone(),
+        [project_a_path.as_path(), project_b_path.as_path()],
+        cx,
+    )
+    .await;
+
+    let language_registry = project.read_with(cx, |project, _| project.languages().clone());
+    language_registry.add(python_lang(fs.clone()));
+
+    cx.update(|cx| {
+        SettingsStore::update_global(cx, |store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings
+                    .terminal
+                    .get_or_insert_with(Default::default)
+                    .project
+                    .detect_venv = Some(settings::VenvSettings::On {
+                    activate_script: None,
+                    venv_name: None,
+                    directories: None,
+                    conda_manager: None,
+                });
+            });
+        });
+    });
+    cx.executor().run_until_parked();
+
+    let worktrees = project.update(cx, |project, cx| {
+        project
+            .worktrees(cx)
+            .map(|worktree| {
+                let worktree = worktree.read(cx);
+                (worktree.id(), worktree.abs_path().to_path_buf())
+            })
+            .collect::<Vec<_>>()
+    });
+    let (project_a_id, _) = worktrees
+        .iter()
+        .find(|(_, path)| path.ends_with("project-a"))
+        .cloned()
+        .expect("project-a worktree");
+    let (project_b_id, _) = worktrees
+        .iter()
+        .find(|(_, path)| path.ends_with("project-b"))
+        .cloned()
+        .expect("project-b worktree");
+
+    let Toolchains {
+        toolchains,
+        root_path,
+        ..
+    } = project
+        .update(cx, |this, cx| {
+            this.available_toolchains(
+                ProjectPath {
+                    worktree_id: project_a_id,
+                    path: rel_path("a.py").into(),
+                },
+                LanguageName::new_static("Python"),
+                cx,
+            )
+        })
+        .await
+        .expect("toolchain for project-a");
+    let toolchain = toolchains
+        .toolchains
+        .into_iter()
+        .next()
+        .expect("first toolchain");
+    project
+        .update(cx, |this, cx| {
+            this.activate_toolchain(
+                ProjectPath {
+                    worktree_id: project_a_id,
+                    path: root_path,
+                },
+                toolchain,
+                cx,
+            )
+        })
+        .await
+        .expect("activate toolchain");
+    cx.executor().run_until_parked();
+
+    let terminal = project
+        .update(cx, |project, cx| {
+            project.create_terminal_task(
+                SpawnInTerminal {
+                    full_label: "scope test".into(),
+                    label: "scope test".into(),
+                    command: Some("cmd.exe".into()),
+                    args: vec!["/C".into(), "echo".into(), "terminal".into()],
+                    cwd: Some(project_b_path.clone()),
+                    shell: Shell::System,
+                    ..SpawnInTerminal::default()
+                },
+                cx,
+            )
+        })
+        .await
+        .expect("terminal entity");
+
+    terminal
+        .update(cx, |terminal, cx| terminal.wait_for_completed_task(cx))
+        .await;
+    cx.background_executor
+        .timer(Duration::from_millis(50))
+        .await;
+
+    let terminal_output = terminal.update(cx, |terminal, _| terminal.get_content());
+
+    assert!(
+        !terminal_output.contains("activate"),
+        "terminal opened in project-b should not receive project-a activation script: {terminal_output:?}"
+    );
+    assert!(
+        !terminal_output.contains(project_a_path.join(".venv").to_string_lossy().as_ref()),
+        "terminal opened in project-b should not reference project-a toolchain path: {terminal_output:?}"
+    );
+
+    let active_toolchain_for_b = project
+        .update(cx, |this, cx| {
+            this.active_toolchain(
+                ProjectPath {
+                    worktree_id: project_b_id,
+                    path: rel_path("b.py").into(),
+                },
+                LanguageName::new_static("Python"),
+                cx,
+            )
+        })
+        .await;
+    assert!(active_toolchain_for_b.is_none());
+
+    let detect_venv = cx.update(|cx| TerminalSettings::get_global(cx).detect_venv.clone());
+    assert!(matches!(detect_venv, settings::VenvSettings::On { .. }));
+}
+
+#[gpui::test]
 async fn test_buffer_file_changes_on_disk(cx: &mut gpui::TestAppContext) {
     init_test(cx);
 
@@ -7474,6 +7698,70 @@ async fn test_search_with_inclusions(cx: &mut gpui::TestAppContext) {
             (path!("dir/two.rs").to_string(), vec![8..12]),
         ]),
         "Rust and typescript search should give both Rust and TypeScript files, even if other inclusions don't match anything"
+    );
+}
+
+#[gpui::test]
+async fn test_search_multiline_crlf(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/dir"),
+        json!({
+            "crlf.rs": "alpha\r\nbeta\r\ngamma",
+            "lf.rs": "alpha\nbeta\ngamma",
+        }),
+    )
+    .await;
+    let project = Project::test(fs.clone(), [path!("/dir").as_ref()], cx).await;
+
+    assert_eq!(
+        search(
+            &project,
+            SearchQuery::text(
+                "alpha\r\nbeta",
+                false,
+                true,
+                false,
+                Default::default(),
+                Default::default(),
+                false,
+                None,
+            )
+            .unwrap(),
+            cx
+        )
+        .await
+        .unwrap(),
+        HashMap::from_iter([
+            (path!("dir/crlf.rs").to_string(), vec![0..10]),
+            (path!("dir/lf.rs").to_string(), vec![0..10]),
+        ])
+    );
+
+    assert_eq!(
+        search(
+            &project,
+            SearchQuery::text(
+                "alpha\nbeta",
+                false,
+                true,
+                false,
+                Default::default(),
+                Default::default(),
+                false,
+                None,
+            )
+            .unwrap(),
+            cx
+        )
+        .await
+        .unwrap(),
+        HashMap::from_iter([
+            (path!("dir/crlf.rs").to_string(), vec![0..10]),
+            (path!("dir/lf.rs").to_string(), vec![0..10]),
+        ])
     );
 }
 
@@ -12513,8 +12801,8 @@ fn js_lang() -> Arc<Language> {
     ))
 }
 
-fn python_lang(fs: Arc<FakeFs>) -> Arc<Language> {
-    struct PythonMootToolchainLister(Arc<FakeFs>);
+fn python_lang(fs: Arc<dyn Fs>) -> Arc<Language> {
+    struct PythonMootToolchainLister(Arc<dyn Fs>);
     #[async_trait]
     impl ToolchainLister for PythonMootToolchainLister {
         async fn list(
@@ -12560,11 +12848,12 @@ fn python_lang(fs: Arc<FakeFs>) -> Arc<Language> {
         }
         fn activation_script(
             &self,
-            _: &Toolchain,
+            toolchain: &Toolchain,
             _: ShellKind,
             _: &gpui::App,
         ) -> futures::future::BoxFuture<'static, Vec<String>> {
-            Box::pin(async { vec![] })
+            let toolchain_path = toolchain.path.to_string();
+            Box::pin(async move { vec![format!("activate {toolchain_path}")] })
         }
     }
     Arc::new(

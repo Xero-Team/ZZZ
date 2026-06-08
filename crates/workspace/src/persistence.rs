@@ -377,6 +377,7 @@ pub fn read_serialized_multi_workspaces(
             let active_workspace = state
                 .active_workspace_id
                 .and_then(|id| group.iter().position(|ws| ws.workspace_id == id))
+                .or_else(|| group.iter().position(|ws| !ws.paths.is_empty()))
                 .or(Some(0))
                 .and_then(|index| group.into_iter().nth(index))?;
             Some(model::SerializedMultiWorkspace {

@@ -31,6 +31,7 @@ use futures::{StreamExt, channel::mpsc, select_biased};
 use git_ui::commit_view::CommitViewToolbar;
 use git_ui::git_panel::GitPanel;
 use git_ui::project_diff::{BranchDiffToolbar, ProjectDiffToolbar};
+use git_ui::solo_diff_view::{SoloDiffGitToolbar, SoloDiffStyleToolbar};
 use gpui::{
     Action, App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, DismissEvent,
     Element, Entity, FocusHandle, Focusable, Image, ImageFormat, KeyBinding, ParentElement,
@@ -1284,6 +1285,8 @@ fn initialize_pane(
         pane.toolbar().update(cx, |toolbar, cx| {
             let multibuffer_hint = cx.new(|_| MultibufferHint::new());
             toolbar.add_item(multibuffer_hint, window, cx);
+            let solo_diff_style_toolbar = cx.new(SoloDiffStyleToolbar::new);
+            toolbar.add_item(solo_diff_style_toolbar, window, cx);
             let breadcrumbs = cx.new(|_| Breadcrumbs::new());
             toolbar.add_item(breadcrumbs, window, cx);
             let buffer_search_bar = cx.new(|cx| {
@@ -1319,6 +1322,8 @@ fn initialize_pane(
             toolbar.add_item(project_diff_toolbar, window, cx);
             let branch_diff_toolbar = cx.new(BranchDiffToolbar::new);
             toolbar.add_item(branch_diff_toolbar, window, cx);
+            let solo_diff_git_toolbar = cx.new(SoloDiffGitToolbar::new);
+            toolbar.add_item(solo_diff_git_toolbar, window, cx);
             let commit_view_toolbar = cx.new(|_| CommitViewToolbar::new());
             toolbar.add_item(commit_view_toolbar, window, cx);
             let agent_diff_toolbar = cx.new(AgentDiffToolbar::new);
@@ -1596,13 +1601,16 @@ fn quit(_: &Quit, cx: &mut App) {
         // If the user cancels any save prompt, then keep the app open.
         for window in &workspace_windows {
             let window = *window;
-            let workspaces = window
+            let active_and_workspaces = window
                 .update(cx, |multi_workspace, _, _cx| {
-                    multi_workspace.workspaces().cloned().collect::<Vec<_>>()
+                    (
+                        multi_workspace.workspace().clone(),
+                        multi_workspace.workspaces().cloned().collect::<Vec<_>>(),
+                    )
                 })
                 .log_err();
 
-            let Some(workspaces) = workspaces else {
+            let Some((originally_active, workspaces)) = active_and_workspaces else {
                 continue;
             };
 
@@ -1618,10 +1626,26 @@ fn quit(_: &Quit, cx: &mut App) {
                     .log_err()
                 {
                     if !should_close.await? {
+                        window
+                            .update(cx, |multi_workspace, window, cx| {
+                                multi_workspace.activate(
+                                    originally_active.clone(),
+                                    None,
+                                    window,
+                                    cx,
+                                );
+                            })
+                            .log_err();
                         return Ok(());
                     }
                 }
             }
+
+            window
+                .update(cx, |multi_workspace, window, cx| {
+                    multi_workspace.activate(originally_active, None, window, cx);
+                })
+                .log_err();
         }
         // Flush all pending workspace serialization before quitting so that
         // session_id/window_id are up-to-date in the database.
@@ -6563,6 +6587,138 @@ mod tests {
                 assert!(
                     keys.contains(&key_c),
                     "restored group key_c should survive a workspace key change; got {keys:?}"
+                );
+            })
+            .unwrap();
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[gpui::test]
+    async fn test_quit_preserves_focused_workspace_for_restore(cx: &mut TestAppContext) {
+        let _guard = session_restore_test_guard();
+        use session::Session;
+        use workspace::{OpenMode, Workspace};
+
+        let app_state = init_test(cx);
+        cx.update(init);
+
+        let dir1 = path!("/dir1");
+        let dir2 = path!("/dir2");
+
+        let fs = app_state.fs.clone();
+        let fake_fs = fs.as_fake();
+        fake_fs.insert_tree(dir1, json!({})).await;
+        fake_fs.insert_tree(dir2, json!({})).await;
+
+        let session_id = cx.read(|cx| app_state.session.read(cx).id().to_owned());
+
+        let workspace::OpenResult { window, .. } = cx
+            .update(|cx| {
+                Workspace::new_local(
+                    vec![dir1.into()],
+                    app_state.clone(),
+                    None,
+                    None,
+                    None,
+                    OpenMode::Activate,
+                    cx,
+                )
+            })
+            .await
+            .expect("failed to open first workspace");
+
+        window
+            .update(cx, |multi_workspace, _, cx| {
+                multi_workspace.open_sidebar(cx);
+            })
+            .unwrap();
+
+        window
+            .update(cx, |multi_workspace, window, cx| {
+                multi_workspace.open_project(vec![dir2.into()], OpenMode::Activate, window, cx)
+            })
+            .unwrap()
+            .await
+            .expect("failed to open second workspace");
+        cx.run_until_parked();
+
+        window
+            .update(cx, |multi_workspace, window, cx| {
+                let workspace = multi_workspace.workspaces().next().unwrap().clone();
+                multi_workspace.activate(workspace, None, window, cx);
+            })
+            .unwrap();
+        cx.run_until_parked();
+
+        window
+            .read_with(cx, |mw, cx| {
+                assert!(
+                    mw.workspace()
+                        .read(cx)
+                        .root_paths(cx)
+                        .iter()
+                        .any(|p| p.as_ref() == Path::new(dir1)),
+                    "dir1 should be the focused workspace before quitting"
+                );
+            })
+            .unwrap();
+
+        cx.dispatch_action(*window, Quit);
+        cx.run_until_parked();
+
+        window
+            .read_with(cx, |mw, cx| {
+                let active = mw.workspace().read(cx).root_paths(cx);
+                assert!(
+                    active.iter().any(|p| p.as_ref() == Path::new(dir1)),
+                    "quitting must not change which workspace is focused"
+                );
+                assert!(
+                    !active.iter().any(|p| p.as_ref() == Path::new(dir2)),
+                    "dir2 must not become the focused workspace after quitting"
+                );
+            })
+            .unwrap();
+
+        flush_workspace_serialization(&window, cx).await;
+        cx.run_until_parked();
+
+        window
+            .update(cx, |_, window, _| window.remove_window())
+            .unwrap();
+        cx.run_until_parked();
+
+        cx.update(|cx| {
+            app_state.session.update(cx, |app_session, _cx| {
+                app_session
+                    .replace_session_for_test(Session::test_with_old_session(session_id.clone()));
+            });
+        });
+
+        let mut async_cx = cx.to_async();
+        crate::restore_or_create_workspace(app_state.clone(), &mut async_cx)
+            .await
+            .expect("failed to restore workspaces");
+        cx.run_until_parked();
+
+        let restored_windows: Vec<WindowHandle<MultiWorkspace>> = cx.read(|cx| {
+            cx.windows()
+                .into_iter()
+                .filter_map(|window| window.downcast::<MultiWorkspace>())
+                .collect()
+        });
+        assert_eq!(restored_windows.len(), 1);
+
+        restored_windows[0]
+            .read_with(cx, |mw, cx| {
+                let active = mw.workspace().read(cx).root_paths(cx);
+                assert!(
+                    active.iter().any(|p| p.as_ref() == Path::new(dir1)),
+                    "the focused workspace (dir1) must be restored as active"
+                );
+                assert!(
+                    !active.iter().any(|p| p.as_ref() == Path::new(dir2)),
+                    "dir2 must not be restored as the active workspace"
                 );
             })
             .unwrap();

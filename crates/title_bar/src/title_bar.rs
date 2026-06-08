@@ -23,6 +23,7 @@ use crate::application_menu::{
 use call::ActiveCall;
 use client::{Client, UserStore, zed_urls};
 use cloud_api_types::Plan;
+use command_palette_hooks::CommandPaletteFilter;
 
 use gpui::{
     Action, Anchor, AnyElement, App, Context, Element, Entity, Focusable, InteractiveElement,
@@ -35,8 +36,9 @@ use project::{
     trusted_worktrees::TrustedWorktrees,
 };
 use remote::RemoteConnectionOptions;
-use settings::Settings as _;
+use settings::{Settings as _, SettingsStore};
 
+use std::any::TypeId;
 use std::sync::Arc;
 use theme::ActiveTheme;
 use title_bar_settings::TitleBarSettings;
@@ -67,8 +69,23 @@ actions!(
     ]
 );
 
+actions!(
+    workspace,
+    [
+        /// Switches to the classic, editor-focused panel layout.
+        UseClassicLayout,
+        /// Switches to the agentic panel layout.
+        UseAgenticLayout,
+    ]
+);
+
 pub fn init(cx: &mut App) {
     platform_title_bar::PlatformTitleBar::init(cx);
+
+    update_layout_action_filter(cx);
+
+    cx.observe_global::<SettingsStore>(update_layout_action_filter)
+        .detach();
 
     cx.observe_new(|workspace: &mut Workspace, window, cx| {
         let Some(window) = window else {
@@ -77,6 +94,12 @@ pub fn init(cx: &mut App) {
         let multi_workspace = workspace.multi_workspace().cloned();
         let item = cx.new(|cx| TitleBar::new("title-bar", workspace, multi_workspace, window, cx));
         workspace.set_titlebar_item(item.into(), window, cx);
+        workspace.register_action(|_workspace, _: &UseClassicLayout, _window, cx| {
+            set_window_layout(WindowLayout::Editor(None), cx);
+        });
+        workspace.register_action(|_workspace, _: &UseAgenticLayout, _window, cx| {
+            set_window_layout(WindowLayout::Agent(None), cx);
+        });
         #[cfg(not(target_os = "macos"))]
         workspace.register_action(|workspace, action: &OpenApplicationMenu, window, cx| {
             if let Some(titlebar) = workspace
@@ -124,6 +147,26 @@ pub fn init(cx: &mut App) {
         });
     })
     .detach();
+}
+
+fn update_layout_action_filter(cx: &mut App) {
+    let disable_ai = project::DisableAiSettings::get_global(cx).disable_ai;
+    let layout_actions = [
+        TypeId::of::<UseClassicLayout>(),
+        TypeId::of::<UseAgenticLayout>(),
+    ];
+    CommandPaletteFilter::update_global(cx, |filter, _| {
+        if disable_ai {
+            filter.hide_action_types(&layout_actions);
+        } else {
+            filter.show_action_types(layout_actions.iter());
+        }
+    });
+}
+
+fn set_window_layout(layout: WindowLayout, cx: &App) {
+    let fs = <dyn fs::Fs>::global(cx);
+    drop(AgentSettings::set_layout(layout, fs, cx));
 }
 
 pub struct TitleBar {
@@ -595,7 +638,7 @@ impl TitleBar {
                 })
             });
 
-        if cfg!(macos_sdk_26) {
+        if ui::utils::MACOS_SDK_26_OR_LATER {
             // Make up for Tahoe's traffic light buttons having less spacing around them
             Some(div().child(button).ml_0p5().into_any_element())
         } else {
@@ -1114,8 +1157,6 @@ impl TitleBar {
                 let is_editor = matches!(current_layout, WindowLayout::Editor(_));
                 let is_agent = matches!(current_layout, WindowLayout::Agent(_));
                 let is_custom = matches!(current_layout, WindowLayout::Custom(_));
-                let fs = <dyn fs::Fs>::global(cx);
-
                 ContextMenu::build(window, cx, |menu, _, _cx| {
                     menu.when(is_signed_in, |this| {
                         let user_login = user_login.clone();
@@ -1205,36 +1246,26 @@ impl TitleBar {
                         zed_actions::Extensions::default().boxed_clone(),
                     )
                     .when(ai_enabled, |menu| {
-                        let fs = fs.clone();
                         menu.separator()
                             .submenu("Panel Layout", move |menu, _window, _cx| {
-                                let fs = fs.clone();
                                 menu.toggleable_entry(
                                     "Classic",
                                     is_editor,
                                     IconPosition::Start,
-                                    None,
-                                    {
-                                        let fs = fs.clone();
-                                        move |_window, cx| {
-                                            drop(AgentSettings::set_layout(
-                                                WindowLayout::Editor(None),
-                                                fs.clone(),
-                                                cx,
-                                            ));
-                                        }
+                                    Some(UseClassicLayout.boxed_clone()),
+                                    move |window, cx| {
+                                        window.dispatch_action(UseClassicLayout.boxed_clone(), cx);
                                     },
                                 )
-                                .toggleable_entry("Agentic", is_agent, IconPosition::Start, None, {
-                                    let fs = fs.clone();
-                                    move |_window, cx| {
-                                        drop(AgentSettings::set_layout(
-                                            WindowLayout::Agent(None),
-                                            fs.clone(),
-                                            cx,
-                                        ));
-                                    }
-                                })
+                                .toggleable_entry(
+                                    "Agentic",
+                                    is_agent,
+                                    IconPosition::Start,
+                                    Some(UseAgenticLayout.boxed_clone()),
+                                    move |window, cx| {
+                                        window.dispatch_action(UseAgenticLayout.boxed_clone(), cx);
+                                    },
+                                )
                                 .when(is_custom, |menu| {
                                     menu.item(
                                         ContextMenuEntry::new("Custom")

@@ -133,6 +133,8 @@ pub struct TabContentParams {
     pub preview: bool,
     /// Tab content should be deemphasized when active pane does not have focus.
     pub deemphasized: bool,
+    /// Maximum title length override. `None` uses the item's own default.
+    pub max_title_len: Option<usize>,
 }
 
 impl TabContentParams {

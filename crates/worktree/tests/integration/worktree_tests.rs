@@ -477,6 +477,82 @@ async fn test_symlinks_pointing_outside(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+async fn test_renaming_subdir_under_symlinked_root_keeps_children(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        "/target",
+        json!({
+            "file1.txt": "",
+            "file2.log": "",
+            "subdir-a": {
+                "config.ini": "",
+            },
+            "subdir-b": {
+                "nested": {
+                    "note.md": "",
+                },
+            },
+        }),
+    )
+    .await;
+    fs.create_symlink("/link".as_ref(), "/target".into())
+        .await
+        .unwrap();
+
+    let tree = Worktree::local(
+        Path::new("/link"),
+        true,
+        fs.clone(),
+        Default::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .unwrap();
+
+    cx.read(|cx| tree.read(cx).as_local().unwrap().scan_complete())
+        .await;
+
+    fs.rename(
+        Path::new("/link/subdir-a"),
+        Path::new("/link/subdir-aa"),
+        Default::default(),
+    )
+    .await
+    .unwrap();
+
+    wait_for_condition(cx, |cx| {
+        tree.read_with(cx, |tree, _| {
+            tree.entry_for_path(rel_path("subdir-a")).is_none()
+                && tree
+                    .entry_for_path(rel_path("subdir-aa/config.ini"))
+                    .is_some()
+        })
+    })
+    .await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entries(true, 0)
+                .map(|entry| entry.path.as_ref())
+                .collect::<Vec<_>>(),
+            vec![
+                rel_path(""),
+                rel_path("file1.txt"),
+                rel_path("file2.log"),
+                rel_path("subdir-aa"),
+                rel_path("subdir-aa/config.ini"),
+                rel_path("subdir-b"),
+                rel_path("subdir-b/nested"),
+                rel_path("subdir-b/nested/note.md"),
+            ]
+        );
+    });
+}
+
+#[gpui::test]
 async fn test_symlinked_dir_inside_project(cx: &mut TestAppContext) {
     init_test(cx);
     let fs = FakeFs::new(cx.background_executor.clone());
@@ -708,6 +784,41 @@ async fn test_root_rescan_reconciles_stale_state(cx: &mut TestAppContext) {
             vec![rel_path(""), rel_path("new.txt")]
         );
     });
+}
+
+#[gpui::test]
+async fn test_root_rescan_does_not_miss_event_before_readding_root_watcher(
+    cx: &mut TestAppContext,
+) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree("/root", json!({})).await;
+
+    let tree = Worktree::local(
+        Path::new("/root"),
+        true,
+        fs.clone(),
+        Default::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .unwrap();
+
+    cx.read(|cx| tree.read(cx).as_local().unwrap().scan_complete())
+        .await;
+
+    fs.create_file_before_next_watch_add("/root", "/root/created-before-root-readd.txt");
+    fs.emit_fs_event("/root", Some(PathEventKind::Rescan));
+
+    wait_for_condition(cx, |cx| {
+        tree.read_with(cx, |tree, _| {
+            tree.entry_for_path(rel_path("created-before-root-readd.txt"))
+                .is_some()
+        })
+    })
+    .await;
 }
 
 #[gpui::test]
@@ -3017,6 +3128,67 @@ async fn test_repo_exclude(executor: BackgroundExecutor, cx: &mut TestAppContext
     });
 }
 
+#[gpui::test]
+async fn test_repo_exclude_anchored_pattern(executor: BackgroundExecutor, cx: &mut TestAppContext) {
+    init_test(cx);
+
+    let fs = FakeFs::new(executor);
+    let project_dir = Path::new(path!("/project"));
+    fs.insert_tree(
+        project_dir,
+        json!({
+            ".git": {
+                "info": {
+                    "exclude": "vendor/cache"
+                }
+            },
+            "vendor": {
+                "cache": {
+                    "blob.bin": "",
+                },
+                "keep.txt": "",
+            },
+            "elsewhere": {
+                "vendor": {
+                    "cache": {
+                        "blob.bin": "",
+                    },
+                },
+            },
+        }),
+    )
+    .await;
+
+    let worktree = Worktree::local(
+        project_dir,
+        true,
+        fs.clone(),
+        Default::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .unwrap();
+    worktree
+        .update(cx, |worktree, _| {
+            worktree.as_local().unwrap().scan_complete()
+        })
+        .await;
+    cx.run_until_parked();
+
+    worktree.update(cx, |worktree, _cx| {
+        check_worktree_entries(
+            worktree,
+            WorktreeExpectations {
+                ignored_paths: &["vendor/cache"],
+                tracked_paths: &["vendor/keep.txt", "elsewhere/vendor/cache"],
+                ..Default::default()
+            },
+        );
+    });
+}
+
 #[derive(Default)]
 struct WorktreeExpectations {
     excluded_paths: &'static [&'static str],
@@ -3328,7 +3500,7 @@ async fn test_invisible_worktree_does_not_track_ancestor_git_repository(
 }
 
 #[gpui::test]
-async fn test_linked_worktree_git_file_event_does_not_panic(
+async fn test_linked_worktree_gitfile_event_preserves_repo(
     executor: BackgroundExecutor,
     cx: &mut TestAppContext,
 ) {
@@ -3342,19 +3514,11 @@ async fn test_linked_worktree_git_file_event_does_not_panic(
     // and `update_git_repositories` panics because the path is outside the
     // worktree root.
     init_test(cx);
-
     use git::repository::Worktree as GitWorktree;
 
     let fs = FakeFs::new(executor);
-
-    fs.insert_tree(
-        path!("/main_repo"),
-        json!({
-            ".git": {},
-            "file.txt": "content",
-        }),
-    )
-    .await;
+    fs.insert_tree(path!("/main_repo"), json!({ ".git": {}, "file.txt": "" }))
+        .await;
     fs.add_linked_worktree_for_repo(
         Path::new(path!("/main_repo/.git")),
         false,
@@ -3367,12 +3531,9 @@ async fn test_linked_worktree_git_file_event_does_not_panic(
         },
     )
     .await;
-    fs.write(
-        path!("/linked_worktree/file.txt").as_ref(),
-        "content".as_bytes(),
-    )
-    .await
-    .unwrap();
+    fs.write(path!("/linked_worktree/file.txt").as_ref(), b"content")
+        .await
+        .unwrap();
 
     let tree = Worktree::local(
         path!("/linked_worktree").as_ref(),
@@ -3389,17 +3550,19 @@ async fn test_linked_worktree_git_file_event_does_not_panic(
         .await;
     cx.run_until_parked();
 
-    // Trigger a filesystem event inside the main repo's .git directory
-    // (which the linked worktree scanner watches via the commondir). This
-    // uses the sentinel-file helper to ensure the event goes through the
-    // real watcher path, exactly as it would in production.
-    tree.flush_fs_events_in_root_git_repository(cx).await;
+    // Overwrite the .git gitfile with garbage to trigger an event for the
+    // gitfile path itself, which only matches `dot_git_abs_path`.
+    fs.write(path!("/linked_worktree/.git").as_ref(), b"garbage")
+        .await
+        .unwrap();
+    tree.flush_fs_events(cx).await;
 
     // The worktree should still be intact.
     tree.read_with(cx, |tree, _| {
         assert_eq!(
             tree.snapshot().root_repo_common_dir().map(|p| p.as_ref()),
             Some(Path::new(path!("/main_repo/.git"))),
+            "linked worktree repo should survive a gitfile change event"
         );
     });
 }

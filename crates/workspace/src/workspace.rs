@@ -48,7 +48,7 @@ use client::{
     ChannelId, Client, ErrorExt, ParticipantIndex, Status, TypedEnvelope, User, UserStore,
     proto::{self, ErrorCode, PanelId, PeerId},
 };
-use collections::{HashMap, HashSet, hash_map};
+use collections::{HashMap, HashSet, TypeIdHashMap, hash_map};
 use dock::{Dock, DockPosition, PanelButtons, PanelHandle, RESIZE_HANDLE_SIZE};
 use fs::Fs;
 use futures::{
@@ -123,7 +123,7 @@ pub use status_bar::StatusItemView;
 use std::{
     any::TypeId,
     borrow::Cow,
-    cell::RefCell,
+    cell::{Cell, RefCell},
     cmp,
     collections::VecDeque,
     env,
@@ -819,7 +819,7 @@ type BuildProjectItemForPathFn =
 
 #[derive(Clone, Default)]
 struct ProjectItemRegistry {
-    build_project_item_fns_by_type: HashMap<TypeId, BuildProjectItemFn>,
+    build_project_item_fns_by_type: TypeIdHashMap<BuildProjectItemFn>,
     build_project_item_for_path_fns: Vec<BuildProjectItemForPathFn>,
 }
 
@@ -947,7 +947,7 @@ pub fn register_project_item<I: ProjectItem>(cx: &mut App) {
 }
 
 #[derive(Default)]
-pub struct FollowableViewRegistry(HashMap<TypeId, FollowableViewDescriptor>);
+pub struct FollowableViewRegistry(TypeIdHashMap<FollowableViewDescriptor>);
 
 struct FollowableViewDescriptor {
     from_state_proto: fn(
@@ -1020,7 +1020,7 @@ struct SerializableItemDescriptor {
 #[derive(Default)]
 struct SerializableItemRegistry {
     descriptors_by_kind: HashMap<Arc<str>, SerializableItemDescriptor>,
-    descriptors_by_type: HashMap<TypeId, SerializableItemDescriptor>,
+    descriptors_by_type: TypeIdHashMap<SerializableItemDescriptor>,
 }
 
 impl Global for SerializableItemRegistry {}
@@ -1408,6 +1408,7 @@ pub struct Workspace {
     _panels_task: Option<Task<Result<()>>>,
     sidebar_focus_handle: Option<FocusHandle>,
     multi_workspace: Option<WeakEntity<MultiWorkspace>>,
+    active_workspace_id: Option<Rc<Cell<EntityId>>>,
     active_worktree_creation: ActiveWorktreeCreation,
     deferred_save_items: Vec<Box<dyn WeakItemHandle>>,
 }
@@ -1852,6 +1853,7 @@ impl Workspace {
             removing: false,
             sidebar_focus_handle: None,
             multi_workspace,
+            active_workspace_id: None,
             active_worktree_creation: ActiveWorktreeCreation::default(),
             open_in_dev_container: false,
             _dev_container_task: None,
@@ -2573,12 +2575,14 @@ impl Workspace {
     pub fn set_multi_workspace(
         &mut self,
         multi_workspace: WeakEntity<MultiWorkspace>,
+        active_workspace_id: Rc<Cell<EntityId>>,
         cx: &mut App,
     ) {
         self.status_bar.update(cx, |status_bar, cx| {
             status_bar.set_multi_workspace(multi_workspace.clone(), cx);
         });
         self.multi_workspace = Some(multi_workspace);
+        self.active_workspace_id = Some(active_workspace_id);
     }
 
     pub fn app_state(&self) -> &Arc<AppState> {
@@ -3663,8 +3667,23 @@ impl Workspace {
                 let fs = fs.clone();
                 let pane = pane.clone();
                 let task = cx.spawn(async move |cx| {
-                    let (_worktree, project_path) = project_path?;
-                    if fs.is_dir(&abs_path).await {
+                    let (worktree, project_path) = project_path?;
+                    let (entry_is_directory, worktree_is_local) =
+                        worktree.read_with(cx, |worktree, _| {
+                            let entry = if project_path.path.as_unix_str().is_empty() {
+                                worktree.root_entry()
+                            } else {
+                                worktree.entry_for_path(&project_path.path)
+                            };
+                            (entry.map(|entry| entry.is_dir()), worktree.is_local())
+                        });
+                    let is_directory = match entry_is_directory {
+                        Some(is_directory) => is_directory,
+                        None if worktree_is_local => fs.is_dir(&abs_path).await,
+                        None => false,
+                    };
+
+                    if is_directory {
                         // Opening a directory should not race to update the active entry.
                         // We'll select/reveal a deterministic final entry after all paths finish opening.
                         None
@@ -5951,6 +5970,20 @@ impl Workspace {
     }
 
     fn update_window_title(&mut self, window: &mut Window, cx: &mut App) {
+        if !self.owns_window_chrome() {
+            return;
+        }
+        self.apply_window_title(window, cx);
+    }
+
+    fn owns_window_chrome(&self) -> bool {
+        match &self.active_workspace_id {
+            Some(active_workspace_id) => active_workspace_id.get() == self.weak_self.entity_id(),
+            None => true,
+        }
+    }
+
+    fn apply_window_title(&mut self, window: &mut Window, cx: &mut App) {
         let project = self.project().read(cx);
         let mut title = String::new();
 
@@ -6010,12 +6043,26 @@ impl Workspace {
         self.last_window_title = Some(title);
     }
 
+    fn is_window_edited(&self, cx: &App) -> bool {
+        !self.project.read(cx).is_disconnected(cx) && !self.dirty_items.is_empty()
+    }
+
     fn update_window_edited(&mut self, window: &mut Window, cx: &mut App) {
-        let is_edited = !self.project.read(cx).is_disconnected(cx) && !self.dirty_items.is_empty();
+        if !self.owns_window_chrome() {
+            return;
+        }
+        let is_edited = self.is_window_edited(cx);
         if is_edited != self.window_edited {
             self.window_edited = is_edited;
             window.set_window_edited(self.window_edited)
         }
+    }
+
+    pub fn refresh_window_state(&mut self, window: &mut Window, cx: &mut App) {
+        self.last_window_title = None;
+        self.apply_window_title(window, cx);
+        self.window_edited = self.is_window_edited(cx);
+        window.set_window_edited(self.window_edited);
     }
 
     fn update_item_dirty_state(
@@ -11502,6 +11549,84 @@ mod tests {
                 assert_eq!(mw.workspaces().count(), 1, "only workspace A should remain");
             })
             .unwrap();
+    }
+
+    #[gpui::test]
+    async fn test_window_title_follows_active_workspace(cx: &mut TestAppContext) {
+        init_test(cx);
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(path!("/root1"), json!({ "a.txt": "" }))
+            .await;
+        fs.insert_tree(path!("/root2"), json!({ "b.txt": "" }))
+            .await;
+
+        let project_a = Project::test(fs.clone(), [path!("/root1").as_ref()], cx).await;
+        let project_b = Project::test(fs, [path!("/root2").as_ref()], cx).await;
+
+        let multi_workspace_handle =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project_a.clone(), window, cx));
+        let workspace_a = multi_workspace_handle
+            .read_with(cx, |mw, _| mw.workspace().clone())
+            .unwrap();
+
+        let cx = &mut VisualTestContext::from_window(multi_workspace_handle.into(), cx);
+        cx.run_until_parked();
+        assert_eq!(cx.window_title().as_deref(), Some("root1"));
+
+        multi_workspace_handle
+            .update(cx, |mw, window, cx| {
+                mw.test_add_workspace(project_b.clone(), window, cx)
+            })
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(cx.window_title().as_deref(), Some("root2"));
+
+        multi_workspace_handle
+            .update(cx, |mw, window, cx| {
+                mw.activate(workspace_a.clone(), None, window, cx);
+            })
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(cx.window_title().as_deref(), Some("root1"));
+    }
+
+    #[gpui::test]
+    async fn test_background_workspace_does_not_clobber_window_title(cx: &mut TestAppContext) {
+        init_test(cx);
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(path!("/root1"), json!({ "a.txt": "" }))
+            .await;
+        fs.insert_tree(path!("/root2"), json!({ "b.txt": "" }))
+            .await;
+        fs.insert_tree(path!("/root3"), json!({ "c.txt": "" }))
+            .await;
+
+        let project_a = Project::test(fs.clone(), [path!("/root1").as_ref()], cx).await;
+        let project_b = Project::test(fs.clone(), [path!("/root2").as_ref()], cx).await;
+
+        let multi_workspace_handle =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project_a.clone(), window, cx));
+
+        let cx = &mut VisualTestContext::from_window(multi_workspace_handle.into(), cx);
+        cx.run_until_parked();
+        assert_eq!(cx.window_title().as_deref(), Some("root1"));
+
+        multi_workspace_handle
+            .update(cx, |mw, window, cx| {
+                mw.test_add_workspace(project_b.clone(), window, cx)
+            })
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(cx.window_title().as_deref(), Some("root2"));
+
+        project_a
+            .update(cx, |project, cx| {
+                project.find_or_create_worktree(path!("/root3"), true, cx)
+            })
+            .await
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(cx.window_title().as_deref(), Some("root2"));
     }
 
     #[gpui::test]

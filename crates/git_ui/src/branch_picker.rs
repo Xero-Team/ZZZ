@@ -122,7 +122,29 @@ pub fn select_popover(
     })
 }
 
-pub type SelectBranchCallback = Arc<dyn Fn(Branch, &mut App)>;
+pub fn select_modal(
+    workspace: WeakEntity<Workspace>,
+    repository: Option<Entity<Repository>>,
+    selected_branch: Option<SharedString>,
+    on_select: SelectBranchCallback,
+    window: &mut Window,
+    cx: &mut Context<BranchList>,
+) -> BranchList {
+    let list = BranchList::new_select(
+        workspace,
+        repository,
+        BranchListStyle::Modal,
+        rems(34.),
+        selected_branch,
+        on_select,
+        window,
+        cx,
+    );
+    list.focus_handle(cx).focus(window, cx);
+    list
+}
+
+pub type SelectBranchCallback = Arc<dyn Fn(Branch, &mut Window, &mut App)>;
 
 pub fn create_embedded(
     workspace: WeakEntity<Workspace>,
@@ -646,6 +668,12 @@ fn delete_branch_command(is_remote: bool, branch_name: &str, force: bool) -> Str
     )
 }
 
+// Branch and remote names typed into the picker should not preserve surrounding
+// whitespace, otherwise normalization can produce invalid leading/trailing dashes.
+fn normalize_branch_name(query: &str) -> String {
+    query.trim().replace(' ', "-")
+}
+
 struct BranchDeleteForceDeletePrompt {
     required_error_substrings: &'static [&'static str],
     message: fn(&str) -> String,
@@ -859,7 +887,7 @@ impl BranchListDelegate {
         let Some(repo) = self.repo.clone() else {
             return;
         };
-        let new_branch_name = new_branch_name.to_string().replace(' ', "-");
+        let new_branch_name = normalize_branch_name(&new_branch_name);
         let base_branch = from_branch.map(|b| b.to_string());
         cx.spawn(async move |_, cx| {
             repo.update(cx, |repo, _| {
@@ -1212,7 +1240,7 @@ impl PickerDelegate for BranchListDelegate {
             picker
                 .update(cx, |picker, _| {
                     if let PickerState::CreateRemote(url) = &picker.delegate.state {
-                        let query = query.replace(' ', "-");
+                        let query = normalize_branch_name(&query);
                         if !query.is_empty() {
                             picker.delegate.matches = vec![Entry::NewRemoteName {
                                 name: query.clone(),
@@ -1231,7 +1259,7 @@ impl PickerDelegate for BranchListDelegate {
                         && !query.is_empty()
                         && !matches.first().is_some_and(|entry| entry.name() == query)
                     {
-                        let query = query.replace(' ', "-");
+                        let query = normalize_branch_name(&query);
                         let is_url = query.trim_start_matches("git@").parse::<Url>().is_ok();
                         let entry = if is_url {
                             Entry::NewUrl { url: query }
@@ -1288,7 +1316,7 @@ impl PickerDelegate for BranchListDelegate {
                 if let BranchSelectionBehavior::Select { on_select, .. } =
                     &self.branch_selection_behavior
                 {
-                    on_select(branch.clone(), cx);
+                    on_select(branch.clone(), window, cx);
                     cx.emit(DismissEvent);
                     return;
                 }
@@ -2744,6 +2772,12 @@ mod tests {
             &format!("refs/heads/{NEW_BRANCH}"),
             "branch ref_name should not have duplicate refs/heads/ prefix"
         );
+    }
+
+    #[test]
+    fn test_normalize_branch_name() {
+        assert_eq!(normalize_branch_name(" branch-name "), "branch-name");
+        assert_eq!(normalize_branch_name(" fix leak "), "fix-leak");
     }
 
     #[gpui::test]

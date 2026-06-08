@@ -368,6 +368,8 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
                 .spacing(ListItemSpacing::Sparse)
                 .child(
                     h_flex()
+                        .w_full()
+                        .min_w_0()
                         .gap_3()
                         .flex_grow()
                         .when(self.has_any_non_local_projects, |this| {

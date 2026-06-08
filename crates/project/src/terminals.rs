@@ -115,19 +115,17 @@ impl Project {
         let env_task =
             self.resolve_directory_environment(&shell, path.clone(), remote_client.clone(), cx);
 
-        let project_path_contexts = self
-            .active_entry()
-            .and_then(|entry_id| self.path_for_entry(entry_id, cx))
+        let project_path_contexts: Vec<ProjectPath> = path
+            .as_ref()
+            .and_then(|path| self.find_worktree(path, cx))
+            .map(|(worktree, relative_path)| ProjectPath {
+                worktree_id: worktree.read(cx).id(),
+                path: relative_path,
+            })
             .into_iter()
-            .chain(
-                self.visible_worktrees(cx)
-                    .map(|wt| wt.read(cx).id())
-                    .map(|worktree_id| ProjectPath {
-                        worktree_id,
-                        path: Arc::from(RelPath::empty()),
-                    }),
-            );
+            .collect();
         let toolchains = project_path_contexts
+            .into_iter()
             .filter(|_| detect_venv)
             .map(|p| self.active_toolchain(p, LanguageName::new_static("Python"), cx))
             .collect::<Vec<_>>();
@@ -333,19 +331,17 @@ impl Project {
         let detect_venv = settings.detect_venv.as_option().is_some();
         let local_path = if is_via_remote { None } else { path.clone() };
 
-        let project_path_contexts = self
-            .active_entry()
-            .and_then(|entry_id| self.path_for_entry(entry_id, cx))
+        let project_path_contexts: Vec<ProjectPath> = path
+            .as_ref()
+            .and_then(|path| self.find_worktree(path, cx))
+            .map(|(worktree, relative_path)| ProjectPath {
+                worktree_id: worktree.read(cx).id(),
+                path: relative_path,
+            })
             .into_iter()
-            .chain(
-                self.visible_worktrees(cx)
-                    .map(|wt| wt.read(cx).id())
-                    .map(|worktree_id| ProjectPath {
-                        worktree_id,
-                        path: RelPath::empty().into(),
-                    }),
-            );
+            .collect();
         let toolchains = project_path_contexts
+            .into_iter()
             .filter(|_| detect_venv)
             .map(|p| self.active_toolchain(p, LanguageName::new_static("Python"), cx))
             .collect::<Vec<_>>();

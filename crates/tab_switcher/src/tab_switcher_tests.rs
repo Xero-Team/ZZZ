@@ -73,6 +73,49 @@ async fn test_open_with_prev_tab_selected_and_cycle_on_toggle_action(
 }
 
 #[gpui::test]
+async fn test_query_selects_first_match(cx: &mut gpui::TestAppContext) {
+    let app_state = init_test(cx);
+
+    app_state
+        .fs
+        .as_fake()
+        .insert_tree(
+            path!("/root"),
+            json!({
+                "1.txt": "First file",
+                "2.txt": "Second file",
+                "3.txt": "Third file",
+                "4.txt": "Fourth file",
+            }),
+        )
+        .await;
+
+    let project = Project::test(app_state.fs.clone(), [path!("/root").as_ref()], cx).await;
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+    let workspace = multi_workspace.read_with(cx, |mw, _| mw.workspace().clone());
+
+    let tab_1 = open_buffer("1.txt", &workspace, cx).await;
+    open_buffer("2.txt", &workspace, cx).await;
+    open_buffer("3.txt", &workspace, cx).await;
+    open_buffer("4.txt", &workspace, cx).await;
+
+    cx.dispatch_action(ToggleAll);
+    let tab_switcher = get_active_tab_switcher(&workspace, cx);
+
+    workspace.update_in(cx, |_, window, cx| {
+        tab_switcher.update(cx, |picker, cx| {
+            picker.update_matches("1".to_string(), window, cx);
+        });
+    });
+    cx.run_until_parked();
+
+    tab_switcher.update(cx, |picker, _| {
+        assert_match_selection(picker, 0, tab_1);
+    });
+}
+
+#[gpui::test]
 async fn test_open_with_last_tab_selected(cx: &mut gpui::TestAppContext) {
     let app_state = init_test(cx);
 
