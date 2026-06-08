@@ -5012,6 +5012,20 @@ impl MultiBufferSnapshot {
         MBD::TextDimension: Sub<Output = MBD::TextDimension> + Ord,
         I: 'a + IntoIterator<Item = &'a Anchor>,
     {
+        let mut summaries = Vec::new();
+        self.summaries_for_anchors_cb(anchors, |summary| summaries.push(summary));
+        summaries
+    }
+
+    pub fn summaries_for_anchors_cb<'a, MBD, I>(&'a self, anchors: I, mut cb: impl FnMut(MBD))
+    where
+        MBD: MultiBufferDimension
+            + Ord
+            + Sub<Output = MBD::TextDimension>
+            + AddAssign<MBD::TextDimension>,
+        MBD::TextDimension: Sub<Output = MBD::TextDimension> + Ord,
+        I: 'a + IntoIterator<Item = &'a Anchor>,
+    {
         let mut anchors = anchors.into_iter().peekable();
         let mut cursor = self.excerpts.cursor::<ExcerptSummary>(());
         let mut diff_transforms_cursor = self
@@ -5019,18 +5033,17 @@ impl MultiBufferSnapshot {
             .cursor::<Dimensions<ExcerptDimension<MBD>, OutputDimension<MBD>>>(());
         diff_transforms_cursor.next();
 
-        let mut summaries = Vec::new();
         while let Some(anchor) = anchors.peek() {
             let target = anchor.seek_target(self);
             let excerpt_anchor = match anchor {
                 Anchor::Min => {
-                    summaries.push(MBD::default());
+                    cb(MBD::default());
                     anchors.next();
                     continue;
                 }
                 Anchor::Excerpt(excerpt_anchor) => excerpt_anchor,
                 Anchor::Max => {
-                    summaries.push(MBD::from_summary(&self.text_summary()));
+                    cb(MBD::from_summary(&self.text_summary()));
                     anchors.next();
                     continue;
                 }
@@ -5048,7 +5061,7 @@ impl MultiBufferSnapshot {
                         excerpt_start_position,
                         &mut diff_transforms_cursor,
                     );
-                    summaries.push(position);
+                    cb(position);
                     anchors.next();
                     continue;
                 }
@@ -5084,7 +5097,7 @@ impl MultiBufferSnapshot {
                         diff_transforms_cursor.seek_forward(&position, Bias::Left);
                     }
 
-                    summaries.push(self.summary_for_anchor_with_excerpt_position(
+                    cb(self.summary_for_anchor_with_excerpt_position(
                         excerpt_anchor,
                         position,
                         &mut diff_transforms_cursor,
@@ -5098,12 +5111,10 @@ impl MultiBufferSnapshot {
                     excerpt_start_position,
                     &mut diff_transforms_cursor,
                 );
-                summaries.push(position);
+                cb(position);
                 anchors.next();
             }
         }
-
-        summaries
     }
 
     pub fn dimensions_from_points<'a, MBD>(
