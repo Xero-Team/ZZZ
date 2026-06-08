@@ -40,7 +40,10 @@ use text::Bias;
 use ui::App;
 use util::markdown::MarkdownEscaped;
 use util::path_list::PathList;
-use util::{ResultExt, get_default_system_shell_preferring_bash, paths::PathStyle};
+use util::{
+    ResultExt, get_default_system_shell_preferring_bash,
+    paths::{PathStyle, is_absolute},
+};
 use uuid::Uuid;
 
 /// Returned when the model stops because it exhausted its output token budget.
@@ -74,6 +77,68 @@ pub fn meta_with_tool_name(tool_name: &str) -> acp::Meta {
 
 /// Key used in ACP ToolCall meta to store the session id and message indexes
 pub const SUBAGENT_SESSION_INFO_META_KEY: &str = "subagent_session_info";
+
+pub const SANDBOX_AUTHORIZATION_META_KEY: &str = "sandbox_authorization";
+
+/// Stable `PermissionOption` ids for the sandbox-escalation approval prompt.
+///
+/// `AllowThread` and `AllowAlways` both use `PermissionOptionKind::AllowAlways`;
+/// the id distinguishes their persistence scope.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SandboxPermission {
+    AllowOnce,
+    AllowThread,
+    AllowAlways,
+    Deny,
+}
+
+impl SandboxPermission {
+    pub fn as_id(self) -> &'static str {
+        match self {
+            Self::AllowOnce => "allow",
+            Self::AllowThread => "allow_thread",
+            Self::AllowAlways => "allow_always",
+            Self::Deny => "deny",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "allow" => Some(Self::AllowOnce),
+            "allow_thread" => Some(Self::AllowThread),
+            "allow_always" => Some(Self::AllowAlways),
+            "deny" => Some(Self::Deny),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct SandboxAuthorizationDetails {
+    #[serde(default)]
+    pub network: bool,
+    #[serde(default)]
+    pub allow_fs_write_all: bool,
+    #[serde(default)]
+    pub unsandboxed: bool,
+    #[serde(default)]
+    pub write_paths: Vec<PathBuf>,
+}
+
+pub fn meta_with_sandbox_authorization(details: SandboxAuthorizationDetails) -> acp::Meta {
+    acp::Meta::from_iter([(
+        SANDBOX_AUTHORIZATION_META_KEY.into(),
+        serde_json::to_value(details).unwrap_or_default(),
+    )])
+}
+
+pub fn sandbox_authorization_details_from_meta(
+    meta: &Option<acp::Meta>,
+) -> Option<SandboxAuthorizationDetails> {
+    meta.as_ref()
+        .and_then(|meta| meta.get(SANDBOX_AUTHORIZATION_META_KEY))
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SubagentSessionInfo {
@@ -263,6 +328,7 @@ pub struct ToolCall {
     pub raw_output: Option<serde_json::Value>,
     pub tool_name: Option<SharedString>,
     pub subagent_session_info: Option<SubagentSessionInfo>,
+    pub sandbox_authorization_details: Option<SandboxAuthorizationDetails>,
 }
 
 impl ToolCall {
@@ -304,6 +370,8 @@ impl ToolCall {
         let tool_name = tool_name_from_meta(&tool_call.meta);
 
         let subagent_session_info = subagent_session_info_from_meta(&tool_call.meta);
+        let sandbox_authorization_details =
+            sandbox_authorization_details_from_meta(&tool_call.meta);
 
         let label = if tool_call.kind == acp::ToolKind::Execute {
             cx.new(|cx| Markdown::new_text(title.into(), cx))
@@ -324,6 +392,7 @@ impl ToolCall {
             raw_output: tool_call.raw_output,
             tool_name,
             subagent_session_info,
+            sandbox_authorization_details,
         };
         Ok(result)
     }
@@ -358,6 +427,10 @@ impl ToolCall {
 
         if let Some(subagent_session_info) = subagent_session_info_from_meta(&meta) {
             self.subagent_session_info = Some(subagent_session_info);
+        }
+        if let Some(sandbox_authorization_details) = sandbox_authorization_details_from_meta(&meta)
+        {
+            self.sandbox_authorization_details = Some(sandbox_authorization_details);
         }
 
         if let Some(title) = title {
@@ -473,9 +546,16 @@ impl ToolCall {
     ) -> Option<ResolvedLocation> {
         let buffer = project
             .update(cx, |project, cx| {
-                project
-                    .project_path_for_absolute_path(&location.path, cx)
-                    .map(|path| project.open_buffer(path, cx))
+                if let Some(path) = project.project_path_for_absolute_path(&location.path, cx) {
+                    Some(project.open_buffer(path, cx))
+                } else if is_absolute(
+                    location.path.to_string_lossy().as_ref(),
+                    project.path_style(cx),
+                ) {
+                    Some(project.open_local_buffer(&location.path, cx))
+                } else {
+                    None
+                }
             })
             .ok()??;
         let buffer = buffer.await.log_err()?;
@@ -1557,7 +1637,7 @@ impl AcpThread {
                 config_options,
                 ..
             }) => cx.emit(AcpThreadEvent::ConfigOptionsUpdated(config_options)),
-            acp::SessionUpdate::UsageUpdate(update) if cx.has_flag::<AcpBetaFeatureFlag>() => {
+            acp::SessionUpdate::UsageUpdate(update) => {
                 let usage = self.token_usage.get_or_insert_with(Default::default);
                 usage.max_tokens = update.size;
                 usage.used_tokens = update.used;
@@ -1907,6 +1987,7 @@ impl AcpThread {
                     raw_output: None,
                     tool_name: None,
                     subagent_session_info: None,
+                    sandbox_authorization_details: None,
                 };
                 self.push_entry(AgentThreadEntry::ToolCall(failed_tool_call), cx);
                 return Ok(());
@@ -3196,6 +3277,38 @@ mod tests {
     };
     use util::{path, path_list::PathList};
 
+    #[test]
+    fn sandbox_authorization_details_round_trip_through_meta() {
+        let details = SandboxAuthorizationDetails {
+            network: true,
+            allow_fs_write_all: false,
+            unsandboxed: false,
+            write_paths: vec![PathBuf::from("/tmp/build"), PathBuf::from("/tmp/cache")],
+        };
+
+        let meta = Some(meta_with_sandbox_authorization(details.clone()));
+
+        assert_eq!(
+            sandbox_authorization_details_from_meta(&meta),
+            Some(details)
+        );
+    }
+
+    #[test]
+    fn sandbox_permission_ids_round_trip() {
+        for permission in [
+            SandboxPermission::AllowOnce,
+            SandboxPermission::AllowThread,
+            SandboxPermission::AllowAlways,
+            SandboxPermission::Deny,
+        ] {
+            assert_eq!(
+                SandboxPermission::from_id(permission.as_id()),
+                Some(permission)
+            );
+        }
+    }
+
     fn init_test(cx: &mut TestAppContext) {
         env_logger::try_init().ok();
         cx.update(|cx| {
@@ -4086,6 +4199,56 @@ mod tests {
             .unwrap();
 
         assert!(cx.read(|cx| !thread.read(cx).has_pending_edit_tool_calls()));
+    }
+
+    #[gpui::test]
+    async fn test_tool_call_location_resolves_external_file(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            path!("/tmp/skills/test-skill"),
+            json!({ "SKILL.md": "skill body" }),
+        )
+        .await;
+        let project = Project::test(fs, [], cx).await;
+        let connection = Rc::new(FakeAgentConnection::new());
+        let thread = cx
+            .update(|cx| {
+                connection.new_session(project, PathList::new(&[Path::new(path!("/project"))]), cx)
+            })
+            .await
+            .unwrap();
+
+        let skill_path = std::path::PathBuf::from(path!("/tmp/skills/test-skill/SKILL.md"));
+        thread
+            .update(cx, |thread, cx| {
+                thread.handle_session_update(
+                    acp::SessionUpdate::ToolCall(
+                        acp::ToolCall::new("write_file", "Write SKILL.md")
+                            .kind(acp::ToolKind::Edit)
+                            .status(acp::ToolCallStatus::Completed)
+                            .locations(vec![acp::ToolCallLocation::new(skill_path.clone())]),
+                    ),
+                    cx,
+                )
+            })
+            .unwrap();
+
+        cx.run_until_parked();
+
+        thread.read_with(cx, |thread, cx| {
+            let (tool_call_location, agent_location) = thread.entries[0]
+                .location(0)
+                .expect("external tool-call location should resolve");
+            assert_eq!(tool_call_location.path, skill_path);
+
+            let buffer = agent_location
+                .buffer
+                .upgrade()
+                .expect("resolved location should keep an open buffer");
+            assert_eq!(buffer.read(cx).text(), "skill body");
+        });
     }
 
     #[gpui::test(iterations = 10)]

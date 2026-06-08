@@ -3937,7 +3937,7 @@ impl Project {
         cx: &mut Context<Self>,
     ) {
         self.lsp_store.update(cx, |lsp_store, cx| {
-            lsp_store.restart_language_servers_for_buffers(buffers, only_restart_servers, cx)
+            lsp_store.restart_language_servers_for_buffers(buffers, only_restart_servers, true, cx)
         })
     }
 

@@ -6,17 +6,16 @@ use crate::{
 use agent_client_protocol::schema as acp;
 use std::cell::RefCell;
 
-use acp_thread::{ContentBlock, PlanEntry};
+use acp_thread::{ContentBlock, PlanEntry, SandboxAuthorizationDetails};
 use cloud_api_types::{SubmitAgentThreadFeedbackBody, SubmitAgentThreadFeedbackCommentsBody};
 use editor::actions::OpenExcerpts;
-use feature_flags::AcpBetaFeatureFlag;
 
 use crate::message_editor::SharedSessionCapabilities;
 
 use gpui::List;
 use heapless::Vec as ArrayVec;
 use ui::{SpinnerLabel, SpinnerVariant, Tab};
-use workspace::SERIALIZATION_THROTTLE_TIME;
+use workspace::{OpenOptions, SERIALIZATION_THROTTLE_TIME};
 
 use super::*;
 use zed_actions::agent::OpenSettings;
@@ -563,6 +562,7 @@ pub struct ThreadView {
     /// Used for showing/hiding tool call results, terminal output, etc.
     pub expanded_tool_calls: HashSet<acp::ToolCallId>,
     pub expanded_tool_call_raw_inputs: HashSet<acp::ToolCallId>,
+    collapsed_sandbox_authorization_details: HashSet<acp::ToolCallId>,
     pub expanded_thinking_blocks: HashSet<(usize, usize)>,
     auto_expanded_thinking_block: Option<(usize, usize)>,
     user_toggled_thinking_blocks: HashSet<(usize, usize)>,
@@ -811,6 +811,7 @@ impl ThreadView {
             thread_feedback: Default::default(),
             expanded_tool_calls: HashSet::default(),
             expanded_tool_call_raw_inputs: HashSet::default(),
+            collapsed_sandbox_authorization_details: HashSet::default(),
             expanded_thinking_blocks: HashSet::default(),
             auto_expanded_thinking_block: None,
             user_toggled_thinking_blocks: HashSet::default(),
@@ -3587,18 +3588,14 @@ impl ThreadView {
         let usage = thread.token_usage()?;
         let show_split = self.supports_split_token_display(cx);
 
-        let cost_label = if cx.has_flag::<AcpBetaFeatureFlag>() {
-            thread.cost().map(|cost| {
-                let precision = if cost.amount > 0.0 && cost.amount < 0.01 {
-                    4
-                } else {
-                    2
-                };
-                format!("{:.prec$} {}", cost.amount, cost.currency, prec = precision)
-            })
-        } else {
-            None
-        };
+        let cost_label = thread.cost().map(|cost| {
+            let precision = if cost.amount > 0.0 && cost.amount < 0.01 {
+                4
+            } else {
+                2
+            };
+            format!("{:.prec$} {}", cost.amount, cost.currency, prec = precision)
+        });
 
         let progress_color = |ratio: f32| -> Hsla {
             if ratio >= 0.85 {
@@ -6022,6 +6019,17 @@ impl ThreadView {
                         })),
                 )
             })
+            .when_some(
+                tool_call.sandbox_authorization_details.as_ref(),
+                |this, details| {
+                    this.child(self.render_sandbox_authorization_details(
+                        entry_ix,
+                        &tool_call.id,
+                        details,
+                        cx,
+                    ))
+                },
+            )
             .when_some(confirmation_options, |this, options| {
                 let is_first = self.is_first_tool_call(active_session_id, &tool_call.id, cx);
                 this.child(self.render_permission_buttons(
@@ -6531,6 +6539,93 @@ impl ThreadView {
             .children(tool_output_display)
     }
 
+    fn render_sandbox_authorization_details(
+        &self,
+        entry_ix: usize,
+        tool_call_id: &acp::ToolCallId,
+        details: &SandboxAuthorizationDetails,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        if details.write_paths.is_empty() {
+            return Empty.into_any_element();
+        }
+
+        let is_open = !self
+            .collapsed_sandbox_authorization_details
+            .contains(tool_call_id);
+        let paths = details
+            .write_paths
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>();
+
+        v_flex()
+            .p_2()
+            .gap_1()
+            .border_t_1()
+            .border_color(self.tool_card_border_color(cx))
+            .child(
+                h_flex()
+                    .id(("sandbox-authorization-details-header", entry_ix))
+                    .gap_1()
+                    .pl_0p5()
+                    .rounded_xs()
+                    .hover(|style| style.bg(cx.theme().colors().element_hover))
+                    .child(
+                        Disclosure::new(("sandbox-authorization-details", entry_ix), is_open)
+                            .opened_icon(IconName::ChevronUp)
+                            .closed_icon(IconName::ChevronDown),
+                    )
+                    .child(
+                        Label::new("Paths")
+                            .size(LabelSize::XSmall)
+                            .color(Color::Muted)
+                            .buffer_font(cx),
+                    )
+                    .on_click(cx.listener({
+                        let tool_call_id = tool_call_id.clone();
+                        move |this, _event, _window, cx| {
+                            if this
+                                .collapsed_sandbox_authorization_details
+                                .remove(&tool_call_id)
+                            {
+                                cx.notify();
+                                return;
+                            }
+
+                            this.collapsed_sandbox_authorization_details
+                                .insert(tool_call_id.clone());
+                            cx.notify();
+                        }
+                    })),
+            )
+            .when(is_open, |this| {
+                this.child(
+                    v_flex()
+                        .gap_0p5()
+                        .pl_5()
+                        .children(paths.into_iter().enumerate().map(|(path_ix, path)| {
+                            h_flex()
+                                .gap_1()
+                                .child(Label::new("•").size(LabelSize::Small).color(Color::Muted))
+                                .child(
+                                    div()
+                                        .id(format!(
+                                            "sandbox-authorization-path-{entry_ix}-{path_ix}"
+                                        ))
+                                        .w_full()
+                                        .max_w_full()
+                                        .overflow_x_scroll()
+                                        .child(
+                                            Label::new(path).buffer_font(cx).size(LabelSize::Small),
+                                        ),
+                                )
+                        })),
+                )
+            })
+            .into_any_element()
+    }
+
     fn render_permission_buttons(
         &self,
         session_id: acp::SessionId,
@@ -6999,7 +7094,13 @@ impl ThreadView {
                                 Icon::new(IconName::CheckDouble)
                                     .size(IconSize::XSmall)
                                     .color(Color::Success),
-                                Some(&AllowAlways as &dyn Action),
+                                if option.option_id.0.as_ref()
+                                    == acp_thread::SandboxPermission::AllowThread.as_id()
+                                {
+                                    None
+                                } else {
+                                    Some(&AllowAlways as &dyn Action)
+                                },
                             ),
                             acp::PermissionOptionKind::RejectOnce => (
                                 Icon::new(IconName::Close)
@@ -7259,12 +7360,24 @@ impl ThreadView {
             .project
             .upgrade()?
             .read(cx)
-            .find_project_path(&tool_call_location.path, cx)?;
+            .find_project_path(&tool_call_location.path, cx);
 
         let open_task = self
             .workspace
             .update(cx, |workspace, cx| {
-                workspace.open_path(project_path, None, true, window, cx)
+                if let Some(project_path) = project_path {
+                    workspace.open_path(project_path, None, true, window, cx)
+                } else {
+                    workspace.open_abs_path(
+                        tool_call_location.path.clone(),
+                        OpenOptions {
+                            focus: Some(true),
+                            ..Default::default()
+                        },
+                        window,
+                        cx,
+                    )
+                }
             })
             .log_err()?;
         window
@@ -8761,12 +8874,36 @@ impl Render for ThreadView {
                 if this.thread.read(cx).status() != ThreadStatus::Idle {
                     return;
                 }
+                if let Some(config_options_view) = this.config_options_view.clone() {
+                    let handled = config_options_view.update(cx, |view, cx| {
+                        view.cycle_category_option(
+                            acp::SessionConfigOptionCategory::ThoughtLevel,
+                            false,
+                            cx,
+                        )
+                    });
+                    if handled {
+                        return;
+                    }
+                }
                 this.cycle_thinking_effort(cx);
             }))
             .on_action(
                 cx.listener(|this, action: &ToggleThinkingEffortMenu, window, cx| {
                     if this.thread.read(cx).status() != ThreadStatus::Idle {
                         return;
+                    }
+                    if let Some(config_options_view) = this.config_options_view.clone() {
+                        let handled = config_options_view.update(cx, |view, cx| {
+                            view.toggle_category_picker(
+                                acp::SessionConfigOptionCategory::ThoughtLevel,
+                                window,
+                                cx,
+                            )
+                        });
+                        if handled {
+                            return;
+                        }
                     }
                     this.toggle_thinking_effort_menu(action, window, cx);
                 }),

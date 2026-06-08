@@ -543,12 +543,12 @@ impl AgentSessionList for AcpSessionList {
         })
     }
 
-    fn supports_delete(&self, cx: &App) -> bool {
-        self.supports_delete && cx.has_flag::<AcpBetaFeatureFlag>()
+    fn supports_delete(&self) -> bool {
+        self.supports_delete
     }
 
     fn delete_session(&self, session_id: &acp::SessionId, cx: &mut App) -> Task<Result<()>> {
-        if !self.supports_delete(cx) {
+        if !self.supports_delete() {
             return Task::ready(Err(anyhow::anyhow!("delete_session not supported")));
         }
 
@@ -2903,28 +2903,14 @@ mod tests {
         );
     }
     #[gpui::test]
-    async fn session_delete_support_requires_beta_flag_and_capability(
-        cx: &mut gpui::TestAppContext,
-    ) {
+    async fn session_delete_support_requires_agent_capability(cx: &mut gpui::TestAppContext) {
         let deleted_sessions = Arc::new(std::sync::Mutex::new(Vec::new()));
         let connection = connect_session_delete_test_agent(deleted_sessions, cx).await;
         let session_list = AcpSessionList::new(connection.clone(), true);
         let missing_capability = AcpSessionList::new(connection, false);
 
-        cx.update(|cx| {
-            let store = settings::SettingsStore::test(cx);
-            cx.set_global(store);
-
-            assert_eq!(
-                session_list.supports_delete(cx),
-                cx.has_flag::<AcpBetaFeatureFlag>()
-            );
-            assert!(!missing_capability.supports_delete(cx));
-
-            cx.update_flags(false, vec![AcpBetaFeatureFlag::NAME.to_string()]);
-            assert!(session_list.supports_delete(cx));
-            assert!(!missing_capability.supports_delete(cx));
-        });
+        assert!(cx.update(|_| session_list.supports_delete()));
+        assert!(!cx.update(|_| missing_capability.supports_delete()));
     }
 
     async fn connect_session_delete_test_agent(
@@ -2978,11 +2964,6 @@ mod tests {
         let session_list = AcpSessionList::new(connection, true);
         let session_id = acp::SessionId::new("session-to-delete");
 
-        cx.update(|cx| {
-            let store = settings::SettingsStore::test(cx);
-            cx.set_global(store);
-            cx.update_flags(false, vec![AcpBetaFeatureFlag::NAME.to_string()]);
-        });
         cx.update(|cx| session_list.delete_session(&session_id, cx))
             .await
             .expect("delete_session failed");
@@ -3002,11 +2983,6 @@ mod tests {
         let session_list = AcpSessionList::new(connection, false);
         let session_id = acp::SessionId::new("session-to-delete");
 
-        cx.update(|cx| {
-            let store = settings::SettingsStore::test(cx);
-            cx.set_global(store);
-            cx.update_flags(false, vec![AcpBetaFeatureFlag::NAME.to_string()]);
-        });
         let error = cx
             .update(|cx| session_list.delete_session(&session_id, cx))
             .await

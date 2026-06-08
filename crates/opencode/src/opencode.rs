@@ -1,6 +1,8 @@
 use anyhow::{Result, anyhow};
 use futures::{AsyncBufReadExt, AsyncReadExt, StreamExt, io::BufReader, stream::BoxStream};
-use http_client::{AsyncBody, HttpClient, Method, Request as HttpRequest};
+use http_client::{
+    AsyncBody, CustomHeaders, HttpClient, Method, Request as HttpRequest, RequestBuilderExt,
+};
 use language_model_core::ReasoningEffort;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
@@ -56,6 +58,8 @@ impl OpenCodeSubscription {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, EnumIter)]
 pub enum Model {
     // -- Anthropic protocol models --
+    #[serde(rename = "claude-opus-4-8")]
+    ClaudeOpus4_8,
     #[serde(rename = "claude-opus-4-7")]
     ClaudeOpus4_7,
     #[serde(rename = "claude-opus-4-6")]
@@ -226,6 +230,7 @@ impl Model {
 
     pub fn id(&self) -> &str {
         match self {
+            Self::ClaudeOpus4_8 => "claude-opus-4-8",
             Self::ClaudeOpus4_7 => "claude-opus-4-7",
             Self::ClaudeOpus4_6 => "claude-opus-4-6",
             Self::ClaudeOpus4_5 => "claude-opus-4-5",
@@ -282,6 +287,7 @@ impl Model {
 
     pub fn display_name(&self) -> &str {
         match self {
+            Self::ClaudeOpus4_8 => "Claude Opus 4.8",
             Self::ClaudeOpus4_7 => "Claude Opus 4.7",
             Self::ClaudeOpus4_6 => "Claude Opus 4.6",
             Self::ClaudeOpus4_5 => "Claude Opus 4.5",
@@ -350,7 +356,8 @@ impl Model {
                 }
             }
 
-            Self::ClaudeOpus4_7
+            Self::ClaudeOpus4_8
+            | Self::ClaudeOpus4_7
             | Self::ClaudeOpus4_6
             | Self::ClaudeOpus4_5
             | Self::ClaudeOpus4_1
@@ -404,7 +411,7 @@ impl Model {
     pub fn max_token_count(&self) -> u64 {
         match self {
             // Anthropic models
-            Self::ClaudeOpus4_7 => 1_000_000,
+            Self::ClaudeOpus4_8 | Self::ClaudeOpus4_7 => 1_000_000,
             Self::ClaudeOpus4_6 | Self::ClaudeSonnet4_6 => 1_000_000,
             Self::ClaudeSonnet4_5 => 1_000_000,
             Self::ClaudeOpus4_5 | Self::ClaudeHaiku4_5 => 200_000,
@@ -449,7 +456,7 @@ impl Model {
     pub fn max_output_tokens(&self) -> Option<u64> {
         match self {
             // Anthropic models
-            Self::ClaudeOpus4_7 | Self::ClaudeOpus4_6 => Some(128_000),
+            Self::ClaudeOpus4_8 | Self::ClaudeOpus4_7 | Self::ClaudeOpus4_6 => Some(128_000),
             Self::ClaudeOpus4_5
             | Self::ClaudeSonnet4_6
             | Self::ClaudeSonnet4_5
@@ -509,7 +516,8 @@ impl Model {
     pub fn supports_images(&self) -> bool {
         match self {
             // Anthropic models support images
-            Self::ClaudeOpus4_7
+            Self::ClaudeOpus4_8
+            | Self::ClaudeOpus4_7
             | Self::ClaudeOpus4_6
             | Self::ClaudeOpus4_5
             | Self::ClaudeOpus4_1
@@ -586,6 +594,13 @@ impl Model {
                 ReasoningEffort::High,
             ]),
 
+            Self::ClaudeOpus4_8 => Some(vec![
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+                ReasoningEffort::XHigh,
+            ]),
+
             Self::DeepSeekV4Pro | Self::DeepSeekV4Flash => Some(vec![
                 ReasoningEffort::Low,
                 ReasoningEffort::Medium,
@@ -613,6 +628,7 @@ pub async fn stream_generate_content(
     api_url: &str,
     api_key: &str,
     request: google_ai::GenerateContentRequest,
+    extra_headers: &CustomHeaders,
 ) -> Result<BoxStream<'static, Result<google_ai::GenerateContentResponse>>> {
     let api_key = api_key.trim();
 
@@ -620,13 +636,13 @@ pub async fn stream_generate_content(
 
     let uri = format!("{api_url}/v1/models/{model_id}:streamGenerateContent?alt=sse");
 
-    let request_builder = HttpRequest::builder()
+    let request = HttpRequest::builder()
         .method(Method::POST)
         .uri(uri)
         .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {api_key}"));
-
-    let request = request_builder.body(AsyncBody::from(serde_json::to_string(&request)?))?;
+        .header("Authorization", format!("Bearer {api_key}"))
+        .extra_headers(extra_headers)
+        .body(AsyncBody::from(serde_json::to_string(&request)?))?;
     let mut response = client.send(request).await?;
     if response.status().is_success() {
         let reader = BufReader::new(response.into_body());

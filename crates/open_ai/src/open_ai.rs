@@ -5,7 +5,8 @@ pub mod responses;
 use anyhow::{Context as _, Result, anyhow};
 use futures::{AsyncBufReadExt, AsyncReadExt, StreamExt, io::BufReader, stream::BoxStream};
 use http_client::{
-    AsyncBody, HttpClient, Method, Request as HttpRequest, StatusCode,
+    AsyncBody, CustomHeaders, HttpClient, Method, Request as HttpRequest, RequestBuilderExt,
+    StatusCode,
     http::{HeaderMap, HeaderValue},
 };
 pub use language_model_core::ReasoningEffort;
@@ -342,6 +343,29 @@ impl Model {
     pub fn supports_prompt_cache_key(&self) -> bool {
         true
     }
+
+    /// Whether OpenAI's Priority processing tier is available for this model.
+    /// The `*-pro`, `*-nano`, legacy `gpt-4`, and custom models are excluded.
+    pub fn supports_priority(&self) -> bool {
+        match self {
+            Self::FourOmniMini
+            | Self::O3
+            | Self::Five
+            | Self::FiveMini
+            | Self::FivePointOne
+            | Self::FivePointTwo
+            | Self::FivePointThreeCodex
+            | Self::FivePointFourMini
+            | Self::FivePointFour
+            | Self::FivePointFive => true,
+            Self::Four
+            | Self::FiveNano
+            | Self::FivePointFourNano
+            | Self::FivePointFourPro
+            | Self::FivePointFivePro
+            | Self::Custom { .. } => false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -417,6 +441,34 @@ mod tests {
             expected_efforts.as_slice()
         );
     }
+
+    #[test]
+    fn priority_support_matches_supported_model_subset() {
+        assert!(Model::FourOmniMini.supports_priority());
+        assert!(Model::O3.supports_priority());
+        assert!(Model::Five.supports_priority());
+        assert!(Model::FiveMini.supports_priority());
+        assert!(Model::FivePointFour.supports_priority());
+        assert!(Model::FivePointFive.supports_priority());
+        assert!(!Model::Four.supports_priority());
+        assert!(!Model::FiveNano.supports_priority());
+        assert!(!Model::FivePointFourNano.supports_priority());
+        assert!(!Model::FivePointFourPro.supports_priority());
+        assert!(!Model::FivePointFivePro.supports_priority());
+        assert!(
+            !Model::Custom {
+                name: "custom".into(),
+                display_name: None,
+                max_tokens: 1,
+                max_output_tokens: None,
+                max_completion_tokens: None,
+                reasoning_effort: None,
+                supports_chat_completions: true,
+                supports_images: true,
+            }
+            .supports_priority()
+        );
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -456,6 +508,20 @@ pub struct Request {
     pub prompt_cache_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<ReasoningEffort>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service_tier: Option<ServiceTier>,
+}
+
+/// Service tier for OpenAI requests. We only send `Priority` today in response
+/// to Fast Mode, but other variants are included so echoed values deserialize.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ServiceTier {
+    Auto,
+    Default,
+    Flex,
+    Scale,
+    Priority,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -717,15 +783,15 @@ pub async fn stream_completion(
     api_url: &str,
     api_key: &str,
     request: Request,
+    extra_headers: &CustomHeaders,
 ) -> Result<BoxStream<'static, Result<ResponseStreamEvent>>, RequestError> {
     let uri = format!("{api_url}/chat/completions");
-    let request_builder = HttpRequest::builder()
+    let request = HttpRequest::builder()
         .method(Method::POST)
         .uri(uri)
         .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {}", api_key.trim()));
-
-    let request = request_builder
+        .header("Authorization", format!("Bearer {}", api_key.trim()))
+        .extra_headers(extra_headers)
         .body(AsyncBody::from(
             serde_json::to_string(&request).map_err(|e| RequestError::Other(e.into()))?,
         ))
