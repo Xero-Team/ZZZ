@@ -13,6 +13,7 @@ use gpui::{
     WindowBounds, WindowHandle, WindowOptions, actions, div, list, point, prelude::*, px,
     uniform_list,
 };
+use i18n as app_i18n;
 
 use language::Buffer;
 use platform_title_bar::PlatformTitleBar;
@@ -433,15 +434,22 @@ fn init_renderers(cx: &mut App) {
                     settings_window,
                     item,
                     settings_file,
-                    Button::new("open-in-settings-file", "Edit in settings.json")
+                    Button::new(
+                        "open-in-settings-file",
+                        app_i18n::tr(
+                            cx,
+                            "settings_ui.common.button.edit_in_settings_json",
+                            "Edit in settings.json",
+                        ),
+                    )
                         .style(ButtonStyle::Outlined)
                         .size(ButtonSize::Medium)
                         .tab_index(0_isize)
-                        .tooltip(Tooltip::for_action_title_in(
+                        .tooltip(Tooltip::text(app_i18n::tr(
+                            cx,
+                            "settings_ui.common.button.edit_in_settings_json",
                             "Edit in settings.json",
-                            &OpenCurrentFile,
-                            &settings_window.focus_handle,
-                        ))
+                        )))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.open_current_settings_file(window, cx);
                         }))
@@ -455,6 +463,7 @@ fn init_renderers(cx: &mut App) {
         .add_basic_renderer::<String>(render_text_field)
         .add_basic_renderer::<SharedString>(render_text_field)
         .add_basic_renderer::<settings::SaturatingBool>(render_toggle_button)
+        .add_basic_renderer::<settings::DisplayLanguage>(render_dropdown)
         .add_basic_renderer::<settings::CursorShape>(render_dropdown)
         .add_basic_renderer::<settings::RestoreOnStartupBehavior>(render_dropdown)
         .add_basic_renderer::<settings::BottomDockLayout>(render_dropdown)
@@ -593,7 +602,7 @@ pub fn open_settings_editor(
         settings_window.search_bar.update(cx, |editor, cx| {
             editor.set_text(query.clone(), window, cx);
         });
-        settings_window.apply_match_indices(indices.iter().copied(), &query);
+        settings_window.apply_match_indices(indices.iter().copied(), &query, cx);
 
         if indices.len() == 1
             && let Some(search_index) = settings_window.search_index.as_ref()
@@ -609,9 +618,9 @@ pub fn open_settings_editor(
 
             if settings_window.filter_table[page_index][item_index]
                 && let SettingsPageItem::SubPageLink(link) = item
-                && let SettingsPageItem::SectionHeader(header) = page.items[header_index]
+                && let SettingsPageItem::SectionHeader(header) = &page.items[header_index]
             {
-                settings_window.push_sub_page(link.clone(), SharedString::from(header), window, cx);
+                settings_window.push_sub_page(link.clone(), header.resolve(cx), window, cx);
             }
         }
 
@@ -670,7 +679,7 @@ pub fn open_settings_editor(
         cx.open_window(
             WindowOptions {
                 titlebar: Some(TitlebarOptions {
-                    title: Some("ZZZ — Settings".into()),
+                    title: Some(tr(cx, "settings_ui.window.title", "ZZZ — Settings")),
                     appears_transparent: true,
                     traffic_light_position: Some(point(px(12.0), px(12.0))),
                 }),
@@ -732,6 +741,10 @@ fn active_language() -> Option<SharedString> {
 
 fn active_language_mut() -> Option<std::sync::RwLockWriteGuard<'static, Option<SharedString>>> {
     ACTIVE_LANGUAGE.write().ok()
+}
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
 }
 
 pub struct SettingsWindow {
@@ -798,7 +811,7 @@ impl SubPage {
         if link.r#type == SubPageType::Language
             && let Some(mut active_language_global) = active_language_mut()
         {
-            active_language_global.replace(link.title.clone());
+            active_language_global.replace(link.title.stable_id());
         }
 
         SubPage {
@@ -815,7 +828,7 @@ impl Drop for SubPage {
             && let Some(mut active_language_global) = active_language_mut()
             && active_language_global
                 .as_ref()
-                .is_some_and(|language_name| language_name == &self.link.title)
+                .is_some_and(|language_name| language_name == &self.link.title.stable_id())
         {
             active_language_global.take();
         }
@@ -824,7 +837,7 @@ impl Drop for SubPage {
 
 #[derive(Debug)]
 struct NavBarEntry {
-    title: &'static str,
+    title: SharedString,
     is_root: bool,
     expanded: bool,
     page_index: usize,
@@ -832,14 +845,62 @@ struct NavBarEntry {
     focus_handle: FocusHandle,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum UiText {
+    Localized {
+        key: &'static str,
+        fallback: &'static str,
+    },
+    Literal(SharedString),
+}
+
+impl UiText {
+    const fn localized(key: &'static str, fallback: &'static str) -> Self {
+        Self::Localized { key, fallback }
+    }
+
+    fn resolve(&self, cx: &App) -> SharedString {
+        match self {
+            Self::Localized { key, fallback } => app_i18n::tr(cx, key, fallback).into(),
+            Self::Literal(text) => text.clone(),
+        }
+    }
+
+    fn stable_id(&self) -> SharedString {
+        match self {
+            Self::Localized { key, .. } => (*key).into(),
+            Self::Literal(text) => text.clone(),
+        }
+    }
+
+    fn fallback(&self) -> &str {
+        match self {
+            Self::Localized { fallback, .. } => fallback,
+            Self::Literal(text) => text.as_ref(),
+        }
+    }
+}
+
+impl From<&'static str> for UiText {
+    fn from(value: &'static str) -> Self {
+        Self::Literal(value.into())
+    }
+}
+
+impl From<SharedString> for UiText {
+    fn from(value: SharedString) -> Self {
+        Self::Literal(value)
+    }
+}
+
 struct SettingsPage {
-    title: &'static str,
+    title: UiText,
     items: Box<[SettingsPageItem]>,
 }
 
 #[derive(PartialEq)]
 enum SettingsPageItem {
-    SectionHeader(&'static str),
+    SectionHeader(UiText),
     SettingItem(SettingItem),
     SubPageLink(SubPageLink),
     DynamicItem(DynamicItem),
@@ -849,25 +910,31 @@ enum SettingsPageItem {
 impl std::fmt::Debug for SettingsPageItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SettingsPageItem::SectionHeader(header) => write!(f, "SectionHeader({})", header),
+            SettingsPageItem::SectionHeader(header) => {
+                write!(f, "SectionHeader({})", header.fallback())
+            }
             SettingsPageItem::SettingItem(setting_item) => {
-                write!(f, "SettingItem({})", setting_item.title)
+                write!(f, "SettingItem({})", setting_item.title.fallback())
             }
             SettingsPageItem::SubPageLink(sub_page_link) => {
-                write!(f, "SubPageLink({})", sub_page_link.title)
+                write!(f, "SubPageLink({})", sub_page_link.title.fallback())
             }
             SettingsPageItem::DynamicItem(dynamic_item) => {
-                write!(f, "DynamicItem({})", dynamic_item.discriminant.title)
+                write!(
+                    f,
+                    "DynamicItem({})",
+                    dynamic_item.discriminant.title.fallback()
+                )
             }
             SettingsPageItem::ActionLink(action_link) => {
-                write!(f, "ActionLink({})", action_link.title)
+                write!(f, "ActionLink({})", action_link.title.fallback())
             }
         }
     }
 }
 
 impl SettingsPageItem {
-    fn header_text(&self) -> Option<&'static str> {
+    fn header_text(&self) -> Option<&UiText> {
         match self {
             SettingsPageItem::SectionHeader(header) => Some(header),
             _ => None,
@@ -954,7 +1021,7 @@ impl SettingsPageItem {
 
         match self {
             SettingsPageItem::SectionHeader(header) => {
-                SettingsSectionHeader::new(SharedString::new_static(header)).into_any_element()
+                SettingsSectionHeader::new(header.resolve(cx)).into_any_element()
             }
             SettingsPageItem::SettingItem(setting_item) => {
                 let (field_with_padding, _) =
@@ -972,7 +1039,7 @@ impl SettingsPageItem {
                 .px_8()
                 .child(
                     h_flex()
-                        .id(sub_page_link.title.clone())
+                        .id(sub_page_link.title.stable_id())
                         .w_full()
                         .min_w_0()
                         .justify_between()
@@ -982,12 +1049,12 @@ impl SettingsPageItem {
                                 .relative()
                                 .w_full()
                                 .max_w_1_2()
-                                .child(Label::new(sub_page_link.title.clone()))
+                                .child(Label::new(sub_page_link.title.resolve(cx)))
                                 .when_some(
                                     sub_page_link.description.as_ref(),
                                     |this, description| {
                                         this.child(
-                                            Label::new(description.clone())
+                                            Label::new(description.resolve(cx))
                                                 .size(LabelSize::Small)
                                                 .color(Color::Muted),
                                         )
@@ -996,8 +1063,12 @@ impl SettingsPageItem {
                         )
                         .child(
                             Button::new(
-                                ("sub-page".into(), sub_page_link.title.clone()),
-                                "Configure",
+                                ("sub-page".into(), sub_page_link.title.stable_id()),
+                                app_i18n::tr(
+                                    cx,
+                                    "settings_ui.common.button.configure",
+                                    "Configure",
+                                ),
                             )
                             .tab_index(0_isize)
                             .end_icon(
@@ -1013,7 +1084,7 @@ impl SettingsPageItem {
                                     let header_text = this
                                         .sub_page_stack
                                         .last()
-                                        .map(|sub_page| sub_page.link.title.clone())
+                                        .map(|sub_page| sub_page.link.title.resolve(cx))
                                         .or_else(|| {
                                             this.current_page()
                                                 .items
@@ -1021,7 +1092,7 @@ impl SettingsPageItem {
                                                 .take(item_index)
                                                 .rev()
                                                 .find_map(|item| {
-                                                    item.header_text().map(SharedString::new_static)
+                                                    item.header_text().map(|text| text.resolve(cx))
                                                 })
                                         });
 
@@ -1036,7 +1107,7 @@ impl SettingsPageItem {
                             }),
                         )
                         .child(render_settings_item_link(
-                            sub_page_link.title.clone(),
+                            sub_page_link.title.stable_id(),
                             sub_page_link.json_path,
                             false,
                             settings_window,
@@ -1107,7 +1178,7 @@ impl SettingsPageItem {
                 .px_8()
                 .child(
                     h_flex()
-                        .id(action_link.title.clone())
+                        .id(action_link.title.stable_id())
                         .w_full()
                         .min_w_0()
                         .justify_between()
@@ -1117,12 +1188,12 @@ impl SettingsPageItem {
                                 .relative()
                                 .w_full()
                                 .max_w_1_2()
-                                .child(Label::new(action_link.title.clone()))
+                                .child(Label::new(action_link.title.resolve(cx)))
                                 .when_some(
                                     action_link.description.as_ref(),
                                     |this, description| {
                                         this.child(
-                                            Label::new(description.clone())
+                                            Label::new(description.resolve(cx))
                                                 .size(LabelSize::Small)
                                                 .color(Color::Muted),
                                         )
@@ -1131,8 +1202,8 @@ impl SettingsPageItem {
                         )
                         .child(
                             Button::new(
-                                ("action-link".into(), action_link.title.clone()),
-                                action_link.button_text.clone(),
+                                ("action-link".into(), action_link.title.stable_id()),
+                                action_link.button_text.resolve(cx),
                             )
                             .tab_index(0_isize)
                             .end_icon(
@@ -1168,7 +1239,7 @@ fn render_settings_item(
     let file_set_in = SettingsUiFile::from_settings(found_in_file.clone());
 
     h_flex()
-        .id(setting_item.title)
+        .id(setting_item.title.stable_id())
         .min_w_0()
         .justify_between()
         .child(
@@ -1181,7 +1252,7 @@ fn render_settings_item(
                     h_flex()
                         .w_full()
                         .gap_1()
-                        .child(Label::new(SharedString::new_static(setting_item.title)))
+                        .child(Label::new(setting_item.title.resolve(cx)))
                         .when_some(
                             if sub_field {
                                 None
@@ -1195,7 +1266,11 @@ fn render_settings_item(
                                     IconButton::new("reset-to-default-btn", IconName::Undo)
                                         .icon_color(Color::Muted)
                                         .icon_size(IconSize::Small)
-                                        .tooltip(Tooltip::text("Reset to Default"))
+                                        .tooltip(Tooltip::text(app_i18n::tr(
+                                            cx,
+                                            "settings_ui.common.tooltip.reset_to_default",
+                                            "Reset to Default",
+                                        )))
                                         .on_click({
                                             move |_, window, cx| {
                                                 reset_to_default(window, cx);
@@ -1209,7 +1284,12 @@ fn render_settings_item(
                             |this, file_set_in| {
                                 this.child(
                                     Label::new(format!(
-                                        "—  Modified in {}",
+                                        "{} {}",
+                                        app_i18n::tr(
+                                            cx,
+                                            "settings_ui.common.modified_in",
+                                            "Modified in",
+                                        ),
                                         settings_window
                                             .display_name(&file_set_in)
                                             .expect("File name should exist")
@@ -1221,7 +1301,7 @@ fn render_settings_item(
                         ),
                 )
                 .child(
-                    Label::new(SharedString::new_static(setting_item.description))
+                    Label::new(setting_item.description.resolve(cx))
                         .size(LabelSize::Small)
                         .color(Color::Muted)
                         .render_code_spans(),
@@ -1230,7 +1310,7 @@ fn render_settings_item(
         .child(control)
         .when(settings_window.sub_page_stack.is_empty(), |this| {
             this.child(render_settings_item_link(
-                setting_item.description,
+                setting_item.description.stable_id(),
                 setting_item.field.json_path(),
                 sub_field,
                 settings_window,
@@ -1272,7 +1352,11 @@ fn render_settings_item_link(
                 .icon_color(link_icon_color)
                 .icon_size(IconSize::Small)
                 .shape(IconButtonShape::Square)
-                .tooltip(Tooltip::text("Copy Link"))
+                .tooltip(Tooltip::text(app_i18n::tr(
+                    cx,
+                    "settings_ui.common.tooltip.copy_link",
+                    "Copy Link",
+                )))
                 .when_some(json_path, |this, path| {
                     this.on_click(cx.listener(move |this, _, _, cx| {
                         let link = format!("zed://settings/{}", path);
@@ -1285,8 +1369,8 @@ fn render_settings_item_link(
 }
 
 struct SettingItem {
-    title: &'static str,
-    description: &'static str,
+    title: UiText,
+    description: UiText,
     field: Box<dyn AnySettingField>,
     metadata: Option<Box<SettingsFieldMetadata>>,
     files: FileMask,
@@ -1373,9 +1457,9 @@ enum SubPageType {
 
 #[derive(Clone)]
 struct SubPageLink {
-    title: SharedString,
+    title: UiText,
     r#type: SubPageType,
-    description: Option<SharedString>,
+    description: Option<UiText>,
     /// See [`SettingField.json_path`]
     json_path: Option<&'static str>,
     /// Whether or not the settings in this sub page are configurable in settings.json
@@ -1394,9 +1478,9 @@ impl PartialEq for SubPageLink {
 
 #[derive(Clone)]
 struct ActionLink {
-    title: SharedString,
-    description: Option<SharedString>,
-    button_text: SharedString,
+    title: UiText,
+    description: Option<UiText>,
+    button_text: UiText,
     on_click: Arc<dyn Fn(&mut SettingsWindow, &mut Window, &mut App) + Send + Sync>,
     files: FileMask,
 }
@@ -1493,7 +1577,11 @@ impl SettingsWindow {
         let current_file = SettingsUiFile::User;
         let search_bar = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Search settings…", window, cx);
+            editor.set_placeholder_text(
+                &app_i18n::tr(cx, "settings_ui.search.placeholder", "Search settings…"),
+                window,
+                cx,
+            );
             editor
         });
         cx.subscribe(&search_bar, |this, _, event: &EditorEvent, cx| {
@@ -1512,6 +1600,16 @@ impl SettingsWindow {
         let mut ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx);
         cx.observe_global_in::<SettingsStore>(window, move |this, window, cx| {
             this.fetch_files(window, cx);
+            if app_i18n::reload(cx) {
+                this.search_bar.update(cx, |editor, cx| {
+                    editor.set_placeholder_text(
+                        &app_i18n::tr(cx, "settings_ui.search.placeholder", "Search settings…"),
+                        window,
+                        cx,
+                    );
+                });
+                this.rebuild_pages(window, cx);
+            }
 
             // Whenever settings are changed, it's possible that the changed
             // settings affects the rendering of the `SettingsWindow`, like is
@@ -1692,7 +1790,7 @@ impl SettingsWindow {
 
         this.fetch_files(window, cx);
         this.build_ui(window, cx);
-        this.build_search_index();
+        this.build_search_index(cx);
 
         this.search_bar.update(cx, |editor, cx| {
             editor.focus_handle(cx).focus(window, cx);
@@ -1764,7 +1862,7 @@ impl SettingsWindow {
 
         for (page_index, page) in self.pages.iter().enumerate() {
             navbar_entries.push(NavBarEntry {
-                title: page.title,
+                title: page.title.resolve(cx),
                 is_root: true,
                 expanded: false,
                 page_index,
@@ -1777,7 +1875,7 @@ impl SettingsWindow {
                     continue;
                 };
                 navbar_entries.push(NavBarEntry {
-                    title,
+                    title: title.resolve(cx),
                     is_root: false,
                     expanded: false,
                     page_index,
@@ -1920,7 +2018,12 @@ impl SettingsWindow {
         indices
     }
 
-    fn apply_match_indices(&mut self, match_indices: impl Iterator<Item = usize>, query: &str) {
+    fn apply_match_indices(
+        &mut self,
+        match_indices: impl Iterator<Item = usize>,
+        query: &str,
+        cx: &App,
+    ) {
         let Some(search_index) = self.search_index.as_ref() else {
             return;
         };
@@ -1946,7 +2049,7 @@ impl SettingsWindow {
         let query_words: Vec<&str> = query_lower.split_whitespace().collect();
         self.open_best_matching_nav_page(&query_words);
         self.reset_list_state();
-        self.scroll_content_to_best_match(&query_words);
+        self.scroll_content_to_best_match(&query_words, cx);
     }
 
     fn update_matches(&mut self, cx: &mut Context<SettingsWindow>) {
@@ -1967,7 +2070,7 @@ impl SettingsWindow {
         if is_json_link_query {
             let indices = self.filter_by_json_path(&query);
             if !indices.is_empty() {
-                self.apply_match_indices(indices.into_iter(), &query);
+                self.apply_match_indices(indices.into_iter(), &query, cx);
                 cx.notify();
                 return;
             }
@@ -2021,7 +2124,7 @@ impl SettingsWindow {
                     .map(|fuzzy_match| fuzzy_match.candidate_id);
                 let merged_indices = exact_indices.chain(fuzzy_indices);
 
-                this.apply_match_indices(merged_indices, &query);
+                this.apply_match_indices(merged_indices, &query, cx);
                 cx.notify();
             })
             .ok();
@@ -2038,7 +2141,7 @@ impl SettingsWindow {
             .collect::<Vec<_>>();
     }
 
-    fn build_search_index(&mut self) {
+    fn build_search_index(&mut self, cx: &App) {
         fn split_into_words(parts: &[&str]) -> Vec<String> {
             parts
                 .iter()
@@ -2069,7 +2172,8 @@ impl SettingsWindow {
         // we could only search relevant items based on the current file
         for (page_index, page) in self.pages.iter().enumerate() {
             let mut header_index = 0;
-            let mut header_str = "";
+            let page_title = page.title.resolve(cx);
+            let mut header_text = SharedString::new_static("");
             for (item_index, item) in page.items.iter().enumerate() {
                 let key_index = key_lut.len();
                 let mut json_path = None;
@@ -2078,6 +2182,8 @@ impl SettingsWindow {
                         discriminant: item, ..
                     })
                     | SettingsPageItem::SettingItem(item) => {
+                        let item_title = item.title.resolve(cx);
+                        let item_description = item.description.resolve(cx);
                         json_path = item
                             .field
                             .json_path()
@@ -2085,58 +2191,65 @@ impl SettingsWindow {
                         documents.push(SearchDocument {
                             id: key_index,
                             words: split_into_words(&[
-                                page.title,
-                                header_str,
-                                item.title,
-                                item.description,
+                                page_title.as_ref(),
+                                header_text.as_ref(),
+                                item_title.as_ref(),
+                                item_description.as_ref(),
                             ]),
                         });
-                        push_candidates(&mut fuzzy_match_candidates, key_index, item.title);
-                        push_candidates(&mut fuzzy_match_candidates, key_index, item.description);
+                        push_candidates(
+                            &mut fuzzy_match_candidates,
+                            key_index,
+                            item_title.as_ref(),
+                        );
+                        push_candidates(
+                            &mut fuzzy_match_candidates,
+                            key_index,
+                            item_description.as_ref(),
+                        );
                     }
                     SettingsPageItem::SectionHeader(header) => {
+                        let resolved_header = header.resolve(cx);
                         documents.push(SearchDocument {
                             id: key_index,
-                            words: split_into_words(&[header]),
+                            words: split_into_words(&[resolved_header.as_ref()]),
                         });
-                        push_candidates(&mut fuzzy_match_candidates, key_index, header);
+                        push_candidates(
+                            &mut fuzzy_match_candidates,
+                            key_index,
+                            resolved_header.as_ref(),
+                        );
                         header_index = item_index;
-                        header_str = *header;
+                        header_text = resolved_header;
                     }
                     SettingsPageItem::SubPageLink(sub_page_link) => {
+                        let title = sub_page_link.title.resolve(cx);
                         json_path = sub_page_link.json_path;
                         documents.push(SearchDocument {
                             id: key_index,
                             words: split_into_words(&[
-                                page.title,
-                                header_str,
-                                sub_page_link.title.as_ref(),
+                                page_title.as_ref(),
+                                header_text.as_ref(),
+                                title.as_ref(),
                             ]),
                         });
-                        push_candidates(
-                            &mut fuzzy_match_candidates,
-                            key_index,
-                            sub_page_link.title.as_ref(),
-                        );
+                        push_candidates(&mut fuzzy_match_candidates, key_index, title.as_ref());
                     }
                     SettingsPageItem::ActionLink(action_link) => {
+                        let title = action_link.title.resolve(cx);
                         documents.push(SearchDocument {
                             id: key_index,
                             words: split_into_words(&[
-                                page.title,
-                                header_str,
-                                action_link.title.as_ref(),
+                                page_title.as_ref(),
+                                header_text.as_ref(),
+                                title.as_ref(),
                             ]),
                         });
-                        push_candidates(
-                            &mut fuzzy_match_candidates,
-                            key_index,
-                            action_link.title.as_ref(),
-                        );
+                        push_candidates(&mut fuzzy_match_candidates, key_index, title.as_ref());
                     }
                 }
-                push_candidates(&mut fuzzy_match_candidates, key_index, page.title);
-                push_candidates(&mut fuzzy_match_candidates, key_index, header_str);
+                push_candidates(&mut fuzzy_match_candidates, key_index, page_title.as_ref());
+                push_candidates(&mut fuzzy_match_candidates, key_index, header_text.as_ref());
 
                 key_lut.push(SearchKeyLUTEntry {
                     page_index,
@@ -2198,7 +2311,7 @@ impl SettingsWindow {
         self.navbar_focus_subscriptions.clear();
         self.content_handles.clear();
         self.build_ui(window, cx);
-        self.build_search_index();
+        self.build_search_index(cx);
     }
 
     #[track_caller]
@@ -2337,13 +2450,13 @@ impl SettingsWindow {
         }
     }
 
-    fn scroll_content_to_best_match(&self, query_words: &[&str]) {
+    fn scroll_content_to_best_match(&self, query_words: &[&str], cx: &App) {
         let position = self
             .visible_page_items()
             .enumerate()
             .find(|(_, (_, item))| match item {
                 SettingsPageItem::SectionHeader(title) => {
-                    let title_lower = title.to_lowercase();
+                    let title_lower = title.resolve(cx).to_lowercase();
                     query_words.iter().all(|query_word| {
                         title_lower
                             .split_whitespace()
@@ -2556,7 +2669,11 @@ impl SettingsWindow {
                                         }),
                                     )
                                     .style(DropdownStyle::Subtle)
-                                    .trigger_tooltip(Tooltip::text("View Other Projects"))
+                                    .trigger_tooltip(Tooltip::text(app_i18n::tr(
+                                        cx,
+                                        "settings_ui.common.tooltip.view_other_projects",
+                                        "View Other Projects",
+                                    )))
                                     .trigger_icon(IconName::ChevronDown)
                                     .attach(gpui::Anchor::BottomLeft)
                                     .offset(gpui::Point {
@@ -2569,17 +2686,24 @@ impl SettingsWindow {
                     }),
             )
             .child(
-                Button::new(edit_in_json_id, "Edit in settings.json")
-                    .tab_index(0_isize)
-                    .style(ButtonStyle::OutlinedGhost)
-                    .tooltip(Tooltip::for_action_title_in(
+                Button::new(
+                    edit_in_json_id,
+                    app_i18n::tr(
+                        cx,
+                        "settings_ui.common.button.edit_in_settings_json",
                         "Edit in settings.json",
-                        &OpenCurrentFile,
-                        &self.focus_handle,
-                    ))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.open_current_settings_file(window, cx);
-                    })),
+                    ),
+                )
+                .tab_index(0_isize)
+                .style(ButtonStyle::OutlinedGhost)
+                .tooltip(Tooltip::text(app_i18n::tr(
+                    cx,
+                    "settings_ui.common.button.edit_in_settings_json",
+                    "Edit in settings.json",
+                )))
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.open_current_settings_file(window, cx);
+                })),
             )
     }
 
@@ -2816,7 +2940,7 @@ impl SettingsWindow {
                                     .map(|(entry_index, entry)| {
                                         TreeViewItem::new(
                                             ("settings-ui-navbar-entry", entry_index),
-                                            entry.title,
+                                            entry.title.clone(),
                                         )
                                         .track_focus(&entry.focus_handle)
                                         .root_item(entry.is_root)
@@ -3099,7 +3223,11 @@ impl SettingsWindow {
                 }),
             )
             .style(DropdownStyle::Subtle)
-            .trigger_tooltip(Tooltip::text("Change Scope"))
+            .trigger_tooltip(Tooltip::text(app_i18n::tr(
+                cx,
+                "settings_ui.common.tooltip.change_scope",
+                "Change Scope",
+            )))
             .attach(gpui::Anchor::BottomLeft)
             .offset(gpui::Point {
                 x: px(0.0),
@@ -3121,7 +3249,7 @@ impl SettingsWindow {
             .child(Label::new("/").color(Color::Muted))
             .children(
                 itertools::intersperse(
-                    std::iter::once(self.current_page().title.into()).chain(
+                    std::iter::once(self.current_page().title.resolve(cx)).chain(
                         self.sub_page_stack
                             .iter()
                             .enumerate()
@@ -3129,7 +3257,7 @@ impl SettingsWindow {
                                 (index == 0)
                                     .then(|| page.section_header.clone())
                                     .into_iter()
-                                    .chain(std::iter::once(page.link.title.clone()))
+                                    .chain(std::iter::once(page.link.title.resolve(cx)))
                             }),
                     ),
                     "/".into(),
@@ -3146,11 +3274,22 @@ impl SettingsWindow {
             .items_center()
             .justify_center()
             .gap_1()
-            .child(Label::new("No Results"))
+            .child(Label::new(tr(
+                cx,
+                "settings_ui.search.no_results.title",
+                "No Results",
+            )))
             .child(
-                Label::new(format!("No settings match \"{}\"", search_query))
-                    .size(LabelSize::Small)
-                    .color(Color::Muted),
+                Label::new(
+                    app_i18n::tr(
+                        cx,
+                        "settings_ui.search.no_results.detail",
+                        "No settings match \"{}\"",
+                    )
+                    .replacen("{}", &search_query, 1),
+                )
+                .size(LabelSize::Small)
+                .color(Color::Muted),
             )
     }
 
@@ -3179,7 +3318,7 @@ impl SettingsWindow {
                 .navbar_entries
                 .iter()
                 .find(|entry| entry.is_root && entry.page_index == self.current_page_index())
-                .map(|entry| entry.title);
+                .map(|entry| entry.title.clone());
 
             let list_content = list(
                 self.list_state.clone(),
@@ -3188,7 +3327,7 @@ impl SettingsWindow {
                         return div()
                             .px_8()
                             .when(this.sub_page_stack.is_empty(), |this| {
-                                this.when_some(root_nav_label, |this, title| {
+                                this.when_some(root_nav_label.clone(), |this, title| {
                                     this.child(
                                         Label::new(title).size(LabelSize::Large).mt_2().mb_3(),
                                     )
@@ -3302,11 +3441,11 @@ impl SettingsWindow {
                 .navbar_entries
                 .iter()
                 .find(|entry| entry.is_root && entry.page_index == self.current_page_index())
-                .map(|entry| entry.title);
+                .map(|entry| entry.title.clone());
 
             page_content
                 .when(self.sub_page_stack.is_empty(), |this| {
-                    this.when_some(root_nav_label, |this, title| {
+                    this.when_some(root_nav_label.clone(), |this, title| {
                         this.child(Label::new(title).size(LabelSize::Large).mt_2().mb_3())
                     })
                 })
@@ -3369,17 +3508,26 @@ impl SettingsWindow {
                 .when(current_sub_page.link.in_json, |this| {
                     this.child(
                         div().flex_shrink_0().child(
-                            Button::new("open-in-settings-file", "Edit in settings.json")
-                                .tab_index(0_isize)
-                                .style(ButtonStyle::OutlinedGhost)
-                                .tooltip(Tooltip::for_action_title_in(
+                            Button::new(
+                                "open-in-settings-file",
+                                app_i18n::tr(
+                                    cx,
+                                    "settings_ui.common.button.edit_in_settings_json",
                                     "Edit in settings.json",
-                                    &OpenCurrentFile,
-                                    &self.focus_handle,
-                                ))
-                                .on_click(cx.listener(|this, _, window, cx| {
+                                ),
+                            )
+                            .tab_index(0_isize)
+                            .style(ButtonStyle::OutlinedGhost)
+                            .tooltip(Tooltip::text(app_i18n::tr(
+                                cx,
+                                "settings_ui.common.button.edit_in_settings_json",
+                                "Edit in settings.json",
+                            )))
+                            .on_click(cx.listener(
+                                |this, _, window, cx| {
                                     this.open_current_settings_file(window, cx);
-                                })),
+                                },
+                            )),
                         ),
                     )
                 })
@@ -3403,7 +3551,7 @@ impl SettingsWindow {
             SettingsStore::global(cx).error_for_file(self.current_file.to_settings())
         {
             fn banner(
-                label: &'static str,
+                label: String,
                 error: String,
                 shown_errors: &mut HashSet<String>,
                 cx: &mut Context<SettingsWindow>,
@@ -3420,12 +3568,21 @@ impl SettingsWindow {
                     )
                     .action_slot(
                         div().pr_1().pb_1().child(
-                            Button::new("fix-in-json", "Fix in settings.json")
-                                .tab_index(0_isize)
-                                .style(ButtonStyle::Tinted(ui::TintColor::Warning))
-                                .on_click(cx.listener(|this, _, window, cx| {
+                            Button::new(
+                                "fix-in-json",
+                                app_i18n::tr(
+                                    cx,
+                                    "settings_ui.common.button.fix_in_settings_json",
+                                    "Fix in settings.json",
+                                ),
+                            )
+                            .tab_index(0_isize)
+                            .style(ButtonStyle::Tinted(ui::TintColor::Warning))
+                            .on_click(cx.listener(
+                                |this, _, window, cx| {
                                     this.open_current_settings_file(window, cx);
-                                })),
+                                },
+                            )),
                         ),
                     )
             }
@@ -3437,7 +3594,12 @@ impl SettingsWindow {
                 .gap_2()
                 .when_some(parse_error, |this, err| {
                     this.child(banner(
-                        "Failed to load your settings. Some values may be incorrect and changes may be lost.",
+                        app_i18n::tr(
+                            cx,
+                            "settings_ui.warning.failed_to_load_settings",
+                            "Failed to load your settings. Some values may be incorrect and changes may be lost.",
+                        )
+                        .to_string(),
                         err,
                         &mut self.shown_errors,
                         cx,
@@ -3445,17 +3607,37 @@ impl SettingsWindow {
                 })
                 .map(|this| match &error.migration_status {
                     settings::MigrationStatus::Succeeded => this.child(banner(
-                        "Your settings are out of date, and need to be updated.",
+                        app_i18n::tr(
+                            cx,
+                            "settings_ui.warning.settings_out_of_date",
+                            "Your settings are out of date, and need to be updated.",
+                        )
+                        .to_string(),
                         match &self.current_file {
-                            SettingsUiFile::User => "They can be automatically migrated to the latest version.",
-                            SettingsUiFile::Server(_) | SettingsUiFile::Project(_)  => "They must be manually migrated to the latest version."
+                            SettingsUiFile::User => app_i18n::tr(
+                                cx,
+                                "settings_ui.warning.auto_migration_available",
+                                "They can be automatically migrated to the latest version.",
+                            )
+                            .to_string(),
+                            SettingsUiFile::Server(_) | SettingsUiFile::Project(_)  => app_i18n::tr(
+                                cx,
+                                "settings_ui.warning.manual_migration_required",
+                                "They must be manually migrated to the latest version."
+                            )
+                            .to_string()
                         }.to_string(),
                         &mut self.shown_errors,
                         cx,
                     )),
                     settings::MigrationStatus::Failed { error: err } if !parse_failed => this
                         .child(banner(
-                            "Your settings file is out of date, automatic migration failed",
+                            app_i18n::tr(
+                                cx,
+                                "settings_ui.warning.auto_migration_failed",
+                                "Your settings file is out of date, automatic migration failed",
+                            )
+                            .to_string(),
                             err.clone(),
                             &mut self.shown_errors,
                             cx,
@@ -3539,7 +3721,7 @@ impl SettingsWindow {
                 this.custom_scrollbars(
                     Scrollbars::new(ui::ScrollAxes::Vertical)
                         .tracked_scroll_handle(&current_sub_page.scroll_handle)
-                        .id((current_sub_page.link.title.clone(), 42)),
+                        .id((current_sub_page.link.title.stable_id(), 42)),
                     window,
                     cx,
                 )
@@ -3737,7 +3919,7 @@ impl SettingsWindow {
     ) {
         self.regex_validation_error = None;
         let sub_page_link = SubPageLink {
-            title: title.into(),
+            title: UiText::from(title.into()),
             r#type: SubPageType::default(),
             description: None,
             json_path,
@@ -3765,8 +3947,10 @@ impl SettingsWindow {
                             .iter()
                             .take(item_index)
                             .rev()
-                            .find_map(|item| item.header_text().map(SharedString::new_static))
-                            .unwrap_or_else(|| "Settings".into());
+                            .find_map(|item| item.header_text().map(|text| text.resolve(cx)))
+                            .unwrap_or_else(|| {
+                                app_i18n::tr(cx, "settings_ui.common.settings", "Settings").into()
+                            });
 
                         self.push_sub_page(sub_page_link.clone(), section_header, window, cx);
                         return true;
@@ -4751,7 +4935,7 @@ pub mod test {
         let toggle_page_idx = settings_window
             .pages
             .iter()
-            .position(|page| page.title == toggle_page)
+            .position(|page| page.title.fallback() == toggle_page)
             .expect("page not found");
         let toggle_idx = settings_window
             .navbar_entries

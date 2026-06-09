@@ -4,13 +4,14 @@ use crate::DockPosition;
 use collections::HashMap;
 use serde::Deserialize;
 pub use settings::{
-    ActionName, AutosaveSetting, BottomDockLayout, EncodingDisplayOptions, InactiveOpacity,
-    PaneSplitDirectionHorizontal, PaneSplitDirectionVertical, RegisterSetting,
+    ActionName, AutosaveSetting, BottomDockLayout, DisplayLanguage, EncodingDisplayOptions,
+    InactiveOpacity, PaneSplitDirectionHorizontal, PaneSplitDirectionVertical, RegisterSetting,
     RestoreOnStartupBehavior, Settings,
 };
 
 #[derive(RegisterSetting)]
 pub struct WorkspaceSettings {
+    pub display_language: DisplayLanguage,
     pub active_pane_modifiers: ActivePanelModifiers,
     pub bottom_dock_layout: settings::BottomDockLayout,
     pub pane_split_direction_horizontal: settings::PaneSplitDirectionHorizontal,
@@ -76,6 +77,7 @@ impl Settings for WorkspaceSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let workspace = &content.workspace;
         Self {
+            display_language: workspace.display_language.unwrap(),
             active_pane_modifiers: ActivePanelModifiers {
                 border_size: Some(
                     workspace

@@ -4,6 +4,7 @@ use gpui::{
     App, Context, Entity, FocusHandle, Focusable, Render, Size, Tiling, Window, WindowBounds,
     WindowKind, WindowOptions, prelude::*, px,
 };
+use i18n as app_i18n;
 use platform_title_bar::PlatformTitleBar;
 use release_channel::ReleaseChannel;
 use rodio::Source;
@@ -133,9 +134,17 @@ impl Render for AudioTestWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let is_testing = self._stop_playback.is_some();
         let button_text = if is_testing {
-            "Stop Testing"
+            app_i18n::tr(
+                cx,
+                "settings_ui.audio_test.button.stop_testing",
+                "Stop Testing",
+            )
         } else {
-            "Start Testing"
+            app_i18n::tr(
+                cx,
+                "settings_ui.audio_test.button.start_testing",
+                "Start Testing",
+            )
         };
 
         let button_style = if is_testing {
@@ -215,13 +224,21 @@ impl Render for AudioTestWindow {
             .child(
                 v_flex()
                     .gap_1()
-                    .child(Label::new("Output Device"))
+                    .child(Label::new(app_i18n::tr(
+                        cx,
+                        "settings_ui.audio_test.output_device",
+                        "Output Device",
+                    )))
                     .child(output_dropdown),
             )
             .child(
                 v_flex()
                     .gap_1()
-                    .child(Label::new("Input Device"))
+                    .child(Label::new(app_i18n::tr(
+                        cx,
+                        "settings_ui.audio_test.input_device",
+                        "Input Device",
+                    )))
                     .child(input_dropdown),
             )
             .child(
@@ -283,7 +300,9 @@ pub fn open_audio_test_window(_window: &mut Window, cx: &mut App) {
     cx.open_window(
         WindowOptions {
             titlebar: Some(gpui::TitlebarOptions {
-                title: Some("Audio Test".into()),
+                title: Some(
+                    app_i18n::tr(cx, "settings_ui.audio_test.window.title", "Audio Test").into(),
+                ),
                 appears_transparent: true,
                 traffic_light_position: Some(gpui::point(px(12.0), px(12.0))),
             }),

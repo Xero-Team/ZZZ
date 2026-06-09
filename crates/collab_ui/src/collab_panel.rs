@@ -1020,7 +1020,13 @@ impl CollabPanel {
         });
 
         let end_slot = if is_pending {
-            Label::new("Calling").color(Color::Muted).into_any_element()
+            Label::new(i18n::tr(
+                cx,
+                "auto.collab_ui.collab_panel.label.calling",
+                "Calling",
+            ))
+            .color(Color::Muted)
+            .into_any_element()
         } else if is_current_user {
             IconButton::new("leave-call", IconName::Exit)
                 .icon_size(IconSize::Small)
@@ -1028,11 +1034,21 @@ impl CollabPanel {
                 .on_click(move |_, window, cx| Self::leave_call(window, cx))
                 .into_any_element()
         } else if role == proto::ChannelRole::Guest {
-            Label::new("Guest").color(Color::Muted).into_any_element()
+            Label::new(i18n::tr(
+                cx,
+                "auto.collab_ui.collab_panel.label.guest",
+                "Guest",
+            ))
+            .color(Color::Muted)
+            .into_any_element()
         } else if role == proto::ChannelRole::Talker {
-            Label::new("Mic only")
-                .color(Color::Muted)
-                .into_any_element()
+            Label::new(i18n::tr(
+                cx,
+                "auto.collab_ui.collab_panel.label.mic.only",
+                "Mic only",
+            ))
+            .color(Color::Muted)
+            .into_any_element()
         } else {
             Empty.into_any_element()
         };
@@ -2335,7 +2351,18 @@ impl CollabPanel {
             PromptLevel::Warning,
             &prompt_message,
             None,
-            &["Leave", "Cancel"],
+            &[
+                gpui::PromptButton::new(i18n::tr(
+                    cx,
+                    "auto.collab_ui.collab_panel.prompt_button.leave",
+                    "Leave",
+                )),
+                gpui::PromptButton::cancel(i18n::tr(
+                    cx,
+                    "auto.collab_ui.collab_panel.prompt_button.cancel",
+                    "Cancel",
+                )),
+            ],
             cx,
         );
         cx.spawn_in(window, async move |this, cx| {
@@ -2368,7 +2395,18 @@ impl CollabPanel {
                 PromptLevel::Warning,
                 &prompt_message,
                 None,
-                &["Remove", "Cancel"],
+                &[
+                    gpui::PromptButton::new(i18n::tr(
+                        cx,
+                        "auto.collab_ui.collab_panel.prompt_button.remove",
+                        "Remove",
+                    )),
+                    gpui::PromptButton::cancel(i18n::tr(
+                        cx,
+                        "auto.collab_ui.collab_panel.prompt_button.cancel",
+                        "Cancel",
+                    )),
+                ],
                 cx,
             );
             let workspace = self.workspace.clone();
@@ -2403,7 +2441,18 @@ impl CollabPanel {
             PromptLevel::Warning,
             &prompt_message,
             None,
-            &["Remove", "Cancel"],
+            &[
+                gpui::PromptButton::new(i18n::tr(
+                    cx,
+                    "auto.collab_ui.collab_panel.prompt_button.remove",
+                    "Remove",
+                )),
+                gpui::PromptButton::cancel(i18n::tr(
+                    cx,
+                    "auto.collab_ui.collab_panel.prompt_button.cancel",
+                    "Cancel",
+                )),
+            ],
             cx,
         );
         let workspace = self.workspace.clone();
@@ -3092,7 +3141,11 @@ impl CollabPanel {
     fn render_contact_placeholder(&self, is_selected: bool, cx: &mut Context<Self>) -> ListItem {
         ListItem::new("contact-placeholder")
             .child(Icon::new(IconName::Plus))
-            .child(Label::new("Add a Contact"))
+            .child(Label::new(i18n::tr(
+                cx,
+                "auto.collab_ui.collab_panel.label.add.a.contact",
+                "Add a Contact",
+            )))
             .toggle_state(is_selected)
             .on_click(cx.listener(|this, _, window, cx| this.toggle_contact_finder(window, cx)))
     }
@@ -3850,7 +3903,11 @@ impl Render for JoinChannelTooltip {
                 .channel_participants(self.channel_id);
 
             container
-                .child(Label::new("Join Channel"))
+                .child(Label::new(i18n::tr(
+                    cx,
+                    "auto.collab_ui.collab_panel.label.join.channel",
+                    "Join Channel",
+                )))
                 .children(participants.iter().map(|participant| {
                     h_flex()
                         .gap_2()
@@ -3918,18 +3975,30 @@ impl Render for CollabNotificationToast {
                 cx.stop_propagation();
             }))
         } else {
-            Button::new("dismiss", "Dismiss").on_click(cx.listener(|_, _, _, cx| {
+            Button::new(
+                "dismiss",
+                i18n::tr(cx, "auto.collab_ui.collab_panel.button.dismiss", "Dismiss"),
+            )
+            .on_click(cx.listener(|_, _, _, cx| {
                 cx.emit(DismissEvent);
             }))
         };
 
         let decline_button = if needs_response {
-            Button::new("decline", "Decline").on_click(cx.listener(|this, _, window, cx| {
+            Button::new(
+                "decline",
+                i18n::tr(cx, "auto.collab_ui.collab_panel.button.decline", "Decline"),
+            )
+            .on_click(cx.listener(|this, _, window, cx| {
                 this.respond(false, window, cx);
                 cx.stop_propagation();
             }))
         } else {
-            Button::new("close", "Close").on_click(cx.listener(|_, _, _, cx| {
+            Button::new(
+                "close",
+                i18n::tr(cx, "auto.collab_ui.collab_panel.button.close", "Close"),
+            )
+            .on_click(cx.listener(|_, _, _, cx| {
                 cx.emit(DismissEvent);
             }))
         };

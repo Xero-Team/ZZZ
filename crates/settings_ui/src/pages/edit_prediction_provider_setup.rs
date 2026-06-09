@@ -6,6 +6,7 @@ use edit_prediction::{
 };
 use edit_prediction_ui::{get_available_providers, set_completion_provider};
 use gpui::{App, Entity, ScrollHandle, prelude::*};
+use i18n as app_i18n;
 use language::language_settings::{AllLanguageSettings, EditPredictionProvider};
 
 use settings::Settings as _;
@@ -17,8 +18,17 @@ const OLLAMA_MODEL_PLACEHOLDER: &str = "qwen2.5-coder:3b-base";
 
 use crate::{
     SettingField, SettingItem, SettingsFieldMetadata, SettingsPageItem, SettingsWindow, USER,
+    UiText,
     components::{SettingsInputField, SettingsSectionHeader},
 };
+
+fn lt(key: &'static str, fallback: &'static str) -> UiText {
+    UiText::localized(key, fallback)
+}
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 pub(crate) fn render_edit_prediction_setup_page(
     settings_window: &SettingsWindow,
@@ -74,7 +84,10 @@ pub(crate) fn render_edit_prediction_setup_page(
                 IconName::AiOpenAiCompat,
                 "OpenAI Compatible API",
                 ApiKeyDocs::Custom {
-                    message: "The API key sent as Authorization: Bearer {key}.".into(),
+                    message: lt(
+                        "settings_ui.edit_prediction_provider_setup.description.authorization_bearer_api_key",
+                        "The API key sent as Authorization: Bearer {key}.",
+                    ),
                 },
                 open_ai_compatible_api_token(cx),
                 |cx| open_ai_compatible_api_url(cx),
@@ -115,14 +128,27 @@ fn render_provider_dropdown(window: &mut Window, cx: &mut App) -> AnyElement {
     let current_provider = AllLanguageSettings::get_global(cx)
         .edit_predictions
         .provider;
-    let current_provider_name = current_provider.display_name().unwrap_or("No provider set");
+    let current_provider_name = current_provider
+        .display_name()
+        .map(SharedString::from)
+        .unwrap_or_else(|| {
+            tr(
+                cx,
+                "settings_ui.edit_prediction_provider_setup.no_provider_set",
+                "No provider set",
+            )
+        });
 
     let menu = ContextMenu::build(window, cx, move |mut menu, _, cx| {
         let available_providers = get_available_providers(cx);
         let fs = <dyn fs::Fs>::global(cx);
 
         menu = menu.toggleable_entry(
-            "None",
+            tr(
+                cx,
+                "settings_ui.edit_prediction_provider_setup.none",
+                "None",
+            ),
             current_provider == EditPredictionProvider::None,
             IconPosition::Start,
             None,
@@ -154,7 +180,14 @@ fn render_provider_dropdown(window: &mut Window, cx: &mut App) -> AnyElement {
         .id("provider-selector")
         .min_w_0()
         .gap_1p5()
-        .child(SettingsSectionHeader::new("Active Provider").no_padding(true))
+        .child(
+            SettingsSectionHeader::new(tr(
+                cx,
+                "settings_ui.edit_prediction_provider_setup.active_provider",
+                "Active Provider",
+            ))
+            .no_padding(true),
+        )
         .child(
             h_flex()
                 .pt_2p5()
@@ -166,11 +199,19 @@ fn render_provider_dropdown(window: &mut Window, cx: &mut App) -> AnyElement {
                         .w_full()
                         .min_w_0()
                         .max_w_1_2()
-                        .child(Label::new("Provider"))
+                        .child(Label::new(tr(
+                            cx,
+                            "settings_ui.edit_prediction_provider_setup.provider",
+                            "Provider",
+                        )))
                         .child(
-                            Label::new("Select which provider to use for edit predictions.")
-                                .size(LabelSize::Small)
-                                .color(Color::Muted),
+                            Label::new(tr(
+                                cx,
+                                "settings_ui.edit_prediction_provider_setup.select_provider",
+                                "Select which provider to use for edit predictions.",
+                            ))
+                            .size(LabelSize::Small)
+                            .color(Color::Muted),
                         ),
                 )
                 .child(
@@ -184,7 +225,7 @@ fn render_provider_dropdown(window: &mut Window, cx: &mut App) -> AnyElement {
 
 enum ApiKeyDocs {
     Link { dashboard_url: SharedString },
-    Custom { message: SharedString },
+    Custom { message: UiText },
 }
 
 fn render_api_key_provider(
@@ -246,10 +287,18 @@ fn render_api_key_provider(
     let header = SettingsSectionHeader::new(title)
         .icon(icon)
         .no_padding(true);
-    let button_link_label = format!("{} dashboard", title);
+    let button_link_label = format!(
+        "{} {}",
+        title,
+        tr(
+            cx,
+            "settings_ui.edit_prediction_provider_setup.dashboard",
+            "Dashboard",
+        )
+    );
     let description = match docs {
         ApiKeyDocs::Custom { message } => div().min_w_0().w_full().child(
-            Label::new(message)
+            Label::new(message.resolve(cx))
                 .size(LabelSize::Small)
                 .color(Color::Muted),
         ),
@@ -259,9 +308,13 @@ fn render_api_key_provider(
             .flex_wrap()
             .gap_0p5()
             .child(
-                Label::new("Visit the")
-                    .size(LabelSize::Small)
-                    .color(Color::Muted),
+                Label::new(tr(
+                    cx,
+                    "settings_ui.edit_prediction_provider_setup.visit_the",
+                    "Visit the",
+                ))
+                .size(LabelSize::Small)
+                .color(Color::Muted),
             )
             .child(
                 ButtonLink::new(button_link_label, dashboard_url)
@@ -270,28 +323,54 @@ fn render_api_key_provider(
                     .label_color(Color::Muted),
             )
             .child(
-                Label::new("to generate an API key.")
-                    .size(LabelSize::Small)
-                    .color(Color::Muted),
+                Label::new(tr(
+                    cx,
+                    "settings_ui.edit_prediction_provider_setup.to_generate_api_key",
+                    "to generate an API key.",
+                ))
+                .size(LabelSize::Small)
+                .color(Color::Muted),
             ),
     };
     let configured_card_label = if is_from_env_var {
-        "API Key Set in Environment Variable"
+        tr(
+            cx,
+            "settings_ui.edit_prediction_provider_setup.api_key_set_in_env_var",
+            "API Key Set in Environment Variable",
+        )
     } else {
-        "API Key Configured"
+        tr(
+            cx,
+            "settings_ui.edit_prediction_provider_setup.api_key_configured",
+            "API Key Configured",
+        )
     };
 
     let container = if has_key {
         base_container.child(header).child(
             ConfiguredApiCard::new(configured_card_label)
-                .button_label("Reset Key")
+                .button_label(tr(
+                    cx,
+                    "settings_ui.edit_prediction_provider_setup.reset_key",
+                    "Reset Key",
+                ))
                 .button_tab_index(0)
                 .disabled(is_from_env_var)
                 .when_some(env_var_name, |this, env_var_name| {
                     this.when(is_from_env_var, |this| {
                         this.tooltip_label(format!(
-                            "To reset your API key, unset the {} environment variable.",
-                            env_var_name
+                            "{} {} {}",
+                            tr(
+                                cx,
+                                "settings_ui.edit_prediction_provider_setup.to_reset_api_key_unset",
+                                "To reset your API key, unset the",
+                            ),
+                            env_var_name,
+                            tr(
+                                cx,
+                                "settings_ui.edit_prediction_provider_setup.environment_variable",
+                                "environment variable.",
+                            ),
                         ))
                     })
                 })
@@ -311,13 +390,27 @@ fn render_api_key_provider(
                         .w_full()
                         .min_w_0()
                         .max_w_1_2()
-                        .child(Label::new("API Key"))
+                        .child(Label::new(tr(
+                            cx,
+                            "settings_ui.edit_prediction_provider_setup.api_key",
+                            "API Key",
+                        )))
                         .child(description)
                         .when_some(env_var_name, |this, env_var_name| {
                             this.child({
                                 let label = format!(
-                                    "Or set the {} env var and restart Zed.",
-                                    env_var_name.as_ref()
+                                    "{} {} {}",
+                                    tr(
+                                        cx,
+                                        "settings_ui.edit_prediction_provider_setup.or_set",
+                                        "Or set the",
+                                    ),
+                                    env_var_name.as_ref(),
+                                    tr(
+                                        cx,
+                                        "settings_ui.edit_prediction_provider_setup.env_var_and_restart_zzz",
+                                        "env var and restart Zed.",
+                                    ),
                                 );
                                 Label::new(label).size(LabelSize::Small).color(Color::Muted)
                             })
@@ -372,8 +465,14 @@ fn render_ollama_provider(
 fn ollama_settings() -> Box<[SettingsPageItem]> {
     Box::new([
         SettingsPageItem::SettingItem(SettingItem {
-            title: "API URL",
-            description: "The base URL of your Ollama server.",
+            title: lt(
+                "settings_ui.edit_prediction_provider_setup.title.api.url",
+                "API URL",
+            ),
+            description: lt(
+                "settings_ui.edit_prediction_provider_setup.description.the.base.url.of.your.ollama.server",
+                "The base URL of your Ollama server.",
+            ),
             field: Box::new(SettingField {
                 pick: |settings| {
                     settings
@@ -405,8 +504,14 @@ fn ollama_settings() -> Box<[SettingsPageItem]> {
             files: USER,
         }),
         SettingsPageItem::SettingItem(SettingItem {
-            title: "Model",
-            description: "The Ollama model to use for edit predictions.",
+            title: lt(
+                "settings_ui.edit_prediction_provider_setup.title.model",
+                "Model",
+            ),
+            description: lt(
+                "settings_ui.edit_prediction_provider_setup.description.the.ollama.model.to.use.for.edit.predictions",
+                "The Ollama model to use for edit predictions.",
+            ),
             field: Box::new(SettingField {
                 pick: |settings| {
                     settings
@@ -438,8 +543,14 @@ fn ollama_settings() -> Box<[SettingsPageItem]> {
             files: USER,
         }),
         SettingsPageItem::SettingItem(SettingItem {
-            title: "Prompt Format",
-            description: "The prompt format to use when requesting predictions. Set to Infer to have the format inferred based on the model name.",
+            title: lt(
+                "settings_ui.edit_prediction_provider_setup.title.prompt.format",
+                "Prompt Format",
+            ),
+            description: lt(
+                "settings_ui.edit_prediction_provider_setup.description.the.prompt.format.to.use.when.requesting.predictions.set.to.infer.to.have.the.format.inferred.based.on.the.model.name",
+                "The prompt format to use when requesting predictions. Set to Infer to have the format inferred based on the model name.",
+            ),
             field: Box::new(SettingField {
                 pick: |settings| {
                     settings
@@ -468,8 +579,14 @@ fn ollama_settings() -> Box<[SettingsPageItem]> {
             metadata: None,
         }),
         SettingsPageItem::SettingItem(SettingItem {
-            title: "Max Output Tokens",
-            description: "The maximum number of tokens to generate.",
+            title: lt(
+                "settings_ui.edit_prediction_provider_setup.title.max.output.tokens",
+                "Max Output Tokens",
+            ),
+            description: lt(
+                "settings_ui.edit_prediction_provider_setup.description.the.maximum.number.of.tokens.to.generate",
+                "The maximum number of tokens to generate.",
+            ),
             field: Box::new(SettingField {
                 pick: |settings| {
                     settings
@@ -503,8 +620,14 @@ fn ollama_settings() -> Box<[SettingsPageItem]> {
 fn open_ai_compatible_settings() -> Box<[SettingsPageItem]> {
     Box::new([
         SettingsPageItem::SettingItem(SettingItem {
-            title: "API URL",
-            description: "The URL of your OpenAI-compatible server's completions API.",
+            title: lt(
+                "settings_ui.edit_prediction_provider_setup.title.api.url",
+                "API URL",
+            ),
+            description: lt(
+                "settings_ui.edit_prediction_provider_setup.description.the.url.of.your.openai.compatible.server.s.completions.api",
+                "The URL of your OpenAI-compatible server's completions API.",
+            ),
             field: Box::new(SettingField {
                 pick: |settings| {
                     settings
@@ -536,8 +659,14 @@ fn open_ai_compatible_settings() -> Box<[SettingsPageItem]> {
             files: USER,
         }),
         SettingsPageItem::SettingItem(SettingItem {
-            title: "Model",
-            description: "The model string to pass to the OpenAI-compatible server.",
+            title: lt(
+                "settings_ui.edit_prediction_provider_setup.title.model",
+                "Model",
+            ),
+            description: lt(
+                "settings_ui.edit_prediction_provider_setup.description.the.model.string.to.pass.to.the.openai.compatible.server",
+                "The model string to pass to the OpenAI-compatible server.",
+            ),
             field: Box::new(SettingField {
                 pick: |settings| {
                     settings
@@ -569,8 +698,14 @@ fn open_ai_compatible_settings() -> Box<[SettingsPageItem]> {
             files: USER,
         }),
         SettingsPageItem::SettingItem(SettingItem {
-            title: "Prompt Format",
-            description: "The prompt format to use when requesting predictions. Set to Infer to have the format inferred based on the model name.",
+            title: lt(
+                "settings_ui.edit_prediction_provider_setup.title.prompt.format",
+                "Prompt Format",
+            ),
+            description: lt(
+                "settings_ui.edit_prediction_provider_setup.description.the.prompt.format.to.use.when.requesting.predictions.set.to.infer.to.have.the.format.inferred.based.on.the.model.name",
+                "The prompt format to use when requesting predictions. Set to Infer to have the format inferred based on the model name.",
+            ),
             field: Box::new(SettingField {
                 pick: |settings| {
                     settings
@@ -599,8 +734,14 @@ fn open_ai_compatible_settings() -> Box<[SettingsPageItem]> {
             metadata: None,
         }),
         SettingsPageItem::SettingItem(SettingItem {
-            title: "Max Output Tokens",
-            description: "The maximum number of tokens to generate.",
+            title: lt(
+                "settings_ui.edit_prediction_provider_setup.title.max.output.tokens",
+                "Max Output Tokens",
+            ),
+            description: lt(
+                "settings_ui.edit_prediction_provider_setup.description.the.maximum.number.of.tokens.to.generate",
+                "The maximum number of tokens to generate.",
+            ),
             field: Box::new(SettingField {
                 pick: |settings| {
                     settings
@@ -634,8 +775,14 @@ fn open_ai_compatible_settings() -> Box<[SettingsPageItem]> {
 fn codestral_settings() -> Box<[SettingsPageItem]> {
     Box::new([
         SettingsPageItem::SettingItem(SettingItem {
-            title: "API URL",
-            description: "The API URL to use for Codestral.",
+            title: lt(
+                "settings_ui.edit_prediction_provider_setup.title.api.url",
+                "API URL",
+            ),
+            description: lt(
+                "settings_ui.edit_prediction_provider_setup.description.the.api.url.to.use.for.codestral",
+                "The API URL to use for Codestral.",
+            ),
             field: Box::new(SettingField {
                 pick: |settings| {
                     settings
@@ -667,8 +814,14 @@ fn codestral_settings() -> Box<[SettingsPageItem]> {
             files: USER,
         }),
         SettingsPageItem::SettingItem(SettingItem {
-            title: "Max Tokens",
-            description: "The maximum number of tokens to generate.",
+            title: lt(
+                "settings_ui.edit_prediction_provider_setup.title.max.tokens",
+                "Max Tokens",
+            ),
+            description: lt(
+                "settings_ui.edit_prediction_provider_setup.description.the.maximum.number.of.tokens.to.generate",
+                "The maximum number of tokens to generate.",
+            ),
             field: Box::new(SettingField {
                 pick: |settings| {
                     settings
@@ -697,8 +850,14 @@ fn codestral_settings() -> Box<[SettingsPageItem]> {
             files: USER,
         }),
         SettingsPageItem::SettingItem(SettingItem {
-            title: "Model",
-            description: "The Codestral model id to use.",
+            title: lt(
+                "settings_ui.edit_prediction_provider_setup.title.model",
+                "Model",
+            ),
+            description: lt(
+                "settings_ui.edit_prediction_provider_setup.description.the.codestral.model.id.to.use",
+                "The Codestral model id to use.",
+            ),
             field: Box::new(SettingField {
                 pick: |settings| {
                     settings

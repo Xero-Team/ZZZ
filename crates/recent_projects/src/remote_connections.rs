@@ -326,7 +326,18 @@ pub async fn open_remote_project(
                                 }
                             },
                             Some(&format!("{e:#}")),
-                            &["Retry", "Cancel"],
+                            &[
+                                gpui::PromptButton::new(i18n::tr(
+                                    cx,
+                                    "auto.recent_projects.remote_connections.prompt_button.retry",
+                                    "Retry",
+                                )),
+                                gpui::PromptButton::cancel(i18n::tr(
+                                    cx,
+                                    "auto.recent_projects.remote_connections.prompt_button.cancel",
+                                    "Cancel",
+                                )),
+                            ],
                             cx,
                         )
                     })?
@@ -387,7 +398,18 @@ pub async fn open_remote_project(
                                 }
                             },
                             Some(&format!("{e:#}")),
-                            &["Retry", "Cancel"],
+                            &[
+                                gpui::PromptButton::new(i18n::tr(
+                                    cx,
+                                    "auto.recent_projects.remote_connections.prompt_button.retry",
+                                    "Retry",
+                                )),
+                                gpui::PromptButton::cancel(i18n::tr(
+                                    cx,
+                                    "auto.recent_projects.remote_connections.prompt_button.cancel",
+                                    "Cancel",
+                                )),
+                            ],
                             cx,
                         )
                     })?

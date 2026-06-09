@@ -331,24 +331,38 @@ impl PickerDelegate for DevContainerPickerDelegate {
                 .border_t_1()
                 .border_color(cx.theme().colors().border_variant)
                 .child(
-                    Button::new("run-action", "Start Dev Container")
-                        .key_binding(
-                            KeyBinding::for_action(&menu::Confirm, cx)
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                        )
-                        .on_click(|_, window, cx| {
-                            window.dispatch_action(menu::Confirm.boxed_clone(), cx)
-                        }),
+                    Button::new(
+                        "run-action",
+                        i18n::tr(
+                            cx,
+                            "auto.recent_projects.remote_servers.button.start.dev.container",
+                            "Start Dev Container",
+                        ),
+                    )
+                    .key_binding(
+                        KeyBinding::for_action(&menu::Confirm, cx)
+                            .map(|kb| kb.size(rems_from_px(12.))),
+                    )
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(menu::Confirm.boxed_clone(), cx)
+                    }),
                 )
                 .child(
-                    Button::new("run-action-secondary", "Open devcontainer.json")
-                        .key_binding(
-                            KeyBinding::for_action(&menu::SecondaryConfirm, cx)
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                        )
-                        .on_click(|_, window, cx| {
-                            window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx)
-                        }),
+                    Button::new(
+                        "run-action-secondary",
+                        i18n::tr(
+                            cx,
+                            "auto.recent_projects.remote_servers.button.open.devcontainer.json",
+                            "Open devcontainer.json",
+                        ),
+                    )
+                    .key_binding(
+                        KeyBinding::for_action(&menu::SecondaryConfirm, cx)
+                            .map(|kb| kb.size(rems_from_px(12.))),
+                    )
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx)
+                    }),
                 )
                 .into_any_element(),
         )
@@ -2507,7 +2521,18 @@ impl RemoteServerProjects {
                     PromptLevel::Warning,
                     &prompt_message,
                     None,
-                    &["Yes, remove it", "No, keep it"],
+                    &[
+                        gpui::PromptButton::new(i18n::tr(
+                            cx,
+                            "auto.recent_projects.remote_servers.prompt_button.yes.remove.it",
+                            "Yes, remove it",
+                        )),
+                        gpui::PromptButton::new(i18n::tr(
+                            cx,
+                            "auto.recent_projects.remote_servers.prompt_button.no.keep.it",
+                            "No, keep it",
+                        )),
+                    ],
                     cx,
                 );
 
@@ -2633,7 +2658,11 @@ impl RemoteServerProjects {
                             .inset(true)
                             .spacing(ui::ListItemSpacing::Sparse)
                             .start_slot(Icon::new(IconName::Copy).color(Color::Muted))
-                            .child(Label::new("Copy Server Address"))
+                            .child(Label::new(i18n::tr(
+                                cx,
+                                "auto.recent_projects.remote_servers.label.copy.server.address",
+                                "Copy Server Address",
+                            )))
                             .end_slot(Label::new(connection_string.clone()).color(Color::Muted))
                             .show_end_slot_on_hover()
                             .on_click({
@@ -2658,7 +2687,18 @@ impl RemoteServerProjects {
                         PromptLevel::Warning,
                         &prompt_message,
                         None,
-                        &["Yes, remove it", "No, keep it"],
+                        &[
+                            gpui::PromptButton::new(i18n::tr(
+                                cx,
+                                "auto.recent_projects.remote_servers.prompt_button.yes.remove.it",
+                                "Yes, remove it",
+                            )),
+                            gpui::PromptButton::new(i18n::tr(
+                                cx,
+                                "auto.recent_projects.remote_servers.prompt_button.no.keep.it",
+                                "No, keep it",
+                            )),
+                        ],
                         cx,
                     );
 

@@ -73,9 +73,17 @@ pub fn init(cx: &mut App) {
                 cx.write_to_clipboard(ClipboardItem::new_string(clipboard_text.clone()));
                 drop(window.prompt(
                     PromptLevel::Info,
-                    "Copied into clipboard",
+                    &i18n::tr(
+                        cx,
+                        "auto.feedback.feedback.prompt.title.copied.into.clipboard",
+                        "Copied into clipboard",
+                    ),
                     Some(&clipboard_text),
-                    &["OK"],
+                    &[gpui::PromptButton::ok(i18n::tr(
+                        cx,
+                        "auto.feedback.feedback.prompt_button.ok",
+                        "OK",
+                    ))],
                     cx,
                 ));
             })

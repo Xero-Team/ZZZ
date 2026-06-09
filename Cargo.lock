@@ -3205,6 +3205,7 @@ dependencies = [
  "futures 0.3.32",
  "fuzzy",
  "gpui",
+ "i18n",
  "livekit_client",
  "menu",
  "notifications",
@@ -6313,6 +6314,7 @@ version = "0.1.0"
 dependencies = [
  "extension_host",
  "gpui",
+ "i18n",
  "system_specs",
  "urlencoding",
  "util",
@@ -8426,6 +8428,23 @@ dependencies = [
  "tower-service",
  "tracing",
  "windows-registry 0.6.1",
+]
+
+[[package]]
+name = "i18n"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gpui",
+ "indexmap 2.14.0",
+ "parking_lot",
+ "paths",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "settings",
+ "sys-locale",
+ "util",
 ]
 
 [[package]]
@@ -14469,6 +14488,7 @@ dependencies = [
  "fuzzy_nucleo",
  "gpui",
  "http_client",
+ "i18n",
  "indoc",
  "language",
  "log",
@@ -16262,6 +16282,7 @@ dependencies = [
  "fuzzy",
  "gpui",
  "heck 0.5.0",
+ "i18n",
  "itertools 0.14.0",
  "language",
  "log",
@@ -22127,6 +22148,7 @@ dependencies = [
  "git",
  "gpui",
  "http_client",
+ "i18n",
  "itertools 0.14.0",
  "language",
  "log",
@@ -23118,6 +23140,7 @@ dependencies = [
  "gpui_platform",
  "gpui_tokio",
  "http_client",
+ "i18n",
  "image",
  "image_viewer",
  "input_latency_ui",

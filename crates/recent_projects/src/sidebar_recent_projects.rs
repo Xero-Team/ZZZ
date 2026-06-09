@@ -425,7 +425,7 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
                                 .w_full()
                                 .gap_1()
                                 .justify_between()
-                                .child(Label::new("Add Remote Folder"))
+                                .child(Label::new(i18n::tr(cx, "auto.recent_projects.sidebar_recent_projects.label.add.remote.folder", "Add Remote Folder")))
                                 .child(KeyBinding::for_action(
                                     &OpenRemote {
                                         from_existing_connection: false,

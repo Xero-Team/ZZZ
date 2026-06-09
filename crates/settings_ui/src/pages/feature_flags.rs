@@ -1,6 +1,7 @@
 use feature_flags::{FeatureFlagDescriptor, FeatureFlagStore, FeatureFlagVariant};
 use fs::Fs;
 use gpui::{ScrollHandle, prelude::*};
+use i18n as app_i18n;
 use ui::{Checkbox, ToggleState, prelude::*};
 
 use crate::SettingsWindow;
@@ -59,20 +60,27 @@ fn render_flag_row(
                     ))
                     .when(forced_on, |this| {
                         this.child(
-                            Label::new("enabled for all")
-                                .size(LabelSize::Small)
-                                .color(Color::Muted),
+                            Label::new(app_i18n::tr(
+                                cx,
+                                "settings_ui.feature_flags.enabled_for_all",
+                                "enabled for all",
+                            ))
+                            .size(LabelSize::Small)
+                            .color(Color::Muted),
                         )
                     }),
             )
             .when(has_override && !forced_on, |this| {
                 let name = descriptor.name;
                 this.child(
-                    Button::new(SharedString::from(format!("reset-{}", name)), "Reset")
-                        .label_size(LabelSize::Small)
-                        .on_click(cx.listener(move |_, _, _, cx| {
-                            FeatureFlagStore::clear_override(name, <dyn Fs>::global(cx), cx);
-                        })),
+                    Button::new(
+                        SharedString::from(format!("reset-{}", name)),
+                        app_i18n::tr(cx, "settings_ui.feature_flags.reset", "Reset"),
+                    )
+                    .label_size(LabelSize::Small)
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        FeatureFlagStore::clear_override(name, <dyn Fs>::global(cx), cx);
+                    })),
                 )
             });
 

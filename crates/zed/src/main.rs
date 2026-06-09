@@ -33,6 +33,7 @@ use gpui::{
     App, AppContext, Application, AsyncApp, Focusable as _, QuitMode, Task, UpdateGlobal as _,
 };
 use gpui_platform;
+use i18n as app_i18n;
 
 use gpui_tokio::Tokio;
 use language::LanguageRegistry;
@@ -430,6 +431,7 @@ fn main() {
             AppCommitSha::set_global(app_commit_sha, cx);
         }
         settings::init(cx);
+        app_i18n::init(cx);
         zlog_settings::init(cx);
         zed::watch_settings_files(fs.clone(), cx);
         handle_keymap_file_changes(user_keymap_file_rx, user_keymap_watcher, cx);
@@ -678,6 +680,8 @@ fn main() {
             let http = app_state.client.http_client();
             let client = app_state.client.clone();
             move |cx| {
+                let locale_changed = app_i18n::reload(cx);
+
                 for &mut window in cx.windows().iter_mut() {
                     let background_appearance = cx.theme().window_background_appearance();
                     window
@@ -705,6 +709,12 @@ fn main() {
                     if client.status().borrow().is_connected() {
                         client.reconnect(&cx.to_async());
                     }
+                }
+
+                if locale_changed {
+                    let menus = app_menus(cx);
+                    cx.set_menus(menus);
+                    cx.refresh_windows();
                 }
             }
         })

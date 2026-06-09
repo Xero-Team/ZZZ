@@ -68,6 +68,7 @@ use gpui::{
     WindowOptions, actions, canvas, point, relative, size, transparent_black,
 };
 pub use history_manager::*;
+use i18n::{prompt_button, tr};
 pub use item::{
     FollowableItem, FollowableItemHandle, Item, ItemHandle, ItemSettings, PreviewTabsSettings,
     ProjectItem, SerializableItem, SerializableItemHandle, WeakItemHandle,
@@ -3283,9 +3284,20 @@ impl Workspace {
                     let answer = cx.update(|window, cx| {
                         window.prompt(
                             PromptLevel::Warning,
-                            "Do you want to leave the current call?",
+                            &tr(
+                                cx,
+                                "prompt.call.leave.title",
+                                "Do you want to leave the current call?",
+                            ),
                             None,
-                            &["Close window and hang up", "Cancel"],
+                            &[
+                                prompt_button(
+                                    cx,
+                                    "prompt.call.leave.close_hangup",
+                                    "Close window and hang up",
+                                ),
+                                prompt_button(cx, "prompt.common.cancel", "Cancel"),
+                            ],
                             cx,
                         )
                     })?;
@@ -3531,9 +3543,17 @@ impl Workspace {
                         );
                         window.prompt(
                             PromptLevel::Warning,
-                            "Do you want to save all changes in the following files?",
+                            &tr(
+                                cx,
+                                "prompt.save_all.title",
+                                "Do you want to save all changes in the following files?",
+                            ),
                             Some(&detail),
-                            &["Save all", "Discard all", "Cancel"],
+                            &[
+                                prompt_button(cx, "prompt.save_all.save", "Save all"),
+                                prompt_button(cx, "prompt.save_all.discard", "Discard all"),
+                                prompt_button(cx, "prompt.common.cancel", "Cancel"),
+                            ],
                             cx,
                         )
                     })?;
@@ -9282,9 +9302,20 @@ async fn join_channel_internal(
                 .update(cx, |_, window, cx| {
                     window.prompt(
                         PromptLevel::Warning,
-                        "Do you want to switch channels?",
-                        Some("Leaving this call will unshare your current project."),
-                        &["Yes, Join Channel", "Cancel"],
+                        &tr(
+                            cx,
+                            "prompt.channel.switch.title",
+                            "Do you want to switch channels?",
+                        ),
+                        Some(&tr(
+                            cx,
+                            "prompt.channel.switch.detail",
+                            "Leaving this call will unshare your current project.",
+                        )),
+                        &[
+                            prompt_button(cx, "prompt.channel.switch.confirm", "Yes, Join Channel"),
+                            prompt_button(cx, "prompt.common.cancel", "Cancel"),
+                        ],
                         cx,
                     )
                 })?
@@ -9449,32 +9480,45 @@ pub fn join_channel(
                 active_window
                     .update(cx, |_, window, cx| {
                         let detail: SharedString = match err.error_code() {
-                            ErrorCode::SignedOut => "Please sign in to continue.".into(),
-                            ErrorCode::UpgradeRequired => concat!(
-                                "Your are running an unsupported version of ZZZ. ",
-                                "Please update to continue."
+                            ErrorCode::SignedOut => tr(
+                                cx,
+                                "prompt.channel.join_failed.signed_out",
+                                "Please sign in to continue.",
                             )
                             .into(),
-                            ErrorCode::NoSuchChannel => concat!(
-                                "No matching channel was found. ",
-                                "Please check the link and try again."
+                            ErrorCode::UpgradeRequired => tr(
+                                cx,
+                                "prompt.channel.join_failed.upgrade_required",
+                                "Your are running an unsupported version of ZZZ. Please update to continue.",
                             )
                             .into(),
-                            ErrorCode::Forbidden => concat!(
-                                "This channel is private, and you do not have access. ",
-                                "Please ask someone to add you and try again."
+                            ErrorCode::NoSuchChannel => tr(
+                                cx,
+                                "prompt.channel.join_failed.not_found",
+                                "No matching channel was found. Please check the link and try again.",
+                            )
+                            .into(),
+                            ErrorCode::Forbidden => tr(
+                                cx,
+                                "prompt.channel.join_failed.forbidden",
+                                "This channel is private, and you do not have access. Please ask someone to add you and try again.",
                             )
                             .into(),
                             ErrorCode::Disconnected => {
-                                "Please check your internet connection and try again.".into()
+                                tr(
+                                    cx,
+                                    "prompt.channel.join_failed.disconnected",
+                                    "Please check your internet connection and try again.",
+                                )
+                                .into()
                             }
                             _ => format!("{}\n\nPlease try again.", err).into(),
                         };
                         window.prompt(
                             PromptLevel::Critical,
-                            "Failed to join channel",
+                            &tr(cx, "prompt.channel.join_failed.title", "Failed to join channel"),
                             Some(&detail),
-                            &["Ok"],
+                            &[prompt_button(cx, "prompt.channel.join_failed.ok", "Ok")],
                             cx,
                         )
                     })?
@@ -10447,9 +10491,16 @@ pub fn reload(cx: &mut App) {
             .update(cx, |_, window, cx| {
                 window.prompt(
                     PromptLevel::Info,
-                    "Are you sure you want to restart?",
+                    &tr(
+                        cx,
+                        "prompt.app.restart.title",
+                        "Are you sure you want to restart?",
+                    ),
                     None,
-                    &["Restart", "Cancel"],
+                    &[
+                        prompt_button(cx, "prompt.app.restart.confirm", "Restart"),
+                        prompt_button(cx, "prompt.common.cancel", "Cancel"),
+                    ],
                     cx,
                 )
             })

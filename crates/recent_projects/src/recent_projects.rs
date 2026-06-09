@@ -1723,28 +1723,38 @@ impl PickerDelegate for RecentProjectsDelegate {
                     .into_any_element(),
             ),
             Some(ProjectPickerEntry::ProjectGroup(_)) if !is_current_workspace_entry => Some(
-                Button::new("remove_selected", "Remove from Window")
-                    .key_binding(KeyBinding::for_action_in(
-                        &RemoveSelected,
-                        &focus_handle,
+                Button::new(
+                    "remove_selected",
+                    i18n::tr(
                         cx,
-                    ))
-                    .on_click(|_, window, cx| {
-                        window.dispatch_action(RemoveSelected.boxed_clone(), cx)
-                    })
-                    .into_any_element(),
+                        "auto.recent_projects.recent_projects.button.remove.from.window",
+                        "Remove from Window",
+                    ),
+                )
+                .key_binding(KeyBinding::for_action_in(
+                    &RemoveSelected,
+                    &focus_handle,
+                    cx,
+                ))
+                .on_click(|_, window, cx| window.dispatch_action(RemoveSelected.boxed_clone(), cx))
+                .into_any_element(),
             ),
             Some(ProjectPickerEntry::RecentProject(_)) => Some(
-                Button::new("delete_recent", "Delete")
-                    .key_binding(KeyBinding::for_action_in(
-                        &RemoveSelected,
-                        &focus_handle,
+                Button::new(
+                    "delete_recent",
+                    i18n::tr(
                         cx,
-                    ))
-                    .on_click(|_, window, cx| {
-                        window.dispatch_action(RemoveSelected.boxed_clone(), cx)
-                    })
-                    .into_any_element(),
+                        "auto.recent_projects.recent_projects.button.delete",
+                        "Delete",
+                    ),
+                )
+                .key_binding(KeyBinding::for_action_in(
+                    &RemoveSelected,
+                    &focus_handle,
+                    cx,
+                ))
+                .on_click(|_, window, cx| window.dispatch_action(RemoveSelected.boxed_clone(), cx))
+                .into_any_element(),
             ),
             _ => None,
         };
@@ -1799,26 +1809,40 @@ impl PickerDelegate for RecentProjectsDelegate {
                         )
                     } else {
                         this.child(
-                            Button::new("open_new_window", "New Window")
-                                .key_binding(KeyBinding::for_action_in(
-                                    &menu::SecondaryConfirm,
-                                    &focus_handle,
+                            Button::new(
+                                "open_new_window",
+                                i18n::tr(
                                     cx,
-                                ))
-                                .on_click(|_, window, cx| {
-                                    window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx)
-                                }),
+                                    "auto.recent_projects.recent_projects.button.new.window",
+                                    "New Window",
+                                ),
+                            )
+                            .key_binding(KeyBinding::for_action_in(
+                                &menu::SecondaryConfirm,
+                                &focus_handle,
+                                cx,
+                            ))
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx)
+                            }),
                         )
                         .child(
-                            Button::new("open_here", "Open")
-                                .key_binding(KeyBinding::for_action_in(
-                                    &menu::Confirm,
-                                    &focus_handle,
+                            Button::new(
+                                "open_here",
+                                i18n::tr(
                                     cx,
-                                ))
-                                .on_click(|_, window, cx| {
-                                    window.dispatch_action(menu::Confirm.boxed_clone(), cx)
-                                }),
+                                    "auto.recent_projects.recent_projects.button.open",
+                                    "Open",
+                                ),
+                            )
+                            .key_binding(KeyBinding::for_action_in(
+                                &menu::Confirm,
+                                &focus_handle,
+                                cx,
+                            ))
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(menu::Confirm.boxed_clone(), cx)
+                            }),
                         )
                     }
                 })

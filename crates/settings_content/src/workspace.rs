@@ -13,6 +13,10 @@ use crate::{
 #[with_fallible_options]
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct WorkspaceSettingsContent {
+    /// The display language to use for the ZZZ user interface.
+    ///
+    /// Default: auto
+    pub display_language: Option<DisplayLanguage>,
     /// Active pane styling settings.
     pub active_pane_modifiers: Option<ActivePaneModifiers>,
     /// The text rendering mode to use.
@@ -130,6 +134,31 @@ pub struct WorkspaceSettingsContent {
     /// Whether the focused panel follows the mouse location
     /// Default: false
     pub focus_follows_mouse: Option<FocusFollowsMouse>,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    MergeFrom,
+    strum::VariantArray,
+    strum::VariantNames,
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum DisplayLanguage {
+    #[default]
+    #[strum(serialize = "Auto")]
+    Auto,
+    #[strum(serialize = "English")]
+    En,
+    #[strum(serialize = "Simplified Chinese")]
+    ZhCn,
 }
 
 #[with_fallible_options]

@@ -976,6 +976,7 @@ impl VsCodeSettings {
 
     fn workspace_settings_content(&self) -> WorkspaceSettingsContent {
         WorkspaceSettingsContent {
+            display_language: None,
             active_pane_modifiers: self.active_pane_modifiers(),
             text_rendering_mode: None,
             autosave: self.read_enum("files.autoSave", |s| match s {
