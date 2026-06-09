@@ -278,10 +278,7 @@ fn bytes_for_mime(item: &ClipboardItem, mime_type: &str) -> Option<Vec<u8>> {
             .map(String::into_bytes);
     }
 
-    if PLAIN_TEXT_MIME_TYPES
-        .iter()
-        .any(|plain_text_mime_type| *plain_text_mime_type == mime_type)
-    {
+    if PLAIN_TEXT_MIME_TYPES.contains(&mime_type) {
         return item.text().map(String::into_bytes);
     }
 
