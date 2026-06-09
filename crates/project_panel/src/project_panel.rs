@@ -1171,7 +1171,7 @@ impl ProjectPanel {
                             tr(cx, "project_panel.menu.duplicate", "Duplicate"),
                             Box::new(Duplicate),
                         )
-                        // TODO: Paste should always be visible, cbut disabled when clipboard is empty
+                        // TODO: Paste should always be visible, but disabled when clipboard is empty
                         .action_disabled_when(
                             !has_pasteable_content,
                             tr(cx, "project_panel.menu.paste", "Paste"),
