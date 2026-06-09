@@ -412,6 +412,22 @@ mod tests {
         .unwrap();
         assert_eq!(result, expected);
     }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_linux_bundled_app_locations_include_current_and_legacy_names() {
+        assert_eq!(
+            linux::bundled_app_locations(),
+            [
+                "../libexec/zzz-editor",
+                "../lib/zzz/zzz-editor",
+                "../libexec/zed-editor",
+                "../lib/zed/zed-editor",
+                "./zzz",
+                "./zed",
+            ]
+        );
+    }
 }
 
 fn parse_path_in_wsl(source: &str, wsl: &str) -> Result<String> {
@@ -872,6 +888,17 @@ mod linux {
 
     struct App(PathBuf);
 
+    pub(super) fn bundled_app_locations() -> [&'static str; 6] {
+        [
+            "../libexec/zzz-editor",
+            "../lib/zzz/zzz-editor",
+            "../libexec/zed-editor",
+            "../lib/zed/zed-editor",
+            "./zzz",
+            "./zed",
+        ]
+    }
+
     impl Detect {
         pub fn detect(path: Option<&Path>) -> anyhow::Result<impl InstalledApp> {
             let path = if let Some(path) = path {
@@ -880,15 +907,16 @@ mod linux {
                 let cli = env::current_exe()?;
                 let dir = cli.parent().context("no parent path for cli")?;
 
-                // libexec is the standard, lib/zed is for Arch (and other non-libexec distros),
-                // ./zed is for the target directory in development builds.
-                let possible_locations =
-                    ["../libexec/zed-editor", "../lib/zed/zed-editor", "./zed"];
-                possible_locations
+                // libexec is the standard, lib/zzz is for distro packages, and the zed-* paths
+                // are retained as a compatibility fallback for older package layouts.
+                bundled_app_locations()
                     .iter()
                     .find_map(|p| dir.join(p).canonicalize().ok().filter(|path| path != &cli))
                     .with_context(|| {
-                        format!("could not find any of: {}", possible_locations.join(", "))
+                        format!(
+                            "could not find any of: {}",
+                            bundled_app_locations().join(", ")
+                        )
                     })?
             };
 
@@ -1038,7 +1066,7 @@ mod flatpak {
                 )
                 .into(),
             );
-            args.push(flatpak_dir.join("bin").join("zed").into());
+            args.push(flatpak_dir.join("bin").join("zzz").into());
 
             let mut is_app_location_set = false;
             for arg in &env::args_os().collect::<Vec<_>>()[1..] {
