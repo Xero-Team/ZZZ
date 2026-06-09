@@ -4524,6 +4524,18 @@ impl GitGraph {
     ) -> (usize, bool) {
         self.commit_count_and_loading_state(cx)
     }
+
+    pub fn search_matches_for_test(&self) -> Vec<Oid> {
+        self.search_state.matches.iter().copied().collect()
+    }
+
+    pub fn initial_commit_data_for_test(&self) -> Vec<Arc<InitialGraphCommitData>> {
+        self.graph_data
+            .commits
+            .iter()
+            .map(|commit| commit.data.clone())
+            .collect()
+    }
     pub fn log_source_for_test(&self) -> &LogSource {
         &self.log_source
     }
