@@ -4524,7 +4524,6 @@ impl GitGraph {
     ) -> (usize, bool) {
         self.commit_count_and_loading_state(cx)
     }
-
     pub fn log_source_for_test(&self) -> &LogSource {
         &self.log_source
     }
