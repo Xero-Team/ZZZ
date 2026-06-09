@@ -6,6 +6,16 @@ if [[ ! " $* " == *" -p "* && ! " $* " == *" --package "* ]]; then
     set -- "$@" --workspace
 fi
 
+if command -v ccache >/dev/null 2>&1 && [[ -z "${CCACHE_DIR:-}" ]]; then
+    ccache_dir="$(ccache --get-config cache_dir)"
+    ccache_parent_dir="$(dirname "$ccache_dir")"
+
+    if [[ ! -d "$ccache_dir" && ! -w "$ccache_parent_dir" ]] || [[ -d "$ccache_dir" && ! -w "$ccache_dir" ]]; then
+        export CCACHE_DIR="$(pwd)/target/ccache"
+        mkdir -p "$CCACHE_DIR"
+    fi
+fi
+
 set -x
 "${CARGO:-cargo}" clippy "$@" --release --all-targets --all-features -- --deny warnings
 
