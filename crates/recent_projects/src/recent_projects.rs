@@ -35,7 +35,7 @@ use picker::{
 use project::{Worktree, git_store::Repository};
 pub use remote_connections::RemoteSettings;
 pub use remote_servers::RemoteServerProjects;
-use settings::{Settings, WorktreeId};
+use settings::{DefaultOpenBehavior, Settings, WorktreeId};
 use ui_input::ErasedEditor;
 use workspace::ProjectGroupKey;
 
@@ -277,10 +277,19 @@ fn get_branch_for_worktree(
         })
 }
 
+pub(crate) fn default_open_in_new_window(cx: &App) -> bool {
+    matches!(
+        workspace::WorkspaceSettings::get_global(cx).default_open_behavior,
+        DefaultOpenBehavior::NewWindow
+    )
+}
+
 pub fn init(cx: &mut App) {
     #[cfg(target_os = "windows")]
     cx.on_action(|open_wsl: &zed_actions::wsl_actions::OpenFolderInWsl, cx| {
-        let create_new_window = open_wsl.create_new_window;
+        let create_new_window = open_wsl
+            .create_new_window
+            .unwrap_or_else(|| default_open_in_new_window(cx));
         with_active_or_new_workspace(cx, move |workspace, window, cx| {
             use gpui::PathPromptOptions;
             use project::DirectoryLister;
@@ -377,7 +386,9 @@ pub fn init(cx: &mut App) {
 
     #[cfg(target_os = "windows")]
     cx.on_action(|open_wsl: &zed_actions::wsl_actions::OpenWsl, cx| {
-        let create_new_window = open_wsl.create_new_window;
+        let create_new_window = open_wsl
+            .create_new_window
+            .unwrap_or_else(|| default_open_in_new_window(cx));
         with_active_or_new_workspace(cx, move |workspace, window, cx| {
             let handle = cx.entity().downgrade();
             let fs = workspace.project().read(cx).fs().clone();
@@ -393,8 +404,15 @@ pub fn init(cx: &mut App) {
         with_active_or_new_workspace(cx, move |workspace, window, cx| {
             let fs = workspace.project().read(cx).fs().clone();
             add_wsl_distro(fs, &open_wsl.distro, cx);
+            let requesting_window =
+                match workspace::WorkspaceSettings::get_global(cx).default_open_behavior {
+                    DefaultOpenBehavior::ExistingWindow => {
+                        window.window_handle().downcast::<MultiWorkspace>()
+                    }
+                    DefaultOpenBehavior::NewWindow => None,
+                };
             let open_options = OpenOptions {
-                requesting_window: window.window_handle().downcast::<MultiWorkspace>(),
+                requesting_window,
                 ..Default::default()
             };
 
@@ -481,7 +499,9 @@ pub fn init(cx: &mut App) {
     });
     cx.on_action(|open_remote: &OpenRemote, cx| {
         let from_existing_connection = open_remote.from_existing_connection;
-        let create_new_window = open_remote.create_new_window;
+        let create_new_window = open_remote
+            .create_new_window
+            .unwrap_or_else(|| default_open_in_new_window(cx));
         with_active_or_new_workspace(cx, move |workspace, window, cx| {
             if from_existing_connection {
                 cx.propagate();
@@ -691,7 +711,7 @@ impl RecentProjects {
 
     pub fn open(
         workspace: &mut Workspace,
-        create_new_window: bool,
+        create_new_window: Option<bool>,
         window_project_groups: Vec<ProjectGroupKey>,
         window: &mut Window,
         focus_handle: FocusHandle,
@@ -700,6 +720,8 @@ impl RecentProjects {
         let weak = cx.entity().downgrade();
         let open_folders = get_open_folders(workspace, cx);
         let fs = Some(workspace.app_state().fs.clone());
+
+        let create_new_window = create_new_window.unwrap_or_else(|| default_open_in_new_window(cx));
 
         workspace.toggle_modal(window, cx, |window, cx| {
             let delegate = RecentProjectsDelegate::new(
@@ -718,7 +740,7 @@ impl RecentProjects {
     pub fn popover(
         workspace: WeakEntity<Workspace>,
         window_project_groups: Vec<ProjectGroupKey>,
-        create_new_window: bool,
+        create_new_window: Option<bool>,
         focus_handle: FocusHandle,
         window: &mut Window,
         cx: &mut App,
@@ -733,6 +755,8 @@ impl RecentProjects {
                 )
             })
             .unwrap_or_else(|| (Vec::new(), None));
+
+        let create_new_window = create_new_window.unwrap_or_else(|| default_open_in_new_window(cx));
 
         cx.new(|cx| {
             let delegate = RecentProjectsDelegate::new(
@@ -1603,6 +1627,21 @@ impl PickerDelegate for RecentProjectsDelegate {
                 };
 
                 let focus_handle = self.focus_handle.clone();
+                let secondary_confirm_tooltip = if self.create_new_window {
+                    "Open Project in This Window"
+                } else {
+                    "Open Project in New Window"
+                };
+                let primary_confirm_tooltip = if self.create_new_window {
+                    "Open Project in New Window"
+                } else {
+                    "Open Project in This Window"
+                };
+                let secondary_confirm_icon = if self.create_new_window {
+                    IconName::ThisWindow
+                } else {
+                    IconName::ArrowUpRight
+                };
 
                 let secondary_actions = h_flex()
                     .gap_px()
@@ -1641,16 +1680,12 @@ impl PickerDelegate for RecentProjectsDelegate {
                         )
                     })
                     .child(
-                        IconButton::new("open_new_window", IconName::ArrowUpRight)
+                        IconButton::new("alternate_open", secondary_confirm_icon)
                             .icon_size(IconSize::Small)
                             .tooltip({
                                 move |_, cx| {
                                     Tooltip::for_action_in(
-                                        i18n::tr(
-                                            cx,
-                                            "recent_projects.open_project_in_new_window",
-                                            "Open Project in New Window",
-                                        ),
+                                        secondary_confirm_tooltip,
                                         &menu::SecondaryConfirm,
                                         &focus_handle,
                                         cx,
@@ -1720,11 +1755,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                                 })
                                 .tooltip(move |_, cx| {
                                     Tooltip::with_meta(
-                                        i18n::tr(
-                                            cx,
-                                            "recent_projects.open_project_in_this_window",
-                                            "Open Project in This Window",
-                                        ),
+                                        primary_confirm_tooltip,
                                         None,
                                         tooltip_path.clone(),
                                         cx,
@@ -1781,7 +1812,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                                     )))
                                     .child(KeyBinding::for_action_in(
                                         &workspace::Open {
-                                            create_new_window: self.create_new_window,
+                                            create_new_window: Some(self.create_new_window),
                                         },
                                         &focus_handle,
                                         cx,
@@ -1815,20 +1846,23 @@ impl PickerDelegate for RecentProjectsDelegate {
                                     .child(KeyBinding::for_action(
                                         &OpenRemote {
                                             from_existing_connection: false,
-                                            create_new_window: false,
+                                            create_new_window: Some(self.create_new_window),
                                         },
                                         cx,
                                     )),
                             )
-                            .on_click(|_, window, cx| {
-                                window.dispatch_action(
-                                    OpenRemote {
-                                        from_existing_connection: false,
-                                        create_new_window: false,
-                                    }
-                                    .boxed_clone(),
-                                    cx,
-                                )
+                            .on_click({
+                                let create_new_window = self.create_new_window;
+                                move |_, window, cx| {
+                                    window.dispatch_action(
+                                        OpenRemote {
+                                            from_existing_connection: false,
+                                            create_new_window: Some(create_new_window),
+                                        }
+                                        .boxed_clone(),
+                                        cx,
+                                    )
+                                }
                             }),
                     )
                     .into_any(),
@@ -1955,6 +1989,43 @@ impl PickerDelegate for RecentProjectsDelegate {
                                 window.dispatch_action(menu::Confirm.boxed_clone(), cx)
                             }),
                         )
+                    } else if self.create_new_window {
+                        this.child(
+                            Button::new(
+                                "open_here",
+                                i18n::tr(
+                                    cx,
+                                    "recent_projects.open_project_in_this_window",
+                                    "This Window",
+                                ),
+                            )
+                            .key_binding(KeyBinding::for_action_in(
+                                &menu::SecondaryConfirm,
+                                &focus_handle,
+                                cx,
+                            ))
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx)
+                            }),
+                        )
+                        .child(
+                            Button::new(
+                                "open_new_window",
+                                i18n::tr(
+                                    cx,
+                                    "auto.recent_projects.recent_projects.button.open",
+                                    "Open",
+                                ),
+                            )
+                            .key_binding(KeyBinding::for_action_in(
+                                &menu::Confirm,
+                                &focus_handle,
+                                cx,
+                            ))
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(menu::Confirm.boxed_clone(), cx)
+                            }),
+                        )
                     } else {
                         this.child(
                             Button::new(
@@ -2019,7 +2090,9 @@ impl PickerDelegate for RecentProjectsDelegate {
                             let focus_handle = focus_handle.clone();
                             let workspace_handle = self.workspace.clone();
                             let create_new_window = self.create_new_window;
-                            let open_action = workspace::Open { create_new_window };
+                            let open_action = workspace::Open {
+                                create_new_window: Some(create_new_window),
+                            };
                             let show_add_to_workspace = match selected_entry {
                                 Some(ProjectPickerEntry::RecentProject(hit)) => self
                                     .workspaces
@@ -2082,7 +2155,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                                                 open_remote_folder,
                                                 OpenRemote {
                                                     from_existing_connection: false,
-                                                    create_new_window: false,
+                                                    create_new_window: Some(create_new_window),
                                                 }
                                                 .boxed_clone(),
                                             )

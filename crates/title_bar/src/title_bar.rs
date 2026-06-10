@@ -243,13 +243,6 @@ impl Render for TitleBar {
                 };
 
                 if let Some(repo_name) = display_name.and_then(|n| n.to_str()) {
-<<<<<<< HEAD
-                    let name = if let Ok(relative) =
-                        worktree_abs_path.strip_prefix(&*repo.work_directory_abs_path)
-                    {
-                        if relative.as_os_str().is_empty() {
-                            repo_name.to_owned()
-=======
                     let visible_worktrees_in_repo = self.visible_worktrees_in_repository(repo, cx);
                     let name = if visible_worktrees_in_repo == 1 {
                         if let Ok(relative) =
@@ -260,7 +253,6 @@ impl Render for TitleBar {
                             } else {
                                 format!("{}/{}", repo_name, relative.display())
                             }
->>>>>>> 45afbac0a5 (Fix project grouping for Git repo subdirectories (#57998))
                         } else {
                             repo_name.to_string()
                         }
@@ -647,7 +639,7 @@ impl TitleBar {
                     Some(recent_projects::RemoteServerProjects::popover(
                         fs,
                         workspace.clone(),
-                        false,
+                        None,
                         window,
                         cx,
                     ))
@@ -674,10 +666,7 @@ impl TitleBar {
                     move |_window, cx| {
                         Tooltip::with_meta(
                             tooltip_title.clone(),
-                            Some(&OpenRemote {
-                                from_existing_connection: false,
-                                create_new_window: false,
-                            }),
+                            Some(&OpenRemote::default()),
                             meta.clone(),
                             cx,
                         )
@@ -863,7 +852,7 @@ impl TitleBar {
                 Some(recent_projects::RecentProjects::popover(
                     workspace.clone(),
                     window_project_groups.clone(),
-                    false,
+                    None,
                     focus_handle.clone(),
                     window,
                     cx,
@@ -888,9 +877,7 @@ impl TitleBar {
                             "title_bar.project_name.recent_projects",
                             "Recent Projects",
                         ),
-                        &zed_actions::OpenRecent {
-                            create_new_window: false,
-                        },
+                        &zed_actions::OpenRecent::default(),
                         cx,
                     )
                 },
@@ -924,7 +911,7 @@ impl TitleBar {
                 Some(recent_projects::RecentProjects::popover(
                     workspace.clone(),
                     window_project_groups.clone(),
-                    false,
+                    None,
                     focus_handle.clone(),
                     window,
                     cx,
@@ -949,9 +936,7 @@ impl TitleBar {
                             "title_bar.project_name.recent_projects",
                             "Recent Projects",
                         ),
-                        &zed_actions::OpenRecent {
-                            create_new_window: false,
-                        },
+                        &zed_actions::OpenRecent::default(),
                         cx,
                     )
                 },

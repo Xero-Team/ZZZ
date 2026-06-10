@@ -212,16 +212,11 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                 ),
                 MenuItem::action(
                     tr(cx, "menu.file.open_recent", "Open Recent..."),
-                    zed_actions::OpenRecent {
-                        create_new_window: false,
-                    },
+                    zed_actions::OpenRecent::default(),
                 ),
                 MenuItem::action(
                     tr(cx, "menu.file.open_remote", "Open Remote..."),
-                    zed_actions::OpenRemote {
-                        create_new_window: false,
-                        from_existing_connection: false,
-                    },
+                    zed_actions::OpenRemote::default(),
                 ),
                 MenuItem::separator(),
                 MenuItem::action(

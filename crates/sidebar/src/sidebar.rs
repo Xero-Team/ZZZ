@@ -4321,9 +4321,7 @@ impl Sidebar {
                 |_window, cx| {
                     Tooltip::for_action(
                         app_i18n::tr(cx, "sidebar.recent_projects.add_project", "Add Project"),
-                        &OpenRecent {
-                            create_new_window: false,
-                        },
+                        &OpenRecent::default(),
                         cx,
                     )
                 },
@@ -4635,7 +4633,7 @@ impl Sidebar {
                 .on_click(|_, window, cx| {
                     window.dispatch_action(
                         Open {
-                            create_new_window: false,
+                            create_new_window: Some(false),
                         }
                         .boxed_clone(),
                         cx,
