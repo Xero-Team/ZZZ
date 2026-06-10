@@ -1293,6 +1293,16 @@ impl PickerDelegate for WorktreePickerDelegate {
                                         })),
                                 );
 
+                            let remove_from_window_button = IconButton::new(
+                                ("remove-worktree-from-window", ix),
+                                IconName::Close,
+                            )
+                            .icon_size(IconSize::Small)
+                            .tooltip(Tooltip::text("Remove Worktree from Window"))
+                            .on_click(cx.listener(move |picker, _, window, cx| {
+                                picker.delegate.remove_worktree_from_window(ix, window, cx);
+                            }));
+
                             this.end_slot(
                                 h_flex()
                                     .gap_0p5()
