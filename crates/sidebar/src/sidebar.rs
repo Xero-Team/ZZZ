@@ -1874,7 +1874,9 @@ impl Sidebar {
                         this.toggle_collapse(&key_for_toggle, window, cx);
                     }
                 }),
-            );
+<<<<<<< HEAD
+            )
+            .block_mouse_except_scroll();
 
         if !is_collapsed && !has_threads {
             v_flex()
