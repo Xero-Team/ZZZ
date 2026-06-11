@@ -135,6 +135,7 @@ pub struct TabContentParams {
     pub deemphasized: bool,
     /// Maximum title length override. `None` uses the item's own default.
     pub max_title_len: Option<usize>,
+    pub truncate_title_middle: bool,
 }
 
 impl TabContentParams {
