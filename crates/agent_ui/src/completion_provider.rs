@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use crate::DEFAULT_THREAD_TITLE;
+use crate::default_thread_title;
 use crate::thread_metadata_store::{ThreadMetadata, ThreadMetadataStore};
 use acp_thread::MentionUri;
 use agent_client_protocol::schema as acp;
@@ -13,6 +13,7 @@ use editor::{CompletionProvider, Editor, code_context_menus::COMPLETION_MENU_MAX
 use futures::FutureExt as _;
 use fuzzy::{PathMatch, StringMatch, StringMatchCandidate};
 use gpui::{App, BackgroundExecutor, Entity, Focusable, SharedString, Task, WeakEntity, Window};
+use i18n as app_i18n;
 use language::{Buffer, CodeLabel, CodeLabelBuilder, HighlightId};
 use lsp::CompletionContext;
 use multi_buffer::ToOffset as _;
@@ -38,6 +39,10 @@ use workspace::Workspace;
 
 use crate::AgentPanel;
 use crate::mention_set::MentionSet;
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> String {
+    app_i18n::tr(cx, key, fallback)
+}
 
 #[derive(Clone)]
 pub(crate) enum AgentContextSelection {
@@ -175,15 +180,17 @@ impl PromptContextAction {
         }
     }
 
-    pub fn label(&self) -> &'static str {
-        match self {
-            Self::AddSelections => "Selection",
-        }
-    }
-
     pub fn icon(&self) -> IconName {
         match self {
             Self::AddSelections => IconName::Reader,
+        }
+    }
+}
+
+fn localized_prompt_context_action_label(action: PromptContextAction, cx: &App) -> String {
+    match action {
+        PromptContextAction::AddSelections => {
+            tr(cx, "agent_ui.completion_provider.selection", "Selection")
         }
     }
 }
@@ -218,18 +225,6 @@ impl PromptContextType {
         }
     }
 
-    pub fn label(&self) -> &'static str {
-        match self {
-            Self::File => "Files & Directories",
-            Self::Symbol => "Symbols",
-            Self::Fetch => "Fetch",
-            Self::Thread => "Threads",
-            Self::Rules => "Rules",
-            Self::Diagnostics => "Diagnostics",
-            Self::BranchDiff => "Branch Diff",
-        }
-    }
-
     pub fn icon(&self) -> IconName {
         match self {
             Self::File => IconName::File,
@@ -240,6 +235,30 @@ impl PromptContextType {
             Self::Diagnostics => IconName::Warning,
             Self::BranchDiff => IconName::GitBranch,
         }
+    }
+}
+
+fn localized_prompt_context_type_label(mode: PromptContextType, cx: &App) -> String {
+    match mode {
+        PromptContextType::File => tr(
+            cx,
+            "agent_ui.completion_provider.files_and_directories",
+            "Files & Directories",
+        ),
+        PromptContextType::Symbol => tr(cx, "agent_ui.completion_provider.symbols", "Symbols"),
+        PromptContextType::Fetch => tr(cx, "agent_ui.completion_provider.fetch", "Fetch"),
+        PromptContextType::Thread => tr(cx, "agent_ui.completion_provider.threads", "Threads"),
+        PromptContextType::Rules => tr(cx, "agent_ui.completion_provider.rules", "Rules"),
+        PromptContextType::Diagnostics => tr(
+            cx,
+            "agent_ui.completion_provider.diagnostics",
+            "Diagnostics",
+        ),
+        PromptContextType::BranchDiff => tr(
+            cx,
+            "agent_ui.completion_provider.branch_diff",
+            "Branch Diff",
+        ),
     }
 }
 
@@ -285,10 +304,10 @@ pub struct EntryMatch {
     entry: PromptContextEntry,
 }
 
-fn session_title(title: Option<SharedString>) -> SharedString {
+fn session_title(title: Option<SharedString>, cx: &App) -> SharedString {
     title
         .filter(|title| !title.is_empty())
-        .unwrap_or_else(|| SharedString::new_static(DEFAULT_THREAD_TITLE))
+        .unwrap_or_else(|| default_thread_title(cx))
 }
 
 #[derive(Debug, Clone)]
@@ -352,7 +371,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
             PromptContextEntry::Mode(mode) => Some(Completion {
                 replace_range: source_range,
                 new_text: format!("@{} ", mode.keyword()),
-                label: CodeLabel::plain(mode.label().to_string(), None),
+                label: CodeLabel::plain(localized_prompt_context_type_label(mode, cx), None),
                 icon_path: Some(mode.icon().path().into()),
                 documentation: None,
                 source: project::CompletionSource::Custom,
@@ -369,7 +388,14 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
                     AgentContextSource::from_active(workspace, cx)?
                         .read_selection(workspace, false, cx)
                 });
-                Self::completion_for_action(action, source_range, editor, mention_set, selection)
+                Self::completion_for_action(
+                    action,
+                    source_range,
+                    editor,
+                    mention_set,
+                    selection,
+                    cx,
+                )
             }
         }
     }
@@ -385,7 +411,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         workspace: Entity<Workspace>,
         cx: &mut App,
     ) -> Completion {
-        let title = session_title(title);
+        let title = session_title(title, cx);
         let uri = MentionUri::Thread {
             id: session_id,
             name: title.to_string(),
@@ -639,6 +665,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         editor: WeakEntity<Editor>,
         mention_set: WeakEntity<MentionSet>,
         selection: Option<AgentContextSelection>,
+        cx: &App,
     ) -> Option<Completion> {
         let (new_text, on_action) = match action {
             PromptContextAction::AddSelections => match selection? {
@@ -664,7 +691,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         Some(Completion {
             replace_range: source_range,
             new_text,
-            label: CodeLabel::plain(action.label().to_string(), None),
+            label: CodeLabel::plain(localized_prompt_context_action_label(action, cx), None),
             icon_path: Some(action.icon().path().into()),
             documentation: None,
             source: project::CompletionSource::Custom,
@@ -715,7 +742,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         for (condition, include_errors, include_warnings) in cases {
             if condition {
                 completions.push(Self::build_diagnostics_completion(
-                    diagnostics_submenu_label(summary, include_errors, include_warnings),
+                    diagnostics_submenu_label(summary, include_errors, include_warnings, cx),
                     source_range.clone(),
                     source.clone(),
                     editor.clone(),
@@ -725,6 +752,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
                     include_errors,
                     include_warnings,
                     summary,
+                    cx,
                 ));
             }
         }
@@ -743,12 +771,13 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         include_errors: bool,
         include_warnings: bool,
         summary: DiagnosticSummary,
+        cx: &App,
     ) -> Completion {
         let uri = MentionUri::Diagnostics {
             include_errors,
             include_warnings,
         };
-        let crease_text = diagnostics_crease_label(summary, include_errors, include_warnings);
+        let crease_text = diagnostics_crease_label(summary, include_errors, include_warnings, cx);
         let display_text = format!("@{}", crease_text);
         let new_text = format!("[{}]({}) ", display_text, uri.to_uri());
         let new_text_len = new_text.len();
@@ -787,7 +816,13 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         let uri = MentionUri::GitDiff {
             base_ref: base_ref.to_string(),
         };
-        let crease_text: SharedString = format!("Branch Diff (vs {})", base_ref).into();
+        let crease_text: SharedString = tr(
+            cx,
+            "agent_ui.completion_provider.branch_diff_vs",
+            "Branch Diff (vs {})",
+        )
+        .replacen("{}", base_ref.as_ref(), 1)
+        .into();
         let display_text = format!("@{}", crease_text);
         let new_text = format!("[{}]({}) ", display_text, uri.to_uri());
         let new_text_len = new_text.len();
@@ -1724,68 +1759,139 @@ impl MentionCompletion {
     }
 }
 
+fn diagnostics_count_label(
+    count: usize,
+    singular_key: &'static str,
+    singular_fallback: &'static str,
+    plural_key: &'static str,
+    plural_fallback: &'static str,
+    cx: &App,
+) -> String {
+    let noun = if count == 1 {
+        tr(cx, singular_key, singular_fallback)
+    } else {
+        tr(cx, plural_key, plural_fallback)
+    };
+    format!("{count} {noun}")
+}
+
 fn diagnostics_label(
     summary: DiagnosticSummary,
     include_errors: bool,
     include_warnings: bool,
+    cx: &App,
 ) -> String {
     let mut parts = Vec::new();
 
     if include_errors && summary.error_count > 0 {
-        parts.push(format!(
-            "{} {}",
+        parts.push(diagnostics_count_label(
             summary.error_count,
-            pluralize("error", summary.error_count)
+            "agent_ui.completion_provider.error_singular",
+            "error",
+            "agent_ui.completion_provider.error_plural",
+            "errors",
+            cx,
         ));
     }
 
     if include_warnings && summary.warning_count > 0 {
-        parts.push(format!(
-            "{} {}",
+        parts.push(diagnostics_count_label(
             summary.warning_count,
-            pluralize("warning", summary.warning_count)
+            "agent_ui.completion_provider.warning_singular",
+            "warning",
+            "agent_ui.completion_provider.warning_plural",
+            "warnings",
+            cx,
         ));
     }
 
     if parts.is_empty() {
-        return "Diagnostics".into();
+        return tr(
+            cx,
+            "agent_ui.completion_provider.diagnostics",
+            "Diagnostics",
+        );
     }
 
     let body = if parts.len() == 2 {
-        format!("{} and {}", parts[0], parts[1])
+        tr(
+            cx,
+            "agent_ui.completion_provider.diagnostics_join_and",
+            "{} and {}",
+        )
+        .replacen("{}", &parts[0], 1)
+        .replacen("{}", &parts[1], 1)
     } else {
         parts
             .pop()
             .expect("at least one part present after non-empty check")
     };
 
-    format!("Diagnostics: {body}")
+    tr(
+        cx,
+        "agent_ui.completion_provider.diagnostics_with_body",
+        "Diagnostics: {}",
+    )
+    .replacen("{}", &body, 1)
 }
 
 fn diagnostics_submenu_label(
     summary: DiagnosticSummary,
     include_errors: bool,
     include_warnings: bool,
+    cx: &App,
 ) -> String {
     match (include_errors, include_warnings) {
-        (true, true) => format!(
-            "{} {} & {} {}",
+        (true, true) => tr(
+            cx,
+            "agent_ui.completion_provider.diagnostics_submenu_both",
+            "{} & {}",
+        )
+        .replacen(
+            "{}",
+            &diagnostics_count_label(
+                summary.error_count,
+                "agent_ui.completion_provider.error_singular",
+                "error",
+                "agent_ui.completion_provider.error_plural",
+                "errors",
+                cx,
+            ),
+            1,
+        )
+        .replacen(
+            "{}",
+            &diagnostics_count_label(
+                summary.warning_count,
+                "agent_ui.completion_provider.warning_singular",
+                "warning",
+                "agent_ui.completion_provider.warning_plural",
+                "warnings",
+                cx,
+            ),
+            1,
+        ),
+        (true, _) => diagnostics_count_label(
             summary.error_count,
-            pluralize("error", summary.error_count),
+            "agent_ui.completion_provider.error_singular",
+            "error",
+            "agent_ui.completion_provider.error_plural",
+            "errors",
+            cx,
+        ),
+        (_, true) => diagnostics_count_label(
             summary.warning_count,
-            pluralize("warning", summary.warning_count)
+            "agent_ui.completion_provider.warning_singular",
+            "warning",
+            "agent_ui.completion_provider.warning_plural",
+            "warnings",
+            cx,
         ),
-        (true, _) => format!(
-            "{} {}",
-            summary.error_count,
-            pluralize("error", summary.error_count)
+        _ => tr(
+            cx,
+            "agent_ui.completion_provider.diagnostics",
+            "Diagnostics",
         ),
-        (_, true) => format!(
-            "{} {}",
-            summary.warning_count,
-            pluralize("warning", summary.warning_count)
-        ),
-        _ => "Diagnostics".into(),
     }
 }
 
@@ -1793,16 +1899,9 @@ fn diagnostics_crease_label(
     summary: DiagnosticSummary,
     include_errors: bool,
     include_warnings: bool,
+    cx: &App,
 ) -> SharedString {
-    diagnostics_label(summary, include_errors, include_warnings).into()
-}
-
-fn pluralize(noun: &str, count: usize) -> String {
-    if count == 1 {
-        noun.to_string()
-    } else {
-        format!("{noun}s")
-    }
+    diagnostics_label(summary, include_errors, include_warnings, cx).into()
 }
 
 pub(crate) fn search_files(
@@ -2007,7 +2106,7 @@ fn collect_session_matches(cx: &App) -> Vec<SessionMatch> {
             let info = acp_thread::AgentSessionInfo::from(metadata);
             SessionMatch {
                 session_id: info.session_id,
-                title: session_title(info.title),
+                title: session_title(info.title, cx),
             }
         })
         .collect()

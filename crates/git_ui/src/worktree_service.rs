@@ -11,6 +11,7 @@ use gpui::{
     AsyncWindowContext, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, SharedString,
     WeakEntity,
 };
+use i18n::tr;
 use project::Project;
 use project::git_store::Repository;
 use project::project_settings::ProjectSettings;
@@ -163,14 +164,23 @@ impl Render for WorktreeFetchFailedToast {
                     .size(IconSize::Small)
                     .color(Color::Error),
             )
-            .child(Label::new(format!(
-                "git fetch failed for {}",
-                self.remote_branch_name
-            )))
+            .child(Label::new(
+                tr(
+                    cx,
+                    "git_ui.worktree_service.git_fetch_failed_for",
+                    "git fetch failed for {}",
+                )
+                .replacen("{}", &self.remote_branch_name, 1),
+            ))
             .child(
                 Button::new(
                     "use-local-worktree-base",
-                    format!("Use local {}", self.remote_branch_name),
+                    tr(
+                        cx,
+                        "git_ui.worktree_service.use_local_branch",
+                        "Use local {}",
+                    )
+                    .replacen("{}", &self.remote_branch_name, 1),
                 )
                 .color(Color::Muted)
                 .on_click(cx.listener(move |_, _event, window, cx| {
@@ -193,18 +203,25 @@ impl Render for WorktreeFetchFailedToast {
                 })),
             )
             .child(
-                Button::new("view-worktree-fetch-log", "Show Error Logs")
-                    .color(Color::Muted)
-                    .on_click(cx.listener(move |_, _event, window, cx| {
-                        cx.emit(DismissEvent);
-                        let output = output.clone();
-                        let operation = operation.clone();
-                        workspace_for_log
-                            .update(cx, move |workspace, cx| {
-                                open_output(operation, workspace, &output, window, cx)
-                            })
-                            .ok();
-                    })),
+                Button::new(
+                    "view-worktree-fetch-log",
+                    tr(
+                        cx,
+                        "git_ui.worktree_service.show_error_logs",
+                        "Show Error Logs",
+                    ),
+                )
+                .color(Color::Muted)
+                .on_click(cx.listener(move |_, _event, window, cx| {
+                    cx.emit(DismissEvent);
+                    let output = output.clone();
+                    let operation = operation.clone();
+                    workspace_for_log
+                        .update(cx, move |workspace, cx| {
+                            open_output(operation, workspace, &output, window, cx)
+                        })
+                        .ok();
+                })),
             )
             .child(
                 IconButton::new("dismiss-worktree-fetch-failed-toast", IconName::Close)

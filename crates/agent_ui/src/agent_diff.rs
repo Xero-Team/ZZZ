@@ -17,6 +17,7 @@ use gpui::{
     Action, AnyElement, App, AppContext, Empty, Entity, EventEmitter, FocusHandle, Focusable,
     Global, SharedString, Subscription, Task, WeakEntity, Window, prelude::*,
 };
+use i18n as app_i18n;
 
 use language::{Buffer, Capability, OffsetRangeExt, Point};
 use multi_buffer::PathKey;
@@ -37,6 +38,10 @@ use workspace::{
     searchable::SearchableItemHandle,
 };
 use zed_actions::assistant::ToggleFocus;
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 pub struct AgentDiffPane {
     multibuffer: Entity<MultiBuffer>,
@@ -528,16 +533,20 @@ impl Item for AgentDiffPane {
             .update(cx, |editor, cx| editor.navigate(data, window, cx))
     }
 
-    fn tab_tooltip_text(&self, _: &App) -> Option<SharedString> {
-        Some("Agent Diff".into())
+    fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString> {
+        Some(tr(cx, "agent_ui.agent_diff.tab_title", "Agent Diff"))
     }
 
     fn tab_content(&self, params: TabContentParams, _window: &Window, cx: &App) -> AnyElement {
         let title = self.thread.read(cx).title();
         Label::new(if let Some(title) = title {
-            format!("Review: {}", title)
+            tr(cx, "agent_ui.agent_diff.review_with_title", "Review: {}").replacen(
+                "{}",
+                title.as_ref(),
+                1,
+            )
         } else {
-            "Review".to_string()
+            tr(cx, "agent_ui.agent_diff.review", "Review").to_string()
         })
         .color(if params.selected {
             Color::Default
@@ -662,8 +671,8 @@ impl Item for AgentDiffPane {
         });
     }
 
-    fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        "Agent Diff".into()
+    fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
+        tr(cx, "agent_ui.agent_diff.tab_title", "Agent Diff")
     }
 }
 
@@ -689,24 +698,35 @@ impl Render for AgentDiffPane {
                     v_flex()
                         .items_center()
                         .gap_2()
-                        .child("No changes to review")
+                        .child(tr(
+                            cx,
+                            "agent_ui.agent_diff.no_changes_to_review",
+                            "No changes to review",
+                        ))
                         .child(
-                            Button::new("continue-iterating", "Continue Iterating")
-                                .style(ButtonStyle::Filled)
-                                .start_icon(
-                                    Icon::new(IconName::ForwardArrow)
-                                        .size(IconSize::Small)
-                                        .color(Color::Muted),
-                                )
-                                .full_width()
-                                .key_binding(KeyBinding::for_action_in(
-                                    &ToggleFocus,
-                                    &focus_handle.clone(),
+                            Button::new(
+                                "continue-iterating",
+                                tr(
                                     cx,
-                                ))
-                                .on_click(|_event, window, cx| {
-                                    window.dispatch_action(ToggleFocus.boxed_clone(), cx)
-                                }),
+                                    "agent_ui.agent_diff.continue_iterating",
+                                    "Continue Iterating",
+                                ),
+                            )
+                            .style(ButtonStyle::Filled)
+                            .start_icon(
+                                Icon::new(IconName::ForwardArrow)
+                                    .size(IconSize::Small)
+                                    .color(Color::Muted),
+                            )
+                            .full_width()
+                            .key_binding(KeyBinding::for_action_in(
+                                &ToggleFocus,
+                                &focus_handle.clone(),
+                                cx,
+                            ))
+                            .on_click(|_event, window, cx| {
+                                window.dispatch_action(ToggleFocus.boxed_clone(), cx)
+                            }),
                         ),
                 )
             })
@@ -767,52 +787,58 @@ fn render_diff_hunk_controls(
         .block_mouse_except_scroll()
         .shadow_md()
         .children(vec![
-            Button::new(("reject", row as u64), "Reject")
-                .disabled(is_created_file)
-                .key_binding(
-                    KeyBinding::for_action_in(&Reject, &editor.read(cx).focus_handle(cx), cx)
-                        .map(|kb| kb.size(rems_from_px(12.))),
-                )
-                .on_click({
-                    let editor = editor.clone();
-                    let thread = thread.clone();
-                    move |_event, window, cx| {
-                        editor.update(cx, |editor, cx| {
-                            let snapshot = editor.buffer().read(cx).snapshot(cx);
-                            reject_edits_in_ranges(
-                                editor,
-                                &snapshot,
-                                &thread,
-                                vec![hunk_range.start..hunk_range.start],
-                                workspace.clone(),
-                                window,
-                                cx,
-                            );
-                        })
-                    }
-                }),
-            Button::new(("keep", row as u64), "Keep")
-                .key_binding(
-                    KeyBinding::for_action_in(&Keep, &editor.read(cx).focus_handle(cx), cx)
-                        .map(|kb| kb.size(rems_from_px(12.))),
-                )
-                .on_click({
-                    let editor = editor.clone();
-                    let thread = thread.clone();
-                    move |_event, window, cx| {
-                        editor.update(cx, |editor, cx| {
-                            let snapshot = editor.buffer().read(cx).snapshot(cx);
-                            keep_edits_in_ranges(
-                                editor,
-                                &snapshot,
-                                &thread,
-                                vec![hunk_range.start..hunk_range.start],
-                                window,
-                                cx,
-                            );
-                        });
-                    }
-                }),
+            Button::new(
+                ("reject", row as u64),
+                tr(cx, "agent_ui.agent_diff.reject", "Reject"),
+            )
+            .disabled(is_created_file)
+            .key_binding(
+                KeyBinding::for_action_in(&Reject, &editor.read(cx).focus_handle(cx), cx)
+                    .map(|kb| kb.size(rems_from_px(12.))),
+            )
+            .on_click({
+                let editor = editor.clone();
+                let thread = thread.clone();
+                move |_event, window, cx| {
+                    editor.update(cx, |editor, cx| {
+                        let snapshot = editor.buffer().read(cx).snapshot(cx);
+                        reject_edits_in_ranges(
+                            editor,
+                            &snapshot,
+                            &thread,
+                            vec![hunk_range.start..hunk_range.start],
+                            workspace.clone(),
+                            window,
+                            cx,
+                        );
+                    })
+                }
+            }),
+            Button::new(
+                ("keep", row as u64),
+                tr(cx, "agent_ui.agent_diff.keep", "Keep"),
+            )
+            .key_binding(
+                KeyBinding::for_action_in(&Keep, &editor.read(cx).focus_handle(cx), cx)
+                    .map(|kb| kb.size(rems_from_px(12.))),
+            )
+            .on_click({
+                let editor = editor.clone();
+                let thread = thread.clone();
+                move |_event, window, cx| {
+                    editor.update(cx, |editor, cx| {
+                        let snapshot = editor.buffer().read(cx).snapshot(cx);
+                        keep_edits_in_ranges(
+                            editor,
+                            &snapshot,
+                            &thread,
+                            vec![hunk_range.start..hunk_range.start],
+                            window,
+                            cx,
+                        );
+                    });
+                }
+            }),
         ])
         .when(
             !editor.read(cx).buffer().read(cx).all_diff_hunks_expanded(),
@@ -825,7 +851,12 @@ fn render_diff_hunk_controls(
                         .tooltip({
                             let focus_handle = editor.focus_handle(cx);
                             move |_window, cx| {
-                                Tooltip::for_action_in("Next Hunk", &GoToHunk, &focus_handle, cx)
+                                Tooltip::for_action_in(
+                                    tr(cx, "agent_ui.agent_diff.next_hunk", "Next Hunk"),
+                                    &GoToHunk,
+                                    &focus_handle,
+                                    cx,
+                                )
                             }
                         })
                         .on_click({
@@ -857,7 +888,7 @@ fn render_diff_hunk_controls(
                             let focus_handle = editor.focus_handle(cx);
                             move |_window, cx| {
                                 Tooltip::for_action_in(
-                                    "Previous Hunk",
+                                    tr(cx, "agent_ui.agent_diff.previous_hunk", "Previous Hunk"),
                                     &GoToPreviousHunk,
                                     &focus_handle,
                                     cx,
@@ -1027,7 +1058,11 @@ impl Render for AgentDiffToolbar {
         let spinner_icon = div()
             .px_0p5()
             .id("generating")
-            .tooltip(Tooltip::text("Generating Changes…"))
+            .tooltip(Tooltip::text(tr(
+                cx,
+                "agent_ui.agent_diff.generating_changes",
+                "Generating Changes…",
+            )))
             .child(
                 Icon::new(IconName::LoadCircle)
                     .size(IconSize::Small)
@@ -1056,7 +1091,11 @@ impl Render for AgentDiffToolbar {
                                 IconButton::new("hunk-up", IconName::ArrowUp)
                                     .icon_size(IconSize::Small)
                                     .tooltip(Tooltip::for_action_title_in(
-                                        "Previous Hunk",
+                                        tr(
+                                            cx,
+                                            "agent_ui.agent_diff.previous_hunk",
+                                            "Previous Hunk",
+                                        ),
                                         &GoToPreviousHunk,
                                         &editor_focus_handle,
                                     ))
@@ -1075,7 +1114,7 @@ impl Render for AgentDiffToolbar {
                                 IconButton::new("hunk-down", IconName::ArrowDown)
                                     .icon_size(IconSize::Small)
                                     .tooltip(Tooltip::for_action_title_in(
-                                        "Next Hunk",
+                                        tr(cx, "agent_ui.agent_diff.next_hunk", "Next Hunk"),
                                         &GoToHunk,
                                         &editor_focus_handle,
                                     ))
@@ -1092,32 +1131,34 @@ impl Render for AgentDiffToolbar {
                         h_flex()
                             .gap_0p5()
                             .child(
-                                Button::new("reject-all", "Reject All")
-                                    .key_binding({
-                                        KeyBinding::for_action_in(
-                                            &RejectAll,
-                                            &editor_focus_handle,
-                                            cx,
-                                        )
+                                Button::new(
+                                    "reject-all",
+                                    tr(cx, "agent_ui.agent_diff.reject_all", "Reject All"),
+                                )
+                                .key_binding({
+                                    KeyBinding::for_action_in(&RejectAll, &editor_focus_handle, cx)
                                         .map(|kb| kb.size(rems_from_px(12.)))
-                                    })
-                                    .on_click(cx.listener(|this, _, window, cx| {
+                                })
+                                .on_click(cx.listener(
+                                    |this, _, window, cx| {
                                         this.dispatch_action(&RejectAll, window, cx)
-                                    })),
+                                    },
+                                )),
                             )
                             .child(
-                                Button::new("keep-all", "Keep All")
-                                    .key_binding({
-                                        KeyBinding::for_action_in(
-                                            &KeepAll,
-                                            &editor_focus_handle,
-                                            cx,
-                                        )
+                                Button::new(
+                                    "keep-all",
+                                    tr(cx, "agent_ui.agent_diff.keep_all", "Keep All"),
+                                )
+                                .key_binding({
+                                    KeyBinding::for_action_in(&KeepAll, &editor_focus_handle, cx)
                                         .map(|kb| kb.size(rems_from_px(12.)))
-                                    })
-                                    .on_click(cx.listener(|this, _, window, cx| {
+                                })
+                                .on_click(cx.listener(
+                                    |this, _, window, cx| {
                                         this.dispatch_action(&KeepAll, window, cx)
-                                    })),
+                                    },
+                                )),
                             )
                             .into_any_element(),
                     ],
@@ -1136,7 +1177,11 @@ impl Render for AgentDiffToolbar {
                             IconButton::new("review", IconName::ListTodo)
                                 .icon_size(IconSize::Small)
                                 .tooltip(Tooltip::for_action_title_in(
-                                    "Review All Files",
+                                    tr(
+                                        cx,
+                                        "agent_ui.agent_diff.review_all_files",
+                                        "Review All Files",
+                                    ),
                                     &OpenAgentDiff,
                                     &editor_focus_handle,
                                 ))
@@ -1188,24 +1233,34 @@ impl Render for AgentDiffToolbar {
                     .child(
                         h_group_sm()
                             .child(
-                                Button::new("reject-all", "Reject All")
-                                    .key_binding({
-                                        KeyBinding::for_action_in(&RejectAll, &focus_handle, cx)
-                                            .map(|kb| kb.size(rems_from_px(12.)))
-                                    })
-                                    .on_click(cx.listener(|this, _, window, cx| {
+                                Button::new(
+                                    "reject-all",
+                                    tr(cx, "agent_ui.agent_diff.reject_all", "Reject All"),
+                                )
+                                .key_binding({
+                                    KeyBinding::for_action_in(&RejectAll, &focus_handle, cx)
+                                        .map(|kb| kb.size(rems_from_px(12.)))
+                                })
+                                .on_click(cx.listener(
+                                    |this, _, window, cx| {
                                         this.dispatch_action(&RejectAll, window, cx)
-                                    })),
+                                    },
+                                )),
                             )
                             .child(
-                                Button::new("keep-all", "Keep All")
-                                    .key_binding({
-                                        KeyBinding::for_action_in(&KeepAll, &focus_handle, cx)
-                                            .map(|kb| kb.size(rems_from_px(12.)))
-                                    })
-                                    .on_click(cx.listener(|this, _, window, cx| {
+                                Button::new(
+                                    "keep-all",
+                                    tr(cx, "agent_ui.agent_diff.keep_all", "Keep All"),
+                                )
+                                .key_binding({
+                                    KeyBinding::for_action_in(&KeepAll, &focus_handle, cx)
+                                        .map(|kb| kb.size(rems_from_px(12.)))
+                                })
+                                .on_click(cx.listener(
+                                    |this, _, window, cx| {
                                         this.dispatch_action(&KeepAll, window, cx)
-                                    })),
+                                    },
+                                )),
                             ),
                     )
                     .into_any()

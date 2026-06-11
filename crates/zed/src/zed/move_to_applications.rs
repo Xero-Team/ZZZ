@@ -4,6 +4,7 @@ use gpui::{
     App, AsyncWindowContext, Context, DismissEvent, EventEmitter, FocusHandle, Focusable,
     PromptButton, PromptLevel, Render, WeakEntity, Window,
 };
+use i18n::tr;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -70,17 +71,38 @@ impl MoveToApplicationsRequest {
         workspace: WeakEntity<MultiWorkspace>,
         cx: &mut AsyncWindowContext,
     ) -> Result<()> {
+        let prompt_title = cx.update(|_, cx| {
+            tr(
+                cx,
+                "zed.move_to_applications.prompt.title",
+                "Move ZZZ to Applications?",
+            )
+        })?;
+        let prompt_message = cx.update(|_, cx| {
+            tr(
+                cx,
+                "zed.move_to_applications.prompt.message",
+                "ZZZ is running from a temporary location. Move it to Applications to finish installing it.",
+            )
+        })?;
+        let yes_label = cx.update(|_, cx| tr(cx, "zed.common.yes", "Yes"))?;
+        let no_label = cx.update(|_, cx| tr(cx, "zed.common.no", "No"))?;
+        let dont_ask_again = cx.update(|_, cx| {
+            tr(
+                cx,
+                "zed.move_to_applications.prompt.dont_ask_again",
+                "Don't ask me again",
+            )
+        })?;
         let response = cx
             .prompt(
                 PromptLevel::Info,
-                "Move ZZZ to Applications?",
-                Some(
-                    "ZZZ is running from a temporary location. Move it to Applications to finish installing it.",
-                ),
+                &prompt_title,
+                Some(&prompt_message),
                 &[
-                    PromptButton::ok("Yes"),
-                    PromptButton::cancel("No"),
-                    PromptButton::new("Don't ask me again"),
+                    PromptButton::ok(yes_label),
+                    PromptButton::cancel(no_label),
+                    PromptButton::new(dont_ask_again),
                 ],
             )
             .await?;
@@ -94,6 +116,14 @@ impl MoveToApplicationsRequest {
                     })
                     .ok();
                 if let Err(error) = move_to_applications(&self.app_path, cx).await {
+                    let error_title = cx.update(|_, cx| {
+                        tr(
+                            cx,
+                            "zed.move_to_applications.error",
+                            "Failed to move ZZZ to Applications",
+                        )
+                    })?;
+                    let ok_label = cx.update(|_, cx| tr(cx, "zed.common.ok", "Ok"))?;
                     workspace
                         .update_in(cx, |workspace, _window, cx| {
                             if let Some(modal) = workspace.active_modal::<InstallingZedModal>(cx) {
@@ -103,9 +133,9 @@ impl MoveToApplicationsRequest {
                         .ok();
                     cx.prompt(
                         PromptLevel::Critical,
-                        "Failed to move ZZZ to Applications",
+                        &error_title,
                         Some(&error.to_string()),
-                        &["Ok"],
+                        &[ok_label],
                     )
                     .await
                     .log_err();
@@ -178,7 +208,11 @@ impl Render for InstallingZedModal {
                     .py_3()
                     .border_b_1()
                     .border_color(theme.colors().border_variant)
-                    .child(Label::new("Installing ZZZ…")),
+                    .child(Label::new(tr(
+                        cx,
+                        "zed.move_to_applications.installing",
+                        "Installing ZZZ…",
+                    ))),
             )
             .child(
                 h_flex()
@@ -196,11 +230,19 @@ impl Render for InstallingZedModal {
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(Label::new("Moving ZZZ to Applications"))
+                            .child(Label::new(tr(
+                                cx,
+                                "zed.move_to_applications.moving",
+                                "Moving ZZZ to Applications",
+                            )))
                             .child(
-                                Label::new("ZZZ will reopen when installation is complete.")
-                                    .size(LabelSize::Small)
-                                    .color(Color::Muted),
+                                Label::new(tr(
+                                    cx,
+                                    "zed.move_to_applications.reopen_when_complete",
+                                    "ZZZ will reopen when installation is complete.",
+                                ))
+                                .size(LabelSize::Small)
+                                .color(Color::Muted),
                             ),
                     ),
             )

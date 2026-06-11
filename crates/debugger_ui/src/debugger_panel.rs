@@ -21,6 +21,7 @@ use gpui::{
     EntityId, EventEmitter, FocusHandle, Focusable, MouseButton, MouseDownEvent, Point,
     Subscription, Task, WeakEntity, anchored, deferred,
 };
+use i18n::tr;
 
 use itertools::Itertools as _;
 use language::Buffer;
@@ -1586,9 +1587,9 @@ impl Panel for DebugPanel {
             .then_some(IconName::Debug)
     }
 
-    fn icon_tooltip(&self, _window: &Window, cx: &App) -> Option<&'static str> {
+    fn icon_tooltip(&self, _window: &Window, cx: &App) -> Option<SharedString> {
         if DebuggerSettings::get_global(cx).button {
-            Some("Debug Panel")
+            Some(tr(cx, "menu.view.debugger_panel", "Debugger Panel").into())
         } else {
             None
         }

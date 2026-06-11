@@ -48,6 +48,7 @@ use fs::Fs;
 use gpui::{
     Action, App, Context, Entity, ImageSource, Resource, SharedString, SharedUri, Window, actions,
 };
+use i18n as app_i18n;
 use language::{
     LanguageRegistry,
     language_settings::{AllLanguageSettings, EditPredictionProvider},
@@ -146,6 +147,11 @@ pub(crate) fn open_abs_path_at_point(
     true
 }
 pub const DEFAULT_THREAD_TITLE: &str = "New Agent Thread";
+
+pub(crate) fn default_thread_title(cx: &App) -> SharedString {
+    app_i18n::tr(cx, "agent_ui.default_thread_title", DEFAULT_THREAD_TITLE).into()
+}
+
 const PARALLEL_AGENT_LAYOUT_BACKFILL_KEY: &str = "parallel_agent_layout_backfilled";
 actions!(
     agent,

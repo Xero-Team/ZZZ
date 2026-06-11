@@ -2,6 +2,7 @@ use askpass::EncryptedPassword;
 use editor::Editor;
 use futures::channel::oneshot;
 use gpui::{AppContext, DismissEvent, Entity, EventEmitter, Focusable, Styled};
+use i18n::tr;
 use ui::{
     ActiveTheme, AnyElement, App, Button, Clickable, Color, Context, DynamicSpacing, Headline,
     HeadlineSize, Icon, IconName, IconSize, InteractiveElement, IntoElement, Label, LabelCommon,
@@ -90,12 +91,24 @@ impl AskPassModal {
                             Icon::new(IconName::Github).size(IconSize::Small)
                         )
                         .child(
-                            Label::new("You may need to configure git for Github.")
+                            Label::new(tr(
+                                cx,
+                                "git_ui.askpass.github_setup_hint",
+                                "You may need to configure git for GitHub.",
+                            ))
                                 .size(LabelSize::Small),
                         )
-                        .child(Button::new("learn-more", "Learn more").color(Color::Accent).label_size(LabelSize::Small).on_click(|_, _, cx| {
-                            cx.open_url("https://docs.github.com/en/get-started/git-basics/set-up-git#authenticating-with-github-from-git")
-                        })),
+                        .child(
+                            Button::new(
+                                "learn-more",
+                                tr(cx, "git_ui.askpass.learn_more", "Learn more"),
+                            )
+                            .color(Color::Accent)
+                            .label_size(LabelSize::Small)
+                            .on_click(|_, _, cx| {
+                                cx.open_url("https://docs.github.com/en/get-started/git-basics/set-up-git#authenticating-with-github-from-git")
+                            }),
+                        ),
                 )
                 .into_any_element(),
         );

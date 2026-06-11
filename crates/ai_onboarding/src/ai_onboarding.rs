@@ -17,9 +17,14 @@ use std::sync::Arc;
 
 use client::{Client, UserStore, zed_urls};
 use gpui::{AnyElement, Entity, IntoElement, ParentElement};
+use i18n as app_i18n;
 use ui::{
     Divider, List, ListBulletItem, RegisterComponent, Tooltip, Vector, VectorName, prelude::*,
 };
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 #[derive(PartialEq)]
 pub enum SignInStatus {
@@ -128,9 +133,10 @@ impl ZedAiOnboarding {
         )
     }
 
-    fn render_dismiss_button(&self) -> Option<AnyElement> {
+    fn render_dismiss_button(&self, cx: &App) -> Option<AnyElement> {
         self.dismiss_onboarding.as_ref().map(|dismiss_callback| {
             let callback = dismiss_callback.clone();
+            let tooltip = tr(cx, "ai_onboarding.common.dismiss", "Dismiss");
 
             h_flex()
                 .absolute()
@@ -139,38 +145,53 @@ impl ZedAiOnboarding {
                 .child(
                     IconButton::new("dismiss_onboarding", IconName::Close)
                         .icon_size(IconSize::Small)
-                        .tooltip(Tooltip::text("Dismiss"))
+                        .tooltip(Tooltip::text(tooltip))
                         .on_click(move |_, window, cx| callback(window, cx)),
                 )
                 .into_any_element()
         })
     }
 
-    fn render_sign_in_disclaimer(&self, _cx: &mut App) -> AnyElement {
+    fn render_sign_in_disclaimer(&self, cx: &mut App) -> AnyElement {
         let signing_in = matches!(self.sign_in_status, SignInStatus::SigningIn);
 
         v_flex()
             .w_full()
             .relative()
             .gap_1()
-            .child(Headline::new("Welcome to Zed AI"))
+            .child(Headline::new(tr(
+                cx,
+                "ai_onboarding.welcome_zed_ai",
+                "Welcome to Zed AI",
+            )))
             .child(
-                Label::new("Sign in to try Zed Pro free for 14 days.")
-                    .color(Color::Muted)
-                    .mb_2(),
+                Label::new(tr(
+                    cx,
+                    "ai_onboarding.sign_in_try_pro",
+                    "Sign in to try Zed Pro free for 14 days.",
+                ))
+                .color(Color::Muted)
+                .mb_2(),
             )
             .child(PlanDefinitions.sign_in_upsell())
             .child(
-                Button::new("sign_in", "Try Zed Pro for Free")
-                    .disabled(signing_in)
-                    .full_width()
-                    .style(ButtonStyle::Tinted(ui::TintColor::Accent))
-                    .on_click({
-                        let callback = self.sign_in.clone();
-                        move |_, window, cx| callback(window, cx)
-                    }),
+                Button::new(
+                    "sign_in",
+                    tr(
+                        cx,
+                        "ai_onboarding.try_zed_pro_for_free",
+                        "Try Zed Pro for Free",
+                    ),
+                )
+                .disabled(signing_in)
+                .full_width()
+                .style(ButtonStyle::Tinted(ui::TintColor::Accent))
+                .on_click({
+                    let callback = self.sign_in.clone();
+                    move |_, window, cx| callback(window, cx)
+                }),
             )
-            .children(self.render_dismiss_button())
+            .children(self.render_dismiss_button(cx))
             .into_any_element()
     }
 
@@ -180,7 +201,11 @@ impl ZedAiOnboarding {
                 .relative()
                 .min_w_0()
                 .gap_1()
-                .child(Headline::new("Welcome to Zed AI"))
+                .child(Headline::new(tr(
+                    cx,
+                    "ai_onboarding.welcome_zed_ai",
+                    "Welcome to Zed AI",
+                )))
                 .child(YoungAccountBanner)
                 .child(
                     v_flex()
@@ -190,7 +215,7 @@ impl ZedAiOnboarding {
                             h_flex()
                                 .gap_2()
                                 .child(
-                                    Label::new("Pro")
+                                    Label::new(tr(cx, "ai_onboarding.plan.pro", "Pro"))
                                         .size(LabelSize::Small)
                                         .color(Color::Accent)
                                         .buffer_font(cx),
@@ -199,7 +224,7 @@ impl ZedAiOnboarding {
                         )
                         .child(PlanDefinitions.pro_plan())
                         .child(
-                            Button::new("pro", "Get Started")
+                            Button::new("pro", tr(cx, "ai_onboarding.get_started", "Get Started"))
                                 .full_width()
                                 .style(ButtonStyle::Tinted(ui::TintColor::Accent))
                                 .on_click(move |_, _window, cx| {
@@ -207,13 +232,18 @@ impl ZedAiOnboarding {
                                 }),
                         ),
                 )
+                .children(self.render_dismiss_button(cx))
                 .into_any_element()
         } else {
             v_flex()
                 .w_full()
                 .relative()
                 .gap_1()
-                .child(Headline::new("Welcome to Zed AI"))
+                .child(Headline::new(tr(
+                    cx,
+                    "ai_onboarding.welcome_zed_ai",
+                    "Welcome to Zed AI",
+                )))
                 .child(
                     v_flex()
                         .mt_2()
@@ -222,24 +252,28 @@ impl ZedAiOnboarding {
                             h_flex()
                                 .gap_2()
                                 .child(
-                                    Label::new("Free")
+                                    Label::new(tr(cx, "ai_onboarding.plan.free", "Free"))
                                         .size(LabelSize::Small)
                                         .color(Color::Muted)
                                         .buffer_font(cx),
                                 )
                                 .child(
-                                    Label::new("(Current Plan)")
-                                        .size(LabelSize::Small)
-                                        .color(Color::Custom(
-                                            cx.theme().colors().text_muted.opacity(0.6),
-                                        ))
-                                        .buffer_font(cx),
+                                    Label::new(tr(
+                                        cx,
+                                        "ai_onboarding.current_plan",
+                                        "(Current Plan)",
+                                    ))
+                                    .size(LabelSize::Small)
+                                    .color(Color::Custom(
+                                        cx.theme().colors().text_muted.opacity(0.6),
+                                    ))
+                                    .buffer_font(cx),
                                 )
                                 .child(Divider::horizontal()),
                         )
                         .child(PlanDefinitions.free_plan()),
                 )
-                .children(self.render_dismiss_button())
+                .children(self.render_dismiss_button(cx))
                 .child(
                     v_flex()
                         .mt_2()
@@ -248,7 +282,7 @@ impl ZedAiOnboarding {
                             h_flex()
                                 .gap_2()
                                 .child(
-                                    Label::new("Pro Trial")
+                                    Label::new(tr(cx, "ai_onboarding.plan.pro_trial", "Pro Trial"))
                                         .size(LabelSize::Small)
                                         .color(Color::Accent)
                                         .buffer_font(cx),
@@ -257,12 +291,15 @@ impl ZedAiOnboarding {
                         )
                         .child(PlanDefinitions.pro_trial(true))
                         .child(
-                            Button::new("pro", "Start Free Trial")
-                                .full_width()
-                                .style(ButtonStyle::Tinted(ui::TintColor::Accent))
-                                .on_click(move |_, _window, cx| {
-                                    cx.open_url(&zed_urls::start_trial_url(cx))
-                                }),
+                            Button::new(
+                                "pro",
+                                tr(cx, "ai_onboarding.start_free_trial", "Start Free Trial"),
+                            )
+                            .full_width()
+                            .style(ButtonStyle::Tinted(ui::TintColor::Accent))
+                            .on_click(move |_, _window, cx| {
+                                cx.open_url(&zed_urls::start_trial_url(cx))
+                            }),
                         ),
                 )
                 .into_any_element()
@@ -275,14 +312,22 @@ impl ZedAiOnboarding {
             .relative()
             .gap_1()
             .child(Self::pro_trial_stamp(cx))
-            .child(Headline::new("Welcome to the Zed Pro Trial"))
+            .child(Headline::new(tr(
+                cx,
+                "ai_onboarding.welcome_zed_pro_trial",
+                "Welcome to the Zed Pro Trial",
+            )))
             .child(
-                Label::new("Here's what you get for the next 14 days:")
-                    .color(Color::Muted)
-                    .mb_2(),
+                Label::new(tr(
+                    cx,
+                    "ai_onboarding.what_you_get_next_14_days",
+                    "Here's what you get for the next 14 days:",
+                ))
+                .color(Color::Muted)
+                .mb_2(),
             )
             .child(PlanDefinitions.pro_trial(false))
-            .children(self.render_dismiss_button())
+            .children(self.render_dismiss_button(cx))
             .into_any_element()
     }
 
@@ -292,14 +337,18 @@ impl ZedAiOnboarding {
             .relative()
             .gap_1()
             .child(Self::certified_user_stamp(cx))
-            .child(Headline::new("Welcome to Zed Pro"))
+            .child(Headline::new(tr(
+                cx,
+                "ai_onboarding.welcome_zed_pro",
+                "Welcome to Zed Pro",
+            )))
             .child(
-                Label::new("Here's what you get:")
+                Label::new(tr(cx, "ai_onboarding.what_you_get", "Here's what you get:"))
                     .color(Color::Muted)
                     .mb_2(),
             )
             .child(PlanDefinitions.pro_plan())
-            .children(self.render_dismiss_button())
+            .children(self.render_dismiss_button(cx))
             .into_any_element()
     }
 
@@ -309,14 +358,18 @@ impl ZedAiOnboarding {
             .relative()
             .gap_1()
             .child(Self::business_stamp(cx))
-            .child(Headline::new("Welcome to Zed Business"))
+            .child(Headline::new(tr(
+                cx,
+                "ai_onboarding.welcome_zed_business",
+                "Welcome to Zed Business",
+            )))
             .child(
-                Label::new("Here's what you get:")
+                Label::new(tr(cx, "ai_onboarding.what_you_get", "Here's what you get:"))
                     .color(Color::Muted)
                     .mb_2(),
             )
             .child(PlanDefinitions.business_plan())
-            .children(self.render_dismiss_button())
+            .children(self.render_dismiss_button(cx))
             .into_any_element()
     }
 
@@ -326,14 +379,18 @@ impl ZedAiOnboarding {
             .relative()
             .gap_1()
             .child(Self::student_stamp(cx))
-            .child(Headline::new("Welcome to Zed Student"))
+            .child(Headline::new(tr(
+                cx,
+                "ai_onboarding.welcome_zed_student",
+                "Welcome to Zed Student",
+            )))
             .child(
-                Label::new("Here's what you get:")
+                Label::new(tr(cx, "ai_onboarding.what_you_get", "Here's what you get:"))
                     .color(Color::Muted)
                     .mb_2(),
             )
             .child(PlanDefinitions.student_plan())
-            .children(self.render_dismiss_button())
+            .children(self.render_dismiss_button(cx))
             .into_any_element()
     }
 }
@@ -437,8 +494,12 @@ pub struct AgentLayoutOnboarding {
 }
 
 impl Render for AgentLayoutOnboarding {
-    fn render(&mut self, _window: &mut ui::Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let description = "With the new Threads Sidebar, you can manage multiple agents across several projects, all in one window.";
+    fn render(&mut self, _window: &mut ui::Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let description = tr(
+            cx,
+            "ai_onboarding.agent_layout.description",
+            "With the new Threads Sidebar, you can manage multiple agents across several projects, all in one window.",
+        );
 
         let dismiss_button = div().absolute().top_0().right_0().child(
             IconButton::new("dismiss", IconName::Close)
@@ -450,29 +511,43 @@ impl Render for AgentLayoutOnboarding {
         );
 
         let primary_button = if self.is_agent_layout {
-            Button::new("revert", "Use Previous Layout")
-                .label_size(LabelSize::Small)
-                .style(ButtonStyle::Outlined)
-                .on_click({
-                    let revert = self.revert_to_editor_layout.clone();
-                    let dismiss = self.dismissed.clone();
-                    move |_, window, cx| {
-                        revert(window, cx);
-                        dismiss(window, cx);
-                    }
-                })
+            Button::new(
+                "revert",
+                tr(
+                    cx,
+                    "ai_onboarding.agent_layout.use_previous_layout",
+                    "Use Previous Layout",
+                ),
+            )
+            .label_size(LabelSize::Small)
+            .style(ButtonStyle::Outlined)
+            .on_click({
+                let revert = self.revert_to_editor_layout.clone();
+                let dismiss = self.dismissed.clone();
+                move |_, window, cx| {
+                    revert(window, cx);
+                    dismiss(window, cx);
+                }
+            })
         } else {
-            Button::new("start", "Use New Layout")
-                .label_size(LabelSize::Small)
-                .style(ButtonStyle::Outlined)
-                .on_click({
-                    let use_layout = self.use_agent_layout.clone();
-                    let dismiss = self.dismissed.clone();
-                    move |_, window, cx| {
-                        use_layout(window, cx);
-                        dismiss(window, cx);
-                    }
-                })
+            Button::new(
+                "start",
+                tr(
+                    cx,
+                    "ai_onboarding.agent_layout.use_new_layout",
+                    "Use New Layout",
+                ),
+            )
+            .label_size(LabelSize::Small)
+            .style(ButtonStyle::Outlined)
+            .on_click({
+                let use_layout = self.use_agent_layout.clone();
+                let dismiss = self.dismissed.clone();
+                move |_, window, cx| {
+                    use_layout(window, cx);
+                    dismiss(window, cx);
+                }
+            })
         };
 
         let content = v_flex()
@@ -480,19 +555,29 @@ impl Render for AgentLayoutOnboarding {
             .w_full()
             .relative()
             .gap_1()
-            .child(Label::new("A new workspace layout for agentic workflows"))
+            .child(Label::new(tr(
+                cx,
+                "ai_onboarding.agent_layout.title",
+                "A new workspace layout for agentic workflows",
+            )))
             .child(Label::new(description).color(Color::Muted).mb_2())
             .child(
                 List::new()
-                    .child(ListBulletItem::new(
+                    .child(ListBulletItem::new(tr(
+                        cx,
+                        "ai_onboarding.agent_layout.bullet.sidebar_left",
                         "The Sidebar and Agent Panel are on the left by default",
-                    ))
-                    .child(ListBulletItem::new(
+                    )))
+                    .child(ListBulletItem::new(tr(
+                        cx,
+                        "ai_onboarding.agent_layout.bullet.panels_shift_right",
                         "The Project Panel and all other panels shift to the right",
-                    ))
-                    .child(ListBulletItem::new(
+                    )))
+                    .child(ListBulletItem::new(tr(
+                        cx,
+                        "ai_onboarding.agent_layout.bullet.customize_settings",
                         "You can always customize your workspace layout in your Settings",
-                    )),
+                    ))),
             )
             .child(
                 h_flex()
@@ -501,12 +586,13 @@ impl Render for AgentLayoutOnboarding {
                     .flex_wrap()
                     .justify_end()
                     .child(
-                        Button::new("learn", "Learn More")
-                            .label_size(LabelSize::Small)
-                            .style(ButtonStyle::OutlinedGhost)
-                            .on_click(move |_, _, cx| {
-                                cx.open_url(&zed_urls::parallel_agents_blog(cx))
-                            }),
+                        Button::new(
+                            "learn",
+                            tr(cx, "ai_onboarding.agent_layout.learn_more", "Learn More"),
+                        )
+                        .label_size(LabelSize::Small)
+                        .style(ButtonStyle::OutlinedGhost)
+                        .on_click(move |_, _, cx| cx.open_url(&zed_urls::parallel_agents_blog(cx))),
                     )
                     .child(primary_button),
             )

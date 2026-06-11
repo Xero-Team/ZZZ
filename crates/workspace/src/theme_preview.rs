@@ -2,6 +2,7 @@
 use gpui::{
     AnyElement, App, Entity, EventEmitter, FocusHandle, Focusable, Hsla, Task, actions, hsla,
 };
+use i18n::tr;
 use strum::IntoEnumIterator;
 use theme::all_theme_colors;
 use ui::{
@@ -38,10 +39,17 @@ enum ThemePreviewPage {
 }
 
 impl ThemePreviewPage {
-    pub fn name(&self) -> &'static str {
+    pub fn id(&self) -> &'static str {
         match self {
             Self::Overview => "Overview",
             Self::Typography => "Typography",
+        }
+    }
+
+    pub fn name(&self, cx: &App) -> String {
+        match self {
+            Self::Overview => tr(cx, "workspace.theme_preview.page.overview", "Overview"),
+            Self::Typography => tr(cx, "workspace.theme_preview.page.typography", "Typography"),
         }
     }
 }
@@ -90,7 +98,9 @@ impl Item for ThemePreview {
 
     fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
         let name = cx.theme().name.clone();
-        format!("{} Preview", name).into()
+        tr(cx, "workspace.theme_preview.tab_title", "{} Preview")
+            .replacen("{}", name.as_ref(), 1)
+            .into()
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
@@ -117,6 +127,30 @@ impl Item for ThemePreview {
 const AVATAR_URL: &str = "https://avatars.githubusercontent.com/u/1714999?v=4";
 
 impl ThemePreview {
+    fn layer_name(layer: ElevationIndex, cx: &App) -> String {
+        match layer {
+            ElevationIndex::Background => {
+                tr(cx, "workspace.theme_preview.layer.background", "Background")
+            }
+            ElevationIndex::Surface => tr(cx, "workspace.theme_preview.layer.surface", "Surface"),
+            ElevationIndex::EditorSurface => tr(
+                cx,
+                "workspace.theme_preview.layer.editor_surface",
+                "Editor Surface",
+            ),
+            ElevationIndex::ElevatedSurface => tr(
+                cx,
+                "workspace.theme_preview.layer.elevated_surface",
+                "Elevated Surface",
+            ),
+            ElevationIndex::ModalSurface => tr(
+                cx,
+                "workspace.theme_preview.layer.modal_surface",
+                "Modal Surface",
+            ),
+        }
+    }
+
     fn preview_bg(window: &mut Window, cx: &mut App) -> Hsla {
         cx.theme().colors().editor_background
     }
@@ -128,6 +162,7 @@ impl ThemePreview {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let bg = layer.bg(cx);
+        let lt = |key: &str, fallback: &str| tr(cx, key, fallback);
 
         let label_with_contrast = |label: &str, fg: Hsla| {
             let contrast = calculate_contrast_ratio(fg, bg);
@@ -136,7 +171,11 @@ impl ThemePreview {
 
         v_flex()
             .gap_1()
-            .child(Headline::new("Text").size(HeadlineSize::Small).color(Color::Muted))
+            .child(
+                Headline::new(lt("workspace.theme_preview.text.title", "Text"))
+                    .size(HeadlineSize::Small)
+                    .color(Color::Muted),
+            )
             .child(
                 h_flex()
                     .items_start()
@@ -144,132 +183,217 @@ impl ThemePreview {
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(Headline::new("Headline Sizes").size(HeadlineSize::Small).color(Color::Muted))
-                            .child(Headline::new("XLarge Headline").size(HeadlineSize::XLarge))
-                            .child(Headline::new("Large Headline").size(HeadlineSize::Large))
-                            .child(Headline::new("Medium Headline").size(HeadlineSize::Medium))
-                            .child(Headline::new("Small Headline").size(HeadlineSize::Small))
-                            .child(Headline::new("XSmall Headline").size(HeadlineSize::XSmall)),
+                            .child(
+                                Headline::new(lt(
+                                    "workspace.theme_preview.headline_sizes",
+                                    "Headline Sizes",
+                                ))
+                                .size(HeadlineSize::Small)
+                                .color(Color::Muted),
+                            )
+                            .child(Headline::new(lt(
+                                "workspace.theme_preview.headline.xlarge",
+                                "XLarge Headline",
+                            ))
+                            .size(HeadlineSize::XLarge))
+                            .child(Headline::new(lt(
+                                "workspace.theme_preview.headline.large",
+                                "Large Headline",
+                            ))
+                            .size(HeadlineSize::Large))
+                            .child(Headline::new(lt(
+                                "workspace.theme_preview.headline.medium",
+                                "Medium Headline",
+                            ))
+                            .size(HeadlineSize::Medium))
+                            .child(Headline::new(lt(
+                                "workspace.theme_preview.headline.small",
+                                "Small Headline",
+                            ))
+                            .size(HeadlineSize::Small))
+                            .child(Headline::new(lt(
+                                "workspace.theme_preview.headline.xsmall",
+                                "XSmall Headline",
+                            ))
+                            .size(HeadlineSize::XSmall)),
                     )
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(Headline::new("Text Colors").size(HeadlineSize::Small).color(Color::Muted))
+                            .child(
+                                Headline::new(lt(
+                                    "workspace.theme_preview.text_colors",
+                                    "Text Colors",
+                                ))
+                                .size(HeadlineSize::Small)
+                                .color(Color::Muted),
+                            )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Default Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.default_text",
+                                        "Default Text",
+                                    ),
                                     Color::Default.color(cx),
                                 ))
                                 .color(Color::Default),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Accent Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.accent_text",
+                                        "Accent Text",
+                                    ),
                                     Color::Accent.color(cx),
                                 ))
                                 .color(Color::Accent),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Conflict Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.conflict_text",
+                                        "Conflict Text",
+                                    ),
                                     Color::Conflict.color(cx),
                                 ))
                                 .color(Color::Conflict),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Created Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.created_text",
+                                        "Created Text",
+                                    ),
                                     Color::Created.color(cx),
                                 ))
                                 .color(Color::Created),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Deleted Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.deleted_text",
+                                        "Deleted Text",
+                                    ),
                                     Color::Deleted.color(cx),
                                 ))
                                 .color(Color::Deleted),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Disabled Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.disabled_text",
+                                        "Disabled Text",
+                                    ),
                                     Color::Disabled.color(cx),
                                 ))
                                 .color(Color::Disabled),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Error Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.error_text",
+                                        "Error Text",
+                                    ),
                                     Color::Error.color(cx),
                                 ))
                                 .color(Color::Error),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Hidden Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.hidden_text",
+                                        "Hidden Text",
+                                    ),
                                     Color::Hidden.color(cx),
                                 ))
                                 .color(Color::Hidden),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Hint Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.hint_text",
+                                        "Hint Text",
+                                    ),
                                     Color::Hint.color(cx),
                                 ))
                                 .color(Color::Hint),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Ignored Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.ignored_text",
+                                        "Ignored Text",
+                                    ),
                                     Color::Ignored.color(cx),
                                 ))
                                 .color(Color::Ignored),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Info Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.info_text",
+                                        "Info Text",
+                                    ),
                                     Color::Info.color(cx),
                                 ))
                                 .color(Color::Info),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Modified Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.modified_text",
+                                        "Modified Text",
+                                    ),
                                     Color::Modified.color(cx),
                                 ))
                                 .color(Color::Modified),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Muted Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.muted_text",
+                                        "Muted Text",
+                                    ),
                                     Color::Muted.color(cx),
                                 ))
                                 .color(Color::Muted),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Placeholder Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.placeholder_text",
+                                        "Placeholder Text",
+                                    ),
                                     Color::Placeholder.color(cx),
                                 ))
                                 .color(Color::Placeholder),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Selected Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.selected_text",
+                                        "Selected Text",
+                                    ),
                                     Color::Selected.color(cx),
                                 ))
                                 .color(Color::Selected),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Success Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.success_text",
+                                        "Success Text",
+                                    ),
                                     Color::Success.color(cx),
                                 ))
                                 .color(Color::Success),
                             )
                             .child(
                                 Label::new(label_with_contrast(
-                                    "Warning Text",
+                                    &lt(
+                                        "workspace.theme_preview.color.warning_text",
+                                        "Warning Text",
+                                    ),
                                     Color::Warning.color(cx),
                                 ))
                                 .color(Color::Warning),
@@ -278,11 +402,18 @@ impl ThemePreview {
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(Headline::new("Wrapping Text").size(HeadlineSize::Small).color(Color::Muted))
                             .child(
-                                div().max_w(px(200.)).child(
-                                "This is a longer piece of text that should wrap to multiple lines. It demonstrates how text behaves when it exceeds the width of its container."
-                            ))
+                                Headline::new(lt(
+                                    "workspace.theme_preview.wrapping_text",
+                                    "Wrapping Text",
+                                ))
+                                .size(HeadlineSize::Small)
+                                .color(Color::Muted),
+                            )
+                            .child(div().max_w(px(200.)).child(lt(
+                                "workspace.theme_preview.wrapping_text.sample",
+                                "This is a longer piece of text that should wrap to multiple lines. It demonstrates how text behaves when it exceeds the width of its container.",
+                            )))
                     )
             )
     }
@@ -299,7 +430,7 @@ impl ThemePreview {
         v_flex()
             .gap_1()
             .child(
-                Headline::new("Colors")
+                Headline::new(tr(cx, "workspace.theme_preview.colors", "Colors"))
                     .size(HeadlineSize::Small)
                     .color(Color::Muted),
             )
@@ -341,7 +472,7 @@ impl ThemePreview {
             .bg(layer.bg(cx))
             .text_color(cx.theme().colors().text)
             .gap_2()
-            .child(Headline::new(layer.clone().to_string()).size(HeadlineSize::Medium))
+            .child(Headline::new(Self::layer_name(layer, cx)).size(HeadlineSize::Medium))
             .child(self.render_text(layer, window, cx))
             .child(self.render_colors(layer, window, cx))
     }
@@ -357,9 +488,25 @@ impl ThemePreview {
             .size_full()
             .child(
                 v_flex()
-                    .child(Headline::new("Theme Preview").size(HeadlineSize::Large))
-                    .child(div().w_full().text_color(cx.theme().colors().text_muted).child("This view lets you preview a range of UI elements across a theme. Use it for testing out changes to the theme."))
+                    .child(
+                        Headline::new(tr(
+                            cx,
+                            "workspace.theme_preview.title",
+                            "Theme Preview",
+                        ))
+                        .size(HeadlineSize::Large),
                     )
+                    .child(
+                        div()
+                            .w_full()
+                            .text_color(cx.theme().colors().text_muted)
+                            .child(tr(
+                                cx,
+                                "workspace.theme_preview.description",
+                                "This view lets you preview a range of UI elements across a theme. Use it for testing out changes to the theme.",
+                            )),
+                    ),
+            )
             .child(self.render_theme_layer(ElevationIndex::Background, window, cx))
             .child(self.render_theme_layer(ElevationIndex::Surface, window, cx))
             .child(self.render_theme_layer(ElevationIndex::EditorSurface, window, cx))
@@ -371,24 +518,80 @@ impl ThemePreview {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let lt = |key: &str, fallback: &str| tr(cx, key, fallback);
         v_flex()
             .id("theme-preview-typography")
             .overflow_scroll()
             .size_full()
-            .child(v_flex()
-                .gap_4()
-                .child(Headline::new("Headline 1").size(HeadlineSize::XLarge))
-                .child(Label::new("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."))
-                .child(Headline::new("Headline 2").size(HeadlineSize::Large))
-                .child(Label::new("Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."))
-                .child(Headline::new("Headline 3").size(HeadlineSize::Medium))
-                .child(Label::new("Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur."))
-                .child(Headline::new("Headline 4").size(HeadlineSize::Small))
-                .child(Label::new("Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."))
-                .child(Headline::new("Headline 5").size(HeadlineSize::XSmall))
-                .child(Label::new("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."))
-                .child(Headline::new("Body Text").size(HeadlineSize::Small))
-                .child(Label::new("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."))
+            .child(
+                v_flex()
+                    .gap_4()
+                    .child(
+                        Headline::new(lt(
+                            "workspace.theme_preview.typography.headline_1",
+                            "Headline 1",
+                        ))
+                        .size(HeadlineSize::XLarge),
+                    )
+                    .child(Label::new(lt(
+                        "workspace.theme_preview.typography.sample_1",
+                        "A strong display headline gives the theme room to show hierarchy, spacing, and rhythm at a glance.",
+                    )))
+                    .child(
+                        Headline::new(lt(
+                            "workspace.theme_preview.typography.headline_2",
+                            "Headline 2",
+                        ))
+                        .size(HeadlineSize::Large),
+                    )
+                    .child(Label::new(lt(
+                        "workspace.theme_preview.typography.sample_2",
+                        "Secondary headings should still feel clear and confident, even when the surrounding interface is dense.",
+                    )))
+                    .child(
+                        Headline::new(lt(
+                            "workspace.theme_preview.typography.headline_3",
+                            "Headline 3",
+                        ))
+                        .size(HeadlineSize::Medium),
+                    )
+                    .child(Label::new(lt(
+                        "workspace.theme_preview.typography.sample_3",
+                        "Medium headings often sit next to controls, status text, and lists, so balance matters.",
+                    )))
+                    .child(
+                        Headline::new(lt(
+                            "workspace.theme_preview.typography.headline_4",
+                            "Headline 4",
+                        ))
+                        .size(HeadlineSize::Small),
+                    )
+                    .child(Label::new(lt(
+                        "workspace.theme_preview.typography.sample_4",
+                        "Smaller headings should remain readable without overpowering nearby body text.",
+                    )))
+                    .child(
+                        Headline::new(lt(
+                            "workspace.theme_preview.typography.headline_5",
+                            "Headline 5",
+                        ))
+                        .size(HeadlineSize::XSmall),
+                    )
+                    .child(Label::new(lt(
+                        "workspace.theme_preview.typography.sample_5",
+                        "Compact headline styles are useful for side panels, forms, and grouped settings.",
+                    )))
+                    .child(
+                        Headline::new(lt(
+                            "workspace.theme_preview.typography.body_text",
+                            "Body Text",
+                        ))
+                        .size(HeadlineSize::Small),
+                    )
+                    .child(Label::new(lt(
+                        "workspace.theme_preview.typography.body_sample",
+                        "Body copy should stay comfortable over long reads, preserve contrast across surfaces, and remain stable beside code, labels, and controls.",
+                    ))),
             )
     }
 
@@ -400,7 +603,8 @@ impl ThemePreview {
             .py_2()
             .bg(Self::preview_bg(window, cx))
             .children(ThemePreviewPage::iter().map(|p| {
-                Button::new(ElementId::Name(p.name().into()), p.name())
+                let label = p.name(cx);
+                Button::new(ElementId::Name(p.id().into()), label)
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.current_page = p;
                         cx.notify();

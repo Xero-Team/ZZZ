@@ -118,11 +118,14 @@ fn files_not_created_on_launch(errors: HashMap<io::ErrorKind, Vec<&Path>>) {
             }) {
                 window
                     .update(cx, |_, window, cx| {
+                        let title =
+                            app_i18n::tr(cx, "zed.launch.failed_title", "ZZZ failed to launch");
+                        let exit = app_i18n::tr(cx, "zed.launch.exit", "Exit");
                         let response = window.prompt(
                             gpui::PromptLevel::Critical,
-                            message,
+                            &title,
                             Some(&error_details),
-                            &["Exit"],
+                            &[exit.as_str()],
                             cx,
                         );
 
@@ -144,8 +147,14 @@ fn fail_to_open_window_async(e: anyhow::Error, cx: &mut AsyncApp) {
 }
 
 fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
+    let _launch_failed = app_i18n::tr(_cx, "zed.launch.failed_title", "ZZZ failed to launch");
     eprintln!(
-        "ZZZ failed to open a window: {e:?}. See https://zed.dev/docs/linux for troubleshooting steps."
+        "{}: {e:?}. See https://zed.dev/docs/linux for troubleshooting steps.",
+        app_i18n::tr(
+            _cx,
+            "zed.launch.failed_to_open_window",
+            "ZZZ failed to open a window"
+        )
     );
     #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
     {
@@ -165,7 +174,7 @@ fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
             proxy
                 .add_notification(
                     notification_id,
-                    Notification::new("ZZZ failed to launch")
+                    Notification::new(_launch_failed.as_ref())
                         .body(Some(
                             format!(
                                 "{e:?}. See https://zed.dev/docs/linux for troubleshooting steps."
@@ -1296,14 +1305,22 @@ pub(crate) async fn restore_or_create_workspace(
         }
 
         if error_count > 0 {
-            let message = if error_count == 1 {
-                "Failed to restore 1 workspace. Check logs for details.".to_string()
-            } else {
-                format!(
-                    "Failed to restore {} workspaces. Check logs for details.",
-                    error_count
-                )
-            };
+            let message = cx.update(|cx| {
+                if error_count == 1 {
+                    app_i18n::tr(
+                        cx,
+                        "zed.restore_workspace.failed_single",
+                        "Failed to restore 1 workspace. Check logs for details.",
+                    )
+                } else {
+                    app_i18n::tr(
+                        cx,
+                        "zed.restore_workspace.failed_multiple",
+                        "Failed to restore {} workspaces. Check logs for details.",
+                    )
+                    .replacen("{}", &error_count.to_string(), 1)
+                }
+            });
 
             // Try to find an active workspace to show the toast
             let toast_shown = cx.update(|cx| {

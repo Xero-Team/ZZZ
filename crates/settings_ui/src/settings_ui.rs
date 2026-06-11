@@ -1291,7 +1291,7 @@ fn render_settings_item(
                                             "Modified in",
                                         ),
                                         settings_window
-                                            .display_name(&file_set_in)
+                                            .display_name(&file_set_in, cx)
                                             .expect("File name should exist")
                                     ))
                                     .color(Color::Muted)
@@ -2572,7 +2572,7 @@ impl SettingsWindow {
             |ix, file: &SettingsUiFile, focus_handle, cx: &mut Context<SettingsWindow>| {
                 Button::new(
                     ix,
-                    self.display_name(&file)
+                    self.display_name(&file, cx)
                         .expect("Files should always have a name"),
                 )
                 .toggle_state(file == &self.current_file)
@@ -2628,7 +2628,7 @@ impl SettingsWindow {
                                     DropdownMenu::new(
                                         "more-files",
                                         format!("+{}", self.files.len() - (OVERFLOW_LIMIT + 1)),
-                                        ContextMenu::build(window, cx, move |mut menu, _, _| {
+                                        ContextMenu::build(window, cx, move |mut menu, _, cx| {
                                             for (mut ix, (file, focus_handle)) in self
                                                 .files
                                                 .iter()
@@ -2639,12 +2639,15 @@ impl SettingsWindow {
                                                     if selected_file_ix == ix {
                                                         ix = OVERFLOW_LIMIT;
                                                         (
-                                                            self.display_name(&self.files[ix].0),
+                                                            self.display_name(
+                                                                &self.files[ix].0,
+                                                                cx,
+                                                            ),
                                                             self.files[ix].1.clone(),
                                                         )
                                                     } else {
                                                         (
-                                                            self.display_name(&file),
+                                                            self.display_name(&file, cx),
                                                             focus_handle.clone(),
                                                         )
                                                     };
@@ -2707,9 +2710,9 @@ impl SettingsWindow {
             )
     }
 
-    pub(crate) fn display_name(&self, file: &SettingsUiFile) -> Option<String> {
+    pub(crate) fn display_name(&self, file: &SettingsUiFile, cx: &App) -> Option<String> {
         match file {
-            SettingsUiFile::User => Some("User".to_string()),
+            SettingsUiFile::User => Some(app_i18n::tr(cx, "settings_ui.common.scope.user", "User")),
             SettingsUiFile::Project((worktree_id, path)) => self
                 .worktree_root_dirs
                 .get(&worktree_id)
@@ -2783,9 +2786,9 @@ impl SettingsWindow {
                 .visible_navbar_entries()
                 .any(|(_, entry)| entry.focus_handle.is_focused(window))
         {
-            "Focus Content"
+            tr(cx, "settings_ui.navigation.focus_content", "Focus Content")
         } else {
-            "Focus Navbar"
+            tr(cx, "settings_ui.navigation.focus_navbar", "Focus Navbar")
         };
 
         let mut key_context = KeyContext::new_with_defaults();
@@ -3170,7 +3173,7 @@ impl SettingsWindow {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let scope_name: SharedString = self
-            .display_name(&self.current_file)
+            .display_name(&self.current_file, cx)
             .unwrap_or_else(|| self.current_file.setting_type().to_string())
             .into();
 
@@ -3190,16 +3193,17 @@ impl SettingsWindow {
 
         let scope_element = if allowed_file_indices.len() > 1 {
             let this = cx.entity();
+            let scope_header = tr(cx, "settings_ui.common.scope", "Scope");
             DropdownMenu::new(
                 "sub-page-scope-picker",
                 scope_name,
-                ContextMenu::build(window, cx, move |mut menu, _, _| {
-                    menu = menu.header("Scope");
+                ContextMenu::build(window, cx, move |mut menu, _, cx| {
+                    menu = menu.header(scope_header.clone());
 
                     for ix in allowed_file_indices {
                         let (file, focus_handle) = &self.files[ix];
                         let display_name = self
-                            .display_name(file)
+                            .display_name(file, cx)
                             .expect("Files should always have a name");
                         menu = menu.toggleable_entry(
                             display_name,
@@ -3499,6 +3503,11 @@ impl SettingsWindow {
                             IconButton::new("back-btn", IconName::ArrowLeft)
                                 .icon_size(IconSize::Small)
                                 .shape(IconButtonShape::Square)
+                                .tooltip(Tooltip::text(app_i18n::tr(
+                                    cx,
+                                    "settings_ui.common.tooltip.back",
+                                    "Back",
+                                )))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.pop_sub_page(window, cx);
                                 })),
@@ -3598,8 +3607,7 @@ impl SettingsWindow {
                             cx,
                             "settings_ui.warning.failed_to_load_settings",
                             "Failed to load your settings. Some values may be incorrect and changes may be lost.",
-                        )
-                        .to_string(),
+                        ),
                         err,
                         &mut self.shown_errors,
                         cx,
@@ -3611,22 +3619,19 @@ impl SettingsWindow {
                             cx,
                             "settings_ui.warning.settings_out_of_date",
                             "Your settings are out of date, and need to be updated.",
-                        )
-                        .to_string(),
+                        ),
                         match &self.current_file {
                             SettingsUiFile::User => app_i18n::tr(
                                 cx,
                                 "settings_ui.warning.auto_migration_available",
                                 "They can be automatically migrated to the latest version.",
-                            )
-                            .to_string(),
+                            ),
                             SettingsUiFile::Server(_) | SettingsUiFile::Project(_)  => app_i18n::tr(
                                 cx,
                                 "settings_ui.warning.manual_migration_required",
                                 "They must be manually migrated to the latest version."
-                            )
-                            .to_string()
-                        }.to_string(),
+                            ),
+                        },
                         &mut self.shown_errors,
                         cx,
                     )),
@@ -3636,8 +3641,7 @@ impl SettingsWindow {
                                 cx,
                                 "settings_ui.warning.auto_migration_failed",
                                 "Your settings file is out of date, automatic migration failed",
-                            )
-                            .to_string(),
+                            ),
                             err.clone(),
                             &mut self.shown_errors,
                             cx,
@@ -4742,7 +4746,7 @@ pub mod test {
         pub fn test(window: &mut Window, cx: &mut Context<Self>) -> Self {
             let search_bar = cx.new(|cx| Editor::single_line(window, cx));
             let dummy_page = SettingsPage {
-                title: "Test",
+                title: "Test".into(),
                 items: Box::new([]),
             };
             Self {
@@ -4850,7 +4854,7 @@ pub mod test {
                     .last_mut()
                     .unwrap()
                     .items
-                    .push(SettingsPageItem::SectionHeader(title));
+                    .push(SettingsPageItem::SectionHeader(title.into()));
                 if selected_idx == Some(index) && !in_expanded_section {
                     panic!("Items in unexpanded sections cannot be selected");
                 }
@@ -4866,7 +4870,7 @@ pub mod test {
         let pages: Vec<SettingsPage> = page_builders
             .into_iter()
             .map(|builder| SettingsPage {
-                title: builder.title,
+                title: builder.title.into(),
                 items: builder.items.into_boxed_slice(),
             })
             .collect();

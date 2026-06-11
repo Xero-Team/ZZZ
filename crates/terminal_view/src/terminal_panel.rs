@@ -15,6 +15,7 @@ use gpui::{
     FocusHandle, Focusable, IntoElement, ParentElement, Pixels, Render, Styled, Task, WeakEntity,
     Window, actions,
 };
+use i18n::tr;
 use itertools::Itertools;
 use project::{Fs, Project};
 
@@ -1651,8 +1652,8 @@ impl Panel for TerminalPanel {
         }
     }
 
-    fn icon_tooltip(&self, _window: &Window, _cx: &App) -> Option<&'static str> {
-        Some("Terminal Panel")
+    fn icon_tooltip(&self, _window: &Window, cx: &App) -> Option<SharedString> {
+        Some(tr(cx, "menu.view.terminal_panel", "Terminal Panel").into())
     }
 
     fn toggle_action(&self) -> Box<dyn gpui::Action> {

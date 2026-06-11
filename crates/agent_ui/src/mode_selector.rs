@@ -4,6 +4,7 @@ use agent_servers::AgentServer;
 
 use fs::Fs;
 use gpui::{Context, Entity, WeakEntity, Window, prelude::*};
+use i18n as app_i18n;
 
 use std::{rc::Rc, sync::Arc};
 use ui::{
@@ -15,6 +16,10 @@ use crate::{
     CycleModeSelector, ToggleProfileSelector,
     ui::{HoldForDefault, documentation_aside_side},
 };
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 pub struct ModeSelector {
     connection: Rc<dyn AgentSessionModes>,
@@ -153,7 +158,7 @@ impl Render for ModeSelector {
             .iter()
             .find(|mode| mode.id == current_mode_id)
             .map(|mode| mode.name.clone())
-            .unwrap_or_else(|| "Unknown".into());
+            .unwrap_or_else(|| app_i18n::tr(cx, "agent_ui.mode_selector.unknown", "Unknown"));
 
         let this = cx.weak_entity();
 
@@ -180,7 +185,11 @@ impl Render for ModeSelector {
                                 h_flex()
                                     .gap_2()
                                     .justify_between()
-                                    .child(Label::new("Change Mode"))
+                                    .child(Label::new(tr(
+                                        cx,
+                                        "agent_ui.mode_selector.change_mode",
+                                        "Change Mode",
+                                    )))
                                     .child(KeyBinding::for_action(&ToggleProfileSelector, cx)),
                             )
                             .child(
@@ -190,7 +199,11 @@ impl Render for ModeSelector {
                                     .border_t_1()
                                     .border_color(cx.theme().colors().border_variant)
                                     .justify_between()
-                                    .child(Label::new("Cycle Through Modes"))
+                                    .child(Label::new(tr(
+                                        cx,
+                                        "agent_ui.mode_selector.cycle_through_modes",
+                                        "Cycle Through Modes",
+                                    )))
                                     .child(KeyBinding::for_action(&CycleModeSelector, cx)),
                             )
                             .into_any()

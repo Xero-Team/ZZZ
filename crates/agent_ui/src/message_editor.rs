@@ -1,5 +1,5 @@
-use crate::DEFAULT_THREAD_TITLE;
 use crate::SendImmediately;
+use crate::default_thread_title;
 use crate::{
     ChatWithFollow,
     completion_provider::{
@@ -25,6 +25,7 @@ use gpui::{
     AppContext, ClipboardEntry, ClipboardItem, Context, Entity, EventEmitter, FocusHandle,
     Focusable, ImageFormat, KeyContext, SharedString, Subscription, Task, TextStyle, WeakEntity,
 };
+use i18n as app_i18n;
 use language::{Buffer, language_settings::InlayHintKind};
 use parking_lot::RwLock;
 use project::AgentId;
@@ -440,16 +441,24 @@ impl MessageEditor {
 
             editor.set_custom_context_menu(|editor, _point, window, cx| {
                 let has_selection = editor.has_non_empty_selection(&editor.display_snapshot(cx));
+                let cut = app_i18n::tr(cx, "agent_ui.message_editor.cut", "Cut");
+                let copy = app_i18n::tr(cx, "agent_ui.message_editor.copy", "Copy");
+                let paste = app_i18n::tr(cx, "agent_ui.message_editor.paste", "Paste");
+                let paste_as_plain_text = app_i18n::tr(
+                    cx,
+                    "agent_ui.message_editor.paste_as_plain_text",
+                    "Paste as Plain Text",
+                );
 
-                Some(ContextMenu::build(window, cx, |menu, _, _| {
-                    menu.action("Cut", Box::new(editor::actions::Cut))
+                Some(ContextMenu::build(window, cx, move |menu, _, _| {
+                    menu.action(cut.clone(), Box::new(editor::actions::Cut))
                         .action_disabled_when(
                             !has_selection,
-                            "Copy",
+                            copy.clone(),
                             Box::new(editor::actions::Copy),
                         )
-                        .action("Paste", Box::new(editor::actions::Paste))
-                        .action("Paste as Plain Text", Box::new(PasteRaw))
+                        .action(paste.clone(), Box::new(editor::actions::Paste))
+                        .action(paste_as_plain_text, Box::new(PasteRaw))
                 }))
             });
 
@@ -634,7 +643,7 @@ impl MessageEditor {
         };
         let thread_title = title
             .filter(|title| !title.is_empty())
-            .unwrap_or_else(|| SharedString::new_static(DEFAULT_THREAD_TITLE));
+            .unwrap_or_else(|| default_thread_title(cx));
         let uri = MentionUri::Thread {
             id: session_id,
             name: thread_title.to_string(),
@@ -1319,6 +1328,12 @@ impl MessageEditor {
         let mention_set = self.mention_set.clone();
         let weak_workspace = self.workspace.clone();
 
+        let could_not_determine_default_branch = app_i18n::tr(
+            cx,
+            "agent_ui.message_editor.could_not_determine_default_branch",
+            "Could not determine default branch",
+        );
+
         window
             .spawn(cx, async move |cx| {
                 let base_ref: SharedString = default_branch_receiver
@@ -1326,7 +1341,7 @@ impl MessageEditor {
                     .ok()
                     .and_then(|r| r.ok())
                     .flatten()
-                    .ok_or_else(|| anyhow!("Could not determine default branch"))?;
+                    .ok_or_else(|| anyhow!(could_not_determine_default_branch))?;
 
                 cx.update(|window, cx| {
                     let mention_uri = MentionUri::GitDiff {
@@ -1406,6 +1421,7 @@ impl MessageEditor {
                 self.editor.downgrade(),
                 self.mention_set.downgrade(),
                 Some(selection),
+                cx,
             )
         else {
             return;

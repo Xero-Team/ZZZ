@@ -86,7 +86,7 @@ where
         current_device
             .map(|info| info.desc.name().to_string())
             .unwrap_or_else(|| {
-                app_i18n::tr(cx, "settings_ui.audio.system_default", "System Default").to_string()
+                app_i18n::tr(cx, "settings_ui.audio.system_default", "System Default")
             }),
         menu,
     )

@@ -6,6 +6,7 @@ use gpui::{
     App, BorderStyle, DismissEvent, EdgesRefinement, Entity, EventEmitter, FocusHandle, Focusable,
     Length, StyleRefinement, TextStyleRefinement, Window, actions, prelude::*,
 };
+use i18n as app_i18n;
 use language::{
     Anchor, Bias, Buffer, BufferSnapshot, CodeLabel, LanguageRegistry, Point, ToOffset, ToPoint,
     language_settings::{self, InlayHintKind},
@@ -24,6 +25,10 @@ use ui::{
     Tooltip, prelude::*,
 };
 use workspace::{ModalView, Workspace};
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 actions!(
     zeta,
@@ -81,10 +86,18 @@ enum RatePredictionView {
 }
 
 impl RatePredictionView {
-    pub fn name(&self) -> &'static str {
+    pub fn name(&self, cx: &App) -> SharedString {
         match self {
-            Self::SuggestedEdits => "Suggested Edits",
-            Self::RawInput => "Recorded Events & Input",
+            Self::SuggestedEdits => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.view.suggested_edits",
+                "Suggested Edits",
+            ),
+            Self::RawInput => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.view.raw_input",
+                "Recorded Events & Input",
+            ),
         }
     }
 }
@@ -682,7 +695,15 @@ impl RatePredictionsModal {
                     editor.set_show_wrap_guides(false, cx);
                     editor.set_show_indent_guides(false, cx);
                     editor.set_show_edit_predictions(Some(false), window, cx);
-                    editor.set_placeholder_text("Add your feedback…", window, cx);
+                    editor.set_placeholder_text(
+                        &app_i18n::tr(
+                            cx,
+                            "edit_prediction_ui.rate_prediction.placeholder.add_feedback",
+                            "Add your feedback…",
+                        ),
+                        window,
+                        cx,
+                    );
                     editor.set_completion_provider(Some(Rc::new(FeedbackCompletionProvider)));
                     if focus {
                         cx.focus_self(window);
@@ -721,7 +742,7 @@ impl RatePredictionsModal {
             .child(
                 Button::new(
                     ElementId::Name("suggested-edits".into()),
-                    RatePredictionView::SuggestedEdits.name(),
+                    RatePredictionView::SuggestedEdits.name(cx),
                 )
                 .label_size(LabelSize::Small)
                 .on_click(cx.listener(move |this, _, _window, cx| {
@@ -733,7 +754,7 @@ impl RatePredictionsModal {
             .child(
                 Button::new(
                     ElementId::Name("raw-input".into()),
-                    RatePredictionView::RawInput.name(),
+                    RatePredictionView::RawInput.name(cx),
                 )
                 .label_size(LabelSize::Small)
                 .on_click(cx.listener(move |this, _, _window, cx| {
@@ -812,7 +833,14 @@ impl RatePredictionsModal {
                                 .px_2()
                                 .border_b_1()
                                 .border_color(border_color)
-                                .child(Label::new("Predicted Patch").size(LabelSize::Small)),
+                                .child(
+                                    Label::new(tr(
+                                        cx,
+                                        "edit_prediction_ui.rate_prediction.predicted_patch",
+                                        "Predicted Patch",
+                                    ))
+                                    .size(LabelSize::Small),
+                                ),
                         )
                         .child(
                             div()
@@ -842,9 +870,17 @@ impl RatePredictionsModal {
                                     Button::new(
                                         "expected-patch-preview",
                                         if expected_patch_preview {
-                                            "Edit"
+                                            tr(
+                                                cx,
+                                                "edit_prediction_ui.rate_prediction.edit",
+                                                "Edit",
+                                            )
                                         } else {
-                                            "Preview"
+                                            tr(
+                                                cx,
+                                                "edit_prediction_ui.rate_prediction.preview",
+                                                "Preview",
+                                            )
                                         },
                                     )
                                     .label_size(LabelSize::Small)
@@ -854,7 +890,14 @@ impl RatePredictionsModal {
                                         },
                                     )),
                                 )
-                                .child(Label::new("Expected Patch").size(LabelSize::Small)),
+                                .child(
+                                    Label::new(tr(
+                                        cx,
+                                        "edit_prediction_ui.rate_prediction.expected_patch",
+                                        "Expected Patch",
+                                    ))
+                                    .size(LabelSize::Small),
+                                ),
                         )
                         .child(
                             div()
@@ -951,7 +994,11 @@ impl RatePredictionsModal {
                             .into_any_element()
                         } else {
                             div()
-                                .child("No active completion".to_string())
+                                .child(app_i18n::tr(
+                                    cx,
+                                    "edit_prediction_ui.rate_prediction.no_active_completion",
+                                    "No active completion",
+                                ))
                                 .into_any_element()
                         }),
                 )
@@ -1007,9 +1054,11 @@ impl RatePredictionsModal {
                         ContextMenu::build(window, cx, move |menu, _window, _cx| {
                             FeedbackCompletionProvider::FAILURE_MODES
                                 .iter()
-                                .fold(menu, |menu, (key, description)| {
-                                    let key: SharedString = (*key).into();
-                                    let description: SharedString = (*description).into();
+                                .fold(menu, |menu, (key, _description)| {
+                                    let failure_key = *key;
+                                    let key: SharedString = failure_key.into();
+                                    let description =
+                                        FeedbackCompletionProvider::description_for(failure_key, _cx);
                                     let modal = modal.clone();
                                     menu.entry(
                                         format!("{} {}", key, description),
@@ -1045,7 +1094,11 @@ impl RatePredictionsModal {
                             .child(
                                 DropdownMenu::new(
                                         "failure-mode-dropdown",
-                                        "Issue",
+                                        tr(
+                                            cx,
+                                            "edit_prediction_ui.rate_prediction.issue",
+                                            "Issue",
+                                        ),
                                         failure_mode_menu,
                                     )
                                     .handle(self.failure_mode_menu_handle.clone())
@@ -1062,9 +1115,10 @@ impl RatePredictionsModal {
                                     )
                                     .child(
                                         div().flex_wrap().child(
-                                            Label::new(concat!(
-                                                "Explain why this completion is good or bad. ",
-                                                "If it's negative, describe what you expected instead."
+                                            Label::new(tr(
+                                                cx,
+                                                "edit_prediction_ui.rate_prediction.explain_feedback",
+                                                "Explain why this completion is good or bad. If it's negative, describe what you expected instead.",
                                             ))
                                             .size(LabelSize::Small)
                                             .color(Color::Muted),
@@ -1099,7 +1153,14 @@ impl RatePredictionsModal {
                                             .size(IconSize::Small)
                                             .color(Color::Success),
                                     )
-                                    .child(Label::new("Rated completion.").color(Color::Muted)),
+                                    .child(
+                                        Label::new(tr(
+                                            cx,
+                                            "edit_prediction_ui.rate_prediction.rated_completion",
+                                            "Rated completion.",
+                                        ))
+                                        .color(Color::Muted),
+                                    ),
                             )
                         } else if active_prediction.prediction.edits.is_empty() {
                             Some(
@@ -1109,7 +1170,14 @@ impl RatePredictionsModal {
                                             .size(IconSize::Small)
                                             .color(Color::Warning),
                                     )
-                                    .child(Label::new("No edits produced.").color(Color::Muted)),
+                                    .child(
+                                        Label::new(tr(
+                                            cx,
+                                            "edit_prediction_ui.rate_prediction.no_edits_produced",
+                                            "No edits produced.",
+                                        ))
+                                        .color(Color::Muted),
+                                    ),
                             )
                         } else {
                             Some(label_container)
@@ -1118,12 +1186,23 @@ impl RatePredictionsModal {
                             h_flex()
                                 .gap_1()
                                 .child(
-                                    Button::new("bad", "Bad Prediction")
+                                    Button::new(
+                                        "bad",
+                                        tr(
+                                            cx,
+                                            "edit_prediction_ui.rate_prediction.bad_prediction",
+                                            "Bad Prediction",
+                                        ),
+                                    )
                                         .start_icon(Icon::new(IconName::ThumbsDown).size(IconSize::Small))
                                         .disabled(rated || feedback_empty)
                                         .when(feedback_empty, |this| {
                                             this.tooltip(Tooltip::text(
-                                                "Explain what's bad about it before reporting it",
+                                                app_i18n::tr(
+                                                    cx,
+                                                    "edit_prediction_ui.rate_prediction.explain_bad_before_reporting",
+                                                    "Explain what's bad about it before reporting it",
+                                                ),
                                             ))
                                         })
                                         .key_binding(KeyBinding::for_action_in(
@@ -1142,7 +1221,14 @@ impl RatePredictionsModal {
                                         })),
                                 )
                                 .child(
-                                    Button::new("good", "Good Prediction")
+                                    Button::new(
+                                        "good",
+                                        tr(
+                                            cx,
+                                            "edit_prediction_ui.rate_prediction.good_prediction",
+                                            "Good Prediction",
+                                        ),
+                                    )
                                         .start_icon(Icon::new(IconName::ThumbsUp).size(IconSize::Small))
                                         .disabled(rated)
                                         .key_binding(KeyBinding::for_action_in(
@@ -1180,17 +1266,44 @@ impl RatePredictionsModal {
 
                 let (icon_name, icon_color, tooltip_text) =
                     match (rated, completion.edits.is_empty()) {
-                        (true, _) => (IconName::Check, Color::Success, "Rated Prediction"),
-                        (false, true) => (IconName::File, Color::Muted, "No Edits Produced"),
-                        (false, false) => (IconName::FileDiff, Color::Accent, "Edits Available"),
+                        (true, _) => (
+                            IconName::Check,
+                            Color::Success,
+                            tr(
+                                cx,
+                                "edit_prediction_ui.rate_prediction.tooltip.rated_prediction",
+                                "Rated Prediction",
+                            ),
+                        ),
+                        (false, true) => (
+                            IconName::File,
+                            Color::Muted,
+                            tr(
+                                cx,
+                                "edit_prediction_ui.rate_prediction.tooltip.no_edits_produced",
+                                "No Edits Produced",
+                            ),
+                        ),
+                        (false, false) => (
+                            IconName::FileDiff,
+                            Color::Accent,
+                            tr(
+                                cx,
+                                "edit_prediction_ui.rate_prediction.tooltip.edits_available",
+                                "Edits Available",
+                            ),
+                        ),
                     };
 
                 let file = completion.buffer.read(cx).file();
-                let file_name = file
-                    .as_ref()
-                    .map_or(SharedString::new_static("untitled"), |file| {
-                        file.file_name(cx).to_string().into()
-                    });
+                let file_name = file.as_ref().map_or(
+                    tr(
+                        cx,
+                        "edit_prediction_ui.rate_prediction.untitled",
+                        "untitled",
+                    ),
+                    |file| file.file_name(cx).to_string().into(),
+                );
                 let file_path = file.map(|file| file.path().as_unix_str().to_string());
 
                 ListItem::new(completion.id.clone())
@@ -1270,7 +1383,11 @@ impl Render for RatePredictionsModal {
                             .border_color(border_color)
                             .child(Icon::new(icons.base).size(IconSize::Small))
                             .child(
-                                Label::new("From most recent to oldest")
+                                Label::new(tr(
+                                    cx,
+                                    "edit_prediction_ui.rate_prediction.from_most_recent_to_oldest",
+                                    "From most recent to oldest",
+                                ))
                                     .color(Color::Muted)
                                     .size(LabelSize::Small),
                             )
@@ -1287,10 +1404,10 @@ impl Render for RatePredictionsModal {
                                         div()
                                             .p_2()
                                             .child(
-                                                Label::new(concat!(
-                                                    "No completions yet. ",
-                                                    "Use the editor to generate some, ",
-                                                    "and make sure to rate them!"
+                                                Label::new(tr(
+                                                    cx,
+                                                    "edit_prediction_ui.rate_prediction.no_completions_yet",
+                                                    "No completions yet. Use the editor to generate some, and make sure to rate them!",
                                                 ))
                                                 .color(Color::Muted),
                                             )
@@ -1340,6 +1457,77 @@ impl FeedbackCompletionProvider {
         ("@cursor_position", "Cursor placed in unhelpful position"),
         ("@whitespace", "Unwanted whitespace or newline changes"),
     ];
+
+    fn description_for(key: &'static str, cx: &App) -> SharedString {
+        match key {
+            "@location" => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.failure.location",
+                "Unexpected location",
+            ),
+            "@malformed" => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.failure.malformed",
+                "Incomplete, cut off, or syntax error",
+            ),
+            "@deleted" => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.failure.deleted",
+                "Deleted code that should be kept (use `@reverted` if it undid a recent edit)",
+            ),
+            "@style" => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.failure.style",
+                "Wrong coding style or conventions",
+            ),
+            "@repetitive" => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.failure.repetitive",
+                "Repeated existing code",
+            ),
+            "@hallucinated" => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.failure.hallucinated",
+                "Referenced non-existent symbols",
+            ),
+            "@formatting" => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.failure.formatting",
+                "Wrong indentation or structure",
+            ),
+            "@aggressive" => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.failure.aggressive",
+                "Changed more than expected",
+            ),
+            "@conservative" => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.failure.conservative",
+                "Too cautious, changed too little",
+            ),
+            "@context" => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.failure.context",
+                "Ignored or misunderstood context",
+            ),
+            "@reverted" => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.failure.reverted",
+                "Undid recent edits",
+            ),
+            "@cursor_position" => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.failure.cursor_position",
+                "Cursor placed in unhelpful position",
+            ),
+            "@whitespace" => tr(
+                cx,
+                "edit_prediction_ui.rate_prediction.failure.whitespace",
+                "Unwanted whitespace or newline changes",
+            ),
+            _ => key.into(),
+        }
+    }
 }
 
 impl editor::CompletionProvider for FeedbackCompletionProvider {
@@ -1387,17 +1575,20 @@ impl editor::CompletionProvider for FeedbackCompletionProvider {
         let completions: Vec<Completion> = Self::FAILURE_MODES
             .iter()
             .filter(|(key, _description)| key.starts_with(&query_lower))
-            .map(|(key, description)| Completion {
-                replace_range: replace_range.clone(),
-                new_text: format!("{} {}", key, description),
-                label: CodeLabel::plain(format!("{}: {}", key, description), None),
-                documentation: None,
-                source: CompletionSource::Custom,
-                icon_path: None,
-                match_start: None,
-                snippet_deduplication_key: None,
-                insert_text_mode: None,
-                confirm: None,
+            .map(|(key, _description)| {
+                let description = Self::description_for(key, cx);
+                Completion {
+                    replace_range: replace_range.clone(),
+                    new_text: format!("{} {}", key, description),
+                    label: CodeLabel::plain(format!("{}: {}", key, description), None),
+                    documentation: None,
+                    source: CompletionSource::Custom,
+                    icon_path: None,
+                    match_start: None,
+                    snippet_deduplication_key: None,
+                    insert_text_mode: None,
+                    confirm: None,
+                }
             })
             .collect();
 

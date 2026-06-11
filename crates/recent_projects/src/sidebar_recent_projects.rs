@@ -134,8 +134,13 @@ impl EventEmitter<DismissEvent> for SidebarRecentProjectsDelegate {}
 impl PickerDelegate for SidebarRecentProjectsDelegate {
     type ListItem = AnyElement;
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Search recent projects…".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        i18n::tr(
+            cx,
+            "recent_projects.sidebar.search_recent_projects",
+            "Search recent projects…",
+        )
+        .into()
     }
 
     fn render_editor(
@@ -279,7 +284,11 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
                             .await
                     })
                     .detach_and_prompt_err(
-                        "Failed to open project",
+                        &i18n::tr(
+                            cx,
+                            "recent_projects.failed_to_open_project",
+                            "Failed to open project",
+                        ),
                         window,
                         cx,
                         |_, _, _| None,
@@ -292,11 +301,15 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
 
     fn dismissed(&mut self, _window: &mut Window, _cx: &mut Context<Picker<Self>>) {}
 
-    fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
+    fn no_matches_text(&self, _window: &mut Window, cx: &mut App) -> Option<SharedString> {
         let text = if self.workspaces.is_empty() {
-            "Recently opened projects will show up here"
+            i18n::tr(
+                cx,
+                "recent_projects.no_matches.recent_projects_will_appear",
+                "Recently opened projects will show up here",
+            )
         } else {
-            "No matches"
+            i18n::tr(cx, "recent_projects.no_matches.none", "No matches")
         };
         Some(text.into())
     }
@@ -379,7 +392,11 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
                 )
                 .tooltip(move |_, cx| {
                     Tooltip::with_meta(
-                        "Open Project in This Window",
+                        i18n::tr(
+                            cx,
+                            "recent_projects.open_project_in_this_window",
+                            "Open Project in This Window",
+                        ),
                         None,
                         tooltip_path.clone(),
                         cx,
@@ -410,7 +427,11 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
                                 .w_full()
                                 .gap_1()
                                 .justify_between()
-                                .child(Label::new("Add Local Folders"))
+                                .child(Label::new(i18n::tr(
+                                    cx,
+                                    "recent_projects.add_local_folders",
+                                    "Add Local Folders",
+                                )))
                                 .child(KeyBinding::for_action_in(&open_action, &focus_handle, cx)),
                         )
                         .on_click(cx.listener(move |_, _, window, cx| {

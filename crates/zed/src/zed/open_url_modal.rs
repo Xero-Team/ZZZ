@@ -1,5 +1,6 @@
 use editor::Editor;
 use gpui::{AppContext as _, DismissEvent, Entity, EventEmitter, Focusable, ReadGlobal, Styled};
+use i18n::tr;
 use ui::{
     ActiveTheme, App, Color, Context, FluentBuilder, InteractiveElement, IntoElement, Label,
     LabelCommon, LabelSize, ParentElement, Render, SharedString, StyledExt, Window, div, h_flex,
@@ -27,7 +28,11 @@ impl OpenUrlModal {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("zzz://...", window, cx);
+            editor.set_placeholder_text(
+                &tr(cx, "zed.open_url.placeholder", "zzz://..."),
+                window,
+                cx,
+            );
             editor
         });
 
@@ -69,7 +74,11 @@ impl OpenUrlModal {
                 cx.emit(DismissEvent);
             }
             Err(e) => {
-                self.last_error = Some(format!("Invalid URL: {}", e).into());
+                self.last_error = Some(
+                    tr(cx, "zed.open_url.invalid_url", "Invalid URL: {}")
+                        .replacen("{}", &e.to_string(), 1)
+                        .into(),
+                );
                 cx.notify();
             }
         }
@@ -106,9 +115,13 @@ impl Render for OpenUrlModal {
                     })
                     .when(self.last_error.is_none(), |this| {
                         this.child(
-                            Label::new("Paste a URL to open.")
-                                .color(Color::Muted)
-                                .size(LabelSize::Small),
+                            Label::new(tr(
+                                cx,
+                                "zed.open_url.paste_to_open",
+                                "Paste a URL to open.",
+                            ))
+                            .color(Color::Muted)
+                            .size(LabelSize::Small),
                         )
                     }),
             )

@@ -5,6 +5,7 @@ use gpui::{
     DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, PromptLevel, Render, ScrollHandle,
     Task, TextStyleRefinement, UnderlineStyle, WeakEntity, svg,
 };
+use i18n::tr;
 use markdown::{CopyButtonVisibility, Markdown, MarkdownElement, MarkdownStyle};
 use parking_lot::Mutex;
 use project::project_settings::ProjectSettings;
@@ -1229,7 +1230,14 @@ where
                         display.push('.');
                     }
                     let detail = f(err, window, cx).unwrap_or(display);
-                    window.prompt(PromptLevel::Critical, &msg, Some(&detail), &["Ok"], cx)
+                    let ok = tr(cx, "zed.common.ok", "Ok");
+                    window.prompt(
+                        PromptLevel::Critical,
+                        &msg,
+                        Some(&detail),
+                        &[ok.as_str()],
+                        cx,
+                    )
                 }) {
                     prompt.await.ok();
                 }

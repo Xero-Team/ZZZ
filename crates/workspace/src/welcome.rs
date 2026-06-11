@@ -11,6 +11,7 @@ use gpui::{
     ParentElement, Render, Styled, Task, Window, actions,
 };
 use gpui::{WeakEntity, linear_color_stop, linear_gradient};
+use i18n::tr;
 use menu::{SelectNext, SelectPrevious};
 
 use schemars::JsonSchema;
@@ -141,16 +142,22 @@ impl SectionVisibility {
 
 struct SectionEntry {
     icon: IconName,
-    title: &'static str,
+    title_key: &'static str,
+    title_fallback: &'static str,
     action: &'static dyn Action,
     visibility_guard: SectionVisibility,
 }
 
 impl SectionEntry {
-    fn render(&self, button_index: usize, focus: &FocusHandle) -> Option<impl IntoElement> {
+    fn render(
+        &self,
+        button_index: usize,
+        focus: &FocusHandle,
+        cx: &App,
+    ) -> Option<impl IntoElement> {
         self.visibility_guard.is_visible().then(|| {
             SectionButton::new(
-                self.title,
+                tr(cx, self.title_key, self.title_fallback),
                 self.icon,
                 self.action,
                 button_index,
@@ -162,52 +169,61 @@ impl SectionEntry {
 
 const CONTENT: (Section<4>, Section<3>) = (
     Section {
-        title: "Get Started",
+        title_key: "workspace.welcome.get_started",
+        title_fallback: "Get Started",
         entries: [
             SectionEntry {
                 icon: IconName::Plus,
-                title: "New File",
+                title_key: "workspace.welcome.new_file",
+                title_fallback: "New File",
                 action: &NewFile,
                 visibility_guard: SectionVisibility::Always,
             },
             SectionEntry {
                 icon: IconName::FolderOpen,
-                title: "Open Project",
+                title_key: "workspace.welcome.open_project",
+                title_fallback: "Open Project",
                 action: &Open::DEFAULT,
                 visibility_guard: SectionVisibility::Always,
             },
             SectionEntry {
                 icon: IconName::CloudDownload,
-                title: "Clone Repository",
+                title_key: "workspace.welcome.clone_repository",
+                title_fallback: "Clone Repository",
                 action: &GitClone,
                 visibility_guard: SectionVisibility::Always,
             },
             SectionEntry {
                 icon: IconName::ListCollapse,
-                title: "Open Command Palette",
+                title_key: "workspace.welcome.open_command_palette",
+                title_fallback: "Open Command Palette",
                 action: &command_palette::Toggle,
                 visibility_guard: SectionVisibility::Always,
             },
         ],
     },
     Section {
-        title: "Configure",
+        title_key: "workspace.welcome.configure",
+        title_fallback: "Configure",
         entries: [
             SectionEntry {
                 icon: IconName::Settings,
-                title: "Open Settings",
+                title_key: "workspace.welcome.open_settings",
+                title_fallback: "Open Settings",
                 action: &OpenSettings,
                 visibility_guard: SectionVisibility::Always,
             },
             SectionEntry {
                 icon: IconName::Keyboard,
-                title: "Customize Keymaps",
+                title_key: "workspace.welcome.customize_keymaps",
+                title_fallback: "Customize Keymaps",
                 action: &OpenKeymap,
                 visibility_guard: SectionVisibility::Always,
             },
             SectionEntry {
                 icon: IconName::Blocks,
-                title: "Explore Extensions",
+                title_key: "workspace.welcome.explore_extensions",
+                title_fallback: "Explore Extensions",
                 action: &Extensions {
                     category_filter: None,
                     id: None,
@@ -219,20 +235,25 @@ const CONTENT: (Section<4>, Section<3>) = (
 );
 
 struct Section<const COLS: usize> {
-    title: &'static str,
+    title_key: &'static str,
+    title_fallback: &'static str,
     entries: [SectionEntry; COLS],
 }
 
 impl<const COLS: usize> Section<COLS> {
-    fn render(self, index_offset: usize, focus: &FocusHandle) -> impl IntoElement {
+    fn render(self, index_offset: usize, focus: &FocusHandle, cx: &App) -> impl IntoElement {
         v_flex()
             .min_w_full()
-            .child(SectionHeader::new(self.title))
+            .child(SectionHeader::new(tr(
+                cx,
+                self.title_key,
+                self.title_fallback,
+            )))
             .children(
                 self.entries
                     .iter()
                     .enumerate()
-                    .filter_map(|(index, entry)| entry.render(index_offset + index, focus)),
+                    .filter_map(|(index, entry)| entry.render(index_offset + index, focus, cx)),
             )
     }
 }
@@ -326,7 +347,11 @@ impl WelcomePage {
         let focus = self.focus_handle.clone();
         let color = cx.theme().colors();
 
-        let description = "Run multiple threads at once, mix and match any ACP-compatible agent, and keep work conflict-free with worktrees.";
+        let description = tr(
+            cx,
+            "workspace.welcome.agent.description",
+            "Run multiple threads at once, mix and match any ACP-compatible agent, and keep work conflict-free with worktrees.",
+        );
 
         v_flex()
             .w_full()
@@ -347,7 +372,11 @@ impl WelcomePage {
                             .color(Color::Muted)
                             .size(IconSize::Small),
                     )
-                    .child(Label::new("Collaborate with Agents")),
+                    .child(Label::new(tr(
+                        cx,
+                        "workspace.welcome.agent.title",
+                        "Collaborate with Agents",
+                    ))),
             )
             .child(
                 Label::new(description)
@@ -356,28 +385,36 @@ impl WelcomePage {
                     .mb_2(),
             )
             .child(
-                Button::new("open-agent", "Open Agent Panel")
-                    .full_width()
-                    .tab_index(tab_index as isize)
-                    .style(ButtonStyle::Outlined)
-                    .key_binding(
-                        KeyBinding::for_action_in(&ToggleFocus, &self.focus_handle, cx)
-                            .size(rems_from_px(12.)),
-                    )
-                    .on_click(move |_, window, cx| {
-                        focus.dispatch_action(&ToggleWorkspaceSidebar, window, cx);
-                        focus.dispatch_action(&ToggleFocus, window, cx);
-                    }),
+                Button::new(
+                    "open-agent",
+                    tr(cx, "workspace.welcome.agent.open_panel", "Open Agent Panel"),
+                )
+                .full_width()
+                .tab_index(tab_index as isize)
+                .style(ButtonStyle::Outlined)
+                .key_binding(
+                    KeyBinding::for_action_in(&ToggleFocus, &self.focus_handle, cx)
+                        .size(rems_from_px(12.)),
+                )
+                .on_click(move |_, window, cx| {
+                    focus.dispatch_action(&ToggleWorkspaceSidebar, window, cx);
+                    focus.dispatch_action(&ToggleFocus, window, cx);
+                }),
             )
     }
 
     fn render_recent_project_section(
         &self,
         recent_projects: Vec<impl IntoElement>,
+        cx: &App,
     ) -> impl IntoElement {
         v_flex()
             .w_full()
-            .child(SectionHeader::new("Recent Projects"))
+            .child(SectionHeader::new(tr(
+                cx,
+                "workspace.welcome.recent_projects",
+                "Recent Projects",
+            )))
             .children(recent_projects)
     }
 
@@ -435,18 +472,18 @@ impl Render for WelcomePage {
         let showing_recent_projects =
             self.fallback_to_recent_projects && !recent_projects.is_empty();
         let second_section = if showing_recent_projects {
-            self.render_recent_project_section(recent_projects)
+            self.render_recent_project_section(recent_projects, cx)
                 .into_any_element()
         } else {
             second_section
-                .render(first_section_entries, &self.focus_handle)
+                .render(first_section_entries, &self.focus_handle, cx)
                 .into_any_element()
         };
 
         let welcome_label = if self.fallback_to_recent_projects {
-            "Welcome back to ZZZ"
+            tr(cx, "workspace.welcome.back", "Welcome back to ZZZ")
         } else {
-            "Welcome to ZZZ"
+            tr(cx, "workspace.welcome.default", "Welcome to ZZZ")
         };
 
         h_flex()
@@ -476,14 +513,18 @@ impl Render for WelcomePage {
                             .child(Vector::square(VectorName::ZedLogo, rems_from_px(45.)))
                             .child(
                                 v_flex().child(Headline::new(welcome_label)).child(
-                                    Label::new("The editor for what's next")
-                                        .size(LabelSize::Small)
-                                        .color(Color::Muted)
-                                        .italic(),
+                                    Label::new(tr(
+                                        cx,
+                                        "workspace.welcome.subtitle",
+                                        "The editor for what's next",
+                                    ))
+                                    .size(LabelSize::Small)
+                                    .color(Color::Muted)
+                                    .italic(),
                                 ),
                             ),
                     )
-                    .child(first_section.render(Default::default(), &self.focus_handle))
+                    .child(first_section.render(Default::default(), &self.focus_handle, cx))
                     .child(second_section)
                     .when(ai_enabled && !showing_recent_projects, |this| {
                         let agent_tab_index = next_tab_index;
@@ -493,13 +534,20 @@ impl Render for WelcomePage {
                     .when(!self.fallback_to_recent_projects, |this| {
                         this.child(
                             v_flex().gap_4().child(Divider::horizontal()).child(
-                                Button::new("welcome-exit", "Return to Onboarding")
-                                    .tab_index(next_tab_index as isize)
-                                    .full_width()
-                                    .label_size(LabelSize::XSmall)
-                                    .on_click(|_, window, cx| {
-                                        window.dispatch_action(OpenOnboarding.boxed_clone(), cx);
-                                    }),
+                                Button::new(
+                                    "welcome-exit",
+                                    tr(
+                                        cx,
+                                        "workspace.welcome.return_to_onboarding",
+                                        "Return to Onboarding",
+                                    ),
+                                )
+                                .tab_index(next_tab_index as isize)
+                                .full_width()
+                                .label_size(LabelSize::XSmall)
+                                .on_click(|_, window, cx| {
+                                    window.dispatch_action(OpenOnboarding.boxed_clone(), cx);
+                                }),
                             ),
                         )
                     }),

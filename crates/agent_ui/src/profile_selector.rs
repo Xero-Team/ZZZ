@@ -11,6 +11,7 @@ use gpui::{
     Action, AnyElement, AnyView, App, BackgroundExecutor, Context, DismissEvent, Empty, Entity,
     FocusHandle, Focusable, ForegroundExecutor, SharedString, Subscription, Task, Window,
 };
+use i18n as app_i18n;
 use picker::{Picker, PickerDelegate, popover_menu::PickerPopoverMenu};
 use settings::{Settings as _, SettingsStore, update_settings_file};
 use std::{
@@ -21,6 +22,10 @@ use ui::{
     DocumentationAside, HighlightedLabel, KeyBinding, LabelSize, ListItem, ListItemSpacing,
     PopoverMenuHandle, Tooltip, prelude::*,
 };
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 /// Trait for types that can provide and manage agent profiles
 pub trait ProfileProvider {
@@ -166,12 +171,23 @@ impl Render for ProfileSelector {
         }
 
         if !self.provider.profiles_supported(cx) {
-            return Button::new("tools-not-supported-button", "Tools Unsupported")
-                .disabled(true)
-                .label_size(LabelSize::Small)
-                .color(Color::Muted)
-                .tooltip(Tooltip::text("This model does not support tools."))
-                .into_any_element();
+            return Button::new(
+                "tools-not-supported-button",
+                tr(
+                    cx,
+                    "agent_ui.profile_selector.tools_unsupported",
+                    "Tools Unsupported",
+                ),
+            )
+            .disabled(true)
+            .label_size(LabelSize::Small)
+            .color(Color::Muted)
+            .tooltip(Tooltip::text(tr(
+                cx,
+                "agent_ui.profile_selector.tools_not_supported_tooltip",
+                "This model does not support tools.",
+            )))
+            .into_any_element();
         }
 
         let picker = self.ensure_picker(window, cx);
@@ -182,7 +198,7 @@ impl Render for ProfileSelector {
 
         let selected_profile = profile
             .map(|profile| profile.name.clone())
-            .unwrap_or_else(|| "Unknown".into());
+            .unwrap_or_else(|| tr(cx, "agent_ui.profile_selector.unknown", "Unknown"));
 
         let icon = if self.picker_handle.is_deployed() {
             IconName::ChevronUp
@@ -202,7 +218,11 @@ impl Render for ProfileSelector {
                     .gap_1()
                     .child(
                         container()
-                            .child(Label::new("Change Profile"))
+                            .child(Label::new(tr(
+                                cx,
+                                "agent_ui.profile_selector.change_profile",
+                                "Change Profile",
+                            )))
                             .child(KeyBinding::for_action(&ToggleProfileSelector, cx)),
                     )
                     .child(
@@ -210,7 +230,11 @@ impl Render for ProfileSelector {
                             .pt_1()
                             .border_t_1()
                             .border_color(cx.theme().colors().border_variant)
-                            .child(Label::new("Cycle Through Profiles"))
+                            .child(Label::new(tr(
+                                cx,
+                                "agent_ui.profile_selector.cycle_through_profiles",
+                                "Cycle Through Profiles",
+                            )))
                             .child(KeyBinding::for_action(&CycleModeSelector, cx)),
                     )
                     .into_any()
@@ -244,8 +268,13 @@ struct ProfileMatchEntry {
 }
 
 enum ProfilePickerEntry {
-    Header(SharedString),
+    Header(ProfilePickerHeader),
     Profile(ProfileMatchEntry),
+}
+
+#[derive(Clone, Copy)]
+enum ProfilePickerHeader {
+    CustomProfiles,
 }
 
 pub struct ProfilePickerDelegate {
@@ -341,11 +370,20 @@ impl ProfilePickerDelegate {
             .collect()
     }
 
-    fn documentation(candidate: &ProfileCandidate) -> Option<&'static str> {
+    fn documentation(candidate: &ProfileCandidate) -> Option<(&'static str, &'static str)> {
         match candidate.id.as_str() {
-            builtin_profiles::WRITE => Some("Get help to write anything."),
-            builtin_profiles::ASK => Some("Chat about your codebase."),
-            builtin_profiles::MINIMAL => Some("Chat about anything with no tools."),
+            builtin_profiles::WRITE => Some((
+                "agent_ui.profile_selector.docs.write",
+                "Get help to write anything.",
+            )),
+            builtin_profiles::ASK => Some((
+                "agent_ui.profile_selector.docs.ask",
+                "Chat about your codebase.",
+            )),
+            builtin_profiles::MINIMAL => Some((
+                "agent_ui.profile_selector.docs.minimal",
+                "Chat about anything with no tools.",
+            )),
             _ => None,
         }
     }
@@ -357,7 +395,9 @@ impl ProfilePickerDelegate {
         for (idx, candidate) in candidates.iter().enumerate() {
             if !candidate.is_builtin && !inserted_custom_header {
                 if !entries.is_empty() {
-                    entries.push(ProfilePickerEntry::Header("Custom Profiles".into()));
+                    entries.push(ProfilePickerEntry::Header(
+                        ProfilePickerHeader::CustomProfiles,
+                    ));
                 }
                 inserted_custom_header = true;
             }
@@ -431,15 +471,23 @@ impl ProfilePickerDelegate {
 impl PickerDelegate for ProfilePickerDelegate {
     type ListItem = AnyElement;
 
-    fn placeholder_text(&self, _: &mut Window, _: &mut App) -> Arc<str> {
-        "Search profiles…".into()
+    fn placeholder_text(&self, _: &mut Window, cx: &mut App) -> Arc<str> {
+        Arc::from(app_i18n::tr(
+            cx,
+            "agent_ui.profile_selector.search_profiles_placeholder",
+            "Search profiles…",
+        ))
     }
 
-    fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
+    fn no_matches_text(&self, _window: &mut Window, cx: &mut App) -> Option<SharedString> {
         let text = if self.candidates.is_empty() {
-            "No profiles.".into()
+            tr(cx, "agent_ui.profile_selector.no_profiles", "No profiles.")
         } else {
-            "No profiles match your search.".into()
+            tr(
+                cx,
+                "agent_ui.profile_selector.no_profiles_match_search",
+                "No profiles match your search.",
+            )
         };
         Some(text)
     }
@@ -563,7 +611,7 @@ impl PickerDelegate for ProfilePickerDelegate {
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
         match self.filtered_entries.get(ix)? {
-            ProfilePickerEntry::Header(label) => Some(
+            ProfilePickerEntry::Header(header) => Some(
                 div()
                     .px_2p5()
                     .pb_0p5()
@@ -574,9 +622,15 @@ impl PickerDelegate for ProfilePickerDelegate {
                             .border_color(cx.theme().colors().border_variant)
                     })
                     .child(
-                        Label::new(label.clone())
-                            .size(LabelSize::XSmall)
-                            .color(Color::Muted),
+                        Label::new(match header {
+                            ProfilePickerHeader::CustomProfiles => tr(
+                                cx,
+                                "agent_ui.profile_selector.custom_profiles",
+                                "Custom Profiles",
+                            ),
+                        })
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted),
                     )
                     .into_any_element(),
             ),
@@ -636,7 +690,8 @@ impl PickerDelegate for ProfilePickerDelegate {
         };
 
         let candidate = self.candidates.get(entry.candidate_index)?;
-        let docs_aside = Self::documentation(candidate)?.to_string();
+        let (docs_key, docs_fallback) = Self::documentation(candidate)?;
+        let docs_aside = app_i18n::tr(cx, docs_key, docs_fallback);
 
         let side = documentation_aside_side(cx);
 
@@ -664,20 +719,19 @@ impl PickerDelegate for ProfilePickerDelegate {
                 .border_color(cx.theme().colors().border_variant)
                 .p_1p5()
                 .child(
-                    Button::new("configure", "Configure")
-                        .full_width()
-                        .style(ButtonStyle::Outlined)
-                        .key_binding(
-                            KeyBinding::for_action_in(
-                                &ManageProfiles::default(),
-                                &focus_handle,
-                                cx,
-                            )
+                    Button::new(
+                        "configure",
+                        tr(cx, "agent_ui.profile_selector.configure", "Configure"),
+                    )
+                    .full_width()
+                    .style(ButtonStyle::Outlined)
+                    .key_binding(
+                        KeyBinding::for_action_in(&ManageProfiles::default(), &focus_handle, cx)
                             .map(|kb| kb.size(rems_from_px(12.))),
-                        )
-                        .on_click(|_, window, cx| {
-                            window.dispatch_action(ManageProfiles::default().boxed_clone(), cx);
-                        }),
+                    )
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(ManageProfiles::default().boxed_clone(), cx);
+                    }),
                 )
                 .into_any(),
         )
@@ -714,7 +768,7 @@ mod tests {
         )));
         assert!(entries.iter().any(|entry| matches!(
             entry,
-            ProfilePickerEntry::Header(label) if label.as_ref() == "Custom Profiles"
+            ProfilePickerEntry::Header(ProfilePickerHeader::CustomProfiles)
         )));
     }
 

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use fuzzy::StringMatch;
 use gpui::{AnyElement, App, Context, DismissEvent, ReadGlobal, SharedString, Task, Window, px};
+use i18n as app_i18n;
 use picker::{Picker, PickerDelegate};
 use settings::SettingsStore;
 use ui::{ListItem, ListItemSpacing, PopoverMenu, prelude::*};
@@ -80,8 +81,13 @@ impl PickerDelegate for OllamaModelPickerDelegate {
         cx.notify();
     }
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Search models…".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        app_i18n::tr(
+            cx,
+            "settings_ui.ollama_model_picker.search_models",
+            "Search models…",
+        )
+        .into()
     }
 
     fn update_matches(
@@ -168,7 +174,12 @@ pub fn render_ollama_model_picker(
         .trigger(render_picker_trigger_button(
             "ollama_model_picker_trigger".into(),
             if current_value.is_empty() {
-                "Select a model…".into()
+                app_i18n::tr(
+                    cx,
+                    "settings_ui.ollama_model_picker.select_model",
+                    "Select a model…",
+                )
+                .into()
             } else {
                 current_value.clone()
             },

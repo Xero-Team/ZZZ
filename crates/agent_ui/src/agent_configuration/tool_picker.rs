@@ -4,6 +4,7 @@ use agent::ContextServerRegistry;
 use agent_settings::{AgentProfileId, AgentProfileSettings};
 use fs::Fs;
 use gpui::{App, Context, DismissEvent, Entity, EventEmitter, Focusable, Task, WeakEntity, Window};
+use i18n as app_i18n;
 use picker::{Picker, PickerDelegate};
 use settings::{AgentProfileContent, ContextServerPresetContent, update_settings_file};
 use ui::{ListItem, ListItemSpacing, prelude::*};
@@ -180,10 +181,18 @@ impl PickerDelegate for ToolPickerDelegate {
         }
     }
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
         match self.mode {
-            ToolPickerMode::BuiltinTools => "Search built-in tools…",
-            ToolPickerMode::McpTools => "Search MCP tools…",
+            ToolPickerMode::BuiltinTools => app_i18n::tr(
+                cx,
+                "agent_ui.tool_picker.search_built_in_tools_placeholder",
+                "Search built-in tools…",
+            ),
+            ToolPickerMode::McpTools => app_i18n::tr(
+                cx,
+                "agent_ui.tool_picker.search_mcp_tools_placeholder",
+                "Search MCP tools…",
+            ),
         }
         .into()
     }

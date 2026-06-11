@@ -12,6 +12,7 @@ use gpui::{
     Render, SharedString, StyleRefinement, Styled, Subscription, WeakEntity, Window, deferred, div,
     px,
 };
+use i18n::tr;
 use serde::{Deserialize, Serialize};
 use settings::{Settings, SettingsStore, TerminalDockPosition};
 use std::sync::Arc;
@@ -60,7 +61,7 @@ pub trait Panel: Focusable + EventEmitter<PanelEvent> + Render + Sized {
     ) {
     }
     fn icon(&self, window: &Window, cx: &App) -> Option<ui::IconName>;
-    fn icon_tooltip(&self, window: &Window, cx: &App) -> Option<&'static str>;
+    fn icon_tooltip(&self, window: &Window, cx: &App) -> Option<SharedString>;
     fn toggle_action(&self) -> Box<dyn Action>;
     fn icon_label(&self, _window: &Window, _: &App) -> Option<String> {
         None
@@ -108,7 +109,7 @@ pub trait PanelHandle: Send + Sync {
     fn has_flexible_size(&self, window: &Window, cx: &App) -> bool;
     fn set_flexible_size(&self, flexible: bool, window: &mut Window, cx: &mut App);
     fn icon(&self, window: &Window, cx: &App) -> Option<ui::IconName>;
-    fn icon_tooltip(&self, window: &Window, cx: &App) -> Option<&'static str>;
+    fn icon_tooltip(&self, window: &Window, cx: &App) -> Option<SharedString>;
     fn toggle_action(&self, window: &Window, cx: &App) -> Box<dyn Action>;
     fn icon_label(&self, window: &Window, cx: &App) -> Option<String>;
     fn panel_focus_handle(&self, cx: &App) -> FocusHandle;
@@ -213,7 +214,7 @@ where
         self.read(cx).icon(window, cx)
     }
 
-    fn icon_tooltip(&self, window: &Window, cx: &App) -> Option<&'static str> {
+    fn icon_tooltip(&self, window: &Window, cx: &App) -> Option<SharedString> {
         self.read(cx).icon_tooltip(window, cx)
     }
 
@@ -317,6 +318,14 @@ impl DockPosition {
             Self::Left => "Left",
             Self::Bottom => "Bottom",
             Self::Right => "Right",
+        }
+    }
+
+    fn localized_label(&self, cx: &App) -> SharedString {
+        match self {
+            Self::Left => tr(cx, "workspace.dock.position.left", "Left").into(),
+            Self::Bottom => tr(cx, "workspace.dock.position.bottom", "Bottom").into(),
+            Self::Right => tr(cx, "workspace.dock.position.right", "Right").into(),
         }
     }
 
@@ -1229,14 +1238,15 @@ impl Render for PanelButtons {
                 let (action, tooltip) = if is_active_button {
                     let action = dock.toggle_action();
 
-                    let tooltip: SharedString =
-                        format!("Close {} Dock", dock.position.label()).into();
+                    let tooltip = tr(cx, "workspace.dock.close_dock", "Close {} Dock")
+                        .replacen("{}", &dock.position.localized_label(cx), 1)
+                        .into();
 
                     (action, tooltip)
                 } else {
                     let action = entry.panel.toggle_action(window, cx);
 
-                    (action, icon_tooltip.into())
+                    (action, icon_tooltip)
                 };
 
                 let focus_handle = dock.focus_handle(cx);
@@ -1258,7 +1268,8 @@ impl Render for PanelButtons {
                                         let is_current = position == dock_position;
                                         let panel = panel.clone();
                                         menu = menu.toggleable_entry(
-                                            format!("Dock {}", position.label()),
+                                            tr(cx, "workspace.dock.position_menu", "Dock {}")
+                                                .replacen("{}", &position.localized_label(cx), 1),
                                             is_current,
                                             IconPosition::Start,
                                             None,
@@ -1279,7 +1290,7 @@ impl Render for PanelButtons {
                                     let dock_for_flex = dock_for_menu.clone();
                                     let workspace_for_flex = workspace_for_menu.clone();
                                     menu = menu.toggleable_entry(
-                                        "Flex Width",
+                                        tr(cx, "workspace.dock.flex_width", "Flex Width"),
                                         currently_flexible,
                                         IconPosition::Start,
                                         None,
@@ -1493,7 +1504,7 @@ pub mod test {
             None
         }
 
-        fn icon_tooltip(&self, _window: &Window, _cx: &App) -> Option<&'static str> {
+        fn icon_tooltip(&self, _window: &Window, _cx: &App) -> Option<SharedString> {
             None
         }
 

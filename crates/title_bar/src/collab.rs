@@ -4,6 +4,7 @@ use call::ActiveCall;
 use channel::ChannelStore;
 use gpui::{AnyElement, IntoElement, ScreenCaptureSource, Styled, WeakEntity};
 use gpui::{App, Task, Window};
+use i18n::tr;
 use icons::IconName;
 use livekit_client::ConnectionQuality;
 use project::WorktreeSettings;
@@ -68,7 +69,25 @@ pub fn toggle_screen_sharing(
         }
         Err(e) => Task::ready(Err(e)),
     };
-    toggle_screen_sharing.detach_and_prompt_err("Sharing Screen Failed", window, cx, |e, _, _| Some(format!("{:?}\n\nPlease check that you have given ZZZ permissions to record your screen in Settings.", e)));
+    toggle_screen_sharing.detach_and_prompt_err(
+        &tr(
+            cx,
+            "title_bar.collab.sharing_screen_failed",
+            "Sharing Screen Failed",
+        ),
+        window,
+        cx,
+        |e, _, cx| {
+            Some(
+                tr(
+                    cx,
+                    "title_bar.collab.sharing_screen_failed_detail",
+                    "{:?}\n\nPlease check that you have given ZZZ permissions to record your screen in Settings.",
+                )
+                .replacen("{:?}", &format!("{:?}", e), 1),
+            )
+        },
+    );
 }
 
 pub fn toggle_mute(cx: &mut App) {
@@ -129,12 +148,26 @@ impl TitleBar {
 
         let effective_quality = stats.effective_quality.unwrap_or(ConnectionQuality::Lost);
         let (signal_icon, signal_color, quality_label) = match effective_quality {
-            ConnectionQuality::Excellent => {
-                (IconName::SignalHigh, Some(Color::Success), "Excellent")
-            }
-            ConnectionQuality::Good => (IconName::SignalHigh, None, "Good"),
-            ConnectionQuality::Poor => (IconName::SignalMedium, Some(Color::Warning), "Poor"),
-            ConnectionQuality::Lost => (IconName::SignalLow, Some(Color::Error), "Lost"),
+            ConnectionQuality::Excellent => (
+                IconName::SignalHigh,
+                Some(Color::Success),
+                tr(cx, "title_bar.collab.quality.excellent", "Excellent"),
+            ),
+            ConnectionQuality::Good => (
+                IconName::SignalHigh,
+                None,
+                tr(cx, "title_bar.collab.quality.good", "Good"),
+            ),
+            ConnectionQuality::Poor => (
+                IconName::SignalMedium,
+                Some(Color::Warning),
+                tr(cx, "title_bar.collab.quality.poor", "Poor"),
+            ),
+            ConnectionQuality::Lost => (
+                IconName::SignalLow,
+                Some(Color::Error),
+                tr(cx, "title_bar.collab.quality.lost", "Lost"),
+            ),
         };
 
         let quality_label: SharedString = quality_label.into();
@@ -145,7 +178,11 @@ impl TitleBar {
                 .child(
                     IconButton::new("leave-call", IconName::Exit)
                         .style(ButtonStyle::Subtle)
-                        .tooltip(Tooltip::text("Leave Call"))
+                        .tooltip(Tooltip::text(tr(
+                            cx,
+                            "title_bar.collab.leave_call",
+                            "Leave Call",
+                        )))
                         .icon_size(IconSize::Small)
                         .on_click(move |_, _window, cx| {
                             ActiveCall::global(cx)
@@ -172,11 +209,21 @@ impl TitleBar {
                         });
 
                     Tooltip::with_meta(
-                        format!("Connection: {quality_label}"),
-                        Some(&ShowCallStats),
-                        format!(
-                            "Latency: {latency} · Jitter: {jitter} · Loss: {packet_loss} · Input lag: {input_lag}",
+                        tr(cx, "title_bar.collab.connection_status", "Connection: {}").replacen(
+                            "{}",
+                            &quality_label,
+                            1,
                         ),
+                        Some(&ShowCallStats),
+                        tr(
+                            cx,
+                            "title_bar.collab.connection_stats",
+                            "Latency: {} · Jitter: {} · Loss: {} · Input lag: {}",
+                        )
+                        .replacen("{}", &latency, 1)
+                        .replacen("{}", &jitter, 1)
+                        .replacen("{}", &packet_loss, 1)
+                        .replacen("{}", &input_lag, 1),
                         cx,
                     )
                 })
@@ -204,21 +251,35 @@ impl TitleBar {
             children.push(
                 Button::new(
                     "toggle_sharing",
-                    if is_shared { "Unshare" } else { "Share" },
+                    if is_shared {
+                        tr(cx, "title_bar.collab.unshare", "Unshare")
+                    } else {
+                        tr(cx, "title_bar.collab.share", "Share")
+                    },
                 )
                 .tooltip(Tooltip::text(if is_shared {
-                    "Stop sharing project with call participants"
+                    tr(
+                        cx,
+                        "title_bar.collab.stop_sharing_project",
+                        "Stop sharing project with call participants",
+                    )
                 } else {
-                    "Share project with call participants"
+                    tr(
+                        cx,
+                        "title_bar.collab.share_project",
+                        "Share project with call participants",
+                    )
                 }))
                 .style(ButtonStyle::Subtle)
                 .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                 .toggle_state(is_shared)
                 .label_size(LabelSize::Small)
                 .when(is_sharing_disabled, |parent| {
-                    parent.disabled(true).tooltip(Tooltip::text(
+                    parent.disabled(true).tooltip(Tooltip::text(tr(
+                        cx,
+                        "title_bar.collab.project_may_not_be_shared",
                         "This project may not be shared in a public channel.",
-                    ))
+                    )))
                 })
                 .on_click(cx.listener(move |this, _, window, cx| {
                     if is_shared {
@@ -245,16 +306,34 @@ impl TitleBar {
                     if is_muted {
                         if is_deafened {
                             Tooltip::with_meta(
-                                "Unmute Microphone",
+                                tr(
+                                    cx,
+                                    "title_bar.collab.unmute_microphone",
+                                    "Unmute Microphone",
+                                ),
                                 None,
-                                "Audio will be unmuted",
+                                tr(
+                                    cx,
+                                    "title_bar.collab.audio_will_be_unmuted",
+                                    "Audio will be unmuted",
+                                ),
                                 cx,
                             )
                         } else {
-                            Tooltip::simple("Unmute Microphone", cx)
+                            Tooltip::simple(
+                                tr(
+                                    cx,
+                                    "title_bar.collab.unmute_microphone",
+                                    "Unmute Microphone",
+                                ),
+                                cx,
+                            )
                         }
                     } else {
-                        Tooltip::simple("Mute Microphone", cx)
+                        Tooltip::simple(
+                            tr(cx, "title_bar.collab.mute_microphone", "Mute Microphone"),
+                            cx,
+                        )
                     }
                 })
                 .style(ButtonStyle::Subtle)
@@ -281,18 +360,36 @@ impl TitleBar {
             .toggle_state(is_deafened)
             .tooltip(move |_window, cx| {
                 if is_deafened {
-                    let label = "Unmute Audio";
+                    let label = tr(cx, "title_bar.collab.unmute_audio", "Unmute Audio");
 
                     if !muted_by_user {
-                        Tooltip::with_meta(label, None, "Microphone will be unmuted", cx)
+                        Tooltip::with_meta(
+                            label,
+                            None,
+                            tr(
+                                cx,
+                                "title_bar.collab.microphone_will_be_unmuted",
+                                "Microphone will be unmuted",
+                            ),
+                            cx,
+                        )
                     } else {
                         Tooltip::simple(label, cx)
                     }
                 } else {
-                    let label = "Mute Audio";
+                    let label = tr(cx, "title_bar.collab.mute_audio", "Mute Audio");
 
                     if !muted_by_user {
-                        Tooltip::with_meta(label, None, "Microphone will be muted", cx)
+                        Tooltip::with_meta(
+                            label,
+                            None,
+                            tr(
+                                cx,
+                                "title_bar.collab.microphone_will_be_muted",
+                                "Microphone will be muted",
+                            ),
+                            cx,
+                        )
                     } else {
                         Tooltip::simple(label, cx)
                     }
@@ -314,9 +411,13 @@ impl TitleBar {
                 .toggle_state(is_screen_sharing)
                 .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                 .tooltip(Tooltip::text(if is_screen_sharing {
-                    "Stop Sharing Screen"
+                    tr(
+                        cx,
+                        "title_bar.collab.stop_sharing_screen",
+                        "Stop Sharing Screen",
+                    )
                 } else {
-                    "Share Screen"
+                    tr(cx, "title_bar.collab.share_screen", "Share Screen")
                 }))
                 .on_click(move |_, window, cx| {
                     let should_share = ActiveCall::global(cx)
@@ -339,7 +440,11 @@ impl TitleBar {
                                 }
                             });
                             task.detach_and_prompt_err(
-                                "Sharing Screen Failed",
+                                &tr(
+                                    cx,
+                                    "title_bar.collab.sharing_screen_failed",
+                                    "Sharing Screen Failed",
+                                ),
                                 window,
                                 cx,
                                 |e, _, _| Some(format!("{e:?}")),
@@ -410,10 +515,10 @@ impl TitleBar {
                                     continue;
                                 };
 
-                                let label = meta
-                                    .label
-                                    .clone()
-                                    .unwrap_or_else(|| SharedString::from("Unknown screen"));
+                                let label = meta.label.clone().unwrap_or_else(|| {
+                                    tr(cx, "title_bar.collab.unknown_screen", "Unknown screen")
+                                        .into()
+                                });
                                 let resolution = SharedString::from(format!(
                                     "{} × {}",
                                     meta.resolution.width.0, meta.resolution.height.0

@@ -32,6 +32,7 @@ use gpui::{
     Action, App, AppContext, Axis, Context, Entity, EventEmitter, Focusable, KeyContext,
     KeystrokeEvent, Render, Subscription, Task, WeakEntity, Window, actions,
 };
+use i18n::tr;
 use insert::{NormalBefore, TemporaryNormal};
 use language::{CursorShape, Point, Selection, SelectionGoal, TransactionId};
 pub use mode_indicator::ModeIndicator;
@@ -361,7 +362,12 @@ pub fn init(cx: &mut App) {
         workspace.register_action(|_, _: &zed_actions::vim::OpenDefaultKeymap, _, cx| {
             cx.emit(workspace::Event::OpenBundledFile {
                 text: settings::vim_keymap(),
-                title: "Default Vim Bindings",
+                title: tr(
+                    cx,
+                    "zed.bundled_file.default_vim_bindings",
+                    "Default Vim Bindings",
+                )
+                .into(),
                 language: "JSON",
             });
         });

@@ -8,6 +8,7 @@ use gpui::{
     ClipboardItem, Entity, Hsla, MouseButton, ScrollHandle, Subscription, TextStyle,
     TextStyleRefinement, UnderlineStyle, WeakEntity, prelude::*,
 };
+use i18n::tr;
 use markdown::{Markdown, MarkdownElement};
 use project::{git_store::Repository, project_settings::ProjectSettings};
 use settings::Settings as _;
@@ -403,16 +404,18 @@ fn deploy_blame_entry_context_menu(
     window: &mut Window,
     cx: &mut App,
 ) {
+    let copy_commit_sha = tr(cx, "git_ui.blame_ui.copy_commit_sha", "Copy Commit SHA");
+    let open_permalink = tr(cx, "git_ui.blame_ui.open_permalink", "Open Permalink");
     let context_menu = ContextMenu::build(window, cx, move |menu, _, _| {
         let sha = format!("{}", blame_entry.sha);
         menu.on_blur_subscription(Subscription::new(|| {}))
-            .entry("Copy Commit SHA", None, move |_, cx| {
+            .entry(copy_commit_sha.clone(), None, move |_, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(sha.clone()));
             })
             .when_some(
                 details.and_then(|details| details.permalink.clone()),
                 |this, url| {
-                    this.entry("Open Permalink", None, move |_, cx| {
+                    this.entry(open_permalink.clone(), None, move |_, cx| {
                         cx.open_url(url.as_str())
                     })
                 },

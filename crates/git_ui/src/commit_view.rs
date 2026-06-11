@@ -17,6 +17,7 @@ use gpui::{
     EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, ParentElement, Pixels,
     PromptLevel, Render, Styled, Task, WeakEntity, Window, actions,
 };
+use i18n::tr;
 use language::{
     Buffer, Capability, DiskState, File, LanguageRegistry, LineEnding, OffsetRangeExt as _,
     ReplicaId, Rope, TextBuffer,
@@ -138,7 +139,11 @@ impl Addon for CommitDiffAddon {
         menu.when_some(file_to_open, |menu, file| {
             let commit_view = self.commit_view.clone();
             menu.entry(
-                "Open File in Project",
+                tr(
+                    cx,
+                    "git_ui.commit_view.open_file_in_project",
+                    "Open File in Project",
+                ),
                 Some(Box::new(OpenFileAtHead)),
                 move |window, cx| {
                     commit_view
@@ -570,9 +575,17 @@ impl CommitView {
         let has_more = self.commit.message.trim().contains('\n');
         let is_expanded = self.message_expanded;
         let expand_tooltip = if is_expanded {
-            "Fold Commit Description"
+            tr(
+                cx,
+                "git_ui.commit_view.fold_commit_description",
+                "Fold Commit Description",
+            )
         } else {
-            "Expand Commit Description"
+            tr(
+                cx,
+                "git_ui.commit_view.expand_commit_description",
+                "Expand Commit Description",
+            )
         };
 
         v_flex()
@@ -646,7 +659,7 @@ impl CommitView {
             )
             .when(self.stash.is_none(), |this| {
                 this.child(
-                    Button::new("sha", "Commit SHA")
+                    Button::new("sha", tr(cx, "git_ui.commit_view.commit_sha", "Commit SHA"))
                         .start_icon(
                             Icon::new(copy_icon)
                                 .size(IconSize::Small)
@@ -655,7 +668,12 @@ impl CommitView {
                         .tooltip({
                             let commit_sha = commit_sha.clone();
                             move |_, cx| {
-                                Tooltip::with_meta("Copy Commit SHA", None, commit_sha.clone(), cx)
+                                Tooltip::with_meta(
+                                    tr(cx, "git_ui.commit_view.copy_commit_sha", "Copy Commit SHA"),
+                                    None,
+                                    commit_sha.clone(),
+                                    cx,
+                                )
                             }
                         })
                         .on_click(move |_, _, cx| {
@@ -704,7 +722,7 @@ impl CommitView {
     fn apply_stash(workspace: &mut Workspace, window: &mut Window, cx: &mut App) {
         Self::stash_action(
             workspace,
-            "Apply",
+            tr(cx, "git_ui.commit_view.apply", "Apply"),
             window,
             cx,
             async move |repository, sha, stash, commit_view, workspace, cx| {
@@ -731,7 +749,7 @@ impl CommitView {
     fn pop_stash(workspace: &mut Workspace, window: &mut Window, cx: &mut App) {
         Self::stash_action(
             workspace,
-            "Pop",
+            tr(cx, "git_ui.commit_view.pop", "Pop"),
             window,
             cx,
             async move |repository, sha, stash, commit_view, workspace, cx| {
@@ -758,7 +776,7 @@ impl CommitView {
     fn remove_stash(workspace: &mut Workspace, window: &mut Window, cx: &mut App) {
         Self::stash_action(
             workspace,
-            "Drop",
+            tr(cx, "git_ui.commit_view.drop", "Drop"),
             window,
             cx,
             async move |repository, sha, stash, commit_view, workspace, cx| {
@@ -784,7 +802,7 @@ impl CommitView {
 
     fn stash_action<AsyncFn>(
         workspace: &mut Workspace,
-        str_action: &str,
+        str_action: String,
         window: &mut Window,
         cx: &mut App,
         callback: AsyncFn,
@@ -806,11 +824,18 @@ impl CommitView {
             return;
         };
         let sha = commit_view.read(cx).commit.sha.clone();
+        let cancel = tr(cx, "prompt.common.cancel", "Cancel");
         let answer = window.prompt(
             PromptLevel::Info,
-            &format!("{} stash@{{{}}}?", str_action, stash),
+            &tr(
+                cx,
+                "git_ui.commit_view.stash_action_prompt",
+                "{} stash@{{{}}}?",
+            )
+            .replacen("{}", &str_action, 1)
+            .replacen("{}", &stash.to_string(), 1),
             None,
-            &[str_action, "Cancel"],
+            &[str_action.as_str(), cancel.as_str()],
             cx,
         );
 
@@ -1258,7 +1283,7 @@ impl Render for CommitViewToolbar {
                     .icon_size(IconSize::Small)
                     .tooltip(move |_, cx| {
                         Tooltip::for_action(
-                            "Buffer Search",
+                            tr(cx, "git_ui.commit_view.buffer_search", "Buffer Search"),
                             &zed_actions::buffer_search::Deploy::find(),
                             cx,
                         )
@@ -1274,7 +1299,11 @@ impl Render for CommitViewToolbar {
                 this.child(
                     IconButton::new("show-in-git-graph", IconName::GitGraph)
                         .icon_size(IconSize::Small)
-                        .tooltip(Tooltip::text("Show in Git Graph"))
+                        .tooltip(Tooltip::text(tr(
+                            cx,
+                            "git_ui.commit_view.show_in_git_graph",
+                            "Show in Git Graph",
+                        )))
                         .on_click(move |_, window, cx| {
                             window.dispatch_action(
                                 Box::new(crate::git_panel::OpenAtCommit {
@@ -1289,7 +1318,13 @@ impl Render for CommitViewToolbar {
 
                     IconButton::new("view_on_provider", icon)
                         .icon_size(IconSize::Small)
-                        .tooltip(Tooltip::text(format!("View on {}", provider_name)))
+                        .tooltip(Tooltip::text(
+                            tr(cx, "git_ui.commit_view.view_on_provider", "View on {}").replacen(
+                                "{}",
+                                &provider_name,
+                                1,
+                            ),
+                        ))
                         .on_click(move |_, _, cx| cx.open_url(&url))
                 }))
             })

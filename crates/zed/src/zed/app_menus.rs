@@ -392,102 +392,183 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
             ],
         },
         Menu {
-            name: "View".into(),
+            name: tr(cx, "menu.view", "View").into(),
             disabled: false,
             items: view_items,
         },
         Menu {
-            name: "Go".into(),
+            name: tr(cx, "menu.go", "Go").into(),
             disabled: false,
             items: vec![
-                MenuItem::action("Back", workspace::GoBack),
-                MenuItem::action("Forward", workspace::GoForward),
+                MenuItem::action(tr(cx, "menu.go.back", "Back"), workspace::GoBack),
+                MenuItem::action(tr(cx, "menu.go.forward", "Forward"), workspace::GoForward),
                 MenuItem::separator(),
-                MenuItem::action("Command Palette...", zed_actions::command_palette::Toggle),
+                MenuItem::action(
+                    tr(cx, "menu.go.command_palette", "Command Palette..."),
+                    zed_actions::command_palette::Toggle,
+                ),
                 MenuItem::separator(),
-                MenuItem::action("Go to File...", workspace::ToggleFileFinder::default()),
+                MenuItem::action(
+                    tr(cx, "menu.go.go_to_file", "Go to File..."),
+                    workspace::ToggleFileFinder::default(),
+                ),
                 // MenuItem::action("Go to Symbol in Project", project_symbols::Toggle),
                 MenuItem::action(
-                    "Go to Symbol in Editor...",
+                    tr(
+                        cx,
+                        "menu.go.go_to_symbol_in_editor",
+                        "Go to Symbol in Editor...",
+                    ),
                     zed_actions::outline::ToggleOutline,
                 ),
-                MenuItem::action("Go to Line/Column...", editor::actions::ToggleGoToLine),
-                MenuItem::separator(),
-                MenuItem::action("Go to Definition", editor::actions::GoToDefinition),
-                MenuItem::action("Go to Declaration", editor::actions::GoToDeclaration),
-                MenuItem::action("Go to Type Definition", editor::actions::GoToTypeDefinition),
                 MenuItem::action(
-                    "Find All References",
+                    tr(cx, "menu.go.go_to_line_column", "Go to Line/Column..."),
+                    editor::actions::ToggleGoToLine,
+                ),
+                MenuItem::separator(),
+                MenuItem::action(
+                    tr(cx, "menu.go.go_to_definition", "Go to Definition"),
+                    editor::actions::GoToDefinition,
+                ),
+                MenuItem::action(
+                    tr(cx, "menu.go.go_to_declaration", "Go to Declaration"),
+                    editor::actions::GoToDeclaration,
+                ),
+                MenuItem::action(
+                    tr(cx, "menu.go.go_to_type_definition", "Go to Type Definition"),
+                    editor::actions::GoToTypeDefinition,
+                ),
+                MenuItem::action(
+                    tr(cx, "menu.go.find_all_references", "Find All References"),
                     editor::actions::FindAllReferences::default(),
                 ),
                 MenuItem::separator(),
-                MenuItem::action("Next Problem", editor::actions::GoToDiagnostic::default()),
                 MenuItem::action(
-                    "Previous Problem",
+                    tr(cx, "menu.go.next_problem", "Next Problem"),
+                    editor::actions::GoToDiagnostic::default(),
+                ),
+                MenuItem::action(
+                    tr(cx, "menu.go.previous_problem", "Previous Problem"),
                     editor::actions::GoToPreviousDiagnostic::default(),
                 ),
             ],
         },
         Menu {
-            name: "Run".into(),
+            name: tr(cx, "menu.run", "Run").into(),
             disabled: false,
             items: vec![
                 MenuItem::action(
-                    "Spawn Task",
+                    tr(cx, "menu.run.spawn_task", "Spawn Task"),
                     zed_actions::Spawn::ViaModal {
                         reveal_target: None,
                     },
                 ),
-                MenuItem::action("Start Debugger", debugger_ui::Start),
-                MenuItem::separator(),
-                MenuItem::action("Edit tasks.json...", crate::zed::OpenProjectTasks),
-                MenuItem::action("Edit debug.json...", zed_actions::OpenProjectDebugTasks),
-                MenuItem::separator(),
-                MenuItem::action("Continue", debugger_ui::Continue),
-                MenuItem::action("Step Over", debugger_ui::StepOver),
-                MenuItem::action("Step Into", debugger_ui::StepInto),
-                MenuItem::action("Step Out", debugger_ui::StepOut),
-                MenuItem::separator(),
-                MenuItem::action("Toggle Breakpoint", editor::actions::ToggleBreakpoint),
-                MenuItem::action("Edit Breakpoint", editor::actions::EditLogBreakpoint),
-                MenuItem::action("Clear All Breakpoints", debugger_ui::ClearAllBreakpoints),
-            ],
-        },
-        Menu {
-            name: "Window".into(),
-            disabled: false,
-            items: vec![
-                MenuItem::action("Minimize", super::Minimize),
-                MenuItem::action("Zoom", super::Zoom),
-                MenuItem::separator(),
-            ],
-        },
-        Menu {
-            name: "Help".into(),
-            disabled: false,
-            items: vec![
-                MenuItem::action("View Dependency Licenses", zed_actions::OpenLicenses),
-                MenuItem::action("Show Welcome", onboarding::ShowWelcome),
-                MenuItem::separator(),
-                MenuItem::action("File Bug Report...", zed_actions::feedback::FileBugReport),
-                MenuItem::action("Request Feature...", zed_actions::feedback::RequestFeature),
-                MenuItem::action("Email Us...", zed_actions::feedback::EmailZed),
+                MenuItem::action(
+                    tr(cx, "menu.run.start_debugger", "Start Debugger"),
+                    debugger_ui::Start,
+                ),
                 MenuItem::separator(),
                 MenuItem::action(
-                    "Documentation",
+                    tr(cx, "menu.run.edit_tasks_json", "Edit tasks.json..."),
+                    crate::zed::OpenProjectTasks,
+                ),
+                MenuItem::action(
+                    tr(cx, "menu.run.edit_debug_json", "Edit debug.json..."),
+                    zed_actions::OpenProjectDebugTasks,
+                ),
+                MenuItem::separator(),
+                MenuItem::action(
+                    tr(cx, "menu.run.continue", "Continue"),
+                    debugger_ui::Continue,
+                ),
+                MenuItem::action(
+                    tr(cx, "menu.run.step_over", "Step Over"),
+                    debugger_ui::StepOver,
+                ),
+                MenuItem::action(
+                    tr(cx, "menu.run.step_into", "Step Into"),
+                    debugger_ui::StepInto,
+                ),
+                MenuItem::action(
+                    tr(cx, "menu.run.step_out", "Step Out"),
+                    debugger_ui::StepOut,
+                ),
+                MenuItem::separator(),
+                MenuItem::action(
+                    tr(cx, "menu.run.toggle_breakpoint", "Toggle Breakpoint"),
+                    editor::actions::ToggleBreakpoint,
+                ),
+                MenuItem::action(
+                    tr(cx, "menu.run.edit_breakpoint", "Edit Breakpoint"),
+                    editor::actions::EditLogBreakpoint,
+                ),
+                MenuItem::action(
+                    tr(
+                        cx,
+                        "menu.run.clear_all_breakpoints",
+                        "Clear All Breakpoints",
+                    ),
+                    debugger_ui::ClearAllBreakpoints,
+                ),
+            ],
+        },
+        Menu {
+            name: tr(cx, "menu.window", "Window").into(),
+            disabled: false,
+            items: vec![
+                MenuItem::action(tr(cx, "menu.window.minimize", "Minimize"), super::Minimize),
+                MenuItem::action(tr(cx, "menu.window.zoom", "Zoom"), super::Zoom),
+                MenuItem::separator(),
+            ],
+        },
+        Menu {
+            name: tr(cx, "menu.help", "Help").into(),
+            disabled: false,
+            items: vec![
+                MenuItem::action(
+                    tr(
+                        cx,
+                        "menu.help.view_dependency_licenses",
+                        "View Dependency Licenses",
+                    ),
+                    zed_actions::OpenLicenses,
+                ),
+                MenuItem::action(
+                    tr(cx, "menu.help.show_welcome", "Show Welcome"),
+                    onboarding::ShowWelcome,
+                ),
+                MenuItem::separator(),
+                MenuItem::action(
+                    tr(cx, "menu.help.file_bug_report", "File Bug Report..."),
+                    zed_actions::feedback::FileBugReport,
+                ),
+                MenuItem::action(
+                    tr(cx, "menu.help.request_feature", "Request Feature..."),
+                    zed_actions::feedback::RequestFeature,
+                ),
+                MenuItem::action(
+                    tr(cx, "menu.help.email_us", "Email Us..."),
+                    zed_actions::feedback::EmailZed,
+                ),
+                MenuItem::separator(),
+                MenuItem::action(
+                    tr(cx, "menu.help.documentation", "Documentation"),
                     super::OpenBrowser {
                         url: "https://zed.dev/docs".into(),
                     },
                 ),
-                MenuItem::action("Zed Repository", feedback::OpenZedRepo),
                 MenuItem::action(
-                    "Zed Twitter",
+                    tr(cx, "menu.help.zed_repository", "Zed Repository"),
+                    feedback::OpenZedRepo,
+                ),
+                MenuItem::action(
+                    tr(cx, "menu.help.zed_twitter", "Zed Twitter"),
                     super::OpenBrowser {
                         url: "https://twitter.com/zeddotdev".into(),
                     },
                 ),
                 MenuItem::action(
-                    "Join the Team",
+                    tr(cx, "menu.help.join_the_team", "Join the Team"),
                     super::OpenBrowser {
                         url: "https://zed.dev/jobs".into(),
                     },

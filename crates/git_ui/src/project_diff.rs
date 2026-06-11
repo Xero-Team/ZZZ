@@ -24,6 +24,7 @@ use gpui::{
     Action, AnyElement, App, AppContext as _, AsyncWindowContext, Entity, EventEmitter,
     FocusHandle, Focusable, Render, Subscription, Task, WeakEntity, actions,
 };
+use i18n::tr;
 use language::{Anchor, Buffer, BufferId, Capability, OffsetRangeExt};
 use multi_buffer::{MultiBuffer, PathKey};
 use project::{
@@ -1151,8 +1152,12 @@ impl Item for ProjectDiff {
 
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString> {
         match self.diff_base(cx) {
-            DiffBase::Head => Some("Project Diff".into()),
-            DiffBase::Merge { .. } => Some("Branch Diff".into()),
+            DiffBase::Head => {
+                Some(tr(cx, "git_ui.project_diff.project_diff", "Project Diff").into())
+            }
+            DiffBase::Merge { .. } => {
+                Some(tr(cx, "git_ui.project_diff.branch_diff", "Branch Diff").into())
+            }
         }
     }
 
@@ -1168,8 +1173,17 @@ impl Item for ProjectDiff {
 
     fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
         match self.branch_diff.read(cx).diff_base() {
-            DiffBase::Head => "Uncommitted Changes".into(),
-            DiffBase::Merge { base_ref } => format!("Changes since {}", base_ref).into(),
+            DiffBase::Head => tr(
+                cx,
+                "git_ui.project_diff.uncommitted_changes",
+                "Uncommitted Changes",
+            )
+            .into(),
+            DiffBase::Merge { base_ref } => {
+                tr(cx, "git_ui.project_diff.changes_since", "Changes since {}")
+                    .replacen("{}", base_ref, 1)
+                    .into()
+            }
         }
     }
 
@@ -1347,35 +1361,36 @@ impl Render for ProjectDiff {
                 el.child(
                     v_flex()
                         .gap_1()
-                        .child(
-                            h_flex()
-                                .justify_around()
-                                .child(Label::new("No uncommitted changes")),
-                        )
+                        .child(h_flex().justify_around().child(Label::new(tr(
+                            cx,
+                            "git_ui.project_diff.no_uncommitted_changes",
+                            "No uncommitted changes",
+                        ))))
                         .map(|el| match remote_button {
                             Some(button) => el.child(h_flex().justify_around().child(button)),
-                            None => el.child(
-                                h_flex()
-                                    .justify_around()
-                                    .child(Label::new("Remote up to date")),
-                            ),
+                            None => el.child(h_flex().justify_around().child(Label::new(tr(
+                                cx,
+                                "git_ui.project_diff.remote_up_to_date",
+                                "Remote up to date",
+                            )))),
                         })
                         .child(
                             h_flex().justify_around().mt_1().child(
-                                Button::new("project-diff-close-button", "Close")
-                                    // .style(ButtonStyle::Transparent)
-                                    .key_binding(KeyBinding::for_action_in(
-                                        &CloseActiveItem::default(),
-                                        &keybinding_focus_handle,
-                                        cx,
-                                    ))
-                                    .on_click(move |_, window, cx| {
-                                        window.focus(&keybinding_focus_handle, cx);
-                                        window.dispatch_action(
-                                            Box::new(CloseActiveItem::default()),
-                                            cx,
-                                        );
-                                    }),
+                                Button::new(
+                                    "project-diff-close-button",
+                                    tr(cx, "git_ui.project_diff.close", "Close"),
+                                )
+                                // .style(ButtonStyle::Transparent)
+                                .key_binding(KeyBinding::for_action_in(
+                                    &CloseActiveItem::default(),
+                                    &keybinding_focus_handle,
+                                    cx,
+                                ))
+                                .on_click(move |_, window, cx| {
+                                    window.focus(&keybinding_focus_handle, cx);
+                                    window
+                                        .dispatch_action(Box::new(CloseActiveItem::default()), cx);
+                                }),
                             ),
                         ),
                 )
@@ -1632,23 +1647,32 @@ impl Render for ProjectDiffToolbar {
                 h_group_sm()
                     .when(button_states.selection, |el| {
                         el.child(
-                            Button::new("stage", "Toggle Staged")
-                                .tooltip(Tooltip::for_action_title_in(
-                                    "Toggle Staged",
-                                    &ToggleStaged,
-                                    &focus_handle,
-                                ))
-                                .disabled(!button_states.stage && !button_states.unstage)
-                                .on_click(cx.listener(|this, _, window, cx| {
+                            Button::new(
+                                "stage",
+                                tr(cx, "git_ui.project_diff.toggle_staged", "Toggle Staged"),
+                            )
+                            .tooltip(Tooltip::for_action_title_in(
+                                tr(cx, "git_ui.project_diff.toggle_staged", "Toggle Staged"),
+                                &ToggleStaged,
+                                &focus_handle,
+                            ))
+                            .disabled(!button_states.stage && !button_states.unstage)
+                            .on_click(cx.listener(
+                                |this, _, window, cx| {
                                     this.dispatch_action(&ToggleStaged, window, cx)
-                                })),
+                                },
+                            )),
                         )
                     })
                     .when(!button_states.selection, |el| {
                         el.child(
-                            Button::new("stage", "Stage")
+                            Button::new("stage", tr(cx, "git_ui.project_diff.stage", "Stage"))
                                 .tooltip(Tooltip::for_action_title_in(
-                                    "Stage and go to next hunk",
+                                    tr(
+                                        cx,
+                                        "git_ui.project_diff.stage_and_go_to_next_hunk",
+                                        "Stage and go to next hunk",
+                                    ),
                                     &StageAndNext,
                                     &focus_handle,
                                 ))
@@ -1662,20 +1686,29 @@ impl Render for ProjectDiffToolbar {
                                 })),
                         )
                         .child(
-                            Button::new("unstage", "Unstage")
-                                .tooltip(Tooltip::for_action_title_in(
+                            Button::new(
+                                "unstage",
+                                tr(cx, "git_ui.project_diff.unstage", "Unstage"),
+                            )
+                            .tooltip(Tooltip::for_action_title_in(
+                                tr(
+                                    cx,
+                                    "git_ui.project_diff.unstage_and_go_to_next_hunk",
                                     "Unstage and go to next hunk",
-                                    &UnstageAndNext,
-                                    &focus_handle,
-                                ))
-                                .disabled(
-                                    !button_states.prev_next
-                                        && !button_states.stage_all
-                                        && !button_states.unstage_all,
-                                )
-                                .on_click(cx.listener(|this, _, window, cx| {
+                                ),
+                                &UnstageAndNext,
+                                &focus_handle,
+                            ))
+                            .disabled(
+                                !button_states.prev_next
+                                    && !button_states.stage_all
+                                    && !button_states.unstage_all,
+                            )
+                            .on_click(cx.listener(
+                                |this, _, window, cx| {
                                     this.dispatch_action(&UnstageAndNext, window, cx)
-                                })),
+                                },
+                            )),
                         )
                     }),
             )
@@ -1687,7 +1720,11 @@ impl Render for ProjectDiffToolbar {
                         IconButton::new("up", IconName::ArrowUp)
                             .shape(ui::IconButtonShape::Square)
                             .tooltip(Tooltip::for_action_title_in(
-                                "Go to previous hunk",
+                                tr(
+                                    cx,
+                                    "git_ui.project_diff.go_to_previous_hunk",
+                                    "Go to previous hunk",
+                                ),
                                 &GoToPreviousHunk,
                                 &focus_handle,
                             ))
@@ -1700,7 +1737,7 @@ impl Render for ProjectDiffToolbar {
                         IconButton::new("down", IconName::ArrowDown)
                             .shape(ui::IconButtonShape::Square)
                             .tooltip(Tooltip::for_action_title_in(
-                                "Go to next hunk",
+                                tr(cx, "git_ui.project_diff.go_to_next_hunk", "Go to next hunk"),
                                 &GoToHunk,
                                 &focus_handle,
                             ))
@@ -1717,15 +1754,22 @@ impl Render for ProjectDiffToolbar {
                         button_states.unstage_all && !button_states.stage_all,
                         |el| {
                             el.child(
-                                Button::new("unstage-all", "Unstage All")
-                                    .tooltip(Tooltip::for_action_title_in(
+                                Button::new(
+                                    "unstage-all",
+                                    tr(cx, "git_ui.project_diff.unstage_all", "Unstage All"),
+                                )
+                                .tooltip(Tooltip::for_action_title_in(
+                                    tr(
+                                        cx,
+                                        "git_ui.project_diff.unstage_all_changes",
                                         "Unstage all changes",
-                                        &UnstageAll,
-                                        &focus_handle,
-                                    ))
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.unstage_all(window, cx)
-                                    })),
+                                    ),
+                                    &UnstageAll,
+                                    &focus_handle,
+                                ))
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.unstage_all(window, cx)),
+                                ),
                             )
                         },
                     )
@@ -1736,24 +1780,33 @@ impl Render for ProjectDiffToolbar {
                                 // todo make it so that changing to say "Unstaged"
                                 // doesn't change the position.
                                 div().child(
-                                    Button::new("stage-all", "Stage All")
-                                        .disabled(!button_states.stage_all)
-                                        .tooltip(Tooltip::for_action_title_in(
+                                    Button::new(
+                                        "stage-all",
+                                        tr(cx, "git_ui.project_diff.stage_all", "Stage All"),
+                                    )
+                                    .disabled(!button_states.stage_all)
+                                    .tooltip(Tooltip::for_action_title_in(
+                                        tr(
+                                            cx,
+                                            "git_ui.project_diff.stage_all_changes",
                                             "Stage all changes",
-                                            &StageAll,
-                                            &focus_handle,
-                                        ))
-                                        .on_click(cx.listener(|this, _, window, cx| {
+                                        ),
+                                        &StageAll,
+                                        &focus_handle,
+                                    ))
+                                    .on_click(
+                                        cx.listener(|this, _, window, cx| {
                                             this.stage_all(window, cx)
-                                        })),
+                                        }),
+                                    ),
                                 ),
                             )
                         },
                     )
                     .child(
-                        Button::new("commit", "Commit")
+                        Button::new("commit", tr(cx, "zed.about.commit", "Commit"))
                             .tooltip(Tooltip::for_action_title_in(
-                                "Commit",
+                                tr(cx, "zed.about.commit", "Commit"),
                                 &Commit,
                                 &focus_handle,
                             ))
@@ -1765,7 +1818,7 @@ impl Render for ProjectDiffToolbar {
             // "Send Review to Agent" button (only shown when there are review comments)
             .when(review_count > 0, |el| {
                 el.child(vertical_divider()).child(
-                    render_send_review_to_agent_button(review_count, &focus_handle).on_click(
+                    render_send_review_to_agent_button(review_count, &focus_handle, cx).on_click(
                         cx.listener(|this, _, window, cx| {
                             this.dispatch_action(&SendReviewToAgent, window, cx)
                         }),
@@ -1775,10 +1828,19 @@ impl Render for ProjectDiffToolbar {
     }
 }
 
-fn render_send_review_to_agent_button(review_count: usize, focus_handle: &FocusHandle) -> Button {
+fn render_send_review_to_agent_button(
+    review_count: usize,
+    focus_handle: &FocusHandle,
+    cx: &App,
+) -> Button {
     Button::new(
         "send-review",
-        format!("Send Review to Agent ({})", review_count),
+        tr(
+            cx,
+            "git_ui.project_diff.send_review_to_agent_count",
+            "Send Review to Agent ({})",
+        )
+        .replacen("{}", &review_count.to_string(), 1),
     )
     .start_icon(
         Icon::new(IconName::ZedAssistant)
@@ -1786,7 +1848,11 @@ fn render_send_review_to_agent_button(review_count: usize, focus_handle: &FocusH
             .color(Color::Muted),
     )
     .tooltip(Tooltip::for_action_title_in(
-        "Send all review comments to the Agent panel",
+        tr(
+            cx,
+            "git_ui.project_diff.send_all_review_comments_to_agent_panel",
+            "Send all review comments to the Agent panel",
+        ),
         &SendReviewToAgent,
         focus_handle,
     ))
@@ -1858,7 +1924,8 @@ impl Render for BranchDiffToolbar {
             return div();
         };
         let selected_base_ref = base_ref.clone();
-        let base_ref_label = format!("Base: {base_ref}");
+        let base_ref_label =
+            tr(cx, "git_ui.project_diff.base", "Base: {}").replacen("{}", &base_ref, 1);
         let repository = project_diff.read(cx).branch_diff.read(cx).repo().cloned();
         let workspace = project_diff.read(cx).workspace.clone();
         let project_diff_for_picker = project_diff.downgrade();
@@ -1913,7 +1980,11 @@ impl Render for BranchDiffToolbar {
                                     .size(IconSize::XSmall)
                                     .color(Color::Muted),
                             ),
-                        Tooltip::text("Select base branch"),
+                        Tooltip::text(tr(
+                            cx,
+                            "git_ui.project_diff.select_base_branch",
+                            "Select base branch",
+                        )),
                     ),
             )
             .when(!is_multibuffer_empty, |this| {
@@ -1926,30 +1997,37 @@ impl Render for BranchDiffToolbar {
             .when(show_review_button, |this| {
                 let focus_handle = focus_handle.clone();
                 this.child(Divider::vertical()).child(
-                    Button::new("review-diff", "Review Diff")
-                        .start_icon(
-                            Icon::new(IconName::ZedAssistant)
-                                .size(IconSize::Small)
-                                .color(Color::Muted),
-                        )
-                        .key_binding(KeyBinding::for_action_in(&ReviewDiff, &focus_handle, cx))
-                        .tooltip(move |_, cx| {
-                            Tooltip::with_meta_in(
-                                "Review Diff",
-                                Some(&ReviewDiff),
-                                "Send this diff for your last agent to review.",
-                                &focus_handle,
+                    Button::new(
+                        "review-diff",
+                        tr(cx, "git_ui.project_diff.review_diff", "Review Diff"),
+                    )
+                    .start_icon(
+                        Icon::new(IconName::ZedAssistant)
+                            .size(IconSize::Small)
+                            .color(Color::Muted),
+                    )
+                    .key_binding(KeyBinding::for_action_in(&ReviewDiff, &focus_handle, cx))
+                    .tooltip(move |_, cx| {
+                        Tooltip::with_meta_in(
+                            tr(cx, "git_ui.project_diff.review_diff", "Review Diff"),
+                            Some(&ReviewDiff),
+                            tr(
                                 cx,
-                            )
-                        })
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.dispatch_action(&ReviewDiff, window, cx);
-                        })),
+                                "git_ui.project_diff.review_diff_tooltip",
+                                "Send this diff for your last agent to review.",
+                            ),
+                            &focus_handle,
+                            cx,
+                        )
+                    })
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.dispatch_action(&ReviewDiff, window, cx);
+                    })),
                 )
             })
             .when(review_count > 0, |this| {
                 this.child(vertical_divider()).child(
-                    render_send_review_to_agent_button(review_count, &focus_handle).on_click(
+                    render_send_review_to_agent_button(review_count, &focus_handle, cx).on_click(
                         cx.listener(|this, _, window, cx| {
                             this.dispatch_action(&SendReviewToAgent, window, cx)
                         }),

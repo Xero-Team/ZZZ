@@ -63,9 +63,9 @@ use gpui::{
     Action, AnyEntity, AnyView, AnyWeakView, App, AsyncApp, AsyncWindowContext, Axis, Bounds,
     Context, CursorStyle, Decorations, DragMoveEvent, Entity, EntityId, EventEmitter, FocusHandle,
     Focusable, Global, HitboxBehavior, Hsla, KeyContext, Keystroke, ManagedView, MouseButton,
-    PathPromptOptions, Point, PromptLevel, Render, ResizeEdge, Size, Stateful, Subscription,
-    SystemWindowTabController, Task, Tiling, WeakEntity, WindowBounds, WindowHandle, WindowId,
-    WindowOptions, actions, canvas, point, relative, size, transparent_black,
+    PathPromptOptions, Point, PromptLevel, Render, ResizeEdge, SharedString, Size, Stateful,
+    Subscription, SystemWindowTabController, Task, Tiling, WeakEntity, WindowBounds, WindowHandle,
+    WindowId, WindowOptions, actions, canvas, point, relative, size, transparent_black,
 };
 pub use history_manager::*;
 use i18n::{prompt_button, tr};
@@ -1286,7 +1286,7 @@ pub enum Event {
     WorkspaceCreated(WeakEntity<Workspace>),
     OpenBundledFile {
         text: Cow<'static, str>,
-        title: &'static str,
+        title: SharedString,
         language: &'static str,
     },
     ZoomChanged,
@@ -5914,9 +5914,16 @@ impl Workspace {
             if let Some(project_id) = other_project_id {
                 let app_state = self.app_state.clone();
                 crate::join_in_room_project(project_id, remote_participant.user.id, app_state, cx)
-                    .detach_and_prompt_err("Failed to join project", window, cx, |error, _, _| {
-                        Some(format!("{error:#}"))
-                    });
+                    .detach_and_prompt_err(
+                        &tr(
+                            cx,
+                            "workspace.error.failed_to_join_project",
+                            "Failed to join project",
+                        ),
+                        window,
+                        cx,
+                        |error, _, _| Some(format!("{error:#}")),
+                    );
             }
         }
 
@@ -7309,22 +7316,42 @@ impl Workspace {
             .on_action(cx.listener(|workspace, action: &Save, window, cx| {
                 workspace
                     .save_active_item(action.save_intent.unwrap_or(SaveIntent::Save), window, cx)
-                    .detach_and_prompt_err("Failed to save", window, cx, |_, _, _| None);
+                    .detach_and_prompt_err(
+                        &tr(cx, "workspace.error.failed_to_save", "Failed to save"),
+                        window,
+                        cx,
+                        |_, _, _| None,
+                    );
             }))
             .on_action(cx.listener(|workspace, _: &FormatAndSave, window, cx| {
                 workspace
                     .save_active_item(SaveIntent::FormatAndSave, window, cx)
-                    .detach_and_prompt_err("Failed to save", window, cx, |_, _, _| None);
+                    .detach_and_prompt_err(
+                        &tr(cx, "workspace.error.failed_to_save", "Failed to save"),
+                        window,
+                        cx,
+                        |_, _, _| None,
+                    );
             }))
             .on_action(cx.listener(|workspace, _: &SaveWithoutFormat, window, cx| {
                 workspace
                     .save_active_item(SaveIntent::SaveWithoutFormat, window, cx)
-                    .detach_and_prompt_err("Failed to save", window, cx, |_, _, _| None);
+                    .detach_and_prompt_err(
+                        &tr(cx, "workspace.error.failed_to_save", "Failed to save"),
+                        window,
+                        cx,
+                        |_, _, _| None,
+                    );
             }))
             .on_action(cx.listener(|workspace, _: &SaveAs, window, cx| {
                 workspace
                     .save_active_item(SaveIntent::SaveAs, window, cx)
-                    .detach_and_prompt_err("Failed to save", window, cx, |_, _, _| None);
+                    .detach_and_prompt_err(
+                        &tr(cx, "workspace.error.failed_to_save", "Failed to save"),
+                        window,
+                        cx,
+                        |_, _, _| None,
+                    );
             }))
             .on_action(
                 cx.listener(|workspace, _: &ActivatePreviousPane, window, cx| {
@@ -8361,12 +8388,23 @@ fn notify_if_database_failed(window: WindowHandle<MultiWorkspace>, cx: &mut Asyn
                         cx,
                         |cx| {
                             cx.new(|cx| {
-                                MessageNotification::new("Failed to load the database file.", cx)
-                                    .primary_message("File an Issue")
-                                    .primary_icon(IconName::Plus)
-                                    .primary_on_click(|window, cx| {
-                                        window.dispatch_action(Box::new(FileBugReport), cx)
-                                    })
+                                MessageNotification::new(
+                                    tr(
+                                        cx,
+                                        "workspace.notification.database_failed",
+                                        "Failed to load the database file.",
+                                    ),
+                                    cx,
+                                )
+                                .primary_message(tr(
+                                    cx,
+                                    "workspace.notification.file_an_issue",
+                                    "File an Issue",
+                                ))
+                                .primary_icon(IconName::Plus)
+                                .primary_on_click(|window, cx| {
+                                    window.dispatch_action(Box::new(FileBugReport), cx)
+                                })
                             })
                         },
                     );
@@ -9512,7 +9550,13 @@ pub fn join_channel(
                                 )
                                 .into()
                             }
-                            _ => format!("{}\n\nPlease try again.", err).into(),
+                            _ => tr(
+                                cx,
+                                "prompt.channel.join_failed.try_again",
+                                "{}\n\nPlease try again.",
+                            )
+                            .replacen("{}", &err.to_string(), 1)
+                            .into(),
                         };
                         window.prompt(
                             PromptLevel::Critical,
@@ -10061,10 +10105,19 @@ pub fn open_paths(
                     workspace.update(cx, |workspace, cx| {
                         workspace.show_notification(NotificationId::unique::<OpenInWsl>(), cx, move |cx| {
                             let display_path = util::markdown::MarkdownInlineCode(&path.to_string_lossy());
-                            let msg = format!("{display_path} is inside a WSL filesystem, some features may not work unless you open it with WSL remote");
+                            let msg = tr(
+                                cx,
+                                "workspace.notification.wsl_path",
+                                "{} is inside a WSL filesystem, some features may not work unless you open it with WSL remote",
+                            )
+                            .replacen("{}", &display_path.to_string(), 1);
                             cx.new(move |cx| {
                                 MessageNotification::new(msg, cx)
-                                    .primary_message("Open in WSL")
+                                    .primary_message(tr(
+                                        cx,
+                                        "workspace.notification.open_in_wsl",
+                                        "Open in WSL",
+                                    ))
                                     .primary_icon(IconName::FolderOpen)
                                     .primary_on_click(move |window, cx| {
                                         window.dispatch_action(Box::new(remote::OpenWslPath {

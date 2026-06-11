@@ -7,6 +7,7 @@ use gpui::{
     Action, AnyElement, App, BackgroundExecutor, DismissEvent, FocusHandle, ForegroundExecutor,
     Subscription, Task,
 };
+use i18n as app_i18n;
 use language_model::{
     ConfiguredModel, IconOrSvg, LanguageModel, LanguageModelId, LanguageModelProvider,
     LanguageModelProviderId, LanguageModelRegistry,
@@ -22,6 +23,22 @@ use crate::ui::{ModelSelectorFooter, ModelSelectorHeader, ModelSelectorListItem}
 type OnModelChanged = Arc<dyn Fn(Arc<dyn LanguageModel>, &mut App) + 'static>;
 type GetActiveModel = Arc<dyn Fn(&App) -> Option<ConfiguredModel> + 'static>;
 type OnToggleFavorite = Arc<dyn Fn(Arc<dyn LanguageModel>, bool, &mut App) + 'static>;
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
+
+fn model_group_label(title: &SharedString, cx: &App) -> SharedString {
+    match title.as_ref() {
+        "Favorite" => tr(cx, "agent_ui.model_selector.favorite_group", "Favorite"),
+        "Recommended" => tr(
+            cx,
+            "agent_ui.model_selector.recommended_group",
+            "Recommended",
+        ),
+        _ => title.clone(),
+    }
+}
 
 pub type LanguageModelSelector = Picker<LanguageModelPickerDelegate>;
 
@@ -410,8 +427,12 @@ impl PickerDelegate for LanguageModelPickerDelegate {
         }
     }
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Select a model…".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        Arc::from(app_i18n::tr(
+            cx,
+            "agent_ui.model_selector.select_a_model_placeholder",
+            "Select a model…",
+        ))
     }
 
     fn update_matches(
@@ -503,9 +524,9 @@ impl PickerDelegate for LanguageModelPickerDelegate {
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
         match self.filtered_entries.get(ix)? {
-            LanguageModelPickerEntry::Separator(title) => {
-                Some(ModelSelectorHeader::new(title, ix > 1).into_any_element())
-            }
+            LanguageModelPickerEntry::Separator(title) => Some(
+                ModelSelectorHeader::new(model_group_label(title, cx), ix > 1).into_any_element(),
+            ),
             LanguageModelPickerEntry::Model(model_info) => {
                 let active_model = (self.get_active_model)(cx);
                 let active_provider_id = active_model.as_ref().map(|m| m.provider.id());

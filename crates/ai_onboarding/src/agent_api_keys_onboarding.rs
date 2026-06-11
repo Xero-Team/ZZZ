@@ -1,6 +1,11 @@
 use gpui::{Action, IntoElement, ParentElement, RenderOnce, point};
+use i18n as app_i18n;
 use language_model::{IconOrSvg, LanguageModelRegistry, ZED_CLOUD_PROVIDER_ID};
 use ui::{Divider, List, ListBulletItem, prelude::*};
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 pub struct ApiKeysWithProviders {
     configured_providers: Vec<(IconOrSvg, SharedString)>,
@@ -99,7 +104,11 @@ impl Render for ApiKeysWithProviders {
                                 div()
                                     .w_full()
                                     .child(
-                                        Label::new("Start now using API keys from your environment for the following providers:")
+                                        Label::new(tr(
+                                            cx,
+                                            "ai_onboarding.api_keys.start_now_with_env",
+                                            "Start now using API keys from your environment for the following providers:",
+                                        ))
                                             .color(Color::Muted)
                                     )
                             )
@@ -127,23 +136,32 @@ impl RenderOnce for ApiKeysWithoutProviders {
                 h_flex()
                     .gap_2()
                     .child(
-                        Label::new("API Keys")
+                        Label::new(tr(cx, "ai_onboarding.api_keys.title", "API Keys"))
                             .size(LabelSize::Small)
                             .color(Color::Muted)
                             .buffer_font(cx),
                     )
                     .child(Divider::horizontal()),
             )
-            .child(List::new().child(ListBulletItem::new(
+            .child(List::new().child(ListBulletItem::new(tr(
+                cx,
+                "ai_onboarding.api_keys.add_your_own",
                 "Add your own keys to use AI without signing in.",
-            )))
+            ))))
             .child(
-                Button::new("configure-providers", "Configure Providers")
-                    .full_width()
-                    .style(ButtonStyle::Outlined)
-                    .on_click(move |_, window, cx| {
-                        window.dispatch_action(zed_actions::agent::OpenSettings.boxed_clone(), cx);
-                    }),
+                Button::new(
+                    "configure-providers",
+                    tr(
+                        cx,
+                        "ai_onboarding.api_keys.configure_providers",
+                        "Configure Providers",
+                    ),
+                )
+                .full_width()
+                .style(ButtonStyle::Outlined)
+                .on_click(move |_, window, cx| {
+                    window.dispatch_action(zed_actions::agent::OpenSettings.boxed_clone(), cx);
+                }),
             )
     }
 }

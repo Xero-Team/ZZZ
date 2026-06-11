@@ -3,6 +3,7 @@ use gpui::{
     Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription, WeakEntity, Window,
     div,
 };
+use i18n::tr;
 use language::LanguageName;
 use settings::Settings as _;
 use ui::{Button, ButtonCommon, Clickable, FluentBuilder, LabelSize, Tooltip};
@@ -49,7 +50,7 @@ impl Render for ActiveBufferLanguage {
             let active_language_text = if let Some(active_language_text) = active_language {
                 active_language_text.to_string()
             } else {
-                "Unknown".to_string()
+                tr(cx, "language_selector.unknown", "Unknown")
             };
 
             el.child(
@@ -62,7 +63,17 @@ impl Render for ActiveBufferLanguage {
                             });
                         }
                     }))
-                    .tooltip(|_window, cx| Tooltip::for_action("Select Language", &Toggle, cx)),
+                    .tooltip(|_window, cx| {
+                        Tooltip::for_action(
+                            tr(
+                                cx,
+                                "language_selector.tooltip.select_language",
+                                "Select Language",
+                            ),
+                            &Toggle,
+                            cx,
+                        )
+                    }),
             )
         })
     }

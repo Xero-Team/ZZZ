@@ -8,6 +8,7 @@ use std::{
 
 use collections::{HashMap, HashSet};
 use gpui::{DismissEvent, EventEmitter, FocusHandle, Focusable, ScrollHandle, WeakEntity};
+use i18n::tr;
 
 use project::{
     WorktreeId,
@@ -68,12 +69,23 @@ impl Render for SecurityModal {
 
         let restricted_count = self.restricted_paths.len();
         let header_label: SharedString = if restricted_count == 1 {
-            "Unrecognized Project".into()
+            tr(
+                cx,
+                "workspace.security_modal.unrecognized_project",
+                "Unrecognized Project",
+            )
+            .into()
         } else {
-            format!("Unrecognized Projects ({})", restricted_count).into()
+            tr(
+                cx,
+                "workspace.security_modal.unrecognized_projects",
+                "Unrecognized Projects ({})",
+            )
+            .replacen("{}", &restricted_count.to_string(), 1)
+            .into()
         };
 
-        let trust_label = self.build_trust_label();
+        let trust_label = self.build_trust_label(cx);
 
         AlertModal::new("security-modal")
             .width(rems(40.))
@@ -163,23 +175,50 @@ impl Render for SecurityModal {
                         v_flex()
                             .child(
                                 Label::new(
-                                    "Untrusted projects are opened in Restricted Mode to protect your system.",
+                                    tr(
+                                        cx,
+                                        "workspace.security_modal.untrusted_projects_message",
+                                        "Untrusted projects are opened in Restricted Mode to protect your system.",
+                                    ),
                                 )
                                 .color(Color::Muted),
                             )
                             .child(
                                 Label::new(
-                                    "Review .ZZZ/settings.json for any extensions or commands configured by this project.",
+                                    tr(
+                                        cx,
+                                        "workspace.security_modal.review_settings_message",
+                                        "Review .ZZZ/settings.json for any extensions or commands configured by this project.",
+                                    ),
                                 )
                                 .color(Color::Muted),
                             ),
                     )
                     .child(
                         v_flex()
-                            .child(Label::new("Restricted Mode prevents:").color(Color::Muted))
-                            .child(ListBulletItem::new("Project settings from being applied"))
-                            .child(ListBulletItem::new("Language servers from running"))
-                            .child(ListBulletItem::new("MCP Server integrations from installing")),
+                            .child(
+                                Label::new(tr(
+                                    cx,
+                                    "workspace.security_modal.restricted_mode_prevents",
+                                    "Restricted Mode prevents:",
+                                ))
+                                .color(Color::Muted),
+                            )
+                            .child(ListBulletItem::new(tr(
+                                cx,
+                                "workspace.security_modal.prevents_project_settings",
+                                "Project settings from being applied",
+                            )))
+                            .child(ListBulletItem::new(tr(
+                                cx,
+                                "workspace.security_modal.prevents_language_servers",
+                                "Language servers from running",
+                            )))
+                            .child(ListBulletItem::new(tr(
+                                cx,
+                                "workspace.security_modal.prevents_mcp_integrations",
+                                "MCP Server integrations from installing",
+                            ))),
                     )
                     .map(|this| match trust_label {
                         Some(trust_label) => this.child(
@@ -203,7 +242,14 @@ impl Render for SecurityModal {
                     .gap_1()
                     .justify_end()
                     .child(
-                        Button::new("rm", "Stay in Restricted Mode")
+                        Button::new(
+                            "rm",
+                            tr(
+                                cx,
+                                "workspace.security_modal.stay_in_restricted_mode",
+                                "Stay in Restricted Mode",
+                            ),
+                        )
                             .key_binding(
                                 KeyBinding::for_action(
                                     &ToggleWorktreeSecurity,
@@ -218,7 +264,14 @@ impl Render for SecurityModal {
                             })),
                     )
                     .child(
-                        Button::new("tc", "Trust and Continue")
+                        Button::new(
+                            "tc",
+                            tr(
+                                cx,
+                                "workspace.security_modal.trust_and_continue",
+                                "Trust and Continue",
+                            ),
+                        )
                             .style(ButtonStyle::Filled)
                             .layer(ui::ElevationIndex::ModalSurface)
                             .key_binding(
@@ -256,7 +309,7 @@ impl SecurityModal {
         this
     }
 
-    fn build_trust_label(&self) -> Option<Cow<'static, str>> {
+    fn build_trust_label(&self, cx: &App) -> Option<Cow<'static, str>> {
         let mut has_restricted_files = false;
         let available_parents = self
             .restricted_paths
@@ -270,16 +323,35 @@ impl SecurityModal {
         match available_parents.len() {
             0 => {
                 if has_restricted_files {
-                    Some(Cow::Borrowed("Trust all single files"))
+                    Some(Cow::Owned(tr(
+                        cx,
+                        "workspace.security_modal.trust_all_single_files",
+                        "Trust all single files",
+                    )))
                 } else {
                     None
                 }
             }
-            1 => Some(Cow::Owned(format!(
-                "Trust all projects in the {:} folder",
-                self.shorten_path(available_parents[0]).display()
+            1 => Some(Cow::Owned(
+                tr(
+                    cx,
+                    "workspace.security_modal.trust_all_projects_in_folder",
+                    "Trust all projects in the {} folder",
+                )
+                .replacen(
+                    "{}",
+                    &self
+                        .shorten_path(available_parents[0])
+                        .display()
+                        .to_string(),
+                    1,
+                ),
+            )),
+            _ => Some(Cow::Owned(tr(
+                cx,
+                "workspace.security_modal.trust_all_projects_in_parent_folders",
+                "Trust all projects in the parent folders",
             ))),
-            _ => Some(Cow::Borrowed("Trust all projects in the parent folders")),
         }
     }
 

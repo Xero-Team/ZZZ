@@ -3,6 +3,7 @@ use std::process::ExitStatus;
 use anyhow::Result;
 use collections::HashSet;
 use gpui::{AppContext, AsyncWindowContext, Context, Entity, Task, WeakEntity};
+use i18n::tr;
 use language::Buffer;
 use project::{TaskSourceKind, WorktreeId};
 use remote::ConnectionState;
@@ -77,38 +78,51 @@ impl Workspace {
         }
 
         if self.terminal_provider.is_some() {
-            let task = cx.spawn_in(window, async move |workspace, cx| {
-                Self::save_for_task(&workspace, spawn_in_terminal.save, cx).await;
+            let task =
+                cx.spawn_in(window, async move |workspace, cx| {
+                    Self::save_for_task(&workspace, spawn_in_terminal.save, cx).await;
 
-                let spawn_task = workspace.update_in(cx, |workspace, window, cx| {
-                    workspace
-                        .terminal_provider
-                        .as_ref()
-                        .map(|terminal_provider| {
-                            terminal_provider.spawn(spawn_in_terminal, window, cx)
-                        })
-                });
-                if let Some(spawn_task) = spawn_task.ok().flatten() {
-                    let res = cx.background_spawn(spawn_task).await;
-                    match res {
-                        Some(Ok(status)) => {
-                            if status.success() {
-                                log::debug!("Task spawn succeeded");
-                            } else {
-                                log::debug!("Task spawn failed, code: {:?}", status.code());
-                            }
-                        }
-                        Some(Err(e)) => {
-                            log::error!("Task spawn failed: {e:#}");
-                            _ = workspace.update(cx, |w, cx| {
-                                let id = NotificationId::unique::<ResolvedTask>();
-                                w.show_toast(Toast::new(id, format!("Task spawn failed: {e}")), cx);
+                    let spawn_task = workspace.update_in(cx, |workspace, window, cx| {
+                        workspace
+                            .terminal_provider
+                            .as_ref()
+                            .map(|terminal_provider| {
+                                terminal_provider.spawn(spawn_in_terminal, window, cx)
                             })
-                        }
-                        None => log::debug!("Task spawn got cancelled"),
-                    };
-                }
-            });
+                    });
+                    if let Some(spawn_task) = spawn_task.ok().flatten() {
+                        let res = cx.background_spawn(spawn_task).await;
+                        match res {
+                            Some(Ok(status)) => {
+                                if status.success() {
+                                    log::debug!("Task spawn succeeded");
+                                } else {
+                                    log::debug!("Task spawn failed, code: {:?}", status.code());
+                                }
+                            }
+                            Some(Err(e)) => {
+                                log::error!("Task spawn failed: {e:#}");
+                                _ =
+                                    workspace.update(cx, |w, cx| {
+                                        let id = NotificationId::unique::<ResolvedTask>();
+                                        w.show_toast(
+                                            Toast::new(
+                                                id,
+                                                tr(
+                                                    cx,
+                                                    "workspace.task.spawn_failed",
+                                                    "Task spawn failed: {}",
+                                                )
+                                                .replacen("{}", &e.to_string(), 1),
+                                            ),
+                                            cx,
+                                        );
+                                    })
+                            }
+                            None => log::debug!("Task spawn got cancelled"),
+                        };
+                    }
+                });
             self.scheduled_tasks.push(task);
         }
     }

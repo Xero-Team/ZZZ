@@ -16,6 +16,7 @@ use gpui::{
     KeyContext, Modifiers, ModifiersChangedEvent, ParentElement, Render,
     StatefulInteractiveElement, Styled, Task, WeakEntity, Window, actions, rems,
 };
+use i18n::tr;
 use language::{BufferSnapshot, Point};
 use open_path_prompt::{
     OpenPathPrompt,
@@ -1897,7 +1898,11 @@ impl PickerDelegate for FileFinderDelegate {
                 this.child(
                     h_flex()
                         .id("project-scan-indicator")
-                        .tooltip(Tooltip::text("Project Scan in Progress…"))
+                        .tooltip(Tooltip::text(tr(
+                            cx,
+                            "file_finder.project_scan_in_progress",
+                            "Project Scan in Progress…",
+                        )))
                         .child(
                             Icon::new(IconName::LoadCircle)
                                 .color(Color::Accent)
@@ -1939,7 +1944,7 @@ impl PickerDelegate for FileFinderDelegate {
                                 let focus_handle = focus_handle.clone();
                                 move |_window, cx| {
                                     Tooltip::for_action_in(
-                                        "Filter Options",
+                                        tr(cx, "file_finder.filter_options", "Filter Options"),
                                         &ToggleFilterMenu,
                                         &focus_handle,
                                         cx,
@@ -1952,13 +1957,20 @@ impl PickerDelegate for FileFinderDelegate {
                             let include_ignored = self.include_ignored;
 
                             move |window, cx| {
+                                let filter_options =
+                                    tr(cx, "file_finder.filter_options", "Filter Options");
+                                let include_ignored_files = tr(
+                                    cx,
+                                    "file_finder.include_ignored_files",
+                                    "Include Ignored Files",
+                                );
                                 Some(ContextMenu::build(window, cx, {
                                     let focus_handle = focus_handle.clone();
                                     move |menu, _, _| {
                                         menu.context(focus_handle.clone())
-                                            .header("Filter Options")
+                                            .header(filter_options.clone())
                                             .toggleable_entry(
-                                                "Include Ignored Files",
+                                                include_ignored_files.clone(),
                                                 include_ignored.unwrap_or(false),
                                                 ui::IconPosition::End,
                                                 Some(ToggleIncludeIgnored.boxed_clone()),
@@ -1989,7 +2001,7 @@ impl PickerDelegate for FileFinderDelegate {
                                 })
                                 .trigger(
                                     ButtonLike::new("split-trigger")
-                                        .child(Label::new("Split…"))
+                                        .child(Label::new(tr(cx, "file_finder.split", "Split…")))
                                         .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                                         .child(
                                             KeyBinding::for_action_in(
@@ -2004,24 +2016,31 @@ impl PickerDelegate for FileFinderDelegate {
                                     let focus_handle = focus_handle.clone();
 
                                     move |window, cx| {
+                                        let split_left =
+                                            tr(cx, "file_finder.split_left", "Split Left");
+                                        let split_right =
+                                            tr(cx, "file_finder.split_right", "Split Right");
+                                        let split_up = tr(cx, "file_finder.split_up", "Split Up");
+                                        let split_down =
+                                            tr(cx, "file_finder.split_down", "Split Down");
                                         Some(ContextMenu::build(window, cx, {
                                             let focus_handle = focus_handle.clone();
                                             move |menu, _, _| {
                                                 menu.context(focus_handle)
                                                     .action(
-                                                        "Split Left",
+                                                        split_left.clone(),
                                                         pane::SplitLeft::default().boxed_clone(),
                                                     )
                                                     .action(
-                                                        "Split Right",
+                                                        split_right.clone(),
                                                         pane::SplitRight::default().boxed_clone(),
                                                     )
                                                     .action(
-                                                        "Split Up",
+                                                        split_up.clone(),
                                                         pane::SplitUp::default().boxed_clone(),
                                                     )
                                                     .action(
-                                                        "Split Down",
+                                                        split_down,
                                                         pane::SplitDown::default().boxed_clone(),
                                                     )
                                             }
@@ -2030,21 +2049,20 @@ impl PickerDelegate for FileFinderDelegate {
                                 }),
                         )
                         .child(
-                            Button::new("open-without-dismiss", "Keep Open")
-                                .key_binding(
-                                    KeyBinding::for_action_in(
-                                        &OpenWithoutDismiss,
-                                        &focus_handle,
-                                        cx,
-                                    )
+                            Button::new(
+                                "open-without-dismiss",
+                                tr(cx, "file_finder.keep_open", "Keep Open"),
+                            )
+                            .key_binding(
+                                KeyBinding::for_action_in(&OpenWithoutDismiss, &focus_handle, cx)
                                     .map(|kb| kb.size(rems_from_px(12.))),
-                                )
-                                .on_click(|_, window, cx| {
-                                    window.dispatch_action(OpenWithoutDismiss.boxed_clone(), cx)
-                                }),
+                            )
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(OpenWithoutDismiss.boxed_clone(), cx)
+                            }),
                         )
                         .child(
-                            Button::new("open-selection", "Open")
+                            Button::new("open-selection", tr(cx, "file_finder.open", "Open"))
                                 .key_binding(
                                     KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
                                         .map(|kb| kb.size(rems_from_px(12.))),

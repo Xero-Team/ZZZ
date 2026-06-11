@@ -15,6 +15,7 @@ use gpui::{
     SharedString, Task, WeakEntity,
 };
 use http_client::{AsyncBody, HttpClientWithUrl};
+use i18n as app_i18n;
 use itertools::Either;
 use language::Buffer;
 use language_model::{LanguageModelImage, LanguageModelImageExt};
@@ -82,7 +83,11 @@ impl MentionSet {
         cx: &mut App,
     ) -> Task<Result<HashMap<CreaseId, (MentionUri, Mention)>>> {
         let Some(project) = self.project.upgrade() else {
-            return Task::ready(Err(anyhow!("Project not found")));
+            return Task::ready(Err(anyhow!(app_i18n::tr(
+                cx,
+                "agent_ui.mention_set.project_not_found",
+                "Project not found",
+            ))));
         };
         let mentions = self.mentions.clone();
         cx.spawn(async move |cx| {
@@ -149,14 +154,20 @@ impl MentionSet {
                 line_range,
                 ..
             } => self.confirm_mention_for_symbol(abs_path, line_range, cx),
-            MentionUri::Selection { abs_path: None, .. } => Task::ready(Err(anyhow!(
-                "Untitled buffer selection mentions are not supported for paste"
-            ))),
+            MentionUri::Selection { abs_path: None, .. } => {
+                Task::ready(Err(anyhow!(app_i18n::tr(
+                    cx,
+                    "agent_ui.mention_set.untitled_buffer_selection_mentions_not_supported_for_paste",
+                    "Untitled buffer selection mentions are not supported for paste",
+                ))))
+            }
             MentionUri::PastedImage { .. }
             | MentionUri::TerminalSelection { .. }
-            | MentionUri::MergeConflict { .. } => {
-                Task::ready(Err(anyhow!("Unsupported mention URI type for paste")))
-            }
+            | MentionUri::MergeConflict { .. } => Task::ready(Err(anyhow!(app_i18n::tr(
+                cx,
+                "agent_ui.mention_set.unsupported_mention_uri_type_for_paste",
+                "Unsupported mention URI type for paste",
+            )))),
         }
     }
 
@@ -299,18 +310,30 @@ impl MentionSet {
             }
             MentionUri::Selection { .. } => {
                 debug_panic!("unexpected selection URI");
-                Task::ready(Err(anyhow!("unexpected selection URI")))
+                Task::ready(Err(anyhow!(app_i18n::tr(
+                    cx,
+                    "agent_ui.mention_set.unexpected_selection_uri",
+                    "Unexpected selection URI",
+                ))))
             }
             MentionUri::TerminalSelection { .. } => {
                 debug_panic!("unexpected terminal URI");
-                Task::ready(Err(anyhow!("unexpected terminal URI")))
+                Task::ready(Err(anyhow!(app_i18n::tr(
+                    cx,
+                    "agent_ui.mention_set.unexpected_terminal_uri",
+                    "Unexpected terminal URI",
+                ))))
             }
             MentionUri::GitDiff { base_ref } => {
                 self.confirm_mention_for_git_diff(base_ref.into(), cx)
             }
             MentionUri::MergeConflict { .. } => {
                 debug_panic!("unexpected merge conflict URI");
-                Task::ready(Err(anyhow!("unexpected merge conflict URI")))
+                Task::ready(Err(anyhow!(app_i18n::tr(
+                    cx,
+                    "agent_ui.mention_set.unexpected_merge_conflict_uri",
+                    "Unexpected merge conflict URI",
+                ))))
             }
         };
         let task = cx
@@ -343,20 +366,37 @@ impl MentionSet {
         cx: &mut Context<Self>,
     ) -> Task<Result<Mention>> {
         let Some(project) = self.project.upgrade() else {
-            return Task::ready(Err(anyhow!("project not found")));
+            return Task::ready(Err(anyhow!(app_i18n::tr(
+                cx,
+                "agent_ui.mention_set.project_not_found",
+                "Project not found",
+            ))));
         };
 
         let Some(project_path) = project
             .read(cx)
             .project_path_for_absolute_path(&abs_path, cx)
         else {
-            return Task::ready(Err(anyhow!("project path not found")));
+            return Task::ready(Err(anyhow!(app_i18n::tr(
+                cx,
+                "agent_ui.mention_set.project_path_not_found",
+                "Project path not found",
+            ))));
         };
         if is_raster_image_path(&abs_path) {
             if !supports_images {
-                return Task::ready(Err(anyhow!("This model does not support images yet")));
+                return Task::ready(Err(anyhow!(app_i18n::tr(
+                    cx,
+                    "agent_ui.mention_set.model_does_not_support_images_yet",
+                    "This model does not support images yet",
+                ))));
             }
             let task = project.update(cx, |project, cx| project.open_image(project_path, cx));
+            let failed_to_convert_image = app_i18n::tr(
+                cx,
+                "agent_ui.mention_set.failed_to_convert_image",
+                "Failed to convert image",
+            );
             return cx.spawn(async move |_, cx| {
                 let image = task.await?;
                 let image = image.update(cx, |image, _| image.image.clone());
@@ -369,7 +409,7 @@ impl MentionSet {
                         format: LanguageModelImage::FORMAT,
                     }))
                 } else {
-                    Err(anyhow!("Failed to convert image"))
+                    Err(anyhow!(failed_to_convert_image))
                 }
             });
         }
@@ -413,13 +453,21 @@ impl MentionSet {
         cx: &mut Context<Self>,
     ) -> Task<Result<Mention>> {
         let Some(project) = self.project.upgrade() else {
-            return Task::ready(Err(anyhow!("project not found")));
+            return Task::ready(Err(anyhow!(app_i18n::tr(
+                cx,
+                "agent_ui.mention_set.project_not_found",
+                "Project not found",
+            ))));
         };
         let Some(project_path) = project
             .read(cx)
             .project_path_for_absolute_path(&abs_path, cx)
         else {
-            return Task::ready(Err(anyhow!("project path not found")));
+            return Task::ready(Err(anyhow!(app_i18n::tr(
+                cx,
+                "agent_ui.mention_set.project_path_not_found",
+                "Project path not found",
+            ))));
         };
         let buffer = project.update(cx, |project, cx| project.open_buffer(project_path, cx));
         cx.spawn(async move |_, cx| {
@@ -443,7 +491,11 @@ impl MentionSet {
         cx: &mut Context<Self>,
     ) -> Task<Result<Mention>> {
         let Some(prompt_store) = self.prompt_store.as_ref() else {
-            return Task::ready(Err(anyhow!("Missing prompt store")));
+            return Task::ready(Err(anyhow!(app_i18n::tr(
+                cx,
+                "agent_ui.mention_set.missing_prompt_store",
+                "Missing prompt store",
+            ))));
         };
         let prompt = prompt_store.read(cx).load(id, cx);
         cx.spawn(async move |_, _| {
@@ -540,11 +592,13 @@ impl MentionSet {
     fn confirm_mention_for_thread(
         &mut self,
         _id: acp::SessionId,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Task<Result<Mention>> {
-        Task::ready(Err(anyhow!(
-            "Thread mentions are no longer supported: the built-in Zed Agent has been removed."
-        )))
+        Task::ready(Err(anyhow!(app_i18n::tr(
+            cx,
+            "agent_ui.mention_set.thread_mentions_no_longer_supported",
+            "Thread mentions are no longer supported: the built-in Zed Agent has been removed.",
+        ))))
     }
 
     fn confirm_mention_for_diagnostics(
@@ -554,7 +608,11 @@ impl MentionSet {
         cx: &mut Context<Self>,
     ) -> Task<Result<Mention>> {
         let Some(project) = self.project.upgrade() else {
-            return Task::ready(Err(anyhow!("project not found")));
+            return Task::ready(Err(anyhow!(app_i18n::tr(
+                cx,
+                "agent_ui.mention_set.project_not_found",
+                "Project not found",
+            ))));
         };
 
         let diagnostics_task = collect_diagnostics(
@@ -566,10 +624,15 @@ impl MentionSet {
             },
             cx,
         );
+        let no_diagnostics_found = app_i18n::tr(
+            cx,
+            "agent_ui.mention_set.no_diagnostics_found",
+            "No diagnostics found.",
+        );
         cx.spawn(async move |_, _| {
             let content = diagnostics_task
                 .await?
-                .unwrap_or_else(|| "No diagnostics found.".into());
+                .unwrap_or_else(|| no_diagnostics_found);
             Ok(Mention::Text {
                 content,
                 tracked_buffers: Vec::new(),
@@ -583,11 +646,19 @@ impl MentionSet {
         cx: &mut Context<Self>,
     ) -> Task<Result<Mention>> {
         let Some(project) = self.project.upgrade() else {
-            return Task::ready(Err(anyhow!("project not found")));
+            return Task::ready(Err(anyhow!(app_i18n::tr(
+                cx,
+                "agent_ui.mention_set.project_not_found",
+                "Project not found",
+            ))));
         };
 
         let Some(repo) = project.read(cx).active_repository(cx) else {
-            return Task::ready(Err(anyhow!("no active repository")));
+            return Task::ready(Err(anyhow!(app_i18n::tr(
+                cx,
+                "agent_ui.mention_set.no_active_repository",
+                "No active repository",
+            ))));
         };
 
         let diff_receiver = repo.update(cx, |repo, cx| {
@@ -596,12 +667,17 @@ impl MentionSet {
                 cx,
             )
         });
+        let no_changes_found_in_branch_diff = app_i18n::tr(
+            cx,
+            "agent_ui.mention_set.no_changes_found_in_branch_diff",
+            "No changes found in branch diff.",
+        );
 
         cx.spawn(async move |_, _| {
             let diff_text = diff_receiver.await??;
             if diff_text.is_empty() {
                 Ok(Mention::Text {
-                    content: "No changes found in branch diff.".into(),
+                    content: no_changes_found_in_branch_diff,
                     tracked_buffers: Vec::new(),
                 })
             } else {
@@ -767,6 +843,15 @@ pub(crate) async fn insert_images_as_context(
             snapshot.anchor_before(start_anchor.to_offset(&snapshot) + content_len)
         });
         let image = Arc::new(image);
+        let failed_to_convert_image = cx
+            .update(|_, cx| {
+                app_i18n::tr(
+                    cx,
+                    "agent_ui.mention_set.failed_to_convert_image",
+                    "Failed to convert image",
+                )
+            })
+            .unwrap_or_else(|_| "Failed to convert image".to_string());
         let Ok(Some((crease_id, tx))) = cx.update(|window, cx| {
             insert_crease_for_mention(
                 text_anchor,
@@ -797,7 +882,7 @@ pub(crate) async fn insert_images_as_context(
                         format: LanguageModelImage::FORMAT,
                     }))
                 } else {
-                    Err("Failed to convert image".into())
+                    Err(failed_to_convert_image.to_string())
                 }
             })
             .shared();
@@ -881,6 +966,7 @@ pub(crate) fn paste_images_as_context(
     cx: &mut App,
 ) -> Option<Task<()>> {
     let clipboard = cx.read_from_clipboard()?;
+    let default_name = app_i18n::tr(cx, "agent_ui.mention_set.default_image_name", "Image");
 
     // Only handle paste if the first clipboard entry is an image or file path.
     // If text comes first, return None so the caller falls through to text paste.
@@ -894,7 +980,7 @@ pub(crate) fn paste_images_as_context(
 
     Some(window.spawn(cx, async move |mut cx| {
         use itertools::Itertools;
-        let default_name: SharedString = "Image".into();
+        let default_name: SharedString = default_name.into();
         let (mut images, paths): (Vec<(gpui::Image, SharedString)>, Vec<_>) = clipboard
             .into_entries()
             .filter_map(|entry| match entry {
@@ -1070,15 +1156,27 @@ fn full_mention_for_directory(
         .read(cx)
         .project_path_for_absolute_path(&abs_path, cx)
     else {
-        return Task::ready(Err(anyhow!("project path not found")));
+        return Task::ready(Err(anyhow!(app_i18n::tr(
+            cx,
+            "agent_ui.mention_set.project_path_not_found",
+            "Project path not found",
+        ))));
     };
     let Some(entry) = project.read(cx).entry_for_path(&project_path, cx) else {
-        return Task::ready(Err(anyhow!("project entry not found")));
+        return Task::ready(Err(anyhow!(app_i18n::tr(
+            cx,
+            "agent_ui.mention_set.project_entry_not_found",
+            "Project entry not found",
+        ))));
     };
     let directory_path = entry.path.clone();
     let worktree_id = project_path.worktree_id;
     let Some(worktree) = project.read(cx).worktree_for_id(worktree_id, cx) else {
-        return Task::ready(Err(anyhow!("worktree not found")));
+        return Task::ready(Err(anyhow!(app_i18n::tr(
+            cx,
+            "agent_ui.mention_set.worktree_not_found",
+            "Worktree not found",
+        ))));
     };
     let project = project.clone();
     cx.spawn(async move |cx| {

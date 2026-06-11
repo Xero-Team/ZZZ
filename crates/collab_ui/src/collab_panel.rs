@@ -20,6 +20,7 @@ use gpui::{
     TextStyle, WeakEntity, Window, actions, anchored, canvas, deferred, div, fill, list, point,
     prelude::*, px,
 };
+use i18n::tr;
 
 use menu::{Cancel, Confirm, SecondaryConfirm, SelectNext, SelectPrevious};
 use notifications::{NotificationEntry, NotificationEvent, NotificationStore};
@@ -3734,8 +3735,8 @@ impl Panel for CollabPanel {
             .then_some(ui::IconName::UserGroup)
     }
 
-    fn icon_tooltip(&self, _window: &Window, _cx: &App) -> Option<&'static str> {
-        Some("Collab Panel")
+    fn icon_tooltip(&self, _window: &Window, cx: &App) -> Option<SharedString> {
+        Some(tr(cx, "workspace.dock.panel.collab", "Collab Panel").into())
     }
 
     fn toggle_action(&self) -> Box<dyn gpui::Action> {

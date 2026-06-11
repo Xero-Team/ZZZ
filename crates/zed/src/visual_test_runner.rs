@@ -106,6 +106,7 @@ use {
         App, AppContext as _, Bounds, Entity, KeyBinding, Modifiers, VisualTestAppContext,
         WindowBounds, WindowHandle, WindowOptions, point, px, size,
     },
+    i18n::tr,
     image::RgbaImage,
     project::{AgentId, Project},
     project_panel::ProjectPanel,
@@ -1760,7 +1761,11 @@ import { AiPaneTabContext } from 'context';
                     if let Some(prompt_editor) = editor.diff_review_prompt_editor().cloned() {
                         prompt_editor.update(cx, |prompt_editor: &mut editor::Editor, cx| {
                             prompt_editor.insert(
-                                "This change needs better error handling",
+                                &tr(
+                                    cx,
+                                    "zed.visual_test_runner.diff_review.better_error_handling",
+                                    "This change needs better error handling",
+                                ),
                                 window,
                                 cx,
                             );
@@ -1835,7 +1840,15 @@ import { AiPaneTabContext } from 'context';
                     // Add second comment
                     if let Some(prompt_editor) = editor.diff_review_prompt_editor().cloned() {
                         prompt_editor.update(cx, |pe, cx| {
-                            pe.insert("Second comment about imports", window, cx);
+                            pe.insert(
+                                &tr(
+                                    cx,
+                                    "zed.visual_test_runner.diff_review.second_comment_about_imports",
+                                    "Second comment about imports",
+                                ),
+                                window,
+                                cx,
+                            );
                         });
                     }
                     editor.submit_diff_review_comment(window, cx);
@@ -1843,7 +1856,15 @@ import { AiPaneTabContext } from 'context';
                     // Add third comment
                     if let Some(prompt_editor) = editor.diff_review_prompt_editor().cloned() {
                         prompt_editor.update(cx, |pe, cx| {
-                            pe.insert("Third comment about naming conventions", window, cx);
+                            pe.insert(
+                                &tr(
+                                    cx,
+                                    "zed.visual_test_runner.diff_review.third_comment_about_naming_conventions",
+                                    "Third comment about naming conventions",
+                                ),
+                                window,
+                                cx,
+                            );
                         });
                     }
                     editor.submit_diff_review_comment(window, cx);
@@ -2115,7 +2136,12 @@ fn run_agent_thread_view_test(
     connection.set_next_prompt_updates(vec![acp::SessionUpdate::ToolCall(
         acp::ToolCall::new(
             "read_file",
-            format!("Read file `{}/test-image.png`", worktree_name),
+            tr(
+                cx,
+                "zed.visual_test_runner.agent_thread.read_file",
+                "Read file `{}/test-image.png`",
+            )
+            .replacen("{}", &worktree_name, 1),
         )
         .kind(acp::ToolKind::Read)
         .status(acp::ToolCallStatus::Completed)
@@ -2202,7 +2228,17 @@ fn run_agent_thread_view_test(
 
     // Send the message to trigger the image response
     let send_future = thread.update(cx, |thread, cx| {
-        thread.send(vec!["Show me the Zed logo".into()], cx)
+        thread.send(
+            vec![
+                tr(
+                    cx,
+                    "zed.visual_test_runner.agent_thread.show_zed_logo",
+                    "Show me the Zed logo",
+                )
+                .into(),
+            ],
+            cx,
+        )
     });
 
     cx.background_executor.allow_parking();
@@ -2436,8 +2472,12 @@ fn run_tool_permissions_visual_tests(
     settings_window_handle
         .update(cx, |settings_window, window, cx| {
             settings_window.push_dynamic_sub_page(
-                "Terminal",
-                "Configure Tool Rules",
+                tr(
+                    cx,
+                    "settings_ui.tool_permissions.tool.terminal.name",
+                    "Terminal",
+                ),
+                tr(cx, "settings_ui.tool_permissions.title", "Tool Permissions"),
                 None,
                 settings_ui::pages::render_terminal_tool_config,
                 window,
@@ -2705,13 +2745,21 @@ fn run_multi_workspace_sidebar_visual_tests(
                 let (session_id, title, updated_at) = match index {
                     0 => (
                         "visual-test-thread-0",
-                        "Refine thread view scrolling behavior",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.multi_workspace.refine_thread_view_scrolling_behavior",
+                            "Refine thread view scrolling behavior",
+                        ),
                         chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 6, 15, 10, 30, 0)
                             .unwrap(),
                     ),
                     1 => (
                         "visual-test-thread-1",
-                        "Add line numbers option to FileEditBlock",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.multi_workspace.add_line_numbers_option",
+                            "Add line numbers option to FileEditBlock",
+                        ),
                         chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 6, 15, 11, 0, 0)
                             .unwrap(),
                     ),
@@ -2722,7 +2770,7 @@ fn run_multi_workspace_sidebar_visual_tests(
                     store.save_thread(
                         acp::SessionId::new(Arc::from(session_id)),
                         agent::DbThread {
-                            title: title.to_string().into(),
+                            title: title.into(),
                             messages: Vec::new(),
                             updated_at,
                             detailed_summary: None,
@@ -2838,7 +2886,11 @@ impl gpui::Render for ErrorWrappingTestView {
             Requested 59724. Please try again in 264ms. Visit \
             https://platform.openai.com/account/rate-limits to learn more.";
 
-        let retry_description = "Retrying. Next attempt in 4 seconds (Attempt 1 of 2).";
+        let retry_description = tr(
+            cx,
+            "zed.visual_test_runner.callout.retrying",
+            "Retrying. Next attempt in 4 seconds (Attempt 1 of 2).",
+        );
 
         v_flex()
             .size_full()
@@ -2856,16 +2908,32 @@ impl gpui::Render for ErrorWrappingTestView {
                 Callout::new()
                     .severity(Severity::Error)
                     .icon(IconName::XCircle)
-                    .title("An Error Happened")
+                    .title(tr(
+                        cx,
+                        "zed.visual_test_runner.callout.error_happened",
+                        "An Error Happened",
+                    ))
                     .description(long_error_message)
-                    .actions_slot(Button::new("dismiss", "Dismiss").label_size(LabelSize::Small)),
+                    .actions_slot(
+                        Button::new(
+                            "dismiss",
+                            tr(cx, "zed.visual_test_runner.common.dismiss", "Dismiss"),
+                        )
+                        .label_size(LabelSize::Small),
+                    ),
             )
             .child(
                 Callout::new()
                     .severity(Severity::Error)
                     .icon(IconName::XCircle)
                     .title(long_error_message)
-                    .actions_slot(Button::new("retry", "Retry").label_size(LabelSize::Small)),
+                    .actions_slot(
+                        Button::new(
+                            "retry",
+                            tr(cx, "zed.visual_test_runner.common.retry", "Retry"),
+                        )
+                        .label_size(LabelSize::Small),
+                    ),
             )
     }
 }
@@ -2885,11 +2953,7 @@ impl gpui::Render for ThreadItemBranchNameTestView {
             prelude::*,
         };
 
-        let section_label = |text: &str| {
-            Label::new(text.to_string())
-                .size(LabelSize::Small)
-                .color(Color::Muted)
-        };
+        let section_label = |text| Label::new(text).size(LabelSize::Small).color(Color::Muted);
 
         let container = || {
             v_flex()
@@ -2905,16 +2969,29 @@ impl gpui::Render for ThreadItemBranchNameTestView {
             .p_4()
             .gap_3()
             .child(
-                Label::new("ThreadItem Branch Names")
+                Label::new(tr(
+                    cx,
+                    "zed.visual_test_runner.thread_item_branch_names.title",
+                    "ThreadItem Branch Names",
+                ))
                     .size(LabelSize::Large)
                     .color(Color::Default),
             )
-            .child(section_label(
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_branch_names.linked_worktree_with_branch",
                 "Linked worktree with branch (worktree / branch)",
-            ))
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-linked-branch", "Fix scrolling behavior")
+                    ThreadItem::new(
+                        "ti-linked-branch",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_branch_names.fix_scrolling_behavior",
+                            "Fix scrolling behavior",
+                        ),
+                    )
                         .icon(IconName::AiClaude)
                         .timestamp("5m")
                         .worktrees(vec![ThreadItemWorktreeInfo {
@@ -2926,12 +3003,21 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         }]),
                 ),
             )
-            .child(section_label(
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_branch_names.linked_worktree_without_branch",
                 "Linked worktree without branch (detached HEAD)",
-            ))
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-linked-no-branch", "Review worktree cleanup")
+                    ThreadItem::new(
+                        "ti-linked-no-branch",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_branch_names.review_worktree_cleanup",
+                            "Review worktree cleanup",
+                        ),
+                    )
                         .icon(IconName::AiClaude)
                         .timestamp("1h")
                         .worktrees(vec![ThreadItemWorktreeInfo {
@@ -2943,10 +3029,21 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         }]),
                 ),
             )
-            .child(section_label("Main worktree with branch (nothing shown)"))
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_branch_names.main_worktree_with_branch",
+                "Main worktree with branch (nothing shown)",
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-main-branch", "Request for Long Classic Poem")
+                    ThreadItem::new(
+                        "ti-main-branch",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_branch_names.request_for_long_classic_poem",
+                            "Request for Long Classic Poem",
+                        ),
+                    )
                         .icon(IconName::ZedAgent)
                         .timestamp("2d")
                         .worktrees(vec![ThreadItemWorktreeInfo {
@@ -2958,12 +3055,21 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         }]),
                 ),
             )
-            .child(section_label(
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_branch_names.main_worktree_without_branch",
                 "Main worktree without branch (nothing shown)",
-            ))
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-main-no-branch", "Simple greeting thread")
+                    ThreadItem::new(
+                        "ti-main-no-branch",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_branch_names.simple_greeting_thread",
+                            "Simple greeting thread",
+                        ),
+                    )
                         .icon(IconName::ZedAgent)
                         .timestamp("3d")
                         .worktrees(vec![ThreadItemWorktreeInfo {
@@ -2975,10 +3081,21 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         }]),
                 ),
             )
-            .child(section_label("Linked worktree where name matches branch"))
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_branch_names.linked_worktree_name_matches_branch",
+                "Linked worktree where name matches branch",
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-same-name", "Implement feature")
+                    ThreadItem::new(
+                        "ti-same-name",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_branch_names.implement_feature",
+                            "Implement feature",
+                        ),
+                    )
                         .icon(IconName::AiClaude)
                         .timestamp("6d")
                         .worktrees(vec![ThreadItemWorktreeInfo {
@@ -2990,12 +3107,21 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         }]),
                 ),
             )
-            .child(section_label(
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_branch_names.manually_opened_linked_worktree",
                 "Manually opened linked worktree (main_path resolves to original repo)",
-            ))
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-manual-linked", "Robust Git Worktree Rollback")
+                    ThreadItem::new(
+                        "ti-manual-linked",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_branch_names.robust_git_worktree_rollback",
+                            "Robust Git Worktree Rollback",
+                        ),
+                    )
                         .icon(IconName::ZedAgent)
                         .timestamp("40m")
                         .worktrees(vec![ThreadItemWorktreeInfo {
@@ -3007,12 +3133,21 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         }]),
                 ),
             )
-            .child(section_label(
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_branch_names.linked_worktree_full_metadata",
                 "Linked worktree + branch + diff stats + timestamp",
-            ))
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-linked-full", "Full metadata with diff stats")
+                    ThreadItem::new(
+                        "ti-linked-full",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_branch_names.full_metadata_with_diff_stats",
+                            "Full metadata with diff stats",
+                        ),
+                    )
                         .icon(IconName::AiClaude)
                         .timestamp("3w")
                         .added(42)
@@ -3026,10 +3161,21 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         }]),
                 ),
             )
-            .child(section_label("Long branch name truncation with diff stats"))
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_branch_names.long_branch_name_truncation",
+                "Long branch name truncation with diff stats",
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-long-branch", "Overflow test with very long branch")
+                    ThreadItem::new(
+                        "ti-long-branch",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_branch_names.overflow_test_long_branch",
+                            "Overflow test with very long branch",
+                        ),
+                    )
                         .icon(IconName::AiClaude)
                         .timestamp("2d")
                         .added(108)
@@ -3045,12 +3191,21 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         }]),
                 ),
             )
-            .child(section_label(
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_branch_names.main_worktree_full_metadata",
                 "Main worktree with branch + diff stats + timestamp (branch hidden)",
-            ))
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-main-full", "Main worktree with everything")
+                    ThreadItem::new(
+                        "ti-main-full",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_branch_names.main_worktree_with_everything",
+                            "Main worktree with everything",
+                        ),
+                    )
                         .icon(IconName::ZedAgent)
                         .timestamp("5m")
                         .added(23)
@@ -3135,11 +3290,7 @@ impl gpui::Render for ThreadItemIconDecorationsTestView {
     ) -> impl gpui::IntoElement {
         use ui::{IconName, Label, LabelSize, ThreadItem, prelude::*};
 
-        let section_label = |text: &str| {
-            Label::new(text.to_string())
-                .size(LabelSize::Small)
-                .color(Color::Muted)
-        };
+        let section_label = |text| Label::new(text).size(LabelSize::Small).color(Color::Muted);
 
         let container = || {
             v_flex()
@@ -3155,54 +3306,124 @@ impl gpui::Render for ThreadItemIconDecorationsTestView {
             .p_4()
             .gap_3()
             .child(
-                Label::new("ThreadItem Icon Decorations")
+                Label::new(tr(
+                    cx,
+                    "zed.visual_test_runner.thread_item_icon_decorations.title",
+                    "ThreadItem Icon Decorations",
+                ))
                     .size(LabelSize::Large)
                     .color(Color::Default),
             )
-            .child(section_label("No decoration (default idle)"))
-            .child(
-                container()
-                    .child(ThreadItem::new("ti-none", "Default idle thread").timestamp("1:00 AM")),
-            )
-            .child(section_label("Blue dot (notified)"))
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_icon_decorations.no_decoration",
+                "No decoration (default idle)",
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-done", "Generation completed successfully")
+                    ThreadItem::new(
+                        "ti-none",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_icon_decorations.default_idle_thread",
+                            "Default idle thread",
+                        ),
+                    )
+                    .timestamp("1:00 AM"),
+                ),
+            )
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_icon_decorations.blue_dot",
+                "Blue dot (notified)",
+            )))
+            .child(
+                container().child(
+                    ThreadItem::new(
+                        "ti-done",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_icon_decorations.generation_completed_successfully",
+                            "Generation completed successfully",
+                        ),
+                    )
                         .timestamp("1:05 AM")
                         .notified(true),
                 ),
             )
-            .child(section_label("Yellow triangle (waiting for confirmation)"))
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_icon_decorations.yellow_triangle",
+                "Yellow triangle (waiting for confirmation)",
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-waiting", "Waiting for user confirmation")
+                    ThreadItem::new(
+                        "ti-waiting",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_icon_decorations.waiting_for_user_confirmation",
+                            "Waiting for user confirmation",
+                        ),
+                    )
                         .timestamp("1:10 AM")
                         .status(ui::AgentThreadStatus::WaitingForConfirmation),
                 ),
             )
-            .child(section_label("Red X (error)"))
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_icon_decorations.red_x",
+                "Red X (error)",
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-error", "Failed to connect to server")
+                    ThreadItem::new(
+                        "ti-error",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_icon_decorations.failed_to_connect_to_server",
+                            "Failed to connect to server",
+                        ),
+                    )
                         .timestamp("1:15 AM")
                         .status(ui::AgentThreadStatus::Error),
                 ),
             )
-            .child(section_label("Spinner (running)"))
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_icon_decorations.spinner",
+                "Spinner (running)",
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-running", "Generating response...")
+                    ThreadItem::new(
+                        "ti-running",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_icon_decorations.generating_response",
+                            "Generating response...",
+                        ),
+                    )
                         .icon(IconName::AiClaude)
                         .timestamp("1:20 AM")
                         .status(ui::AgentThreadStatus::Running),
                 ),
             )
-            .child(section_label(
+            .child(section_label(tr(
+                cx,
+                "zed.visual_test_runner.thread_item_icon_decorations.spinner_with_yellow_triangle",
                 "Spinner + yellow triangle (waiting for confirmation)",
-            ))
+            )))
             .child(
                 container().child(
-                    ThreadItem::new("ti-running-waiting", "Running but needs confirmation")
+                    ThreadItem::new(
+                        "ti-running-waiting",
+                        tr(
+                            cx,
+                            "zed.visual_test_runner.thread_item_icon_decorations.running_but_needs_confirmation",
+                            "Running but needs confirmation",
+                        ),
+                    )
                         .icon(IconName::AiClaude)
                         .timestamp("1:25 AM")
                         .status(ui::AgentThreadStatus::WaitingForConfirmation),

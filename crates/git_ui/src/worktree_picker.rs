@@ -10,6 +10,7 @@ use gpui::{
     InteractiveElement, IntoElement, Modifiers, ModifiersChangedEvent, ParentElement, PromptLevel,
     Render, SharedString, Styled, Subscription, Task, WeakEntity, Window, actions, rems,
 };
+use i18n as app_i18n;
 use picker::{Picker, PickerDelegate, PickerEditorPosition};
 use project::Project;
 use project::git_store::RepositoryEvent;
@@ -266,7 +267,7 @@ enum WorktreeEntry {
         default_branch: RemoteBranchName,
     },
     Separator,
-    SectionHeader(SharedString),
+    ThisWindowSectionHeader,
     Worktree {
         worktree: GitWorktree,
         positions: Vec<usize>,
@@ -274,8 +275,14 @@ enum WorktreeEntry {
     CreateNamed {
         name: String,
         from_branch: Option<RemoteBranchName>,
-        disabled_reason: Option<String>,
+        disabled_reason: Option<CreateNamedWorktreeDisabledReason>,
     },
+}
+
+#[derive(Clone)]
+enum CreateNamedWorktreeDisabledReason {
+    MultipleRepositories,
+    AlreadyExists,
 }
 
 #[derive(Clone)]
@@ -330,7 +337,6 @@ fn remove_worktree_command(path: &Path, force: bool) -> String {
 
 struct WorktreeRemoveForceDeletePrompt {
     required_error_substrings: &'static [&'static str],
-    message: fn(&str) -> String,
 }
 
 impl WorktreeRemoveForceDeletePrompt {
@@ -347,22 +353,14 @@ const WORKTREE_REMOVE_FORCE_DELETE_PROMPTS: &[WorktreeRemoveForceDeletePrompt] =
             "contains modified or untracked files",
             "use --force to delete it",
         ],
-        message: dirty_worktree_force_delete_prompt,
     }];
 
-fn dirty_worktree_force_delete_prompt(display_name: &str) -> String {
-    format!("Worktree \"{display_name}\" contains modified or untracked files. Force delete it?")
-}
-
-fn force_delete_prompt_for_worktree_remove_error(
-    error: &anyhow::Error,
-    display_name: &str,
-) -> Option<String> {
+fn should_prompt_force_delete_for_worktree_remove_error(error: &anyhow::Error) -> bool {
     let normalized_error_message = error.to_string().to_lowercase();
     WORKTREE_REMOVE_FORCE_DELETE_PROMPTS
         .iter()
         .find(|prompt| prompt.matches(&normalized_error_message))
-        .map(|prompt| (prompt.message)(display_name))
+        .is_some()
 }
 
 struct DeleteWorktreeTooltip {
@@ -402,7 +400,11 @@ impl Render for DeleteWorktreeTooltip {
 
         if force_delete {
             Tooltip::for_action_in(
-                "Force Delete Worktree",
+                app_i18n::tr(
+                    cx,
+                    "git_ui.worktree_picker.force_delete_worktree",
+                    "Force Delete Worktree",
+                ),
                 &ForceDeleteWorktree,
                 &self.focus_handle,
                 cx,
@@ -410,9 +412,17 @@ impl Render for DeleteWorktreeTooltip {
             .into_any_element()
         } else {
             Tooltip::with_meta_in(
-                "Delete Worktree",
+                app_i18n::tr(
+                    cx,
+                    "git_ui.worktree_picker.delete_worktree",
+                    "Delete Worktree",
+                ),
                 Some(&DeleteWorktree),
-                "Hold alt to force delete",
+                app_i18n::tr(
+                    cx,
+                    "git_ui.worktree_picker.hold_alt_to_force_delete",
+                    "Hold alt to force delete",
+                ),
                 &self.focus_handle,
                 cx,
             )
@@ -452,11 +462,44 @@ impl WorktreePickerDelegate {
     fn creation_blocked_reason(&self, cx: &App) -> Option<SharedString> {
         let project = self.project.read(cx);
         if project.is_via_collab() {
-            Some("Worktree creation is not supported in collaborative projects".into())
+            Some(
+                app_i18n::tr(
+                    cx,
+                    "git_ui.worktree_picker.creation_not_supported_in_collab",
+                    "Worktree creation is not supported in collaborative projects",
+                )
+                .into(),
+            )
         } else if project.repositories(cx).is_empty() {
-            Some("Requires a Git repository in the project".into())
+            Some(
+                app_i18n::tr(
+                    cx,
+                    "git_ui.worktree_picker.requires_git_repository",
+                    "Requires a Git repository in the project",
+                )
+                .into(),
+            )
         } else {
             None
+        }
+    }
+
+    fn create_named_disabled_reason(
+        &self,
+        reason: &CreateNamedWorktreeDisabledReason,
+        cx: &App,
+    ) -> String {
+        match reason {
+            CreateNamedWorktreeDisabledReason::MultipleRepositories => app_i18n::tr(
+                cx,
+                "git_ui.worktree_picker.cannot_create_named_worktree_with_multiple_repositories",
+                "Cannot create a named worktree in a project with multiple repositories",
+            ),
+            CreateNamedWorktreeDisabledReason::AlreadyExists => app_i18n::tr(
+                cx,
+                "git_ui.worktree_picker.worktree_name_already_exists",
+                "A worktree with this name already exists",
+            ),
         }
     }
 
@@ -535,19 +578,26 @@ impl WorktreePickerDelegate {
                 Err(error) => {
                     log::error!("Failed to remove worktree: {}", error);
 
-                    let force_delete_prompt = (!force)
-                        .then(|| {
-                            force_delete_prompt_for_worktree_remove_error(&error, &display_name)
-                        })
-                        .flatten();
-
-                    if let Some(prompt_message) = force_delete_prompt {
+                    if !force && should_prompt_force_delete_for_worktree_remove_error(&error) {
+                        let prompt_message = cx.update(|_, cx| {
+                            app_i18n::tr(
+                                cx,
+                                "git_ui.worktree_picker.force_delete_dirty_prompt",
+                                "Worktree \"{}\" contains modified or untracked files. Force delete it?",
+                            )
+                            .replacen("{}", &display_name, 1)
+                        })?;
+                        let force_delete = cx.update(|_, cx| {
+                            app_i18n::tr(cx, "git_ui.worktree_picker.force_delete", "Force Delete")
+                        })?;
+                        let cancel = cx
+                            .update(|_, cx| app_i18n::tr(cx, "prompt.common.cancel", "Cancel"))?;
                         let answer = cx.update(|window, cx| {
                             window.prompt(
                                 PromptLevel::Warning,
                                 &prompt_message,
                                 None,
-                                &["Force Delete", "Cancel"],
+                                &[force_delete.as_str(), cancel.as_str()],
                                 cx,
                             )
                         })?;
@@ -632,7 +682,11 @@ impl PickerDelegate for WorktreePickerDelegate {
     type ListItem = AnyElement;
 
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Select a worktree…".into()
+        Arc::from(app_i18n::tr(
+            _cx,
+            "git_ui.worktree_picker.placeholder",
+            "Select a worktree…",
+        ))
     }
 
     fn editor_position(&self) -> PickerEditorPosition {
@@ -659,7 +713,7 @@ impl PickerDelegate for WorktreePickerDelegate {
     fn can_select(&self, ix: usize, _window: &mut Window, _cx: &mut Context<Picker<Self>>) -> bool {
         !matches!(
             self.matches.get(ix),
-            Some(WorktreeEntry::Separator | WorktreeEntry::SectionHeader(_))
+            Some(WorktreeEntry::Separator | WorktreeEntry::ThisWindowSectionHeader)
         )
     }
 
@@ -680,10 +734,10 @@ impl PickerDelegate for WorktreePickerDelegate {
         let has_named_worktree = self.all_worktrees.iter().any(|worktree| {
             worktree.directory_name(main_worktree_path.as_deref()) == normalized_query
         });
-        let create_named_disabled_reason: Option<String> = if self.has_multiple_repositories {
-            Some("Cannot create a named worktree in a project with multiple repositories".into())
+        let create_named_disabled_reason = if self.has_multiple_repositories {
+            Some(CreateNamedWorktreeDisabledReason::MultipleRepositories)
         } else if has_named_worktree {
-            Some("A worktree with this name already exists".into())
+            Some(CreateNamedWorktreeDisabledReason::AlreadyExists)
         } else {
             None
         };
@@ -715,7 +769,7 @@ impl PickerDelegate for WorktreePickerDelegate {
                 matches.push(WorktreeEntry::Separator);
 
                 if open_here.len() > 1 {
-                    matches.push(WorktreeEntry::SectionHeader("This Window".into()));
+                    matches.push(WorktreeEntry::ThisWindowSectionHeader);
                     for worktree in open_here {
                         matches.push(WorktreeEntry::Worktree {
                             worktree,
@@ -827,7 +881,7 @@ impl PickerDelegate for WorktreePickerDelegate {
         };
 
         match entry {
-            WorktreeEntry::Separator | WorktreeEntry::SectionHeader(_) => return,
+            WorktreeEntry::Separator | WorktreeEntry::ThisWindowSectionHeader => return,
             WorktreeEntry::CreateFromCurrentBranch => {
                 if self.creation_blocked_reason(cx).is_some() {
                     return;
@@ -959,21 +1013,34 @@ impl PickerDelegate for WorktreePickerDelegate {
                     .child(Divider::horizontal())
                     .into_any_element(),
             ),
-            WorktreeEntry::SectionHeader(label) => Some(
-                ListSubHeader::new(label.clone())
-                    .inset(true)
-                    .into_any_element(),
+            WorktreeEntry::ThisWindowSectionHeader => Some(
+                ListSubHeader::new(app_i18n::tr(
+                    cx,
+                    "git_ui.worktree_picker.this_window",
+                    "This Window",
+                ))
+                .inset(true)
+                .into_any_element(),
             ),
             WorktreeEntry::CreateFromCurrentBranch => {
                 let branch_label = if self.has_multiple_repositories {
-                    "current branches".to_string()
+                    app_i18n::tr(
+                        cx,
+                        "git_ui.worktree_picker.current_branches",
+                        "current branches",
+                    )
                 } else {
                     self.current_branch_name
                         .clone()
                         .unwrap_or_else(|| "HEAD".to_string())
                 };
 
-                let label = format!("Create new worktree based on {branch_label}");
+                let label = app_i18n::tr(
+                    cx,
+                    "git_ui.worktree_picker.create_new_worktree_based_on",
+                    "Create new worktree based on {}",
+                )
+                .replacen("{}", &branch_label, 1);
 
                 let item = create_new_list_item(
                     "create-from-current".to_string().into(),
@@ -986,7 +1053,12 @@ impl PickerDelegate for WorktreePickerDelegate {
             }
             WorktreeEntry::CreateFromDefaultBranch { default_branch } => {
                 let default_branch_name = default_branch.display_name();
-                let label = format!("Create new worktree based on {default_branch_name}");
+                let label = app_i18n::tr(
+                    cx,
+                    "git_ui.worktree_picker.create_new_worktree_based_on",
+                    "Create new worktree based on {}",
+                )
+                .replacen("{}", &default_branch_name, 1);
 
                 let item = create_new_list_item(
                     "create-from-main".to_string().into(),
@@ -1100,7 +1172,11 @@ impl PickerDelegate for WorktreePickerDelegate {
                             let open_in_new_window_button =
                                 IconButton::new(("open-new-window", ix), IconName::ArrowUpRight)
                                     .icon_size(IconSize::Small)
-                                    .tooltip(Tooltip::text("Open in New Window"))
+                                    .tooltip(Tooltip::text(app_i18n::tr(
+                                        cx,
+                                        "git_ui.worktree_picker.open_in_new_window",
+                                        "Open in New Window",
+                                    )))
                                     .on_click(cx.listener(move |picker, _, window, cx| {
                                         let Some(entry) = picker.delegate.matches.get(ix) else {
                                             return;
@@ -1177,7 +1253,13 @@ impl PickerDelegate for WorktreePickerDelegate {
                             .clone()
                             .unwrap_or_else(|| "HEAD".to_string())
                     });
-                let label = format!("Create \"{name}\" based on {branch_label}");
+                let label = app_i18n::tr(
+                    cx,
+                    "git_ui.worktree_picker.create_named_worktree_based_on",
+                    "Create \"{}\" based on {}",
+                )
+                .replacen("{}", name, 1)
+                .replacen("{}", &branch_label, 1);
                 let element_id = match from_branch {
                     Some(branch) => format!("create-named-from-{}", branch.display_name()),
                     None => "create-named-from-current".to_string(),
@@ -1186,7 +1268,9 @@ impl PickerDelegate for WorktreePickerDelegate {
                 let item = create_new_list_item(
                     element_id.into(),
                     label.into(),
-                    disabled_reason.clone().map(SharedString::from),
+                    disabled_reason.as_ref().map(|reason| {
+                        SharedString::from(self.create_named_disabled_reason(reason, cx))
+                    }),
                     selected,
                 );
 
@@ -1235,14 +1319,17 @@ impl PickerDelegate for WorktreePickerDelegate {
             Some(
                 footer
                     .child(
-                        Button::new("create-worktree", "Create")
-                            .key_binding(
-                                KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
-                                    .map(|kb| kb.size(rems_from_px(12.))),
-                            )
-                            .on_click(|_, window, cx| {
-                                window.dispatch_action(menu::Confirm.boxed_clone(), cx)
-                            }),
+                        Button::new(
+                            "create-worktree",
+                            app_i18n::tr(cx, "git_ui.worktree_picker.create", "Create"),
+                        )
+                        .key_binding(
+                            KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
+                                .map(|kb| kb.size(rems_from_px(12.))),
+                        )
+                        .on_click(|_, window, cx| {
+                            window.dispatch_action(menu::Confirm.boxed_clone(), cx)
+                        }),
                     )
                     .into_any(),
             )
@@ -1252,42 +1339,55 @@ impl PickerDelegate for WorktreePickerDelegate {
                     .when(can_delete, |this| {
                         let focus_handle = focus_handle.clone();
                         this.child(
-                            Button::new("delete-worktree", "Delete")
-                                .key_binding(
-                                    KeyBinding::for_action_in(&DeleteWorktree, &focus_handle, cx)
-                                        .map(|kb| kb.size(rems_from_px(12.))),
-                                )
-                                .on_click(|_, window, cx| {
-                                    window.dispatch_action(DeleteWorktree.boxed_clone(), cx)
-                                }),
+                            Button::new(
+                                "delete-worktree",
+                                app_i18n::tr(cx, "git_ui.worktree_picker.delete", "Delete"),
+                            )
+                            .key_binding(
+                                KeyBinding::for_action_in(&DeleteWorktree, &focus_handle, cx)
+                                    .map(|kb| kb.size(rems_from_px(12.))),
+                            )
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(DeleteWorktree.boxed_clone(), cx)
+                            }),
                         )
                     })
                     .when(!is_current, |this| {
                         let focus_handle = focus_handle.clone();
                         this.child(
-                            Button::new("open-in-new-window", "Open in New Window")
-                                .key_binding(
-                                    KeyBinding::for_action_in(
-                                        &menu::SecondaryConfirm,
-                                        &focus_handle,
-                                        cx,
-                                    )
-                                    .map(|kb| kb.size(rems_from_px(12.))),
+                            Button::new(
+                                "open-in-new-window",
+                                app_i18n::tr(
+                                    cx,
+                                    "git_ui.worktree_picker.open_in_new_window",
+                                    "Open in New Window",
+                                ),
+                            )
+                            .key_binding(
+                                KeyBinding::for_action_in(
+                                    &menu::SecondaryConfirm,
+                                    &focus_handle,
+                                    cx,
                                 )
-                                .on_click(|_, window, cx| {
-                                    window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx)
-                                }),
+                                .map(|kb| kb.size(rems_from_px(12.))),
+                            )
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx)
+                            }),
                         )
                     })
                     .child(
-                        Button::new("open-worktree", "Open")
-                            .key_binding(
-                                KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
-                                    .map(|kb| kb.size(rems_from_px(12.))),
-                            )
-                            .on_click(|_, window, cx| {
-                                window.dispatch_action(menu::Confirm.boxed_clone(), cx)
-                            }),
+                        Button::new(
+                            "open-worktree",
+                            app_i18n::tr(cx, "git_ui.worktree_picker.open", "Open"),
+                        )
+                        .key_binding(
+                            KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
+                                .map(|kb| kb.size(rems_from_px(12.))),
+                        )
+                        .on_click(|_, window, cx| {
+                            window.dispatch_action(menu::Confirm.boxed_clone(), cx)
+                        }),
                     )
                     .into_any(),
             )
@@ -1363,7 +1463,16 @@ pub async fn open_remote_worktree(
             window,
             cx,
         )
-        .prompt_err("Failed to connect", window, cx, |_, _, _| None)
+        .prompt_err(
+            &app_i18n::tr(
+                cx,
+                "git_ui.worktree_picker.failed_to_connect",
+                "Failed to connect",
+            ),
+            window,
+            cx,
+            |_, _, _| None,
+        )
     })?;
 
     let session = connect_task.await;
@@ -1435,7 +1544,7 @@ pub async fn open_remote_worktree(
 mod tests {
     use super::*;
     use fs::FakeFs;
-    use gpui::{AppContext, TestAppContext, VisualTestContext};
+    use gpui::{AppContext, TestAppContext, UpdateGlobal, VisualTestContext};
     use project::project_settings::ProjectSettings;
     use project::{Project, WorktreeSettings};
     use serde_json::json;
@@ -1448,6 +1557,12 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.workspace.display_language = Some(settings::DisplayLanguage::En);
+                });
+            });
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);
             ProjectSettings::register(cx);
@@ -1758,12 +1873,7 @@ mod tests {
                 let matches = &picker.delegate.matches;
                 let header_index = matches
                     .iter()
-                    .position(|entry| {
-                        matches!(
-                            entry,
-                            WorktreeEntry::SectionHeader(label) if label.as_ref() == "This Window"
-                        )
-                    })
+                    .position(|entry| matches!(entry, WorktreeEntry::ThisWindowSectionHeader))
                     .expect("section header should be present when multiple worktrees are open");
 
                 let grouped_paths: Vec<&Path> = matches[header_index + 1..]

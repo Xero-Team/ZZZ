@@ -1,5 +1,10 @@
 use gpui::{App, IntoElement, Modifiers, RenderOnce, Window};
+use i18n as app_i18n;
 use ui::{prelude::*, render_modifiers};
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 #[derive(IntoElement)]
 pub struct HoldForDefault {
@@ -33,7 +38,7 @@ impl RenderOnce for HoldForDefault {
             .gap_0p5()
             .text_sm()
             .text_color(Color::Muted.color(cx))
-            .child("Hold")
+            .child(tr(cx, "agent_ui.hold_for_default.hold", "Hold"))
             .child(h_flex().flex_shrink_0().children(render_modifiers(
                 &Modifiers::secondary_key(),
                 PlatformStyle::platform(),
@@ -43,9 +48,17 @@ impl RenderOnce for HoldForDefault {
             )))
             .child(div().map(|this| {
                 if self.is_default {
-                    this.child("to unset as default")
+                    this.child(tr(
+                        cx,
+                        "agent_ui.hold_for_default.to_unset_as_default",
+                        "to unset as default",
+                    ))
                 } else {
-                    this.child("to set as default")
+                    this.child(tr(
+                        cx,
+                        "agent_ui.hold_for_default.to_set_as_default",
+                        "to set as default",
+                    ))
                 }
             }))
     }

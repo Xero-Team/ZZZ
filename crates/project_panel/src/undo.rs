@@ -135,6 +135,7 @@ use anyhow::{Context, Result, anyhow};
 use fs::TrashedEntry;
 use futures::channel::mpsc;
 use gpui::{AppContext, AsyncApp, SharedString, Task, WeakEntity};
+use i18n::tr;
 use project::{ProjectPath, WorktreeId};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{collections::VecDeque, sync::Arc};
@@ -291,13 +292,14 @@ enum UndoMessage {
 }
 
 impl UndoMessage {
-    fn error_title(&self) -> &'static str {
+    fn error_title(&self) -> (&'static str, &'static str) {
         match self {
-            UndoMessage::Changed(_) => {
-                "this is a bug in the manage_undo_and_redo task please report"
-            }
-            UndoMessage::Undo => "Undo failed",
-            UndoMessage::Redo => "Redo failed",
+            UndoMessage::Changed(_) => (
+                "project_panel.undo.error.internal_bug",
+                "This is a bug in the undo/redo task. Please report it.",
+            ),
+            UndoMessage::Undo => ("project_panel.undo.error.undo_failed", "Undo failed"),
+            UndoMessage::Redo => ("project_panel.undo.error.redo_failed", "Redo failed"),
         }
     }
 }
@@ -310,7 +312,7 @@ impl Inner {
                 return;
             };
 
-            let error_title = new.error_title();
+            let (error_title_key, error_title_fallback) = new.error_title();
             let res = match new {
                 UndoMessage::Changed(changes) => {
                     self.record(changes);
@@ -329,7 +331,13 @@ impl Inner {
             };
 
             if let Err(e) = res {
-                Self::show_error(error_title, self.workspace.clone(), e.to_string(), &mut cx);
+                Self::show_error(
+                    error_title_key,
+                    error_title_fallback,
+                    self.workspace.clone(),
+                    e.to_string(),
+                    &mut cx,
+                );
             }
 
             self.can_undo.store(self.can_undo(), Ordering::Relaxed);
@@ -539,7 +547,8 @@ impl Inner {
 
     /// Displays a notification with the provided `title` and `error`.
     fn show_error(
-        title: impl Into<SharedString>,
+        title_key: &'static str,
+        title_fallback: &'static str,
         workspace: WeakEntity<Workspace>,
         error: String,
         cx: &mut AsyncApp,
@@ -550,6 +559,7 @@ impl Inner {
                     NotificationId::Named(SharedString::new_static("project_panel_undo"));
 
                 workspace.show_notification(notification_id, cx, move |cx| {
+                    let title = tr(cx, title_key, title_fallback);
                     cx.new(|cx| MessageNotification::new(error, cx).with_title(title))
                 })
             })

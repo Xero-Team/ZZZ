@@ -1,4 +1,5 @@
 use gpui::{Action, Entity, OwnedMenu, OwnedMenuItem, actions};
+use i18n::tr;
 use settings::Settings;
 
 use schemars::JsonSchema;
@@ -146,7 +147,7 @@ impl ApplicationMenu {
         })
     }
 
-    fn render_application_menu(&self, entry: &MenuEntry) -> impl IntoElement {
+    fn render_application_menu(&self, entry: &MenuEntry, cx: &App) -> impl IntoElement {
         let handle = entry.handle.clone();
 
         let menu_name = entry.menu.name.clone();
@@ -168,7 +169,11 @@ impl ApplicationMenu {
                         )
                         .style(ButtonStyle::Subtle)
                         .icon_size(IconSize::Small),
-                        Tooltip::text("Open Application Menu"),
+                        Tooltip::text(tr(
+                            cx,
+                            "title_bar.application_menu.open_application_menu",
+                            "Open Application Menu",
+                        )),
                     )
                     .with_handle(handle),
             )
@@ -314,7 +319,7 @@ impl Render for ApplicationMenu {
             .flex_row()
             .gap_x_1()
             .when(!all_menus_shown && !self.entries.is_empty(), |this| {
-                this.child(self.render_application_menu(&self.entries[0]))
+                this.child(self.render_application_menu(&self.entries[0], cx))
             })
             .when(all_menus_shown, |this| {
                 this.children(

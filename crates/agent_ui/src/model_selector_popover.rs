@@ -4,11 +4,16 @@ use std::sync::Arc;
 use acp_thread::{AgentModelIcon, AgentModelInfo, AgentModelSelector};
 use fs::Fs;
 use gpui::{Entity, FocusHandle};
+use i18n as app_i18n;
 use picker::popover_menu::PickerPopoverMenu;
 use ui::{PopoverMenuHandle, Tooltip, prelude::*};
 
 use crate::ui::ModelSelectorTooltip;
 use crate::{ModelSelector, model_selector::acp_model_selector};
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 pub struct ModelSelectorPopover {
     selector: Entity<ModelSelector>,
@@ -55,7 +60,13 @@ impl Render for ModelSelectorPopover {
         let model_name = model
             .as_ref()
             .map(|model| model.name.clone())
-            .unwrap_or_else(|| SharedString::from("Select a Model"));
+            .unwrap_or_else(|| {
+                tr(
+                    cx,
+                    "agent_ui.model_selector.select_a_model",
+                    "Select a Model",
+                )
+            });
 
         let model_icon = model.as_ref().and_then(|model| model.icon.clone());
 

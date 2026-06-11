@@ -10,6 +10,7 @@ use fuzzy::StringMatchCandidate;
 use gpui::{
     App, BackgroundExecutor, Context, DismissEvent, Entity, Subscription, Task, Window, prelude::*,
 };
+use i18n as app_i18n;
 use ordered_float::OrderedFloat;
 use picker::popover_menu::PickerPopoverMenu;
 use picker::{Picker, PickerDelegate};
@@ -26,6 +27,22 @@ use crate::{
     CycleFavoriteModels, CycleModeSelector, CycleThinkingEffort, ToggleProfileSelector,
     ToggleThinkingEffortMenu,
 };
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
+
+fn separator_label(title: &SharedString, cx: &App) -> SharedString {
+    match title.as_ref() {
+        "agent_ui.config_options.favorites" => {
+            tr(cx, "agent_ui.config_options.favorites", "Favorites")
+        }
+        "agent_ui.config_options.all_options" => {
+            tr(cx, "agent_ui.config_options.all_options", "All Options")
+        }
+        _ => title.clone(),
+    }
+}
 
 const PICKER_THRESHOLD: usize = 5;
 
@@ -321,17 +338,18 @@ impl ConfigOptionSelector {
         self.picker_handle.toggle(window, cx);
     }
 
-    fn current_value_name(&self) -> String {
+    fn current_value_name(&self, cx: &App) -> String {
         let Some(option) = self.current_option() else {
-            return "Unknown".to_string();
+            return app_i18n::tr(cx, "agent_ui.config_options.unknown", "Unknown");
         };
 
         match &option.kind {
             acp::SessionConfigKind::Select(select) => {
-                find_option_name(&select.options, &select.current_value)
-                    .unwrap_or_else(|| "Unknown".to_string())
+                find_option_name(&select.options, &select.current_value).unwrap_or_else(|| {
+                    app_i18n::tr(cx, "agent_ui.config_options.unknown", "Unknown")
+                })
             }
-            _ => "Unknown".to_string(),
+            _ => app_i18n::tr(cx, "agent_ui.config_options.unknown", "Unknown"),
         }
     }
 
@@ -345,10 +363,13 @@ impl ConfigOptionSelector {
 
     fn render_trigger_button(&self, _window: &mut Window, _cx: &mut Context<Self>) -> Button {
         let Some(option) = self.current_option() else {
-            return Button::new("config-option-trigger", "Unknown")
-                .label_size(LabelSize::Small)
-                .color(Color::Muted)
-                .disabled(true);
+            return Button::new(
+                "config-option-trigger",
+                tr(_cx, "agent_ui.config_options.unknown", "Unknown"),
+            )
+            .label_size(LabelSize::Small)
+            .color(Color::Muted)
+            .disabled(true);
         };
 
         let icon = if self.picker_handle.is_deployed() {
@@ -359,7 +380,7 @@ impl ConfigOptionSelector {
 
         Button::new(
             ElementId::Name(format!("config-option-{}", option.id.0).into()),
-            self.current_value_name(),
+            self.current_value_name(_cx),
         )
         .label_size(LabelSize::Small)
         .color(Color::Muted)
@@ -410,33 +431,63 @@ impl Render for ConfigOptionSelector {
                     acp::SessionConfigOptionCategory::Mode => {
                         content = content
                             .child(action_tooltip_container(
-                                "Change Mode",
+                                app_i18n::tr(
+                                    cx,
+                                    "agent_ui.mode_selector.change_mode",
+                                    "Change Mode",
+                                )
+                                .as_str(),
                                 KeyBinding::for_action(&ToggleProfileSelector, cx),
                             ))
                             .child(action_tooltip_container(
-                                "Cycle Through Modes",
+                                app_i18n::tr(
+                                    cx,
+                                    "agent_ui.mode_selector.cycle_through_modes",
+                                    "Cycle Through Modes",
+                                )
+                                .as_str(),
                                 KeyBinding::for_action(&CycleModeSelector, cx),
                             ));
                     }
                     acp::SessionConfigOptionCategory::Model => {
                         content = content
                             .child(action_tooltip_container(
-                                "Change Model",
+                                app_i18n::tr(
+                                    cx,
+                                    "agent_ui.model_selector.change_model",
+                                    "Change Model",
+                                )
+                                .as_str(),
                                 KeyBinding::for_action(&ToggleModelSelector, cx),
                             ))
                             .child(action_tooltip_container(
-                                "Cycle Favorite Models",
+                                app_i18n::tr(
+                                    cx,
+                                    "agent_ui.model_selector.cycle_favorite_models",
+                                    "Cycle Favorite Models",
+                                )
+                                .as_str(),
                                 KeyBinding::for_action(&CycleFavoriteModels, cx),
                             ));
                     }
                     acp::SessionConfigOptionCategory::ThoughtLevel => {
                         content = content
                             .child(action_tooltip_container(
-                                "Change Thinking Effort",
+                                app_i18n::tr(
+                                    cx,
+                                    "agent_ui.config_options.change_thinking_effort",
+                                    "Change Thinking Effort",
+                                )
+                                .as_str(),
                                 KeyBinding::for_action(&ToggleThinkingEffortMenu, cx),
                             ))
                             .child(action_tooltip_container(
-                                "Cycle Thinking Effort",
+                                app_i18n::tr(
+                                    cx,
+                                    "agent_ui.config_options.cycle_thinking_effort",
+                                    "Cycle Thinking Effort",
+                                )
+                                .as_str(),
                                 KeyBinding::for_action(&CycleThinkingEffort, cx),
                             ));
                     }
@@ -565,8 +616,12 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
         }
     }
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Select an option…".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        Arc::from(app_i18n::tr(
+            cx,
+            "agent_ui.config_options.select_an_option",
+            "Select an option…",
+        ))
     }
 
     fn update_matches(
@@ -675,7 +730,7 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
                             .py_1()
                             .text_xs()
                             .text_color(cx.theme().colors().text_muted)
-                            .child(title.clone()),
+                            .child(separator_label(title, cx)),
                     )
                     .into_any_element(),
             ),
@@ -720,9 +775,25 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
                                 }))
                                 .end_slot_on_hover(div().pr_1p5().child({
                                     let (icon, color, tooltip) = if is_favorite {
-                                        (IconName::StarFilled, Color::Accent, "Unfavorite")
+                                        (
+                                            IconName::StarFilled,
+                                            Color::Accent,
+                                            tr(
+                                                cx,
+                                                "agent_ui.config_options.unfavorite",
+                                                "Unfavorite",
+                                            ),
+                                        )
                                     } else {
-                                        (IconName::Star, Color::Default, "Favorite")
+                                        (
+                                            IconName::Star,
+                                            Color::Default,
+                                            tr(
+                                                cx,
+                                                "agent_ui.config_options.favorite",
+                                                "Favorite",
+                                            ),
+                                        )
                                     };
 
                                     let config_id = self.config_id.clone();
@@ -852,7 +923,9 @@ fn options_to_picker_entries(
     }
 
     if !favorite_options.is_empty() {
-        entries.push(ConfigOptionPickerEntry::Separator("Favorites".into()));
+        entries.push(ConfigOptionPickerEntry::Separator(
+            "agent_ui.config_options.favorites".into(),
+        ));
         for option in favorite_options {
             entries.push(ConfigOptionPickerEntry::Option(option));
         }
@@ -862,7 +935,9 @@ fn options_to_picker_entries(
         if let Some(option) = options.first()
             && option.group.is_none()
         {
-            entries.push(ConfigOptionPickerEntry::Separator("All Options".into()));
+            entries.push(ConfigOptionPickerEntry::Separator(
+                "agent_ui.config_options.all_options".into(),
+            ));
         }
     }
 

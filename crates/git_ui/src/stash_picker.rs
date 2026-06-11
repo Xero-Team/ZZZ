@@ -6,6 +6,7 @@ use gpui::{
     InteractiveElement, IntoElement, Modifiers, ModifiersChangedEvent, ParentElement, Render,
     SharedString, Styled, Subscription, Task, WeakEntity, Window, actions, rems,
 };
+use i18n::tr;
 use picker::{Picker, PickerDelegate};
 use project::git_store::{Repository, RepositoryEvent};
 use std::sync::Arc;
@@ -308,9 +309,16 @@ impl StashListDelegate {
                 .await??;
             Ok(())
         })
-        .detach_and_prompt_err("Failed to drop stash", window, cx, |e, _, _| {
-            Some(e.to_string())
-        });
+        .detach_and_prompt_err(
+            &tr(
+                cx,
+                "git_ui.stash_picker.failed_to_drop_stash",
+                "Failed to drop stash",
+            ),
+            window,
+            cx,
+            |e, _, _| Some(e.to_string()),
+        );
     }
 
     fn show_stash_at(&self, ix: usize, window: &mut Window, cx: &mut Context<Picker<Self>>) {
@@ -343,9 +351,16 @@ impl StashListDelegate {
                 .await?;
             Ok(())
         })
-        .detach_and_prompt_err("Failed to pop stash", window, cx, |e, _, _| {
-            Some(e.to_string())
-        });
+        .detach_and_prompt_err(
+            &tr(
+                cx,
+                "git_ui.stash_picker.failed_to_pop_stash",
+                "Failed to pop stash",
+            ),
+            window,
+            cx,
+            |e, _, _| Some(e.to_string()),
+        );
         cx.emit(DismissEvent);
     }
 
@@ -359,9 +374,16 @@ impl StashListDelegate {
                 .await?;
             Ok(())
         })
-        .detach_and_prompt_err("Failed to apply stash", window, cx, |e, _, _| {
-            Some(e.to_string())
-        });
+        .detach_and_prompt_err(
+            &tr(
+                cx,
+                "git_ui.stash_picker.failed_to_apply_stash",
+                "Failed to apply stash",
+            ),
+            window,
+            cx,
+            |e, _, _| Some(e.to_string()),
+        );
         cx.emit(DismissEvent);
     }
 }
@@ -370,7 +392,7 @@ impl PickerDelegate for StashListDelegate {
     type ListItem = ListItem;
 
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Select a stash…".into()
+        tr(_cx, "git_ui.stash_picker.placeholder", "Select a stash…").into()
     }
 
     fn match_count(&self) -> usize {
@@ -532,7 +554,12 @@ impl PickerDelegate for StashListDelegate {
             IconButton::new(("view-stash", ix), IconName::Eye)
                 .icon_size(IconSize::Small)
                 .tooltip(move |_, cx| {
-                    Tooltip::for_action_in("View Stash", &ShowStashItem, &focus_handle, cx)
+                    Tooltip::for_action_in(
+                        tr(cx, "git_ui.stash_picker.view_stash", "View Stash"),
+                        &ShowStashItem,
+                        &focus_handle,
+                        cx,
+                    )
                 })
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.delegate.show_stash_at(ix, window, cx);
@@ -544,7 +571,12 @@ impl PickerDelegate for StashListDelegate {
             IconButton::new(("pop-stash", ix), IconName::MaximizeAlt)
                 .icon_size(IconSize::Small)
                 .tooltip(move |_, cx| {
-                    Tooltip::for_action_in("Pop Stash", &menu::SecondaryConfirm, &focus_handle, cx)
+                    Tooltip::for_action_in(
+                        tr(cx, "git_ui.stash_picker.pop_stash", "Pop Stash"),
+                        &menu::SecondaryConfirm,
+                        &focus_handle,
+                        cx,
+                    )
                 })
                 .on_click(|_, window, cx| {
                     window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx);
@@ -556,7 +588,12 @@ impl PickerDelegate for StashListDelegate {
             IconButton::new(("drop-stash", ix), IconName::Trash)
                 .icon_size(IconSize::Small)
                 .tooltip(move |_, cx| {
-                    Tooltip::for_action_in("Drop Stash", &DropStashItem, &focus_handle, cx)
+                    Tooltip::for_action_in(
+                        tr(cx, "git_ui.stash_picker.drop_stash", "Drop Stash"),
+                        &DropStashItem,
+                        &focus_handle,
+                        cx,
+                    )
                 })
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.delegate.drop_stash_at(ix, window, cx);
@@ -618,7 +655,14 @@ impl PickerDelegate for StashListDelegate {
     }
 
     fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
-        Some("No stashes found".into())
+        Some(
+            tr(
+                _cx,
+                "git_ui.stash_picker.no_stashes_found",
+                "No stashes found",
+            )
+            .into(),
+        )
     }
 
     fn render_footer(&self, _: &mut Window, cx: &mut Context<Picker<Self>>) -> Option<AnyElement> {
@@ -638,7 +682,7 @@ impl PickerDelegate for StashListDelegate {
                 .border_t_1()
                 .border_color(cx.theme().colors().border_variant)
                 .child(
-                    Button::new("drop-stash", "Drop")
+                    Button::new("drop-stash", tr(cx, "git_ui.stash_picker.drop", "Drop"))
                         .key_binding(
                             KeyBinding::for_action_in(
                                 &stash_picker::DropStashItem,
@@ -652,7 +696,7 @@ impl PickerDelegate for StashListDelegate {
                         }),
                 )
                 .child(
-                    Button::new("view-stash", "View")
+                    Button::new("view-stash", tr(cx, "git_ui.stash_picker.view", "View"))
                         .key_binding(
                             KeyBinding::for_action_in(
                                 &stash_picker::ShowStashItem,
@@ -668,7 +712,7 @@ impl PickerDelegate for StashListDelegate {
                         })),
                 )
                 .child(
-                    Button::new("pop-stash", "Pop")
+                    Button::new("pop-stash", tr(cx, "git_ui.stash_picker.pop", "Pop"))
                         .key_binding(
                             KeyBinding::for_action_in(&menu::SecondaryConfirm, &focus_handle, cx)
                                 .map(|kb| kb.size(rems_from_px(12.))),
@@ -678,7 +722,7 @@ impl PickerDelegate for StashListDelegate {
                         }),
                 )
                 .child(
-                    Button::new("apply-stash", "Apply")
+                    Button::new("apply-stash", tr(cx, "git_ui.stash_picker.apply", "Apply"))
                         .key_binding(
                             KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
                                 .map(|kb| kb.size(rems_from_px(12.))),

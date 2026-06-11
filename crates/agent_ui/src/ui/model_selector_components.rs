@@ -1,8 +1,13 @@
 use gpui::{Action, ClickEvent, FocusHandle, prelude::*};
+use i18n as app_i18n;
 use ui::{Chip, ElevationIndex, KeyBinding, ListItem, ListItemSpacing, Tooltip, prelude::*};
 use zed_actions::agent::ToggleModelSelector;
 
 use crate::CycleFavoriteModels;
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 enum ModelIcon {
     Name(IconName),
@@ -116,7 +121,7 @@ impl ModelSelectorListItem {
 }
 
 impl RenderOnce for ModelSelectorListItem {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let model_icon_color = if self.is_selected {
             Color::Accent
         } else {
@@ -144,14 +149,34 @@ impl RenderOnce for ModelSelectorListItem {
                         )
                     })
                     .child(Label::new(self.title).truncate())
-                    .when(self.is_latest, |parent| parent.child(Chip::new("Latest")))
+                    .when(self.is_latest, |parent| {
+                        parent.child(Chip::new(tr(
+                            cx,
+                            "agent_ui.model_selector.latest",
+                            "Latest",
+                        )))
+                    })
                     .when_some(self.cost_info, |this, cost_info| {
                         let tooltip_text = if cost_info.ends_with('×') {
-                            format!("Cost Multiplier: {}", cost_info)
+                            tr(
+                                cx,
+                                "agent_ui.model_selector.cost_multiplier",
+                                "Cost Multiplier: {}",
+                            )
+                            .replacen("{}", cost_info.as_ref(), 1)
                         } else if cost_info.contains('$') {
-                            format!("Cost per Million Tokens: {}", cost_info)
+                            tr(
+                                cx,
+                                "agent_ui.model_selector.cost_per_million_tokens",
+                                "Cost per Million Tokens: {}",
+                            )
+                            .replacen("{}", cost_info.as_ref(), 1)
                         } else {
-                            format!("Cost: {}", cost_info)
+                            tr(cx, "agent_ui.model_selector.cost", "Cost: {}").replacen(
+                                "{}",
+                                cost_info.as_ref(),
+                                1,
+                            )
                         };
 
                         this.child(Chip::new(cost_info).tooltip(Tooltip::text(tooltip_text)))
@@ -163,9 +188,25 @@ impl RenderOnce for ModelSelectorListItem {
             .end_slot_on_hover(div().pr_1p5().when_some(self.on_toggle_favorite, {
                 |this, handle_click| {
                     let (icon, color, tooltip) = if is_favorite {
-                        (IconName::StarFilled, Color::Accent, "Unfavorite Model")
+                        (
+                            IconName::StarFilled,
+                            Color::Accent,
+                            tr(
+                                cx,
+                                "agent_ui.model_selector.unfavorite_model",
+                                "Unfavorite Model",
+                            ),
+                        )
                     } else {
-                        (IconName::Star, Color::Default, "Favorite Model")
+                        (
+                            IconName::Star,
+                            Color::Default,
+                            tr(
+                                cx,
+                                "agent_ui.model_selector.favorite_model",
+                                "Favorite Model",
+                            ),
+                        )
                     };
                     this.child(
                         IconButton::new(("toggle-favorite", self.index), icon)
@@ -206,16 +247,19 @@ impl RenderOnce for ModelSelectorFooter {
             .border_t_1()
             .border_color(cx.theme().colors().border_variant)
             .child(
-                Button::new("configure", "Configure")
-                    .full_width()
-                    .style(ButtonStyle::Outlined)
-                    .key_binding(
-                        KeyBinding::for_action_in(action.as_ref(), &focus_handle, cx)
-                            .map(|kb| kb.size(rems_from_px(12.))),
-                    )
-                    .on_click(move |_, window, cx| {
-                        window.dispatch_action(action.boxed_clone(), cx);
-                    }),
+                Button::new(
+                    "configure",
+                    tr(cx, "agent_ui.model_selector.configure", "Configure"),
+                )
+                .full_width()
+                .style(ButtonStyle::Outlined)
+                .key_binding(
+                    KeyBinding::for_action_in(action.as_ref(), &focus_handle, cx)
+                        .map(|kb| kb.size(rems_from_px(12.))),
+                )
+                .on_click(move |_, window, cx| {
+                    window.dispatch_action(action.boxed_clone(), cx);
+                }),
             )
     }
 }
@@ -246,7 +290,11 @@ impl RenderOnce for ModelSelectorTooltip {
                 h_flex()
                     .gap_2()
                     .justify_between()
-                    .child(Label::new("Change Model"))
+                    .child(Label::new(tr(
+                        cx,
+                        "agent_ui.model_selector.change_model",
+                        "Change Model",
+                    )))
                     .child(KeyBinding::for_action(&ToggleModelSelector, cx)),
             )
             .when(self.show_cycle_row, |this| {
@@ -257,7 +305,11 @@ impl RenderOnce for ModelSelectorTooltip {
                         .border_t_1()
                         .border_color(cx.theme().colors().border_variant)
                         .justify_between()
-                        .child(Label::new("Cycle Favorite Models"))
+                        .child(Label::new(tr(
+                            cx,
+                            "agent_ui.model_selector.cycle_favorite_models",
+                            "Cycle Favorite Models",
+                        )))
                         .child(KeyBinding::for_action(&CycleFavoriteModels, cx)),
                 )
             })

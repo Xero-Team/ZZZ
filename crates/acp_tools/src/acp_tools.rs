@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt::Display, rc::Rc, sync::Arc};
+use std::{collections::HashSet, rc::Rc, sync::Arc};
 
 use agent_client_protocol::schema as acp;
 use agent_servers::{AcpDebugMessage, AcpDebugMessageContent, AcpDebugMessageDirection};
@@ -10,6 +10,7 @@ use gpui::{
     SharedString, StyleRefinement, Subscription, Task, TextStyleRefinement, WeakEntity, Window,
     actions, list, prelude::*,
 };
+use i18n as app_i18n;
 use language::LanguageRegistry;
 use markdown::{CodeBlockRenderer, CopyButtonVisibility, Markdown, MarkdownElement, MarkdownStyle};
 use project::{AgentId, Project};
@@ -286,21 +287,33 @@ impl AcpTools {
         entries
     }
 
-    fn selected_connection_label(&self) -> SharedString {
+    fn selected_connection_label(&self, cx: &App) -> SharedString {
         self.selected_connection
             .as_ref()
             .map(|agent_id| agent_id.0.clone())
-            .unwrap_or_else(|| SharedString::from("No connection selected"))
+            .unwrap_or_else(|| {
+                app_i18n::tr(
+                    cx,
+                    "acp_tools.no_connection_selected",
+                    "No connection selected",
+                )
+                .into()
+            })
     }
 
     fn connection_menu(&self, window: &mut Window, cx: &mut Context<Self>) -> Entity<ContextMenu> {
         let entries = self.connection_menu_entries();
+        let empty_label = app_i18n::tr(
+            cx,
+            "acp_tools.no_active_connections",
+            "No active connections",
+        );
         let selected_connection = self.selected_connection.clone();
         let acp_tools = cx.entity().downgrade();
 
         ContextMenu::build(window, cx, move |mut menu, _window, _cx| {
             if entries.is_empty() {
-                return menu.entry("No active connections", None, |_, _| {});
+                return menu.entry(empty_label, None, |_, _| {});
             }
 
             for entry in &entries {
@@ -359,7 +372,7 @@ impl AcpTools {
                         AcpDebugMessageDirection::Outgoing => "outgoing",
                         AcpDebugMessageDirection::Stderr => "stderr",
                     },
-                    "_type": message.message_type.to_string().to_lowercase(),
+                    "_type": message.message_type.code(),
                     "id": message.request_id,
                     "method": message.name.to_string(),
                     "params": params,
@@ -460,7 +473,7 @@ impl AcpTools {
                     .child(div().flex_1())
                     .child(
                         div()
-                            .child(ui::Chip::new(message.message_type.to_string()))
+                            .child(ui::Chip::new(message.message_type.label(cx)))
                             .visible_on_hover("message"),
                     )
                     .children(
@@ -655,13 +668,30 @@ enum MessageType {
     Stderr,
 }
 
-impl Display for MessageType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl MessageType {
+    fn code(&self) -> &'static str {
         match self {
-            MessageType::Request => write!(f, "Request"),
-            MessageType::Response => write!(f, "Response"),
-            MessageType::Notification => write!(f, "Notification"),
-            MessageType::Stderr => write!(f, "Stderr"),
+            MessageType::Request => "request",
+            MessageType::Response => "response",
+            MessageType::Notification => "notification",
+            MessageType::Stderr => "stderr",
+        }
+    }
+
+    fn label(&self, cx: &App) -> SharedString {
+        match self {
+            MessageType::Request => {
+                app_i18n::tr(cx, "acp_tools.message_type.request", "Request").into()
+            }
+            MessageType::Response => {
+                app_i18n::tr(cx, "acp_tools.message_type.response", "Response").into()
+            }
+            MessageType::Notification => {
+                app_i18n::tr(cx, "acp_tools.message_type.notification", "Notification").into()
+            }
+            MessageType::Stderr => {
+                app_i18n::tr(cx, "acp_tools.message_type.stderr", "Stderr").into()
+            }
         }
     }
 }
@@ -673,13 +703,17 @@ impl EventEmitter<AcpToolsEvent> for AcpTools {}
 impl Item for AcpTools {
     type Event = AcpToolsEvent;
 
-    fn tab_content_text(&self, _detail: usize, _cx: &App) -> ui::SharedString {
-        format!(
-            "ACP: {}",
-            self.selected_watched_connection()
-                .map_or("Disconnected", |connection| connection.agent_id.0.as_ref())
-        )
-        .into()
+    fn tab_content_text(&self, _detail: usize, cx: &App) -> ui::SharedString {
+        app_i18n::tr(cx, "acp_tools.tab_title", "ACP: {}")
+            .replacen(
+                "{}",
+                self.selected_watched_connection().map_or(
+                    app_i18n::tr(cx, "acp_tools.disconnected", "Disconnected").as_ref(),
+                    |connection| connection.agent_id.0.as_ref(),
+                ),
+                1,
+            )
+            .into()
     }
 
     fn tab_icon(&self, _window: &Window, _cx: &App) -> Option<Icon> {
@@ -721,7 +755,7 @@ impl Render for AcpTools {
                     .child(
                         DropdownMenu::new(
                             "acp-connection-selector",
-                            self.selected_connection_label(),
+                            self.selected_connection_label(cx),
                             self.connection_menu(window, cx),
                         )
                         .style(DropdownStyle::Subtle)
@@ -733,7 +767,11 @@ impl Render for AcpTools {
                             .child(
                                 IconButton::new("restart_connection", IconName::RotateCw)
                                     .icon_size(IconSize::Small)
-                                    .tooltip(Tooltip::text("Restart Connection"))
+                                    .tooltip(Tooltip::text(app_i18n::tr(
+                                        cx,
+                                        "acp_tools.restart_connection",
+                                        "Restart Connection",
+                                    )))
                                     .disabled(!can_restart)
                                     .on_click(cx.listener(|this, _, _window, cx| {
                                         this.restart_selected_connection(cx);
@@ -741,13 +779,21 @@ impl Render for AcpTools {
                             )
                             .child(
                                 CopyButton::new("copy-all-messages", copied_messages)
-                                    .tooltip_label("Copy All Messages")
+                                    .tooltip_label(app_i18n::tr(
+                                        cx,
+                                        "acp_tools.copy_all_messages",
+                                        "Copy All Messages",
+                                    ))
                                     .disabled(!has_messages),
                             )
                             .child(
                                 IconButton::new("clear_messages", IconName::Trash)
                                     .icon_size(IconSize::Small)
-                                    .tooltip(Tooltip::text("Clear Messages"))
+                                    .tooltip(Tooltip::text(app_i18n::tr(
+                                        cx,
+                                        "acp_tools.clear_messages",
+                                        "Clear Messages",
+                                    )))
                                     .disabled(!has_messages)
                                     .on_click(cx.listener(|this, _, _window, cx| {
                                         this.clear_messages(cx);
@@ -762,7 +808,11 @@ impl Render for AcpTools {
                             .size_full()
                             .justify_center()
                             .items_center()
-                            .child("No messages recorded yet")
+                            .child(app_i18n::tr(
+                                cx,
+                                "acp_tools.no_messages_recorded_yet",
+                                "No messages recorded yet",
+                            ))
                             .into_any()
                     } else {
                         div()
@@ -785,16 +835,20 @@ impl Render for AcpTools {
                         .size_full()
                         .justify_center()
                         .items_center()
-                        .child(format!(
-                            "Reconnecting to {}",
-                            self.selected_connection_label()
-                        ))
+                        .child(
+                            app_i18n::tr(cx, "acp_tools.reconnecting_to", "Reconnecting to {}")
+                                .replacen("{}", self.selected_connection_label(cx).as_ref(), 1),
+                        )
                         .into_any(),
                     _ => h_flex()
                         .size_full()
                         .justify_center()
                         .items_center()
-                        .child("No active connection")
+                        .child(app_i18n::tr(
+                            cx,
+                            "acp_tools.no_active_connection",
+                            "No active connection",
+                        ))
                         .into_any(),
                 },
             })

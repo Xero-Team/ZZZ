@@ -9,6 +9,7 @@ use gpui::{
     AnyEntity, App, AppContext as _, Entity, EntityId, EventEmitter, FocusHandle, Focusable,
     ScrollHandle, TextStyleRefinement, WeakEntity, Window,
 };
+use i18n as app_i18n;
 use language::language_settings::SoftWrap;
 use project::{AgentId, Project};
 use prompt_store::PromptStore;
@@ -20,6 +21,10 @@ use ui::{Context, TextSize};
 use workspace::Workspace;
 
 use crate::message_editor::{MessageEditor, MessageEditorEvent, SharedSessionCapabilities};
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> String {
+    app_i18n::tr(cx, key, fallback)
+}
 
 pub struct EntryViewState {
     workspace: WeakEntity<Workspace>,
@@ -89,7 +94,12 @@ impl EntryViewState {
                             self.prompt_store.clone(),
                             self.session_capabilities.clone(),
                             self.agent_id.clone(),
-                            "Edit message － @ to include context",
+                            tr(
+                                cx,
+                                "agent_ui.entry_view_state.edit_message_placeholder",
+                                "Edit message － @ to include context",
+                            )
+                            .as_ref(),
                             editor::EditorMode::AutoHeight {
                                 min_lines: 1,
                                 max_lines: None,

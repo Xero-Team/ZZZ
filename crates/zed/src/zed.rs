@@ -39,6 +39,7 @@ use gpui::{
     UpdateGlobal, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
     actions, image_cache, img, point, px, retain_all,
 };
+use i18n::tr;
 use image_viewer::ImageInfo;
 use language::Capability;
 use language_onboarding::BasedPyrightBanner;
@@ -189,7 +190,12 @@ pub fn init(cx: &mut App) {
             open_bundled_file(
                 workspace,
                 asset_str::<Assets>("licenses.md"),
-                "Open Source License Attribution",
+                tr(
+                    cx,
+                    "zed.bundled_file.open_source_license_attribution",
+                    "Open Source License Attribution",
+                )
+                .into(),
                 "Markdown",
                 window,
                 cx,
@@ -241,7 +247,12 @@ pub fn init(cx: &mut App) {
             open_bundled_file(
                 workspace,
                 settings::default_semantic_token_rules(),
-                "Default Semantic Token Rules",
+                tr(
+                    cx,
+                    "zed.bundled_file.default_semantic_token_rules",
+                    "Default Semantic Token Rules",
+                )
+                .into(),
                 "JSONC",
                 window,
                 cx,
@@ -253,7 +264,7 @@ pub fn init(cx: &mut App) {
             open_bundled_file(
                 workspace,
                 settings::default_settings(),
-                "Default Settings",
+                tr(cx, "zed.bundled_file.default_settings", "Default Settings").into(),
                 "JSON",
                 window,
                 cx,
@@ -265,7 +276,12 @@ pub fn init(cx: &mut App) {
             open_bundled_file(
                 workspace,
                 settings::default_keymap(),
-                "Default Key Bindings",
+                tr(
+                    cx,
+                    "zed.bundled_file.default_key_bindings",
+                    "Default Key Bindings",
+                )
+                .into(),
                 "JSON",
                 window,
                 cx,
@@ -500,7 +516,9 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
                     text,
                     title,
                     language,
-                } => open_bundled_file(workspace, text.clone(), title, language, window, cx),
+                } => {
+                    open_bundled_file(workspace, text.clone(), title.clone(), language, window, cx)
+                }
                 _ => {}
             }
         })
@@ -596,19 +614,26 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
 #[allow(unused)]
 fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
     if let Err(e) = fs::fs_watcher::global(|_| {}) {
-        let message = format!(
-            db::indoc! {r#"
-            inotify_init returned {}
-
-            This may be due to system-wide limits on inotify instances. For troubleshooting see: https://zed.dev/docs/linux
-            "#},
-            e
-        );
+        let message = tr(
+            cx,
+            "zed.file_watcher.inotify_error_detail",
+            "inotify_init returned {}\n\nThis may be due to system-wide limits on inotify instances. For troubleshooting see: https://zed.dev/docs/linux",
+        )
+        .replacen("{}", &e.to_string(), 1);
         let prompt = window.prompt(
             PromptLevel::Critical,
-            "Could not start inotify",
+            &tr(
+                cx,
+                "zed.file_watcher.inotify_error",
+                "Could not start inotify",
+            ),
             Some(&message),
-            &["Troubleshoot and Quit"],
+            &[tr(
+                cx,
+                "zed.file_watcher.troubleshoot_and_quit",
+                "Troubleshoot and Quit",
+            )
+            .as_str()],
             cx,
         );
         cx.spawn(async move |_, cx| {
@@ -627,19 +652,26 @@ fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
 #[allow(unused)]
 fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
     if let Err(e) = fs::fs_watcher::global(|_| {}) {
-        let message = format!(
-            db::indoc! {r#"
-            ReadDirectoryChangesW initialization failed: {}
-
-            This may occur on network filesystems and WSL paths. For troubleshooting see: https://zed.dev/docs/windows
-            "#},
-            e
-        );
+        let message = tr(
+            cx,
+            "zed.file_watcher.read_directory_changes_error_detail",
+            "ReadDirectoryChangesW initialization failed: {}\n\nThis may occur on network filesystems and WSL paths. For troubleshooting see: https://zed.dev/docs/windows",
+        )
+        .replacen("{}", &e.to_string(), 1);
         let prompt = window.prompt(
             PromptLevel::Critical,
-            "Could not start ReadDirectoryChangesW",
+            &tr(
+                cx,
+                "zed.file_watcher.read_directory_changes_error",
+                "Could not start ReadDirectoryChangesW",
+            ),
             Some(&message),
-            &["Troubleshoot and Quit"],
+            &[tr(
+                cx,
+                "zed.file_watcher.troubleshoot_and_quit",
+                "Troubleshoot and Quit",
+            )
+            .as_str()],
             cx,
         );
         cx.spawn(async move |_, cx| {
@@ -662,34 +694,38 @@ fn show_software_emulation_warning_if_needed(
     if specs.is_software_emulated && std::env::var("ZED_ALLOW_EMULATED_GPU").is_err() {
         let (graphics_api, docs_url, open_url) = if cfg!(target_os = "windows") {
             (
-                "DirectX",
+                tr(cx, "zed.gpu.graphics_api.directx", "DirectX"),
                 "https://zed.dev/docs/windows",
                 "https://zed.dev/docs/windows",
             )
         } else {
             (
-                "Vulkan",
+                tr(cx, "zed.gpu.graphics_api.vulkan", "Vulkan"),
                 "https://zed.dev/docs/linux",
                 "https://zed.dev/docs/linux#zed-fails-to-open-windows",
             )
         };
-        let message = format!(
-            db::indoc! {r#"
-            Zed uses {} for rendering and requires a compatible GPU.
-
-            Currently you are using a software emulated GPU ({}) which
-            will result in awful performance.
-
-            For troubleshooting see: {}
-            Set ZED_ALLOW_EMULATED_GPU=1 env var to permanently override.
-            "#},
-            graphics_api, specs.device_name, docs_url
-        );
+        let message = tr(
+            cx,
+            "zed.gpu.unsupported_detail",
+            "ZZZ uses {} for rendering and requires a compatible GPU.\n\nCurrently you are using a software emulated GPU ({}) which\nwill result in awful performance.\n\nFor troubleshooting see: {}\nSet ZED_ALLOW_EMULATED_GPU=1 env var to permanently override.",
+        )
+        .replacen("{}", &graphics_api, 1)
+        .replacen("{}", &specs.device_name, 1)
+        .replacen("{}", docs_url, 1);
         let prompt = window.prompt(
             PromptLevel::Critical,
-            "Unsupported GPU",
+            &tr(cx, "zed.gpu.unsupported", "Unsupported GPU"),
             Some(&message),
-            &["Skip", "Troubleshoot and Quit"],
+            &[
+                tr(cx, "zed.gpu.skip", "Skip").as_str(),
+                tr(
+                    cx,
+                    "zed.file_watcher.troubleshoot_and_quit",
+                    "Troubleshoot and Quit",
+                )
+                .as_str(),
+            ],
             cx,
         );
         cx.spawn(async move |_, cx| {
@@ -1430,14 +1466,14 @@ fn open_about_window(cx: &mut App) {
                             .child(Headline::new(self.message.clone()))
                             .when_some(self.commit.clone(), |this, commit| {
                                 this.child(
-                                    Label::new("Commit")
+                                    Label::new(tr(cx, "zed.about.commit", "Commit"))
                                         .color(Color::Muted)
                                         .size(LabelSize::XSmall),
                                 )
                                 .child(Label::new(commit).size(LabelSize::Small))
                             })
                             .child(
-                                Label::new("Version")
+                                Label::new(tr(cx, "zed.about.version", "Version"))
                                     .color(Color::Muted)
                                     .size(LabelSize::XSmall),
                             )
@@ -1455,7 +1491,7 @@ fn open_about_window(cx: &mut App) {
                                         window.remove_window();
                                     }))
                                     .child(
-                                        Button::new("ok", "Ok")
+                                        Button::new("ok", tr(cx, "zed.common.ok", "Ok"))
                                             .full_width()
                                             .style(ButtonStyle::OutlinedGhost)
                                             .toggle_state(ok_is_focused)
@@ -1475,7 +1511,7 @@ fn open_about_window(cx: &mut App) {
                                         },
                                     ))
                                     .child(
-                                        Button::new("copy", "Copy")
+                                        Button::new("copy", tr(cx, "zed.common.copy", "Copy"))
                                             .full_width()
                                             .style(ButtonStyle::Tinted(TintColor::Accent))
                                             .toggle_state(copy_is_focused)
@@ -1518,11 +1554,12 @@ fn open_about_window(cx: &mut App) {
         width: px(440.),
         height: px(300.),
     };
+    let about_title = tr(cx, "menu.about", "About ZZZ");
 
     cx.open_window(
         WindowOptions {
             titlebar: Some(TitlebarOptions {
-                title: Some("About ZZZ".into()),
+                title: Some(about_title.into()),
                 appears_transparent: true,
                 traffic_light_position: Some(point(px(12.), px(12.))),
             }),
@@ -1580,9 +1617,16 @@ fn quit(_: &Quit, cx: &mut App) {
                 .update(cx, |_, window, cx| {
                     window.prompt(
                         PromptLevel::Info,
-                        "Are you sure you want to quit?",
+                        &tr(
+                            cx,
+                            "zed.quit.confirm_title",
+                            "Are you sure you want to quit?",
+                        ),
                         None,
-                        &["Quit", "Cancel"],
+                        &[
+                            tr(cx, "zed.quit.quit", "Quit").as_str(),
+                            tr(cx, "zed.quit.cancel", "Cancel").as_str(),
+                        ],
                         cx,
                     )
                 })
@@ -1673,6 +1717,10 @@ fn quit(_: &Quit, cx: &mut App) {
 
 fn open_log_file(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
     const MAX_LINES: usize = 1000;
+    let log_title = tr(cx, "zed.log.title", "Log");
+    let log_breadcrumb = tr(cx, "zed.log.last_lines_in", "Last {} lines in {}")
+        .replacen("{}", &MAX_LINES.to_string(), 1)
+        .replacen("{}", &paths::log_file().display().to_string(), 1);
     let app_state = workspace.app_state();
     let languages = app_state.languages.clone();
     let fs = app_state.fs.clone();
@@ -1719,16 +1767,18 @@ fn open_log_file(workspace: &mut Workspace, window: &mut Window, cx: &mut Contex
                             NotificationId::unique::<OpenLogError>(),
                             cx,
                             |cx| {
-                                cx.new(|cx| {
-                                    MessageNotification::new(
-                                        format!(
-                                            "Unable to access/open log file at path \
-                                                    {}: {e:#}",
-                                            paths::log_file().display()
-                                        ),
-                                        cx,
-                                    )
-                                })
+                                let message = tr(
+                                    cx,
+                                    "zed.log.open_error",
+                                    "Unable to access/open log file at path {}: {}",
+                                )
+                                .replacen("{}", &paths::log_file().display().to_string(), 1)
+                                .replacen(
+                                    "{}",
+                                    &format!("{e:#}"),
+                                    1,
+                                );
+                                cx.new(|cx| MessageNotification::new(message, cx))
                             },
                         );
                     })
@@ -1751,17 +1801,14 @@ fn open_log_file(workspace: &mut Workspace, window: &mut Window, cx: &mut Contex
                 buffer.set_text(log, cx);
             });
 
-            let buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx).with_title("Log".into()));
+            let buffer =
+                cx.new(|cx| MultiBuffer::singleton(buffer, cx).with_title(log_title.to_string()));
 
             let editor = cx
                 .new_window_entity(|window, cx| {
                     let mut editor = Editor::for_multibuffer(buffer, Some(project), window, cx);
                     editor.set_read_only(true);
-                    editor.set_breadcrumb_header(format!(
-                        "Last {} lines in {}",
-                        MAX_LINES,
-                        paths::log_file().display()
-                    ));
+                    editor.set_breadcrumb_header(log_breadcrumb);
                     let last_multi_buffer_offset = editor.buffer().read(cx).len(cx);
                     editor.change_selections(Default::default(), window, cx, |s| {
                         s.select_ranges(Some(last_multi_buffer_offset..last_multi_buffer_offset));
@@ -1782,9 +1829,18 @@ fn open_log_file(workspace: &mut Workspace, window: &mut Window, cx: &mut Contex
 }
 
 fn notify_settings_errors(result: settings::SettingsParseResult, is_user: bool, cx: &mut App) {
+    let settings_scope = tr(
+        cx,
+        if is_user {
+            "zed.settings.scope.user"
+        } else {
+            "zed.settings.scope.global"
+        },
+        if is_user { "user" } else { "global" },
+    );
+
     if let settings::ParseStatus::Failed { error: err } = &result.parse_status {
-        let settings_type = if is_user { "user" } else { "global" };
-        log::error!("Failed to load {} settings: {err}", settings_type);
+        log::error!("Failed to load {} settings: {err}", settings_scope);
     }
 
     let error = match result.parse_status {
@@ -1803,9 +1859,18 @@ fn notify_settings_errors(result: settings::SettingsParseResult, is_user: bool, 
                 // Local settings errors are displayed by the projects
             } else {
                 show_app_notification(id, cx, move |cx| {
+                    let message = tr(
+                        cx,
+                        "zed.settings.invalid_settings_file",
+                        "Invalid {} settings file\n{}",
+                    )
+                    .replacen("{}", &settings_scope, 1)
+                    .replacen("{}", &error.to_string(), 1);
+                    let open_settings_file =
+                        tr(cx, "menu.settings.open_file", "Open Settings File");
                     cx.new(|cx| {
-                        MessageNotification::new(format!("Invalid user settings file\n{error}"), cx)
-                            .primary_message("Open Settings File")
+                        MessageNotification::new(message, cx)
+                            .primary_message(open_settings_file)
                             .primary_icon(IconName::Settings)
                             .primary_on_click(|window, cx| {
                                 window.dispatch_action(
@@ -1833,20 +1898,25 @@ fn notify_settings_errors(result: settings::SettingsParseResult, is_user: bool, 
         settings::MigrationStatus::Failed { error: err } => {
             if !showed_parse_error {
                 show_app_notification(id, cx, move |cx| {
+                    let message = tr(
+                        cx,
+                        "zed.settings.failed_to_migrate",
+                        "Failed to migrate settings\n{}",
+                    )
+                    .replacen("{}", &err, 1);
+                    let open_settings_file =
+                        tr(cx, "menu.settings.open_file", "Open Settings File");
                     cx.new(|cx| {
-                        MessageNotification::new(
-                            format!(
-                                "Failed to migrate settings\n\
-                                {err}"
-                            ),
-                            cx,
-                        )
-                        .primary_message("Open Settings File")
-                        .primary_icon(IconName::Settings)
-                        .primary_on_click(|window, cx| {
-                            window.dispatch_action(zed_actions::OpenSettingsFile.boxed_clone(), cx);
-                            cx.emit(DismissEvent);
-                        })
+                        MessageNotification::new(message, cx)
+                            .primary_message(open_settings_file)
+                            .primary_icon(IconName::Settings)
+                            .primary_on_click(|window, cx| {
+                                window.dispatch_action(
+                                    zed_actions::OpenSettingsFile.boxed_clone(),
+                                    cx,
+                                );
+                                cx.emit(DismissEvent);
+                            })
                     })
                 });
             }
@@ -2013,12 +2083,18 @@ fn show_keymap_file_json_error(
     error: &anyhow::Error,
     cx: &mut App,
 ) {
-    let message: SharedString =
-        format!("JSON parse error in keymap file. Bindings not reloaded.\n\n{error}").into();
+    let message: SharedString = tr(
+        cx,
+        "zed.keymap.invalid_keymap_file",
+        "JSON parse error in keymap file. Bindings not reloaded.\n\n{}",
+    )
+    .replacen("{}", &error.to_string(), 1)
+    .into();
     show_app_notification(notification_id, cx, move |cx| {
+        let open_keymap_file = tr(cx, "menu.settings.open_keymap_file", "Open Keymap File");
         cx.new(|cx| {
             MessageNotification::new(message.clone(), cx)
-                .primary_message("Open Keymap File")
+                .primary_message(open_keymap_file)
                 .primary_icon(IconName::Settings)
                 .primary_on_click(|window, cx| {
                     window.dispatch_action(zed_actions::OpenKeymapFile.boxed_clone(), cx);
@@ -2036,7 +2112,7 @@ fn show_keymap_file_load_error(
     show_markdown_app_notification(
         notification_id,
         error_message,
-        "Open Keymap File".into(),
+        tr(cx, "menu.settings.open_keymap_file", "Open Keymap File").into(),
         |window, cx| {
             window.dispatch_action(zed_actions::OpenKeymapFile.boxed_clone(), cx);
             cx.emit(DismissEvent);
@@ -2092,7 +2168,7 @@ fn reload_keymaps(cx: &mut App, mut user_key_bindings: Vec<KeyBinding>) {
     // On Windows, this is set in the `update_jump_list` method of the `HistoryManager`.
     #[cfg(not(target_os = "windows"))]
     cx.set_dock_menu(vec![gpui::MenuItem::action(
-        "New Window",
+        tr(cx, "menu.file.new_window", "New Window"),
         workspace::NewWindow,
     )]);
     // todo: nicer api here?
@@ -2274,7 +2350,16 @@ fn open_local_file(
         struct NoOpenFolders;
 
         workspace.show_notification(NotificationId::unique::<NoOpenFolders>(), cx, |cx| {
-            cx.new(|cx| MessageNotification::new("This project has no folders open.", cx))
+            cx.new(|cx| {
+                MessageNotification::new(
+                    tr(
+                        cx,
+                        "zed.project.no_open_folders",
+                        "This project has no folders open.",
+                    ),
+                    cx,
+                )
+            })
         })
     }
 }
@@ -2282,7 +2367,7 @@ fn open_local_file(
 fn open_bundled_file(
     workspace: &mut Workspace,
     text: Cow<'static, str>,
-    title: &'static str,
+    title: SharedString,
     language: &'static str,
     window: &mut Window,
     cx: &mut Context<Workspace>,
@@ -2290,7 +2375,7 @@ fn open_bundled_file(
     let existing = workspace.items_of_type::<Editor>(cx).find(|editor| {
         editor.read_with(cx, |editor, cx| {
             editor.read_only(cx)
-                && editor.title(cx).as_ref() == title
+                && editor.title(cx).as_ref() == title.as_ref()
                 && editor
                     .buffer()
                     .read(cx)
@@ -2318,8 +2403,11 @@ fn open_bundled_file(
                         buffer.set_text(text.into_owned(), cx);
                         buffer.set_capability(Capability::ReadOnly, cx);
                     });
-                    let buffer =
-                        cx.new(|cx| MultiBuffer::singleton(buffer, cx).with_title(title.into()));
+                    let title_for_buffer = title.clone();
+                    let title_for_editor = title.clone();
+                    let buffer = cx.new(|cx| {
+                        MultiBuffer::singleton(buffer, cx).with_title(title_for_buffer.to_string())
+                    });
                     workspace.update_in(cx, |workspace, window, cx| {
                         workspace.add_item_to_active_pane(
                             Box::new(cx.new(|cx| {
@@ -2331,7 +2419,7 @@ fn open_bundled_file(
                                 );
                                 editor.set_read_only(true);
                                 editor.set_should_serialize(false, cx);
-                                editor.set_breadcrumb_header(title.into());
+                                editor.set_breadcrumb_header(title_for_editor.to_string());
                                 editor
                             })),
                             None,

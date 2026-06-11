@@ -344,7 +344,7 @@ impl CommitModal {
             workspace,
         ) = self.git_panel.update(cx, |git_panel, cx| {
             let (can_commit, tooltip) = git_panel.configure_commit_button(cx);
-            let title = git_panel.commit_button_title();
+            let title = git_panel.commit_button_title(cx);
             let co_authors = git_panel.render_co_authors(cx);
             let generate_commit_message = git_panel.render_generate_commit_message_button(cx);
             let active_repo = git_panel.active_repository.clone();
@@ -441,13 +441,13 @@ impl CommitModal {
                     .child(close_kb_hint)
                     .child(SplitButton::new(
                         ui::ButtonLike::new_rounded_left(ElementId::Name(
-                            format!("split-button-left-{}", commit_label).into(),
+                            format!("split-button-left-{commit_label}").into(),
                         ))
                         .layer(ui::ElevationIndex::ModalSurface)
                         .size(ui::ButtonSize::Compact)
                         .child(
                             div()
-                                .child(Label::new(commit_label).size(LabelSize::Small))
+                                .child(Label::new(commit_label.clone()).size(LabelSize::Small))
                                 .mr_0p5(),
                         )
                         .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
@@ -470,7 +470,7 @@ impl CommitModal {
                             move |_window, cx| {
                                 if can_commit {
                                     Tooltip::with_meta_in(
-                                        tooltip,
+                                        tooltip.clone(),
                                         Some(&git::Commit),
                                         format!(
                                             "git commit{}{}",
@@ -481,12 +481,12 @@ impl CommitModal {
                                         cx,
                                     )
                                 } else {
-                                    Tooltip::simple(tooltip, cx)
+                                    Tooltip::simple(tooltip.clone(), cx)
                                 }
                             }
                         }),
                         self.render_git_commit_menu(
-                            ElementId::Name(format!("split-button-right-{}", commit_label).into()),
+                            ElementId::Name(format!("split-button-right-{commit_label}").into()),
                             Some(focus_handle),
                         )
                         .into_any_element(),

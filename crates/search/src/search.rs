@@ -3,6 +3,7 @@ pub use buffer_search::BufferSearchBar;
 pub use editor::HighlightKey;
 use editor::SearchSettings;
 use gpui::{Action, App, ClickEvent, FocusHandle, IntoElement, actions};
+use i18n::tr;
 use project::search::SearchQuery;
 pub use project_search::ProjectSearchView;
 use ui::{ButtonStyle, IconButton, IconButtonShape};
@@ -95,15 +96,32 @@ impl SearchOption {
         SearchOptions::from_bits(1 << *self as u8).unwrap()
     }
 
-    pub fn label(&self) -> &'static str {
+    pub fn label(&self, cx: &App) -> SharedString {
         match self {
-            SearchOption::WholeWord => "Match Whole Words",
-            SearchOption::CaseSensitive => "Match Case Sensitivity",
-            SearchOption::IncludeIgnored => "Also search files ignored by configuration",
-            SearchOption::Regex => "Use Regular Expressions",
-            SearchOption::OneMatchPerLine => "One Match Per Line",
-            SearchOption::Backwards => "Search Backwards",
+            SearchOption::WholeWord => {
+                tr(cx, "search.option.match_whole_words", "Match Whole Words")
+            }
+            SearchOption::CaseSensitive => tr(
+                cx,
+                "search.option.match_case_sensitivity",
+                "Match Case Sensitivity",
+            ),
+            SearchOption::IncludeIgnored => tr(
+                cx,
+                "search.option.include_ignored",
+                "Also search files ignored by configuration",
+            ),
+            SearchOption::Regex => tr(
+                cx,
+                "search.option.use_regular_expressions",
+                "Use Regular Expressions",
+            ),
+            SearchOption::OneMatchPerLine => {
+                tr(cx, "search.option.one_match_per_line", "One Match Per Line")
+            }
+            SearchOption::Backwards => tr(cx, "search.option.search_backwards", "Search Backwards"),
         }
+        .into()
     }
 
     pub fn icon(&self) -> ui::IconName {
@@ -131,11 +149,20 @@ impl SearchOption {
         active: SearchOptions,
         search_source: SearchSource,
         focus_handle: FocusHandle,
+        cx: &App,
     ) -> impl IntoElement {
         let action = self.to_toggle_action();
-        let label = self.label();
+        let label = self.label(cx);
+        let id = match self {
+            SearchOption::WholeWord => "search-option-whole-word",
+            SearchOption::CaseSensitive => "search-option-case-sensitive",
+            SearchOption::IncludeIgnored => "search-option-include-ignored",
+            SearchOption::Regex => "search-option-regex",
+            SearchOption::OneMatchPerLine => "search-option-one-match-per-line",
+            SearchOption::Backwards => "search-option-backwards",
+        };
         IconButton::new(
-            (label, matches!(search_source, SearchSource::Buffer) as u32),
+            (id, matches!(search_source, SearchSource::Buffer) as u32),
             self.icon(),
         )
         .map(|button| match search_source {
@@ -158,7 +185,9 @@ impl SearchOption {
         .style(ButtonStyle::Subtle)
         .shape(IconButtonShape::Square)
         .toggle_state(active.contains(self.as_options()))
-        .tooltip(move |_window, cx| Tooltip::for_action_in(label, action, &focus_handle, cx))
+        .tooltip(move |_window, cx| {
+            Tooltip::for_action_in(label.clone(), action, &focus_handle, cx)
+        })
     }
 }
 
@@ -196,7 +225,11 @@ pub(crate) fn show_no_more_matches(window: &mut Window, cx: &mut App) {
         };
         workspace.update(cx, |workspace, cx| {
             workspace.show_toast(
-                Toast::new(notification_id.clone(), "No more matches").autohide(),
+                Toast::new(
+                    notification_id.clone(),
+                    tr(cx, "search.no_more_matches", "No more matches"),
+                )
+                .autohide(),
                 cx,
             );
         })

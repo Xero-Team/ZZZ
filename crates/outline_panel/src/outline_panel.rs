@@ -22,6 +22,7 @@ use gpui::{
     UniformListScrollHandle, WeakEntity, Window, actions, anchored, deferred, div, point, px, size,
     uniform_list,
 };
+use i18n::tr;
 use itertools::Itertools;
 use language::{Anchor, BufferId, BufferSnapshot, OffsetRangeExt, OutlineItem};
 use language::{LanguageAwareStyling, language_settings::LanguageSettings};
@@ -4992,8 +4993,8 @@ impl Panel for OutlinePanel {
             .then_some(IconName::ListTree)
     }
 
-    fn icon_tooltip(&self, _window: &Window, _: &App) -> Option<&'static str> {
-        Some("Outline Panel")
+    fn icon_tooltip(&self, _window: &Window, cx: &App) -> Option<SharedString> {
+        Some(tr(cx, "menu.view.outline_panel", "Outline Panel").into())
     }
 
     fn toggle_action(&self) -> Box<dyn Action> {

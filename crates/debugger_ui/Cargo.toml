@@ -42,6 +42,7 @@ file_icons.workspace = true
 futures.workspace = true
 fuzzy.workspace = true
 gpui.workspace = true
+i18n.workspace = true
 hex.workspace = true
 indoc.workspace = true
 itertools.workspace = true

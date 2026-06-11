@@ -38,6 +38,7 @@ use gpui::{
     App, Context, Entity, Focusable, Global, HighlightStyle, Subscription, Task, UpdateGlobal,
     WeakEntity, Window, point,
 };
+use i18n as app_i18n;
 use language::{Buffer, Point, Selection, TransactionId};
 use language_model::{ConfigurationError, ConfiguredModel, LanguageModelRegistry};
 use multi_buffer::MultiBufferRow;
@@ -51,6 +52,10 @@ use ui::prelude::*;
 use util::{RangeExt, ResultExt, maybe};
 use workspace::{Toast, Workspace, dock::Panel, notifications::NotificationId};
 use zed_actions::agent::OpenSettings;
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> String {
+    app_i18n::tr(cx, key, fallback)
+}
 
 pub fn init(fs: Arc<dyn Fs>, prompt_builder: Arc<PromptBuilder>, cx: &mut App) {
     cx.set_global(InlineAssistant::new(fs, prompt_builder));
@@ -275,13 +280,15 @@ impl InlineAssistant {
                     handle_assist(window, cx);
                 }
             } else {
+                let configure = tr(cx, "agent_ui.inline_assistant.configure", "Configure");
+                let cancel = tr(cx, "agent_ui.inline_assistant.cancel", "Cancel");
                 cx.spawn_in(window, async move |_, cx| {
                     let answer = cx
                         .prompt(
                             gpui::PromptLevel::Warning,
                             &error.to_string(),
                             None,
-                            &["Configure", "Cancel"],
+                            &[configure.as_str(), cancel.as_str()],
                         )
                         .await
                         .ok();
@@ -1695,7 +1702,16 @@ impl InlineAssist {
                                         .ok();
                                 }
 
-                                let error = format!("Inline assistant error: {}", error);
+                                let error = tr(
+                                    cx,
+                                    "agent_ui.inline_assistant.error",
+                                    "Inline assistant error: {}",
+                                )
+                                .replacen(
+                                    "{}",
+                                    &error.to_string(),
+                                    1,
+                                );
                                 workspace.update(cx, |workspace, cx| {
                                     struct InlineAssistantError;
 

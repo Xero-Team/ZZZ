@@ -1348,7 +1348,7 @@ fn render_global_default_mode_section(
                             },
                         )
                         .entry(
-                            deny_label.clone(),
+                            deny_label,
                             None,
                             move |_, cx| {
                                 set_global_default_permission(ToolPermissionMode::Deny, cx);
@@ -1418,7 +1418,7 @@ fn render_default_mode_section(
                         .entry(allow_label.clone(), None, move |_, cx| {
                             set_default_mode(&tool_id_allow, ToolPermissionMode::Allow, cx);
                         })
-                        .entry(deny_label.clone(), None, move |_, cx| {
+                        .entry(deny_label, None, move |_, cx| {
                             set_default_mode(&tool_id_deny, ToolPermissionMode::Deny, cx);
                         })
                     }))

@@ -5,11 +5,16 @@ use crate::{
 };
 use fs::Fs;
 use gpui::{Entity, FocusHandle, SharedString};
+use i18n as app_i18n;
 use language_model::IconOrSvg;
 use picker::popover_menu::PickerPopoverMenu;
 use settings::update_settings_file;
 use std::sync::Arc;
 use ui::{PopoverMenuHandle, Tooltip, prelude::*};
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 pub struct AgentModelSelector {
     selector: Entity<LanguageModelSelector>,
@@ -87,7 +92,13 @@ impl Render for AgentModelSelector {
         let model_name = model
             .as_ref()
             .map(|model| model.model.name().0)
-            .unwrap_or_else(|| SharedString::from("Select a Model"));
+            .unwrap_or_else(|| {
+                tr(
+                    cx,
+                    "agent_ui.model_selector.select_a_model",
+                    "Select a Model",
+                )
+            });
 
         let provider_icon = model.as_ref().map(|model| model.provider.icon());
         let color = if self.menu_handle.is_deployed() {

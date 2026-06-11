@@ -11,6 +11,7 @@ use gpui::{
     App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, MouseDownEvent,
     Render, SharedString, Task, WeakEntity, Window,
 };
+use i18n as app_i18n;
 use itertools::Itertools as _;
 use notifications::status_toast::StatusToast;
 use project::{AgentId, AgentRegistryStore, AgentServerStore};
@@ -28,6 +29,10 @@ use crate::{
     agent_connection_store::AgentConnectionStore,
     thread_metadata_store::{ThreadId, ThreadMetadata, ThreadMetadataStore, WorktreePaths},
 };
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 pub struct AcpThreadImportOnboarding;
 pub struct CrossChannelImportOnboarding;
@@ -276,19 +281,36 @@ impl ThreadImportModal {
 
     fn show_imported_threads_toast(&self, imported_count: usize, cx: &mut App) {
         let status_toast = if imported_count == 0 {
-            StatusToast::new("No threads found to import.", cx, |this, _cx| {
-                this.icon(
-                    Icon::new(IconName::Info)
-                        .size(IconSize::Small)
-                        .color(Color::Muted),
-                )
-                .dismiss_button(true)
-            })
+            StatusToast::new(
+                app_i18n::tr(
+                    cx,
+                    "agent_ui.thread_import.no_threads_found_to_import",
+                    "No threads found to import.",
+                ),
+                cx,
+                |this, _cx| {
+                    this.icon(
+                        Icon::new(IconName::Info)
+                            .size(IconSize::Small)
+                            .color(Color::Muted),
+                    )
+                    .dismiss_button(true)
+                },
+            )
         } else {
             let message = if imported_count == 1 {
-                "Imported 1 thread.".to_string()
+                app_i18n::tr(
+                    cx,
+                    "agent_ui.thread_import.imported_one_thread",
+                    "Imported 1 thread.",
+                )
             } else {
-                format!("Imported {imported_count} threads.")
+                app_i18n::tr(
+                    cx,
+                    "agent_ui.thread_import.imported_threads",
+                    "Imported {} threads.",
+                )
+                .replacen("{}", &imported_count.to_string(), 1)
             };
             StatusToast::new(message, cx, |this, _cx| {
                 this.icon(
@@ -390,10 +412,17 @@ impl Render for ThreadImportModal {
                 Modal::new("import-threads", None)
                     .header(
                         ModalHeader::new()
-                            .headline("Import External Agent Threads")
+                            .headline(tr(
+                                cx,
+                                "agent_ui.thread_import.import_external_agent_threads",
+                                "Import External Agent Threads",
+                            ))
                             .description(
-                                "Import threads from agents like Claude Agent, Codex, and more, whether started in Zed or another client. \
-                                Choose which agents to include, and their threads will appear in your thread history."
+                                app_i18n::tr(
+                                    cx,
+                                    "agent_ui.thread_import.import_external_agent_threads_description",
+                                    "Import threads from agents like Claude Agent, Codex, and more, whether started in Zed or another client. Choose which agents to include, and their threads will appear in your thread history.",
+                                )
                             )
                             .show_dismiss_button(true),
 
@@ -408,7 +437,11 @@ impl Render for ThreadImportModal {
                                 .when(has_agents, |this| this.children(agent_rows))
                                 .when(!has_agents, |this| {
                                     this.child(
-                                        Label::new("No ACP agents available.")
+                                        Label::new(tr(
+                                            cx,
+                                            "agent_ui.thread_import.no_acp_agents_available",
+                                            "No ACP agents available.",
+                                        ))
                                             .color(Color::Muted)
                                             .size(LabelSize::Small),
                                     )
@@ -426,7 +459,14 @@ impl Render for ThreadImportModal {
                                 )
                             })
                             .end_slot(
-                                Button::new("import-threads", "Import Threads")
+                                Button::new(
+                                    "import-threads",
+                                    tr(
+                                        cx,
+                                        "agent_ui.thread_import.import_threads",
+                                        "Import Threads",
+                                    ),
+                                )
                                     .loading(self.is_importing)
                                     .disabled(disabled_import_thread)
                                     .key_binding(
@@ -688,15 +728,32 @@ fn show_cross_channel_import_toast(
     cx: &mut App,
 ) {
     let status_toast = if imported_count == 0 {
-        StatusToast::new("No new threads found to import.", cx, |this, _cx| {
-            this.icon(Icon::new(IconName::Info).color(Color::Muted))
-                .dismiss_button(true)
-        })
+        StatusToast::new(
+            tr(
+                cx,
+                "agent_ui.thread_import.no_new_threads_found_to_import",
+                "No new threads found to import.",
+            ),
+            cx,
+            |this, _cx| {
+                this.icon(Icon::new(IconName::Info).color(Color::Muted))
+                    .dismiss_button(true)
+            },
+        )
     } else {
         let message = if imported_count == 1 {
-            "Imported 1 thread from other channels.".to_string()
+            app_i18n::tr(
+                cx,
+                "agent_ui.thread_import.imported_one_thread_from_other_channels",
+                "Imported 1 thread from other channels.",
+            )
         } else {
-            format!("Imported {imported_count} threads from other channels.")
+            app_i18n::tr(
+                cx,
+                "agent_ui.thread_import.imported_threads_from_other_channels",
+                "Imported {} threads from other channels.",
+            )
+            .replacen("{}", &imported_count.to_string(), 1)
         };
         StatusToast::new(message, cx, |this, _cx| {
             this.icon(Icon::new(IconName::Check).color(Color::Success))

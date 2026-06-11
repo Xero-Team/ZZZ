@@ -10,12 +10,13 @@ use gpui::{
     ClickEvent, Entity, FocusHandle, Focusable, FontWeight, Modifiers, TextAlign,
     TextStyleRefinement, WeakEntity,
 };
+use i18n as app_i18n;
 
 use settings::{
     CenteredPaddingSettings, CodeFade, DelayMs, FontSize, FontWeightContent, InactiveOpacity,
     MinimumContrast,
 };
-use ui::prelude::*;
+use ui::{Tooltip, prelude::*};
 use zed_actions::editor::{MoveDown, MoveUp};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
@@ -467,6 +468,11 @@ impl<T: NumberFieldType> RenderOnce for NumberField<T> {
                     IconButton::new("reset", IconName::RotateCcw)
                         .icon_size(IconSize::Small)
                         .when_some(self.tab_index, |this, _| this.tab_index(0isize))
+                        .tooltip(Tooltip::text(app_i18n::tr(
+                            cx,
+                            "settings_ui.number_field.tooltip.reset",
+                            "Reset",
+                        )))
                         .on_click(on_reset),
                 )
             })

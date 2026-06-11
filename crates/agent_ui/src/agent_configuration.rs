@@ -19,6 +19,7 @@ use gpui::{
     Action, Anchor, AnyView, App, AsyncWindowContext, Entity, EventEmitter, FocusHandle, Focusable,
     ScrollHandle, Subscription, Task, WeakEntity,
 };
+use i18n as app_i18n;
 use itertools::Itertools;
 use language::LanguageRegistry;
 use language_model::{
@@ -50,6 +51,10 @@ use crate::{
     agent_configuration::add_llm_provider_modal::{AddLlmProviderModal, LlmCompatibleProvider},
     agent_connection_store::{AgentConnectionStatus, AgentConnectionStore},
 };
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 pub struct AgentConfiguration {
     fs: Arc<dyn Fs>,
@@ -325,15 +330,24 @@ impl AgentConfiguration {
                     .gap_1()
                     .when(is_expanded, |parent| match configuration_view {
                         Some(configuration_view) => parent.child(configuration_view),
-                        None => parent.child(Label::new(format!(
-                            "No configuration view for {provider_name}",
-                        ))),
+                        None => parent.child(Label::new(
+                            tr(
+                                cx,
+                                "agent_ui.agent_configuration.no_configuration_view",
+                                "No configuration view for {}",
+                            )
+                            .replacen("{}", provider_name.as_ref(), 1),
+                        )),
                     })
                     .when(is_expanded && provider.is_authenticated(cx), |parent| {
                         parent.child(
                             Button::new(
                                 SharedString::from(format!("new-thread-{provider_id}")),
-                                "Start New Thread",
+                                tr(
+                                    cx,
+                                    "agent_ui.agent_configuration.start_new_thread",
+                                    "Start New Thread",
+                                ),
                             )
                             .full_width()
                             .style(ButtonStyle::Outlined)
@@ -360,7 +374,11 @@ impl AgentConfiguration {
                             this.child(
                                 Button::new(
                                     SharedString::from(format!("delete-provider-{provider_id}")),
-                                    "Remove Provider",
+                                    tr(
+                                        cx,
+                                        "agent_ui.agent_configuration.remove_provider",
+                                        "Remove Provider",
+                                    ),
                                 )
                                 .full_width()
                                 .style(ButtonStyle::Outlined)
@@ -429,37 +447,50 @@ impl AgentConfiguration {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let providers = LanguageModelRegistry::read_global(cx).visible_providers();
+        let compatible_apis_label = tr(
+            cx,
+            "agent_ui.agent_configuration.compatible_apis",
+            "Compatible APIs",
+        );
 
         let popover_menu = PopoverMenu::new("add-provider-popover")
             .trigger(
-                Button::new("add-provider", "Add Provider")
-                    .style(ButtonStyle::Outlined)
-                    .start_icon(
-                        Icon::new(IconName::Plus)
-                            .size(IconSize::Small)
-                            .color(Color::Muted),
-                    )
-                    .label_size(LabelSize::Small),
+                Button::new(
+                    "add-provider",
+                    tr(
+                        cx,
+                        "agent_ui.agent_configuration.add_provider",
+                        "Add Provider",
+                    ),
+                )
+                .style(ButtonStyle::Outlined)
+                .start_icon(
+                    Icon::new(IconName::Plus)
+                        .size(IconSize::Small)
+                        .color(Color::Muted),
+                )
+                .label_size(LabelSize::Small),
             )
             .menu({
                 let workspace = self.workspace.clone();
                 move |window, cx| {
                     Some(ContextMenu::build(window, cx, |menu, _window, _cx| {
-                        menu.header("Compatible APIs").entry("OpenAI", None, {
-                            let workspace = workspace.clone();
-                            move |window, cx| {
-                                workspace
-                                    .update(cx, |workspace, cx| {
-                                        AddLlmProviderModal::toggle(
-                                            LlmCompatibleProvider::OpenAi,
-                                            workspace,
-                                            window,
-                                            cx,
-                                        );
-                                    })
-                                    .log_err();
-                            }
-                        })
+                        menu.header(compatible_apis_label.clone())
+                            .entry("OpenAI", None, {
+                                let workspace = workspace.clone();
+                                move |window, cx| {
+                                    workspace
+                                        .update(cx, |workspace, cx| {
+                                            AddLlmProviderModal::toggle(
+                                                LlmCompatibleProvider::OpenAi,
+                                                workspace,
+                                                window,
+                                                cx,
+                                            );
+                                        })
+                                        .log_err();
+                                }
+                            })
                     }))
                 }
             })
@@ -473,8 +504,16 @@ impl AgentConfiguration {
             .min_w_0()
             .w_full()
             .child(self.render_section_title(
-                "LLM Providers",
-                "Add at least one provider to use AI-powered features in ZZZ.",
+                tr(
+                    cx,
+                    "agent_ui.agent_configuration.llm_providers",
+                    "LLM Providers",
+                ),
+                tr(
+                    cx,
+                    "agent_ui.agent_configuration.llm_providers_description",
+                    "Add at least one provider to use AI-powered features in ZZZ.",
+                ),
                 popover_menu.into_any_element(),
             ))
             .child(
@@ -507,14 +546,38 @@ impl AgentConfiguration {
                 .blend(cx.theme().colors().text_accent.opacity(0.2));
 
             let (plan_name, label_color, bg_color) = match plan {
-                Plan::ZedFree => ("Free", Color::Default, free_chip_bg),
-                Plan::ZedProTrial => ("Pro Trial", Color::Accent, pro_chip_bg),
-                Plan::ZedPro => ("Pro", Color::Accent, pro_chip_bg),
-                Plan::ZedBusiness => ("Business", Color::Accent, pro_chip_bg),
-                Plan::ZedStudent => ("Student", Color::Accent, pro_chip_bg),
+                Plan::ZedFree => (
+                    app_i18n::tr(cx, "agent_ui.agent_configuration.plan.free", "Free"),
+                    Color::Default,
+                    free_chip_bg,
+                ),
+                Plan::ZedProTrial => (
+                    app_i18n::tr(
+                        cx,
+                        "agent_ui.agent_configuration.plan.pro_trial",
+                        "Pro Trial",
+                    ),
+                    Color::Accent,
+                    pro_chip_bg,
+                ),
+                Plan::ZedPro => (
+                    app_i18n::tr(cx, "agent_ui.agent_configuration.plan.pro", "Pro"),
+                    Color::Accent,
+                    pro_chip_bg,
+                ),
+                Plan::ZedBusiness => (
+                    app_i18n::tr(cx, "agent_ui.agent_configuration.plan.business", "Business"),
+                    Color::Accent,
+                    pro_chip_bg,
+                ),
+                Plan::ZedStudent => (
+                    app_i18n::tr(cx, "agent_ui.agent_configuration.plan.student", "Student"),
+                    Color::Accent,
+                    pro_chip_bg,
+                ),
             };
 
-            Chip::new(plan_name.to_string())
+            Chip::new(plan_name)
                 .bg_color(bg_color)
                 .label_color(label_color)
                 .into_any_element()
@@ -525,40 +588,57 @@ impl AgentConfiguration {
 
     fn render_context_servers_section(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let context_server_ids = self.context_server_store.read(cx).server_ids();
+        let add_custom_server_label = tr(
+            cx,
+            "agent_ui.agent_configuration.add_custom_server",
+            "Add Custom Server",
+        );
+        let install_from_extensions_label = tr(
+            cx,
+            "agent_ui.agent_configuration.install_from_extensions",
+            "Install from Extensions",
+        );
 
         let add_server_popover = PopoverMenu::new("add-server-popover")
             .trigger(
-                Button::new("add-server", "Add Server")
-                    .style(ButtonStyle::Outlined)
-                    .start_icon(
-                        Icon::new(IconName::Plus)
-                            .size(IconSize::Small)
-                            .color(Color::Muted),
-                    )
-                    .label_size(LabelSize::Small),
+                Button::new(
+                    "add-server",
+                    tr(cx, "agent_ui.agent_configuration.add_server", "Add Server"),
+                )
+                .style(ButtonStyle::Outlined)
+                .start_icon(
+                    Icon::new(IconName::Plus)
+                        .size(IconSize::Small)
+                        .color(Color::Muted),
+                )
+                .label_size(LabelSize::Small),
             )
             .menu({
                 move |window, cx| {
                     Some(ContextMenu::build(window, cx, |menu, _window, _cx| {
-                        menu.entry("Add Custom Server", None, {
+                        menu.entry(add_custom_server_label.clone(), None, {
                             |window, cx| {
                                 window.dispatch_action(crate::AddContextServer.boxed_clone(), cx)
                             }
                         })
-                        .entry("Install from Extensions", None, {
-                            |window, cx| {
-                                window.dispatch_action(
-                                    zed_actions::Extensions {
-                                        category_filter: Some(
-                                            ExtensionCategoryFilter::ContextServers,
-                                        ),
-                                        id: None,
-                                    }
-                                    .boxed_clone(),
-                                    cx,
-                                )
-                            }
-                        })
+                        .entry(
+                            install_from_extensions_label.clone(),
+                            None,
+                            {
+                                |window, cx| {
+                                    window.dispatch_action(
+                                        zed_actions::Extensions {
+                                            category_filter: Some(
+                                                ExtensionCategoryFilter::ContextServers,
+                                            ),
+                                            id: None,
+                                        }
+                                        .boxed_clone(),
+                                        cx,
+                                    )
+                                }
+                            },
+                        )
                     }))
                 }
             })
@@ -573,8 +653,16 @@ impl AgentConfiguration {
             .border_b_1()
             .border_color(cx.theme().colors().border)
             .child(self.render_section_title(
-                "Model Context Protocol (MCP) Servers",
-                "All MCP servers connected directly or via a ZZZ extension.",
+                tr(
+                    cx,
+                    "agent_ui.agent_configuration.mcp_servers_title",
+                    "Model Context Protocol (MCP) Servers",
+                ),
+                tr(
+                    cx,
+                    "agent_ui.agent_configuration.mcp_servers_description",
+                    "All MCP servers connected directly or via a ZZZ extension.",
+                ),
                 add_server_popover.into_any_element(),
             ))
             .child(
@@ -595,9 +683,13 @@ impl AgentConfiguration {
                                     .border_color(cx.theme().colors().border.opacity(0.6))
                                     .rounded_sm()
                                     .child(
-                                        Label::new("No MCP servers added yet.")
-                                            .color(Color::Muted)
-                                            .size(LabelSize::Small),
+                                        Label::new(tr(
+                                            cx,
+                                            "agent_ui.agent_configuration.no_mcp_servers_added_yet",
+                                            "No MCP servers added yet.",
+                                        ))
+                                        .color(Color::Muted)
+                                        .size(LabelSize::Small),
                                     ),
                             )
                         } else {
@@ -706,13 +798,25 @@ impl AgentConfiguration {
             matches!(config.as_ref(), ContextServerConfiguration::Http { .. })
                 && !config.has_static_auth_header()
         });
+        let configure_server_label = tr(
+            cx,
+            "agent_ui.agent_configuration.configure_server",
+            "Configure Server",
+        );
+        let view_tools_label = tr(cx, "agent_ui.agent_configuration.view_tools", "View Tools");
+        let log_out_label = tr(cx, "agent_ui.agent_configuration.log_out", "Log Out");
+        let uninstall_label = tr(cx, "agent_ui.agent_configuration.uninstall", "Uninstall");
 
         let context_server_configuration_menu = PopoverMenu::new("context-server-config-menu")
             .trigger_with_tooltip(
                 IconButton::new("context-server-config-menu", IconName::Settings)
                     .icon_color(Color::Muted)
                     .icon_size(IconSize::Small),
-                Tooltip::text("Configure MCP Server"),
+                Tooltip::text(tr(
+                    cx,
+                    "agent_ui.agent_configuration.configure_mcp_server",
+                    "Configure MCP Server",
+                )),
             )
             .anchor(Anchor::TopRight)
             .menu({
@@ -722,10 +826,12 @@ impl AgentConfiguration {
                 let workspace = self.workspace.clone();
                 let context_server_registry = self.context_server_registry.clone();
                 let context_server_store = context_server_store.clone();
-
                 move |window, cx| {
                     Some(ContextMenu::build(window, cx, |menu, _window, _cx| {
-                        menu.entry("Configure Server", None, {
+                        menu.entry(
+                            configure_server_label.clone(),
+                            None,
+                            {
                             let context_server_id = context_server_id.clone();
                             let language_registry = language_registry.clone();
                             let workspace = workspace.clone();
@@ -750,7 +856,9 @@ impl AgentConfiguration {
                                     .detach();
                                 }
                             }
-                        }).when(tool_count > 0, |this| this.entry("View Tools", None, {
+                        },
+                        )
+                        .when(tool_count > 0, |this| this.entry(view_tools_label.clone(), None, {
                             let context_server_id = context_server_id.clone();
                             let context_server_registry = context_server_registry.clone();
                             let workspace = workspace.clone();
@@ -769,7 +877,7 @@ impl AgentConfiguration {
                             }
                         }))
                         .when(should_show_logout_button, |this| {
-                            this.entry("Log Out", None, {
+                            this.entry(log_out_label.clone(), None, {
                                 let context_server_store = context_server_store.clone();
                                 let context_server_id = context_server_id.clone();
                                 move |_window, cx| {
@@ -780,7 +888,7 @@ impl AgentConfiguration {
                             })
                         })
                         .separator()
-                        .entry("Uninstall", None, {
+                        .entry(uninstall_label.clone(), None, {
                             let fs = fs.clone();
                             let context_server_id = context_server_id.clone();
                             let workspace = workspace.clone();
@@ -858,18 +966,21 @@ impl AgentConfiguration {
                     )
                     .when(should_show_logout_button, |this| {
                         this.child(
-                            Button::new("error-logout-server", "Log Out")
-                                .style(ButtonStyle::Outlined)
-                                .label_size(LabelSize::Small)
-                                .on_click({
-                                    let context_server_store = context_server_store.clone();
-                                    let context_server_id = context_server_id.clone();
-                                    move |_event, _window, cx| {
-                                        context_server_store.update(cx, |store, cx| {
-                                            store.logout_server(&context_server_id, cx).log_err();
-                                        });
-                                    }
-                                }),
+                            Button::new(
+                                "error-logout-server",
+                                tr(cx, "agent_ui.agent_configuration.log_out", "Log Out"),
+                            )
+                            .style(ButtonStyle::Outlined)
+                            .label_size(LabelSize::Small)
+                            .on_click({
+                                let context_server_store = context_server_store.clone();
+                                let context_server_id = context_server_id.clone();
+                                move |_event, _window, cx| {
+                                    context_server_store.update(cx, |store, cx| {
+                                        store.logout_server(&context_server_id, cx).log_err();
+                                    });
+                                }
+                            }),
                         )
                     })
                     .into_any_element(),
@@ -889,23 +1000,34 @@ impl AgentConfiguration {
                                     .color(Color::Muted),
                             )
                             .child(
-                                Label::new("Authenticate to connect this server")
-                                    .color(Color::Muted)
-                                    .size(LabelSize::Small),
+                                Label::new(tr(
+                                    cx,
+                                    "agent_ui.agent_configuration.authenticate_to_connect_server",
+                                    "Authenticate to connect this server",
+                                ))
+                                .color(Color::Muted)
+                                .size(LabelSize::Small),
                             ),
                     )
                     .child(
-                        Button::new("authenticate-server", "Authenticate")
-                            .style(ButtonStyle::Outlined)
-                            .label_size(LabelSize::Small)
-                            .on_click({
-                                let context_server_id = context_server_id.clone();
-                                move |_event, _window, cx| {
-                                    context_server_store.update(cx, |store, cx| {
-                                        store.authenticate_server(&context_server_id, cx).log_err();
-                                    });
-                                }
-                            }),
+                        Button::new(
+                            "authenticate-server",
+                            tr(
+                                cx,
+                                "agent_ui.agent_configuration.authenticate",
+                                "Authenticate",
+                            ),
+                        )
+                        .style(ButtonStyle::Outlined)
+                        .label_size(LabelSize::Small)
+                        .on_click({
+                            let context_server_id = context_server_id.clone();
+                            move |_event, _window, cx| {
+                                context_server_store.update(cx, |store, cx| {
+                                    store.authenticate_server(&context_server_id, cx).log_err();
+                                });
+                            }
+                        }),
                     )
                     .into_any_element(),
             )
@@ -924,13 +1046,24 @@ impl AgentConfiguration {
                                     .color(Color::Muted),
                             )
                             .child(
-                                Label::new("Enter a client secret to connect this server")
+                                Label::new(tr(
+                                    cx,
+                                    "agent_ui.agent_configuration.enter_client_secret_to_connect_server",
+                                    "Enter a client secret to connect this server",
+                                ))
                                     .color(Color::Muted)
                                     .size(LabelSize::Small),
                             ),
                     )
                     .child(
-                        Button::new("enter-client-secret", "Enter Client Secret")
+                        Button::new(
+                            "enter-client-secret",
+                            tr(
+                                cx,
+                                "agent_ui.agent_configuration.enter_client_secret",
+                                "Enter Client Secret",
+                            ),
+                        )
                             .style(ButtonStyle::Outlined)
                             .label_size(LabelSize::Small)
                             .on_click({
@@ -959,9 +1092,13 @@ impl AgentConfiguration {
                     .gap_2()
                     .child(div().size_3().flex_shrink_0())
                     .child(
-                        Label::new("Authenticating…")
-                            .color(Color::Muted)
-                            .size(LabelSize::Small),
+                        Label::new(tr(
+                            cx,
+                            "agent_ui.agent_configuration.authenticating",
+                            "Authenticating…",
+                        ))
+                        .color(Color::Muted)
+                        .size(LabelSize::Small),
                     )
                     .into_any_element(),
             )
@@ -971,9 +1108,16 @@ impl AgentConfiguration {
 
         let tool_label = if is_running {
             Some(if tool_count == 1 {
-                SharedString::from("1 tool")
+                tr(cx, "agent_ui.agent_configuration.tool_count_one", "1 tool")
             } else {
-                SharedString::from(format!("{} tools", tool_count))
+                SharedString::from(
+                    tr(
+                        cx,
+                        "agent_ui.agent_configuration.tool_count_many",
+                        "{} tools",
+                    )
+                    .replacen("{}", &tool_count.to_string(), 1),
+                )
             })
         } else {
             None
@@ -1052,27 +1196,42 @@ impl AgentConfiguration {
             })
             .sorted_unstable_by_key(|(_, _, display_name, _)| display_name.to_lowercase())
             .collect();
+        let install_from_registry_label = tr(
+            cx,
+            "agent_ui.agent_configuration.install_from_registry",
+            "Install from Registry",
+        );
+        let add_custom_agent_label = tr(
+            cx,
+            "agent_ui.agent_configuration.add_custom_agent",
+            "Add Custom Agent",
+        );
+        let learn_more_label = tr(cx, "agent_ui.agent_configuration.learn_more", "Learn More");
+        let acp_docs_label = tr(cx, "agent_ui.agent_configuration.acp_docs", "ACP Docs");
 
         let add_agent_popover = PopoverMenu::new("add-agent-server-popover")
             .trigger(
-                Button::new("add-agent", "Add Agent")
-                    .style(ButtonStyle::Outlined)
-                    .start_icon(
-                        Icon::new(IconName::Plus)
-                            .size(IconSize::Small)
-                            .color(Color::Muted),
-                    )
-                    .label_size(LabelSize::Small),
+                Button::new(
+                    "add-agent",
+                    tr(cx, "agent_ui.agent_configuration.add_agent", "Add Agent"),
+                )
+                .style(ButtonStyle::Outlined)
+                .start_icon(
+                    Icon::new(IconName::Plus)
+                        .size(IconSize::Small)
+                        .color(Color::Muted),
+                )
+                .label_size(LabelSize::Small),
             )
             .menu({
                 move |window, cx| {
                     Some(ContextMenu::build(window, cx, |menu, _window, _cx| {
-                        menu.entry("Install from Registry", None, {
+                        menu.entry(install_from_registry_label.clone(), None, {
                             |window, cx| {
                                 window.dispatch_action(Box::new(zed_actions::AcpRegistry), cx)
                             }
                         })
-                        .entry("Add Custom Agent", None, {
+                        .entry(add_custom_agent_label.clone(), None, {
                             move |window, cx| {
                                 if let Some(workspace) = Workspace::for_window(window, cx) {
                                     let workspace = workspace.downgrade();
@@ -1088,9 +1247,9 @@ impl AgentConfiguration {
                             }
                         })
                         .separator()
-                        .header("Learn More")
+                        .header(learn_more_label.clone())
                         .item(
-                            ContextMenuEntry::new("ACP Docs")
+                            ContextMenuEntry::new(acp_docs_label.clone())
                                 .icon(IconName::ArrowUpRight)
                                 .icon_color(Color::Muted)
                                 .icon_position(IconPosition::End)
@@ -1121,8 +1280,16 @@ impl AgentConfiguration {
             .child(
                 v_flex()
                     .child(self.render_section_title(
-                        "External Agents",
-                        "All agents connected through the Agent Client Protocol.",
+                        tr(
+                            cx,
+                            "agent_ui.agent_configuration.external_agents",
+                            "External Agents",
+                        ),
+                        tr(
+                            cx,
+                            "agent_ui.agent_configuration.external_agents_description",
+                            "All agents connected through the Agent Client Protocol.",
+                        ),
                         add_agent_popover.into_any_element(),
                     ))
                     .child(
@@ -1203,7 +1370,11 @@ impl AgentConfiguration {
             .disabled(connection_status == AgentConnectionStatus::Connecting)
             .icon_color(Color::Muted)
             .icon_size(IconSize::Small)
-            .tooltip(Tooltip::text("Restart Agent Connection"))
+            .tooltip(Tooltip::text(tr(
+                cx,
+                "agent_ui.agent_configuration.restart_agent_connection",
+                "Restart Agent Connection",
+            )))
             .on_click(cx.listener({
                 let agent = agent.clone();
                 move |this, _, _window, cx| {
@@ -1226,7 +1397,11 @@ impl AgentConfiguration {
                     )
                     .icon_color(Color::Muted)
                     .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text("Remove Registry Agent"))
+                    .tooltip(Tooltip::text(tr(
+                        cx,
+                        "agent_ui.agent_configuration.remove_registry_agent",
+                        "Remove Registry Agent",
+                    )))
                     .on_click(cx.listener(move |_, _, _window, cx| {
                         let agent_name = agent_server_name.clone();
                         update_settings_file(fs.clone(), cx, move |settings, _| {
@@ -1254,7 +1429,11 @@ impl AgentConfiguration {
                     )
                     .icon_color(Color::Muted)
                     .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text("Remove Custom Agent"))
+                    .tooltip(Tooltip::text(tr(
+                        cx,
+                        "agent_ui.agent_configuration.remove_custom_agent",
+                        "Remove Custom Agent",
+                    )))
                     .on_click(cx.listener(move |_, _, _window, cx| {
                         let agent_name = agent_server_name.clone();
                         update_settings_file(fs.clone(), cx, move |settings, _| {
@@ -1354,10 +1533,12 @@ fn show_unable_to_uninstall_extension_with_context_server(
     let context_server_id = id.clone();
 
     let status_toast = StatusToast::new(
-        format!(
+        tr(
+            cx,
+            "agent_ui.agent_configuration.extension_provides_more_than_mcp",
             "The {} extension provides more than just the MCP server. Proceed to uninstall anyway?",
-            id.0
-        ),
+        )
+        .replacen("{}", id.0.as_ref(), 1),
         cx,
         move |this, _cx| {
             let workspace_handle = workspace_handle.clone();
@@ -1368,38 +1549,41 @@ fn show_unable_to_uninstall_extension_with_context_server(
                     .color(Color::Warning),
             )
             .dismiss_button(true)
-            .action("Uninstall", move |_, _cx| {
-                if let Some((extension_id, _)) =
-                    resolve_extension_for_context_server(&context_server_id, _cx)
-                {
-                    ExtensionStore::global(_cx).update(_cx, |store, cx| {
-                        store
-                            .uninstall_extension(extension_id, cx)
-                            .detach_and_log_err(cx);
-                    });
+            .action(
+                tr(_cx, "agent_ui.agent_configuration.uninstall", "Uninstall"),
+                move |_, _cx| {
+                    if let Some((extension_id, _)) =
+                        resolve_extension_for_context_server(&context_server_id, _cx)
+                    {
+                        ExtensionStore::global(_cx).update(_cx, |store, cx| {
+                            store
+                                .uninstall_extension(extension_id, cx)
+                                .detach_and_log_err(cx);
+                        });
 
-                    workspace_handle
-                        .update(_cx, |workspace, cx| {
-                            let fs = workspace.app_state().fs.clone();
-                            cx.spawn({
-                                let context_server_id = context_server_id.clone();
-                                async move |_workspace_handle, cx| {
-                                    cx.update(|cx| {
-                                        update_settings_file(fs, cx, move |settings, _| {
-                                            settings
-                                                .project
-                                                .context_servers
-                                                .remove(&context_server_id.0);
+                        workspace_handle
+                            .update(_cx, |workspace, cx| {
+                                let fs = workspace.app_state().fs.clone();
+                                cx.spawn({
+                                    let context_server_id = context_server_id.clone();
+                                    async move |_workspace_handle, cx| {
+                                        cx.update(|cx| {
+                                            update_settings_file(fs, cx, move |settings, _| {
+                                                settings
+                                                    .project
+                                                    .context_servers
+                                                    .remove(&context_server_id.0);
+                                            });
                                         });
-                                    });
-                                    anyhow::Ok(())
-                                }
+                                        anyhow::Ok(())
+                                    }
+                                })
+                                .detach_and_log_err(cx);
                             })
-                            .detach_and_log_err(cx);
-                        })
-                        .log_err();
-                }
-            })
+                            .log_err();
+                    }
+                },
+            )
         },
     );
 

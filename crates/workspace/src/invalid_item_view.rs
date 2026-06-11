@@ -1,6 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use gpui::{EventEmitter, FocusHandle, Focusable};
+use i18n::tr;
 use ui::{
     App, Button, ButtonCommon, ButtonStyle, Clickable, Context, FluentBuilder, InteractiveElement,
     KeyBinding, Label, LabelCommon, LabelSize, ParentElement, Render, SharedString, Styled as _,
@@ -90,7 +91,11 @@ impl Render for InvalidItemView {
                     v_flex()
                         .justify_center()
                         .gap_2()
-                        .child(h_flex().justify_center().child("Could not open file"))
+                        .child(h_flex().justify_center().child(tr(
+                            cx,
+                            "workspace.invalid_item.could_not_open_file",
+                            "Could not open file",
+                        )))
                         .child(
                             h_flex()
                                 .justify_center()
@@ -99,12 +104,19 @@ impl Render for InvalidItemView {
                         .when(self.is_local, |contents| {
                             contents.child(
                                 h_flex().justify_center().child(
-                                    Button::new("open-with-system", "Open in Default App")
-                                        .on_click(move |_, _, cx| {
-                                            cx.open_with_system(&abs_path);
-                                        })
-                                        .style(ButtonStyle::Outlined)
-                                        .key_binding(KeyBinding::for_action(&OpenWithSystem, cx)),
+                                    Button::new(
+                                        "open-with-system",
+                                        tr(
+                                            cx,
+                                            "workspace.invalid_item.open_in_default_app",
+                                            "Open in Default App",
+                                        ),
+                                    )
+                                    .on_click(move |_, _, cx| {
+                                        cx.open_with_system(&abs_path);
+                                    })
+                                    .style(ButtonStyle::Outlined)
+                                    .key_binding(KeyBinding::for_action(&OpenWithSystem, cx)),
                                 ),
                             )
                         }),

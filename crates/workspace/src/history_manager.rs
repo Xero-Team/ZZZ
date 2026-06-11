@@ -2,6 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use fs::Fs;
 use gpui::{AppContext, Entity, Global, MenuItem};
+use i18n::tr;
 use smallvec::SmallVec;
 use ui::{App, Context};
 use util::{ResultExt, paths::PathExt};
@@ -99,7 +100,10 @@ impl HistoryManager {
     }
 
     fn update_jump_list(&mut self, cx: &mut Context<'_, HistoryManager>) {
-        let menus = vec![MenuItem::action("New Window", NewWindow)];
+        let menus = vec![MenuItem::action(
+            tr(cx, "workspace.history.new_window", "New Window"),
+            NewWindow,
+        )];
         let entries = self
             .history
             .iter()

@@ -4,6 +4,7 @@ use csv_preview::{
 };
 use feature_flags::FeatureFlagAppExt as _;
 use gpui::{AnyElement, Modifiers, WeakEntity};
+use i18n::tr;
 use markdown_preview::{
     OpenPreview as MarkdownOpenPreview, OpenPreviewToTheSide as MarkdownOpenPreviewToTheSide,
     markdown_preview_view::MarkdownPreviewView,
@@ -55,21 +56,25 @@ impl QuickActionBar {
             match preview_type {
                 PreviewType::Markdown => (
                     "toggle-markdown-preview",
-                    "Preview Markdown",
+                    tr(
+                        cx,
+                        "zed.quick_action_bar.preview_markdown",
+                        "Preview Markdown",
+                    ),
                     Box::new(MarkdownOpenPreview) as Box<dyn gpui::Action>,
                     Box::new(MarkdownOpenPreviewToTheSide) as Box<dyn gpui::Action>,
                     &markdown_preview::OpenPreview as &dyn gpui::Action,
                 ),
                 PreviewType::Svg => (
                     "toggle-svg-preview",
-                    "Preview SVG",
+                    tr(cx, "zed.quick_action_bar.preview_svg", "Preview SVG"),
                     Box::new(SvgOpenPreview) as Box<dyn gpui::Action>,
                     Box::new(SvgOpenPreviewToTheSide) as Box<dyn gpui::Action>,
                     &svg_preview::OpenPreview as &dyn gpui::Action,
                 ),
                 PreviewType::Csv => (
                     "toggle-csv-preview",
-                    "Preview CSV",
+                    tr(cx, "zed.quick_action_bar.preview_csv", "Preview CSV"),
                     Box::new(CsvOpenPreview) as Box<dyn gpui::Action>,
                     Box::new(CsvOpenPreviewToTheSide) as Box<dyn gpui::Action>,
                     &csv_preview::OpenPreview as &dyn gpui::Action,
@@ -87,11 +92,17 @@ impl QuickActionBar {
             .style(ButtonStyle::Subtle)
             .tooltip(move |_window, cx| {
                 Tooltip::with_meta(
-                    tooltip_text,
+                    tooltip_text.clone(),
                     Some(open_action_for_tooltip),
-                    format!(
+                    tr(
+                        cx,
+                        "zed.quick_action_bar.open_in_split",
                         "{} to open in a split",
-                        text_for_keystroke(&alt_click.modifiers, &alt_click.key, cx)
+                    )
+                    .replacen(
+                        "{}",
+                        &text_for_keystroke(&alt_click.modifiers, &alt_click.key, cx),
+                        1,
                     ),
                     cx,
                 )

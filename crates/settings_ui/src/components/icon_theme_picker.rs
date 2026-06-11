@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use fuzzy::{StringMatch, StringMatchCandidate};
 use gpui::{AnyElement, App, Context, DismissEvent, SharedString, Task, Window};
+use i18n as app_i18n;
 use picker::{Picker, PickerDelegate};
 use theme::ThemeRegistry;
 use ui::{ListItem, ListItemSpacing, prelude::*};
@@ -77,8 +78,13 @@ impl PickerDelegate for IconThemePickerDelegate {
         cx.notify();
     }
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Search icon themes…".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        app_i18n::tr(
+            cx,
+            "settings_ui.icon_theme_picker.search_icon_themes",
+            "Search icon themes…",
+        )
+        .into()
     }
 
     fn update_matches(

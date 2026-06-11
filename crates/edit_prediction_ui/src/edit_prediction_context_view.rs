@@ -18,6 +18,7 @@ use gpui::{
     Focusable, InteractiveElement as _, IntoElement as _, ParentElement as _, SharedString,
     Styled as _, Task, TextAlign, Window, actions, div, pulsating_between,
 };
+use i18n as app_i18n;
 use multi_buffer::{Anchor, MultiBuffer};
 use project::Project;
 use text::Point;
@@ -31,6 +32,10 @@ use edit_prediction::{
     EditPredictionStore,
 };
 use workspace::Item;
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 pub struct EditPredictionContextView {
     empty_focus_handle: FocusHandle,
@@ -214,26 +219,31 @@ impl EditPredictionContextView {
             });
 
             editor.update_in(cx, |editor, window, cx| {
-                let blocks = excerpt_anchors_with_orders
-                    .into_iter()
-                    .map(|(anchor, order)| {
-                        let label = SharedString::from(format!("order: {order}"));
-                        BlockProperties {
-                            placement: BlockPlacement::Above(anchor),
-                            height: Some(1),
-                            style: BlockStyle::Sticky,
-                            render: Arc::new(move |cx| {
-                                div()
-                                    .pl(cx.anchor_x)
-                                    .text_ui_xs(cx)
-                                    .text_color(cx.editor_style.status.info)
-                                    .child(label.clone())
-                                    .into_any_element()
-                            }),
-                            priority: 0,
-                        }
-                    })
-                    .collect::<Vec<_>>();
+                let blocks =
+                    excerpt_anchors_with_orders
+                        .into_iter()
+                        .map(|(anchor, order)| {
+                            let label =
+                                SharedString::from(
+                                    tr(cx, "edit_prediction_ui.context.order", "order: {}")
+                                        .replacen("{}", &order.to_string(), 1),
+                                );
+                            BlockProperties {
+                                placement: BlockPlacement::Above(anchor),
+                                height: Some(1),
+                                style: BlockStyle::Sticky,
+                                render: Arc::new(move |cx| {
+                                    div()
+                                        .pl(cx.anchor_x)
+                                        .text_ui_xs(cx)
+                                        .text_color(cx.editor_style.status.info)
+                                        .child(label.clone())
+                                        .into_any_element()
+                                }),
+                                priority: 0,
+                            }
+                        })
+                        .collect::<Vec<_>>();
                 editor.insert_blocks(blocks, None, cx);
                 editor.move_to_beginning(&Default::default(), window, cx);
             })?;
@@ -295,7 +305,8 @@ impl EditPredictionContextView {
                     ])
                 }
                 table = table.row(vec![
-                    "Total Time".into_any_element(),
+                    tr(cx, "edit_prediction_ui.context.total_time", "Total Time")
+                        .into_any_element(),
                     format!("{} ms", (run.finished_at.unwrap_or(t0) - t0).as_millis())
                         .into_any_element(),
                 ]);
@@ -309,7 +320,11 @@ impl EditPredictionContextView {
                             IconButton::new("go-back", IconName::ChevronLeft)
                                 .disabled(self.current_ix == 0 || self.runs.len() < 2)
                                 .tooltip(ui::Tooltip::for_action_title(
-                                    "Go to previous run",
+                                    tr(
+                                        cx,
+                                        "edit_prediction_ui.context.go_to_previous_run",
+                                        "Go to previous run",
+                                    ),
                                     &EditPredictionContextGoBack,
                                 ))
                                 .on_click(cx.listener(|this, _, window, cx| {
@@ -338,7 +353,11 @@ impl EditPredictionContextView {
                             IconButton::new("go-forward", IconName::ChevronRight)
                                 .disabled(self.current_ix + 1 == self.runs.len())
                                 .tooltip(ui::Tooltip::for_action_title(
-                                    "Go to next run",
+                                    tr(
+                                        cx,
+                                        "edit_prediction_ui.context.go_to_next_run",
+                                        "Go to next run",
+                                    ),
                                     &EditPredictionContextGoBack,
                                 ))
                                 .on_click(cx.listener(|this, _, window, cx| {
@@ -368,8 +387,12 @@ impl EventEmitter<()> for EditPredictionContextView {}
 impl Item for EditPredictionContextView {
     type Event = ();
 
-    fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        "Edit Prediction Context".into()
+    fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
+        tr(
+            cx,
+            "edit_prediction_ui.context.tab_title",
+            "Edit Prediction Context",
+        )
     }
 
     fn buffer_kind(&self, _cx: &App) -> workspace::item::ItemBufferKind {
@@ -406,7 +429,11 @@ impl gpui::Render for EditPredictionContextView {
                             .size_full()
                             .justify_center()
                             .items_center()
-                            .child("No retrieval runs yet"),
+                            .child(tr(
+                                cx,
+                                "edit_prediction_ui.context.no_retrieval_runs_yet",
+                                "No retrieval runs yet",
+                            )),
                     )
                 } else {
                     this.child(self.runs[self.current_ix].editor.clone())

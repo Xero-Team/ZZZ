@@ -9,6 +9,7 @@ use gpui::{
     App, ClickEvent, Context, Empty, Entity, InteractiveElement as _, ParentElement as _,
     Subscription, Task, WeakEntity,
 };
+use i18n::tr;
 use language::{Anchor, Buffer, BufferId};
 use project::{
     ConflictRegion, ConflictSet, ConflictSetUpdate, Project,
@@ -331,45 +332,59 @@ fn render_conflict_buttons(
         .gap_1()
         .bg(cx.theme().colors().editor_background)
         .child(
-            Button::new("head", format!("Use {}", conflict.ours_branch_name))
-                .label_size(LabelSize::Small)
-                .on_click({
-                    let editor = editor.clone();
-                    let conflict = conflict.clone();
-                    let ours = conflict.ours.clone();
-                    move |_, window, cx| {
-                        resolve_conflict(
-                            editor.clone(),
-                            conflict.clone(),
-                            vec![ours.clone()],
-                            window,
-                            cx,
-                        )
-                        .detach()
-                    }
-                }),
+            Button::new(
+                "head",
+                tr(cx, "git_ui.conflict_view.use_branch", "Use {}").replacen(
+                    "{}",
+                    &conflict.ours_branch_name,
+                    1,
+                ),
+            )
+            .label_size(LabelSize::Small)
+            .on_click({
+                let editor = editor.clone();
+                let conflict = conflict.clone();
+                let ours = conflict.ours.clone();
+                move |_, window, cx| {
+                    resolve_conflict(
+                        editor.clone(),
+                        conflict.clone(),
+                        vec![ours.clone()],
+                        window,
+                        cx,
+                    )
+                    .detach()
+                }
+            }),
         )
         .child(
-            Button::new("origin", format!("Use {}", conflict.theirs_branch_name))
-                .label_size(LabelSize::Small)
-                .on_click({
-                    let editor = editor.clone();
-                    let conflict = conflict.clone();
-                    let theirs = conflict.theirs.clone();
-                    move |_, window, cx| {
-                        resolve_conflict(
-                            editor.clone(),
-                            conflict.clone(),
-                            vec![theirs.clone()],
-                            window,
-                            cx,
-                        )
-                        .detach()
-                    }
-                }),
+            Button::new(
+                "origin",
+                tr(cx, "git_ui.conflict_view.use_branch", "Use {}").replacen(
+                    "{}",
+                    &conflict.theirs_branch_name,
+                    1,
+                ),
+            )
+            .label_size(LabelSize::Small)
+            .on_click({
+                let editor = editor.clone();
+                let conflict = conflict.clone();
+                let theirs = conflict.theirs.clone();
+                move |_, window, cx| {
+                    resolve_conflict(
+                        editor.clone(),
+                        conflict.clone(),
+                        vec![theirs.clone()],
+                        window,
+                        cx,
+                    )
+                    .detach()
+                }
+            }),
         )
         .child(
-            Button::new("both", "Use Both")
+            Button::new("both", tr(cx, "git_ui.conflict_view.use_both", "Use Both"))
                 .label_size(LabelSize::Small)
                 .on_click({
                     let editor = editor.clone();
@@ -390,50 +405,57 @@ fn render_conflict_buttons(
         )
         .when(is_ai_enabled, |this| {
             this.child(Divider::vertical()).child(
-                Button::new("resolve-with-agent", "Resolve with Agent")
-                    .label_size(LabelSize::Small)
-                    .start_icon(
-                        Icon::new(IconName::ZedAssistant)
-                            .size(IconSize::Small)
-                            .color(Color::Muted),
-                    )
-                    .on_click({
-                        let conflict = conflict.clone();
-                        move |_, window, cx| {
-                            let content = editor
-                                .update(cx, |editor, cx| {
-                                    let multibuffer = editor.buffer().read(cx);
-                                    let buffer_id = conflict.ours.end.buffer_id;
-                                    let buffer = multibuffer.buffer(buffer_id)?;
-                                    let buffer_read = buffer.read(cx);
-                                    let snapshot = buffer_read.snapshot();
-                                    let conflict_text = snapshot
-                                        .text_for_range(conflict.range.clone())
-                                        .collect::<String>();
-                                    let file_path = buffer_read
-                                        .file()
-                                        .and_then(|file| file.as_local())
-                                        .map(|f| f.abs_path(cx).to_string_lossy().to_string())
-                                        .unwrap_or_default();
-                                    Some(ConflictContent {
-                                        file_path,
-                                        conflict_text,
-                                        ours_branch_name: conflict.ours_branch_name.to_string(),
-                                        theirs_branch_name: conflict.theirs_branch_name.to_string(),
-                                    })
+                Button::new(
+                    "resolve-with-agent",
+                    tr(
+                        cx,
+                        "git_ui.conflict_view.resolve_with_agent",
+                        "Resolve with Agent",
+                    ),
+                )
+                .label_size(LabelSize::Small)
+                .start_icon(
+                    Icon::new(IconName::ZedAssistant)
+                        .size(IconSize::Small)
+                        .color(Color::Muted),
+                )
+                .on_click({
+                    let conflict = conflict.clone();
+                    move |_, window, cx| {
+                        let content = editor
+                            .update(cx, |editor, cx| {
+                                let multibuffer = editor.buffer().read(cx);
+                                let buffer_id = conflict.ours.end.buffer_id;
+                                let buffer = multibuffer.buffer(buffer_id)?;
+                                let buffer_read = buffer.read(cx);
+                                let snapshot = buffer_read.snapshot();
+                                let conflict_text = snapshot
+                                    .text_for_range(conflict.range.clone())
+                                    .collect::<String>();
+                                let file_path = buffer_read
+                                    .file()
+                                    .and_then(|file| file.as_local())
+                                    .map(|f| f.abs_path(cx).to_string_lossy().to_string())
+                                    .unwrap_or_default();
+                                Some(ConflictContent {
+                                    file_path,
+                                    conflict_text,
+                                    ours_branch_name: conflict.ours_branch_name.to_string(),
+                                    theirs_branch_name: conflict.theirs_branch_name.to_string(),
                                 })
-                                .ok()
-                                .flatten();
-                            if let Some(content) = content {
-                                window.dispatch_action(
-                                    Box::new(ResolveConflictsWithAgent {
-                                        conflicts: vec![content],
-                                    }),
-                                    cx,
-                                );
-                            }
+                            })
+                            .ok()
+                            .flatten();
+                        if let Some(content) = content {
+                            window.dispatch_action(
+                                Box::new(ResolveConflictsWithAgent {
+                                    conflicts: vec![content],
+                                }),
+                                cx,
+                            );
                         }
-                    }),
+                    }
+                }),
             )
         })
         .into_any()
@@ -652,7 +674,11 @@ impl Render for MergeConflictIndicator {
                         Tooltip::with_meta(
                             tooltip_label.clone(),
                             None,
-                            "Click to Resolve with Agent",
+                            tr(
+                                cx,
+                                "git_ui.conflict_view.click_to_resolve_with_agent",
+                                "Click to Resolve with Agent",
+                            ),
                             cx,
                         )
                     })
