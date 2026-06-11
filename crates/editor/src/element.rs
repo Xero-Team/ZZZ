@@ -47,6 +47,7 @@ use gpui::{
     MousePressureEvent, MouseUpEvent, PaintQuad, ParentElement, Pixels, PressureStage, ScrollDelta,
     ScrollHandle, ScrollWheelEvent, ShapedLine, SharedString, Size, StatefulInteractiveElement,
     Style, Styled, StyledText, TextAlign, TextRun, TextStyleRefinement, WeakEntity, Window,
+    WindowBackgroundAppearance,
     anchored, deferred, div, fill, linear_color_stop, linear_gradient, outline, pattern_slash,
     point, px, quad, relative, size, solid_background, transparent_black,
 };
@@ -8504,6 +8505,8 @@ pub(crate) fn render_buffer_header(
     };
     let focus_handle = editor_read.focus_handle(cx);
     let colors = cx.theme().colors();
+    let opaque_window =
+        cx.theme().window_background_appearance() == WindowBackgroundAppearance::Opaque;
 
     let header = div()
         .id(("buffer-header", buffer_id.to_proto()))
@@ -8519,7 +8522,7 @@ pub(crate) fn render_buffer_header(
                 .pr_2()
                 .rounded_sm()
                 .gap_1p5()
-                .when(is_sticky, |el| el.shadow_md())
+                .when(is_sticky && opaque_window, |el| el.shadow_md())
                 .border_1()
                 .map(|border| {
                     let border_color =
@@ -8530,7 +8533,7 @@ pub(crate) fn render_buffer_header(
                         };
                     border.border_color(border_color)
                 })
-                .bg(colors.editor_subheader_background)
+                .when(opaque_window, |el| el.bg(colors.editor_subheader_background))
                 .hover(|style| style.bg(colors.element_hover))
                 .map(|header| {
                     let editor = editor.clone();

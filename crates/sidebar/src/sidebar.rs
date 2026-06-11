@@ -24,8 +24,9 @@ use feature_flags::{
 };
 use gpui::{
     Action as _, AnyElement, App, ClickEvent, Context, DismissEvent, Entity, EntityId, FocusHandle,
-    Focusable, KeyContext, ListState, Modifiers, Pixels, Render, SharedString, Task, WeakEntity,
-    Window, WindowHandle, linear_color_stop, linear_gradient, list, prelude::*, px,
+    Focusable, KeyContext, ListState, Modifiers, Pixels, Render, SharedString, Task,
+    WeakEntity, Window, WindowBackgroundAppearance, WindowHandle, linear_color_stop,
+    linear_gradient, list, prelude::*, px,
 };
 use i18n as app_i18n;
 use menu::{
@@ -1676,13 +1677,20 @@ impl Sidebar {
         let key_for_toggle = key.clone();
         let key_for_focus = key.clone();
 
+        // The fade gradient renders as a visible patch on transparent windows,
+        // so truncate the label instead.
+        let opaque_window =
+            cx.theme().window_background_appearance() == WindowBackgroundAppearance::Opaque;
+
         let label = if highlight_positions.is_empty() {
             Label::new(label.clone())
                 .when(!is_active, |this| this.color(Color::Muted))
+                .when(!opaque_window, |this| this.truncate())
                 .into_any_element()
         } else {
             HighlightedLabel::new(label.clone(), highlight_positions.to_vec())
                 .when(!is_active, |this| this.color(Color::Muted))
+                .when(!opaque_window, |this| this.truncate())
                 .into_any_element()
         };
 
@@ -1801,10 +1809,12 @@ impl Sidebar {
                         )
                     }),
             )
-            .child(gradient_overlay())
+            .children(opaque_window.then(|| gradient_overlay()))
             .child(
                 h_flex()
-                    .child(gradient_overlay())
+                    .gap_px()
+                    .pr_1p5()
+                    .children(opaque_window.then(|| gradient_overlay()))
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
                         cx.stop_propagation();
                     })
