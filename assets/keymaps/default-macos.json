@@ -324,7 +324,6 @@
   {
     "context": "AcpThread",
     "bindings": {
-      "ctrl--": "pane::GoBack",
       "pageup": "agent::ScrollOutputPageUp",
       "pagedown": "agent::ScrollOutputPageDown",
       "home": "agent::ScrollOutputToTop",
