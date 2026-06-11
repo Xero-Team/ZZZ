@@ -104,3 +104,5 @@ impl CliResponseSink for ipc::IpcSender<CliResponse> {
         ipc::IpcSender::send(self, response).map_err(|error| anyhow::anyhow!("{error}"))
     }
 }
+
+pub const CLI_URL_SCHEME: &str = "zzz-cli://";

@@ -153,7 +153,7 @@ impl OpenRequest {
         }
 
         for url in request.urls {
-            if let Some(server_name) = url.strip_prefix("zzz-cli://") {
+            if let Some(server_name) = url.strip_prefix(cli::CLI_URL_SCHEME) {
                 this.kind = Some(OpenRequestKind::CliConnection(connect_to_cli(server_name)?));
             } else if let Some(action_index) = url.strip_prefix("zed-dock-action://") {
                 this.kind = Some(OpenRequestKind::DockMenuAction {

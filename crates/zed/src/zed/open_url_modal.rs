@@ -59,7 +59,7 @@ impl OpenUrlModal {
         }
 
         // Handle zzz:// URLs internally.
-        if url.starts_with("zzz://") || url.starts_with("zzz-cli://") {
+        if url.starts_with("zzz://") || url.starts_with(cli::CLI_URL_SCHEME) {
             OpenListener::global(cx).open(RawOpenRequest {
                 urls: vec![url],
                 ..Default::default()

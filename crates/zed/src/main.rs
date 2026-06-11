@@ -1656,7 +1656,7 @@ fn parse_url_arg(arg: &str) -> String {
         Err(_) => {
             if arg.starts_with("file://")
                 || arg.starts_with("zzz://")
-                || arg.starts_with("zzz-cli://")
+                || arg.starts_with(cli::CLI_URL_SCHEME)
                 || arg.starts_with("ssh://")
             {
                 arg.into()
@@ -1664,6 +1664,17 @@ fn parse_url_arg(arg: &str) -> String {
                 format!("file://{arg}")
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_url_arg;
+
+    #[test]
+    fn parse_url_arg_preserves_zzz_cli_ipc_scheme() {
+        let scheme = "zzz-cli:///tmp/socket";
+        assert_eq!(parse_url_arg(scheme), scheme);
     }
 }
 

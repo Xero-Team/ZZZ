@@ -573,7 +573,7 @@ fn run() -> Result<()> {
 
     let (server, server_name) =
         IpcOneShotServer::<IpcHandshake>::new().context("Handshake before Zed spawn")?;
-    let url = format!("zed-cli://{server_name}");
+    let url = format!("{}{server_name}", cli::CLI_URL_SCHEME);
 
     let open_behavior = if args.new {
         cli::OpenBehavior::AlwaysNew
