@@ -761,7 +761,7 @@ fn matching_history_items<'a>(
                     candidates_paths.remove_entry(&project_path).or_else(|| {
                         candidates_paths.remove_entry(&ProjectPath {
                             worktree_id,
-                            path: RelPath::empty().into_arc(),
+                            path: RelPath::empty_arc(),
                         })
                     })?;
                 Some((
@@ -819,7 +819,7 @@ fn project_path_for_search_match(
         .worktree_for_id(worktree_id, cx)
         .is_some_and(|worktree| worktree.read(cx).is_single_file())
     {
-        RelPath::empty().into_arc()
+        RelPath::empty_arc()
     } else {
         path_match.path.clone()
     };
@@ -1452,7 +1452,7 @@ impl FileFinderDelegate {
                             positions: Vec::new(),
                             worktree_id: worktree.read(cx).id().to_usize(),
                             path: relative_path,
-                            path_prefix: RelPath::empty().into(),
+                            path_prefix: RelPath::empty_arc(),
                             is_dir: false, // File finder doesn't support directories
                             distance_to_relative_ancestor: usize::MAX,
                         }));
