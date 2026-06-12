@@ -369,6 +369,7 @@ impl Render for LanguageServerPrompt {
                                     )
                                     .child(
                                         IconButton::new(close_id, close_icon)
+                                    .flex_shrink_0()
                                             .tooltip(move |_window, cx| {
                                                 if suppress {
                                                     Tooltip::with_meta(
@@ -654,6 +655,8 @@ impl RenderOnce for NotificationFrame {
                     .items_start()
                     .child(
                         v_flex()
+                            .flex_1()
+                            .min_w_0()
                             .gap_0p5()
                             .when_some(self.title.clone(), |div, title| {
                                 div.child(Label::new(title))
@@ -664,6 +667,7 @@ impl RenderOnce for NotificationFrame {
                         this.on_modifiers_changed(move |_, _, cx| cx.notify(entity))
                             .child(
                                 IconButton::new(close_id, close_icon)
+                                    .flex_shrink_0()
                                     .tooltip(move |_window, cx| {
                                         if suppress {
                                             Tooltip::with_meta(
