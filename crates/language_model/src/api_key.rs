@@ -237,6 +237,10 @@ impl ApiKey {
         }
     }
 
+    #[allow(
+        clippy::future_not_send,
+        reason = "Credential reads are driven by AsyncApp-bound providers"
+    )]
     pub async fn load_from_system_keychain(
         url: &str,
         credentials_provider: &dyn CredentialsProvider,
@@ -247,6 +251,10 @@ impl ApiKey {
             .into_authenticate_result()
     }
 
+    #[allow(
+        clippy::future_not_send,
+        reason = "Credential reads are driven by AsyncApp-bound providers"
+    )]
     async fn load_from_system_keychain_impl(
         url: &str,
         credentials_provider: &dyn CredentialsProvider,

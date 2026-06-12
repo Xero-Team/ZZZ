@@ -72,15 +72,15 @@ impl UpdateButton {
     }
 
     pub fn checking() -> Self {
-        Self::new(IconName::ArrowCircle, "Checking for ZZZ updates…").icon_animate(true)
+        Self::new(IconName::ArrowCircle, "Checking for ZZZ updates...").icon_animate(true)
     }
 
     pub fn downloading(version: impl Into<SharedString>) -> Self {
-        Self::new(IconName::Download, "Downloading ZZZ update…").tooltip(version)
+        Self::new(IconName::Download, "Downloading ZZZ update...").tooltip(version)
     }
 
     pub fn installing(version: impl Into<SharedString>) -> Self {
-        Self::new(IconName::ArrowCircle, "Installing ZZZ update…")
+        Self::new(IconName::ArrowCircle, "Installing ZZZ update...")
             .icon_animate(true)
             .tooltip(version)
     }

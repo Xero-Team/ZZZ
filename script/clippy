@@ -2,7 +2,12 @@
 
 set -euo pipefail
 
-if [[ ! " $* " == *" -p "* && ! " $* " == *" --package "* ]]; then
+has_package_selection=false
+if [[ " $* " == *" -p "* || " $* " == *" --package "* ]]; then
+    has_package_selection=true
+fi
+
+if [[ "$has_package_selection" == false ]]; then
     set -- "$@" --workspace
 fi
 
@@ -18,6 +23,49 @@ fi
 
 set -x
 "${CARGO:-cargo}" clippy "$@" --release --all-targets --all-features -- --deny warnings
+
+if [[ -n "${ZED_STRICT_CLIPPY:-}" ]]; then
+    # Run a second pass for low-noise strict manifest checks across the requested packages.
+    "${CARGO:-cargo}" clippy "$@" --release --all-features -- \
+        --deny warnings \
+        --warn clippy::negative_feature_names \
+        --warn clippy::wildcard_dependencies
+
+    # `future_not_send` is high-signal for background or thread-safe utility crates, but
+    # much noisier in GPUI crates that intentionally await on main-thread local state.
+    if [[ "$has_package_selection" == true ]]; then
+        "${CARGO:-cargo}" clippy "$@" --release --all-features -- \
+            --deny warnings \
+            --warn clippy::future_not_send
+    else
+        "${CARGO:-cargo}" clippy \
+            --release \
+            --all-features \
+            -p cli \
+            -p compliance \
+            -p git \
+            -p language_model \
+            -p lsp \
+            -p sqlez \
+            -p theme \
+            -p watch \
+            -p xtask \
+            -- \
+            --deny warnings \
+            --warn clippy::future_not_send
+    fi
+
+    # Explicitly opt-in style experiments. These are useful when tightening
+    # individual crates, but are still too noisy for the default workspace gate.
+    if [[ -n "${ZED_EXPERIMENTAL_STYLE_CLIPPY:-}" ]]; then
+        "${CARGO:-cargo}" clippy "$@" --release --all-features -- \
+            --deny warnings \
+            --warn clippy::redundant_else \
+            --warn clippy::needless_continue \
+            --warn clippy::str_to_string
+    fi
+
+fi
 
 # If local, run other checks if we have the tools installed.
 if [[ -z "${GITHUB_ACTIONS+x}" ]]; then

@@ -783,7 +783,7 @@ def sync_issue(number: int, dry_run: bool = False) -> None:
 
 def sync_all(dry_run: bool = False) -> None:
     """Sync every item currently in the project. Cron mode."""
-    log("fetching all project items…")
+    log("fetching all project items...")
     cursor: str | None = None
     total = 0
     failed = 0

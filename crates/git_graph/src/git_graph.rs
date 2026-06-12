@@ -1468,7 +1468,7 @@ impl GitGraph {
 
         let search_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Search commits…", window, cx);
+            editor.set_placeholder_text("Search commits...", window, cx);
             editor
         });
 
@@ -1766,7 +1766,7 @@ impl GitGraph {
                     author_name = data.author_name.clone();
                     formatted_time = format_timestamp(data.commit_timestamp);
                 } else {
-                    subject = "Loading…".into();
+                    subject = "Loading...".into();
                     author_name = "".into();
                 }
 
@@ -2365,7 +2365,7 @@ impl GitGraph {
         let copy_tag_label: SharedString = match tag_names.as_slice() {
             [] => copy_tag_label.into(),
             [tag_name] => format!("{copy_tag_label}: {tag_name}").into(),
-            _ => format!("{copy_tag_label}…").into(),
+            _ => format!("{copy_tag_label}...").into(),
         };
         let copy_tag_disabled = tag_names.is_empty();
         let git_tasks = self
@@ -2669,7 +2669,9 @@ impl GitGraph {
                 Some(data.commit_timestamp),
                 data.subject.clone(),
             ),
-            CommitDataState::Loading(_) => ("Loading…".into(), "".into(), None, "Loading…".into()),
+            CommitDataState::Loading(_) => {
+                ("Loading...".into(), "".into(), None, "Loading...".into())
+            }
         };
 
         let date_string = commit_timestamp

@@ -322,7 +322,7 @@ mod tests {
             "Should NOT contain truncation text"
         );
         assert!(
-            !title.contains("…") && !title.contains("..."),
+            !title.contains("...") && !title.contains("..."),
             "Should NOT contain ellipsis"
         )
     }

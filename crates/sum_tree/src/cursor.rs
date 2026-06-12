@@ -254,9 +254,8 @@ where
                 if entry.index() == 0 {
                     self.stack.pop();
                     continue;
-                } else {
-                    entry.index -= 1;
                 }
+                entry.index -= 1;
             }
 
             for summary in &entry.tree.0.child_summaries()[..entry.index()] {
@@ -331,11 +330,10 @@ where
                             let next_summary = &child_summaries[entry.index()];
                             if filter_node(next_summary) {
                                 break;
-                            } else {
-                                entry.index += 1;
-                                entry.position.add_summary(next_summary, self.cx);
-                                self.position.add_summary(next_summary, self.cx);
                             }
+                            entry.index += 1;
+                            entry.position.add_summary(next_summary, self.cx);
+                            self.position.add_summary(next_summary, self.cx);
                         }
 
                         child_trees.get(entry.index())
@@ -352,11 +350,10 @@ where
                             if let Some(next_item_summary) = item_summaries.get(entry.index()) {
                                 if filter_node(next_item_summary) {
                                     return;
-                                } else {
-                                    entry.index += 1;
-                                    entry.position.add_summary(next_item_summary, self.cx);
-                                    self.position.add_summary(next_item_summary, self.cx);
                                 }
+                                entry.index += 1;
+                                entry.position.add_summary(next_item_summary, self.cx);
+                                self.position.add_summary(next_item_summary, self.cx);
                             } else {
                                 break None;
                             }
@@ -616,9 +613,8 @@ impl<'a, T: Item> Iterator for Iter<'a, T> {
 
                         if let Some(next_item) = items.get(entry.index()) {
                             return Some(next_item);
-                        } else {
-                            None
                         }
+                        None
                     }
                 }
             };

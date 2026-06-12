@@ -626,10 +626,10 @@ impl TextLayout {
                 line_origin.y += line.size(line_height).height;
                 line_start_ix = line_end_ix + 1;
                 continue;
-            } else {
-                let ix_within_line = index - line_start_ix;
-                return Some(line_origin + line.position_for_index(ix_within_line, line_height)?);
             }
+
+            let ix_within_line = index - line_start_ix;
+            return Some(line_origin + line.position_for_index(ix_within_line, line_height)?);
         }
 
         None
@@ -657,9 +657,9 @@ impl TextLayout {
                 line_origin.y += line.size(line_height).height;
                 line_start_ix = line_end_ix + 1;
                 continue;
-            } else {
-                return Some(line.layout.clone());
             }
+
+            return Some(line.layout.clone());
         }
 
         None

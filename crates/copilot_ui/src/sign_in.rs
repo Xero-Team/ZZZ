@@ -26,7 +26,7 @@ pub fn initiate_sign_in(copilot: Entity<Copilot>, window: &mut Window, cx: &mut 
 }
 
 pub fn initiate_sign_out(copilot: Entity<Copilot>, window: &mut Window, cx: &mut App) {
-    copilot_toast(Some("Signing out of Copilot…"), window, cx);
+    copilot_toast(Some("Signing out of Copilot..."), window, cx);
 
     let sign_out_task = copilot.update(cx, |copilot, cx| copilot.sign_out(cx));
     window
@@ -48,7 +48,7 @@ pub fn initiate_sign_out(copilot: Entity<Copilot>, window: &mut Window, cx: &mut
 }
 
 pub fn reinstall_and_sign_in(copilot: Entity<Copilot>, window: &mut Window, cx: &mut App) {
-    let _ = copilot.update(cx, |copilot, cx| copilot.reinstall(cx));
+    drop(copilot.update(cx, |copilot, cx| copilot.reinstall(cx)));
     let is_reinstall = true;
     initiate_sign_in_impl(copilot, is_reinstall, window, cx);
 }
@@ -107,9 +107,9 @@ pub fn initiate_sign_in_impl(
         Status::Starting { task } => {
             copilot_toast(
                 Some(if is_reinstall {
-                    "Copilot is reinstalling…"
+                    "Copilot is reinstalling..."
                 } else {
-                    "Copilot is starting…"
+                    "Copilot is starting..."
                 }),
                 window,
                 cx,
@@ -238,7 +238,7 @@ impl CopilotCodeVerification {
         cx: &mut Context<Self>,
     ) -> impl Element {
         let connect_button_label = if connect_clicked {
-            "Waiting for connection…"
+            "Waiting for connection..."
         } else {
             "Connect to GitHub"
         };
@@ -522,9 +522,9 @@ impl ConfigurationView {
 
     fn loading_message(&self) -> Option<SharedString> {
         if self.is_starting() {
-            Some("Starting Copilot…".into())
+            Some("Starting Copilot...".into())
         } else if self.is_signing_in() {
-            Some("Signing into Copilot…".into())
+            Some("Signing into Copilot...".into())
         } else {
             None
         }

@@ -144,7 +144,7 @@ fn token_len(input: &InternedInput<&str>, tokens: &[Token]) -> usize {
 
 fn apply_diff_to_string_lenient(diff_str: &str, text: &str) -> String {
     let hunks = parse_diff_hunks(diff_str);
-    let mut result = text.to_string();
+    let mut result = text.to_owned();
 
     for hunk in hunks {
         let hunk_diff = format!("--- a/file\n+++ b/file\n{}", format_hunk(&hunk));
@@ -211,11 +211,11 @@ fn parse_diff_hunks(diff: &str) -> Vec<ParsedHunk> {
             });
         } else if let Some(ref mut hunk) = current_hunk {
             if let Some(stripped) = line.strip_prefix('+') {
-                hunk.lines.push(HunkLine::Addition(stripped.to_string()));
+                hunk.lines.push(HunkLine::Addition(stripped.to_owned()));
             } else if let Some(stripped) = line.strip_prefix('-') {
-                hunk.lines.push(HunkLine::Deletion(stripped.to_string()));
+                hunk.lines.push(HunkLine::Deletion(stripped.to_owned()));
             } else if let Some(stripped) = line.strip_prefix(' ') {
-                hunk.lines.push(HunkLine::Context(stripped.to_string()));
+                hunk.lines.push(HunkLine::Context(stripped.to_owned()));
             } else if line.is_empty() {
                 hunk.lines.push(HunkLine::Context(String::new()));
             }
@@ -370,7 +370,7 @@ fn compute_excerpt_aware_reversal_overlap(
     excerpt_start_row: u32,
     predicted_content: &str,
 ) -> ReversalOverlap {
-    let mut current_content = excerpt_content.to_string();
+    let mut current_content = excerpt_content.to_owned();
     let mut current_excerpt_start_row = excerpt_start_row;
 
     for diff in edit_history_diffs.iter().rev() {
@@ -458,7 +458,7 @@ fn reverse_diff(diff: &str) -> String {
             } else if line.starts_with('-') && !line.starts_with("---") {
                 format!("+{}", &line[1..])
             } else {
-                line.to_string()
+                line.to_owned()
             }
         })
         .collect::<Vec<_>>()
@@ -587,8 +587,8 @@ fn normalize_extension_edits(edits: Vec<GranularEdit>) -> Vec<GranularEdit> {
                     .into_iter()
                     .map(|(range, replacement)| GranularEdit {
                         range: edit.range.start + range.start..edit.range.start + range.end,
-                        old_text: edit.old_text[range].to_string(),
-                        new_text: replacement.to_string(),
+                        old_text: edit.old_text[range].to_owned(),
+                        new_text: replacement.to_owned(),
                     })
                     .collect();
             }

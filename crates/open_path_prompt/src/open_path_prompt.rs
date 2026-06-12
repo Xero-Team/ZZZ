@@ -860,7 +860,7 @@ impl PickerDelegate for OpenPathDelegate {
 
     fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
         Some(match &self.directory_state {
-            DirectoryState::Create { .. } => SharedString::from("Type a path…"),
+            DirectoryState::Create { .. } => SharedString::from("Type a path..."),
             DirectoryState::List {
                 error: Some(error), ..
             } => error.clone(),

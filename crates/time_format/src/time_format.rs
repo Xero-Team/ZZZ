@@ -79,9 +79,9 @@ fn format_absolute_date(
         let timestamp_date = timestamp.date();
         let reference_date = reference.date();
         if timestamp_date == reference_date {
-            "Today".to_string()
+            "Today".to_owned()
         } else if reference_date.previous_day() == Some(timestamp_date) {
-            "Yesterday".to_string()
+            "Yesterday".to_owned()
         } else {
             macos::format_date(&timestamp)
         }
@@ -95,9 +95,9 @@ fn format_absolute_date(
         let timestamp_date = timestamp.date();
         let reference_date = reference.date();
         if timestamp_date == reference_date {
-            "Today".to_string()
+            "Today".to_owned()
         } else if reference_date.previous_day() == Some(timestamp_date) {
-            "Yesterday".to_string()
+            "Yesterday".to_owned()
         } else {
             windows::format_date(&timestamp)
         }
@@ -186,9 +186,9 @@ fn format_absolute_date_medium(
         let timestamp_date = timestamp.date();
         let reference_date = reference.date();
         if timestamp_date == reference_date {
-            "Today".to_string()
+            "Today".to_owned()
         } else if reference_date.previous_day() == Some(timestamp_date) {
-            "Yesterday".to_string()
+            "Yesterday".to_owned()
         } else {
             macos::format_date_medium(&timestamp)
         }
@@ -202,9 +202,9 @@ fn format_absolute_date_medium(
         let timestamp_date = timestamp.date();
         let reference_date = reference.date();
         if timestamp_date == reference_date {
-            "Today".to_string()
+            "Today".to_owned()
         } else if reference_date.previous_day() == Some(timestamp_date) {
-            "Yesterday".to_string()
+            "Yesterday".to_owned()
         } else {
             windows::format_date_medium(&timestamp)
         }
@@ -224,9 +224,9 @@ fn format_absolute_date_medium(
         let timestamp_date = timestamp.date();
         let reference_date = reference.date();
         if timestamp_date == reference_date {
-            "Today".to_string()
+            "Today".to_owned()
         } else if reference_date.previous_day() == Some(timestamp_date) {
-            "Yesterday".to_string()
+            "Yesterday".to_owned()
         } else {
             format_timestamp_naive_date_medium(
                 timestamp,
@@ -260,13 +260,13 @@ fn format_relative_time(timestamp: OffsetDateTime, reference: OffsetDateTime) ->
     let difference = reference - timestamp;
     let minutes = difference.whole_minutes();
     match minutes {
-        0 => Some("Just now".to_string()),
-        1 => Some("1 minute ago".to_string()),
+        0 => Some("Just now".to_owned()),
+        1 => Some("1 minute ago".to_owned()),
         2..=59 => Some(format!("{} minutes ago", minutes)),
         _ => {
             let hours = difference.whole_hours();
             match hours {
-                1 => Some("1 hour ago".to_string()),
+                1 => Some("1 hour ago".to_owned()),
                 2..=23 => Some(format!("{} hours ago", hours)),
                 _ => None,
             }
@@ -280,18 +280,18 @@ fn format_relative_date(timestamp: OffsetDateTime, reference: OffsetDateTime) ->
     let difference = reference_date - timestamp_date;
     let days = difference.whole_days();
     match days {
-        0 => "Today".to_string(),
-        1 => "Yesterday".to_string(),
+        0 => "Today".to_owned(),
+        1 => "Yesterday".to_owned(),
         2..=6 => format!("{} days ago", days),
         _ => {
             let weeks = difference.whole_weeks();
             match weeks {
-                1 => "1 week ago".to_string(),
+                1 => "1 week ago".to_owned(),
                 2..=4 => format!("{} weeks ago", weeks),
                 _ => {
                     let month_diff = calculate_month_difference(timestamp, reference);
                     match month_diff {
-                        0..=1 => "1 month ago".to_string(),
+                        0..=1 => "1 month ago".to_owned(),
                         2..=11 => format!("{} months ago", month_diff),
                         12..60 => format_compound_year_month(month_diff),
                         months => {
@@ -385,9 +385,9 @@ fn format_timestamp_naive_date(
     let timestamp_local_date = timestamp_local.date();
 
     if timestamp_local_date == reference_local_date {
-        "Today".to_string()
+        "Today".to_owned()
     } else if reference_local_date.previous_day() == Some(timestamp_local_date) {
-        "Yesterday".to_string()
+        "Yesterday".to_owned()
     } else {
         match is_12_hour_time {
             true => format!(
@@ -858,12 +858,12 @@ mod tests {
 
         assert_eq!(
             format_relative_time(reference, reference),
-            Some("Just now".to_string())
+            Some("Just now".to_owned())
         );
 
         assert_eq!(
             format_relative_time(next_minute(), reference),
-            Some("1 minute ago".to_string())
+            Some("1 minute ago".to_owned())
         );
 
         for i in 2..=59 {
@@ -875,7 +875,7 @@ mod tests {
 
         assert_eq!(
             format_relative_time(next_minute(), reference),
-            Some("1 hour ago".to_string())
+            Some("1 hour ago".to_owned())
         );
     }
 
@@ -898,7 +898,7 @@ mod tests {
 
         assert_eq!(
             format_relative_time(next_hour(), reference),
-            Some("1 hour ago".to_string())
+            Some("1 hour ago".to_owned())
         );
 
         for i in 2..=23 {
@@ -924,12 +924,12 @@ mod tests {
 
         assert_eq!(
             format_relative_date(reference, reference),
-            "Today".to_string()
+            "Today".to_owned()
         );
 
         assert_eq!(
             format_relative_date(next_day(), reference),
-            "Yesterday".to_string()
+            "Yesterday".to_owned()
         );
 
         for i in 2..=6 {
@@ -957,7 +957,7 @@ mod tests {
 
         assert_eq!(
             format_relative_date(next_week(), reference),
-            "1 week ago".to_string()
+            "1 week ago".to_owned()
         );
 
         for i in 2..=4 {
@@ -992,7 +992,7 @@ mod tests {
 
         assert_eq!(
             format_relative_date(next_month(), reference),
-            "4 weeks ago".to_string()
+            "4 weeks ago".to_owned()
         );
 
         for i in 2..=11 {

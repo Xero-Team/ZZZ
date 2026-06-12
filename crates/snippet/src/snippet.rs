@@ -74,10 +74,9 @@ fn parse_snippet<'a>(
             Some('}') => {
                 if nested {
                     return Ok(source);
-                } else {
-                    text.push('}');
-                    source = &source[1..];
                 }
+                text.push('}');
+                source = &source[1..];
             }
             Some(_) => {
                 let chunk_end = source.find(['}', '$', '\\']).unwrap_or(source.len());

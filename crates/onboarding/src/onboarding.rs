@@ -443,12 +443,12 @@ pub async fn handle_import_vscode_settings(
             Ok(vscode_settings) => vscode_settings,
             Err(err) => {
                 zlog::error!("{err:?}");
-                let _ = cx.prompt(
+                drop(cx.prompt(
                     gpui::PromptLevel::Info,
                     &format!("Could not find or load a {source} settings file"),
                     None,
                     &["Ok"],
-                );
+                ));
                 return;
             }
         };

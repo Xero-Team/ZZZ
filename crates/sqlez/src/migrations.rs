@@ -77,19 +77,20 @@ impl Connection {
                     if completed_migration == migration {
                         // Migration already run. Continue
                         continue;
-                    } else if should_allow_migration_change(index, &completed_migration, &migration)
-                    {
-                        continue;
-                    } else {
-                        anyhow::bail!(formatdoc! {"
-                            Migration changed for {domain} at step {index}
-
-                            Stored migration:
-                            {completed_migration}
-
-                            Proposed migration:
-                            {migration}"});
                     }
+
+                    if should_allow_migration_change(index, &completed_migration, &migration) {
+                        continue;
+                    }
+
+                    anyhow::bail!(formatdoc! {"
+                        Migration changed for {domain} at step {index}
+
+                        Stored migration:
+                        {completed_migration}
+
+                        Proposed migration:
+                        {migration}"});
                 }
 
                 self.eager_exec(&migration)?;

@@ -72,7 +72,7 @@ impl BufLsp {
             (Os::Windows, Architecture::Aarch64) => "Windows-arm64.exe",
             (Os::Windows, Architecture::X8664) => "Windows-x86_64.exe",
             _ => {
-                return Err("Platform and architecture not supported by buf CLI".to_string());
+                return Err("Platform and architecture not supported by buf CLI".to_owned());
             }
         };
 

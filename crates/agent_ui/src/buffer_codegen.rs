@@ -1090,11 +1090,11 @@ impl CodegenAlternative {
         // while we're still pre-processing the completion event
         cx.spawn(async move |codegen, cx| {
             let finish_with_status = |status: CodegenStatus, cx: &mut AsyncApp| {
-                let _ = codegen.update(cx, |this, cx| {
+                drop(codegen.update(cx, |this, cx| {
                     this.status = status;
                     cx.emit(CodegenEvent::Finished);
                     cx.notify();
-                });
+                }));
             };
 
             let mut completion_events = match completion_stream.await {
@@ -1160,10 +1160,10 @@ impl CodegenAlternative {
                 let codegen = codegen.clone();
                 async move |cx| {
                     while let Some(update) = message_rx.next().await {
-                        let _ = codegen.update(cx, |this, _cx| match update {
+                        drop(codegen.update(cx, |this, _cx| match update {
                             ModelUpdate::Description(d) => this.description = Some(d),
                             ModelUpdate::Failure(f) => this.failure = Some(f),
-                        });
+                        }));
                     }
                 }
             })

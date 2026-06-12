@@ -1174,7 +1174,7 @@ mod tests {
                     (2..3, Text),
                     (3..6, SubstitutedText("—".into())),
                     (6..7, Text),
-                    (7..10, SubstitutedText("…".into())),
+                    (7..10, SubstitutedText("...".into())),
                     (10..11, Text),
                     (11..12, SubstitutedText("\u{201c}".into())),
                     (12..25, Text),

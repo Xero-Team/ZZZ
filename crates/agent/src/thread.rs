@@ -3916,10 +3916,10 @@ impl ToolCallEventStream {
     /// if the tool is already allowed, an error if it is denied, and
     /// otherwise prompts the user for a decision. While a prompt is pending,
     /// a subscription to `SettingsStore` watches for changes (for example,
-    /// when the user clicks "Always for …" on a sibling tool call and the
+    /// when the user clicks "Always for ..." on a sibling tool call and the
     /// new rule becomes globally visible). When settings change, the current
     /// prompt is dismissed and the decision is re-evaluated. This closes the
-    /// gap where an "Always for …" decision on one pending tool call would
+    /// gap where an "Always for ..." decision on one pending tool call would
     /// not propagate to other pending tool calls in the same turn or in
     /// subagent turns.
     ///

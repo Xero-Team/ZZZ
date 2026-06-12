@@ -2288,8 +2288,8 @@ mod tests {
         let (mut inlay_map, _) = InlayMap::new(buffer.read(cx).snapshot(cx));
 
         // Create an inlay with text that contains a multi-byte character
-        // The string "SortingDirec…" contains an ellipsis character '…' which is 3 bytes (E2 80 A6)
-        let inlay_text = "SortingDirec…";
+        // The string "SortingDirec..." contains an ellipsis character '…' which is 3 bytes (E2 80 A6)
+        let inlay_text = "SortingDirec...";
         let position = buffer.read(cx).snapshot(cx).anchor_before(Point::new(0, 5));
 
         let inlay = Inlay {
@@ -2334,7 +2334,7 @@ mod tests {
             .collect();
 
         assert_eq!(highlighted_chunks.len(), 1);
-        assert_eq!(highlighted_chunks[0].chunk.text, "SortingDirec…");
+        assert_eq!(highlighted_chunks[0].chunk.text, "SortingDirec...");
     }
 
     #[gpui::test]

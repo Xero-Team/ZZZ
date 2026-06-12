@@ -1216,6 +1216,10 @@ pub struct GitCommitTemplate {
     pub template: String,
 }
 
+#[allow(
+    clippy::future_not_send,
+    reason = "This queries AsyncApp-bound state on the main GPUI thread"
+)]
 pub async fn get_git_committer(cx: &AsyncApp) -> GitCommitter {
     if cfg!(any(feature = "test-support", test)) {
         return GitCommitter {
@@ -3402,7 +3406,7 @@ impl GitBinary {
 
     pub async fn run<S>(&self, args: &[S]) -> Result<String>
     where
-        S: AsRef<OsStr>,
+        S: AsRef<OsStr> + Sync,
     {
         let mut stdout = self.run_raw(args).await?;
         if stdout.chars().last() == Some('\n') {
@@ -3414,7 +3418,7 @@ impl GitBinary {
     /// Returns the result of the command without trimming the trailing newline.
     pub async fn run_raw<S>(&self, args: &[S]) -> Result<String>
     where
-        S: AsRef<OsStr>,
+        S: AsRef<OsStr> + Sync,
     {
         let mut command = self.build_command(args);
         let output = command.output().await?;

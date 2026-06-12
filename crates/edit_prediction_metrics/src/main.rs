@@ -23,7 +23,7 @@ fn run() -> Result<(), String> {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.is_empty() {
         print_usage();
-        return Err("missing arguments".to_string());
+        return Err("missing arguments".to_owned());
     }
 
     let input = CliInput::parse(&args)?;
@@ -61,7 +61,7 @@ fn run() -> Result<(), String> {
                 .expected_patches
                 .into_iter()
                 .next()
-                .ok_or_else(|| "JSON input is missing expected_patches[0]".to_string())?;
+                .ok_or_else(|| "JSON input is missing expected_patches[0]".to_owned())?;
             let actual_patch = example
                 .predictions
                 .into_iter()
@@ -149,7 +149,7 @@ impl CliInput {
             if base_path.is_some() || expected_patch_path.is_some() || actual_patch_path.is_some() {
                 return Err(
                     "--json cannot be combined with --base/--expected-patch/--actual-patch"
-                        .to_string(),
+                        .to_owned(),
                 );
             }
             return Ok(CliInput::Json {
@@ -168,7 +168,7 @@ impl CliInput {
             }
             _ => Err(
                 "expected either --json <file> or all of --base, --expected-patch, and --actual-patch"
-                    .to_string(),
+                    .to_owned(),
             ),
         }
     }
@@ -524,7 +524,7 @@ fn try_apply_hunks(
 }
 
 fn split_preserving_final_empty_line(text: &str) -> Vec<String> {
-    let mut lines: Vec<String> = text.lines().map(ToString::to_string).collect();
+    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
     if text.ends_with('\n') {
         if lines.last().is_some_and(|line| !line.is_empty()) || lines.is_empty() {
             lines.push(String::new());
@@ -625,14 +625,14 @@ fn parse_diff_hunks(diff: &str) -> Vec<ParsedHunk> {
 
         if let Some(text) = line.strip_prefix('+') {
             if !line.starts_with("+++") {
-                hunk.lines.push(HunkLine::Addition(text.to_string()));
+                hunk.lines.push(HunkLine::Addition(text.to_owned()));
             }
         } else if let Some(text) = line.strip_prefix('-') {
             if !line.starts_with("---") {
-                hunk.lines.push(HunkLine::Deletion(text.to_string()));
+                hunk.lines.push(HunkLine::Deletion(text.to_owned()));
             }
         } else if let Some(text) = line.strip_prefix(' ') {
-            hunk.lines.push(HunkLine::Context(text.to_string()));
+            hunk.lines.push(HunkLine::Context(text.to_owned()));
         } else if line.is_empty() {
             hunk.lines.push(HunkLine::Context(String::new()));
         }

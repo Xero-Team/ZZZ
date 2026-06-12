@@ -1694,8 +1694,12 @@ impl GitStore {
                         if conflict_status_changed {
                             let buffer_store = self.buffer_store.read(cx);
                             if let Some(buffer) = buffer_store.get(*buffer_id) {
-                                let _ = diff
-                                    .reparse_conflict_markers(buffer.read(cx).text_snapshot(), cx);
+                                drop(
+                                    diff.reparse_conflict_markers(
+                                        buffer.read(cx).text_snapshot(),
+                                        cx,
+                                    ),
+                                );
                             }
                         }
                     }
@@ -4847,7 +4851,7 @@ impl Repository {
     fn reload_buffer_diff_bases(&mut self, cx: &mut Context<Self>) {
         let this = cx.weak_entity();
         let git_store = self.git_store.clone();
-        let _ = self.send_keyed_job(
+        drop(self.send_keyed_job(
             "reload_buffer_diff_bases",
             Some(GitJobKey::ReloadBufferDiffBases),
             None,
@@ -5010,7 +5014,7 @@ impl Repository {
                     }
                 })
             },
-        );
+        ));
     }
 
     pub fn send_job<F, Fut, R>(
@@ -7975,7 +7979,7 @@ impl Repository {
         cx: &mut Context<Self>,
     ) {
         let this = cx.weak_entity();
-        let _ = self.send_keyed_job(
+        drop(self.send_keyed_job(
             "schedule_scan",
             Some(GitJobKey::ReloadGitState),
             None,
@@ -7999,7 +8003,7 @@ impl Repository {
                 }
                 Ok(())
             },
-        );
+        ));
     }
 
     fn spawn_local_git_worker(
@@ -8224,7 +8228,7 @@ impl Repository {
         }
 
         let this = cx.weak_entity();
-        let _ = self.send_keyed_job(
+        drop(self.send_keyed_job(
             "paths_changed",
             Some(GitJobKey::RefreshStatuses),
             None,
@@ -8324,7 +8328,7 @@ impl Repository {
                     }
                 })
             },
-        );
+        ));
     }
 
     /// currently running git command and when it started

@@ -406,7 +406,7 @@ impl Subcommand for InfoForCommit {
 
     fn args(&self) -> impl IntoIterator<Item = String> {
         [
-            "log".to_string(),
+            "log".to_owned(),
             format!("--pretty=format:{}", CommitDetails::FORMAT_STRING),
             format!("{sha}~1..{sha}", sha = self.sha),
         ]
@@ -432,7 +432,7 @@ impl Subcommand for CommitsFromVersionToVersion {
 
     fn args(&self) -> impl IntoIterator<Item = String> {
         [
-            "log".to_string(),
+            "log".to_owned(),
             format!("--pretty=format:{}", CommitDetails::FORMAT_STRING),
             format!(
                 "{version}..{branch}",

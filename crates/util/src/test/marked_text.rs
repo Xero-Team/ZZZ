@@ -197,7 +197,7 @@ pub fn generate_marked_text(
     ranges: &[Range<usize>],
     indicate_cursors: bool,
 ) -> String {
-    let mut marked_text = unmarked_text.to_string();
+    let mut marked_text = unmarked_text.to_owned();
     for range in ranges.iter().rev() {
         if indicate_cursors {
             match range.start.cmp(&range.end) {

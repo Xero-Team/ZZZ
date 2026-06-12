@@ -298,7 +298,7 @@ impl LanguageServerState {
                     BinaryStatus::None => None,
                     BinaryStatus::CheckingForUpdate
                     | BinaryStatus::Downloading
-                    | BinaryStatus::Starting => Some((Color::Modified, "Starting…")),
+                    | BinaryStatus::Starting => Some((Color::Modified, "Starting...")),
                     BinaryStatus::Stopping | BinaryStatus::Stopped => {
                         Some((Color::Disabled, "Stopped"))
                     }

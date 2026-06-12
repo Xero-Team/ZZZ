@@ -171,13 +171,13 @@ impl InlineAssistant {
                 let windows = cx.windows();
                 if !windows.is_empty() {
                     let window = windows[0];
-                    let _ = window.update(cx, |_, window, cx| {
+                    drop(window.update(cx, |_, window, cx| {
                         editor.update(cx, |editor, cx| {
                             if editor.has_active_edit_prediction() {
                                 editor.cancel(&Default::default(), window, cx);
                             }
                         });
-                    });
+                    }));
                 }
             }
         }

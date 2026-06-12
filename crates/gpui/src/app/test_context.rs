@@ -556,6 +556,10 @@ impl TestAppContext {
 
     /// Runs until the given condition becomes true. (Prefer `run_until_parked` if you
     /// don't need to jump in at a specific time).
+    #[allow(
+        clippy::future_not_send,
+        reason = "TestAppContext futures are intentionally local-only"
+    )]
     pub async fn condition<T: 'static>(
         &mut self,
         entity: &Entity<T>,
@@ -595,6 +599,10 @@ impl TestAppContext {
 
 impl<T: 'static> Entity<T> {
     /// Block until the next event is emitted by the entity, then return it.
+    #[allow(
+        clippy::future_not_send,
+        reason = "Test subscriptions are tied to local-only state"
+    )]
     pub fn next_event<Event>(&self, cx: &mut TestAppContext) -> impl Future<Output = Event>
     where
         Event: Send + Clone + 'static,
@@ -620,6 +628,10 @@ impl<T: 'static> Entity<T> {
 
 impl<V: 'static> Entity<V> {
     /// Returns a future that resolves when the view is next updated.
+    #[allow(
+        clippy::future_not_send,
+        reason = "Test subscriptions are tied to local-only state"
+    )]
     pub fn next_notification(
         &self,
         advance_clock_by: Duration,
@@ -645,6 +657,10 @@ impl<V: 'static> Entity<V> {
 
 impl<V> Entity<V> {
     /// Returns a future that resolves when the condition becomes true.
+    #[allow(
+        clippy::future_not_send,
+        reason = "TestAppContext predicates run on the local test executor"
+    )]
     pub fn condition<Evt>(
         &self,
         cx: &TestAppContext,

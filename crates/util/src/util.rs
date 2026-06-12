@@ -61,12 +61,12 @@ pub fn truncate_and_trailoff(s: &str, max_chars: usize) -> String {
     // If the string's byte length is <= max_chars, walking the string can be skipped since the
     // number of chars is <= the number of bytes.
     if s.len() <= max_chars {
-        return s.to_string();
+        return s.to_owned();
     }
     let truncation_ix = s.char_indices().map(|(i, _)| i).nth(max_chars);
     match truncation_ix {
-        Some(index) => s[..index].to_string() + "…",
-        _ => s.to_string(),
+        Some(index) => s[..index].to_owned() + "...",
+        _ => s.to_owned(),
     }
 }
 
@@ -78,7 +78,7 @@ pub fn truncate_and_remove_front(s: &str, max_chars: usize) -> String {
     // If the string's byte length is <= max_chars, walking the string can be skipped since the
     // number of chars is <= the number of bytes.
     if s.len() <= max_chars {
-        return s.to_string();
+        return s.to_owned();
     }
     let suffix_char_length = max_chars.saturating_sub(1);
     let truncation_ix = s
@@ -86,8 +86,8 @@ pub fn truncate_and_remove_front(s: &str, max_chars: usize) -> String {
         .map(|(i, _)| i)
         .nth_back(suffix_char_length);
     match truncation_ix {
-        Some(index) if index > 0 => "…".to_string() + &s[index..],
-        _ => s.to_string(),
+        Some(index) if index > 0 => "...".to_owned() + &s[index..],
+        _ => s.to_owned(),
     }
 }
 
@@ -98,7 +98,7 @@ pub fn truncate_lines_and_trailoff(s: &str, max_lines: usize) -> String {
     let mut lines = s.lines().take(max_lines).collect::<Vec<_>>();
     if lines.len() > max_lines - 1 {
         lines.pop();
-        lines.join("\n") + "\n…"
+        lines.join("\n") + "\n..."
     } else {
         lines.join("\n")
     }
@@ -848,10 +848,10 @@ mod tests {
         assert_eq!(truncate_and_trailoff("", 5), "");
         assert_eq!(truncate_and_trailoff("aaaaaa", 7), "aaaaaa");
         assert_eq!(truncate_and_trailoff("aaaaaa", 6), "aaaaaa");
-        assert_eq!(truncate_and_trailoff("aaaaaa", 5), "aaaaa…");
+        assert_eq!(truncate_and_trailoff("aaaaaa", 5), "aaaaa...");
         assert_eq!(truncate_and_trailoff("èèèèèè", 7), "èèèèèè");
         assert_eq!(truncate_and_trailoff("èèèèèè", 6), "èèèèèè");
-        assert_eq!(truncate_and_trailoff("èèèèèè", 5), "èèèèè…");
+        assert_eq!(truncate_and_trailoff("èèèèèè", 5), "èèèèè...");
     }
 
     #[test]
@@ -957,14 +957,14 @@ Line 3"#;
         assert_eq!(
             truncate_lines_and_trailoff(text, 2),
             r#"Line 1
-…"#
+..."#
         );
 
         assert_eq!(
             truncate_lines_and_trailoff(text, 3),
             r#"Line 1
 Line 2
-…"#
+..."#
         );
 
         assert_eq!(

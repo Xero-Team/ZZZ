@@ -175,7 +175,7 @@ impl Output {
     ) {
         mdata.iterations = Some(iters);
         self.tests
-            .push((name.as_ref().to_string(), Some(mdata), Ok(timings)));
+            .push((name.as_ref().to_owned(), Some(mdata), Ok(timings)));
     }
 
     /// Reports a failure and adds it to this run's `Output`. If this test was tried
@@ -194,7 +194,7 @@ impl Output {
             mdata.iterations = attempted_iters;
         }
         self.tests
-            .push((name.as_ref().to_string(), mdata, Err(kind)));
+            .push((name.as_ref().to_owned(), mdata, Err(kind)));
     }
 
     /// True if no tests executed this run.
@@ -228,7 +228,7 @@ impl Output {
     /// a prefix set.
     pub fn merge<'a>(&mut self, other: Self, pref_other: impl Into<Option<&'a str>>) {
         let pref = if let Some(pref) = pref_other.into() {
-            "crates/".to_string() + pref + "::"
+            "crates/".to_owned() + pref + "::"
         } else {
             String::new()
         };

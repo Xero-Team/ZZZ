@@ -66,9 +66,9 @@ impl Connection {
                 SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_READWRITE | SQLITE_OPEN_URI,
             )
             .expect("Could not create fallback in memory db");
-        } else {
-            Self::open(":memory:", false).expect("Could not create fallback in memory db")
         }
+
+        Self::open(":memory:", false).expect("Could not create fallback in memory db")
     }
 
     pub fn persistent(&self) -> bool {

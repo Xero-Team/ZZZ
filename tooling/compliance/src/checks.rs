@@ -1,4 +1,4 @@
-use std::{fmt, ops::Not as _, rc::Rc};
+use std::{fmt, ops::Not as _, sync::Arc};
 
 use futures::StreamExt;
 use itertools::Itertools as _;
@@ -186,11 +186,11 @@ impl<E: Into<anyhow::Error>> From<E> for ReviewFailure {
 
 pub struct Reporter {
     commits: CommitList,
-    github_client: Rc<dyn GithubApiClient>,
+    github_client: Arc<dyn GithubApiClient>,
 }
 
 impl Reporter {
-    pub fn new(commits: CommitList, github_client: Rc<dyn GithubApiClient>) -> Self {
+    pub fn new(commits: CommitList, github_client: Arc<dyn GithubApiClient>) -> Self {
         Self {
             commits,
             github_client,
@@ -199,7 +199,7 @@ impl Reporter {
 
     pub async fn result_for_commit(
         commit: CommitDetails,
-        github_client: Rc<dyn GithubApiClient>,
+        github_client: Arc<dyn GithubApiClient>,
     ) -> ReviewResult {
         Self::new(Default::default(), github_client)
             .check_commit(&commit)
@@ -214,9 +214,8 @@ impl Reporter {
         let Some(pr_number) = commit.pr_number() else {
             if commit.author().is_zed_zippy() {
                 return self.check_zippy_automated_change(commit).await;
-            } else {
-                return Err(ReviewFailure::NoPullRequestFound);
             }
+            return Err(ReviewFailure::NoPullRequestFound);
         };
 
         let pull_request = self
@@ -268,10 +267,10 @@ impl Reporter {
                     AutomatedChangeFailure::MissingCommitData,
                 ))?;
 
-        if !metadata
+        if metadata
             .primary_author()
             .user()
-            .is_some_and(|login| login.as_str() == ZED_ZIPPY_LOGIN)
+            .is_none_or(|login| login.as_str() != ZED_ZIPPY_LOGIN)
         {
             return Err(ReviewFailure::UnexpectedZippyAction(
                 AutomatedChangeFailure::AuthorMismatch,
@@ -446,8 +445,8 @@ impl Reporter {
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
     use std::str::FromStr;
+    use std::sync::Arc;
 
     use crate::git::{
         AutomatedChangeKind, CommitDetails, CommitList, CommitSha, ZED_ZIPPY_EMAIL, ZED_ZIPPY_LOGIN,
@@ -469,7 +468,7 @@ mod tests {
         org_members: Vec<String>,
     }
 
-    #[async_trait::async_trait(?Send)]
+    #[async_trait::async_trait]
     impl GithubApiClient for MockGithubApi {
         async fn get_pull_request(
             &self,
@@ -768,7 +767,7 @@ mod tests {
                 commit_files: self.commit_files,
                 org_members: self.org_members,
             };
-            let client = Rc::new(mock);
+            let client = Arc::new(mock);
             let reporter = Reporter::new(CommitList::default(), client);
             reporter.check_commit(&self.commit).await
         }

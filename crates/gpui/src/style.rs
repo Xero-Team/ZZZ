@@ -367,7 +367,7 @@ pub enum WhiteSpace {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum TextOverflow {
     /// Truncate the text at the end when it doesn't fit, and represent this truncation by
-    /// displaying the provided string (e.g., "very long te…").
+    /// displaying the provided string (e.g., "very long te...").
     Truncate(SharedString),
     /// Truncate the text at the start when it doesn't fit, and represent this truncation by
     /// displaying the provided string at the beginning (e.g., "…ong text here").

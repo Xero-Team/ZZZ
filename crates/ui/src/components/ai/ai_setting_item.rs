@@ -23,7 +23,7 @@ impl AiSettingItemStatus {
             Self::Error => "Server has an error.",
             Self::AuthRequired => "Authentication required.",
             Self::ClientSecretRequired => "Client secret required.",
-            Self::Authenticating => "Waiting for authorization…",
+            Self::Authenticating => "Waiting for authorization...",
         }
     }
 

@@ -156,7 +156,7 @@ fn scope_alloc_from_scope_str(scope_str: &str) -> Option<ScopeAlloc> {
         );
         return None;
     }
-    let scope = scope_buf.map(|s| s.to_string());
+    let scope = scope_buf.map(|s| s.to_owned());
     Some(scope)
 }
 
@@ -218,7 +218,7 @@ impl ScopeMap {
                 if let Some(idx) = modules.iter().position(|(module, _)| module == scope_str) {
                     modules[idx].1 = level_filter;
                 } else {
-                    modules.push((scope_str.to_string(), level_filter));
+                    modules.push((scope_str.to_owned(), level_filter));
                 }
                 continue;
             }
@@ -312,9 +312,9 @@ impl ScopeMap {
             let res_entries_end = this.entries.len();
             if parent_index != usize::MAX {
                 this.entries[parent_index].descendants = res_entries_start..res_entries_end;
-            } else {
-                this.root_count = res_entries_end;
+                continue;
             }
+            this.root_count = res_entries_end;
         }
 
         this

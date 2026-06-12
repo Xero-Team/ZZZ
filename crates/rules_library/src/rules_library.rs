@@ -226,7 +226,7 @@ impl PickerDelegate for RulePickerDelegate {
     }
 
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Search…".into()
+        "Search...".into()
     }
 
     fn update_matches(

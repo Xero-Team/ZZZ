@@ -9835,7 +9835,7 @@ impl Editor {
                     .gap_1()
                     .min_w_16()
                     .child(styled_text)
-                    .when(has_more_lines, |parent| parent.child("…"));
+                    .when(has_more_lines, |parent| parent.child("..."));
 
                 let left = if supports_jump && first_edit_row != cursor_point.row {
                     render_relative_row_jump("", cursor_point.row, first_edit_row)

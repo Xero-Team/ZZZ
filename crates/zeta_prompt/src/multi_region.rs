@@ -510,7 +510,7 @@ pub fn extract_editable_region_from_markers(text: &str) -> Option<String> {
 
     let raw = &text[content_start..content_end];
     let result = strip_marker_tags(raw);
-    let result = result.strip_suffix('\n').unwrap_or(&result).to_string();
+    let result = result.strip_suffix('\n').unwrap_or(&result).to_owned();
     Some(result)
 }
 
@@ -749,7 +749,7 @@ fn apply_marker_span_impl(
     let end_value = tags[tags.len() - 1].value;
 
     if start_value == end_value {
-        return Ok(old_editable.to_string());
+        return Ok(old_editable.to_owned());
     }
 
     let (start_byte, end_byte) = resolve_boundaries(start_value, end_value)?;

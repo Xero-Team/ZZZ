@@ -194,9 +194,8 @@ pub fn find_context_candidates(text: &str, hunk: &mut Hunk) -> Vec<usize> {
             // Restore if fallback didn't help either.
             hunk.context.push('\n');
             debug_assert_eq!(hunk.context.len(), old_len);
-        } else {
-            hunk.context.push('\n');
         }
+        hunk.context.push('\n');
     }
 
     Vec::new()
@@ -348,7 +347,7 @@ impl OffsetUnifiedDiffBuilder<'_> {
 
 pub fn encode_cursor_in_patch(patch: &str, cursor_offset: Option<usize>) -> String {
     let Some(cursor_offset) = cursor_offset else {
-        return patch.to_string();
+        return patch.to_owned();
     };
 
     let mut result = String::new();
@@ -412,7 +411,7 @@ pub fn apply_diff_to_string_with_hunk_offset(
 ) -> Result<(String, Option<usize>)> {
     let mut diff = DiffParser::new(diff_str);
 
-    let mut text = text.to_string();
+    let mut text = text.to_owned();
     let mut first_hunk_offset = None;
     let mut line_delta = 0i64;
 

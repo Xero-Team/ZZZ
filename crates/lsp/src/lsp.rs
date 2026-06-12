@@ -611,6 +611,10 @@ impl LanguageServer {
         self.code_action_kinds.clone()
     }
 
+    #[allow(
+        clippy::future_not_send,
+        reason = "LSP message dispatch runs on AsyncApp-bound local state"
+    )]
     async fn handle_incoming_messages<Stdout>(
         stdout: Stdout,
         on_unhandled_notification: impl AsyncFn(NotificationOrRequest) + 'static + Send,

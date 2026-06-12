@@ -199,7 +199,10 @@ impl WorkflowType {
         for workflow_type in Self::iter() {
             for path in fs::read_dir(workflow_type.folder_path())? {
                 let entry = path?;
-                if !entry.file_type().is_ok_and(|file_type| file_type.is_file()) {
+                if entry
+                    .file_type()
+                    .map_or(true, |file_type| !file_type.is_file())
+                {
                     continue;
                 }
 

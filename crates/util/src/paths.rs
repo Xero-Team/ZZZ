@@ -468,7 +468,7 @@ impl PathStyle {
 
                 let normalized = components.join(self.primary_separator());
                 if is_absolute && normalized.is_empty() {
-                    "/".to_string()
+                    "/".to_owned()
                 } else if is_absolute {
                     format!("/{normalized}")
                 } else {
@@ -541,7 +541,7 @@ impl RemotePathBuf {
     }
 
     pub fn from_str(path: &str, style: PathStyle) -> Self {
-        Self::new(path.to_string(), style)
+        Self::new(path.to_owned(), style)
     }
 
     pub fn path_style(&self) -> PathStyle {
@@ -633,14 +633,13 @@ pub fn normalize_lexically(path: &Path) -> Result<PathBuf, NormalizeError> {
         match component {
             Component::RootDir => unreachable!(),
             Component::Prefix(_) => return Err(NormalizeError),
-            Component::CurDir => continue,
+            Component::CurDir => {}
             Component::ParentDir => {
                 // It's an error if ParentDir causes us to go above the "root".
                 if lexical.as_os_str().len() == root {
                     return Err(NormalizeError);
-                } else {
-                    lexical.pop();
                 }
+                lexical.pop();
             }
             Component::Normal(path) => lexical.push(path),
         }
@@ -964,7 +963,7 @@ impl PathMatcher {
             .filter_map(|glob| {
                 let glob = glob.glob();
                 Some((
-                    glob.to_string(),
+                    glob.to_owned(),
                     RelPath::new(&glob.as_ref(), path_style)
                         .ok()
                         .map(std::borrow::Cow::into_owned)?,
@@ -1155,17 +1154,17 @@ pub fn natural_sort(a: &str, b: &str) -> Ordering {
                         Ordering::Equal => continue,
                         ordering => return ordering,
                     }
-                } else {
-                    match a_char
-                        .to_ascii_lowercase()
-                        .cmp(&b_char.to_ascii_lowercase())
-                    {
-                        Ordering::Equal => {
-                            a_iter.next();
-                            b_iter.next();
-                        }
-                        ordering => return ordering,
+                }
+
+                match a_char
+                    .to_ascii_lowercase()
+                    .cmp(&b_char.to_ascii_lowercase())
+                {
+                    Ordering::Equal => {
+                        a_iter.next();
+                        b_iter.next();
                     }
+                    ordering => return ordering,
                 }
             }
         }
@@ -1489,7 +1488,7 @@ impl WslPath {
                 match c {
                     Prefix(p) => unreachable!("got {p:?}, but already stripped prefix"),
                     RootDir => unreachable!("got root dir, but already stripped root"),
-                    CurDir => continue,
+                    CurDir => {}
                     ParentDir => result.push("/.."),
                     Normal(s) => {
                         result.push("/");

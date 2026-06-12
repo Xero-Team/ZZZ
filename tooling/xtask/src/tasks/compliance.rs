@@ -1,4 +1,4 @@
-use std::{path::PathBuf, rc::Rc};
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -62,7 +62,7 @@ async fn check_compliance_impl(args: ComplianceArgs) -> Result<()> {
     let app_id = std::env::var("GITHUB_APP_ID").context("Missing GITHUB_APP_ID")?;
     let key = std::env::var("GITHUB_APP_KEY").context("Missing GITHUB_APP_KEY")?;
 
-    let client = Rc::new(
+    let client = Arc::new(
         OctocrabClient::new(
             app_id.parse().context("Failed to parse app ID as int")?,
             key.as_ref(),

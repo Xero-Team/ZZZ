@@ -251,9 +251,8 @@ impl KeyBindingContextPredicate {
         let (predicate, rest) = Self::parse_expr(source, 0)?;
         if let Some(next) = rest.chars().next() {
             anyhow::bail!("unexpected character '{next:?}'");
-        } else {
-            Ok(predicate)
         }
+        Ok(predicate)
     }
 
     /// Find the deepest depth at which the predicate matches.

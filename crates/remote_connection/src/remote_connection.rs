@@ -235,7 +235,7 @@ impl Render for RemoteConnectionPrompt {
                                 .with_rotate_animation(2),
                         )
                         .child(
-                            Label::new(format!("{}…", status_message))
+                            Label::new(format!("{}...", status_message))
                                 .size(LabelSize::Small)
                                 .color(Color::Muted)
                                 .truncate()

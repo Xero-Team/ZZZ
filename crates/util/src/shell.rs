@@ -70,7 +70,7 @@ pub fn get_system_shell() -> String {
     if cfg!(windows) {
         get_windows_system_shell()
     } else {
-        std::env::var("SHELL").unwrap_or("/bin/sh".to_string())
+        std::env::var("SHELL").unwrap_or("/bin/sh".to_owned())
     }
 }
 
@@ -78,7 +78,7 @@ pub fn get_default_system_shell() -> String {
     if cfg!(windows) {
         get_windows_system_shell()
     } else {
-        "/bin/sh".to_string()
+        "/bin/sh".to_owned()
     }
 }
 
@@ -87,7 +87,7 @@ pub fn get_default_system_shell_preferring_bash() -> String {
     if cfg!(windows) {
         get_windows_bash().unwrap_or_else(|| get_windows_system_shell())
     } else {
-        "/bin/sh".to_string()
+        "/bin/sh".to_owned()
     }
 }
 
@@ -226,7 +226,7 @@ pub fn get_windows_system_shell() -> String {
             .inspect(|shell| log::info!("Found powershell in: {}", shell))
             .unwrap_or_else(|| {
                 log::warn!("Powershell not found, falling back to `cmd`");
-                "cmd.exe".to_string()
+                "cmd.exe".to_owned()
             })
     });
 

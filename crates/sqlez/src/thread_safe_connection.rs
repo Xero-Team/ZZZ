@@ -45,7 +45,7 @@ pub struct ThreadSafeConnectionBuilder<M: Migrator + 'static = ()> {
     db_initialize_query: Option<&'static str>,
     write_queue_constructor: Option<WriteQueueConstructor>,
     connection: ThreadSafeConnection,
-    _migrator: PhantomData<*mut M>,
+    _migrator: PhantomData<fn() -> M>,
 }
 
 impl<M: Migrator> ThreadSafeConnectionBuilder<M> {

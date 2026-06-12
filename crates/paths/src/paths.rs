@@ -186,12 +186,12 @@ pub fn state_dir() -> &'static PathBuf {
                 dirs::state_dir().expect("failed to determine XDG_STATE_HOME directory")
             }
             .join(APP_NAME_LOWERCASE);
-        } else {
-            // Windows
-            return dirs::data_local_dir()
-                .expect("failed to determine LocalAppData directory")
-                .join(APP_NAME);
         }
+
+        // Windows
+        return dirs::data_local_dir()
+            .expect("failed to determine LocalAppData directory")
+            .join(APP_NAME);
     })
 }
 

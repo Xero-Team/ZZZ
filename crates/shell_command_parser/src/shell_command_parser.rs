@@ -70,7 +70,7 @@ pub fn extract_terminal_command_prefix(command: &str) -> Option<TerminalCommandP
     if let Some(suffix) = &simple_command.suffix {
         for item in &suffix.0 {
             match item {
-                ast::CommandPrefixOrSuffixItem::IoRedirect(_) => continue,
+                ast::CommandPrefixOrSuffixItem::IoRedirect(_) => {}
                 ast::CommandPrefixOrSuffixItem::Word(word) => {
                     let normalized_word = normalize_word(word)?;
                     if !normalized_word.starts_with('-') {
@@ -87,7 +87,7 @@ pub fn extract_terminal_command_prefix(command: &str) -> Option<TerminalCommandP
 
     let start = display_start?;
     let end = display_end?;
-    let display = command.get(start..end)?.to_string();
+    let display = command.get(start..end)?.to_owned();
 
     Some(TerminalCommandPrefix {
         normalized: normalized_tokens.join(" "),
@@ -160,7 +160,7 @@ fn normalize_assignment_for_command_prefix(
             let normalized_value = normalize_word(value)?;
             let raw_value = word.value.strip_prefix(&assignment_prefix)?;
             let rendered_value = if shell_value_requires_quoting(&normalized_value) {
-                raw_value.to_string()
+                raw_value.to_owned()
             } else {
                 normalized_value
             };
@@ -1227,28 +1227,28 @@ mod tests {
     fn test_command_substitution_dollar() {
         let commands = extract_commands("echo $(whoami)").expect("parse failed");
         assert!(commands.iter().any(|c| c.contains("echo")));
-        assert!(commands.contains(&"whoami".to_string()));
+        assert!(commands.contains(&"whoami".to_owned()));
     }
 
     #[test]
     fn test_command_substitution_backticks() {
         let commands = extract_commands("echo `whoami`").expect("parse failed");
         assert!(commands.iter().any(|c| c.contains("echo")));
-        assert!(commands.contains(&"whoami".to_string()));
+        assert!(commands.contains(&"whoami".to_owned()));
     }
 
     #[test]
     fn test_process_substitution_input() {
         let commands = extract_commands("cat <(ls)").expect("parse failed");
         assert!(commands.iter().any(|c| c.contains("cat")));
-        assert!(commands.contains(&"ls".to_string()));
+        assert!(commands.contains(&"ls".to_owned()));
     }
 
     #[test]
     fn test_process_substitution_output() {
         let commands = extract_commands("ls >(cat)").expect("parse failed");
         assert!(commands.iter().any(|c| c.contains("ls")));
-        assert!(commands.contains(&"cat".to_string()));
+        assert!(commands.contains(&"cat".to_owned()));
     }
 
     #[test]
@@ -1280,7 +1280,7 @@ mod tests {
         let commands = extract_commands("echo $(cat $(whoami).txt)").expect("parse failed");
         assert!(commands.iter().any(|c| c.contains("echo")));
         assert!(commands.iter().any(|c| c.contains("cat")));
-        assert!(commands.contains(&"whoami".to_string()));
+        assert!(commands.contains(&"whoami".to_owned()));
     }
 
     #[test]
@@ -1529,7 +1529,7 @@ mod tests {
     fn test_here_document_command_substitution_extracted() {
         let commands = extract_commands("cat <<EOF\n$(rm -rf /)\nEOF").expect("parse failed");
         assert!(commands.iter().any(|c| c.contains("cat")));
-        assert!(commands.contains(&"rm -rf /".to_string()));
+        assert!(commands.contains(&"rm -rf /".to_owned()));
     }
 
     #[test]
@@ -1542,28 +1542,28 @@ mod tests {
     fn test_here_document_backtick_substitution_extracted() {
         let commands = extract_commands("cat <<EOF\n`whoami`\nEOF").expect("parse failed");
         assert!(commands.iter().any(|c| c.contains("cat")));
-        assert!(commands.contains(&"whoami".to_string()));
+        assert!(commands.contains(&"whoami".to_owned()));
     }
 
     #[test]
     fn test_brace_group_redirect_with_command_substitution() {
         let commands = extract_commands("{ echo hello; } > $(mktemp)").expect("parse failed");
-        assert!(commands.contains(&"echo hello".to_string()));
-        assert!(commands.contains(&"mktemp".to_string()));
+        assert!(commands.contains(&"echo hello".to_owned()));
+        assert!(commands.contains(&"mktemp".to_owned()));
     }
 
     #[test]
     fn test_function_definition_redirect_with_command_substitution() {
         let commands = extract_commands("f() { echo hi; } > $(mktemp)").expect("parse failed");
-        assert!(commands.contains(&"echo hi".to_string()));
-        assert!(commands.contains(&"mktemp".to_string()));
+        assert!(commands.contains(&"echo hi".to_owned()));
+        assert!(commands.contains(&"mktemp".to_owned()));
     }
 
     #[test]
     fn test_brace_group_redirect_with_process_substitution() {
         let commands = extract_commands("{ cat; } > >(tee /tmp/log)").expect("parse failed");
-        assert!(commands.contains(&"cat".to_string()));
-        assert!(commands.contains(&"tee /tmp/log".to_string()));
+        assert!(commands.contains(&"cat".to_owned()));
+        assert!(commands.contains(&"tee /tmp/log".to_owned()));
     }
 
     #[test]
@@ -1671,15 +1671,11 @@ mod tests {
         assert_eq!(
             prefix,
             TerminalCommandPrefix {
-                normalized: "PAGER=blah git log".to_string(),
-                display: "PAGER=blah git log".to_string(),
-                tokens: vec![
-                    "PAGER=blah".to_string(),
-                    "git".to_string(),
-                    "log".to_string(),
-                ],
-                command: "git".to_string(),
-                subcommand: Some("log".to_string()),
+                normalized: "PAGER=blah git log".to_owned(),
+                display: "PAGER=blah git log".to_owned(),
+                tokens: vec!["PAGER=blah".to_owned(), "git".to_owned(), "log".to_owned(),],
+                command: "git".to_owned(),
+                subcommand: Some("log".to_owned()),
             }
         );
     }
@@ -1693,15 +1689,15 @@ mod tests {
         assert_eq!(
             prefix,
             TerminalCommandPrefix {
-                normalized: "PAGER='less -R' git log".to_string(),
-                display: "PAGER='less -R' git log".to_string(),
+                normalized: "PAGER='less -R' git log".to_owned(),
+                display: "PAGER='less -R' git log".to_owned(),
                 tokens: vec![
-                    "PAGER='less -R'".to_string(),
-                    "git".to_string(),
-                    "log".to_string(),
+                    "PAGER='less -R'".to_owned(),
+                    "git".to_owned(),
+                    "log".to_owned(),
                 ],
-                command: "git".to_string(),
-                subcommand: Some("log".to_string()),
+                command: "git".to_owned(),
+                subcommand: Some("log".to_owned()),
             }
         );
     }
@@ -1714,11 +1710,11 @@ mod tests {
         assert_eq!(
             prefix,
             TerminalCommandPrefix {
-                normalized: "git log".to_string(),
-                display: "git 2>/dev/null log".to_string(),
-                tokens: vec!["git".to_string(), "log".to_string()],
-                command: "git".to_string(),
-                subcommand: Some("log".to_string()),
+                normalized: "git log".to_owned(),
+                display: "git 2>/dev/null log".to_owned(),
+                tokens: vec!["git".to_owned(), "log".to_owned()],
+                command: "git".to_owned(),
+                subcommand: Some("log".to_owned()),
             }
         );
     }
@@ -1854,7 +1850,7 @@ mod tests {
     fn test_arithmetic_expansion_nested_backtick_substitution() {
         let commands = extract_commands("echo $((`whoami`))").expect("parse failed");
         assert!(commands.iter().any(|c| c.contains("echo")));
-        assert!(commands.contains(&"whoami".to_string()));
+        assert!(commands.contains(&"whoami".to_owned()));
     }
 
     #[test]

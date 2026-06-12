@@ -1330,7 +1330,7 @@ impl ExtensionsPage {
         let has_search = self.search_query(cx).is_some();
 
         let message = if self.is_fetching_extensions {
-            "Loading extensions…"
+            "Loading extensions..."
         } else if self.fetch_failed {
             "Failed to load extensions. Please check your connection and try again."
         } else {

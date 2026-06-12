@@ -234,7 +234,7 @@ fn build_comparison_units(tokens: &[&str]) -> Vec<ComparisonUnit> {
             });
         } else {
             units.push(ComparisonUnit {
-                text: tokens[index].to_string(),
+                text: tokens[index].to_owned(),
                 token_start,
                 token_end: index + 1,
             });
@@ -429,7 +429,7 @@ pub fn annotate_kept_rate_tokens(
         .into_iter()
         .zip(result.token_annotations)
         .map(|(token, annotation)| AnnotatedToken {
-            token: token.to_string(),
+            token: token.to_owned(),
             annotation,
         })
         .collect()

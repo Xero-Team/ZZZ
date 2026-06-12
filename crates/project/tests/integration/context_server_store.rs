@@ -728,9 +728,9 @@ async fn test_context_server_refreshed_when_worktree_added(cx: &mut TestAppConte
 
     {
         let _server_events = assert_server_events(&store, vec![], cx);
-        let _ = project.update(cx, |project, cx| {
+        drop(project.update(cx, |project, cx| {
             project.find_or_create_worktree(path!("/second"), true, cx)
-        });
+        }));
         cx.run_until_parked();
     }
 

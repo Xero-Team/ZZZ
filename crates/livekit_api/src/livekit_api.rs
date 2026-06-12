@@ -154,7 +154,7 @@ impl Client for LiveKitClient {
                 proto::UpdateParticipantRequest {
                     room: room.clone(),
                     identity,
-                    metadata: "".to_string(),
+                    metadata: "".to_owned(),
                     permission: Some(permission),
                 },
             )

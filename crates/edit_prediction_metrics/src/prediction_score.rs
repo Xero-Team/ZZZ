@@ -330,8 +330,8 @@ mod tests {
         let actual_patch = "--- a/file.txt\n+++ b/file.txt\n@@ -0,0 +1 @@\n+bbbbbb\n";
         let expected_patch = "--- a/file.txt\n+++ b/file.txt\n@@ -0,0 +1 @@\n+cccccc\n";
         let expected_patches = [PreparedExpectedPatch {
-            patch: expected_patch.to_string(),
-            text: "cccccc".to_string(),
+            patch: expected_patch.to_owned(),
+            text: "cccccc".to_owned(),
             cursor_editable_region_offset: None,
         }];
 

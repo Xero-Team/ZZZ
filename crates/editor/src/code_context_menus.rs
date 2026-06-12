@@ -1853,7 +1853,7 @@ impl CodeActionsMenu {
         let is_truncated = line_wrapper.should_truncate_line(
             &label,
             CODE_ACTION_MENU_MAX_WIDTH,
-            "…",
+            "...",
             gpui::TruncateFrom::End,
         );
 

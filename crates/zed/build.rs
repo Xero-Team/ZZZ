@@ -59,7 +59,7 @@ fn main() {
                 && output.status.success()
             {
                 let git_sha = String::from_utf8_lossy(&output.stdout);
-                Some(git_sha.trim().to_string())
+                Some(git_sha.trim().to_owned())
             } else {
                 None
             }

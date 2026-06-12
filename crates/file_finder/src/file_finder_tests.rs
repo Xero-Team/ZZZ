@@ -26,7 +26,7 @@ fn test_path_elision() {
         let slice = PathComponentSlice::new(&path);
         let matches = Vec::from_iter(matches);
         if let Some(range) = slice.elision_range(budget - 1, &matches) {
-            path.replace_range(range, "…");
+            path.replace_range(range, "...");
         }
         assert_eq!(path, expected);
     }

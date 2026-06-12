@@ -17,9 +17,7 @@ pub fn count_tree_sitter_errors<'a>(nodes: impl Iterator<Item = tree_sitter::Nod
                 if !cursor.goto_parent() {
                     break 'node;
                 }
-                if cursor.goto_next_sibling() {
-                    continue;
-                }
+                if cursor.goto_next_sibling() {}
             }
         }
     }

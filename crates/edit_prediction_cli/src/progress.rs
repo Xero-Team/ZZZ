@@ -181,7 +181,7 @@ impl Progress {
         for line in message.lines() {
             let truncated = truncate_to_visible_width(line, max_width);
             if truncated.len() < line.len() {
-                eprintln!("{}…", truncated);
+                eprintln!("{}...", truncated);
             } else {
                 eprintln!("{}", truncated);
             }
@@ -611,7 +611,7 @@ fn truncate_with_ellipsis(s: &str, max_len: usize) -> Cow<'_, str> {
     if s.len() <= max_len {
         Cow::Borrowed(s)
     } else {
-        Cow::Owned(format!("{}…", &s[..max_len.saturating_sub(1)]))
+        Cow::Owned(format!("{}...", &s[..max_len.saturating_sub(1)]))
     }
 }
 

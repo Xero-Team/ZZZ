@@ -425,9 +425,8 @@ pub fn replace_top_level_array_value_in_json_text(
         if !cursor.goto_next_sibling() {
             if let Some(new_value) = new_value {
                 return append_top_level_array_value_in_json_text(text, new_value, tab_size);
-            } else {
-                return (0..0, String::new());
             }
+            return (0..0, String::new());
         }
     }
 

@@ -1,5 +1,9 @@
+msrv = "1.95.0"
 allow-private-module-inception = true
 avoid-breaking-exported-api = false
+# This workspace is predominantly application code; when enabling additional
+# opt-in lints, prefer configurations that also keep internal code honest
+# without widening the default gate unexpectedly.
 ignore-interior-mutability = [
     # Suppresses clippy::mutable_key_type, which is a false positive as the Eq
     # and Hash impls do not use fields with interior mutability.

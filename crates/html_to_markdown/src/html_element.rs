@@ -59,7 +59,7 @@ impl HtmlElement {
             .map(|attr| {
                 attr.value
                     .split(' ')
-                    .map(|class| class.trim().to_string())
+                    .map(|class| class.trim().to_owned())
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default()

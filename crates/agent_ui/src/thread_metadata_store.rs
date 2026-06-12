@@ -178,7 +178,7 @@ fn migrate_thread_metadata(cx: &mut App) -> Task<anyhow::Result<()>> {
 
         log::info!("Finished migrating thread store entries");
 
-        let _ = store.update(cx, |store, cx| store.reload(cx));
+        drop(store.update(cx, |store, cx| store.reload(cx)));
         anyhow::Ok(())
     })
 }
@@ -1148,7 +1148,7 @@ impl ThreadMetadataStore {
             in_flight_archives: HashMap::default(),
             _db_operations_task,
         };
-        let _ = this.reload(cx);
+        drop(this.reload(cx));
         this
     }
 
@@ -3035,7 +3035,7 @@ mod tests {
         cx.update(|cx| {
             let store = ThreadMetadataStore::global(cx);
             store.update(cx, |store, cx| {
-                let _ = store.reload(cx);
+                drop(store.reload(cx));
             });
         });
 

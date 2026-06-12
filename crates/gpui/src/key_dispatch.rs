@@ -282,10 +282,9 @@ impl DispatchTree {
             while let Some(source_ancestor) = source_stack.last() {
                 if source_node.parent == Some(*source_ancestor) {
                     break;
-                } else {
-                    source_stack.pop();
-                    self.pop_node();
                 }
+                source_stack.pop();
+                self.pop_node();
             }
 
             source_stack.push(source_node_id);

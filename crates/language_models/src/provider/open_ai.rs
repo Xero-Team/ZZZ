@@ -710,7 +710,7 @@ impl Render for ConfigurationView {
             );
 
         if self.load_credentials_task.is_some() {
-            div().child(Label::new("Loading credentials…")).into_any()
+            div().child(Label::new("Loading credentials...")).into_any()
         } else {
             v_flex()
                 .size_full()

@@ -113,11 +113,10 @@ impl TabStopMap {
             let first = self.order.first()?;
             if first.tab_stop {
                 return self.focus_handle_for_order(first);
-            } else {
-                return self
-                    .next_inner(first)
-                    .and_then(|order| self.focus_handle_for_order(order));
             }
+            return self
+                .next_inner(first)
+                .and_then(|order| self.focus_handle_for_order(order));
         };
 
         let Some(node) = self.tab_node_for_focus_id(focused_id) else {
@@ -150,11 +149,10 @@ impl TabStopMap {
             let last = self.order.last()?;
             if last.tab_stop {
                 return self.focus_handle_for_order(last);
-            } else {
-                return self
-                    .prev_inner(last)
-                    .and_then(|order| self.focus_handle_for_order(order));
             }
+            return self
+                .prev_inner(last)
+                .and_then(|order| self.focus_handle_for_order(order));
         };
 
         let Some(node) = self.tab_node_for_focus_id(focused_id) else {

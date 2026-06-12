@@ -1,3 +1,4 @@
+use anyhow::Context as _;
 use windows::Win32::System::Com::{
     CLSCTX_LOCAL_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, IDispatch,
     IServiceProvider,
@@ -15,7 +16,9 @@ pub fn shell_execute_from_explorer(
     directory: &str,
 ) -> anyhow::Result<()> {
     unsafe {
-        CoInitializeEx(None, COINIT_APARTMENTTHREADED).unwrap();
+        CoInitializeEx(None, COINIT_APARTMENTTHREADED)
+            .ok()
+            .context("COM initialization failed")?;
 
         let mut _hwnd = Default::default();
         let shell_dispatch: IShellDispatch2 =

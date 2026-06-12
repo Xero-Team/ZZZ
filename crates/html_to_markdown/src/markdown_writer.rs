@@ -79,7 +79,7 @@ impl MarkdownWriter {
         let markdown = empty_line_regex().replace_all(&markdown, "");
         let markdown = more_than_three_newlines_regex().replace_all(&markdown, "\n\n");
 
-        markdown.trim().to_string()
+        markdown.trim().to_owned()
     }
 
     fn visit_node(&mut self, node: &Handle, handlers: &mut [TagHandler]) -> Result<()> {

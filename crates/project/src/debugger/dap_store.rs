@@ -640,7 +640,7 @@ impl DapStore {
 
             if let Some(index) = value.find("\n") {
                 value.truncate(index);
-                value.push_str("…");
+                value.push_str("...");
             }
 
             if value.len() > LIMIT {
@@ -650,7 +650,7 @@ impl DapStore {
                     index -= 1;
                 }
                 value.truncate(index);
-                value.push_str("…");
+                value.push_str("...");
             }
 
             format!(": {}", value)

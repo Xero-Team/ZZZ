@@ -348,7 +348,7 @@ fn count_ngrams_from_chars(chars: &[char], n: usize) -> Counts {
 #[allow(dead_code)]
 fn chr_f_ngram_counts(text: &str) -> Vec<Counts> {
     let text = match CHR_F_WHITESPACE {
-        ChrfWhitespace::Unchanged => text.to_string(),
+        ChrfWhitespace::Unchanged => text.to_owned(),
         ChrfWhitespace::Ignore => text
             .chars()
             .filter(|c| !c.is_whitespace())
@@ -450,7 +450,7 @@ pub fn extract_changed_lines_from_diff(diff: &str) -> Counts {
         }
         // Include added and removed lines (with their prefix)
         if line.starts_with('+') || line.starts_with('-') {
-            *counts.entry(line.to_string()).or_insert(0) += 1;
+            *counts.entry(line.to_owned()).or_insert(0) += 1;
         }
     }
 
@@ -757,13 +757,13 @@ impl Patch {
                     current_file = path.into();
                 }
             } else if let Some(line) = line.strip_prefix('+') {
-                hunk.lines.push(PatchLine::Addition(line.to_string()));
+                hunk.lines.push(PatchLine::Addition(line.to_owned()));
             } else if let Some(line) = line.strip_prefix('-') {
-                hunk.lines.push(PatchLine::Deletion(line.to_string()));
+                hunk.lines.push(PatchLine::Deletion(line.to_owned()));
             } else if let Some(line) = line.strip_prefix(' ') {
-                hunk.lines.push(PatchLine::Context(line.to_string()));
+                hunk.lines.push(PatchLine::Context(line.to_owned()));
             } else {
-                hunk.lines.push(PatchLine::Garbage(line.to_string()));
+                hunk.lines.push(PatchLine::Garbage(line.to_owned()));
             }
         }
 
@@ -809,7 +809,7 @@ impl Hunk {
                 .join(" ")
                 .trim_start_matches("@@")
                 .trim()
-                .to_string()
+                .to_owned()
         } else {
             String::new()
         };

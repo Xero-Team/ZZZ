@@ -948,7 +948,7 @@ pub(super) fn keystroke_from_xkb(
                 // ctrl-0..9 may emit control codes like ctrl-[, but
                 // we don't want to map them to `[`
                 } else if key_utf32 <= 0x1f
-                    && !name.chars().next().is_some_and(|c| c.is_ascii_digit())
+                    && name.chars().next().is_none_or(|c| !c.is_ascii_digit())
                 {
                     ((key_utf32 as u8 + 0x40) as char)
                         .to_ascii_lowercase()

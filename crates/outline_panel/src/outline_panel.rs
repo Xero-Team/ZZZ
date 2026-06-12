@@ -459,7 +459,7 @@ impl PartialEq for PanelEntry {
 impl Eq for PanelEntry {}
 
 const SEARCH_MATCH_CONTEXT_SIZE: u32 = 40;
-const TRUNCATED_CONTEXT_MARK: &str = "…";
+const TRUNCATED_CONTEXT_MARK: &str = "...";
 
 impl SearchData {
     fn new(
@@ -711,7 +711,7 @@ impl OutlinePanel {
         cx.new(|cx| {
             let filter_editor = cx.new(|cx| {
                 let mut editor = Editor::single_line(window, cx);
-                editor.set_placeholder_text("Search buffer symbols…", window, cx);
+                editor.set_placeholder_text("Search buffer symbols...", window, cx);
                 editor
             });
             let filter_update_subscription = cx.subscribe_in(

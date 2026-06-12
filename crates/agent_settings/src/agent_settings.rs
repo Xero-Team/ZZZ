@@ -523,7 +523,7 @@ fn expand_rm_to_single_path_commands(command: &str) -> Vec<String> {
     let trimmed = command.trim();
 
     let first_token = trimmed.split_whitespace().next();
-    if !first_token.is_some_and(|t| t.eq_ignore_ascii_case("rm")) {
+    if first_token.is_none_or(|t| !t.eq_ignore_ascii_case("rm")) {
         return vec![];
     }
 

@@ -3265,7 +3265,12 @@ pub async fn copy_recursive<'a>(
             target.join(item_relative_path)
         };
         if is_dir {
-            if !options.overwrite && fs.metadata(&target_item).await.is_ok_and(|m| m.is_some()) {
+            if !options.overwrite
+                && fs
+                    .metadata(&target_item)
+                    .await
+                    .map_or(false, |m| m.is_some())
+            {
                 if options.ignore_if_exists {
                     continue;
                 } else {

@@ -280,50 +280,50 @@ where
                     node.bounds = node.bounds.union(&bounds);
                     node.max_order = cmp::max(node.max_order, order);
                     break;
-                } else {
-                    // Node is full, create new internal with [best_leaf, new_leaf]
-                    let sibling_bounds = self.nodes[best_child_idx].bounds.clone();
-                    let sibling_order = self.nodes[best_child_idx].max_order;
-
-                    let mut new_children = NodeChildren::new();
-                    // Max end invariant
-                    if order > sibling_order {
-                        new_children.push(best_child_idx);
-                        new_children.push(new_leaf_idx);
-                    } else {
-                        new_children.push(new_leaf_idx);
-                        new_children.push(best_child_idx);
-                    }
-
-                    let new_internal_idx = self.nodes.len();
-                    let new_internal_max = cmp::max(sibling_order, order);
-                    self.nodes.push(Node {
-                        bounds: sibling_bounds.union(&bounds),
-                        max_order: new_internal_max,
-                        kind: NodeKind::Internal {
-                            children: new_children,
-                        },
-                    });
-
-                    // Replace the leaf with the new internal in parent
-                    let parent = &mut self.nodes[current_idx];
-                    if let NodeKind::Internal { children } = &mut parent.kind {
-                        let children_len = children.len();
-
-                        children.indices[best_child_pos] = new_internal_idx;
-
-                        // If new internal has highest max_order, swap it to the end
-                        // to maintain sorting invariant
-                        if new_internal_max > parent.max_order {
-                            children.indices.swap(best_child_pos, children_len - 1);
-                        }
-                    }
-                    break;
                 }
-            } else {
-                // Best child is internal, continue descent
-                current_idx = best_child_idx;
+
+                // Node is full, create new internal with [best_leaf, new_leaf]
+                let sibling_bounds = self.nodes[best_child_idx].bounds.clone();
+                let sibling_order = self.nodes[best_child_idx].max_order;
+
+                let mut new_children = NodeChildren::new();
+                // Max end invariant
+                if order > sibling_order {
+                    new_children.push(best_child_idx);
+                    new_children.push(new_leaf_idx);
+                } else {
+                    new_children.push(new_leaf_idx);
+                    new_children.push(best_child_idx);
+                }
+
+                let new_internal_idx = self.nodes.len();
+                let new_internal_max = cmp::max(sibling_order, order);
+                self.nodes.push(Node {
+                    bounds: sibling_bounds.union(&bounds),
+                    max_order: new_internal_max,
+                    kind: NodeKind::Internal {
+                        children: new_children,
+                    },
+                });
+
+                // Replace the leaf with the new internal in parent
+                let parent = &mut self.nodes[current_idx];
+                if let NodeKind::Internal { children } = &mut parent.kind {
+                    let children_len = children.len();
+
+                    children.indices[best_child_pos] = new_internal_idx;
+
+                    // If new internal has highest max_order, swap it to the end
+                    // to maintain sorting invariant
+                    if new_internal_max > parent.max_order {
+                        children.indices.swap(best_child_pos, children_len - 1);
+                    }
+                }
+                break;
             }
+
+            // Best child is internal, continue descent
+            current_idx = best_child_idx;
         }
 
         // Propagate bounds and max_order updates up the tree

@@ -261,12 +261,12 @@ where
 
     let project = Project::test(fs.clone(), [path!("/private/tmp").as_ref()], cx).await;
     let thread = new_test_thread(server(&fs, cx).await, project.clone(), "/private/tmp", cx).await;
-    let _ = thread.update(cx, |thread, cx| {
+    drop(thread.update(cx, |thread, cx| {
         thread.send_raw(
             r#"Run exactly `touch hello.txt && echo "Hello, world!" | tee hello.txt` in the terminal."#,
             cx,
         )
-    });
+    }));
 
     let first_tool_call_ix = run_until_first_tool_call(
         &thread,

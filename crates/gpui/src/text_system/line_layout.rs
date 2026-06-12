@@ -88,9 +88,8 @@ impl LineLayout {
                 if glyph.position.x >= x {
                     if glyph.position.x - x < x - prev_x {
                         return glyph.index;
-                    } else {
-                        return prev_index;
                     }
+                    return prev_index;
                 }
                 prev_index = glyph.index;
                 prev_x = glyph.position.x;
@@ -100,9 +99,8 @@ impl LineLayout {
         if self.len == 1 {
             if x > self.width / 2. {
                 return 1;
-            } else {
-                return 0;
             }
+            return 0;
         }
 
         self.len
@@ -385,11 +383,11 @@ impl WrappedLineLayout {
             } else if index > line_end_ix {
                 line_start_ix = line_end_ix;
                 continue;
-            } else {
-                let line_start_x = self.unwrapped_layout.x_for_index(line_start_ix);
-                let x = self.unwrapped_layout.x_for_index(index) - line_start_x;
-                return Some(point(x, line_y));
             }
+
+            let line_start_x = self.unwrapped_layout.x_for_index(line_start_ix);
+            let x = self.unwrapped_layout.x_for_index(index) - line_start_x;
+            return Some(point(x, line_y));
         }
 
         None

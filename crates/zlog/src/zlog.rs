@@ -273,11 +273,11 @@ pub mod private {
         assert!(scopes.len() <= SCOPE_DEPTH_MAX);
         let mut scope = [""; SCOPE_DEPTH_MAX];
         scope[0..scopes.len()].copy_from_slice(scopes);
-        scope.map(|s| s.to_string())
+        scope.map(|s| s.to_owned())
     }
 
     pub fn scope_to_alloc(scope: &Scope) -> ScopeAlloc {
-        scope.map(|s| s.to_string())
+        scope.map(|s| s.to_owned())
     }
 }
 

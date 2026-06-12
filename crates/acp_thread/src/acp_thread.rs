@@ -345,7 +345,7 @@ impl ToolCall {
         } else if tool_call.kind == acp::ToolKind::Edit {
             MarkdownEscaped(tool_call.title.as_str()).to_string()
         } else if let Some((first_line, _)) = tool_call.title.split_once("\n") {
-            first_line.to_owned() + "…"
+            first_line.to_owned() + "..."
         } else {
             tool_call.title
         };
@@ -447,7 +447,7 @@ impl ToolCall {
                 } else if self.kind == acp::ToolKind::Edit {
                     label.replace(MarkdownEscaped(&title).to_string(), cx)
                 } else if let Some((first_line, _)) = title.split_once("\n") {
-                    label.replace(first_line.to_owned() + "…", cx);
+                    label.replace(first_line.to_owned() + "...", cx);
                 } else {
                     label.replace(title, cx);
                 }
@@ -2694,10 +2694,10 @@ impl AcpThread {
             }
 
             this.update(cx, |this, cx| {
-                if !this
+                if this
                     .running_turn
                     .as_ref()
-                    .is_some_and(|turn| turn.id == turn_id)
+                    .is_none_or(|turn| turn.id != turn_id)
                 {
                     return;
                 }
@@ -5639,12 +5639,12 @@ mod tests {
 
         // Setting a provisional title updates the display title.
         thread.update(cx, |thread, cx| {
-            thread.set_provisional_title("Hello, can you help…".into(), cx);
+            thread.set_provisional_title("Hello, can you help...".into(), cx);
         });
         thread.read_with(cx, |thread, _| {
             assert_eq!(
                 thread.title().as_ref().map(|s| s.as_str()),
-                Some("Hello, can you help…")
+                Some("Hello, can you help...")
             );
         });
 
@@ -5710,7 +5710,7 @@ mod tests {
         });
 
         thread.update(cx, |thread, cx| {
-            thread.set_provisional_title("Hello, can you help…".into(), cx);
+            thread.set_provisional_title("Hello, can you help...".into(), cx);
         });
         assert_eq!(
             *title_updated_events.borrow(),

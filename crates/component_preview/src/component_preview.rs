@@ -122,7 +122,8 @@ impl ComponentPreview {
         let sorted_components = component_registry.sorted_components();
         let selected_index = selected_index.into().unwrap_or(0);
         let active_page = active_page.unwrap_or(PreviewPage::AllComponents);
-        let filter_editor = cx.new(|cx| InputField::new(window, cx, "Find components or usages…"));
+        let filter_editor =
+            cx.new(|cx| InputField::new(window, cx, "Find components or usages..."));
 
         let component_list = ListState::new(
             sorted_components.len(),

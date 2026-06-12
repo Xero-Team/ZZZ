@@ -284,8 +284,8 @@ impl Repository<'static> {
     }
 }
 
-#[async_trait::async_trait(?Send)]
-pub trait GithubApiClient {
+#[async_trait::async_trait]
+pub trait GithubApiClient: Send + Sync {
     async fn get_pull_request(
         &self,
         repo: &Repository<'_>,
@@ -528,7 +528,7 @@ mod octo_client {
         }
     }
 
-    #[async_trait::async_trait(?Send)]
+    #[async_trait::async_trait]
     impl GithubApiClient for OctocrabClient {
         async fn get_pull_request(
             &self,

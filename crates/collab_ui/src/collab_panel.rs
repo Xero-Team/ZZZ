@@ -237,7 +237,7 @@ impl CollabPanel {
         cx.new(|cx| {
             let filter_editor = cx.new(|cx| {
                 let mut editor = Editor::single_line(window, cx);
-                editor.set_placeholder_text("Search channels…", window, cx);
+                editor.set_placeholder_text("Search channels...", window, cx);
                 editor
             });
 
@@ -2566,14 +2566,14 @@ impl CollabPanel {
         let (button_id, button_label, button_icon) = if is_authenticated {
             (
                 "connect",
-                if is_busy { "Connecting…" } else { "Connect" },
+                if is_busy { "Connecting..." } else { "Connect" },
                 IconName::Public,
             )
         } else {
             (
                 "sign_in",
                 if is_busy {
-                    "Signing in…"
+                    "Signing in..."
                 } else {
                     "Sign In with GitHub"
                 },

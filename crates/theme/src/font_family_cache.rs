@@ -62,6 +62,10 @@ impl FontFamilyCache {
     }
 
     /// Prefetch all font names in the background
+    #[allow(
+        clippy::future_not_send,
+        reason = "Font prefetch begins from AsyncApp-bound text system state"
+    )]
     pub async fn prefetch(&self, cx: &gpui::AsyncApp) {
         if self
             .state

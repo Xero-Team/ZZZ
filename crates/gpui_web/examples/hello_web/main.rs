@@ -228,7 +228,7 @@ impl Render for HelloWeb {
 
         // -- Go button --
         let (go_bg, go_text, go_label) = if is_running {
-            (BG_OVERLAY, TEXT_DIM, "Running…")
+            (BG_OVERLAY, TEXT_DIM, "Running...")
         } else {
             (ACCENT_GREEN, BG_BASE, "Count Primes")
         };

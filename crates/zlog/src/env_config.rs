@@ -16,12 +16,12 @@ pub fn parse(filter: &str) -> Result<EnvFilter> {
             Some((name, level)) => {
                 anyhow::ensure!(!level.contains('='), "Invalid directive: {directive}");
                 let level = parse_level(level.trim())?;
-                directive_names.push(name.trim().trim_end_matches(".rs").to_string());
+                directive_names.push(name.trim().trim_end_matches(".rs").to_owned());
                 directive_levels.push(level);
             }
             None => {
                 let Ok(level) = parse_level(directive.trim()) else {
-                    directive_names.push(directive.trim().trim_end_matches(".rs").to_string());
+                    directive_names.push(directive.trim().trim_end_matches(".rs").to_owned());
                     directive_levels.push(log::LevelFilter::max() /* Enable all levels */);
                     continue;
                 };

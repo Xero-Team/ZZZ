@@ -826,7 +826,7 @@ impl ToolchainSelectorDelegate {
                     }
                 };
                 let placeholder_text =
-                    format!("Select a {} for {pretty_path}…", meta.term.to_lowercase(),).into();
+                    format!("Select a {} for {pretty_path}...", meta.term.to_lowercase(),).into();
                 let _ = this.update_in(cx, move |this, window, cx| {
                     this.delegate.relative_path = relative_path;
                     this.delegate.placeholder_text = placeholder_text;
@@ -864,7 +864,7 @@ impl ToolchainSelectorDelegate {
                 Some(())
             }
         });
-        let placeholder_text = "Select a toolchain…".to_string().into();
+        let placeholder_text = "Select a toolchain...".to_string().into();
         Self {
             toolchain_selector,
             candidates: Default::default(),

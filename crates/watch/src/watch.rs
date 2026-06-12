@@ -156,7 +156,10 @@ impl<T> Receiver<T> {
         RwLockReadGuard::map(state, |state| &state.value)
     }
 
-    pub fn changed(&mut self) -> impl Future<Output = Result<(), NoSenderError>> {
+    pub fn changed(&mut self) -> impl Future<Output = Result<(), NoSenderError>> + Send
+    where
+        T: Send + Sync,
+    {
         Changed {
             receiver: self,
             pending_waker_id: None,
@@ -177,7 +180,7 @@ impl<T> Receiver<T> {
     }
 }
 
-impl<T: Clone> Receiver<T> {
+impl<T: Clone + Send + Sync> Receiver<T> {
     pub async fn recv(&mut self) -> Result<T, NoSenderError> {
         self.changed().await?;
         Ok(self.borrow().clone())
@@ -223,6 +226,10 @@ mod tests {
         assert_eq!(receiver.recv().await, Err(NoSenderError));
     }
 
+    #[allow(
+        clippy::future_not_send,
+        reason = "GPUI test contexts intentionally run on a local executor"
+    )]
     #[gpui::test(iterations = 1000)]
     async fn test_watch_random(cx: &mut TestAppContext) {
         let next_id = Arc::new(AtomicUsize::new(1));

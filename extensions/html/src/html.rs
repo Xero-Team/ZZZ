@@ -19,7 +19,7 @@ impl HtmlExtension {
     fn server_script_path(&mut self, language_server_id: &LanguageServerId) -> Result<String> {
         let server_exists = self.server_exists();
         if self.cached_binary_path.is_some() && server_exists {
-            return Ok(SERVER_PATH.to_string());
+            return Ok(SERVER_PATH.to_owned());
         }
 
         zed::set_language_server_installation_status(
@@ -51,7 +51,7 @@ impl HtmlExtension {
                 }
             }
         }
-        Ok(SERVER_PATH.to_string())
+        Ok(SERVER_PATH.to_owned())
     }
 }
 
@@ -70,7 +70,7 @@ impl zed::Extension for HtmlExtension {
         let server_path = if let Some(path) = worktree.which(BINARY_NAME) {
             return Ok(zed::Command {
                 command: path,
-                args: vec!["--stdio".to_string()],
+                args: vec!["--stdio".to_owned()],
                 env: Default::default(),
             });
         } else {
@@ -85,7 +85,7 @@ impl zed::Extension for HtmlExtension {
 
         Ok(zed::Command {
             command: zed::node_binary_path()?,
-            args: vec![server_path, "--stdio".to_string()],
+            args: vec![server_path, "--stdio".to_owned()],
             env: Default::default(),
         })
     }

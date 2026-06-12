@@ -30,7 +30,7 @@ pub fn add_new_subschema(
     name: &str,
     schema: serde_json::Value,
 ) -> schemars::Schema {
-    let old_definition = generator.definitions_mut().insert(name.to_string(), schema);
+    let old_definition = generator.definitions_mut().insert(name.to_owned(), schema);
     assert_eq!(old_definition, None);
     schemars::Schema::new_ref(format!("{DEFS_PATH}{name}"))
 }
@@ -48,7 +48,7 @@ impl schemars::transform::Transform for DefaultDenyUnknownFields {
             && !object.contains_key("additionalProperties")
             && !object.contains_key("unevaluatedProperties")
         {
-            object.insert("additionalProperties".to_string(), false.into());
+            object.insert("additionalProperties".to_owned(), false.into());
         }
         transform_subschemas(self, schema);
     }
@@ -66,7 +66,7 @@ impl schemars::transform::Transform for AllowTrailingCommas {
         if let Some(object) = schema.as_object_mut()
             && !object.contains_key("allowTrailingCommas")
         {
-            object.insert("allowTrailingCommas".to_string(), true.into());
+            object.insert("allowTrailingCommas".to_owned(), true.into());
         }
     }
 }

@@ -1061,7 +1061,7 @@ fn format_excerpts(buffer: &Buffer, excerpts: &[RelatedExcerpt]) -> String {
             continue;
         }
         if current_row < excerpt.row_range.start {
-            writeln!(&mut output, "…").unwrap();
+            writeln!(&mut output, "...").unwrap();
         }
         current_row = excerpt.row_range.start;
 
@@ -1072,7 +1072,7 @@ fn format_excerpts(buffer: &Buffer, excerpts: &[RelatedExcerpt]) -> String {
         }
     }
     if current_row < file_line_count {
-        writeln!(&mut output, "…").unwrap();
+        writeln!(&mut output, "...").unwrap();
     }
     output
 }

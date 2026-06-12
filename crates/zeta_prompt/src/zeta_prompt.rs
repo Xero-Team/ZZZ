@@ -1079,7 +1079,7 @@ pub fn format_expected_output(
     cursor_offset: Option<usize>,
 ) -> Result<String> {
     let (context, editable_range, _, _) = resolve_cursor_region(input, format);
-    let mut old_editable = context[editable_range].to_string();
+    let mut old_editable = context[editable_range].to_owned();
     if !old_editable.is_empty() && !old_editable.ends_with('\n') {
         old_editable.push('\n');
     }
@@ -1258,22 +1258,22 @@ pub fn parse_zeta2_model_output(
             if hashline::output_has_edit_commands(output) {
                 hashline::apply_edit_commands(old_editable_region, output)
             } else {
-                output.to_string()
+                output.to_owned()
             },
         ),
         ZetaFormat::V0304VariableEdit => v0304_variable_edit::apply_variable_edit(context, output)?,
         ZetaFormat::V0304SeedNoEdits => (
             editable_range_in_context,
             if output.starts_with(seed_coder::NO_EDITS) {
-                old_editable_region.to_string()
+                old_editable_region.to_owned()
             } else {
-                output.to_string()
+                output.to_owned()
             },
         ),
         ZetaFormat::V0306SeedMultiRegions => (
             editable_range_in_context,
             if output.starts_with(seed_coder::NO_EDITS) {
-                old_editable_region.to_string()
+                old_editable_region.to_owned()
             } else {
                 multi_region::apply_marker_span(old_editable_region, output)?
             },
@@ -1298,7 +1298,7 @@ pub fn parse_zeta2_model_output(
             editable_range_in_context,
             multi_region::apply_marker_span_v0318(old_editable_region, output)?,
         ),
-        _ => (editable_range_in_context, output.to_string()),
+        _ => (editable_range_in_context, output.to_owned()),
     };
 
     let range_in_excerpt =
@@ -1359,7 +1359,7 @@ pub fn parsed_output_to_patch(
 ) -> Result<String> {
     let range_in_excerpt = parsed.range_in_excerpt;
     let excerpt = prompt_inputs.cursor_excerpt.as_ref();
-    let old_text = excerpt[range_in_excerpt.clone()].to_string();
+    let old_text = excerpt[range_in_excerpt.clone()].to_owned();
     let mut new_text = parsed.new_editable_region;
 
     let mut old_text_normalized = old_text;
@@ -1386,7 +1386,7 @@ pub fn parsed_output_to_patch(
         .cursor_path
         .to_string_lossy()
         .trim_start_matches('/')
-        .to_string();
+        .to_owned();
     let formatted_diff = format!("--- a/{path}\n+++ b/{path}\n{diff}");
 
     Ok(udiff::encode_cursor_in_patch(
@@ -1881,13 +1881,13 @@ pub mod v0211_prefill {
                 {
                     end += 1;
                 }
-                editable_region[..end].to_string()
+                editable_region[..end].to_owned()
             }
             // No newline found. Fall back to splitting before the last space
             // (word-level boundary)
             None => match prefill.rfind(' ') {
-                Some(pos) => prefill[..pos].to_string(),
-                None => prefill.to_string(),
+                Some(pos) => prefill[..pos].to_owned(),
+                None => prefill.to_owned(),
             },
         }
     }
@@ -2148,7 +2148,7 @@ pub mod hashline {
             .trim_start()
             .starts_with(NO_EDITS_COMMAND_MARKER)
         {
-            return editable_region.to_string();
+            return editable_region.to_owned();
         }
 
         let original_lines: Vec<&str> = editable_region.lines().collect();
@@ -2456,7 +2456,7 @@ pub mod hashline {
         }
 
         if result.is_empty() {
-            return Ok(NO_EDITS_COMMAND_MARKER.to_string());
+            return Ok(NO_EDITS_COMMAND_MARKER.to_owned());
         }
 
         Ok(result)
@@ -3661,7 +3661,7 @@ pub mod v0304_variable_edit {
         };
 
         let edit_range = prefix_offset..suffix_offset;
-        return Ok((edit_range, new_text.to_string()));
+        return Ok((edit_range, new_text.to_owned()));
     }
 
     fn find_substring_at_line_boundary(haystack: &str, needle: &str) -> Option<usize> {
@@ -3698,7 +3698,7 @@ pub mod v0304_variable_edit {
         // Apply each hunk by finding its old_context in the text and
         // performing the edits. We search forward from where the previous
         // hunk ended so that hunks are applied in order.
-        let mut new_text = old_text.to_string();
+        let mut new_text = old_text.to_owned();
         let mut search_from: usize = 0;
         let mut first_hunk_pos: Option<usize> = None;
 
@@ -3864,7 +3864,6 @@ pub mod v0304_variable_edit {
                     edits: Vec::new(),
                 });
             } else if line.starts_with("---") || line.starts_with("+++") {
-                continue;
             } else if let Some(hunk) = &mut current {
                 if let Some(added) = line.strip_prefix('+') {
                     let pos = hunk.old_context.len();
@@ -4124,7 +4123,7 @@ pub mod v0304_variable_edit {
             for case in cases {
                 let (edit_range, replacement) =
                     apply_variable_edit(case.original, case.model_output).unwrap();
-                let mut edited = case.original.to_string();
+                let mut edited = case.original.to_owned();
                 edited.replace_range(edit_range, &replacement);
                 assert_eq!(edited, case.expected, "{}", case.name);
             }
@@ -4519,7 +4518,7 @@ pub mod v0304_variable_edit {
                     .unwrap_or_else(|error| {
                         panic!("failed applying variable_edit for {}: {error}", case.name)
                     });
-                let mut edited_by_variable_edit = case.old.to_string();
+                let mut edited_by_variable_edit = case.old.to_owned();
                 edited_by_variable_edit.replace_range(edit_range, &replacement);
                 assert_eq!(
                     edited_by_variable_edit, case.expected_after_apply,
@@ -4536,7 +4535,7 @@ pub mod v0304_variable_edit {
                             )
                         },
                     );
-                let mut edited_by_expected_variable_edit = case.old.to_string();
+                let mut edited_by_expected_variable_edit = case.old.to_owned();
                 edited_by_expected_variable_edit
                     .replace_range(expected_edit_range, &expected_replacement);
                 assert_eq!(
@@ -4837,7 +4836,7 @@ mod tests {
         Event::BufferChange {
             path: Path::new(path).into(),
             old_path: Path::new(path).into(),
-            diff: diff.to_string(),
+            diff: diff.to_owned(),
             predicted: false,
             in_open_source_repo: false,
         }
@@ -4894,7 +4893,7 @@ mod tests {
                 suffix
                 <|fim_middle|>updated
             "#}
-            .to_string()
+            .to_owned()
         );
     }
 
@@ -4930,7 +4929,7 @@ mod tests {
                 <|fim_suffix|>
                 <|fim_middle|>updated
             "#}
-            .to_string()
+            .to_owned()
         );
 
         assert_eq!(
@@ -4949,7 +4948,7 @@ mod tests {
                 <|fim_suffix|>
                 <|fim_middle|>updated
             "#}
-                .to_string()
+                .to_owned()
             )
         );
     }
@@ -5001,7 +5000,7 @@ mod tests {
                 <|fim_suffix|>
                 <|fim_middle|>updated
             "#}
-            .to_string()
+            .to_owned()
         );
 
         assert_eq!(
@@ -5017,7 +5016,7 @@ mod tests {
                 <|fim_suffix|>
                 <|fim_middle|>updated
             "#}
-            .to_string()
+            .to_owned()
         );
     }
 
@@ -5069,7 +5068,7 @@ mod tests {
                 <|fim_suffix|>
                 <|fim_middle|>updated
             "#}
-            .to_string()
+            .to_owned()
         );
 
         // With tight budget, only file_b (lower order) fits.
@@ -5088,7 +5087,7 @@ mod tests {
                 <|fim_suffix|>
                 <|fim_middle|>updated
             "#}
-            .to_string()
+            .to_owned()
         );
     }
 
@@ -5145,7 +5144,7 @@ mod tests {
                 <|fim_suffix|>
                 <|fim_middle|>updated
             "#}
-            .to_string()
+            .to_owned()
         );
 
         // With tight budget, only order<=1 excerpts included (header + important fn).
@@ -5164,7 +5163,7 @@ mod tests {
                 <|fim_suffix|>
                 <|fim_middle|>updated
             "#}
-            .to_string()
+            .to_owned()
         );
     }
 
@@ -5195,7 +5194,7 @@ mod tests {
                 <|fim_suffix|>
                 <|fim_middle|>updated
             "#}
-            .to_string()
+            .to_owned()
         );
 
         assert_eq!(
@@ -5212,7 +5211,7 @@ mod tests {
                 <|fim_suffix|>
                 <|fim_middle|>updated
             "#}
-            .to_string()
+            .to_owned()
         );
     }
 
@@ -5306,14 +5305,14 @@ mod tests {
         input.active_buffer_diagnostics = vec![
             ActiveBufferDiagnostic {
                 severity: Some(1),
-                message: "missing semicolon".to_string(),
-                snippet: "let value = 1".to_string(),
+                message: "missing semicolon".to_owned(),
+                snippet: "let value = 1".to_owned(),
                 snippet_buffer_row_range: 1..2,
                 diagnostic_range_in_snippet: 12..13,
             },
             ActiveBufferDiagnostic {
                 severity: Some(2),
-                message: "file-level warning".to_string(),
+                message: "file-level warning".to_owned(),
                 snippet: String::new(),
                 snippet_buffer_row_range: 0..0,
                 diagnostic_range_in_snippet: 0..0,
@@ -5566,7 +5565,7 @@ mod tests {
                     co<|user_cursor|>de
                     =======
                     <[fim-middle]>"#}
-                .to_string()
+                .to_owned()
             )
         );
     }
@@ -5880,7 +5879,7 @@ mod tests {
     }
 
     fn apply_edit(excerpt: &str, parsed_output: &ParsedOutput) -> String {
-        let mut result = excerpt.to_string();
+        let mut result = excerpt.to_owned();
         result.replace_range(
             parsed_output.range_in_excerpt.clone(),
             &parsed_output.new_editable_region,

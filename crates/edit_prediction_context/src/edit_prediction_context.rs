@@ -737,7 +737,7 @@ fn is_tombi_lsp_in_toml(
     cx: &mut Context<Project>,
 ) -> bool {
     buffer.update(cx, |buffer, cx| {
-        if !buffer.language().is_some_and(|lang| lang.name() == "TOML") {
+        if buffer.language().is_none_or(|lang| lang.name() != "TOML") {
             return false;
         }
         project.lsp_store().update(cx, |lsp_store, cx| {

@@ -96,10 +96,10 @@ async fn capture_unix(
 
     let (fd_num, redir) = match shell_kind {
         ShellKind::Rc => (FD_STDIN, format!(">[1={}]", FD_STDIN)), // `[1=0]`
-        ShellKind::Nushell | ShellKind::Tcsh => (FD_STDOUT, "".to_string()),
+        ShellKind::Nushell | ShellKind::Tcsh => (FD_STDOUT, "".to_owned()),
         // xonsh doesn't support redirecting to stdin, and control sequences are printed to
         // stdout on startup
-        ShellKind::Xonsh => (FD_STDERR, "o>e".to_string()),
+        ShellKind::Xonsh => (FD_STDERR, "o>e".to_owned()),
         ShellKind::PowerShell => (FD_STDIN, format!(">{}", FD_STDIN)),
         _ => (FD_STDIN, format!(">&{}", FD_STDIN)), // `>&0`
     };
