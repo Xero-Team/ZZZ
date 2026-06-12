@@ -203,7 +203,7 @@ impl PickerDelegate for LanguageSelectorDelegate {
         tr(
             cx,
             "language_selector.placeholder.select_language",
-            "Select a language…",
+            "Select a language...",
         )
         .into()
     }

@@ -1578,7 +1578,7 @@ impl SettingsWindow {
         let search_bar = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
             editor.set_placeholder_text(
-                &app_i18n::tr(cx, "settings_ui.search.placeholder", "Search settings…"),
+                &app_i18n::tr(cx, "settings_ui.search.placeholder", "Search settings..."),
                 window,
                 cx,
             );
@@ -1603,7 +1603,7 @@ impl SettingsWindow {
             if app_i18n::reload(cx) {
                 this.search_bar.update(cx, |editor, cx| {
                     editor.set_placeholder_text(
-                        &app_i18n::tr(cx, "settings_ui.search.placeholder", "Search settings…"),
+                        &app_i18n::tr(cx, "settings_ui.search.placeholder", "Search settings..."),
                         window,
                         cx,
                     );

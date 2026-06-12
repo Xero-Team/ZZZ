@@ -7395,6 +7395,7 @@ version = "0.1.0"
 dependencies = [
  "editor",
  "gpui",
+ "i18n",
  "indoc",
  "language",
  "menu",
@@ -16460,6 +16461,7 @@ dependencies = [
  "git",
  "gpui",
  "http_client",
+ "i18n",
  "language",
  "language_model",
  "log",

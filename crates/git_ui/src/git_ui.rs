@@ -1160,7 +1160,7 @@ impl GitCloneModal {
                 &tr(
                     cx,
                     "git_ui.clone.placeholder.enter_repository_url",
-                    "Enter repository URL…",
+                    "Enter repository URL...",
                 ),
                 window,
                 cx,

@@ -1342,7 +1342,7 @@ impl FileFinderDelegate {
                     components.elision_range(budget - 1, &full_path_positions)
                 {
                     let elided_len = elided_range.end - elided_range.start;
-                    let placeholder = "…";
+                    let placeholder = "...";
                     full_path_positions.retain_mut(|mat| {
                         if *mat >= elided_range.end {
                             *mat -= elided_len;
@@ -1901,7 +1901,7 @@ impl PickerDelegate for FileFinderDelegate {
                         .tooltip(Tooltip::text(tr(
                             cx,
                             "file_finder.project_scan_in_progress",
-                            "Project Scan in Progress…",
+                            "Project Scan in Progress...",
                         )))
                         .child(
                             Icon::new(IconName::LoadCircle)
@@ -2001,7 +2001,7 @@ impl PickerDelegate for FileFinderDelegate {
                                 })
                                 .trigger(
                                     ButtonLike::new("split-trigger")
-                                        .child(Label::new(tr(cx, "file_finder.split", "Split…")))
+                                        .child(Label::new(tr(cx, "file_finder.split", "Split...")))
                                         .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                                         .child(
                                             KeyBinding::for_action_in(

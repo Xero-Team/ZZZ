@@ -569,10 +569,10 @@ impl Render for ProjectSearchView {
                 SearchState::Running(SearchActivity::WaitingForScan) => app_i18n::tr(
                     cx,
                     "search.project.heading.loading_project",
-                    "Loading project…",
+                    "Loading project...",
                 ),
                 SearchState::Running(SearchActivity::Searching) => {
-                    app_i18n::tr(cx, "search.project.heading.searching", "Searching…")
+                    app_i18n::tr(cx, "search.project.heading.searching", "Searching...")
                 }
                 SearchState::Completed(SearchCompletion::NoResults) => {
                     app_i18n::tr(cx, "search.project.heading.no_results", "No Results")
@@ -868,7 +868,7 @@ impl ProjectSearchView {
                 &app_i18n::tr(
                     cx,
                     "search.project.placeholder.search_all",
-                    "Search all files…",
+                    "Search all files...",
                 ),
                 window,
                 cx,
@@ -879,7 +879,7 @@ impl ProjectSearchView {
                 &app_i18n::tr(
                     cx,
                     "search.project.placeholder.replace_in_project",
-                    "Replace in project…",
+                    "Replace in project...",
                 ),
                 window,
                 cx,
@@ -1055,7 +1055,7 @@ impl ProjectSearchView {
                 &app_i18n::tr(
                     cx,
                     "search.project.placeholder.search_all",
-                    "Search all files…",
+                    "Search all files...",
                 ),
                 window,
                 cx,
@@ -1088,7 +1088,7 @@ impl ProjectSearchView {
                 &app_i18n::tr(
                     cx,
                     "search.project.placeholder.replace_in_project",
-                    "Replace in project…",
+                    "Replace in project...",
                 ),
                 window,
                 cx,

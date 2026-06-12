@@ -1688,7 +1688,7 @@ impl GitPanel {
             .take(5)
             .join("\n");
         if entries.len() > 5 {
-            details.push_str(&format!("\nand {} more…", entries.len() - 5))
+            details.push_str(&format!("\nand {} more...", entries.len() - 5))
         }
 
         let restore = tr(
@@ -1752,7 +1752,7 @@ impl GitPanel {
             .join("\n");
 
         if to_delete.len() > 5 {
-            details.push_str(&format!("\nand {} more…", to_delete.len() - 5))
+            details.push_str(&format!("\nand {} more...", to_delete.len() - 5))
         }
 
         let trash = tr(cx, "git_ui.git_panel.trash", "Trash");
@@ -4215,7 +4215,7 @@ impl GitPanel {
         E: std::fmt::Debug + std::fmt::Display,
     {
         if let Ok(Some(workspace)) = weak_this.update(cx, |this, _cx| this.workspace.upgrade()) {
-            let _ = workspace.update(cx, |workspace, cx| {
+            workspace.update(cx, |workspace, cx| {
                 struct CommitMessageError;
                 let notification_id = NotificationId::unique::<CommitMessageError>();
                 workspace.show_notification(notification_id, cx, |cx| {
@@ -4421,7 +4421,7 @@ impl GitPanel {
                         Label::new(tr(
                             cx,
                             "git_ui.git_panel.generating_commit",
-                            "Generating Commit…",
+                            "Generating Commit...",
                         ))
                         .size(LabelSize::Small)
                         .color(Color::Muted),
@@ -5371,7 +5371,7 @@ impl GitPanel {
                         Label::new(tr(
                             cx,
                             "git_ui.git_panel.loading_commit_history",
-                            "Loading Commit History…",
+                            "Loading Commit History...",
                         ))
                         .color(Color::Muted),
                     ),
@@ -5631,7 +5631,7 @@ impl GitPanel {
                                             Some(data.commit_timestamp),
                                         ),
                                         None => (
-                                            tr(cx, "git_ui.git_panel.loading", "Loading…").into(),
+                                            tr(cx, "git_ui.git_panel.loading", "Loading...").into(),
                                             "".into(),
                                             None,
                                             None,

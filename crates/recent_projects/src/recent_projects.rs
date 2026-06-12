@@ -936,7 +936,7 @@ impl PickerDelegate for RecentProjectsDelegate {
     type ListItem = AnyElement;
 
     fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
-        i18n::tr(cx, "recent_projects.search_projects", "Search projects…").into()
+        i18n::tr(cx, "recent_projects.search_projects", "Search projects...").into()
     }
 
     fn render_editor(

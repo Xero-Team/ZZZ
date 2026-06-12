@@ -2728,7 +2728,11 @@ impl AgentPanel {
                                 }),
                             )
                             .action(
-                                tr(cx, "agent_ui.panel.add_custom_server", "Add Custom Server…"),
+                                tr(
+                                    cx,
+                                    "agent_ui.panel.add_custom_server",
+                                    "Add Custom Server...",
+                                ),
                                 Box::new(AddContextServer),
                             )
                             .separator()
@@ -3081,7 +3085,7 @@ impl AgentPanel {
                 .trigger_with_tooltip(agent_selector_button, {
                     move |_window, cx| {
                         Tooltip::for_action_in(
-                            tr(cx, "agent_ui.panel.new_thread", "New Thread…"),
+                            tr(cx, "agent_ui.panel.new_thread", "New Thread..."),
                             &ToggleNewThreadMenu,
                             &focus_handle,
                             cx,
@@ -3126,7 +3130,7 @@ impl AgentPanel {
                     {
                         move |_window, cx| {
                             Tooltip::for_action_in(
-                                tr(cx, "agent_ui.panel.new_thread", "New Thread…"),
+                                tr(cx, "agent_ui.panel.new_thread", "New Thread..."),
                                 &ToggleNewThreadMenu,
                                 &focus_handle,
                                 cx,

@@ -321,7 +321,7 @@ impl Render for BufferSearchBar {
         self.query_editor.update(cx, |query_editor, cx| {
             if query_editor.placeholder_text(cx).is_none() {
                 query_editor.set_placeholder_text(
-                    &app_i18n::tr(cx, "search.buffer.placeholder.search", "Search…"),
+                    &app_i18n::tr(cx, "search.buffer.placeholder.search", "Search..."),
                     window,
                     cx,
                 );
@@ -333,7 +333,7 @@ impl Render for BufferSearchBar {
                 &app_i18n::tr(
                     cx,
                     "search.buffer.placeholder.replace_with",
-                    "Replace with…",
+                    "Replace with...",
                 ),
                 window,
                 cx,

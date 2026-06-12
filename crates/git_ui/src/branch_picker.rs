@@ -1079,20 +1079,20 @@ impl PickerDelegate for BranchListDelegate {
                     tr(
                         cx,
                         "git_ui.branch_picker.placeholder.select_branch",
-                        "Select branch…",
+                        "Select branch...",
                     )
                 } else {
                     tr(
                         cx,
                         "git_ui.branch_picker.placeholder.switch_branch",
-                        "Switch branch…",
+                        "Switch branch...",
                     )
                 }
             }
             PickerState::CreateRemote(_) => tr(
                 cx,
                 "git_ui.branch_picker.placeholder.enter_remote_name",
-                "Enter a name for this remote…",
+                "Enter a name for this remote...",
             ),
         }
         .into()
@@ -1313,7 +1313,7 @@ impl PickerDelegate for BranchListDelegate {
 
                     if !picker.delegate.is_select_only()
                         && !query.is_empty()
-                        && !matches.first().is_some_and(|entry| entry.name() == query)
+                        && matches.first().is_none_or(|entry| entry.name() != query)
                     {
                         let query = normalize_branch_name(&query);
                         let is_url = query.trim_start_matches("git@").parse::<Url>().is_ok();
@@ -1529,7 +1529,7 @@ impl PickerDelegate for BranchListDelegate {
                 tr(
                     cx,
                     "git_ui.branch_picker.create_branch_named",
-                    "Create Branch: \"{}\"…",
+                    "Create Branch: \"{}\"...",
                 )
                 .replacen("{}", name, 1),
             )

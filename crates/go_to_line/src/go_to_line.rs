@@ -10,6 +10,7 @@ use gpui::{
     App, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Render, SharedString, Styled,
     Subscription, div, prelude::*,
 };
+use i18n as app_i18n;
 use language::Buffer;
 use text::{Bias, Point};
 use theme::ActiveTheme;
@@ -133,22 +134,27 @@ impl GoToLine {
         });
         let line_editor_change = cx.subscribe_in(&line_editor, window, Self::on_line_editor_event);
 
-        let current_text = format!(
-            "Current Line: {} of {} (column {})",
-            line,
-            last_line + 1,
-            column
-        );
-
         Self {
             line_editor,
             active_editor,
             active_buffer,
-            current_text: current_text.into(),
+            current_text: Self::current_line_text(cx, line, last_line + 1, column),
             prev_scroll_position: Some(scroll_position),
             current_line: line,
             _subscriptions: vec![line_editor_change, cx.on_release_in(window, Self::release)],
         }
+    }
+
+    fn current_line_text(cx: &App, line: u32, total_lines: u32, column: u32) -> SharedString {
+        app_i18n::tr(
+            cx,
+            "go_to_line.current_line",
+            "Current Line: {} of {} (column {})",
+        )
+        .replacen("{}", &line.to_string(), 1)
+        .replacen("{}", &total_lines.to_string(), 1)
+        .replacen("{}", &column.to_string(), 1)
+        .into()
     }
 
     fn release(&mut self, window: &mut Window, cx: &mut App) {
@@ -313,13 +319,27 @@ impl Render for GoToLine {
             } else {
                 self.current_line.saturating_sub(offset.unsigned_abs())
             };
-            format!("Go to line {target_line} ({offset:+} from current)").into()
+            app_i18n::tr(
+                cx,
+                "go_to_line.go_to_line_relative",
+                "Go to line {} ({:+} from current)",
+            )
+            .replacen("{}", &target_line.to_string(), 1)
+            .replacen("{:+}", &format!("{offset:+}"), 1)
+            .into()
         } else {
             match self.line_and_char_from_query(cx) {
-                Some((line, Some(character))) => {
-                    format!("Go to line {line}, character {character}").into()
-                }
-                Some((line, None)) => format!("Go to line {line}").into(),
+                Some((line, Some(character))) => app_i18n::tr(
+                    cx,
+                    "go_to_line.go_to_line_character",
+                    "Go to line {}, character {}",
+                )
+                .replacen("{}", &line.to_string(), 1)
+                .replacen("{}", &character.to_string(), 1)
+                .into(),
+                Some((line, None)) => app_i18n::tr(cx, "go_to_line.go_to_line", "Go to line {}")
+                    .replacen("{}", &line.to_string(), 1)
+                    .into(),
                 None => self.current_text.clone(),
             }
         };

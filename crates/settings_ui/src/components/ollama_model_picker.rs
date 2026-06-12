@@ -85,7 +85,7 @@ impl PickerDelegate for OllamaModelPickerDelegate {
         app_i18n::tr(
             cx,
             "settings_ui.ollama_model_picker.search_models",
-            "Search models…",
+            "Search models...",
         )
         .into()
     }
@@ -177,7 +177,7 @@ pub fn render_ollama_model_picker(
                 app_i18n::tr(
                     cx,
                     "settings_ui.ollama_model_picker.select_model",
-                    "Select a model…",
+                    "Select a model...",
                 )
                 .into()
             } else {

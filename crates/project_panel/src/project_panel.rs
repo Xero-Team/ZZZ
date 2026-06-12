@@ -1134,7 +1134,7 @@ impl ProjectPanel {
                         )
                         .when(is_dir, |menu| {
                             menu.separator().action(
-                                tr(cx, "project_panel.menu.find_in_folder", "Find in Folder…"),
+                                tr(cx, "project_panel.menu.find_in_folder", "Find in Folder..."),
                                 Box::new(NewSearchInDirectory),
                             )
                         })
@@ -1255,7 +1255,7 @@ impl ProjectPanel {
                                     tr(
                                         cx,
                                         "project_panel.menu.add_folders_to_project",
-                                        "Add Folders to Project…",
+                                        "Add Folders to Project...",
                                     ),
                                     Box::new(workspace::AddFolderToProject),
                                 )
@@ -2385,7 +2385,7 @@ impl ProjectPanel {
                             {
                                 if let Some(buffer) = project.buffer_for_id(*buffer_id, cx) {
                                     buffer.update(cx, |buffer, cx| {
-                                        let _ = buffer.reload(cx);
+                                        drop(buffer.reload(cx));
                                     });
                                 }
                             }

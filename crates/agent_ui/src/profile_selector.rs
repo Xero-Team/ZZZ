@@ -475,7 +475,7 @@ impl PickerDelegate for ProfilePickerDelegate {
         Arc::from(app_i18n::tr(
             cx,
             "agent_ui.profile_selector.search_profiles_placeholder",
-            "Search profiles…",
+            "Search profiles...",
         ))
     }
 

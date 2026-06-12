@@ -1095,7 +1095,7 @@ impl AgentConfiguration {
                         Label::new(tr(
                             cx,
                             "agent_ui.agent_configuration.authenticating",
-                            "Authenticating…",
+                            "Authenticating...",
                         ))
                         .color(Color::Muted)
                         .size(LabelSize::Small),

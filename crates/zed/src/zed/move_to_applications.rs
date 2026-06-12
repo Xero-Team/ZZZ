@@ -211,7 +211,7 @@ impl Render for InstallingZedModal {
                     .child(Label::new(tr(
                         cx,
                         "zed.move_to_applications.installing",
-                        "Installing ZZZ…",
+                        "Installing ZZZ...",
                     ))),
             )
             .child(

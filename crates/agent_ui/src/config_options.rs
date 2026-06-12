@@ -620,7 +620,7 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
         Arc::from(app_i18n::tr(
             cx,
             "agent_ui.config_options.select_an_option",
-            "Select an option…",
+            "Select an option...",
         ))
     }
 

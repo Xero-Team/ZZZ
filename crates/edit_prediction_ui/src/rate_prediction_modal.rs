@@ -699,7 +699,7 @@ impl RatePredictionsModal {
                         &app_i18n::tr(
                             cx,
                             "edit_prediction_ui.rate_prediction.placeholder.add_feedback",
-                            "Add your feedback…",
+                            "Add your feedback...",
                         ),
                         window,
                         cx,

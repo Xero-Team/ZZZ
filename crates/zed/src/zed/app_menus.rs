@@ -206,7 +206,7 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                     if cfg!(not(target_os = "macos")) {
                         tr(cx, "menu.file.open_folder", "Open Folder...")
                     } else {
-                        tr(cx, "menu.file.open", "Open…")
+                        tr(cx, "menu.file.open", "Open...")
                     },
                     workspace::Open::default(),
                 ),
@@ -225,7 +225,7 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                 ),
                 MenuItem::separator(),
                 MenuItem::action(
-                    tr(cx, "menu.file.add_folder", "Add Folder to Project…"),
+                    tr(cx, "menu.file.add_folder", "Add Folder to Project..."),
                     workspace::AddFolderToProject,
                 ),
                 MenuItem::separator(),
@@ -233,7 +233,7 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                     tr(cx, "menu.file.save", "Save"),
                     workspace::Save { save_intent: None },
                 ),
-                MenuItem::action(tr(cx, "menu.file.save_as", "Save As…"), workspace::SaveAs),
+                MenuItem::action(tr(cx, "menu.file.save_as", "Save As..."), workspace::SaveAs),
                 MenuItem::action(
                     tr(cx, "menu.file.save_all", "Save All"),
                     workspace::SaveAll { save_intent: None },

@@ -992,11 +992,11 @@ impl TitleBar {
 
         let display_label: SharedString = if let Some(ref name) = creation_in_progress {
             if is_switch {
-                tr(cx, "title_bar.worktree.loading", "Loading {}…")
+                tr(cx, "title_bar.worktree.loading", "Loading {}...")
                     .replacen("{}", name, 1)
                     .into()
             } else {
-                tr(cx, "title_bar.worktree.creating", "Creating {}…")
+                tr(cx, "title_bar.worktree.creating", "Creating {}...")
                     .replacen("{}", name, 1)
                     .into()
             }

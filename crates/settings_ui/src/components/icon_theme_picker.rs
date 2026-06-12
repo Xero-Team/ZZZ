@@ -82,7 +82,7 @@ impl PickerDelegate for IconThemePickerDelegate {
         app_i18n::tr(
             cx,
             "settings_ui.icon_theme_picker.search_icon_themes",
-            "Search icon themes…",
+            "Search icon themes...",
         )
         .into()
     }

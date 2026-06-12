@@ -1061,7 +1061,7 @@ impl Render for AgentDiffToolbar {
             .tooltip(Tooltip::text(tr(
                 cx,
                 "agent_ui.agent_diff.generating_changes",
-                "Generating Changes…",
+                "Generating Changes...",
             )))
             .child(
                 Icon::new(IconName::LoadCircle)

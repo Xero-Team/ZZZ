@@ -637,7 +637,7 @@ fn render_verification_section(
             &tr(
                 cx,
                 "settings_ui.tool_permissions.test_input_placeholder",
-                "Enter a tool input to test your rules…",
+                "Enter a tool input to test your rules...",
             ),
             window,
             cx,
@@ -1260,7 +1260,7 @@ fn render_add_pattern_input(
         .with_placeholder(tr(
             cx,
             "settings_ui.tool_permissions.add_regex_pattern",
-            "Add regex pattern…",
+            "Add regex pattern...",
         ))
         .tab_index(0)
         .with_buffer_font()

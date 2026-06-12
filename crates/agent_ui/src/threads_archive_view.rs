@@ -178,7 +178,7 @@ impl ThreadsArchiveView {
                 &app_i18n::tr(
                     cx,
                     "agent_ui.threads_archive.search_all_threads",
-                    "Search all threads…",
+                    "Search all threads...",
                 ),
                 window,
                 cx,

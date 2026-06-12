@@ -1403,7 +1403,7 @@ impl ConfigureContextServerModal {
                         Label::new(tr(
                             cx,
                             "agent_ui.context_server.authenticating",
-                            "Authenticating…",
+                            "Authenticating...",
                         ))
                         .size(LabelSize::Small)
                         .color(Color::Muted),
@@ -1481,7 +1481,7 @@ impl Render for ConfigureContextServerModal {
                                             State::Waiting => self.render_loading(tr(
                                                 cx,
                                                 "agent_ui.context_server.connecting_server",
-                                                "Connecting Server…",
+                                                "Connecting Server...",
                                             )),
                                             State::AuthRequired { server_id } => {
                                                 self.render_auth_required(&server_id.clone(), cx)

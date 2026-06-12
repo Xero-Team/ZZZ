@@ -431,7 +431,7 @@ impl PickerDelegate for LanguageModelPickerDelegate {
         Arc::from(app_i18n::tr(
             cx,
             "agent_ui.model_selector.select_a_model_placeholder",
-            "Select a model…",
+            "Select a model...",
         ))
     }
 

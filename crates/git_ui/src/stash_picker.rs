@@ -392,7 +392,7 @@ impl PickerDelegate for StashListDelegate {
     type ListItem = ListItem;
 
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        tr(_cx, "git_ui.stash_picker.placeholder", "Select a stash…").into()
+        tr(_cx, "git_ui.stash_picker.placeholder", "Select a stash...").into()
     }
 
     fn match_count(&self) -> usize {

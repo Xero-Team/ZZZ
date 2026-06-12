@@ -69,7 +69,12 @@ impl PickerDelegate for ThemePickerDelegate {
     }
 
     fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
-        app_i18n::tr(cx, "settings_ui.theme_picker.search_theme", "Search theme…").into()
+        app_i18n::tr(
+            cx,
+            "settings_ui.theme_picker.search_theme",
+            "Search theme...",
+        )
+        .into()
     }
 
     fn update_matches(

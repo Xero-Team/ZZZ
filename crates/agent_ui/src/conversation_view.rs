@@ -1360,7 +1360,7 @@ impl ConversationView {
                 .active_view()
                 .and_then(|v| v.read(cx).thread.read(cx).title())
                 .unwrap_or_else(|| default_thread_title(cx)),
-            ServerState::Loading { .. } => tr(cx, "agent_ui.conversation.loading", "Loading…"),
+            ServerState::Loading { .. } => tr(cx, "agent_ui.conversation.loading", "Loading..."),
             ServerState::LoadError { error, .. } => match error {
                 LoadError::Unsupported { .. } => {
                     app_i18n::tr(cx, "agent_ui.conversation.upgrade_agent", "Upgrade {}")
@@ -2126,7 +2126,7 @@ impl ConversationView {
                     app_i18n::tr(
                         cx,
                         "agent_ui.conversation.authenticating_to",
-                        "Authenticating to {}…",
+                        "Authenticating to {}...",
                     )
                     .replacen("{}", agent_display_name.as_ref(), 1),
                 )
@@ -3020,7 +3020,7 @@ impl Render for ConversationView {
                     .items_center()
                     .justify_center()
                     .child(
-                        Label::new(tr(cx, "agent_ui.conversation.loading", "Loading…"))
+                        Label::new(tr(cx, "agent_ui.conversation.loading", "Loading..."))
                             .color(Color::Muted)
                             .with_animation(
                                 "loading-agent-label",

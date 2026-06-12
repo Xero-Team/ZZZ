@@ -506,7 +506,7 @@ pub(crate) enum PermissionSelection {
     /// A specific choice from the dropdown (e.g., "Always for terminal", "Only this time").
     /// The index corresponds to the position in the `choices` list from `PermissionOptions`.
     Choice(usize),
-    /// "Select options…" mode where individual command patterns can be toggled.
+    /// "Select options..." mode where individual command patterns can be toggled.
     /// Contains the indices of checked patterns in the `patterns` list.
     /// All patterns start checked when this mode is first activated.
     SelectedPatterns(Vec<usize>),
@@ -3163,7 +3163,7 @@ impl ThreadView {
                                     app_i18n::tr(
                                         cx,
                                         "agent_ui.thread_view.edits.editing_one",
-                                        "Editing {} file…",
+                                        "Editing {} file...",
                                     )
                                     .replacen(
                                         "{}",
@@ -3174,7 +3174,7 @@ impl ThreadView {
                                     app_i18n::tr(
                                         cx,
                                         "agent_ui.thread_view.edits.editing_many",
-                                        "Editing {} files…",
+                                        "Editing {} files...",
                                     )
                                     .replacen(
                                         "{}",
@@ -3988,7 +3988,7 @@ impl ThreadView {
                 .tooltip(Tooltip::text(tr(
                     cx,
                     "agent_ui.thread_view.loading_added_context",
-                    "Loading Added Context…",
+                    "Loading Added Context...",
                 )))
                 .child(loading_contents_spinner(IconSize::default()))
                 .into_any_element()
@@ -4729,7 +4729,7 @@ impl ThreadView {
                                                         .tooltip(Tooltip::text(tr(
                                                             cx,
                                                             "agent_ui.thread_view.loading_added_context",
-                                                            "Loading Added Context…",
+                                                            "Loading Added Context...",
                                                         )))
                                                         .child(loading_contents_spinner(IconSize::XSmall))
                                                         .into_any_element()
@@ -7451,7 +7451,7 @@ impl ThreadView {
                         menu = menu.separator().header(tr(
                             cx,
                             "agent_ui.thread_view.select_options",
-                            "Select Options…",
+                            "Select Options...",
                         ));
 
                         for (pattern_index, label) in patterns.iter() {
@@ -8311,7 +8311,11 @@ impl ThreadView {
                 "Subagent Failed",
             )
         } else {
-            tr(cx, "agent_ui.thread_view.spawning_agent", "Spawning Agent…")
+            tr(
+                cx,
+                "agent_ui.thread_view.spawning_agent",
+                "Spawning Agent...",
+            )
         };
 
         let card_header_id = format!("subagent-header-{}", entry_ix);

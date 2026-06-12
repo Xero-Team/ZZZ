@@ -186,12 +186,12 @@ impl PickerDelegate for ToolPickerDelegate {
             ToolPickerMode::BuiltinTools => app_i18n::tr(
                 cx,
                 "agent_ui.tool_picker.search_built_in_tools_placeholder",
-                "Search built-in tools…",
+                "Search built-in tools...",
             ),
             ToolPickerMode::McpTools => app_i18n::tr(
                 cx,
                 "agent_ui.tool_picker.search_mcp_tools_placeholder",
-                "Search MCP tools…",
+                "Search MCP tools...",
             ),
         }
         .into()

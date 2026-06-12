@@ -138,7 +138,7 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
         i18n::tr(
             cx,
             "recent_projects.sidebar.search_recent_projects",
-            "Search recent projects…",
+            "Search recent projects...",
         )
         .into()
     }

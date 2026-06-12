@@ -71,7 +71,12 @@ impl PickerDelegate for FontPickerDelegate {
     }
 
     fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
-        app_i18n::tr(cx, "settings_ui.font_picker.search_fonts", "Search fonts…").into()
+        app_i18n::tr(
+            cx,
+            "settings_ui.font_picker.search_fonts",
+            "Search fonts...",
+        )
+        .into()
     }
 
     fn update_matches(

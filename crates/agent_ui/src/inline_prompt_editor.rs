@@ -375,7 +375,7 @@ impl<T: 'static> PromptEditor<T> {
             let mut editor = Editor::auto_height(1, Self::MAX_LINES as usize, window, cx);
             editor.set_soft_wrap_mode(language::language_settings::SoftWrap::EditorWidth, cx);
             editor.set_placeholder_text(
-                &app_i18n::tr(cx, "agent_ui.inline_prompt.add_a_prompt", "Add a prompt…"),
+                &app_i18n::tr(cx, "agent_ui.inline_prompt.add_a_prompt", "Add a prompt..."),
                 window,
                 cx,
             );
