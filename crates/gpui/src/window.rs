@@ -1178,14 +1178,32 @@ pub(crate) struct ElementStateBox {
     pub(crate) type_name: &'static str,
 }
 
+fn active_window_bounds(cx: &mut App) -> Option<WindowBounds> {
+    let window_update_stack = cx.window_update_stack.clone();
+    let window_stack = cx.window_stack().unwrap_or_default();
+
+    let active_window = window_stack
+        .into_iter()
+        .filter(|window| !window_update_stack.contains(&window.window_id()))
+        .find_map(|window| {
+            window
+                .update(cx, |_, window, _| window.window_bounds())
+                .ok()
+        });
+
+    active_window.or_else(|| {
+        cx.active_window()
+            .filter(|window| !window_update_stack.contains(&window.window_id()))
+            .and_then(|window| {
+                window
+                    .update(cx, |_, window, _| window.window_bounds())
+                    .ok()
+            })
+    })
+}
+
 fn default_bounds(display_id: Option<DisplayId>, cx: &mut App) -> WindowBounds {
-    // TODO, BUG: if you open a window with the currently active window
-    // on the stack, this will erroneously fallback to `None`
-    //
-    // TODO these should be the initial window bounds not considering maximized/fullscreen
-    let active_window_bounds = cx
-        .active_window()
-        .and_then(|w| w.update(cx, |_, window, _| window.window_bounds()).ok());
+    let active_window_bounds = active_window_bounds(cx);
 
     const CASCADE_OFFSET: f32 = 25.0;
 
@@ -1208,11 +1226,9 @@ fn default_bounds(display_id: Option<DisplayId>, cx: &mut App) -> WindowBounds {
         },
         window_bounds_ctor,
     ): (_, fn(Bounds<Pixels>) -> WindowBounds) = match active_window_bounds {
-        Some(bounds) => match bounds {
-            WindowBounds::Windowed(bounds) => (bounds, WindowBounds::Windowed),
-            WindowBounds::Maximized(bounds) => (bounds, WindowBounds::Maximized),
-            WindowBounds::Fullscreen(bounds) => (bounds, WindowBounds::Fullscreen),
-        },
+        // New windows should inherit the restore bounds of the active window,
+        // but they should always open as regular windowed windows.
+        Some(bounds) => (bounds.get_bounds(), WindowBounds::Windowed),
         None => (
             display
                 .as_ref()

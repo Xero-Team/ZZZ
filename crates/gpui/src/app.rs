@@ -335,14 +335,18 @@ impl SystemWindowTabController {
             .find_map(|(group, tabs)| tabs.iter().find(|tab| tab.id == id).map(|_| group));
 
         let current_group = current_group?;
-        // TODO: `.keys()` returns arbitrary order, what does "next" mean?
-        let mut group_ids: Vec<_> = controller.tab_groups.keys().collect();
-        let idx = group_ids.iter().position(|g| *g == current_group)?;
+        let group_ids: Vec<_> = controller
+            .tab_groups
+            .keys()
+            .copied()
+            .sorted_unstable()
+            .collect();
+        let idx = group_ids.iter().position(|g| g == current_group)?;
         let next_idx = (idx + 1) % group_ids.len();
 
         controller
             .tab_groups
-            .get(group_ids[next_idx])
+            .get(&group_ids[next_idx])
             .and_then(|tabs| {
                 tabs.iter()
                     .max_by_key(|tab| tab.last_active_at)
@@ -360,9 +364,13 @@ impl SystemWindowTabController {
             .find_map(|(group, tabs)| tabs.iter().find(|tab| tab.id == id).map(|_| group));
 
         let current_group = current_group?;
-        // TODO: `.keys()` returns arbitrary order, what does "previous" mean?
-        let mut group_ids: Vec<_> = controller.tab_groups.keys().collect();
-        let idx = group_ids.iter().position(|g| *g == current_group)?;
+        let group_ids: Vec<_> = controller
+            .tab_groups
+            .keys()
+            .copied()
+            .sorted_unstable()
+            .collect();
+        let idx = group_ids.iter().position(|g| g == current_group)?;
         let prev_idx = if idx == 0 {
             group_ids.len() - 1
         } else {
@@ -371,7 +379,7 @@ impl SystemWindowTabController {
 
         controller
             .tab_groups
-            .get(group_ids[prev_idx])
+            .get(&group_ids[prev_idx])
             .and_then(|tabs| {
                 tabs.iter()
                     .max_by_key(|tab| tab.last_active_at)
