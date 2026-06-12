@@ -134,10 +134,7 @@ struct Args {
     #[arg(long, action = clap::ArgAction::Append, num_args = 2, value_names = ["OLD_PATH", "NEW_PATH"])]
     diff: Vec<String>,
     /// Uninstall ZZZ from user system
-    #[cfg(all(
-        any(target_os = "linux", target_os = "macos"),
-        not(feature = "no-bundled-uninstall")
-    ))]
+    #[cfg(all(any(target_os = "linux", target_os = "macos"), zzz_bundled_uninstall))]
     #[arg(long)]
     uninstall: bool,
 
@@ -548,10 +545,7 @@ fn run() -> Result<()> {
         anyhow::bail!(msg.join("\n"));
     }
 
-    #[cfg(all(
-        any(target_os = "linux", target_os = "macos"),
-        not(feature = "no-bundled-uninstall")
-    ))]
+    #[cfg(all(any(target_os = "linux", target_os = "macos"), zzz_bundled_uninstall))]
     if args.uninstall {
         static UNINSTALL_SCRIPT: &[u8] = include_bytes!("../../../script/uninstall.sh");
 

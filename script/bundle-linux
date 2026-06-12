@@ -12,8 +12,20 @@ Build a release .tar.gz for Linux.
 Options:
   -h, --help     Display this help and exit.
   --flatpak      Set ZED_BUNDLE_TYPE=flatpak so that this can be included in system info
+  --native       Build the local app with the linux-native profile and target-cpu=native
+
+Environment:
+  ZZZ_PGO_GENERATE_DIR=/abs/dir   Build host binaries with PGO instrumentation into this directory
+  ZZZ_PGO_PROFILE=/abs/file       Build host binaries using this merged .profdata file
+  ZZZ_BOLT_PREPARE=1              Build host binary with relocation info for later perf2bolt/llvm-bolt use
+  ZZZ_BOLT_INSTRUMENT_FILE=/abs/file  Build an instrumented host binary that writes BOLT .fdata here
+  ZZZ_BOLT_PERF=/abs/file         Build host binary, then optimize it with BOLT using this perf.data
+  ZZZ_BOLT_FDATA=/abs/file        Build host binary, then optimize it with BOLT using this .fdata
   "
 }
+
+host_build_profile=release
+host_build_native=false
 
 # Parse all arguments manually
 while [[ $# -gt 0 ]]; do
@@ -24,6 +36,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         --flatpak)
             export ZED_BUNDLE_TYPE=flatpak
+            shift
+            ;;
+        --native)
+            host_build_profile=linux-native
+            host_build_native=true
             shift
             ;;
         --)
@@ -47,6 +64,15 @@ export ZED_BUNDLE=true
 
 channel=$(<crates/zed/RELEASE_CHANNEL)
 target_dir="${CARGO_TARGET_DIR:-target}"
+host_artifact_dir=""
+remote_artifact_dir=""
+bundle_artifact_dir="${target_dir}/${host_build_profile}"
+pgo_generate_dir="${ZZZ_PGO_GENERATE_DIR:-}"
+pgo_profile="${ZZZ_PGO_PROFILE:-}"
+bolt_prepare="${ZZZ_BOLT_PREPARE:-}"
+bolt_instrument_file="${ZZZ_BOLT_INSTRUMENT_FILE:-}"
+bolt_perf="${ZZZ_BOLT_PERF:-}"
+bolt_fdata="${ZZZ_BOLT_FDATA:-}"
 
 version="$(script/get-crate-version zzz)"
 # Set RELEASE_VERSION so it's compiled into GPUI and it knows about the version.
@@ -64,6 +90,83 @@ if command -v rustup >/dev/null 2>&1; then
     rustup_installed=true
 fi
 
+if [[ -n "${pgo_generate_dir}" && -n "${pgo_profile}" ]]; then
+    echo "Error: ZZZ_PGO_GENERATE_DIR and ZZZ_PGO_PROFILE are mutually exclusive" >&2
+    exit 1
+fi
+
+bolt_mode_count=0
+if [[ -n "${bolt_instrument_file}" ]]; then
+    bolt_mode_count=$((bolt_mode_count + 1))
+fi
+if [[ -n "${bolt_perf}" ]]; then
+    bolt_mode_count=$((bolt_mode_count + 1))
+fi
+if [[ -n "${bolt_fdata}" ]]; then
+    bolt_mode_count=$((bolt_mode_count + 1))
+fi
+if (( bolt_mode_count > 1 )); then
+    echo "Error: Choose only one of ZZZ_BOLT_INSTRUMENT_FILE, ZZZ_BOLT_PERF, or ZZZ_BOLT_FDATA" >&2
+    exit 1
+fi
+
+if [[ -n "${pgo_generate_dir}" && "${pgo_generate_dir}" != /* ]]; then
+    echo "Error: ZZZ_PGO_GENERATE_DIR must be an absolute path" >&2
+    exit 1
+fi
+
+if [[ "${pgo_generate_dir}" == "/" ]]; then
+    echo "Error: ZZZ_PGO_GENERATE_DIR cannot be /" >&2
+    exit 1
+fi
+
+if [[ -n "${pgo_profile}" && "${pgo_profile}" != /* ]]; then
+    echo "Error: ZZZ_PGO_PROFILE must be an absolute path" >&2
+    exit 1
+fi
+
+if [[ -n "${pgo_profile}" && ! -f "${pgo_profile}" ]]; then
+    echo "Error: ZZZ_PGO_PROFILE does not exist: ${pgo_profile}" >&2
+    exit 1
+fi
+
+if [[ -n "${bolt_instrument_file}" && "${bolt_instrument_file}" != /* ]]; then
+    echo "Error: ZZZ_BOLT_INSTRUMENT_FILE must be an absolute path" >&2
+    exit 1
+fi
+
+if [[ -n "${bolt_perf}" && "${bolt_perf}" != /* ]]; then
+    echo "Error: ZZZ_BOLT_PERF must be an absolute path" >&2
+    exit 1
+fi
+
+if [[ -n "${bolt_fdata}" && "${bolt_fdata}" != /* ]]; then
+    echo "Error: ZZZ_BOLT_FDATA must be an absolute path" >&2
+    exit 1
+fi
+
+if [[ -n "${bolt_perf}" && ! -f "${bolt_perf}" ]]; then
+    echo "Error: ZZZ_BOLT_PERF does not exist: ${bolt_perf}" >&2
+    exit 1
+fi
+
+if [[ -n "${bolt_fdata}" && ! -f "${bolt_fdata}" ]]; then
+    echo "Error: ZZZ_BOLT_FDATA does not exist: ${bolt_fdata}" >&2
+    exit 1
+fi
+
+if [[ -n "${bolt_instrument_file}" || -n "${bolt_perf}" || -n "${bolt_fdata}" ]]; then
+    if ! command -v llvm-bolt >/dev/null 2>&1; then
+        echo "Error: llvm-bolt is required for BOLT workflows" >&2
+        exit 1
+    fi
+fi
+
+if [[ -n "${bolt_perf}" ]] && ! command -v perf2bolt >/dev/null 2>&1; then
+    echo "Error: perf2bolt is required when ZZZ_BOLT_PERF is set" >&2
+    exit 1
+fi
+
 # Generate the licenses first, so they can be baked into the binaries
 script/generate-licenses
 
@@ -78,18 +181,79 @@ export CC=${CC:-$(which clang)}
 # NOTE: Since RUSTFLAGS env var overrides all .cargo/config.toml rustflags
 # (see https://github.com/rust-lang/cargo/issues/5376), the
 # [target.aarch64-unknown-linux-gnu] section in config.toml has no effect here.
+base_rustflags="${RUSTFLAGS:-}"
 if [[ "$(uname -m)" == "aarch64" ]]; then
-    export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-fuse-ld=lld -C link-args=-Wl,--disable-new-dtags,-rpath,\$ORIGIN/../lib"
+    link_rustflags=" -C link-arg=-fuse-ld=lld -C link-args=-Wl,--disable-new-dtags,-rpath,\$ORIGIN/../lib"
 else
-    export RUSTFLAGS="${RUSTFLAGS:-} -C link-args=-Wl,--disable-new-dtags,-rpath,\$ORIGIN/../lib"
+    link_rustflags=" -C link-args=-Wl,--disable-new-dtags,-rpath,\$ORIGIN/../lib"
 fi
-cargo build --release --target "${target_triple}" --package zzz --package cli
+if [[ -n "${bolt_prepare}" || -n "${bolt_instrument_file}" || -n "${bolt_perf}" || -n "${bolt_fdata}" ]]; then
+    link_rustflags="${link_rustflags},--emit-relocs,-znow"
+fi
+
+host_cargo_args=(--release)
+if [[ "$host_build_profile" != "release" ]]; then
+    host_cargo_args=(--profile "$host_build_profile")
+fi
+host_rustflags="${base_rustflags}${link_rustflags}"
+if [[ "$host_build_native" == true ]]; then
+    host_rustflags="${host_rustflags} -C target-cpu=native"
+fi
+if [[ -n "${pgo_generate_dir}" ]]; then
+    mkdir -p "${pgo_generate_dir}"
+    find "${pgo_generate_dir}" -maxdepth 1 -type f -name '*.profraw' -delete
+    host_rustflags="${host_rustflags} -Cprofile-generate=${pgo_generate_dir}"
+fi
+if [[ -n "${pgo_profile}" ]]; then
+    host_rustflags="${host_rustflags} -Cprofile-use=${pgo_profile} -Cllvm-args=-pgo-warn-missing-function"
+fi
+export RUSTFLAGS="${host_rustflags}"
+cargo build "${host_cargo_args[@]}" --target "${target_triple}" --package zzz --package cli
+host_artifact_dir="${target_dir}/${target_triple}/${host_build_profile}"
+
+host_binary="${host_artifact_dir}/zzz"
+if [[ -n "${bolt_instrument_file}" ]]; then
+    mkdir -p "$(dirname "${bolt_instrument_file}")"
+    instrumented_binary="${host_binary}.bolt-instrumented"
+    llvm-bolt "${host_binary}" \
+        -o "${instrumented_binary}" \
+        --instrument \
+        --instrumentation-file="${bolt_instrument_file}" \
+        --instrumentation-file-append-pid \
+        --update-debug-sections \
+        --use-gnu-stack
+    mv "${instrumented_binary}" "${host_binary}"
+elif [[ -n "${bolt_perf}" || -n "${bolt_fdata}" ]]; then
+    bolt_profile="${bolt_fdata}"
+    if [[ -n "${bolt_perf}" ]]; then
+        bolt_profile="${host_artifact_dir}/zzz.perf.fdata"
+        perf2bolt "${host_binary}" --perfdata="${bolt_perf}" -o "${bolt_profile}"
+    fi
+    optimized_binary="${host_binary}.bolt"
+    llvm-bolt "${host_binary}" \
+        -o "${optimized_binary}" \
+        --data="${bolt_profile}" \
+        --reorder-blocks=ext-tsp \
+        --reorder-functions=hfsort+ \
+        --split-functions \
+        --split-all-cold \
+        --icf=safe \
+        --plt=hot \
+        --dyno-stats \
+        --update-debug-sections \
+        --use-gnu-stack
+    mv "${optimized_binary}" "${host_binary}"
+fi
+
 # Build remote_server in separate invocation to prevent feature unification from other crates
 # from influencing dynamic libraries required by it.
+remote_rustflags="${base_rustflags}${link_rustflags}"
 if [[ "$remote_server_triple" == "$musl_triple" ]]; then
-    export RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=+crt-static"
+    remote_rustflags="${remote_rustflags} -C target-feature=+crt-static"
 fi
+export RUSTFLAGS="${remote_rustflags}"
 cargo build --release --target "${remote_server_triple}" --package remote_server
+remote_artifact_dir="${target_dir}/${remote_server_triple}/release"
 
 # Upload debug info to sentry.io
 if ! command -v sentry-cli >/dev/null 2>&1; then
@@ -103,8 +267,8 @@ else
         for attempt in 1 2 3; do
             echo "Attempting sentry upload (attempt $attempt/3)..."
             if sentry-cli debug-files upload --include-sources --wait -p zed -o zed-dev \
-                "${target_dir}/${target_triple}"/release/zzz \
-                "${target_dir}/${remote_server_triple}"/release/remote_server; then
+                "${host_artifact_dir}/zzz" \
+                "${remote_artifact_dir}/remote_server"; then
                 echo "Sentry upload successful on attempt $attempt"
                 break
             else
@@ -122,12 +286,12 @@ fi
 # Strip debug symbols and save them for upload to DigitalOcean.
 # We use llvm-objcopy because GNU objcopy on older distros (e.g. Ubuntu 20.04)
 # doesn't understand CREL sections produced by newer LLVM.
-llvm-objcopy --strip-debug "${target_dir}/${target_triple}/release/zzz"
-llvm-objcopy --strip-debug "${target_dir}/${target_triple}/release/cli"
-llvm-objcopy --strip-debug "${target_dir}/${remote_server_triple}/release/remote_server"
+llvm-objcopy --strip-debug "${host_artifact_dir}/zzz"
+llvm-objcopy --strip-debug "${host_artifact_dir}/cli"
+llvm-objcopy --strip-debug "${remote_artifact_dir}/remote_server"
 
 # Ensure that remote_server does not depend on libssl nor libcrypto, as we got rid of these deps.
-if ldd "${target_dir}/${remote_server_triple}/release/remote_server" | grep -q 'libcrypto\|libssl'; then
+if ldd "${remote_artifact_dir}/remote_server" | grep -q 'libcrypto\|libssl'; then
     if [[ "$remote_server_triple" == *-musl ]]; then
         echo "Error: remote_server still depends on libssl or libcrypto" && exit 1
     else
@@ -147,14 +311,14 @@ zed_dir="${temp_dir}/zzz$suffix.app"
 
 # Binary
 mkdir -p "${zed_dir}/bin" "${zed_dir}/libexec"
-cp "${target_dir}/${target_triple}/release/zzz" "${zed_dir}/libexec/zzz-editor"
-cp "${target_dir}/${target_triple}/release/cli" "${zed_dir}/bin/zzz"
+cp "${host_artifact_dir}/zzz" "${zed_dir}/libexec/zzz-editor"
+cp "${host_artifact_dir}/cli" "${zed_dir}/bin/zzz"
 
 # Libs
 # Bundle libstdc++ so older supported systems can run binaries built with our
 # toolchain even when their system libstdc++.so.6 lacks required GLIBCXX symbols.
 find_libs() {
-    ldd ${target_dir}/${target_triple}/release/zzz |\
+    ldd "${host_artifact_dir}/zzz" |\
         cut -d' ' -f3 |\
         grep -v '\<\(libc.so\|libgcc_s.so\|libm.so\|libpthread.so\|libdl.so\|libasound.so\)'
 }
@@ -201,7 +365,7 @@ archive="zzz-linux-${arch}.tar.gz"
 
 rm -rf "${archive}"
 remove_match="zzz(-[a-zA-Z0-9]+)?-linux-$(uname -m)\.tar\.gz"
-ls "${target_dir}/release" | grep -E ${remove_match} | xargs -d "\n" -I {} rm -f "${target_dir}/release/{}" || true
-tar -czvf "${target_dir}/release/$archive" -C ${temp_dir} "zzz$suffix.app"
+ls "${bundle_artifact_dir}" | grep -E ${remove_match} | xargs -d "\n" -I {} rm -f "${bundle_artifact_dir}/{}" || true
+tar -czvf "${bundle_artifact_dir}/$archive" -C ${temp_dir} "zzz$suffix.app"
 
-gzip -f --stdout --best "${target_dir}/${remote_server_triple}/release/remote_server" > "${target_dir}/zed-remote-server-linux-${arch}.gz"
+gzip -f --stdout --best "${remote_artifact_dir}/remote_server" > "${target_dir}/zed-remote-server-linux-${arch}.gz"

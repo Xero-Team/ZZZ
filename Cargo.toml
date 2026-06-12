@@ -967,6 +967,14 @@ strip = true
 [profile.release.package]
 zzz = { codegen-units = 16 }
 
+[profile.linux-native]
+inherits = "release"
+
+[profile.linux-native.package]
+# The release profile keeps the desktop binary at 16 CGUs to reduce build time.
+# For linux-native we want the opposite tradeoff and keep full cross-crate optimization.
+zzz = { codegen-units = 1 }
+
 [profile.release-fast]
 inherits = "release"
 debug = "full"

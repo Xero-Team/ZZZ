@@ -17,7 +17,6 @@ name = "cli"
 path = "src/main.rs"
 
 [features]
-no-bundled-uninstall = []
 default = []
 
 [dependencies]

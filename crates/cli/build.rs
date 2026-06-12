@@ -2,8 +2,10 @@
 use std::process::Command;
 
 fn main() {
-    if std::env::var("ZED_UPDATE_EXPLANATION").is_ok() {
-        println!(r#"cargo:rustc-cfg=feature="no-bundled-uninstall""#);
+    println!("cargo:rustc-check-cfg=cfg(zzz_bundled_uninstall)");
+
+    if std::env::var("ZED_UPDATE_EXPLANATION").is_err() {
+        println!("cargo:rustc-cfg=zzz_bundled_uninstall");
     }
 
     if cfg!(target_os = "macos") {
