@@ -991,6 +991,10 @@ negative_feature_names = "deny"
 wildcard_dependencies = "deny"
 let_underscore_future = "deny"
 nonminimal_bool = "deny"
+needless_continue = "deny"
+redundant_else = "deny"
+manual_range_contains = "deny"
+match_result_ok = "deny"
 
 declare_interior_mutable_const = "deny"
 
@@ -1012,8 +1016,7 @@ style = { level = "allow", priority = -1 }
 
 # We periodically evaluate style-only lints from the Clippy index, but keep
 # them out of the default gate unless they remain low-noise across the whole
-# workspace. Current deferred candidates include `redundant_else`,
-# `needless_continue`, and `str_to_string`.
+# workspace. Current deferred candidates include `str_to_string`.
 
 # Individual rules that have violations in the codebase:
 type_complexity = "allow"
