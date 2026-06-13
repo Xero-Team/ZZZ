@@ -6291,6 +6291,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fearless_simd"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b97b65636e5b9ef369943878ac74335ba1c55c1cb6adbf1e2c293c624248d693"
+
+[[package]]
 name = "feature_flags"
 version = "0.1.0"
 dependencies = [
@@ -8020,6 +8026,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hayro-jpeg2000"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c75ab947623ef4ccaa7acf0579edf7cbb5a73838e3839a7be73335e522f433a1"
+dependencies = [
+ "fearless_simd",
+]
+
+[[package]]
 name = "hdrhistogram"
 version = "7.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8632,7 +8647,7 @@ dependencies = [
  "image-webp",
  "moxcms",
  "num-traits",
- "png",
+ "png 0.18.1",
  "qoi",
  "ravif",
  "rayon",
@@ -9522,6 +9537,7 @@ dependencies = [
  "futures 0.3.32",
  "gpui",
  "http_client",
+ "i18n",
  "icons",
  "image",
  "language_model_core",
@@ -9677,6 +9693,7 @@ dependencies = [
  "editor",
  "futures 0.3.32",
  "gpui",
+ "i18n",
  "itertools 0.14.0",
  "language",
  "lsp",
@@ -12098,6 +12115,7 @@ dependencies = [
  "futures 0.3.32",
  "fuzzy",
  "gpui",
+ "i18n",
  "indoc",
  "language",
  "lsp",
@@ -12406,6 +12424,31 @@ name = "pciid-parser"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "978d5ddc523f0b9c63a3ccc75aef5b924962edf2097dd48f5b991df2951482f3"
+
+[[package]]
+name = "pdf_viewer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "db",
+ "editor",
+ "file_icons",
+ "futures 0.3.32",
+ "gpui",
+ "i18n",
+ "image",
+ "language",
+ "log",
+ "project",
+ "serde",
+ "settings",
+ "smallvec",
+ "theme_settings",
+ "ui",
+ "util",
+ "workspace",
+ "zpdf",
+]
 
 [[package]]
 name = "peg"
@@ -13240,6 +13283,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51bae2ac328883f7acdfea3d66a7c35751187f870bc81f94563733a154d7a670"
 dependencies = [
  "plotters-backend",
+]
+
+[[package]]
+name = "png"
+version = "0.17.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82151a2fc869e011c153adc57cf2789ccb8d9906ce52c0b39a6b5697749d7526"
+dependencies = [
+ "bitflags 1.3.2",
+ "crc32fast",
+ "fdeflate",
+ "flate2",
+ "miniz_oxide",
 ]
 
 [[package]]
@@ -14985,7 +15041,7 @@ dependencies = [
  "pico-args",
  "rgb",
  "svgtypes",
- "tiny-skia",
+ "tiny-skia 0.12.0",
  "usvg",
  "zune-jpeg",
 ]
@@ -18212,6 +18268,21 @@ dependencies = [
 
 [[package]]
 name = "tiny-skia"
+version = "0.11.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83d13394d44dae3207b52a326c0c85a8bf87f1541f23b0d143811088497b09ab"
+dependencies = [
+ "arrayref",
+ "arrayvec",
+ "bytemuck",
+ "cfg-if",
+ "log",
+ "png 0.17.16",
+ "tiny-skia-path 0.11.4",
+]
+
+[[package]]
+name = "tiny-skia"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47ffee5eaaf5527f630fb0e356b90ebdec84d5d18d937c5e440350f88c5a91ea"
@@ -18221,8 +18292,19 @@ dependencies = [
  "bytemuck",
  "cfg-if",
  "log",
- "png",
- "tiny-skia-path",
+ "png 0.18.1",
+ "tiny-skia-path 0.12.0",
+]
+
+[[package]]
+name = "tiny-skia-path"
+version = "0.11.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c9e7fc0c2e86a30b117d0462aa261b72b7a99b7ebd7deb3a14ceda95c5bdc93"
+dependencies = [
+ "arrayref",
+ "bytemuck",
+ "strict-num",
 ]
 
 [[package]]
@@ -19221,6 +19303,7 @@ dependencies = [
  "gpui",
  "gpui_macros",
  "gpui_util",
+ "i18n",
  "icons",
  "itertools 0.14.0",
  "log",
@@ -19428,7 +19511,7 @@ dependencies = [
  "siphasher 1.0.2",
  "strict-num",
  "svgtypes",
- "tiny-skia-path",
+ "tiny-skia-path 0.12.0",
  "ttf-parser",
  "unicode-bidi",
  "unicode-script",
@@ -22963,6 +23046,139 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
+name = "zpdf"
+version = "0.4.0"
+source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+dependencies = [
+ "zpdf-color",
+ "zpdf-content",
+ "zpdf-core",
+ "zpdf-display-list",
+ "zpdf-document",
+ "zpdf-font",
+ "zpdf-image",
+ "zpdf-parser",
+ "zpdf-render",
+ "zpdf-render-cpu",
+]
+
+[[package]]
+name = "zpdf-color"
+version = "0.4.0"
+source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+dependencies = [
+ "moxcms",
+ "tracing",
+ "zpdf-core",
+]
+
+[[package]]
+name = "zpdf-content"
+version = "0.4.0"
+source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+dependencies = [
+ "tracing",
+ "zpdf-color",
+ "zpdf-core",
+ "zpdf-display-list",
+ "zpdf-document",
+ "zpdf-font",
+ "zpdf-image",
+ "zpdf-parser",
+]
+
+[[package]]
+name = "zpdf-core"
+version = "0.4.0"
+source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+dependencies = [
+ "smallvec",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "zpdf-display-list"
+version = "0.4.0"
+source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+dependencies = [
+ "smallvec",
+ "zpdf-core",
+]
+
+[[package]]
+name = "zpdf-document"
+version = "0.4.0"
+source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+dependencies = [
+ "tracing",
+ "zpdf-core",
+ "zpdf-font",
+ "zpdf-parser",
+]
+
+[[package]]
+name = "zpdf-font"
+version = "0.4.0"
+source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+dependencies = [
+ "tracing",
+ "ttf-parser",
+ "zpdf-core",
+]
+
+[[package]]
+name = "zpdf-image"
+version = "0.4.0"
+source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+dependencies = [
+ "hayro-jpeg2000",
+ "tracing",
+ "zpdf-color",
+ "zpdf-core",
+ "zune-jpeg",
+]
+
+[[package]]
+name = "zpdf-parser"
+version = "0.4.0"
+source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+dependencies = [
+ "aes",
+ "cbc",
+ "flate2",
+ "sha2 0.10.9",
+ "tracing",
+ "winnow 0.7.15",
+ "zpdf-core",
+ "zune-jpeg",
+]
+
+[[package]]
+name = "zpdf-render"
+version = "0.4.0"
+source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+dependencies = [
+ "zpdf-core",
+ "zpdf-display-list",
+]
+
+[[package]]
+name = "zpdf-render-cpu"
+version = "0.4.0"
+source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+dependencies = [
+ "image",
+ "thiserror 2.0.18",
+ "tiny-skia 0.11.4",
+ "zpdf-content",
+ "zpdf-core",
+ "zpdf-display-list",
+ "zpdf-font",
+ "zpdf-image",
+ "zpdf-render",
+]
+
+[[package]]
 name = "zstd"
 version = "0.11.2+zstd.1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -23189,6 +23405,7 @@ dependencies = [
  "outline_panel",
  "parking_lot",
  "paths",
+ "pdf_viewer",
  "picker",
  "pkg-config",
  "pretty_assertions",
