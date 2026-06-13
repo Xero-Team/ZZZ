@@ -5,6 +5,7 @@ use gpui::{
     KeyContext, ModifiersChangedEvent, MouseButton, ParentElement, Rems, Render, Styled,
     Subscription, WeakEntity, Window, actions, rems,
 };
+use i18n::tr;
 use project::git_store::Repository;
 use ui::{
     FluentBuilder, ToggleButtonGroup, ToggleButtonGroupStyle, ToggleButtonSimple, Tooltip,
@@ -45,6 +46,13 @@ pub struct GitPicker {
 }
 
 impl GitPicker {
+    fn tab_label(tab: GitPickerTab, cx: &App) -> String {
+        match tab {
+            GitPickerTab::Branches => tr(cx, "git_ui.git_picker.tab.branches", "Branches"),
+            GitPickerTab::Stashes => tr(cx, "git_ui.git_picker.tab.stashes", "Stashes"),
+        }
+    }
+
     pub fn new(
         workspace: WeakEntity<Workspace>,
         repository: Option<Entity<Repository>>,
@@ -196,7 +204,7 @@ impl GitPicker {
                 "git-picker-tabs",
                 [
                     ToggleButtonSimple::new(
-                        GitPickerTab::Branches.to_string(),
+                        Self::tab_label(GitPickerTab::Branches, cx),
                         cx.listener(|this, _, window, cx| {
                             this.tab = GitPickerTab::Branches;
                             this.ensure_active_picker(window, cx);
@@ -206,14 +214,18 @@ impl GitPicker {
                     )
                     .tooltip(move |_, cx| {
                         Tooltip::for_action_in(
-                            "Toggle Branch Picker",
+                            tr(
+                                cx,
+                                "git_ui.git_picker.toggle_branch_picker",
+                                "Toggle Branch Picker",
+                            ),
                             &ActivateBranchesTab,
                             &branches_focus_handle,
                             cx,
                         )
                     }),
                     ToggleButtonSimple::new(
-                        GitPickerTab::Stashes.to_string(),
+                        Self::tab_label(GitPickerTab::Stashes, cx),
                         cx.listener(|this, _, window, cx| {
                             this.tab = GitPickerTab::Stashes;
                             this.ensure_active_picker(window, cx);
@@ -223,7 +235,11 @@ impl GitPicker {
                     )
                     .tooltip(move |_, cx| {
                         Tooltip::for_action_in(
-                            "Toggle Stash Picker",
+                            tr(
+                                cx,
+                                "git_ui.git_picker.toggle_stash_picker",
+                                "Toggle Stash Picker",
+                            ),
                             &ActivateStashTab,
                             &stash_focus_handle,
                             cx,

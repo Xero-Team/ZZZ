@@ -1,6 +1,7 @@
 //! UI-related utilities
 
 use gpui::App;
+use i18n::tr;
 use theme::ActiveTheme;
 
 mod apca_contrast;
@@ -24,14 +25,22 @@ pub fn is_light(cx: &mut App) -> bool {
     cx.theme().appearance.is_light()
 }
 
-/// Returns the platform-appropriate label for the "reveal in file manager" action.
-pub fn reveal_in_file_manager_label(is_remote: bool) -> &'static str {
+/// Returns the localized platform-appropriate label for the "reveal in file manager" action.
+pub fn reveal_in_file_manager_label(cx: &App, is_remote: bool) -> String {
     if cfg!(target_os = "macos") && !is_remote {
-        "Reveal in Finder"
+        tr(cx, "ui.reveal_in_file_manager.finder", "Reveal in Finder")
     } else if cfg!(target_os = "windows") && !is_remote {
-        "Reveal in File Explorer"
+        tr(
+            cx,
+            "ui.reveal_in_file_manager.explorer",
+            "Reveal in File Explorer",
+        )
     } else {
-        "Reveal in File Manager"
+        tr(
+            cx,
+            "ui.reveal_in_file_manager.default",
+            "Reveal in File Manager",
+        )
     }
 }
 

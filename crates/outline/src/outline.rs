@@ -10,6 +10,7 @@ use gpui::{
     ParentElement, Point, Render, Styled, StyledText, Task, TextStyle, WeakEntity, Window, div,
     rems,
 };
+use i18n::tr;
 use language::{Outline, OutlineItem};
 use ordered_float::OrderedFloat;
 use picker::{Picker, PickerDelegate};
@@ -261,8 +262,8 @@ impl OutlineViewDelegate {
 impl PickerDelegate for OutlineViewDelegate {
     type ListItem = ListItem;
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Search buffer symbols...".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(cx, "outline.search.placeholder", "Search buffer symbols...").into()
     }
 
     fn match_count(&self) -> usize {

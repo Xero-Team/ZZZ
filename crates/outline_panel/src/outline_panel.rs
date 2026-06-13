@@ -711,7 +711,12 @@ impl OutlinePanel {
         cx.new(|cx| {
             let filter_editor = cx.new(|cx| {
                 let mut editor = Editor::single_line(window, cx);
-                editor.set_placeholder_text("Search buffer symbols...", window, cx);
+                let placeholder = tr(
+                    cx,
+                    "outline_panel.search.placeholder",
+                    "Search buffer symbols...",
+                );
+                editor.set_placeholder_text(&placeholder, window, cx);
                 editor
             });
             let filter_update_subscription = cx.subscribe_in(
@@ -1450,23 +1455,43 @@ impl OutlinePanel {
         let is_foldable = auto_fold_dirs && !is_root && self.is_foldable(&entry);
         let is_unfoldable = auto_fold_dirs && !is_root && self.is_unfoldable(&entry);
 
-        let context_menu = ContextMenu::build(window, cx, |menu, _, _| {
+        let context_menu = ContextMenu::build(window, cx, |menu, _, cx| {
             menu.context(self.focus_handle.clone())
                 .action(
-                    ui::utils::reveal_in_file_manager_label(false),
+                    ui::utils::reveal_in_file_manager_label(cx, false),
                     Box::new(RevealInFileManager),
                 )
-                .action("Open in Terminal", Box::new(OpenInTerminal))
+                .action(
+                    tr(cx, "workspace.pane.open_in_terminal", "Open in Terminal"),
+                    Box::new(OpenInTerminal),
+                )
                 .when(is_unfoldable, |menu| {
-                    menu.action("Unfold Directory", Box::new(UnfoldDirectory))
+                    menu.action(
+                        tr(
+                            cx,
+                            "outline_panel.menu.unfold_directory",
+                            "Unfold Directory",
+                        ),
+                        Box::new(UnfoldDirectory),
+                    )
                 })
                 .when(is_foldable, |menu| {
-                    menu.action("Fold Directory", Box::new(FoldDirectory))
+                    menu.action(
+                        tr(cx, "outline_panel.menu.fold_directory", "Fold Directory"),
+                        Box::new(FoldDirectory),
+                    )
                 })
                 .separator()
-                .action("Copy Path", Box::new(zed_actions::workspace::CopyPath))
                 .action(
-                    "Copy Relative Path",
+                    tr(cx, "project_panel.menu.copy_path", "Copy Path"),
+                    Box::new(zed_actions::workspace::CopyPath),
+                )
+                .action(
+                    tr(
+                        cx,
+                        "project_panel.menu.copy_relative_path",
+                        "Copy Relative Path",
+                    ),
                     Box::new(zed_actions::workspace::CopyRelativePath),
                 )
         });
@@ -2266,11 +2291,11 @@ impl OutlinePanel {
     fn excerpt_label(&self, range: &ExcerptRange<language::Anchor>, cx: &App) -> Option<String> {
         let buffer_snapshot = self.buffer_snapshot_for_id(range.context.start.buffer_id, cx)?;
         let excerpt_range = range.context.to_point(&buffer_snapshot);
-        Some(format!(
-            "Lines {}- {}",
-            excerpt_range.start.row + 1,
-            excerpt_range.end.row + 1,
-        ))
+        Some(
+            tr(cx, "outline_panel.excerpt.lines", "Lines {}- {}")
+                .replacen("{}", &(excerpt_range.start.row + 1).to_string(), 1)
+                .replacen("{}", &(excerpt_range.end.row + 1).to_string(), 1),
+        )
     }
 
     fn render_outline(
@@ -2423,9 +2448,19 @@ impl OutlinePanel {
                             .map(|icon| icon.color(color).into_any_element());
                             (icon, file_name(path.as_std_path()))
                         }
-                        None => (None, "Untitled".to_string()),
+                        None => (
+                            None,
+                            tr(cx, "outline_panel.external_file.untitled", "Untitled"),
+                        ),
                     },
-                    None => (None, "Unknown buffer".to_string()),
+                    None => (
+                        None,
+                        tr(
+                            cx,
+                            "outline_panel.external_file.unknown_buffer",
+                            "Unknown buffer",
+                        ),
+                    ),
                 };
                 (
                     ElementId::from(external_file.buffer_id.to_proto() as usize),
@@ -4622,9 +4657,13 @@ impl OutlinePanel {
     ) -> impl IntoElement {
         let contents = if self.cached_entries.is_empty() {
             let header = if query.is_some() {
-                "No matches for query"
+                tr(cx, "outline_panel.empty.no_matches", "No matches for query")
             } else {
-                "No outlines available"
+                tr(
+                    cx,
+                    "outline_panel.empty.no_outlines",
+                    "No outlines available",
+                )
             };
 
             v_flex()
@@ -4647,7 +4686,14 @@ impl OutlinePanel {
                     h_flex()
                         .gap_1()
                         .justify_center()
-                        .child(Label::new("Toggle Panel With").color(Color::Muted))
+                        .child(
+                            Label::new(tr(
+                                cx,
+                                "outline_panel.empty.toggle_panel_with",
+                                "Toggle Panel With",
+                            ))
+                            .color(Color::Muted),
+                        )
                         .child({
                             let key_binding = match self.position(window, cx) {
                                 DockPosition::Left => {
@@ -4817,9 +4863,21 @@ impl OutlinePanel {
 
     fn render_filter_footer(&mut self, pinned: bool, cx: &mut Context<Self>) -> Div {
         let (pin_button_id, icon, icon_tooltip) = if pinned {
-            ("unpin_button", IconName::Unpin, "Unpin Outline")
+            (
+                "unpin_button",
+                IconName::Unpin,
+                tr(cx, "outline_panel.toolbar.unpin_outline", "Unpin Outline"),
+            )
         } else {
-            ("pin_button", IconName::Pin, "Pin Active Outline")
+            (
+                "pin_button",
+                IconName::Pin,
+                tr(
+                    cx,
+                    "outline_panel.toolbar.pin_active_outline",
+                    "Pin Active Outline",
+                ),
+            )
         };
 
         let has_query = self.query(cx).is_some();
@@ -4847,7 +4905,11 @@ impl OutlinePanel {
                         this.child(
                             IconButton::new("clear_filter", IconName::Close)
                                 .shape(IconButtonShape::Square)
-                                .tooltip(Tooltip::text("Clear Filter"))
+                                .tooltip(Tooltip::text(tr(
+                                    cx,
+                                    "outline_panel.toolbar.clear_filter",
+                                    "Clear Filter",
+                                )))
                                 .on_click(cx.listener(|outline_panel, _, window, cx| {
                                     outline_panel.filter_editor.update(cx, |editor, cx| {
                                         editor.set_text("", window, cx);
@@ -5136,7 +5198,10 @@ impl Render for OutlinePanel {
                         .gap_0p5()
                         .border_b_1()
                         .border_color(cx.theme().colors().border_variant)
-                        .child(Label::new("Searching:").color(Color::Muted))
+                        .child(
+                            Label::new(tr(cx, "outline_panel.search.searching", "Searching:"))
+                                .color(Color::Muted),
+                        )
                         .child(Label::new(query_text)),
                 )
             })

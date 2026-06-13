@@ -2359,47 +2359,46 @@ impl Pane {
                     _ => return Ok(false),
                 }
                 return Ok(true);
-            } else {
-                let answer = pane.update_in(cx, |pane, window, cx| {
-                    pane.activate_item(item_ix, true, true, window, cx);
-                    let title = tr(
-                        cx,
-                        "workspace.pane.conflict_message",
-                        "This file has changed on disk since you started editing it. Do you want to overwrite it?",
-                    );
-                    let overwrite = tr(cx, "workspace.pane.overwrite", "Overwrite");
-                    let discard = tr(cx, "workspace.pane.discard", "Discard");
-                    let cancel = tr(cx, "prompt.common.cancel", "Cancel");
-                    window.prompt(
-                        PromptLevel::Warning,
-                        &title,
-                        None,
-                        &[overwrite.as_str(), discard.as_str(), cancel.as_str()],
-                        cx,
-                    )
-                })?;
-                match answer.await {
-                    Ok(0) => {
-                        pane.update_in(cx, |_, window, cx| {
-                            item.save(
-                                SaveOptions {
-                                    format: should_format,
-                                    force_format,
-                                    autosave: false,
-                                },
-                                project,
-                                window,
-                                cx,
-                            )
-                        })?
-                        .await?
-                    }
-                    Ok(1) => {
-                        pane.update_in(cx, |_, window, cx| item.reload(project, window, cx))?
-                            .await?
-                    }
-                    _ => return Ok(false),
+            }
+            let answer = pane.update_in(cx, |pane, window, cx| {
+                pane.activate_item(item_ix, true, true, window, cx);
+                let title = tr(
+                    cx,
+                    "workspace.pane.conflict_message",
+                    "This file has changed on disk since you started editing it. Do you want to overwrite it?",
+                );
+                let overwrite = tr(cx, "workspace.pane.overwrite", "Overwrite");
+                let discard = tr(cx, "workspace.pane.discard", "Discard");
+                let cancel = tr(cx, "prompt.common.cancel", "Cancel");
+                window.prompt(
+                    PromptLevel::Warning,
+                    &title,
+                    None,
+                    &[overwrite.as_str(), discard.as_str(), cancel.as_str()],
+                    cx,
+                )
+            })?;
+            match answer.await {
+                Ok(0) => {
+                    pane.update_in(cx, |_, window, cx| {
+                        item.save(
+                            SaveOptions {
+                                format: should_format,
+                                force_format,
+                                autosave: false,
+                            },
+                            project,
+                            window,
+                            cx,
+                        )
+                    })?
+                    .await?
                 }
+                Ok(1) => {
+                    pane.update_in(cx, |_, window, cx| item.reload(project, window, cx))?
+                        .await?
+                }
+                _ => return Ok(false),
             }
         } else if is_dirty && (can_save || can_save_as) {
             if save_intent == SaveIntent::Close {
@@ -3109,7 +3108,12 @@ impl Pane {
                             } else {
                                 this.tooltip(move |_, cx| {
                                     let text = text.clone();
-                                    Tooltip::with_meta(text, None, "Read-Only File", cx)
+                                    Tooltip::with_meta(
+                                        text,
+                                        None,
+                                        tr(cx, "workspace.pane.read_only_file", "Read-Only File"),
+                                        cx,
+                                    )
                                 })
                             }
                         }
@@ -3174,9 +3178,20 @@ impl Pane {
                         close_pinned: false,
                     };
                     if let Some(pane) = pane.upgrade() {
+                        let close = tr(cx, "workspace.pane.close", "Close");
+                        let close_others = tr(cx, "workspace.pane.close_others", "Close Others");
+                        let close_multibuffers = tr(
+                            cx,
+                            "workspace.pane.close_multibuffers",
+                            "Close Multibuffers",
+                        );
+                        let close_left = tr(cx, "workspace.pane.close_left", "Close Left");
+                        let close_right = tr(cx, "workspace.pane.close_right", "Close Right");
+                        let close_clean = tr(cx, "workspace.pane.close_clean", "Close Clean");
+                        let close_all = tr(cx, "workspace.pane.close_all", "Close All");
                         menu = menu
                             .entry(
-                                "Close",
+                                close,
                                 Some(Box::new(close_active_item_action)),
                                 window.handler_for(&pane, move |pane, window, cx| {
                                     pane.close_item_by_id(item_id, SaveIntent::Close, window, cx)
@@ -3184,7 +3199,7 @@ impl Pane {
                                 }),
                             )
                             .item(ContextMenuItem::Entry(
-                                ContextMenuEntry::new("Close Others")
+                                ContextMenuEntry::new(close_others)
                                     .action(Box::new(close_inactive_items_action.clone()))
                                     .disabled(total_items == 1)
                                     .handler(window.handler_for(&pane, move |pane, window, cx| {
@@ -3200,7 +3215,7 @@ impl Pane {
                             // We make this optional, instead of using disabled as to not overwhelm the context menu unnecessarily
                             .extend(has_multibuffer_items.then(|| {
                                 ContextMenuItem::Entry(
-                                    ContextMenuEntry::new("Close Multibuffers")
+                                    ContextMenuEntry::new(close_multibuffers)
                                         .action(Box::new(close_multibuffers_action.clone()))
                                         .handler(window.handler_for(
                                             &pane,
@@ -3217,7 +3232,7 @@ impl Pane {
                             }))
                             .separator()
                             .item(ContextMenuItem::Entry(
-                                ContextMenuEntry::new("Close Left")
+                                ContextMenuEntry::new(close_left)
                                     .action(Box::new(close_items_to_the_left_action.clone()))
                                     .disabled(!has_items_to_left)
                                     .handler(window.handler_for(&pane, move |pane, window, cx| {
@@ -3231,7 +3246,7 @@ impl Pane {
                                     })),
                             ))
                             .item(ContextMenuItem::Entry(
-                                ContextMenuEntry::new("Close Right")
+                                ContextMenuEntry::new(close_right)
                                     .action(Box::new(close_items_to_the_right_action.clone()))
                                     .disabled(!has_items_to_right)
                                     .handler(window.handler_for(&pane, move |pane, window, cx| {
@@ -3246,7 +3261,7 @@ impl Pane {
                             ))
                             .separator()
                             .item(ContextMenuItem::Entry(
-                                ContextMenuEntry::new("Close Clean")
+                                ContextMenuEntry::new(close_clean)
                                     .action(Box::new(close_clean_items_action.clone()))
                                     .disabled(!has_clean_items)
                                     .handler(window.handler_for(&pane, move |pane, window, cx| {
@@ -3259,7 +3274,7 @@ impl Pane {
                                     })),
                             ))
                             .entry(
-                                "Close All",
+                                close_all,
                                 Some(Box::new(close_all_items_action.clone())),
                                 window.handler_for(&pane, move |pane, window, cx| {
                                     pane.close_all_items(&close_all_items_action, window, cx)
@@ -3271,7 +3286,7 @@ impl Pane {
                             menu.separator().map(|this| {
                                 if is_pinned {
                                     this.entry(
-                                        "Unpin Tab",
+                                        tr(cx, "workspace.pane.unpin_tab", "Unpin Tab"),
                                         Some(TogglePinTab.boxed_clone()),
                                         window.handler_for(&pane, move |pane, window, cx| {
                                             pane.unpin_tab_at(ix, window, cx);
@@ -3279,7 +3294,7 @@ impl Pane {
                                     )
                                 } else {
                                     this.entry(
-                                        "Pin Tab",
+                                        tr(cx, "workspace.pane.pin_tab", "Pin Tab"),
                                         Some(TogglePinTab.boxed_clone()),
                                         window.handler_for(&pane, move |pane, window, cx| {
                                             pane.pin_tab_at(ix, window, cx);
@@ -3291,9 +3306,17 @@ impl Pane {
 
                         if capability != Capability::ReadOnly {
                             let read_only_label = if capability.editable() {
-                                "Make File Read-Only"
+                                tr(
+                                    cx,
+                                    "workspace.pane.make_file_read_only",
+                                    "Make File Read-Only",
+                                )
                             } else {
-                                "Make File Editable"
+                                tr(
+                                    cx,
+                                    "workspace.pane.make_file_editable",
+                                    "Make File Editable",
+                                )
                             };
                             menu = menu.separator().entry(
                                 read_only_label,
@@ -3384,7 +3407,7 @@ impl Pane {
                                 .when(is_local, |menu| {
                                     menu.when_some(reveal_path, |menu, reveal_path| {
                                         menu.separator().entry(
-                                            ui::utils::reveal_in_file_manager_label(is_remote),
+                                            ui::utils::reveal_in_file_manager_label(cx, is_remote),
                                             Some(Box::new(
                                                 zed_actions::editor::RevealInFileManager,
                                             )),

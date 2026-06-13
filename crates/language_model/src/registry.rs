@@ -4,6 +4,7 @@ use crate::{
 };
 use collections::{BTreeMap, HashSet};
 use gpui::{App, Context, Entity, EventEmitter, Global, prelude::*};
+use i18n::tr;
 use std::{str::FromStr, sync::Arc};
 use thiserror::Error;
 
@@ -38,6 +39,29 @@ impl std::fmt::Debug for ConfigurationError {
             Self::ProviderNotAuthenticated(provider) => {
                 write!(f, "ProviderNotAuthenticated({})", provider.id())
             }
+        }
+    }
+}
+
+impl ConfigurationError {
+    pub fn localized_message(&self, cx: &App) -> String {
+        match self {
+            Self::NoProvider => tr(
+                cx,
+                "language_model.registry.no_provider",
+                "Configure at least one LLM provider to start using the panel.",
+            ),
+            Self::ModelNotFound => tr(
+                cx,
+                "language_model.registry.model_not_found",
+                "LLM provider is not configured or does not support the configured model.",
+            ),
+            Self::ProviderNotAuthenticated(provider) => tr(
+                cx,
+                "language_model.registry.provider_not_authenticated",
+                "{} LLM provider is not configured.",
+            )
+            .replacen("{}", provider.name().0.as_ref(), 1),
         }
     }
 }

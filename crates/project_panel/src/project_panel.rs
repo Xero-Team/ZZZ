@@ -1110,7 +1110,7 @@ impl ProjectPanel {
                         .separator()
                         .when(is_local, |menu| {
                             menu.action(
-                                ui::utils::reveal_in_file_manager_label(is_remote),
+                                ui::utils::reveal_in_file_manager_label(cx, is_remote),
                                 Box::new(RevealInFileManager),
                             )
                         })
@@ -2156,15 +2156,15 @@ impl ProjectPanel {
                         }
                         directory_id = entry.id;
                         break;
-                    } else {
-                        if let Some(parent_path) = entry.path.parent()
-                            && let Some(parent_entry) = worktree.entry_for_path(parent_path)
-                        {
-                            entry = parent_entry;
-                            continue;
-                        }
-                        return;
                     }
+
+                    if let Some(parent_path) = entry.path.parent()
+                        && let Some(parent_entry) = worktree.entry_for_path(parent_path)
+                    {
+                        entry = parent_entry;
+                        continue;
+                    }
+                    return;
                 }
             } else {
                 return;

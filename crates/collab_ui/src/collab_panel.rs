@@ -95,6 +95,10 @@ struct ChannelMoveClipboard {
 const COLLABORATION_PANEL_KEY: &str = "CollaborationPanel";
 const TOAST_DURATION: Duration = Duration::from_secs(5);
 
+fn tr_arg(cx: &App, key: &'static str, fallback: &'static str, value: &str) -> String {
+    tr(cx, key, fallback).replacen("{}", value, 1)
+}
+
 pub fn init(cx: &mut App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {
         workspace.register_action(|workspace, _: &ToggleFocus, window, cx| {
@@ -237,7 +241,15 @@ impl CollabPanel {
         cx.new(|cx| {
             let filter_editor = cx.new(|cx| {
                 let mut editor = Editor::single_line(window, cx);
-                editor.set_placeholder_text("Search channels...", window, cx);
+                editor.set_placeholder_text(
+                    &tr(
+                        cx,
+                        "collab_ui.collab_panel.placeholder.search_channels",
+                        "Search channels...",
+                    ),
+                    window,
+                    cx,
+                );
                 editor
             });
 
@@ -1014,7 +1026,12 @@ impl CollabPanel {
         let user_id = user.id;
         let is_current_user =
             self.user_store.read(cx).current_user().map(|user| user.id) == Some(user_id);
-        let tooltip = format!("Follow {}", user.github_login);
+        let tooltip = tr_arg(
+            cx,
+            "collab_ui.collab_panel.tooltip.follow",
+            "Follow {}",
+            &user.github_login,
+        );
 
         let is_call_admin = ActiveCall::global(cx).read(cx).room().is_some_and(|room| {
             room.read(cx).local_participant().role == proto::ChannelRole::Admin
@@ -1031,7 +1048,11 @@ impl CollabPanel {
         } else if is_current_user {
             IconButton::new("leave-call", IconName::Exit)
                 .icon_size(IconSize::Small)
-                .tooltip(Tooltip::text("Leave Call"))
+                .tooltip(Tooltip::text(tr(
+                    cx,
+                    "collab_ui.collab_panel.tooltip.leave_call",
+                    "Leave Call",
+                )))
                 .on_click(move |_, window, cx| Self::leave_call(window, cx))
                 .into_any_element()
         } else if role == proto::ChannelRole::Guest {
@@ -1059,7 +1080,11 @@ impl CollabPanel {
             .child(render_participant_name_and_handle(user))
             .toggle_state(is_selected)
             .end_slot(end_slot)
-            .tooltip(Tooltip::text("Click to Follow"))
+            .tooltip(Tooltip::text(tr(
+                cx,
+                "collab_ui.collab_panel.tooltip.click_to_follow",
+                "Click to Follow",
+            )))
             .when_some(peer_id, |el, peer_id| {
                 if role == proto::ChannelRole::Guest {
                     return el;
@@ -1097,11 +1122,22 @@ impl CollabPanel {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let project_name: SharedString = if worktree_root_names.is_empty() {
-            "untitled".to_string()
+            tr(cx, "collab_ui.collab_panel.label.untitled", "untitled")
         } else {
             worktree_root_names.join(", ")
         }
         .into();
+        let failed_to_join_project = tr(
+            cx,
+            "collab_ui.collab_panel.error.failed_to_join_project",
+            "Failed to join project",
+        );
+        let open_project_tooltip = tr_arg(
+            cx,
+            "collab_ui.collab_panel.tooltip.open_project",
+            "Open {}",
+            project_name.as_ref(),
+        );
 
         ListItem::new(project_id as usize)
             .height(rems_from_px(24.))
@@ -1112,7 +1148,7 @@ impl CollabPanel {
                         let app_state = workspace.app_state().clone();
                         workspace::join_in_room_project(project_id, host_user_id, app_state, cx)
                             .detach_and_prompt_err(
-                                "Failed to join project",
+                                &failed_to_join_project,
                                 window,
                                 cx,
                                 |error, _, _| Some(format!("{error:#}")),
@@ -1130,8 +1166,8 @@ impl CollabPanel {
                             .color(Color::Muted),
                     ),
             )
-            .child(Label::new(project_name.clone()))
-            .tooltip(Tooltip::text(format!("Open {}", project_name)))
+            .child(Label::new(project_name))
+            .tooltip(Tooltip::text(open_project_tooltip))
     }
 
     fn render_participant_screen(
@@ -1157,9 +1193,17 @@ impl CollabPanel {
                             .color(Color::Muted),
                     ),
             )
-            .child(Label::new("Screen"))
+            .child(Label::new(tr(
+                cx,
+                "collab_ui.collab_panel.label.screen",
+                "Screen",
+            )))
             .when_some(peer_id, |this, _| {
-                this.tooltip(Tooltip::text("Shared screen unavailable"))
+                this.tooltip(Tooltip::text(tr(
+                    cx,
+                    "collab_ui.collab_panel.tooltip.shared_screen_unavailable",
+                    "Shared screen unavailable",
+                )))
             })
     }
 
@@ -1213,8 +1257,16 @@ impl CollabPanel {
                             }),
                     ),
             )
-            .child(Label::new("notes"))
-            .tooltip(Tooltip::text("Open Channel Notes"))
+            .child(Label::new(tr(
+                cx,
+                "collab_ui.collab_panel.label.notes",
+                "notes",
+            )))
+            .tooltip(Tooltip::text(tr(
+                cx,
+                "collab_ui.collab_panel.tooltip.open_channel_notes",
+                "Open Channel Notes",
+            )))
     }
 
     fn has_subchannels(&self, ix: usize) -> bool {
@@ -1243,10 +1295,19 @@ impl CollabPanel {
             return;
         }
 
-        let context_menu = ContextMenu::build(window, cx, |mut context_menu, window, _| {
+        let context_menu = ContextMenu::build(window, cx, |mut context_menu, window, cx| {
             if role == proto::ChannelRole::Guest {
+                let failed_to_grant_mic_access = tr(
+                    cx,
+                    "collab_ui.collab_panel.error.failed_to_grant_mic_access",
+                    "Failed to grant mic access",
+                );
                 context_menu = context_menu.entry(
-                    "Grant Mic Access",
+                    tr(
+                        cx,
+                        "collab_ui.collab_panel.menu.grant_mic_access",
+                        "Grant Mic Access",
+                    ),
                     None,
                     window.handler_for(&this, move |_, window, cx| {
                         ActiveCall::global(cx)
@@ -1263,7 +1324,7 @@ impl CollabPanel {
                                 })
                             })
                             .detach_and_prompt_err(
-                                "Failed to grant mic access",
+                                &failed_to_grant_mic_access,
                                 window,
                                 cx,
                                 |_, _, _| None,
@@ -1272,8 +1333,17 @@ impl CollabPanel {
                 );
             }
             if role == proto::ChannelRole::Guest || role == proto::ChannelRole::Talker {
+                let failed_to_grant_write_access = tr(
+                    cx,
+                    "collab_ui.collab_panel.error.failed_to_grant_write_access",
+                    "Failed to grant write access",
+                );
                 context_menu = context_menu.entry(
-                    "Grant Write Access",
+                    tr(
+                        cx,
+                        "collab_ui.collab_panel.menu.grant_write_access",
+                        "Grant Write Access",
+                    ),
                     None,
                     window.handler_for(&this, move |_, window, cx| {
                         ActiveCall::global(cx)
@@ -1289,21 +1359,37 @@ impl CollabPanel {
                                     )
                                 })
                             })
-                            .detach_and_prompt_err("Failed to grant write access", window, cx, |e, _, _| {
-                                match e.error_code() {
-                                    ErrorCode::NeedsCla => Some("This user has not yet signed the CLA at https://zed.dev/cla.".into()),
+                            .detach_and_prompt_err(
+                                &failed_to_grant_write_access,
+                                window,
+                                cx,
+                                |e, _, cx| match e.error_code() {
+                                    ErrorCode::NeedsCla => Some(tr(
+                                        cx,
+                                        "collab_ui.collab_panel.error.user_has_not_signed_cla",
+                                        "This user has not yet signed the CLA at https://zed.dev/cla.",
+                                    )),
                                     _ => None,
-                                }
-                            })
+                                },
+                            )
                     }),
                 );
             }
             if role == proto::ChannelRole::Member || role == proto::ChannelRole::Talker {
                 let label = if role == proto::ChannelRole::Talker {
-                    "Mute"
+                    tr(cx, "collab_ui.collab_panel.menu.mute", "Mute")
                 } else {
-                    "Revoke Access"
+                    tr(
+                        cx,
+                        "collab_ui.collab_panel.menu.revoke_access",
+                        "Revoke Access",
+                    )
                 };
+                let failed_to_revoke_access = tr(
+                    cx,
+                    "collab_ui.collab_panel.error.failed_to_revoke_access",
+                    "Failed to revoke access",
+                );
                 context_menu = context_menu.entry(
                     label,
                     None,
@@ -1322,7 +1408,7 @@ impl CollabPanel {
                                 })
                             })
                             .detach_and_prompt_err(
-                                "Failed to revoke access",
+                                &failed_to_revoke_access,
                                 window,
                                 cx,
                                 |_, _, _| None,
