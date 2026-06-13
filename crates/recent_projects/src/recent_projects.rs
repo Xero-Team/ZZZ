@@ -2239,20 +2239,20 @@ impl RecentProjectsDelegate {
                             });
                         }
                         return;
-                    } else {
-                        workspace
-                            .open_workspace_for_paths(OpenMode::NewWindow, paths, window, cx)
-                            .detach_and_prompt_err(
-                                &i18n::tr(
-                                    cx,
-                                    "recent_projects.failed_to_open_project",
-                                    "Failed to open project",
-                                ),
-                                window,
-                                cx,
-                                |_, _, _| None,
-                            );
                     }
+
+                    workspace
+                        .open_workspace_for_paths(OpenMode::NewWindow, paths, window, cx)
+                        .detach_and_prompt_err(
+                            &i18n::tr(
+                                cx,
+                                "recent_projects.failed_to_open_project",
+                                "Failed to open project",
+                            ),
+                            window,
+                            cx,
+                            |_, _, _| None,
+                        );
                 }
                 SerializedWorkspaceLocation::Remote(mut connection) => {
                     let app_state = workspace.app_state().clone();

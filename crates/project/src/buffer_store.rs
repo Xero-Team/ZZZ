@@ -990,10 +990,9 @@ impl BufferStore {
                 } else if entry.get().upgrade().is_some() {
                     if is_remote {
                         return Ok(());
-                    } else {
-                        debug_panic!("buffer {remote_id} was already registered");
-                        anyhow::bail!("buffer {remote_id} was already registered");
                     }
+                    debug_panic!("buffer {remote_id} was already registered");
+                    anyhow::bail!("buffer {remote_id} was already registered");
                 }
                 entry.insert(open_buffer);
                 _expect_path_to_exist = true;

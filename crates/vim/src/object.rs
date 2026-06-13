@@ -1441,10 +1441,10 @@ fn sentence(
             if around {
                 start = Some(offset);
                 continue;
-            } else {
-                end = offset;
-                break;
             }
+
+            end = offset;
+            break;
         }
 
         if char != '\n' {

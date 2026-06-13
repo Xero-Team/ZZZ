@@ -283,10 +283,13 @@ impl InlineAssistant {
                 let configure = tr(cx, "agent_ui.inline_assistant.configure", "Configure");
                 let cancel = tr(cx, "agent_ui.inline_assistant.cancel", "Cancel");
                 cx.spawn_in(window, async move |_, cx| {
+                    let error_message = cx
+                        .update(|_, cx| error.localized_message(cx))
+                        .unwrap_or_else(|_| error.to_string());
                     let answer = cx
                         .prompt(
                             gpui::PromptLevel::Warning,
-                            &error.to_string(),
+                            &error_message,
                             None,
                             &[configure.as_str(), cancel.as_str()],
                         )
@@ -793,27 +796,27 @@ impl InlineAssistant {
                     {
                         self.focus_assist(*assist_id, window, cx);
                         return;
-                    } else {
-                        let distance_from_selection = assist_range
-                            .start
+                    }
+
+                    let distance_from_selection = assist_range
+                        .start
+                        .0
+                        .abs_diff(selection.start.0)
+                        .min(assist_range.start.0.abs_diff(selection.end.0))
+                        + assist_range
+                            .end
                             .0
                             .abs_diff(selection.start.0)
-                            .min(assist_range.start.0.abs_diff(selection.end.0))
-                            + assist_range
-                                .end
-                                .0
-                                .abs_diff(selection.start.0)
-                                .min(assist_range.end.0.abs_diff(selection.end.0));
-                        match closest_assist_fallback {
-                            Some((_, old_distance)) => {
-                                if distance_from_selection < old_distance {
-                                    closest_assist_fallback =
-                                        Some((assist_id, distance_from_selection));
-                                }
+                            .min(assist_range.end.0.abs_diff(selection.end.0));
+                    match closest_assist_fallback {
+                        Some((_, old_distance)) => {
+                            if distance_from_selection < old_distance {
+                                closest_assist_fallback =
+                                    Some((assist_id, distance_from_selection));
                             }
-                            None => {
-                                closest_assist_fallback = Some((assist_id, distance_from_selection))
-                            }
+                        }
+                        None => {
+                            closest_assist_fallback = Some((assist_id, distance_from_selection))
                         }
                     }
                 }

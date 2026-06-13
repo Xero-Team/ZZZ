@@ -1138,7 +1138,7 @@ impl EditPredictionStore {
                         debug_tx
                             .unbounded_send(DebugEvent::ContextRetrievalStarted(
                                 ContextRetrievalStartedDebugEvent {
-                                    project_entity_id: project_entity_id,
+                                    project_entity_id,
                                     timestamp: Instant::now(),
                                     search_prompt: String::new(),
                                 },
@@ -1154,7 +1154,7 @@ impl EditPredictionStore {
                         debug_tx
                             .unbounded_send(DebugEvent::ContextRetrievalFinished(
                                 ContextRetrievalFinishedDebugEvent {
-                                    project_entity_id: project_entity_id,
+                                    project_entity_id,
                                     timestamp: Instant::now(),
                                     metadata: vec![
                                         (

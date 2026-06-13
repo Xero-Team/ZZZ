@@ -2072,7 +2072,7 @@ mod tests {
             compute_prediction_reversal_ratio(&prompt_inputs, predicted, Path::new("src/test.rs"));
 
         assert!(
-            ratio >= 0.0 && ratio <= 1.0,
+            (0.0..=1.0).contains(&ratio),
             "Ratio should be valid even with lenient fallback, got {}",
             ratio
         );

@@ -5001,9 +5001,8 @@ impl Editor {
                 }
                 if selection.id == state.selection_id {
                     return true;
-                } else {
-                    i += 1;
                 }
+                i += 1;
             }
             false
         });
@@ -5999,11 +5998,10 @@ impl Editor {
                 *context_menu = None;
                 cx.notify();
                 return;
-            } else {
-                // Otherwise, clear it and start a new one
-                *context_menu = None;
-                cx.notify();
             }
+            // Otherwise, clear it and start a new one
+            *context_menu = None;
+            cx.notify();
         }
         drop(context_menu);
         let snapshot = self.snapshot(window, cx);
@@ -11498,7 +11496,7 @@ impl Editor {
                     selection.tail()
                 };
                 CursorData {
-                    anchor: anchor,
+                    anchor,
                     point: anchor.to_point(&display_snapshot.buffer_snapshot()),
                 }
             })
@@ -12278,7 +12276,7 @@ impl Editor {
             text.chars()
                 .map(|c| {
                     let code_point = c as u32;
-                    if code_point >= 33 && code_point <= 126 {
+                    if (33..=126).contains(&code_point) {
                         return char::from_u32(33 + ((code_point + 14) % 94)).unwrap();
                     }
                     c
@@ -15831,8 +15829,6 @@ impl Editor {
                         edits.push((prefix_range, empty_str.clone()));
                         edits.push((suffix_range, empty_str.clone()));
                     }
-                } else {
-                    continue;
                 }
             }
 
@@ -15851,7 +15847,6 @@ impl Editor {
                     match row.cmp(&MultiBufferRow(selection.end.row)) {
                         Ordering::Less => {
                             suffixes_inserted.next();
-                            continue;
                         }
                         Ordering::Greater => break,
                         Ordering::Equal => {
@@ -23846,12 +23841,10 @@ fn comment_delimiter_for_newline(
 
         if line_content_after_cursor.trim().is_empty() {
             return None;
-        } else {
-            return Some(delimiter.clone());
         }
-    } else {
-        None
+        return Some(delimiter.clone());
     }
+    None
 }
 
 fn documentation_delimiter_for_newline(
@@ -25937,9 +25930,8 @@ impl<T: InvalidationRegion> InvalidationStack<T> {
 
             if all_selections_inside_invalidation_ranges {
                 break;
-            } else {
-                self.pop();
             }
+            self.pop();
         }
     }
 }

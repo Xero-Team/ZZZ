@@ -901,9 +901,9 @@ fn resolve_preview_image(
                 return Some(ImageSource::Resource(Resource::Path(Arc::from(
                     absolute_path.as_path(),
                 ))));
-            } else {
-                return None;
             }
+
+            return None;
         }
     }
 

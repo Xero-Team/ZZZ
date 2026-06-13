@@ -3022,7 +3022,7 @@ mod tests {
             thought_signature: None,
         };
         let tool_result = LanguageModelToolResult {
-            tool_use_id: tool_use_id,
+            tool_use_id,
             tool_name: Arc::from("search"),
             is_error: false,
             content: vec![LanguageModelToolResultContent::Text(Arc::from("result"))],

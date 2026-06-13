@@ -340,18 +340,14 @@ impl Inner {
                 Ok(data) => {
                     if formats.contains(&data.format) {
                         return Ok(data);
-                    } else {
-                        log::trace!(
-                            "Conversion to {} responded with {} which is not supported",
-                            self.atom_name(*format),
-                            self.atom_name(data.format),
-                        );
-                        continue;
                     }
+                    log::trace!(
+                        "Conversion to {} responded with {} which is not supported",
+                        self.atom_name(*format),
+                        self.atom_name(data.format),
+                    );
                 }
-                Err(Error::ContentNotAvailable) => {
-                    continue;
-                }
+                Err(Error::ContentNotAvailable) => {}
                 Err(e) => {
                     log::trace!("Conversion to {} failed: {}", self.atom_name(*format), e);
                     return Err(e);

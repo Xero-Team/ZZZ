@@ -947,9 +947,7 @@ impl SettingsObserver {
                 user_settings_watcher = Some(cx.observe_global::<SettingsStore>(move |_, cx| {
                     if let Some(new_settings) = cx.global::<SettingsStore>().raw_user_settings() {
                         if Some(new_settings) != user_settings.as_ref() {
-                            if let Some(new_settings_string) =
-                                serde_json::to_string(new_settings).ok()
-                            {
+                            if let Ok(new_settings_string) = serde_json::to_string(new_settings) {
                                 user_settings = Some(new_settings.clone());
                                 upstream_client
                                     .send(proto::UpdateUserSettings {

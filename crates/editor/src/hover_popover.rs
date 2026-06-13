@@ -303,9 +303,8 @@ fn show_hover(
         {
             // Hover triggered from same location as last time. Don't show again.
             return None;
-        } else {
-            hide_hover(editor, cx);
         }
+        hide_hover(editor, cx);
     }
 
     let hover_popover_delay = EditorSettings::get_global(cx).hover_popover_delay.0;
@@ -822,7 +821,7 @@ pub fn open_markdown_url(link: SharedString, window: &mut Window, cx: &mut App) 
                 };
                 let mut accum = 0u32;
                 for c in fragment.chars() {
-                    if c >= '0' && c <= '9' && accum < u32::MAX / 2 {
+                    if ('0'..='9').contains(&c) && accum < u32::MAX / 2 {
                         accum *= 10;
                         accum += c as u32 - '0' as u32;
                     } else if accum > 0 {

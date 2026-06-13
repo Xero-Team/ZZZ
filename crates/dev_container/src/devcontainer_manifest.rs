@@ -2162,7 +2162,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
 
             let dev_container_up = DevContainerUp {
                 container_id: docker_ps.id,
-                remote_user: remote_user,
+                remote_user,
                 remote_workspace_folder: remote_folder.display().to_string(),
                 extension_ids: self.extension_ids(),
                 remote_env,

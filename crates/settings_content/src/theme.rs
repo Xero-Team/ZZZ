@@ -75,7 +75,6 @@ impl<'de> Deserialize<'de> for FontFeaturesContent {
                                         value,
                                         key
                                     );
-                                    continue;
                                 }
                             }
                         }

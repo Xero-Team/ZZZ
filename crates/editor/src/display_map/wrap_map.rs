@@ -532,17 +532,15 @@ impl WrapSnapshot {
                                 ..chunk
                             });
                             break;
-                        } else {
-                            if let Some(width) =
-                                chunk.renderer.as_ref().and_then(|r| r.measured_width)
-                            {
-                                line_fragments
-                                    .push(gpui::LineFragment::element(width, chunk.text.len()));
-                            } else {
-                                line_fragments.push(gpui::LineFragment::text(chunk.text));
-                            }
-                            line.push_str(chunk.text);
                         }
+                        if let Some(width) = chunk.renderer.as_ref().and_then(|r| r.measured_width)
+                        {
+                            line_fragments
+                                .push(gpui::LineFragment::element(width, chunk.text.len()));
+                        } else {
+                            line_fragments.push(gpui::LineFragment::text(chunk.text));
+                        }
+                        line.push_str(chunk.text);
                     }
 
                     if line.is_empty() {
@@ -947,9 +945,8 @@ impl WrapSnapshot {
         while let Some(transform) = cursor.item() {
             if transform.is_isomorphic() && cursor.start().1.column() == 0 {
                 return Some(cmp::max(cursor.start().0.row(), point.row()));
-            } else {
-                cursor.next();
             }
+            cursor.next();
         }
 
         None

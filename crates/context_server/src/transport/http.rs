@@ -299,7 +299,6 @@ impl HttpTransport {
                                 || line.starts_with("retry:")
                             {
                                 // Ignore other SSE fields
-                                continue;
                             } else if in_message {
                                 // Continuation of data
                                 data_buffer.push(line);

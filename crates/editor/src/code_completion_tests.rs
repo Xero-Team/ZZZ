@@ -473,7 +473,7 @@ impl CompletionBuilder {
                 server_id: LanguageServerId(0),
                 lsp_completion: Box::new(CompletionItem {
                     label: label.to_string(),
-                    kind: kind,
+                    kind,
                     sort_text: Some(sort_text.to_string()),
                     filter_text: filter_text.map(|text| text.to_string()),
                     ..Default::default()

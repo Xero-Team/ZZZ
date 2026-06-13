@@ -605,19 +605,18 @@ fn wrap_with_prefix(
                     is_first_line = false;
                     current_line = subsequent_lines_prefix.clone();
                     current_line_len = subsequent_lines_prefix_len;
-                } else if have_preceding_whitespace {
-                    continue;
-                } else if current_line_len + 1 > wrap_column
-                    && current_line_len != current_prefix_len
-                {
-                    wrapped_text.push_str(current_line.trim_end());
-                    wrapped_text.push('\n');
-                    is_first_line = false;
-                    current_line = subsequent_lines_prefix.clone();
-                    current_line_len = subsequent_lines_prefix_len;
-                } else if current_line_len != current_prefix_len {
-                    current_line.push(' ');
-                    current_line_len += 1;
+                } else if !have_preceding_whitespace {
+                    if current_line_len + 1 > wrap_column && current_line_len != current_prefix_len
+                    {
+                        wrapped_text.push_str(current_line.trim_end());
+                        wrapped_text.push('\n');
+                        is_first_line = false;
+                        current_line = subsequent_lines_prefix.clone();
+                        current_line_len = subsequent_lines_prefix_len;
+                    } else if current_line_len != current_prefix_len {
+                        current_line.push(' ');
+                        current_line_len += 1;
+                    }
                 }
             }
         }

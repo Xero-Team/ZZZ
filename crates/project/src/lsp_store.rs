@@ -3986,7 +3986,7 @@ impl LocalLspStore {
 }
 
 fn notify_server_capabilities_updated(server: &LanguageServer, cx: &mut Context<LspStore>) {
-    if let Some(capabilities) = serde_json::to_string(&server.capabilities()).ok() {
+    if let Ok(capabilities) = serde_json::to_string(&server.capabilities()) {
         cx.emit(LspStoreEvent::LanguageServerUpdate {
             language_server_id: server.server_id(),
             name: Some(server.name()),
@@ -5600,8 +5600,6 @@ impl LspStore {
                             });
                         }
                     }
-                } else {
-                    continue;
                 }
             }
             rebase.finish()
@@ -13936,11 +13934,9 @@ fn lsp_workspace_diagnostics_refresh(
                 match response_result {
                     ConnectionResult::Timeout => {
                         log::error!("Timeout during workspace diagnostics pull");
-                        continue 'request;
                     }
                     ConnectionResult::ConnectionReset => {
                         log::error!("Server closed a workspace diagnostics pull request");
-                        continue 'request;
                     }
                     ConnectionResult::Result(Err(e)) => {
                         log::error!("Error during workspace diagnostics pull: {e:#}");

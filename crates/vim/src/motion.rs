@@ -1359,12 +1359,12 @@ impl Motion {
 
                 if start < end {
                     return Some((start..end, MotionKind::Exclusive));
-                } else {
-                    return Some((end..start, MotionKind::Exclusive));
                 }
-            } else {
-                return None;
+
+                return Some((end..start, MotionKind::Exclusive));
             }
+
+            return None;
         }
         let maybe_new_point = self.move_point(
             map,
@@ -2565,7 +2565,9 @@ fn find_matching_c_preprocessor_directive(
             if line_start.starts_with("\n\n") {
                 // empty line
                 continue;
-            } else if line_start.starts_with("#endif") {
+            }
+
+            if line_start.starts_with("#endif") {
                 depth += 1;
             } else if line_start.starts_with("#if") {
                 if depth > 0 {
@@ -2752,8 +2754,6 @@ fn matching(
                     closest_distance = distance;
                 }
             }
-
-            continue;
         }
 
         closest_pair_destination
@@ -2810,7 +2810,6 @@ fn unmatched_forward(
                     if distance < closest_distance {
                         closest_closing_destination = Some(close_range.start);
                         closest_distance = distance;
-                        continue;
                     }
                 }
             }
@@ -2854,7 +2853,6 @@ fn unmatched_backward(
                     if distance < closest_distance {
                         closest_starting_destination = Some(start_range.start);
                         closest_distance = distance;
-                        continue;
                     }
                 }
             }
@@ -2865,9 +2863,8 @@ fn unmatched_backward(
             .unwrap_or(display_point);
         if new_point == display_point {
             break;
-        } else {
-            display_point = new_point;
         }
+        display_point = new_point;
     }
     display_point
 }

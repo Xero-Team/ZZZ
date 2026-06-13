@@ -113,9 +113,9 @@ impl OpenPathDelegate {
                             path: user_input.file.clone(),
                             is_dir: false,
                         });
-                    } else {
-                        i -= 1;
                     }
+
+                    i -= 1;
                 }
                 let id = self.string_matches.get(i)?.candidate_id;
                 entries.iter().find(|entry| entry.path.id == id).cloned()
@@ -750,9 +750,9 @@ impl PickerDelegate for OpenPathDelegate {
             let icon = if candidate.is_dir {
                 if is_current_dir_candidate {
                     return Some(Icon::new(IconName::ReplyArrowRight).color(Color::Muted));
-                } else {
-                    FileIcons::get_folder_icon(false, path, cx)?
                 }
+
+                FileIcons::get_folder_icon(false, path, cx)?
             } else {
                 FileIcons::get_icon(path, cx)?
             };

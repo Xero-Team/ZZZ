@@ -218,15 +218,15 @@ impl KeystrokeInput {
                     close_keystrokes.push(keystroke.clone());
                     if close_keystrokes.len() == action_keystrokes.len() {
                         return CloseKeystrokeResult::Close;
-                    } else {
-                        self.close_keystrokes = Some(close_keystrokes);
-                        self.update_clear_close_keystrokes_timer(cx);
-                        return CloseKeystrokeResult::Partial;
                     }
-                } else {
-                    self.end_close_keystrokes_capture();
-                    return CloseKeystrokeResult::None;
+
+                    self.close_keystrokes = Some(close_keystrokes);
+                    self.update_clear_close_keystrokes_timer(cx);
+                    return CloseKeystrokeResult::Partial;
                 }
+
+                self.end_close_keystrokes_capture();
+                return CloseKeystrokeResult::None;
             }
         } else if let Some(first_action_keystroke) = action_keystrokes.first()
             && keystroke.should_match(first_action_keystroke)

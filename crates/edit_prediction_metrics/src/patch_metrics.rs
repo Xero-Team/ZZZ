@@ -903,7 +903,7 @@ mod test_optimization {
             let score = delta_chr_f(original, expected, actual).score;
             // Just verify it produces a reasonable score (0-100)
             assert!(
-                score >= 0.0 && score <= 100.0,
+                (0.0..=100.0).contains(&score),
                 "Score {} out of range for ({}, {}, {})",
                 score,
                 original,

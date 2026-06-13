@@ -2440,9 +2440,9 @@ impl Thread {
                     cancellation_rx,
                     cx,
                 ));
-            } else {
-                return None;
             }
+
+            return None;
         }
 
         if let Some(mut sender) = self
@@ -4078,7 +4078,7 @@ impl ToolCallEventStream {
                                 );
                                 return Err(anyhow!(reason));
                             }
-                            ToolPermissionDecision::Confirm => continue,
+                            ToolPermissionDecision::Confirm => {}
                         }
                     }
                 }

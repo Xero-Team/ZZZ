@@ -209,15 +209,12 @@ impl History {
     }
 
     fn group_until(&mut self, transaction_id: TransactionId) {
-        let mut count = 0;
-        for transaction in self.undo_stack.iter().rev() {
+        for (count, transaction) in self.undo_stack.iter().rev().enumerate() {
             if transaction.id == transaction_id {
                 self.group_trailing(count);
                 break;
             } else if transaction.suppress_grouping {
                 break;
-            } else {
-                count += 1;
             }
         }
     }

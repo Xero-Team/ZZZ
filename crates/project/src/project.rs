@@ -2654,7 +2654,7 @@ impl Project {
             Worktree::restore_entry(trash_entry, worktree, cx)
                 .await
                 .map(|rel_path_buf| ProjectPath {
-                    worktree_id: worktree_id,
+                    worktree_id,
                     path: Arc::from(rel_path_buf.as_rel_path()),
                 })
         })
@@ -3118,7 +3118,7 @@ impl Project {
         downloading_files.lock().insert(
             key,
             DownloadingFile {
-                destination_path: destination_path,
+                destination_path,
                 chunks: Vec::new(),
                 total_size: 0,
                 file_id: Some(file_id),
@@ -3617,7 +3617,7 @@ impl Project {
                         });
                     }
                     proto::update_language_server::Variant::RegisteredForBuffer(update) => {
-                        if let Some(buffer_id) = BufferId::new(update.buffer_id).ok() {
+                        if let Ok(buffer_id) = BufferId::new(update.buffer_id) {
                             cx.emit(Event::LanguageServerBufferRegistered {
                                 buffer_id,
                                 server_id: *language_server_id,
@@ -5841,9 +5841,8 @@ impl Project {
                     return Task::ready(Err(anyhow!(
                         "can't synchronize remote buffers on a readonly project"
                     )));
-                } else {
-                    remote_id
                 }
+                remote_id
             }
             ProjectClientState::Shared { .. } | ProjectClientState::Local => {
                 return Task::ready(Err(anyhow!(

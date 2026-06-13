@@ -2018,11 +2018,10 @@ impl LocalWorktree {
                         let result = callback(update.clone());
                         if result.await {
                             break;
-                        } else {
-                            log::info!("waiting to resume updates");
-                            if resume_updates_rx.next().await.is_none() {
-                                return Some(());
-                            }
+                        }
+                        log::info!("waiting to resume updates");
+                        if resume_updates_rx.next().await.is_none() {
+                            return Some(());
                         }
                     }
                 }

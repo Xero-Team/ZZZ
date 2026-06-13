@@ -470,7 +470,7 @@ impl RemoteConnection for SshRemoteConnection {
         } else {
             let mut proxy_args = vec![];
             for env_var in VARS {
-                if let Some(value) = std::env::var(env_var).ok() {
+                if let Ok(value) = std::env::var(env_var) {
                     proxy_args.push(format!("{env_var}={value}"));
                 }
             }
@@ -1003,9 +1003,8 @@ impl SshRemoteConnection {
                             .is_ok()
                         {
                             return Err(e);
-                        } else {
-                            anyhow::bail!("Neither curl nor wget is available");
                         }
+                        anyhow::bail!("Neither curl nor wget is available");
                     }
                 }
             }

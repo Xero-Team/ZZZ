@@ -777,9 +777,8 @@ impl PaneAxis {
                         return Some(true); // pane found and operations already done
                     } else if self.axis != axis {
                         return Some(false); // pane found but this is not the correct axis direction
-                    } else {
-                        found_axis_index = Some(i); // pane found and this is correct direction
                     }
+                    found_axis_index = Some(i); // pane found and this is correct direction
                 }
             }
             found_axis_index?; // no pane found

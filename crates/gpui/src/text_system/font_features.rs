@@ -96,7 +96,6 @@ impl<'de> serde::Deserialize<'de> for FontFeatures {
                                         value,
                                         key
                                     );
-                                    continue;
                                 }
                             }
                         }

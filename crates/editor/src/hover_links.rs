@@ -1039,12 +1039,11 @@ fn surrounding_filename(
             if inside_quotes {
                 found_end = true;
                 break;
-            } else {
-                // Otherwise, we skip the quote
-                inside_quotes = true;
-                token_end += ch.len_utf8();
-                continue;
             }
+            // Otherwise, we skip the quote
+            inside_quotes = true;
+            token_end += ch.len_utf8();
+            continue;
         }
         filename.push(ch);
         token_end += ch.len_utf8();

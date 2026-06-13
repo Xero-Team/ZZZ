@@ -243,7 +243,7 @@ pub fn deploy_context_menu(
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("svg"))
             });
 
-        ui::ContextMenu::build(window, cx, |menu, _window, _cx| {
+        ui::ContextMenu::build(window, cx, |menu, _window, cx| {
             let builder = menu
                 .on_blur_subscription(Subscription::new(|| {}))
                 .when(run_to_cursor, |builder| {
@@ -288,7 +288,7 @@ pub fn deploy_context_menu(
                 .separator()
                 .action_disabled_when(
                     !has_reveal_target,
-                    ui::utils::reveal_in_file_manager_label(false),
+                    ui::utils::reveal_in_file_manager_label(cx, false),
                     Box::new(RevealInFileManager),
                 )
                 .when(is_markdown, |builder| {

@@ -1623,9 +1623,8 @@ impl CodeActionContents {
         if let Some(tasks) = &self.tasks {
             if let Some((kind, task)) = tasks.templates.get(index) {
                 return Some(CodeActionsItem::Task(kind.clone(), task.clone()));
-            } else {
-                index -= tasks.templates.len();
             }
+            index -= tasks.templates.len();
         }
         if let Some(actions) = &self.actions {
             if let Some(available) = actions.get(index) {
@@ -1633,9 +1632,8 @@ impl CodeActionContents {
                     action: available.action.clone(),
                     provider: available.provider.clone(),
                 });
-            } else {
-                index -= actions.len();
             }
+            index -= actions.len();
         }
 
         self.debug_scenarios

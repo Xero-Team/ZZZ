@@ -324,7 +324,7 @@ impl CodegenAlternative {
             generation: Task::ready(()),
             diff: Diff::default(),
             builder,
-            active: active,
+            active,
             edits: Vec::new(),
             line_operations: Vec::new(),
             range,
@@ -1270,7 +1270,7 @@ impl CodegenAlternative {
             ));
 
             let language_model_text_stream = LanguageModelTextStream {
-                message_id: message_id,
+                message_id,
                 stream: text_stream,
                 last_token_usage,
             };
@@ -1405,15 +1405,15 @@ where
                                 .any(|prefix| trimmed_line.ends_with(prefix))
                         {
                             break;
-                        } else {
-                            if this.line_end {
-                                chunk.push('\n');
-                                this.line_end = false;
-                            }
-
-                            chunk.push_str(&line_without_cursor);
-                            consumed += line.len();
                         }
+
+                        if this.line_end {
+                            chunk.push('\n');
+                            this.line_end = false;
+                        }
+
+                        chunk.push_str(&line_without_cursor);
+                        consumed += line.len();
                     }
                 }
             }

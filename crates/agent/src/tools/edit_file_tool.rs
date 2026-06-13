@@ -483,9 +483,7 @@ impl AgentTool for EditFileTool {
                 .unwrap_or(input.path.to_string_lossy().into_owned())
                 .into(),
             Err(raw_input) => {
-                if let Some(input) =
-                    serde_json::from_value::<EditFileToolPartialInput>(raw_input).ok()
-                {
+                if let Ok(input) = serde_json::from_value::<EditFileToolPartialInput>(raw_input) {
                     let path = input.path.unwrap_or_default();
                     let path = path.trim();
                     if !path.is_empty() {

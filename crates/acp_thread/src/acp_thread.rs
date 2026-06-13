@@ -1566,9 +1566,7 @@ impl AcpThread {
         for entry in self.entries.iter().rev() {
             match entry {
                 AgentThreadEntry::UserMessage(..) => return false,
-                AgentThreadEntry::AssistantMessage(..) | AgentThreadEntry::CompletedPlan(..) => {
-                    continue;
-                }
+                AgentThreadEntry::AssistantMessage(..) | AgentThreadEntry::CompletedPlan(..) => {}
                 AgentThreadEntry::ToolCall(..) => return true,
             }
         }

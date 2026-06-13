@@ -8700,9 +8700,9 @@ impl ThreadView {
                         if !source.is_empty() {
                             if source == "User canceled" {
                                 return None;
-                            } else {
-                                return Some(SharedString::from(source));
                             }
+
+                            return Some(SharedString::from(source));
                         }
                     }
                 }

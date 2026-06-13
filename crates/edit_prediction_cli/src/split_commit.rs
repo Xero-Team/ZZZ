@@ -737,11 +737,11 @@ pub fn imitate_human_edits(
                     split_found = true;
                     last_old_end = op.old_range().end;
                     break;
-                } else {
-                    edit_index += repl_len;
-                    new_src.push_str(&ins);
-                    last_old_end = op.old_range().end;
                 }
+
+                edit_index += repl_len;
+                new_src.push_str(&ins);
+                last_old_end = op.old_range().end;
             }
             DiffTag::Insert => {
                 let repl: String = op.new_range().map(|i| tgt_tokens[i]).collect();
@@ -751,10 +751,10 @@ pub fn imitate_human_edits(
                     new_src.push_str(&repl[..safe_offset]);
                     split_found = true;
                     break;
-                } else {
-                    edit_index += repl.len();
-                    new_src.push_str(&repl);
                 }
+
+                edit_index += repl.len();
+                new_src.push_str(&repl);
             }
             DiffTag::Delete => {
                 let repl: String = op.old_range().map(|i| src_tokens[i]).collect();
@@ -765,11 +765,11 @@ pub fn imitate_human_edits(
                     split_found = true;
                     last_old_end = op.old_range().start + safe_offset.min(op.old_range().len());
                     break;
-                } else {
-                    edit_index += repl.len();
-                    new_src.push_str(&repl);
-                    last_old_end = op.old_range().end;
                 }
+
+                edit_index += repl.len();
+                new_src.push_str(&repl);
+                last_old_end = op.old_range().end;
             }
         }
     }

@@ -1013,9 +1013,8 @@ impl EditorElement {
                     editor.selection_drag_state = SelectionDragState::None;
                     cx.stop_propagation();
                     return;
-                } else {
-                    debug_panic!("drag state can never be in ready state after drag")
                 }
+                debug_panic!("drag state can never be in ready state after drag")
             }
             SelectionDragState::Dragging { ref selection, .. } => {
                 let snapshot = editor.snapshot(window, cx);
@@ -6135,9 +6134,8 @@ impl EditorElement {
                                 };
                                 current_paint = Some((new_background, new_row..new_row, edges));
                                 continue;
-                            } else {
-                                current_range.end = current_range.end.next_row();
                             }
+                            current_range.end = current_range.end.next_row();
                         }
                         None => {
                             let edges = Edges {
@@ -10633,12 +10631,11 @@ impl Element for EditorElement {
                                 window,
                                 cx,
                             );
-                        } else {
-                            debug_panic!(
-                                "dropping block resize because prepaint depth \
-                                 limit was reached"
-                            );
                         }
+                        debug_panic!(
+                            "dropping block resize because prepaint depth \
+                             limit was reached"
+                        );
                     }
 
                     let sticky_buffer_header = if self.should_show_buffer_headers() {
@@ -12895,7 +12892,7 @@ mod tests {
             scroll_position: gpui::Point::default(),
             dimensions: &DIMENSIONS,
             hitbox: &HITBOX,
-            snapshot: snapshot,
+            snapshot,
             row_infos: &ROW_INFOS,
         }
     }

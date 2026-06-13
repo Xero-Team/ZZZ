@@ -47,7 +47,6 @@ fn monitor_hangs(cx: &App) {
                         Ok(_) => {
                             hang_time = None;
                             hanging = false;
-                            continue;
                         }
                         Err(e) => {
                             let is_full = e.into_send_error().is_full();

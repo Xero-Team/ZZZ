@@ -196,12 +196,11 @@ async fn build_remote_server_from_source(
         let path = std::path::PathBuf::from(path);
         if path.exists() {
             return Ok(Some(path));
-        } else {
-            log::warn!(
-                "ZED_COPY_REMOTE_SERVER path does not exist, falling back to ZED_BUILD_REMOTE_SERVER: {}",
-                path.display()
-            );
         }
+        log::warn!(
+            "ZED_COPY_REMOTE_SERVER path does not exist, falling back to ZED_BUILD_REMOTE_SERVER: {}",
+            path.display()
+        );
     }
 
     // By default, we make building remote server from source opt-out and we do not force artifact compression

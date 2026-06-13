@@ -1021,7 +1021,7 @@ impl VariableList {
 
         for entry in self.entries.iter() {
             match &entry.entry {
-                DapEntry::Watcher { .. } => continue,
+                DapEntry::Watcher { .. } => {}
                 DapEntry::Variable(dap) => scopes[idx].1.push(dap.clone()),
                 DapEntry::Scope(scope) => {
                     if !scopes.is_empty() {

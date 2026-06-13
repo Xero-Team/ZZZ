@@ -284,10 +284,7 @@ fn should_skip_commit(commit: &CommitInfo) -> bool {
         .lines()
         .filter(|l| l.starts_with('+') || l.starts_with('-'))
         .count();
-    lines_changed < 30
-        || lines_changed > 1000
-        || is_non_code_commit(commit)
-        || is_rename_commit(commit)
+    !(30..=1000).contains(&lines_changed) || is_non_code_commit(commit) || is_rename_commit(commit)
 }
 
 fn is_non_code_commit(commit: &CommitInfo) -> bool {

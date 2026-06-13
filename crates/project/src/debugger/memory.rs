@@ -324,9 +324,8 @@ impl Iterator for MemoryIterator {
             if let Some(next_cell) = current_memory_chunk.next() {
                 self.start += 1;
                 return Some(next_cell);
-            } else {
-                self.current_known_page.take();
             }
+            self.current_known_page.take();
         }
         if !self.fetch_next_page() {
             self.start += 1;

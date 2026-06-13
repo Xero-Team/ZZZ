@@ -84,9 +84,8 @@ async fn start(
     if cfg!(any(test, feature = "test-support")) {
         if let Some(connection) = binary.connection.clone() {
             return Ok(Box::new(FakeTransport::start_tcp(connection, cx).await?));
-        } else {
-            return Ok(Box::new(FakeTransport::start_stdio(cx).await?));
         }
+        return Ok(Box::new(FakeTransport::start_stdio(cx).await?));
     }
 
     if binary.connection.is_some() {

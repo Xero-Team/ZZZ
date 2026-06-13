@@ -3048,9 +3048,8 @@ impl GitRepository for RealGitRepository {
 
                 if stderr_output.is_empty() {
                     anyhow::bail!("git log command failed with {}", status);
-                } else {
-                    anyhow::bail!("git log command failed with {}: {}", status, stderr_output);
                 }
+                anyhow::bail!("git log command failed with {}: {}", status, stderr_output);
             }
             Ok(())
         }
@@ -3655,7 +3654,7 @@ fn parse_branch_input(input: &str) -> Result<Vec<Branch>> {
                 sha: head_sha,
                 subject,
                 commit_timestamp: commiterdate,
-                author_name: author_name,
+                author_name,
                 has_parent: !parent_sha.is_empty(),
             }),
             upstream: if upstream_name.is_empty() {

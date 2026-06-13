@@ -2073,7 +2073,7 @@ async fn test_breakpoint_jumps_only_in_proper_split_view(
             let mut total_active_debug_lines = 0;
             for pane in [&pane_a, &pane_b] {
                 for item in pane.read(cx).items() {
-                    if let Some(editor) = item.to_any_view().downcast::<Editor>().ok() {
+                    if let Ok(editor) = item.to_any_view().downcast::<Editor>() {
                         total_active_debug_lines += editor
                             .read(cx)
                             .highlighted_rows::<ActiveDebugLine>()
@@ -2187,7 +2187,7 @@ async fn test_breakpoint_jumps_only_in_proper_split_view(
             let mut total_active_debug_lines = 0;
             for pane in [&pane_a, &pane_b] {
                 for item in pane.read(cx).items() {
-                    if let Some(editor) = item.to_any_view().downcast::<Editor>().ok() {
+                    if let Ok(editor) = item.to_any_view().downcast::<Editor>() {
                         total_active_debug_lines += editor
                             .read(cx)
                             .highlighted_rows::<ActiveDebugLine>()
@@ -2321,7 +2321,7 @@ async fn test_breakpoint_jumps_only_in_proper_split_view(
             let mut total_active_debug_lines = 0;
             for pane in [&pane_a, &pane_b, &pane_c] {
                 for item in pane.read(cx).items() {
-                    if let Some(editor) = item.to_any_view().downcast::<Editor>().ok() {
+                    if let Ok(editor) = item.to_any_view().downcast::<Editor>() {
                         total_active_debug_lines += editor
                             .read(cx)
                             .highlighted_rows::<ActiveDebugLine>()

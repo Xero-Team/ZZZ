@@ -22,7 +22,10 @@ if command -v ccache >/dev/null 2>&1 && [[ -z "${CCACHE_DIR:-}" ]]; then
 fi
 
 set -x
-"${CARGO:-cargo}" clippy "$@" --release --all-targets --all-features -- --deny warnings
+"${CARGO:-cargo}" clippy "$@" --release --all-targets --all-features -- \
+    --deny warnings \
+    --deny clippy::manual_range_contains \
+    --deny clippy::match_result_ok
 
 if [[ -n "${ZED_STRICT_CLIPPY:-}" ]]; then
     # Run a second pass for low-noise strict manifest checks across the requested packages.

@@ -402,7 +402,7 @@ impl DapStore {
                 let executor = cx.background_executor().clone();
 
                 if let Some(locator) = locator.cloned() {
-                    cx.background_spawn(async move {
+                    return cx.background_spawn(async move {
                         let result = locator
                             .run(build_command.clone(), executor)
                             .await
@@ -415,13 +415,12 @@ impl DapStore {
                             "None of the locators for task `{}` completed successfully",
                             build_command.label
                         )
-                    })
-                } else {
-                    Task::ready(Err(anyhow!(
-                        "Couldn't find any locator for task `{}`. Specify the `attach` or `launch` arguments in your debug scenario definition",
-                        build_command.label
-                    )))
+                    });
                 }
+                Task::ready(Err(anyhow!(
+                    "Couldn't find any locator for task `{}`. Specify the `attach` or `launch` arguments in your debug scenario definition",
+                    build_command.label
+                )))
             }
             DapStoreMode::Remote(remote) => {
                 let request = remote.upstream_client.request(proto::RunDebugLocators {

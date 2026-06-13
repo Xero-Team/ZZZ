@@ -1750,7 +1750,7 @@ impl SettingsWindow {
             worktree_root_dirs: HashMap::default(),
             files: vec![],
 
-            current_file: current_file,
+            current_file,
             project_setting_file_buffers: HashMap::default(),
             pages: vec![],
             sub_page_stack: vec![],

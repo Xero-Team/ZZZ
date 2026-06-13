@@ -62,9 +62,8 @@ impl CreaseSnapshot {
                 Ordering::Equal => {
                     if item.crease.range().start.is_valid(snapshot) {
                         return Some(&item.crease);
-                    } else {
-                        cursor.next();
                     }
+                    cursor.next();
                 }
                 Ordering::Greater => break,
             }

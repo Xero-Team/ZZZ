@@ -2163,7 +2163,7 @@ impl GitStore {
                 cx.background_executor().spawn(async move {
                     client
                         .request(proto::GitInit {
-                            project_id: project_id,
+                            project_id,
                             abs_path: path.to_string_lossy().into_owned(),
                             fallback_branch_name,
                         })

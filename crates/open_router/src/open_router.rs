@@ -524,7 +524,7 @@ pub async fn stream_completion(
                 Err(OpenRouterError::ServerOverloaded { retry_after })
             }
             _ => Err(OpenRouterError::ApiError(ApiError {
-                code: code,
+                code,
                 message: error_response.message,
             })),
         }
@@ -631,7 +631,7 @@ pub async fn list_models(
                 Err(OpenRouterError::ServerOverloaded { retry_after })
             }
             _ => Err(OpenRouterError::ApiError(ApiError {
-                code: code,
+                code,
                 message: error_response.message,
             })),
         }

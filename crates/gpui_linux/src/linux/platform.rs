@@ -585,8 +585,6 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
                     // we lose the zeroizing capabilities at this boundary,
                     // a current limitation GPUI's credentials api
                     return Ok(Some((username.to_string(), secret.to_vec())));
-                } else {
-                    continue;
                 }
             }
             Ok(None)

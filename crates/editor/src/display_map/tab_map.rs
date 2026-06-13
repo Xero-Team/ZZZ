@@ -480,12 +480,11 @@ impl TabSnapshot {
                     ),
                     Bias::Right => (cursor.byte_offset(), expanded_chars, 0),
                 };
-            } else {
-                // otherwise we only want to move the cursor collapse column forward
-                collapsed_column = collapsed_column - tab_len + 1;
-                seek_target = (collapsed_column - cursor.byte_offset)
-                    .min(self.max_expansion_column - cursor.byte_offset);
             }
+            // otherwise we only want to move the cursor collapse column forward
+            collapsed_column = collapsed_column - tab_len + 1;
+            seek_target = (collapsed_column - cursor.byte_offset)
+                .min(self.max_expansion_column - cursor.byte_offset);
         }
 
         let collapsed_bytes = cursor.byte_offset();

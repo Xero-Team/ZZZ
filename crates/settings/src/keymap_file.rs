@@ -998,29 +998,29 @@ impl KeymapFile {
                     );
                     keymap_contents.replace_range(replace_range, &replace_value);
                     return Ok(keymap_contents);
-                } else {
-                    // if we are replacing one of multiple bindings in a section
-                    // with a context change, remove the existing binding from the
-                    // section, then treat this operation as an add operation of the
-                    // new binding with the updated context.
-
-                    let (replace_range, replace_value) = replace_top_level_array_value_in_json_text(
-                        &keymap_contents,
-                        &[
-                            binding_location.kind.key_path(),
-                            binding_location.keystrokes_str,
-                        ],
-                        None,
-                        None,
-                        binding_location.index,
-                        tab_size,
-                    );
-                    keymap_contents.replace_range(replace_range, &replace_value);
-                    operation = KeybindUpdateOperation::Add {
-                        source,
-                        from: Some(target),
-                    };
                 }
+
+                // if we are replacing one of multiple bindings in a section
+                // with a context change, remove the existing binding from the
+                // section, then treat this operation as an add operation of the
+                // new binding with the updated context.
+
+                let (replace_range, replace_value) = replace_top_level_array_value_in_json_text(
+                    &keymap_contents,
+                    &[
+                        binding_location.kind.key_path(),
+                        binding_location.keystrokes_str,
+                    ],
+                    None,
+                    None,
+                    binding_location.index,
+                    tab_size,
+                );
+                keymap_contents.replace_range(replace_range, &replace_value);
+                operation = KeybindUpdateOperation::Add {
+                    source,
+                    from: Some(target),
+                };
             } else {
                 log::warn!(
                     "Failed to find keybinding to update `{:?} -> {}` creating new binding for `{:?} -> {}` instead",

@@ -1377,7 +1377,7 @@ impl Element for TerminalElement {
                                 line_height: layout.dimensions.line_height,
                                 lines: highlighted_range_lines,
                                 color: *color,
-                                corner_radius: corner_radius,
+                                corner_radius,
                             };
                             hr.paint(true, bounds, window);
                         }

@@ -160,7 +160,6 @@ impl From<RemoteConnectionOptions> for RemoteHostLocation {
                 Some(SharedString::new(docker_connection_options.name)),
                 SharedString::new(docker_connection_options.container_id),
             ),
-            #[cfg(feature = "test-support")]
             RemoteConnectionOptions::Mock(mock) => {
                 (None, SharedString::new(format!("mock-{}", mock.id)))
             }
@@ -572,9 +571,8 @@ impl TrustedWorktreesStore {
 
         if !other_paths.is_empty() {
             return other_paths;
-        } else {
-            single_file_paths
         }
+        single_file_paths
     }
 
     /// Switches the "trust nothing" mode to "automatically trust everything".

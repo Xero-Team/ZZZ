@@ -417,9 +417,8 @@ fn substitute_all_template_variables_in_str<A: AsRef<str>>(
             if !default.is_empty() {
                 // Strip the colon and return the default value
                 return Ok(Some(default[1..].to_owned()));
-            } else {
-                bail!("Unknown variable name: {variable_name}");
             }
+            bail!("Unknown variable name: {variable_name}");
         }
         // This is an unknown variable.
         // We should not error out, as they may come from user environment (e.g.

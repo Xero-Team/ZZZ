@@ -277,9 +277,8 @@ impl ContextMenu {
                 if let Some(ignore_until) = this.ignore_blur_until {
                     if Instant::now() < ignore_until {
                         return;
-                    } else {
-                        this.ignore_blur_until = None;
                     }
+                    this.ignore_blur_until = None;
                 }
 
                 if this.main_menu.is_none() {
@@ -354,9 +353,8 @@ impl ContextMenu {
                     if let Some(ignore_until) = this.ignore_blur_until {
                         if Instant::now() < ignore_until {
                             return;
-                        } else {
-                            this.ignore_blur_until = None;
                         }
+                        this.ignore_blur_until = None;
                     }
 
                     if this.main_menu.is_none() {
@@ -436,9 +434,8 @@ impl ContextMenu {
                         if let Some(ignore_until) = this.ignore_blur_until {
                             if Instant::now() < ignore_until {
                                 return;
-                            } else {
-                                this.ignore_blur_until = None;
                             }
+                            this.ignore_blur_until = None;
                         }
 
                         if this.main_menu.is_none() {
@@ -1077,13 +1074,12 @@ impl ContextMenu {
             if self.items.len() <= next_index {
                 self.select_first(&SelectFirst, window, cx);
                 return;
-            } else {
-                for (ix, item) in self.items.iter().enumerate().skip(next_index) {
-                    if item.is_selectable() {
-                        self.select_index(ix, window, cx);
-                        cx.notify();
-                        return;
-                    }
+            }
+            for (ix, item) in self.items.iter().enumerate().skip(next_index) {
+                if item.is_selectable() {
+                    self.select_index(ix, window, cx);
+                    cx.notify();
+                    return;
                 }
             }
         }

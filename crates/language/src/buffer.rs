@@ -5641,16 +5641,15 @@ impl<'a> Iterator for BufferChunks<'a> {
                 if self.range.start < capture.node.start_byte() {
                     next_capture_start = capture.node.start_byte();
                     break;
-                } else {
-                    let highlight_id =
-                        highlights.highlight_maps[capture.grammar_index].get(capture.index);
-                    if let Some(highlight_id) = highlight_id {
-                        highlights
-                            .stack
-                            .push((capture.node.end_byte(), highlight_id));
-                    }
-                    highlights.next_capture = highlights.captures.next();
                 }
+                let highlight_id =
+                    highlights.highlight_maps[capture.grammar_index].get(capture.index);
+                if let Some(highlight_id) = highlight_id {
+                    highlights
+                        .stack
+                        .push((capture.node.end_byte(), highlight_id));
+                }
+                highlights.next_capture = highlights.captures.next();
             }
         }
 

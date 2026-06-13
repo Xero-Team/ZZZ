@@ -124,9 +124,9 @@ fn migrate_builtin_entry(
         for &field in REGISTRY_COMPATIBLE_FIELDS {
             if let Some(value) = old_obj.get(field) {
                 match value {
-                    Value::Array(arr) if arr.is_empty() => continue,
-                    Value::Object(map) if map.is_empty() => continue,
-                    Value::Null => continue,
+                    Value::Array(arr) if arr.is_empty() => {}
+                    Value::Object(map) if map.is_empty() => {}
+                    Value::Null => {}
                     _ => {
                         custom_obj.insert(field.to_string(), value.clone());
                     }
@@ -143,9 +143,9 @@ fn migrate_builtin_entry(
         for &field in REGISTRY_COMPATIBLE_FIELDS {
             if let Some(value) = old_obj.get(field) {
                 match value {
-                    Value::Array(arr) if arr.is_empty() => continue,
-                    Value::Object(map) if map.is_empty() => continue,
-                    Value::Null => continue,
+                    Value::Array(arr) if arr.is_empty() => {}
+                    Value::Object(map) if map.is_empty() => {}
+                    Value::Null => {}
                     _ => {
                         registry_obj.insert(field.to_string(), value.clone());
                     }

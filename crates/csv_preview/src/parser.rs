@@ -223,38 +223,38 @@ fn parse_csv_with_positions(
                     // Handle Windows line endings (\r\n): account for \r byte, let \n be handled next
                     current_offset += char_byte_len;
                     continue;
-                } else {
-                    if !in_quotes {
-                        // Standalone \r row separator
-                        current_line += 1;
-                        // Row separator (only when not inside quotes)
-                        let field_end_offset = current_offset;
-                        current_row.push((
-                            current_field.clone().into(),
-                            field_start_offset..field_end_offset,
-                        ));
-                        current_field.clear();
+                }
 
-                        // Only add non-empty rows
-                        if !current_row.is_empty()
-                            && !current_row.iter().all(|(field, _)| field.trim().is_empty())
-                        {
-                            rows.push(current_row);
-                            // Add line number info for this row
-                            let line_info = if row_start_line == current_line - 1 {
-                                LineNumber::Line(row_start_line)
-                            } else {
-                                LineNumber::LineRange(row_start_line, current_line - 1)
-                            };
-                            line_numbers.push(line_info);
-                        }
-                        current_row = Vec::new();
-                        row_start_line = current_line;
-                        field_start_offset = current_offset + char_byte_len;
-                    } else {
-                        // \r inside quotes - preserve it
-                        current_field.push(ch);
+                if !in_quotes {
+                    // Standalone \r row separator
+                    current_line += 1;
+                    // Row separator (only when not inside quotes)
+                    let field_end_offset = current_offset;
+                    current_row.push((
+                        current_field.clone().into(),
+                        field_start_offset..field_end_offset,
+                    ));
+                    current_field.clear();
+
+                    // Only add non-empty rows
+                    if !current_row.is_empty()
+                        && !current_row.iter().all(|(field, _)| field.trim().is_empty())
+                    {
+                        rows.push(current_row);
+                        // Add line number info for this row
+                        let line_info = if row_start_line == current_line - 1 {
+                            LineNumber::Line(row_start_line)
+                        } else {
+                            LineNumber::LineRange(row_start_line, current_line - 1)
+                        };
+                        line_numbers.push(line_info);
                     }
+                    current_row = Vec::new();
+                    row_start_line = current_line;
+                    field_start_offset = current_offset + char_byte_len;
+                } else {
+                    // \r inside quotes - preserve it
+                    current_field.push(ch);
                 }
             }
             _ => {

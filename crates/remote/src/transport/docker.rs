@@ -589,9 +589,8 @@ impl DockerExecConnection {
                             .is_ok()
                         {
                             return Err(e);
-                        } else {
-                            anyhow::bail!("Neither curl nor wget is available");
                         }
+                        anyhow::bail!("Neither curl nor wget is available");
                     }
                 }
             }
@@ -650,7 +649,7 @@ impl RemoteConnection for DockerExecConnection {
             docker_args.push(format!("{k}={v}"));
         }
         for env_var in ["RUST_LOG", "RUST_BACKTRACE", "ZED_GENERATE_MINIDUMPS"] {
-            if let Some(value) = std::env::var(env_var).ok() {
+            if let Ok(value) = std::env::var(env_var) {
                 docker_args.push("-e".to_string());
                 docker_args.push(format!("{env_var}={value}"));
             }

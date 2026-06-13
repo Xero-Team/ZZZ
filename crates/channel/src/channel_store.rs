@@ -293,7 +293,6 @@ impl ChannelStore {
                                     this.initialize();
                                 }).ok();
                             }
-                        continue;
                     }
                     _ = timer => {
                         return Err(anyhow!("{:?} elapsed without receiving channels", timeout));
@@ -443,10 +442,9 @@ impl ChannelStore {
                 Some(OpenEntityHandle::Open(entity)) => {
                     if let Some(entity) = entity.upgrade() {
                         break Task::ready(Ok(entity)).shared();
-                    } else {
-                        get_map(self).remove(&channel_id);
-                        continue;
                     }
+                    get_map(self).remove(&channel_id);
+                    continue;
                 }
                 Some(OpenEntityHandle::Loading(task)) => break task.clone(),
                 None => {}

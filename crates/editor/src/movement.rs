@@ -740,9 +740,8 @@ pub fn find_boundary_point(
             if return_point_before_boundary {
                 let point = prev_offset.to_point(map.buffer_snapshot());
                 return map.clip_point(map.point_to_display_point(point, Bias::Right), Bias::Right);
-            } else {
-                break;
             }
+            break;
         }
         prev_offset = offset;
         offset += ch.len_utf8();

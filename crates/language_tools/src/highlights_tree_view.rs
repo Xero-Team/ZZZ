@@ -229,13 +229,13 @@ impl HighlightsTreeView {
             Some(active_item) => {
                 if active_item.item_id() == cx.entity_id() {
                     return;
-                } else {
-                    match active_item.downcast::<Editor>() {
-                        Some(active_editor) => active_editor,
-                        None => {
-                            self.clear(cx);
-                            return;
-                        }
+                }
+
+                match active_item.downcast::<Editor>() {
+                    Some(active_editor) => active_editor,
+                    None => {
+                        self.clear(cx);
+                        return;
                     }
                 }
             }

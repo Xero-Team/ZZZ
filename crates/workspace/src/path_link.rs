@@ -170,14 +170,14 @@ fn possible_open_target_internal(
 
     const GIT_DIFF_PATH_PREFIXES: &[&str] = &["a", "b"];
     for prefix_str in GIT_DIFF_PATH_PREFIXES.iter().chain(std::iter::once(&".")) {
-        if let Some(stripped) = original_path.path.strip_prefix(prefix_str).ok() {
+        if let Ok(stripped) = original_path.path.strip_prefix(prefix_str) {
             potential_paths.push(PathWithPosition {
                 path: stripped.to_owned(),
                 row: original_path.row,
                 column: original_path.column,
             });
         }
-        if let Some(stripped) = path_with_position.path.strip_prefix(prefix_str).ok() {
+        if let Ok(stripped) = path_with_position.path.strip_prefix(prefix_str) {
             potential_paths.push(PathWithPosition {
                 path: stripped.to_owned(),
                 row: path_with_position.row,

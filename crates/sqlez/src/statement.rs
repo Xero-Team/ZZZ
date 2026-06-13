@@ -118,8 +118,6 @@ impl<'a> Statement<'a> {
                         .last_error()
                         .with_context(|| format!("Failed to bind value at index {index}"))?;
                     any_succeed = true;
-                } else {
-                    continue;
                 }
             }
         }

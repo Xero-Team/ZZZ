@@ -11,7 +11,7 @@ fn main() {
 
         let mut rpath_dirs = std::collections::BTreeSet::new();
         for lib in &dlopened_libs {
-            if let Some(libdir) = pkg_config::get_variable(lib, "libdir").ok() {
+            if let Ok(libdir) = pkg_config::get_variable(lib, "libdir") {
                 rpath_dirs.insert(libdir);
             } else {
                 eprintln!("zed build.rs: {lib} not found in pkg-config's path");
@@ -71,14 +71,6 @@ fn main() {
 
         if let Some(build_identifier) = option_env!("GITHUB_RUN_NUMBER") {
             println!("cargo:rustc-env=ZED_BUILD_ID={build_identifier}");
-        }
-
-        if let Ok(build_profile) = std::env::var("PROFILE")
-            && build_profile == "release"
-        {
-            // This is currently the best way to make `cargo build ...`'s build script
-            // to print something to stdout without extra verbosity.
-            println!("cargo::warning=Info: using '{git_sha}' hash for ZED_COMMIT_SHA env var");
         }
     }
 

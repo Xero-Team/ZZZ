@@ -1533,7 +1533,6 @@ impl WorkspaceDb {
                             }
                             Err(err) => {
                                 log::error!("{err}");
-                                continue;
                             }
                         }
                     }
@@ -1557,7 +1556,6 @@ impl WorkspaceDb {
                         toolchain.language_name.as_ref().to_owned(), toolchain.name.to_string(), toolchain.path.to_string(), toolchain.as_json.to_string());
                         if let Err(err) = conn.exec_bound(query)?(args) {
                             log::error!("{err}");
-                            continue;
                         }
                     }
                 }
@@ -1973,7 +1971,7 @@ impl WorkspaceDb {
         match RemoteConnectionKind::deserialize(&kind)? {
             RemoteConnectionKind::Wsl => Some(RemoteConnectionOptions::Wsl(WslConnectionOptions {
                 distro_name: distro?,
-                user: user,
+                user,
             })),
             RemoteConnectionKind::Ssh => Some(RemoteConnectionOptions::Ssh(SshConnectionOptions {
                 host: host?.into(),

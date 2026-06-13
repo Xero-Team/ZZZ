@@ -246,9 +246,9 @@ fn find_target(
             // Used to determine if the initial character is a number.
             if is_numeric_string(&pre_char) {
                 break;
-            } else {
-                first_char_is_num = false;
             }
+
+            first_char_is_num = false;
         }
 
         pre_char.insert(0, ch);

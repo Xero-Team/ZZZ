@@ -4008,17 +4008,16 @@ impl MultiBufferSnapshot {
                 let hunk_start = buffer.anchor_after(hunk.diff_base_byte_range.start);
                 let start = Anchor::in_buffer(excerpt.path_key_index, hunk_start).to_point(self);
                 return Some(MultiBufferRow(start.row));
-            } else {
-                let Some(hunk) = diff
-                    .hunks_intersecting_range_rev(excerpt.range.context.clone(), buffer)
-                    .next()
-                else {
-                    continue;
-                };
-                let start = Anchor::in_buffer(excerpt.path_key_index, hunk.buffer_range.start)
-                    .to_point(self);
-                return Some(MultiBufferRow(start.row));
             }
+            let Some(hunk) = diff
+                .hunks_intersecting_range_rev(excerpt.range.context.clone(), buffer)
+                .next()
+            else {
+                continue;
+            };
+            let start =
+                Anchor::in_buffer(excerpt.path_key_index, hunk.buffer_range.start).to_point(self);
+            return Some(MultiBufferRow(start.row));
         }
     }
 
@@ -7900,15 +7899,14 @@ impl<'a> MultiBufferChunks<'a> {
             } else if let Some(chunk) = self.excerpt_chunks.as_mut()?.next() {
                 self.excerpt_offset_range.start += chunk.text.len();
                 return Some(chunk);
-            } else {
-                self.excerpts.next();
-                let excerpt = self.excerpts.item()?;
-                self.excerpt_chunks = Some(excerpt.chunks_in_range(
-                    0..(self.excerpt_offset_range.end - *self.excerpts.start()),
-                    self.language_aware,
-                    self.snapshot,
-                ));
             }
+            self.excerpts.next();
+            let excerpt = self.excerpts.item()?;
+            self.excerpt_chunks = Some(excerpt.chunks_in_range(
+                0..(self.excerpt_offset_range.end - *self.excerpts.start()),
+                self.language_aware,
+                self.snapshot,
+            ));
         }
     }
 }

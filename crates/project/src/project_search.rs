@@ -164,17 +164,19 @@ impl Search {
             let buffer = handle.read(cx);
             if !buffers.is_searchable(&buffer.remote_id()) {
                 continue;
-            } else if buffer
+            }
+            if buffer
                 .file()
                 .is_some_and(|file| file.disk_state().is_deleted())
             {
                 continue;
-            } else if let Some(entry_id) = buffer.entry_id(cx) {
+            }
+            if let Some(entry_id) = buffer.entry_id(cx) {
                 open_buffers.insert(entry_id);
             } else {
                 self.limit = self.limit.saturating_sub(1);
                 unnamed_buffers.push(handle)
-            };
+            }
         }
         let open_buffers = Arc::new(open_buffers);
         let executor = cx.background_executor().clone();
@@ -824,7 +826,7 @@ impl RequestHandler<'_> {
             } else {
                 self.confirm_contents_will_match_tx
                     .send(MatchingEntry {
-                        should_scan_tx: should_scan_tx,
+                        should_scan_tx,
                         worktree_root: snapshot.abs_path().clone(),
                         path: ProjectPath {
                             worktree_id: snapshot.id(),

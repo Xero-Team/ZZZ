@@ -3350,7 +3350,7 @@ fn editor_page() -> SettingsPage {
 
     SettingsPage {
         title: lt("settings_ui.page_data.title.editor", "Editor"),
-        items: items,
+        items,
     }
 }
 

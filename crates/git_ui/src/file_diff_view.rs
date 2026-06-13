@@ -140,7 +140,7 @@ impl FileDiffView {
                         let mut recv = pin!(buffer_changes_rx.recv().fuse());
                         select_biased! {
                             _ = timer => break,
-                            _ = recv => continue,
+                            _ = recv => {}
                         }
                     }
 

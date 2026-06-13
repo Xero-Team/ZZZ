@@ -95,11 +95,11 @@ impl Reindenter {
             if is_pending_line {
                 start_ix = line_end;
                 break;
-            } else {
-                self.in_leading_whitespace = true;
-                indented.push('\n');
-                start_ix = line_end + 1;
             }
+
+            self.in_leading_whitespace = true;
+            indented.push('\n');
+            start_ix = line_end + 1;
         }
         self.buffer.replace_range(..start_ix, "");
         if is_final {

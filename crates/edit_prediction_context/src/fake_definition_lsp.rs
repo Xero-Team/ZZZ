@@ -91,7 +91,7 @@ pub fn register_fake_definition_server(
                                         }
                                         lsp::FileChangeType::CREATED
                                         | lsp::FileChangeType::CHANGED => {
-                                            if let Some(path) = event.uri.to_file_path().ok() {
+                                            if let Ok(path) = event.uri.to_file_path() {
                                                 if let Ok(content) = fs.load(&path).await {
                                                     index.lock().index_file(event.uri, &content);
                                                 }

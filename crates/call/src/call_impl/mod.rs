@@ -634,9 +634,8 @@ impl ActiveCall {
         if let Some(room) = self.room().cloned() {
             if room.read(cx).channel_id() == Some(channel_id) {
                 return Task::ready(Ok(Some(room)));
-            } else {
-                room.update(cx, |room, cx| room.clear_state(cx));
             }
+            room.update(cx, |room, cx| room.clear_state(cx));
         }
 
         if self.pending_room_creation.is_some() {

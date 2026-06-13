@@ -1637,13 +1637,13 @@ impl Item for TerminalView {
                     .detach();
 
                 return true;
-            } else {
-                if let Some(project_path) = item.project_path(cx)
-                    && let Some(path) = project.read(cx).absolute_path(&project_path, cx)
-                {
-                    self.add_paths_to_terminal(&[path], window, cx);
-                    return true;
-                }
+            }
+
+            if let Some(project_path) = item.project_path(cx)
+                && let Some(path) = project.read(cx).absolute_path(&project_path, cx)
+            {
+                self.add_paths_to_terminal(&[path], window, cx);
+                return true;
             }
 
             return false;

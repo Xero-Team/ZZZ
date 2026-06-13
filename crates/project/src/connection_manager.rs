@@ -169,9 +169,8 @@ impl Manager {
                                 let task = this.update(cx, |this, cx| this.reconnected(cx));
                                 if task.await.log_err().is_some() {
                                     return true;
-                                } else {
-                                    remaining_attempts -= 1;
                                 }
+                                remaining_attempts -= 1;
                             } else if client_status.borrow().is_signed_out() {
                                 return false;
                             }

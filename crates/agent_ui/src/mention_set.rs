@@ -662,10 +662,7 @@ impl MentionSet {
         };
 
         let diff_receiver = repo.update(cx, |repo, cx| {
-            repo.diff(
-                git::repository::DiffType::MergeBase { base_ref: base_ref },
-                cx,
-            )
+            repo.diff(git::repository::DiffType::MergeBase { base_ref }, cx)
         });
         let no_changes_found_in_branch_diff = app_i18n::tr(
             cx,

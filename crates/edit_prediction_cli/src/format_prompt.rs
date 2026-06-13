@@ -623,10 +623,10 @@ pub(crate) fn extract_last_codeblock(text: &str) -> Option<String> {
                     let content = lines[i + 1..closing_idx].join("\n");
                     // Preserve trailing newline to match previous behavior
                     return Some(format!("{}\n", content));
-                } else {
-                    // Empty block
-                    return Some(String::new());
                 }
+
+                // Empty block
+                return Some(String::new());
             }
         }
     }

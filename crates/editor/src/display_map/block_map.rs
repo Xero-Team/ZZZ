@@ -2242,9 +2242,8 @@ impl BlockSnapshot {
                 if let Some(block) = &transform.block {
                     cursor.next();
                     return Some((start_row, block));
-                } else {
-                    cursor.next();
                 }
+                cursor.next();
             }
             None
         })
@@ -2264,10 +2263,7 @@ impl BlockSnapshot {
                     return Some(StickyHeaderExcerpt { excerpt });
                 }
                 Some(block) if block.is_buffer_header() => return None,
-                _ => {
-                    cursor.prev();
-                    continue;
-                }
+                _ => cursor.prev(),
             }
         }
 

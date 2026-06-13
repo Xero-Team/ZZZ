@@ -40,8 +40,8 @@ impl ZedEditPredictionDelegate {
         .detach();
 
         Self {
-            project: project,
-            store: store,
+            project,
+            store,
             singleton_buffer,
         }
     }

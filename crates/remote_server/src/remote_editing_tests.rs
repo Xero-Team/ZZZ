@@ -205,7 +205,7 @@ async fn do_search_and_assert(
             match response {
                 SearchResult::Buffer { buffer, .. } => break buffer,
                 SearchResult::LimitReached => panic!("incorrect result"),
-                SearchResult::WaitingForScan | SearchResult::Searching => continue,
+                SearchResult::WaitingForScan | SearchResult::Searching => {}
             }
         };
         buffer.update(&mut cx, |buffer, cx| {

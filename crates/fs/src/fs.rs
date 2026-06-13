@@ -683,9 +683,8 @@ impl Fs for RealFs {
         if !options.overwrite && smol::fs::metadata(target).await.is_ok() {
             if options.ignore_if_exists {
                 return Ok(());
-            } else {
-                anyhow::bail!("{target:?} already exists");
             }
+            anyhow::bail!("{target:?} already exists");
         }
 
         smol::fs::copy(source, target).await?;
@@ -748,9 +747,8 @@ impl Fs for RealFs {
         if use_metadata_fallback && smol::fs::metadata(target).await.is_ok() {
             if options.ignore_if_exists {
                 return Ok(());
-            } else {
-                anyhow::bail!("{target:?} already exists");
             }
+            anyhow::bail!("{target:?} already exists");
         }
 
         smol::fs::rename(source, target).await?;
@@ -1085,7 +1083,7 @@ impl Fs for RealFs {
         }
 
         // Check if path is a symlink and follow the target parent
-        if let Some(mut target) = self.read_link(path).await.ok() {
+        if let Ok(mut target) = self.read_link(path).await {
             log::trace!("watch symlink {path:?} -> {target:?}");
             // Check if symlink target is relative path, if so make it absolute
             if target.is_relative()
@@ -3273,9 +3271,8 @@ pub async fn copy_recursive<'a>(
             {
                 if options.ignore_if_exists {
                     continue;
-                } else {
-                    anyhow::bail!("{target_item:?} already exists");
                 }
+                anyhow::bail!("{target_item:?} already exists");
             }
             let _ = fs
                 .remove_dir(

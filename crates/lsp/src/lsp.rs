@@ -1976,9 +1976,8 @@ impl FakeLanguageServer {
             let (method, params) = self.notifications_rx.recv().await.ok()?;
             if method == T::METHOD {
                 return Some(serde_json::from_str::<T::Params>(&params).unwrap());
-            } else {
-                log::info!("skipping message in fake language server {:?}", params);
             }
+            log::info!("skipping message in fake language server {:?}", params);
         }
     }
 

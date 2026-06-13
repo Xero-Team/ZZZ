@@ -72,15 +72,12 @@ static QUIET: AtomicBool = AtomicBool::new(false);
 macro_rules! fail {
     ($output:ident, $name:expr, $kind:expr) => {{
         $output.failure($name, None, None, $kind);
-        continue;
     }};
     ($output:ident, $name:expr, $mdata:expr, $kind:expr) => {{
         $output.failure($name, Some($mdata), None, $kind);
-        continue;
     }};
     ($output:ident, $name:expr, $mdata:expr, $count:expr, $kind:expr) => {{
         $output.failure($name, Some($mdata), Some($count), $kind);
-        continue;
     }};
 }
 
@@ -521,11 +518,15 @@ fn main() {
         // Get the metadata this test reports for us.
         let t_mdata = match parse_mdata(t_bin, t_mdata) {
             Ok(mdata) => mdata,
-            Err(err) => fail!(output, t_name_pretty, err),
+            Err(err) => {
+                fail!(output, t_name_pretty, err);
+                continue;
+            }
         };
 
         if t_mdata.importance < thresh {
             fail!(output, t_name_pretty, t_mdata, FailKind::Skipped);
+            continue;
         }
 
         // Time test execution to see how many iterations we need to do in order
@@ -548,6 +549,7 @@ fn main() {
         // Don't profile failing tests.
         let Some(final_iter_count) = final_iter_count else {
             fail!(output, t_name_pretty, t_mdata, FailKind::Triage);
+            continue;
         };
 
         // Now profile!
@@ -561,6 +563,7 @@ fn main() {
                 final_iter_count,
                 FailKind::Profile
             );
+            continue;
         }
     }
     if !QUIET.load(Ordering::Relaxed) {

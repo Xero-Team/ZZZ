@@ -378,7 +378,7 @@ impl FoldMap {
                     },
                     (),
                 ),
-                inlay_snapshot: inlay_snapshot,
+                inlay_snapshot,
                 version: 0,
                 fold_metadata_by_id: TreeMap::default(),
             },

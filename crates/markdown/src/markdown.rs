@@ -3647,14 +3647,14 @@ impl RenderedText {
             let line_source_start = line.source_mappings.first().unwrap().source_index;
             if source_index < line_source_start {
                 break;
-            } else if source_index > line.source_end {
-                continue;
-            } else {
-                let line_height = line.layout.line_height();
-                let rendered_index_within_line = line.rendered_index_for_source_index(source_index);
-                let position = line.layout.position_for_index(rendered_index_within_line)?;
-                return Some((position, line_height));
             }
+            if source_index > line.source_end {
+                continue;
+            }
+            let line_height = line.layout.line_height();
+            let rendered_index_within_line = line.rendered_index_for_source_index(source_index);
+            let position = line.layout.position_for_index(rendered_index_within_line)?;
+            return Some((position, line_height));
         }
         None
     }

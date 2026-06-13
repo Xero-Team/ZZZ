@@ -295,7 +295,6 @@ impl Editor {
                                             cmp::Ordering::Less => {
                                                 colors_splice.to_remove.push(*existing_inlay_id);
                                                 existing_buffer_colors.next();
-                                                continue;
                                             }
                                             cmp::Ordering::Equal => {
                                                 if existing_color == &new_color {

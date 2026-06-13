@@ -78,14 +78,18 @@ impl AppDatabase {
     /// Returns the per-App connection if set, otherwise falls back to
     /// the shared LazyLock.
     pub fn global(cx: &App) -> &ThreadSafeConnection {
-        #[allow(unreachable_code)]
         if let Some(db) = cx.try_global::<Self>() {
             return &db.0;
-        } else {
-            #[cfg(any(feature = "test-support", test))]
-            return &TEST_APP_DATABASE.0;
+        }
 
-            panic!("database not initialized")
+        #[cfg(any(feature = "test-support", test))]
+        {
+            return &TEST_APP_DATABASE.0;
+        }
+
+        #[cfg(not(any(feature = "test-support", test)))]
+        {
+            panic!("database not initialized");
         }
     }
 }

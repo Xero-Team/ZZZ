@@ -404,11 +404,10 @@ impl PickerDelegate for CommandPaletteDelegate {
                 if self.query_history.is_navigating() {
                     if let Some(query) = self.query_history.next(query, cx).map(|s| s.to_string()) {
                         return Some(query);
-                    } else {
-                        let prefix = self.query_history.prefix.take().unwrap_or_default();
-                        self.query_history.reset_cursor();
-                        return Some(prefix);
                     }
+                    let prefix = self.query_history.prefix.take().unwrap_or_default();
+                    self.query_history.reset_cursor();
+                    return Some(prefix);
                 }
             }
         }

@@ -111,49 +111,66 @@ impl Prettier {
                 if has_prettier_in_node_modules(fs, &path_to_check).await? {
                     log::debug!("Found prettier path {path_to_check:?} in the node_modules");
                     return Ok(ControlFlow::Continue(Some(path_to_check)));
-                } else {
-                    match &closest_package_json_path {
-                        None => closest_package_json_path = Some(path_to_check.clone()),
-                        Some(closest_package_json_path) => {
-                            match package_json_contents.get("workspaces") {
-                                Some(serde_json::Value::Array(workspaces)) => {
-                                    let subproject_path = closest_package_json_path.strip_prefix(&path_to_check).expect("traversing path parents, should be able to strip prefix");
-                                    if workspaces.iter().filter_map(|value| {
+                }
+                match &closest_package_json_path {
+                    None => closest_package_json_path = Some(path_to_check.clone()),
+                    Some(closest_package_json_path) => {
+                        match package_json_contents.get("workspaces") {
+                            Some(serde_json::Value::Array(workspaces)) => {
+                                let subproject_path = closest_package_json_path
+                                    .strip_prefix(&path_to_check)
+                                    .expect(
+                                        "traversing path parents, should be able to strip prefix",
+                                    );
+                                if workspaces
+                                    .iter()
+                                    .filter_map(|value| {
                                         if let serde_json::Value::String(s) = value {
                                             Some(s.clone())
                                         } else {
-                                            log::warn!("Skipping non-string 'workspaces' value: {value:?}");
+                                            log::warn!(
+                                                "Skipping non-string 'workspaces' value: {value:?}"
+                                            );
                                             None
                                         }
-                                    }).any(|workspace_definition| {
-                                        workspace_definition == subproject_path.to_string_lossy() || PathMatcher::new(&[workspace_definition], PathStyle::local()).ok().is_some_and(
-                                            |path_matcher| RelPath::new(subproject_path, PathStyle::local()).is_ok_and(|path|  path_matcher.is_match(path)))
-                                    }) {
-                                        anyhow::ensure!(has_prettier_in_node_modules(fs, &path_to_check).await?,
-                                            "Path {path_to_check:?} is the workspace root for project in \
-                                            {closest_package_json_path:?}, but it has no prettier installed"
-                                        );
-                                        log::info!(
-                                            "Found prettier path {path_to_check:?} in the workspace \
-                                            root for project in {closest_package_json_path:?}"
-                                        );
-                                        return Ok(ControlFlow::Continue(Some(path_to_check)));
-                                    } else {
-                                        log::warn!(
-                                            "Skipping path {path_to_check:?} workspace root with \
-                                            workspaces {workspaces:?} that have no prettier installed"
-                                        );
-                                    }
+                                    })
+                                    .any(|workspace_definition| {
+                                        workspace_definition == subproject_path.to_string_lossy()
+                                            || PathMatcher::new(
+                                                &[workspace_definition],
+                                                PathStyle::local(),
+                                            )
+                                            .ok()
+                                            .is_some_and(|path_matcher| {
+                                                RelPath::new(subproject_path, PathStyle::local())
+                                                    .is_ok_and(|path| path_matcher.is_match(path))
+                                            })
+                                    })
+                                {
+                                    anyhow::ensure!(
+                                        has_prettier_in_node_modules(fs, &path_to_check).await?,
+                                        "Path {path_to_check:?} is the workspace root for project in \
+                                        {closest_package_json_path:?}, but it has no prettier installed"
+                                    );
+                                    log::info!(
+                                        "Found prettier path {path_to_check:?} in the workspace \
+                                        root for project in {closest_package_json_path:?}"
+                                    );
+                                    return Ok(ControlFlow::Continue(Some(path_to_check)));
                                 }
-                                Some(unknown) => log::error!(
-                                    "Failed to parse workspaces for {path_to_check:?} from package.json, \
-                                    got {unknown:?}. Skipping."
-                                ),
-                                None => log::warn!(
-                                    "Skipping path {path_to_check:?} that has no prettier \
-                                    dependency and no workspaces section in its package.json"
-                                ),
+                                log::warn!(
+                                    "Skipping path {path_to_check:?} workspace root with \
+                                    workspaces {workspaces:?} that have no prettier installed"
+                                );
                             }
+                            Some(unknown) => log::error!(
+                                "Failed to parse workspaces for {path_to_check:?} from package.json, \
+                                got {unknown:?}. Skipping."
+                            ),
+                            None => log::warn!(
+                                "Skipping path {path_to_check:?} that has no prettier \
+                                dependency and no workspaces section in its package.json"
+                            ),
                         }
                     }
                 }

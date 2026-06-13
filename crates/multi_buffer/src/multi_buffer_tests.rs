@@ -5440,7 +5440,8 @@ fn test_random_chunk_bitmaps_with_diffs(cx: &mut App, mut rng: StdRng) {
                     for line in buffer_text.lines() {
                         if rng.random_bool(0.3) {
                             continue;
-                        } else if rng.random_bool(0.3) {
+                        }
+                        if rng.random_bool(0.3) {
                             let line_len = rng.random_range(0..50);
                             let modified_line = RandomCharIter::new(&mut rng)
                                 .take(line_len)

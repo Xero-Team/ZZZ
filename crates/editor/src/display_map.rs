@@ -1470,30 +1470,29 @@ impl<'a> HighlightedChunk<'a> {
                         is_inlay,
                         replacement: Some(ChunkReplacement::Str(replacement.into())),
                     });
-                } else {
-                    let invisible_highlight = HighlightStyle {
-                        background_color: Some(editor_style.status.hint_background),
-                        underline: Some(UnderlineStyle {
-                            color: Some(editor_style.status.hint),
-                            thickness: px(1.),
-                            wavy: false,
-                        }),
-                        ..Default::default()
-                    };
-                    let invisible_style = if let Some(style) = style {
-                        style.highlight(invisible_highlight)
-                    } else {
-                        invisible_highlight
-                    };
-
-                    return Some(HighlightedChunk {
-                        text: prefix,
-                        style: Some(invisible_style),
-                        is_tab: false,
-                        is_inlay,
-                        replacement: renderer.clone(),
-                    });
                 }
+                let invisible_highlight = HighlightStyle {
+                    background_color: Some(editor_style.status.hint_background),
+                    underline: Some(UnderlineStyle {
+                        color: Some(editor_style.status.hint),
+                        thickness: px(1.),
+                        wavy: false,
+                    }),
+                    ..Default::default()
+                };
+                let invisible_style = if let Some(style) = style {
+                    style.highlight(invisible_highlight)
+                } else {
+                    invisible_highlight
+                };
+
+                return Some(HighlightedChunk {
+                    text: prefix,
+                    style: Some(invisible_style),
+                    is_tab: false,
+                    is_inlay,
+                    replacement: renderer.clone(),
+                });
             }
 
             if !text.is_empty() {
@@ -2181,9 +2180,8 @@ impl DisplaySnapshot {
             if let Some(ix) = chunk.find('\n') {
                 result.push_str(&chunk[0..ix]);
                 break;
-            } else {
-                result.push_str(chunk);
             }
+            result.push_str(chunk);
         }
         result
     }

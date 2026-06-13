@@ -919,15 +919,13 @@ impl InlaySnapshot {
                         while let Some(Transform::Inlay(inlay)) = cursor.next_item() {
                             if inlay.position.bias() == Bias::Right {
                                 break;
-                            } else {
-                                cursor.next();
                             }
+                            cursor.next();
                         }
                         return cursor.end().1;
-                    } else {
-                        let overshoot = offset - cursor.start().0;
-                        return InlayOffset(cursor.start().1.0 + overshoot);
                     }
+                    let overshoot = offset - cursor.start().0;
+                    return InlayOffset(cursor.start().1.0 + overshoot);
                 }
                 Some(Transform::Inlay(inlay)) => {
                     if inlay.position.bias() == Bias::Left {
@@ -1046,9 +1044,8 @@ impl InlaySnapshot {
                         let clipped_point = InlayPoint(cursor.start().0.0 + clipped_overshoot);
                         if clipped_point == point {
                             return clipped_point;
-                        } else {
-                            point = clipped_point;
                         }
+                        point = clipped_point;
                     }
                 }
                 Some(Transform::Inlay(inlay)) => {
@@ -1297,15 +1294,13 @@ impl InlayPointCursor<'_> {
                         while let Some(Transform::Inlay(inlay)) = cursor.next_item() {
                             if bias == Bias::Left && inlay.position.bias() == Bias::Right {
                                 break;
-                            } else {
-                                cursor.next();
                             }
+                            cursor.next();
                         }
                         return cursor.end().1;
-                    } else {
-                        let overshoot = point - cursor.start().0;
-                        return InlayPoint(cursor.start().1.0 + overshoot);
                     }
+                    let overshoot = point - cursor.start().0;
+                    return InlayPoint(cursor.start().1.0 + overshoot);
                 }
                 Some(Transform::Inlay(inlay)) => {
                     if inlay.position.bias() == Bias::Left || bias == Bias::Right {

@@ -402,9 +402,8 @@ impl Room {
                             let task = this.update(cx, |this, cx| this.rejoin(cx));
                             if task.await.log_err().is_some() {
                                 return true;
-                            } else {
-                                remaining_attempts -= 1;
                             }
+                            remaining_attempts -= 1;
                         } else if client_status.borrow().is_signed_out() {
                             return false;
                         }
@@ -426,7 +425,6 @@ impl Room {
                         log::info!("successfully reconnected to room");
                         // If we successfully joined the room, go back around the loop
                         // waiting for future connection status changes.
-                        continue;
                     }
                     Ok(false) => break,
                     Err(Timeout) => {

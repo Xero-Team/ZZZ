@@ -1887,7 +1887,7 @@ impl Workspace {
         cx.spawn(async move |cx| {
             let mut paths_to_open = Vec::with_capacity(abs_paths.len());
             for path in abs_paths.into_iter() {
-                if let Some(canonical) = app_state.fs.canonicalize(&path).await.ok() {
+                if let Ok(canonical) = app_state.fs.canonicalize(&path).await {
                     paths_to_open.push(canonical)
                 } else {
                     paths_to_open.push(path)
@@ -2421,15 +2421,12 @@ impl Workspace {
             if let Some(opposite_flex) = opposite.as_ref().and_then(|(_, s)| s.flex) {
                 let total_flex = flex + center_column_count + opposite_flex;
                 return Some((flex / total_flex * workspace_width).max(RESIZE_HANDLE_SIZE));
-            } else {
-                let opposite_fixed = opposite
-                    .map(|(panel, s)| s.size.unwrap_or_else(|| panel.default_size(window, cx)))
-                    .unwrap_or_default();
-                let available = (workspace_width - opposite_fixed).max(RESIZE_HANDLE_SIZE);
-                return Some(
-                    (flex / (flex + center_column_count) * available).max(RESIZE_HANDLE_SIZE),
-                );
             }
+            let opposite_fixed = opposite
+                .map(|(panel, s)| s.size.unwrap_or_else(|| panel.default_size(window, cx)))
+                .unwrap_or_default();
+            let available = (workspace_width - opposite_fixed).max(RESIZE_HANDLE_SIZE);
+            return Some((flex / (flex + center_column_count) * available).max(RESIZE_HANDLE_SIZE));
         }
 
         Some(
@@ -3304,10 +3301,9 @@ impl Workspace {
 
                     if answer.await.log_err() == Some(1) {
                         return anyhow::Ok(false);
-                    } else {
-                        if let Ok(task) = cx.update(|_window, cx| active_call.0.hang_up(cx)) {
-                            task.await.log_err();
-                        }
+                    }
+                    if let Ok(task) = cx.update(|_window, cx| active_call.0.hang_up(cx)) {
+                        task.await.log_err();
                     }
                 }
                 if close_intent == CloseIntent::ReplaceWindow {
@@ -9383,7 +9379,7 @@ async fn join_channel_internal(
             | Status::Authenticated
             | Status::Reconnecting
             | Status::Reauthenticating
-            | Status::Reauthenticated => continue,
+            | Status::Reauthenticated => {}
             Status::Connected { .. } => break 'outer,
             Status::SignedOut | Status::AuthenticationError => {
                 return Err(ErrorCode::SignedOut.into());
