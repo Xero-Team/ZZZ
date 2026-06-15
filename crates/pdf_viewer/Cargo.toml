@@ -34,7 +34,7 @@ theme_settings.workspace = true
 ui.workspace = true
 util.workspace = true
 workspace.workspace = true
-zpdf = { git = "https://github.com/Xero-Team/zpdf.git", rev = "afd164e645bc3419886b7241c8602e3ddea0b773", default-features = true }
+zpdf = { version = "0.5", default-features = true }
 
 [dev-dependencies]
 editor = { workspace = true, features = ["test-support"] }
