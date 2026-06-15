@@ -11135,6 +11135,7 @@ dependencies = [
  "util",
  "watch",
  "which",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -14768,6 +14769,7 @@ dependencies = [
  "urlencoding",
  "util",
  "which",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -19596,6 +19598,7 @@ dependencies = [
  "util_macros",
  "walkdir",
  "which",
+ "windows 0.61.3",
 ]
 
 [[package]]
