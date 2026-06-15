@@ -14,6 +14,8 @@ If your repository includes a `.devcontainer/devcontainer.json` file, ZZZ can op
 - Docker or Podman must be installed and available in your `PATH`. If you use `podman`, you must set the `use_podman` setting in your ZZZ settings.json to true.
 - Your project must contain a `.devcontainer/devcontainer.json` directory/file.
 
+By default ZZZ builds dev container images with BuildKit when the `docker buildx` plugin is available. If your Docker-compatible engine lacks an integrated BuildKit, set `"dev_container_use_buildkit": false` in your settings.json to use the classic Docker builder instead.
+
 ## Using Dev Containers in ZZZ
 
 ### Automatic prompt
