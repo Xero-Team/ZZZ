@@ -104,6 +104,8 @@ gpui = { workspace = true, features = ["test-support"] }
 gpui_tokio.workspace = true
 
 indoc.workspace = true
+i18n.workspace = true
+jsonwebtoken = { workspace = true, features = ["aws_lc_rs"] }
 language = { workspace = true, features = ["test-support"] }
 language_model = { workspace = true, features = ["test-support"] }
 livekit_client =  { workspace = true, features = ["test-support"] }

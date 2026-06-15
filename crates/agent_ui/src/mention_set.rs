@@ -707,6 +707,7 @@ mod tests {
         let settings_store = cx.update(SettingsStore::test);
         cx.set_global(settings_store);
         cx.update(|cx| {
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             release_channel::init(Version::new(0, 0, 0), cx);
             prompt_store::init(cx);
@@ -848,7 +849,7 @@ pub(crate) async fn insert_images_as_context(
                     "Failed to convert image",
                 )
             })
-            .unwrap_or_else(|_| "Failed to convert image".to_string());
+            .unwrap_or_else(|_| "Failed to convert image".to_owned());
         let Ok(Some((crease_id, tx))) = cx.update(|window, cx| {
             insert_crease_for_mention(
                 text_anchor,

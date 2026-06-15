@@ -446,7 +446,7 @@ fn rename_current_branch(
     let current_branch: Option<String> = panel.update(cx, |panel, cx| {
         let repo = panel.active_repository.as_ref()?;
         let repo = repo.read(cx);
-        repo.branch.as_ref().map(|branch| branch.name().to_string())
+        repo.branch.as_ref().map(|branch| branch.name().to_owned())
     });
 
     let Some(current_branch_name) = current_branch else {
@@ -470,7 +470,7 @@ fn copy_branch_name(workspace: &mut Workspace, cx: &mut Context<Workspace>) {
     let branch_name = panel.update(cx, |panel, cx| {
         let repo = panel.active_repository.as_ref()?;
         let repo = repo.read(cx);
-        repo.branch.as_ref().map(|branch| branch.name().to_string())
+        repo.branch.as_ref().map(|branch| branch.name().to_owned())
     });
     if let Some(name) = branch_name {
         cx.write_to_clipboard(ClipboardItem::new_string(name));
@@ -525,7 +525,7 @@ impl RefPickerModal {
 
     fn lookup_commit_details(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let git_ref = self.editor.read(cx).text(cx);
-        let git_ref = git_ref.trim().to_string();
+        let git_ref = git_ref.trim().to_owned();
 
         if git_ref.is_empty() {
             self.commit_details = None;
@@ -575,7 +575,7 @@ impl RefPickerModal {
             return;
         }
 
-        let git_ref_string = git_ref.to_string();
+        let git_ref_string = git_ref.to_owned();
 
         let repo = self.repo.clone();
         let workspace = self.workspace.clone();
@@ -647,7 +647,7 @@ impl Render for RefPickerModal {
                 time_format::TimestampFormat::Relative,
             );
 
-            let subject = details.message.lines().next().unwrap_or("").to_string();
+            let subject = details.message.lines().next().unwrap_or("").to_owned();
             let author_and_subject = format!("{} • {}", details.author_name, subject);
 
             h_flex()
@@ -1265,6 +1265,7 @@ mod view_commit_tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             theme_settings::init(LoadThemes::JustBase, cx);
             AllLanguageSettings::register(cx);
             editor::init(cx);

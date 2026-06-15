@@ -128,7 +128,7 @@ impl KeystrokeInput {
     fn dummy(modifiers: Modifiers) -> KeybindingKeystroke {
         KeybindingKeystroke::from_keystroke(Keystroke {
             modifiers,
-            key: "".to_string(),
+            key: "".to_owned(),
             key_char: None,
         })
     }
@@ -1115,6 +1115,7 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
         });
 

@@ -8,6 +8,9 @@ license = "GPL-3.0-or-later"
 [lib]
 path = "src/codestral.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 edit_prediction_types.workspace = true

@@ -211,7 +211,7 @@ impl Render for BufferSearchBar {
                                         if window.modifiers().secondary() {
                                             window.dispatch_action(
                                                 OpenSettingsAt {
-                                                    path: "minimum_split_diff_width".to_string(),
+                                                    path: "minimum_split_diff_width".to_owned(),
                                                 }
                                                 .boxed_clone(),
                                                 cx,
@@ -360,7 +360,7 @@ impl Render for BufferSearchBar {
                     None
                 }
             })
-            .unwrap_or_else(|| "0/0".to_string());
+            .unwrap_or_else(|| "0/0".to_owned());
         let should_show_replace_input = self.replace_enabled && replacement;
         let in_replace = self.replacement_editor.focus_handle(cx).is_focused(window);
 
@@ -1702,7 +1702,7 @@ impl BufferSearchBar {
                 };
 
                 self.active_search = Some(query.clone());
-                let query_text = query.as_str().to_string();
+                let query_text = query.as_str().to_owned();
 
                 let matches_with_token =
                     active_searchable_item.find_matches_with_token(query, window, cx);
@@ -1833,7 +1833,7 @@ impl BufferSearchBar {
         if let Some(new_query) = self
             .search_history
             .next(&mut self.search_history_cursor)
-            .map(str::to_string)
+            .map(str::to_owned)
         {
             drop(self.search(&new_query, Some(self.search_options), false, window, cx));
         } else if let Some(draft) = self.search_history_cursor.take_draft() {
@@ -1856,7 +1856,7 @@ impl BufferSearchBar {
             && let Some(new_query) = self
                 .search_history
                 .current(&self.search_history_cursor)
-                .map(str::to_string)
+                .map(str::to_owned)
         {
             drop(self.search(&new_query, Some(self.search_options), false, window, cx));
             return;
@@ -1866,7 +1866,7 @@ impl BufferSearchBar {
         if let Some(new_query) = self
             .search_history
             .previous(&mut self.search_history_cursor, &current_query)
-            .map(str::to_string)
+            .map(str::to_owned)
         {
             drop(self.search(&new_query, Some(self.search_options), false, window, cx));
         }
@@ -2024,6 +2024,7 @@ mod tests {
         cx.update(|cx| {
             let store = settings::SettingsStore::test(cx);
             cx.set_global(store);
+            app_i18n::init(cx);
             editor::init(cx);
 
             theme_settings::init(theme::LoadThemes::JustBase, cx);

@@ -98,6 +98,7 @@ pub fn init_test(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let settings_store = SettingsStore::test(cx);
         cx.set_global(settings_store);
+        i18n::init(cx);
         cx.set_global(acp_thread::StubSessionCounter(
             std::sync::atomic::AtomicUsize::new(0),
         ));

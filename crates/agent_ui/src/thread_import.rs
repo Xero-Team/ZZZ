@@ -1032,6 +1032,7 @@ mod tests {
         cx.update(|cx| {
             let settings_store = settings::SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             release_channel::init("0.0.0".parse().unwrap(), cx);
             <dyn fs::Fs>::set_global(fs, cx);
@@ -1040,16 +1041,21 @@ mod tests {
         cx.run_until_parked();
     }
 
-    /// Returns two release channels that are not the current one and not Dev.
-    /// This ensures tests work regardless of which release channel branch
-    /// they run on.
+    /// Returns up to two release channels other than the current one.
+    /// If only one foreign channel exists, duplicate it so tests still cover
+    /// cross-channel imports without depending on a larger channel enum.
     fn foreign_channels(cx: &TestAppContext) -> (ReleaseChannel, ReleaseChannel) {
         let current = cx.update(|cx| ReleaseChannel::global(cx));
-        let mut channels = ReleaseChannel::ALL
+        let channels: Vec<_> = ReleaseChannel::ALL
             .iter()
             .copied()
-            .filter(|ch| *ch != current && *ch != ReleaseChannel::Dev);
-        (channels.next().unwrap(), channels.next().unwrap())
+            .filter(|ch| *ch != current)
+            .collect();
+        match channels.as_slice() {
+            [first, second, ..] => (*first, *second),
+            [only] => (*only, *only),
+            [] => panic!("expected at least one foreign release channel"),
+        }
     }
 
     #[gpui::test]

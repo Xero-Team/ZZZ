@@ -505,14 +505,14 @@ impl Copilot {
         let mut env = HashMap::default();
 
         if let Some(proxy_type) = http_or_https_proxy {
-            env.insert(proxy_type.to_string(), proxy_url);
+            env.insert(proxy_type.to_owned(), proxy_url);
             if let Some(true) = no_verify {
-                env.insert("NODE_TLS_REJECT_UNAUTHORIZED".to_string(), "0".to_string());
+                env.insert("NODE_TLS_REJECT_UNAUTHORIZED".to_owned(), "0".to_owned());
             };
         }
 
         if let Ok(oauth_token) = env::var(copilot_chat::COPILOT_OAUTH_ENV_VAR) {
-            env.insert(copilot_chat::COPILOT_OAUTH_ENV_VAR.to_string(), oauth_token);
+            env.insert(copilot_chat::COPILOT_OAUTH_ENV_VAR.to_owned(), oauth_token);
         }
 
         if env.is_empty() { None } else { Some(env) }
@@ -1330,7 +1330,7 @@ impl Copilot {
 fn id_for_language(language: Option<&Arc<Language>>) -> String {
     language
         .map(|language| language.lsp_id())
-        .unwrap_or_else(|| "plaintext".to_string())
+        .unwrap_or_else(|| "plaintext".to_owned())
 }
 
 fn uri_for_buffer(buffer: &Entity<Buffer>, cx: &App) -> Result<lsp::Uri, ()> {
@@ -1879,6 +1879,7 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
         });
     }
 }

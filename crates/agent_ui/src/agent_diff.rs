@@ -1876,6 +1876,7 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             SettingsStore::update_global(cx, |store, cx| {
                 store.update_user_settings(cx, |settings| {
                     settings.editor.diff_view_style = Some(DiffViewStyle::Unified);
@@ -2038,6 +2039,7 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             prompt_store::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             language_model::init(cx);

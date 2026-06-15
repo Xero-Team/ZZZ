@@ -1502,6 +1502,7 @@ mod tests {
     fn init_test(cx: &mut gpui::App) {
         let settings_store = SettingsStore::test(cx);
         cx.set_global(settings_store);
+        i18n::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         crate::init(cx);
     }

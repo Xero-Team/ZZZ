@@ -2034,6 +2034,7 @@ fn init_test(cx: &mut TestAppContext) {
         zlog::init_test();
         let settings = SettingsStore::test(cx);
         cx.set_global(settings);
+        i18n::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         crate::init(cx);
         editor::init(cx);

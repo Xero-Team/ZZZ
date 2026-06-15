@@ -973,7 +973,7 @@ impl BranchListDelegate {
             }
 
             let is_remote = branch.is_remote();
-            let branch_name = branch.name().to_string();
+            let branch_name = branch.name().to_owned();
             let initial_result = repo
                 .update(cx, |repo, _| {
                     repo.delete_branch(is_remote, branch_name.clone(), force)
@@ -1397,7 +1397,7 @@ impl PickerDelegate for BranchListDelegate {
 
                 let branch = branch.clone();
                 cx.spawn(async move |_, cx| {
-                    repo.update(cx, |repo, _| repo.change_branch(branch.name().to_string()))
+                    repo.update(cx, |repo, _| repo.change_branch(branch.name().to_owned()))
                         .await??;
 
                     anyhow::Ok(())
@@ -1548,7 +1548,7 @@ impl PickerDelegate for BranchListDelegate {
             .truncate()
             .into_any_element(),
             Entry::Branch { branch, positions } => {
-                HighlightedLabel::new(branch.name().to_string(), positions.clone())
+                HighlightedLabel::new(branch.name().to_owned(), positions.clone())
                     .single_line()
                     .truncate()
                     .into_any_element()
@@ -1760,7 +1760,7 @@ impl PickerDelegate for BranchListDelegate {
                                     }
                                 })
                                 .when_some(
-                                    entry.as_branch().map(|b| b.name().to_string()),
+                                    entry.as_branch().map(|b| b.name().to_owned()),
                                     |this, branch_name| {
                                         let absolute_time = absolute_time.clone();
                                         this.tooltip({
@@ -2080,6 +2080,7 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);
         });

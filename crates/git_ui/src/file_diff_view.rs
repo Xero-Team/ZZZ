@@ -393,6 +393,7 @@ mod tests {
                     settings.editor.diff_view_style = Some(DiffViewStyle::Unified);
                 });
             });
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
         });
     }

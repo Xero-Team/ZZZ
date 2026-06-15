@@ -681,7 +681,7 @@ impl<T: 'static> PromptEditor<T> {
                     {
                         let mut toast = Toast::new(
                             NotificationId::unique::<InlinePromptRating>(),
-                            msg.to_string(),
+                            msg.to_owned(),
                         )
                         .autohide();
 
@@ -1689,6 +1689,7 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             theme::init(theme::LoadThemes::JustBase, cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);

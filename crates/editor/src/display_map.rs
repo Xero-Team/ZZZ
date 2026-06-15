@@ -4033,6 +4033,7 @@ pub mod tests {
     fn init_test(cx: &mut App, f: &dyn Fn(&mut SettingsContent)) {
         let settings = SettingsStore::test(cx);
         cx.set_global(settings);
+        i18n::init(cx);
         crate::init(cx);
         theme_settings::init(LoadThemes::JustBase, cx);
         cx.update_global::<SettingsStore, _>(|store, cx| {

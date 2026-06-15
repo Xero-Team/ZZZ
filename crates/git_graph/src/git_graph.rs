@@ -204,13 +204,13 @@ impl ChangedFileEntry {
         let file_name: SharedString = file
             .path
             .file_name()
-            .map(|n| n.to_string())
+            .map(|n| n.to_owned())
             .unwrap_or_default()
             .into();
         let dir_path: SharedString = file
             .path
             .parent()
-            .map(|p| p.as_unix_str().to_string())
+            .map(|p| p.as_unix_str().to_owned())
             .unwrap_or_default()
             .into();
 
@@ -614,7 +614,7 @@ fn timestamp_format() -> &'static [BorrowedFormatItem<'static>] {
 
 fn format_timestamp(timestamp: i64) -> String {
     let Ok(datetime) = OffsetDateTime::from_unix_timestamp(timestamp) else {
-        return "Unknown".to_string();
+        return "Unknown".to_owned();
     };
 
     let local_offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
@@ -1716,7 +1716,7 @@ impl GitGraph {
                 .snapshot()
                 .branch
                 .as_ref()
-                .map(|branch| SharedString::from(branch.name().to_string()))
+                .map(|branch| SharedString::from(branch.name().to_owned()))
         });
 
         let row_height = Self::row_height(window, cx);
@@ -2242,7 +2242,7 @@ impl GitGraph {
             .data
             .tag_names()
             .into_iter()
-            .map(|tag_name| SharedString::from(tag_name.to_string()))
+            .map(|tag_name| SharedString::from(tag_name.to_owned()))
             .collect::<Vec<_>>();
 
         match tag_names.as_slice() {
@@ -2282,7 +2282,7 @@ impl GitGraph {
         let repository_name = repository_path
             .file_name()
             .and_then(|name| name.to_str())
-            .map(ToString::to_string);
+            .map(str::to_owned);
 
         let mut task_variables = TaskVariables::from_iter([
             (VariableName::GitSha, commit_sha.to_string()),
@@ -2405,7 +2405,7 @@ impl GitGraph {
                     menu = menu.separator().header("Custom Git Commands");
 
                     for (task_source_kind, resolved_task) in git_tasks {
-                        let label = resolved_task.display_label().to_string();
+                        let label = resolved_task.display_label().to_owned();
 
                         menu = menu.entry(
                             label,
@@ -2652,7 +2652,7 @@ impl GitGraph {
             .snapshot()
             .branch
             .as_ref()
-            .map(|branch| SharedString::from(branch.name().to_string()));
+            .map(|branch| SharedString::from(branch.name().to_owned()));
 
         let accent_colors = cx.theme().accents();
         let accent_color = accent_colors
@@ -3679,9 +3679,9 @@ impl Render for GitGraph {
             let message = if let Some(error) = &error {
                 format!("Error loading: {}", error)
             } else if is_loading {
-                "Loading".to_string()
+                "Loading".to_owned()
             } else {
-                "No commits found".to_string()
+                "No commits found".to_owned()
             };
             let label = Label::new(message)
                 .color(Color::Muted)
@@ -4015,7 +4015,7 @@ impl Item for GitGraph {
                 .map(|name| name.to_string_lossy().to_string())
         });
         let path_history_path = match &self.log_source {
-            LogSource::Path(path) => Some(path.as_unix_str().to_string()),
+            LogSource::Path(path) => Some(path.as_unix_str().to_owned()),
             _ => None,
         };
 
@@ -4043,8 +4043,8 @@ impl Item for GitGraph {
             return path
                 .as_ref()
                 .file_name()
-                .map(|name| SharedString::from(name.to_string()))
-                .unwrap_or_else(|| SharedString::from(path.as_unix_str().to_string()));
+                .map(|name| SharedString::from(name.to_owned()))
+                .unwrap_or_else(|| SharedString::from(path.as_unix_str().to_owned()));
         }
 
         self.get_repository(cx)
@@ -4306,7 +4306,7 @@ mod persistence {
             LogSource::All => None,
             LogSource::Branch(branch) => Some(branch.to_string()),
             LogSource::Sha(oid) => Some(oid.to_string()),
-            LogSource::Path(path) => Some(path.as_unix_str().to_string()),
+            LogSource::Path(path) => Some(path.as_unix_str().to_owned()),
         }
     }
 
@@ -4435,6 +4435,7 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             language_model::init(cx);
             git_ui::init(cx);

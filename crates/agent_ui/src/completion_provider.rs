@@ -569,7 +569,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         let (abs_path, file_name) = match &symbol.path {
             SymbolLocation::InProject(project_path) => (
                 project.read(cx).absolute_path(&project_path, cx)?,
-                project_path.path.file_name()?.to_string().into(),
+                project_path.path.file_name()?.to_owned().into(),
             ),
             SymbolLocation::OutsideProject {
                 abs_path,
@@ -1651,11 +1651,11 @@ impl SlashCommandCompletion {
         let mut command = None;
         if let Some((command_text, args)) = last_command.split_once(char::is_whitespace) {
             if !args.is_empty() {
-                argument = Some(args.trim_end().to_string());
+                argument = Some(args.trim_end().to_owned());
             }
-            command = Some(command_text.to_string());
+            command = Some(command_text.to_owned());
         } else if !last_command.is_empty() {
-            command = Some(last_command.to_string());
+            command = Some(last_command.to_owned());
         };
 
         Some(Self {
@@ -1729,7 +1729,7 @@ impl MentionCompletion {
             {
                 mode = Some(parsed_mode);
             } else {
-                argument = Some(mode_text.to_string());
+                argument = Some(mode_text.to_owned());
             }
             match rest_of_line[mode_text.len()..].find(|c: char| !c.is_whitespace()) {
                 Some(whitespace_count) => {
@@ -1740,7 +1740,7 @@ impl MentionCompletion {
                             return None;
                         }
 
-                        argument = Some(argument_text.to_string());
+                        argument = Some(argument_text.to_owned());
                         end += whitespace_count + argument_text.len();
                     }
                 }
@@ -2210,7 +2210,7 @@ pub fn extract_file_name_and_directory(
     let display_path = full_path.display(path_style);
     let (directory, file_name) = display_path.split_at(display_path.len() - file_name.len());
     (
-        file_name.to_string().into(),
+        file_name.to_owned().into(),
         Some(SharedString::new(directory)).filter(|dir| !dir.is_empty()),
     )
 }
@@ -2834,6 +2834,7 @@ mod tests {
 
         let app_state = cx.update(|cx| {
             let state = AppState::test(cx);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);
             state

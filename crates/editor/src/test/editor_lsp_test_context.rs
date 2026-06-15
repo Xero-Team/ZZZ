@@ -55,6 +55,7 @@ impl EditorLspTestContext {
 
         cx.update(|cx| {
             assets::Assets.load_test_fonts(cx);
+            i18n::init(cx);
             crate::init(cx);
             workspace::init(app_state.clone(), cx);
         });
@@ -178,13 +179,13 @@ impl EditorLspTestContext {
             LanguageConfig {
                 name: "Typescript".into(),
                 matcher: LanguageMatcher {
-                    path_suffixes: vec!["ts".to_string()],
+                    path_suffixes: vec!["ts".to_owned()],
                     ..Default::default()
                 },
                 brackets: language::BracketPairConfig {
                     pairs: vec![language::BracketPair {
-                        start: "{".to_string(),
-                        end: "}".to_string(),
+                        start: "{".to_owned(),
+                        end: "}".to_owned(),
                         close: true,
                         surround: true,
                         newline: true,
@@ -283,13 +284,13 @@ impl EditorLspTestContext {
             LanguageConfig {
                 name: "TSX".into(),
                 matcher: LanguageMatcher {
-                    path_suffixes: vec!["tsx".to_string()],
+                    path_suffixes: vec!["tsx".to_owned()],
                     ..Default::default()
                 },
                 brackets: language::BracketPairConfig {
                     pairs: vec![language::BracketPair {
-                        start: "{".to_string(),
-                        end: "}".to_string(),
+                        start: "{".to_owned(),
+                        end: "}".to_owned(),
                         close: true,
                         surround: true,
                         newline: true,

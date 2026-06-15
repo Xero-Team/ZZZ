@@ -88,6 +88,10 @@ impl TestServer {
     pub async fn start(deterministic: BackgroundExecutor) -> Self {
         static NEXT_LIVEKIT_SERVER_ID: AtomicUsize = AtomicUsize::new(0);
 
+        jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER
+            .install_default()
+            .ok();
+
         let use_postgres = env::var("USE_POSTGRES").ok();
         let use_postgres = use_postgres.as_deref();
         let test_db = if use_postgres == Some("true") || use_postgres == Some("1") {
@@ -174,6 +178,7 @@ impl TestServer {
             }
             let settings = SettingsStore::test(cx);
             cx.set_global(settings);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             release_channel::init(semver::Version::new(0, 0, 0), cx);
         });

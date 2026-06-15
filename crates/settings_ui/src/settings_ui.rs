@@ -2346,7 +2346,7 @@ impl SettingsWindow {
                 };
 
                 self.worktree_root_dirs
-                    .insert(worktree_id, directory_name.as_unix_str().to_string());
+                    .insert(worktree_id, directory_name.as_unix_str().to_owned());
             }
 
             let focus_handle = prev_files
@@ -3174,7 +3174,7 @@ impl SettingsWindow {
     ) -> impl IntoElement {
         let scope_name: SharedString = self
             .display_name(&self.current_file, cx)
-            .unwrap_or_else(|| self.current_file.setting_type().to_string())
+            .unwrap_or_else(|| self.current_file.setting_type().to_owned())
             .into();
 
         let allowed_mask = self
@@ -4425,7 +4425,7 @@ fn render_text_field<T: From<String> + Into<String> + AsRef<str> + Clone>(
     SettingsInputField::new()
         .tab_index(0)
         .when_some(initial_text, |editor, text| {
-            editor.with_initial_text(text.as_ref().to_string())
+            editor.with_initial_text(text.as_ref().to_owned())
         })
         .when_some(
             metadata.and_then(|metadata| metadata.placeholder),
@@ -4496,7 +4496,7 @@ fn render_editable_number_field<T: NumberFieldType + Send + Sync>(
     let id = field
         .json_path
         .map(|p| format!("numeric_stepper_{}", p))
-        .unwrap_or_else(|| "numeric_stepper".to_string());
+        .unwrap_or_else(|| "numeric_stepper".to_owned());
 
     NumberField::new(id, value, window, cx)
         .mode(NumberFieldMode::Edit, cx)
@@ -4804,6 +4804,7 @@ pub mod test {
 
     pub fn register_settings(cx: &mut App) {
         settings::init(cx);
+        i18n::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         editor::init(cx);
         menu::init();
@@ -5690,6 +5691,7 @@ mod project_settings_update_tests {
         cx.update(|cx| {
             let store = settings::SettingsStore::test(cx);
             cx.set_global(store);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);
             menu::init();

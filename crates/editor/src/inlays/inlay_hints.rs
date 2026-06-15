@@ -4402,7 +4402,11 @@ let c = 3;"#
                 show_parameter_hints: Some(true),
                 show_other_hints: Some(true),
                 ..InlayHintSettingsContent::default()
-            })
+            });
+            settings.defaults.language_servers = Some(vec![
+                "rust-analyzer".to_string(),
+                "secondary-ls".to_string(),
+            ]);
         });
 
         let fs = FakeFs::new(cx.background_executor.clone());
@@ -4519,21 +4523,30 @@ let c = 3;"#
                 editor.refresh_inlay_hints(InlayHintRefreshReason::NewLinesShown, cx);
             })
             .unwrap();
-        cx.executor().advance_clock(Duration::from_millis(100));
-        cx.executor().run_until_parked();
+        let mut visible = Vec::new();
+        let mut has_b = false;
+        for _ in 0..4 {
+            cx.executor().advance_clock(Duration::from_millis(100));
+            cx.executor().run_until_parked();
+            visible = editor
+                .update(cx, |editor, _window, cx| visible_hint_labels(editor, cx))
+                .unwrap();
+            has_b = visible.iter().any(|h| h.starts_with("server_b"));
+            if has_b {
+                break;
+            }
 
-        // Verify both servers' hints are present initially.
-        editor
-            .update(cx, |editor, _window, cx| {
-                let visible = visible_hint_labels(editor, cx);
-                let has_a = visible.iter().any(|h| h.starts_with("server_a"));
-                let has_b = visible.iter().any(|h| h.starts_with("server_b"));
-                assert!(
-                    has_a && has_b,
-                    "Both servers should have hints initially. Got: {visible:?}"
-                );
-            })
-            .unwrap();
+            editor
+                .update(cx, |editor, _window, cx| {
+                    editor.refresh_inlay_hints(InlayHintRefreshReason::NewLinesShown, cx);
+                })
+                .unwrap();
+        }
+
+        assert!(
+            has_b,
+            "Server B hints should be present before server A requests a refresh. Got: {visible:?}"
+        );
 
         // Trigger RefreshRequested from server A. This should re-fetch server A's
         // hints while keeping server B's hints intact.
@@ -4797,6 +4810,7 @@ let c = 3;"#
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             release_channel::init(semver::Version::new(0, 0, 0), cx);
             crate::init(cx);

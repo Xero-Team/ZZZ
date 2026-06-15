@@ -75,7 +75,7 @@ impl LanguageSelector {
         let current_language_name = buffer
             .read(cx)
             .language()
-            .map(|language| language.name().as_ref().to_string());
+            .map(|language| language.name().as_ref().to_owned());
         let delegate = LanguageSelectorDelegate::new(
             cx.entity().downgrade(),
             buffer,
@@ -349,6 +349,7 @@ mod tests {
     fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
         cx.update(|cx| {
             let app_state = AppState::test(cx);
+            i18n::init(cx);
             settings::init(cx);
             super::init(cx);
             editor::init(cx);

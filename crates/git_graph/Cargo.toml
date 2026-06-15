@@ -50,6 +50,7 @@ db = { workspace = true, features = ["test-support"] }
 fs = { workspace = true, features = ["test-support"] }
 git = { workspace = true, features = ["test-support"] }
 gpui = { workspace = true, features = ["test-support"] }
+i18n.workspace = true
 language_model.workspace = true
 project = { workspace = true, features = ["test-support"] }
 rand.workspace = true

@@ -3137,7 +3137,9 @@ dependencies = [
  "gpui_tokio",
  "hex",
  "http_client",
+ "i18n",
  "indoc",
+ "jsonwebtoken",
  "language",
  "language_model",
  "livekit_api",
@@ -3284,6 +3286,7 @@ dependencies = [
  "fuzzy_nucleo",
  "go_to_line",
  "gpui",
+ "i18n",
  "language",
  "log",
  "menu",
@@ -3553,6 +3556,7 @@ dependencies = [
  "fs",
  "futures 0.3.32",
  "gpui",
+ "i18n",
  "icons",
  "indoc",
  "language",
@@ -5008,6 +5012,7 @@ dependencies = [
  "editor",
  "futures-lite 2.6.1",
  "gpui",
+ "i18n",
  "indoc",
  "itertools 0.14.0",
  "language",
@@ -5547,6 +5552,7 @@ dependencies = [
  "fuzzy",
  "git",
  "gpui",
+ "i18n",
  "indoc",
  "itertools 0.14.0",
  "language",
@@ -7177,6 +7183,7 @@ dependencies = [
  "git",
  "git_ui",
  "gpui",
+ "i18n",
  "language",
  "language_model",
  "menu",
@@ -9321,6 +9328,7 @@ dependencies = [
  "fs",
  "fuzzy",
  "gpui",
+ "i18n",
  "itertools 0.14.0",
  "json_schema_store",
  "language",
@@ -10458,6 +10466,7 @@ dependencies = [
  "editor",
  "fs",
  "gpui",
+ "i18n",
  "image",
  "language",
  "log",
@@ -23047,8 +23056,9 @@ checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
 name = "zpdf"
-version = "0.4.0"
-source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4a302dfc8f2573a27bb91779e5b514618af8e853eaf9c13b47fe157cddb7b34"
 dependencies = [
  "zpdf-color",
  "zpdf-content",
@@ -23064,8 +23074,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-color"
-version = "0.4.0"
-source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb1cd0292098d93458678922c468b5773c66fad6428eb35cb7e17cb78f990738"
 dependencies = [
  "moxcms",
  "tracing",
@@ -23074,8 +23085,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-content"
-version = "0.4.0"
-source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe23d3640efa67651134310b52eb0e444c5348089ef004ccb16384c373eff8b2"
 dependencies = [
  "tracing",
  "zpdf-color",
@@ -23089,8 +23101,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-core"
-version = "0.4.0"
-source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c93f0c4f56047e2cb6a847921818136ab891fc5cc421f958e1e3d9ecb39c8c0f"
 dependencies = [
  "smallvec",
  "thiserror 2.0.18",
@@ -23098,8 +23111,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-display-list"
-version = "0.4.0"
-source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95932f068f48f84d01fc4e22e0bce9b219686c169039c942b6d6b936d98c84ec"
 dependencies = [
  "smallvec",
  "zpdf-core",
@@ -23107,8 +23121,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-document"
-version = "0.4.0"
-source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab092f54793fd39015d08079a1f8b0d28c4d18343cfbcbf9c82f458c1779f01a"
 dependencies = [
  "tracing",
  "zpdf-core",
@@ -23118,8 +23133,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-font"
-version = "0.4.0"
-source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58dfb66eb153cc9e032ddad6f0794b5b9fd560e034a62f04c958760e68fde381"
 dependencies = [
  "tracing",
  "ttf-parser",
@@ -23128,8 +23144,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-image"
-version = "0.4.0"
-source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bbb4fabb19292c65384428c1c010e1cb798b13762fa34f1f8029fa5eba46955"
 dependencies = [
  "hayro-jpeg2000",
  "tracing",
@@ -23140,8 +23157,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-parser"
-version = "0.4.0"
-source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa179c77547b2a1018f6689ef6375e14c94c61fe51ddc7ab15893075cb77a9d2"
 dependencies = [
  "aes",
  "cbc",
@@ -23155,8 +23173,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-render"
-version = "0.4.0"
-source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9de6be2d1a288f77dfec93c2111abc6fbe1aa3f6921162d0a28524b88be9031f"
 dependencies = [
  "zpdf-core",
  "zpdf-display-list",
@@ -23164,12 +23183,14 @@ dependencies = [
 
 [[package]]
 name = "zpdf-render-cpu"
-version = "0.4.0"
-source = "git+https://github.com/Xero-Team/zpdf.git?rev=afd164e645bc3419886b7241c8602e3ddea0b773#afd164e645bc3419886b7241c8602e3ddea0b773"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8f423ca8fb247cb7ea1583d4ef6f1b5f6823aa982322b64011b70fa0c99457d"
 dependencies = [
  "image",
  "thiserror 2.0.18",
  "tiny-skia 0.11.4",
+ "tracing",
  "zpdf-content",
  "zpdf-core",
  "zpdf-display-list",

@@ -773,7 +773,7 @@ fn handle_url_click(
     if path_part.is_empty() {
         if let Some(fragment) = fragment {
             let view = view.clone();
-            let slug = SharedString::from(fragment.to_string());
+            let slug = SharedString::from(fragment.to_owned());
             window.defer(cx, move |window, cx| {
                 if let Some(view) = view.upgrade() {
                     let markdown = view.read(cx).markdown.clone();
@@ -801,7 +801,7 @@ fn handle_url_click(
         }
     } else {
         open_preview_url(
-            SharedString::from(path_part.to_string()),
+            SharedString::from(path_part.to_owned()),
             base_directory,
             workspace,
             window,
@@ -856,7 +856,7 @@ fn resolve_preview_path(url: &str, base_directory: Option<&Path>) -> Option<Path
     let (path_text, _) = split_preview_url(url);
     let decoded_url = urlencoding::decode(path_text)
         .map(|decoded| decoded.into_owned())
-        .unwrap_or_else(|_| path_text.to_string());
+        .unwrap_or_else(|_| path_text.to_owned());
     let candidate = PathBuf::from(&decoded_url);
 
     if candidate.is_absolute() && candidate.exists() {
@@ -883,13 +883,13 @@ fn resolve_preview_image(
 
     if dest_url.starts_with("http://") || dest_url.starts_with("https://") {
         return Some(ImageSource::Resource(Resource::Uri(SharedUri::from(
-            dest_url.to_string(),
+            dest_url.to_owned(),
         ))));
     }
 
     let decoded = urlencoding::decode(dest_url)
         .map(|decoded| decoded.into_owned())
-        .unwrap_or_else(|_| dest_url.to_string());
+        .unwrap_or_else(|_| dest_url.to_owned());
 
     if let Some(stripped) = ['/', '\\']
         .iter()
@@ -1337,7 +1337,7 @@ impl SearchableItem for MarkdownPreviewView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Vec<Self::Match>> {
-        let source = self.markdown.read(cx).source().to_string();
+        let source = self.markdown.read(cx).source().to_owned();
         cx.background_spawn(async move { query.search_str(&source) })
     }
 
@@ -1821,6 +1821,7 @@ mod tests {
     fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
         cx.update(|cx| {
             let state = AppState::test(cx);
+            i18n::init(cx);
             editor::init(cx);
             crate::init(cx);
             state

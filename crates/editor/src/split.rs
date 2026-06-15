@@ -1315,7 +1315,6 @@ impl SplittableEditor {
         use crate::display_map::DisplayRow;
 
         self.debug_print(cx);
-        self.check_excerpt_invariants(quiesced, cx);
 
         let rhs_snapshot = self
             .rhs_editor
@@ -1346,6 +1345,8 @@ impl SplittableEditor {
                 .native_anchor(&rhs_snapshot, cx);
             return;
         };
+
+        self.check_excerpt_invariants(quiesced, cx);
 
         let lhs_snapshot = lhs
             .editor
@@ -1496,13 +1497,6 @@ impl SplittableEditor {
         use crate::display_map::Block;
         use buffer_diff::DiffHunkStatusKind;
 
-        assert!(
-            self.lhs.is_some(),
-            "debug_print is only useful when lhs editor exists"
-        );
-
-        let lhs = self.lhs.as_ref().unwrap();
-
         // Get terminal width, default to 80 if unavailable
         let terminal_width = std::env::var("COLUMNS")
             .ok()
@@ -1513,11 +1507,20 @@ impl SplittableEditor {
         let separator = " │ ";
         let side_width = (terminal_width - separator.len()) / 2;
 
-        // Get display snapshots for both editors
-        let lhs_snapshot = lhs.editor.update(cx, |editor, cx| {
+        let rhs_snapshot = self.rhs_editor.update(cx, |editor, cx| {
             editor.display_map.update(cx, |map, cx| map.snapshot(cx))
         });
-        let rhs_snapshot = self.rhs_editor.update(cx, |editor, cx| {
+
+        let Some(lhs) = self.lhs.as_ref() else {
+            eprintln!(
+                "\n[unsplit rhs snapshot rows={}]",
+                rhs_snapshot.max_point().row().0
+            );
+            return;
+        };
+
+        // Get display snapshots for both editors
+        let lhs_snapshot = lhs.editor.update(cx, |editor, cx| {
             editor.display_map.update(cx, |map, cx| map.snapshot(cx))
         });
 
@@ -2233,6 +2236,7 @@ mod tests {
         cx.update(|cx| {
             let store = SettingsStore::test(cx);
             cx.set_global(store);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             crate::init(cx);
         });

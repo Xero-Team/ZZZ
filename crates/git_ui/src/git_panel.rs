@@ -1543,7 +1543,7 @@ impl GitPanel {
             if entry.status.staging().has_staged() {
                 self.change_file_stage(false, vec![entry.clone()], cx);
             }
-            let filename = path.path.file_name()?.to_string();
+            let filename = path.path.file_name()?.to_owned();
 
             if !entry.status.is_created() {
                 self.perform_checkout(vec![entry.clone()], window, cx);
@@ -1684,7 +1684,7 @@ impl GitPanel {
         let mut details = entries
             .iter()
             .filter_map(|entry| entry.repo_path.as_ref().file_name())
-            .map(|filename| filename.to_string())
+            .map(|filename| filename.to_owned())
             .take(5)
             .join("\n");
         if entries.len() > 5 {
@@ -1745,7 +1745,7 @@ impl GitPanel {
                     .repo_path
                     .as_ref()
                     .file_name()
-                    .map(|f| f.to_string())
+                    .map(|f| f.to_owned())
                     .unwrap_or_default()
             })
             .take(5)
@@ -2459,7 +2459,7 @@ impl GitPanel {
         };
 
         let confirmation = self.check_for_pushed_commits(window, cx);
-        let prior_head = self.load_commit_details("HEAD".to_string(), cx);
+        let prior_head = self.load_commit_details("HEAD".to_owned(), cx);
 
         let task = cx.spawn_in(window, async move |this, cx| {
             let result = maybe!(async {
@@ -2467,7 +2467,7 @@ impl GitPanel {
                     let prior_head = prior_head.await?;
 
                     repo.update(cx, |repo, cx| {
-                        repo.reset("HEAD^".to_string(), ResetMode::Soft, cx)
+                        repo.reset("HEAD^".to_owned(), ResetMode::Soft, cx)
                     })
                     .await??;
 
@@ -2579,7 +2579,7 @@ impl GitPanel {
             .repo_path
             .file_name()
             .unwrap_or_default()
-            .to_string();
+            .to_owned();
 
         Some(format!("{} {}", action_text, file_name))
     }
@@ -2615,7 +2615,7 @@ impl GitPanel {
     fn truncate_iteratively(patch: &str, max_bytes: usize) -> String {
         let mut current_size = patch.len();
         if current_size <= max_bytes {
-            return patch.to_string();
+            return patch.to_owned();
         }
         let file_patches = Self::split_patch(patch);
         let mut file_infos: Vec<TruncatedPatch> = file_patches
@@ -2624,7 +2624,7 @@ impl GitPanel {
             .collect();
 
         if file_infos.is_empty() {
-            return patch.to_string();
+            return patch.to_owned();
         }
 
         current_size = file_infos.iter().map(|f| f.calculate_size()).sum::<usize>();
@@ -2659,7 +2659,7 @@ impl GitPanel {
 
     pub fn compress_commit_diff(diff_text: &str, max_bytes: usize) -> String {
         if diff_text.len() <= max_bytes {
-            return diff_text.to_string();
+            return diff_text.to_owned();
         }
 
         let mut compressed = diff_text
@@ -2720,7 +2720,7 @@ impl GitPanel {
         let content = buffer
             .read_with(cx, |buffer, _| buffer.text())
             .trim()
-            .to_string();
+            .to_owned();
 
         if content.is_empty() {
             None
@@ -3354,7 +3354,7 @@ impl GitPanel {
                 .filter(|upstream| matches!(upstream.tracking, UpstreamTracking::Tracked(_)))
                 .and_then(|upstream| upstream.branch_name())
                 .ok_or_else(|| anyhow::anyhow!("No remote configured for repository"))?;
-            let source_branch = source_branch.to_string();
+            let source_branch = source_branch.to_owned();
 
             let remote_url = branch
                 .upstream
@@ -3367,7 +3367,7 @@ impl GitPanel {
                 .or(remote_origin.as_deref())
                 .or(remote_upstream.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("No remote configured for repository"))?;
-            let remote_url = remote_url.to_string();
+            let remote_url = remote_url.to_owned();
 
             let provider_registry = GitHostingProviderRegistry::global(cx);
             let Some((provider, parsed_remote)) =
@@ -3438,7 +3438,7 @@ impl GitPanel {
                         None
                     } else {
                         let current_branch = repo.branch.as_ref().context("No active branch")?;
-                        Some(current_branch.name().to_string())
+                        Some(current_branch.name().to_owned())
                     };
                     anyhow::Ok(repo.get_remotes(current_branch, is_push))
                 })?
@@ -5485,7 +5485,7 @@ impl GitPanel {
             return;
         };
 
-        let branch_name = branch.name().to_string();
+        let branch_name = branch.name().to_owned();
         let log_source = LogSource::Branch(branch_name.into());
         let log_order = LogOrder::DateOrder;
 
@@ -5530,7 +5530,7 @@ impl GitPanel {
             return;
         };
 
-        let branch_name = branch.name().to_string();
+        let branch_name = branch.name().to_owned();
         let log_source = LogSource::Branch(branch_name.into());
         let log_order = LogOrder::DateOrder;
 
@@ -7498,7 +7498,7 @@ impl Component for PanelRepoFooter {
         fn custom(branch_name: &str, upstream: Option<UpstreamTracking>) -> Branch {
             Branch {
                 is_head: true,
-                ref_name: branch_name.to_string().into(),
+                ref_name: branch_name.to_owned().into(),
                 upstream: upstream.map(|tracking| Upstream {
                     ref_name: format!("zed/{}", branch_name).into(),
                     tracking,
@@ -7801,9 +7801,9 @@ fn rpc_error_raw_message_from_chain(error: &anyhow::Error) -> Option<&str> {
 
 fn format_git_error_toast_message(error: &anyhow::Error) -> String {
     if let Some(message) = rpc_error_raw_message_from_chain(error) {
-        message.trim().to_string()
+        message.trim().to_owned()
     } else {
-        error.to_string().trim().to_string()
+        error.to_string().trim().to_owned()
     }
 }
 
@@ -7836,6 +7836,7 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             theme_settings::init(LoadThemes::JustBase, cx);
             editor::init(cx);
             crate::init(cx);

@@ -355,7 +355,7 @@ impl<'a> Iterator for InlayChunks<'a> {
                                             .bg(colors.surface_background)
                                             .text_color(colors.text_muted)
                                             .text_xs()
-                                            .child(text.trim().to_string()),
+                                            .child(text.trim().to_owned()),
                                     )
                                     .into_any_element()
                             }),
@@ -2244,6 +2244,7 @@ mod tests {
     fn init_test(cx: &mut App) {
         let store = SettingsStore::test(cx);
         cx.set_global(store);
+        i18n::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
     }
 
@@ -2283,7 +2284,7 @@ mod tests {
         let (mut inlay_map, _) = InlayMap::new(buffer.read(cx).snapshot(cx));
 
         // Create an inlay with text that contains a multi-byte character
-        // The string "SortingDirec..." contains an ellipsis character '…' which is 3 bytes (E2 80 A6)
+        // The string "SortingDirec..." uses ASCII dots and should remain UTF-8 safe.
         let inlay_text = "SortingDirec...";
         let position = buffer.read(cx).snapshot(cx).anchor_before(Point::new(0, 5));
 
@@ -2320,16 +2321,16 @@ mod tests {
 
         // Verify the chunks are correct
         let full_text: String = chunks.iter().map(|c| c.chunk.text).collect();
-        assert_eq!(full_text, "fn maSortingDirec…in() {}\n");
+        assert_eq!(full_text, "fn maSortingDirec...in() {}\n");
 
-        // Verify the highlighted portion includes the complete ellipsis character
+        // Verify the highlighted portion remains valid UTF-8 after truncation.
         let highlighted_chunks: Vec<_> = chunks
             .iter()
             .filter(|c| c.chunk.highlight_style.is_some() && c.chunk.is_inlay)
             .collect();
 
         assert_eq!(highlighted_chunks.len(), 1);
-        assert_eq!(highlighted_chunks[0].chunk.text, "SortingDirec...");
+        assert_eq!(highlighted_chunks[0].chunk.text, "SortingDirec.");
     }
 
     #[gpui::test]

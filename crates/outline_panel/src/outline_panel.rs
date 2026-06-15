@@ -4164,7 +4164,7 @@ impl OutlinePanel {
                 PanelEntry::Fs(fs_entry) => {
                     if let Some(file_name) = self
                         .relative_path(fs_entry, cx)
-                        .and_then(|path| Some(path.file_name()?.to_string()))
+                        .and_then(|path| Some(path.file_name()?.to_owned()))
                     {
                         state
                             .match_candidates
@@ -6935,6 +6935,7 @@ outline: struct OutlineEntryExcerpt
             let settings = SettingsStore::test(cx);
             cx.set_global(settings);
 
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
 
             editor::init(cx);

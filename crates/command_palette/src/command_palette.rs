@@ -214,7 +214,7 @@ impl QueryHistory {
 
     fn previous(&mut self, current_query: &str, cx: &App) -> Option<&str> {
         if self.validate_cursor(current_query, cx).is_none() {
-            self.prefix = Some(current_query.to_string());
+            self.prefix = Some(current_query.to_owned());
         }
 
         let prefix = self.prefix.clone().unwrap_or_default();
@@ -391,10 +391,8 @@ impl PickerDelegate for CommandPaletteDelegate {
                 let should_use_history =
                     self.selected_ix == 0 || self.query_history.is_navigating();
                 if should_use_history {
-                    if let Some(query) = self
-                        .query_history
-                        .previous(query, cx)
-                        .map(|s| s.to_string())
+                    if let Some(query) =
+                        self.query_history.previous(query, cx).map(|s| s.to_owned())
                     {
                         return Some(query);
                     }
@@ -402,7 +400,7 @@ impl PickerDelegate for CommandPaletteDelegate {
             }
             Direction::Down => {
                 if self.query_history.is_navigating() {
-                    if let Some(query) = self.query_history.next(query, cx).map(|s| s.to_string()) {
+                    if let Some(query) = self.query_history.next(query, cx).map(|s| s.to_owned()) {
                         return Some(query);
                     }
                     let prefix = self.query_history.prefix.take().unwrap_or_default();
@@ -456,7 +454,7 @@ impl PickerDelegate for CommandPaletteDelegate {
             let hit_counts = self.hit_counts(cx);
             let executor = cx.background_executor().clone();
             let query = normalize_action_query(query_str);
-            let query_for_link = query_str.to_string();
+            let query_for_link = query_str.to_owned();
             async move {
                 commands.sort_by_key(|action| {
                     (
@@ -565,7 +563,7 @@ impl PickerDelegate for CommandPaletteDelegate {
             };
             let action_name = selected_command.action.name();
             let open_keymap = Box::new(zed_actions::ChangeKeybinding {
-                action: action_name.to_string(),
+                action: action_name.to_owned(),
             });
             window.dispatch_action(open_keymap, cx);
             self.dismissed(window, cx);
@@ -965,6 +963,7 @@ mod tests {
     fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
         cx.update(|cx| {
             let app_state = AppState::test(cx);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);
             menu::init();

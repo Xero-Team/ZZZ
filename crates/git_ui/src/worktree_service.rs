@@ -390,7 +390,7 @@ fn start_worktree_creations(
     let worktree_name = worktree_name.unwrap_or_else(|| {
         let existing_refs: Vec<&str> = existing_worktree_names.iter().map(|s| s.as_str()).collect();
         worktree_names::generate_worktree_name(&existing_refs, rng)
-            .unwrap_or_else(|| "worktree".to_string())
+            .unwrap_or_else(|| "worktree".to_owned())
     });
 
     for repo in git_repos {
@@ -681,7 +681,7 @@ fn handle_create_worktree_inner(
     let display_name: SharedString = worktree_name
         .as_deref()
         .unwrap_or("worktree")
-        .to_string()
+        .to_owned()
         .into();
 
     workspace.set_active_worktree_creation(Some(display_name), false, cx);
@@ -840,7 +840,7 @@ async fn do_create_worktree(
                         .and_then(|p| p.file_name())
                         .and_then(|n| n.to_str())
                     {
-                        existing_worktree_names.push(name.to_string());
+                        existing_worktree_names.push(name.to_owned());
                     }
                     existing_worktree_paths.insert(worktree.path.clone());
                 }
@@ -855,8 +855,8 @@ async fn do_create_worktree(
     if remote_branch_fetch_mode.should_fetch()
         && let Some((remote_name, branch_name)) = remote_branch_to_fetch(&branch_target)
     {
-        let remote_name = remote_name.to_string();
-        let branch_name = branch_name.to_string();
+        let remote_name = remote_name.to_owned();
+        let branch_name = branch_name.to_owned();
         if let Err(error) = fetch_remote_for_worktree_base(
             &git_repos,
             remote_name.clone(),
@@ -1217,6 +1217,7 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             theme_settings::init(LoadThemes::JustBase, cx);
             AllLanguageSettings::register(cx);
             editor::init(cx);

@@ -542,7 +542,7 @@ pub(crate) async fn determine_paths_with_positions(
 
 async fn path_exists(connection: &Arc<dyn RemoteConnection>, path: &Path) -> bool {
     let Ok(command) = connection.build_command(
-        Some("test".to_string()),
+        Some("test".to_owned()),
         &["-e".to_owned(), path.to_string_lossy().to_string()],
         &Default::default(),
         None,
@@ -1032,6 +1032,7 @@ mod tests {
     fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
         cx.update(|cx| {
             let state = AppState::test(cx);
+            i18n::init(cx);
             crate::init(cx);
             editor::init(cx);
             state

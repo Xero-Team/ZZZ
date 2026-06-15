@@ -32,20 +32,20 @@ fn test_path_elision() {
     }
 
     // Simple cases, mostly to check that different path shapes are handled gracefully.
-    check("p/a/b/c/d/", 6, [], "p/…/d/");
+    check("p/a/b/c/d/", 6, [], "p/.../d/");
     check("p/a/b/c/d/", 1, [2, 4, 6], "p/a/b/c/d/");
-    check("p/a/b/c/d/", 10, [2, 6], "p/a/…/c/d/");
-    check("p/a/b/c/d/", 8, [6], "p/…/c/d/");
+    check("p/a/b/c/d/", 10, [2, 6], "p/a/.../c/d/");
+    check("p/a/b/c/d/", 8, [6], "p/.../c/d/");
 
-    check("p/a/b/c/d", 5, [], "p/…/d");
+    check("p/a/b/c/d", 5, [], "p/.../d");
     check("p/a/b/c/d", 9, [2, 4, 6], "p/a/b/c/d");
-    check("p/a/b/c/d", 9, [2, 6], "p/a/…/c/d");
-    check("p/a/b/c/d", 7, [6], "p/…/c/d");
+    check("p/a/b/c/d", 9, [2, 6], "p/a/.../c/d");
+    check("p/a/b/c/d", 7, [6], "p/.../c/d");
 
-    check("/p/a/b/c/d/", 7, [], "/p/…/d/");
+    check("/p/a/b/c/d/", 7, [], "/p/.../d/");
     check("/p/a/b/c/d/", 11, [3, 5, 7], "/p/a/b/c/d/");
-    check("/p/a/b/c/d/", 11, [3, 7], "/p/a/…/c/d/");
-    check("/p/a/b/c/d/", 9, [7], "/p/…/c/d/");
+    check("/p/a/b/c/d/", 11, [3, 7], "/p/a/.../c/d/");
+    check("/p/a/b/c/d/", 9, [7], "/p/.../c/d/");
 
     // If the budget can't be met, no elision is done.
     check(
@@ -60,7 +60,7 @@ fn test_path_elision() {
         "project/one/two/X/three/sub",
         21,
         [16],
-        "project/…/X/three/sub",
+        "project/.../X/three/sub",
     );
 
     // Elision stops when the budget is met, even though there are more components in the chosen segment.
@@ -69,7 +69,7 @@ fn test_path_elision() {
         "project/one/two/three/X/sub",
         21,
         [22],
-        "project/…/three/X/sub",
+        "project/.../three/X/sub",
     )
 }
 
@@ -4412,6 +4412,7 @@ async fn open_queried_buffer(
 fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
     cx.update(|cx| {
         let state = AppState::test(cx);
+        i18n::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         super::init(cx);
         editor::init(cx);

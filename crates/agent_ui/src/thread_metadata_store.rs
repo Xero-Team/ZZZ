@@ -254,8 +254,8 @@ fn migrate_thread_remote_connections(cx: &mut App, migration_task: Task<anyhow::
             .unwrap_or(Task::ready(()).shared());
 
         kvp.write_kvp(
-            THREAD_REMOTE_CONNECTION_MIGRATION_KEY.to_string(),
-            "1".to_string(),
+            THREAD_REMOTE_CONNECTION_MIGRATION_KEY.to_owned(),
+            "1".to_owned(),
         )
         .await?;
         reloaded_task.await;
@@ -285,7 +285,7 @@ fn migrate_thread_ids(cx: &mut App) {
             .then_some(store.update(cx, |store, cx| store.reload(cx)))
             .unwrap_or(Task::ready(()).shared());
 
-        kvp.write_kvp(THREAD_ID_MIGRATION_KEY.to_string(), "1".to_string())
+        kvp.write_kvp(THREAD_ID_MIGRATION_KEY.to_owned(), "1".to_owned())
             .await?;
         reloaded_task.await;
 
@@ -1758,8 +1758,10 @@ mod tests {
     fn init_test(cx: &mut TestAppContext) {
         let fs = FakeFs::new(cx.executor());
         cx.update(|cx| {
+            cx.set_global(db::AppDatabase::test_new());
             let settings_store = settings::SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);
             release_channel::init("0.0.0".parse().unwrap(), cx);
@@ -2191,7 +2193,8 @@ mod tests {
     ) {
         init_test(cx);
 
-        let folder_paths = PathList::new(&[Path::new("/remote-project")]);
+        let folder_paths =
+            PathList::new(&[Path::new("/remote-project-thread-remote-backfill-test")]);
         let updated_at = Utc::now();
         let metadata = make_metadata(
             "remote-session",

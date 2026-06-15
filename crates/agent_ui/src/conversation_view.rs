@@ -1964,8 +1964,8 @@ impl ConversationView {
 
             let success_patterns = match method.0.as_ref() {
                 "claude-login" | GEMINI_TERMINAL_AUTH_METHOD_ID => vec![
-                    "Login successful".to_string(),
-                    "Type your message".to_string(),
+                    "Login successful".to_owned(),
+                    "Type your message".to_owned(),
                 ],
                 _ => Vec::new(),
             };
@@ -2092,7 +2092,7 @@ impl ConversationView {
                     .enumerate()
                     .rev()
                     .map(|(ix, method)| {
-                        let (method_id, name) = (method.id().0.clone(), method.name().to_string());
+                        let (method_id, name) = (method.id().0.clone(), method.name().to_owned());
 
                         Button::new(method_id.clone(), name)
                             .label_size(LabelSize::Small)
@@ -2104,7 +2104,7 @@ impl ConversationView {
                                 }
                             })
                             .when_some(method.description(), |this, description| {
-                                this.tooltip(Tooltip::text(description.to_string()))
+                                this.tooltip(Tooltip::text(description.to_owned()))
                             })
                             .on_click({
                                 cx.listener(move |this, _, window, cx| {
@@ -2665,7 +2665,7 @@ impl ConversationView {
                 .read(cx)
                 .visible_worktrees(cx)
                 .next()
-                .map(|worktree| worktree.read(cx).root_name_str().to_string())
+                .map(|worktree| worktree.read(cx).root_name_str().to_owned())
         });
 
         if let Some(screen_window) = cx
@@ -5411,6 +5411,7 @@ pub(crate) mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             ThreadMetadataStore::init_global(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);

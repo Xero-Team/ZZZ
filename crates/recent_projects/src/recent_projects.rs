@@ -273,7 +273,7 @@ fn get_branch_for_worktree(
             repo.read(cx)
                 .branch
                 .as_ref()
-                .map(|branch| SharedString::from(branch.name().to_string()))
+                .map(|branch| SharedString::from(branch.name().to_owned()))
         })
 }
 
@@ -510,11 +510,11 @@ pub fn init(cx: &mut App) {
                             )
                         })
                         .unwrap_or_else(|_| {
-                            "Cannot open Dev Container from remote project".to_string()
+                            "Cannot open Dev Container from remote project".to_owned()
                         });
                     let ok_label = cx
                         .update(|_, cx| i18n::tr(cx, "zed.common.ok", "Ok"))
-                        .unwrap_or_else(|_| "Ok".to_string());
+                        .unwrap_or_else(|_| "Ok".to_owned());
                     cx.prompt(
                         gpui::PromptLevel::Critical,
                         &title,
@@ -3070,6 +3070,7 @@ mod tests {
     fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
         cx.update(|cx| {
             let state = AppState::test(cx);
+            i18n::init(cx);
             crate::init(cx);
             editor::init(cx);
             state

@@ -43,6 +43,11 @@ pub struct EditorTestContext {
 
 impl EditorTestContext {
     pub async fn new(cx: &mut gpui::TestAppContext) -> EditorTestContext {
+        cx.update(|cx| {
+            assets::Assets.load_test_fonts(cx);
+            i18n::init(cx);
+            crate::init(cx);
+        });
         let fs = FakeFs::new(cx.executor());
         let root = Self::root_path();
         fs.insert_tree(
@@ -335,7 +340,7 @@ impl EditorTestContext {
         let path = self.update_buffer(|buffer, _| buffer.file().unwrap().path().clone());
         fs.set_head_for_repo(
             &Self::root_path().join(".git"),
-            &[(path.as_unix_str(), diff_base.to_string())],
+            &[(path.as_unix_str(), diff_base.to_owned())],
             "deadbeef",
         );
         self.cx.run_until_parked();
@@ -356,7 +361,7 @@ impl EditorTestContext {
         let path = self.update_buffer(|buffer, _| buffer.file().unwrap().path().clone());
         fs.set_index_for_repo(
             &Self::root_path().join(".git"),
-            &[(path.as_unix_str(), diff_base.to_string())],
+            &[(path.as_unix_str(), diff_base.to_owned())],
         );
         self.cx.run_until_parked();
     }
@@ -609,7 +614,7 @@ impl EditorTestContext {
     pub fn assert_editor_state(&mut self, marked_text: &str) {
         let (expected_text, expected_selections) = marked_text_ranges(marked_text, true);
         pretty_assertions::assert_eq!(self.buffer_text(), expected_text, "unexpected buffer text");
-        self.assert_selections(expected_selections, marked_text.to_string())
+        self.assert_selections(expected_selections, marked_text.to_owned())
     }
 
     /// Make an assertion about the editor's text and the ranges and directions
@@ -620,7 +625,7 @@ impl EditorTestContext {
     pub fn assert_display_state(&mut self, marked_text: &str) {
         let (expected_text, expected_selections) = marked_text_ranges(marked_text, true);
         pretty_assertions::assert_eq!(self.display_text(), expected_text, "unexpected buffer text");
-        self.assert_selections(expected_selections, marked_text.to_string())
+        self.assert_selections(expected_selections, marked_text.to_owned())
     }
 
     pub fn editor_state(&mut self) -> String {

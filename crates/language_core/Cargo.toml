@@ -7,6 +7,9 @@ publish = false
 [lib]
 path = "src/language_core.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 collections.workspace = true
