@@ -68,8 +68,8 @@ impl OpenPathDelegate {
             cancel_flag: Arc::new(AtomicBool::new(false)),
             should_dismiss: true,
             prompt_root: match path_style {
-                PathStyle::Posix => "/".to_string(),
-                PathStyle::Windows => "C:\\".to_string(),
+                PathStyle::Posix => "/".to_owned(),
+                PathStyle::Windows => "C:\\".to_owned(),
             },
             path_style,
             replace_prompt: Task::ready(()),
@@ -443,7 +443,7 @@ impl PickerDelegate for OpenPathDelegate {
                         CandidateInfo {
                             path: StringMatchCandidate {
                                 id: max_id + 1,
-                                string: current_dir.to_string(),
+                                string: current_dir.to_owned(),
                                 char_bag: CharBag::from(current_dir),
                             },
                             is_dir: true,
@@ -762,7 +762,7 @@ impl PickerDelegate for OpenPathDelegate {
         match &self.directory_state {
             DirectoryState::List { parent_path, .. } => {
                 let (label, indices) = if is_current_dir_candidate {
-                    ("open this directory".to_string(), vec![])
+                    ("open this directory".to_owned(), vec![])
                 } else if *parent_path == self.prompt_root {
                     match_positions.iter_mut().for_each(|position| {
                         *position += self.prompt_root.len();
@@ -946,7 +946,7 @@ fn get_dir_and_suffix(query: String, path_style: PathStyle) -> (String, String) 
                 (query, String::new())
             };
             if dir.len() < 3 {
-                dir = "C:\\".to_string();
+                dir = "C:\\".to_owned();
             }
             (dir, suffix)
         }

@@ -1002,7 +1002,7 @@ impl DirectoryLister {
                 } else {
                     "~/"
                 }
-                .to_string()
+                .to_owned()
             })
     }
 
@@ -2125,7 +2125,7 @@ impl Project {
                 id: 100 + self.visible_worktrees(cx).count() as u64,
                 root_name,
                 visible: true,
-                abs_path: abs_path.to_string(),
+                abs_path: abs_path.to_owned(),
                 root_repo_common_dir: None,
             },
             client,
@@ -5013,18 +5013,11 @@ impl Project {
                 }
             }
         } else {
-            for worktree in worktree_store.visible_worktrees(cx) {
-                let worktree = worktree.read(cx);
-                if let Ok(rel_path) = RelPath::new(path, path_style) {
-                    if let Some(entry) = worktree.entry_for_path(&rel_path) {
-                        return Some(ProjectPath {
-                            worktree_id: worktree.id(),
-                            path: entry.path.clone(),
-                        });
-                    }
-                }
-            }
-
+            // When callers include the worktree root name (for example
+            // `foo/path.txt`), prefer resolving that prefix before treating
+            // the input as a worktree-relative path. Otherwise a worktree
+            // containing a subdirectory named like its own root can shadow the
+            // intended root-qualified path.
             for worktree in worktree_store.visible_worktrees(cx) {
                 let worktree_root_name = worktree.read(cx).root_name();
                 if let Ok(relative_path) = path.strip_prefix(worktree_root_name.as_std_path())
@@ -5034,6 +5027,18 @@ impl Project {
                         worktree_id: worktree.read(cx).id(),
                         path: path.into_arc(),
                     });
+                }
+            }
+
+            for worktree in worktree_store.visible_worktrees(cx) {
+                let worktree = worktree.read(cx);
+                if let Ok(rel_path) = RelPath::new(path, path_style) {
+                    if let Some(entry) = worktree.entry_for_path(&rel_path) {
+                        return Some(ProjectPath {
+                            worktree_id: worktree.id(),
+                            path: entry.path.clone(),
+                        });
+                    }
                 }
             }
         }
