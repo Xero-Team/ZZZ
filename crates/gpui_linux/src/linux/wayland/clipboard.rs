@@ -79,7 +79,7 @@ impl<T: ReceiveData> DataOffer<T> {
 
     fn read_bytes(&self, connection: &Connection, mime_type: &str) -> Option<Vec<u8>> {
         let pipe = Pipe::new().unwrap();
-        self.inner.receive_data(mime_type.to_string(), unsafe {
+        self.inner.receive_data(mime_type.to_owned(), unsafe {
             BorrowedFd::borrow_raw(pipe.write.as_raw_fd())
         });
         let fd = pipe.read;

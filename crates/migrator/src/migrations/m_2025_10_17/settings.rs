@@ -20,9 +20,9 @@ fn migrate_one(obj: &mut serde_json::Map<String, Value>) -> Result<()> {
         return Ok(());
     };
     *include_ignored = match include_ignored {
-        Value::Bool(true) => Value::String("all".to_string()),
-        Value::Bool(false) => Value::String("indexed".to_string()),
-        Value::Null => Value::String("smart".to_string()),
+        Value::Bool(true) => Value::String("all".to_owned()),
+        Value::Bool(false) => Value::String("indexed".to_owned()),
+        Value::Null => Value::String("smart".to_owned()),
         Value::String(s) if s == "all" || s == "indexed" || s == "smart" => return Ok(()),
         _ => anyhow::bail!("Expected include_ignored to be a boolean or null"),
     };

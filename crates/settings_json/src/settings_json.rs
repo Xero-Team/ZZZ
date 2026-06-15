@@ -294,7 +294,7 @@ fn construct_json_value(
         if parse_index_key(key.as_ref()).is_some() {
             new_value = serde_json::json!([new_value]);
         } else {
-            new_value = serde_json::json!({ key.as_ref().to_string(): new_value });
+            new_value = serde_json::json!({ key.as_ref().to_owned(): new_value });
         }
     }
     return new_value;

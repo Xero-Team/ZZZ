@@ -436,7 +436,7 @@ impl X11Client {
         let layout_name = xkb_state
             .get_keymap()
             .layout_get_name(layout_idx)
-            .to_string();
+            .to_owned();
         let keyboard_layout = LinuxKeyboardLayout::new(layout_name.into());
 
         let resource_database = x11rb::resource_manager::new_from_default(&xcb_connection)
@@ -1509,7 +1509,7 @@ impl X11Client {
         let keymap = state.xkb.get_keymap();
         let layout_name = keymap.layout_get_name(layout_idx);
         if layout_name != state.keyboard_layout.name() {
-            state.keyboard_layout = LinuxKeyboardLayout::new(layout_name.to_string().into());
+            state.keyboard_layout = LinuxKeyboardLayout::new(layout_name.to_owned().into());
             if let Some(mut callback) = state.common.callbacks.keyboard_layout_change.take() {
                 drop(state);
                 callback();

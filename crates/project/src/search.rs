@@ -309,7 +309,7 @@ impl SearchQuery {
                 .split(',')
                 .map(str::trim)
                 .filter(|&glob_str| !glob_str.is_empty())
-                .map(|s| s.to_string())
+                .map(|s| s.to_owned())
                 .collect()
         } else {
             message.files_to_include
@@ -321,7 +321,7 @@ impl SearchQuery {
                 .split(',')
                 .map(str::trim)
                 .filter(|&glob_str| !glob_str.is_empty())
-                .map(|s| s.to_string())
+                .map(|s| s.to_owned())
                 .collect()
         } else {
             message.files_to_exclude
@@ -373,7 +373,7 @@ impl SearchQuery {
         let mut files_to_include = self.files_to_include().sources();
         let mut files_to_exclude = self.files_to_exclude().sources();
         proto::SearchQuery {
-            query: self.as_str().to_string(),
+            query: self.as_str().to_owned(),
             regex: self.is_regex(),
             whole_word: self.whole_word(),
             case_sensitive: self.case_sensitive(),

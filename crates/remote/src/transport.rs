@@ -381,7 +381,7 @@ async fn which(
     binary_name: impl AsRef<str>,
     cx: &mut AsyncApp,
 ) -> Result<Option<std::path::PathBuf>> {
-    let binary_name = binary_name.as_ref().to_string();
+    let binary_name = binary_name.as_ref().to_owned();
     let binary_name_cloned = binary_name.clone();
     let res = cx
         .background_spawn(async move { which::which(binary_name_cloned) })

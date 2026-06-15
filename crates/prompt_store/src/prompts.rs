@@ -55,8 +55,8 @@ impl ProjectContext {
             has_rules,
             has_user_rules: !default_user_rules.is_empty(),
             user_rules: default_user_rules,
-            os: std::env::consts::OS.to_string(),
-            arch: std::env::consts::ARCH.to_string(),
+            os: std::env::consts::OS.to_owned(),
+            arch: std::env::consts::ARCH.to_owned(),
             shell: ShellKind::new(&get_default_system_shell_preferring_bash(), cfg!(windows))
                 .to_string(),
         }
@@ -360,7 +360,7 @@ impl PromptBuilder {
             .collect();
 
         let context = ContentPromptContextV2 {
-            content_type: content_type.to_string(),
+            content_type: content_type.to_owned(),
             language_name: language_name.map(|s| s.to_string()),
             is_truncated,
             document_content,
@@ -443,7 +443,7 @@ impl PromptBuilder {
             .collect();
 
         let context = ContentPromptContext {
-            content_type: content_type.to_string(),
+            content_type: content_type.to_owned(),
             language_name: language_name.map(|s| s.to_string()),
             is_insert,
             is_truncated,
@@ -463,12 +463,12 @@ impl PromptBuilder {
         latest_output: &[String],
     ) -> Result<String, RenderError> {
         let context = TerminalAssistantPromptContext {
-            os: std::env::consts::OS.to_string(),
-            arch: std::env::consts::ARCH.to_string(),
-            shell: shell.map(|s| s.to_string()),
-            working_directory: working_directory.map(|s| s.to_string()),
+            os: std::env::consts::OS.to_owned(),
+            arch: std::env::consts::ARCH.to_owned(),
+            shell: shell.map(|s| s.to_owned()),
+            working_directory: working_directory.map(|s| s.to_owned()),
             latest_output: latest_output.to_vec(),
-            user_prompt: user_prompt.to_string(),
+            user_prompt: user_prompt.to_owned(),
         };
 
         self.handlebars

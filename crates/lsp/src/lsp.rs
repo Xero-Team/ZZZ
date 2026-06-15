@@ -184,7 +184,7 @@ impl LanguageServerName {
 
 impl<'a> From<&'a str> for LanguageServerName {
     fn from(str: &'a str) -> LanguageServerName {
-        LanguageServerName(str.to_string().into())
+        LanguageServerName(str.to_owned().into())
     }
 }
 
@@ -780,7 +780,7 @@ impl LanguageServer {
                 self.root_uri
                     .to_file_path()
                     .map(|path| path.to_string_lossy().into_owned())
-                    .unwrap_or_else(|_| self.root_uri.path().to_string()),
+                    .unwrap_or_else(|_| self.root_uri.path().to_owned()),
             ),
             root_uri: Some(self.root_uri.clone()),
             initialization_options: None,
@@ -857,12 +857,12 @@ impl LanguageServer {
                         data_support: Some(true),
                         resolve_support: Some(CodeActionCapabilityResolveSupport {
                             properties: vec![
-                                "kind".to_string(),
-                                "diagnostics".to_string(),
-                                "isPreferred".to_string(),
-                                "disabled".to_string(),
-                                "edit".to_string(),
-                                "command".to_string(),
+                                "kind".to_owned(),
+                                "diagnostics".to_owned(),
+                                "isPreferred".to_owned(),
+                                "disabled".to_owned(),
+                                "edit".to_owned(),
+                                "command".to_owned(),
                             ],
                         }),
                         dynamic_registration: Some(true),
@@ -873,10 +873,10 @@ impl LanguageServer {
                             snippet_support: Some(true),
                             resolve_support: Some(CompletionItemCapabilityResolveSupport {
                                 properties: vec![
-                                    "additionalTextEdits".to_string(),
-                                    "command".to_string(),
-                                    "detail".to_string(),
-                                    "documentation".to_string(),
+                                    "additionalTextEdits".to_owned(),
+                                    "command".to_owned(),
+                                    "detail".to_owned(),
+                                    "documentation".to_owned(),
                                     // NB: Do not have this resolved, otherwise Zed becomes slow to complete things
                                     // "textEdit".to_string(),
                                 ],
@@ -928,11 +928,11 @@ impl LanguageServer {
                     inlay_hint: Some(InlayHintClientCapabilities {
                         resolve_support: Some(InlayHintResolveClientCapabilities {
                             properties: vec![
-                                "textEdits".to_string(),
-                                "tooltip".to_string(),
-                                "label.tooltip".to_string(),
-                                "label.location".to_string(),
-                                "label.command".to_string(),
+                                "textEdits".to_owned(),
+                                "tooltip".to_owned(),
+                                "label.tooltip".to_owned(),
+                                "label.location".to_owned(),
+                                "label.command".to_owned(),
                             ],
                         }),
                         dynamic_registration: Some(true),
@@ -1043,7 +1043,7 @@ impl LanguageServer {
             workspace_folders: Some(workspace_folders),
             client_info: release_channel::ReleaseChannel::try_global(cx).map(|release_channel| {
                 ClientInfo {
-                    name: release_channel.display_name().to_string(),
+                    name: release_channel.display_name().to_owned(),
                     version: Some(release_channel::AppVersion::global(cx).to_string()),
                 }
             }),
@@ -1784,7 +1784,7 @@ impl fmt::Debug for LanguageServerBinary {
                 .iter()
                 .map(|(key, value)| {
                     let redacted_value = if redact::should_redact(key) {
-                        "REDACTED".to_string()
+                        "REDACTED".to_owned()
                     } else {
                         value.clone()
                     };

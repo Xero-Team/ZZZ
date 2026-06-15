@@ -121,12 +121,17 @@ pub(crate) fn to_settings_soft_wrap(value: language_core::SoftWrap) -> settings:
 
 static QUERY_CURSORS: Mutex<Vec<QueryCursor>> = Mutex::new(vec![]);
 static PARSERS: Mutex<Vec<Parser>> = Mutex::new(vec![]);
+#[cfg(test)]
+static PARSER_TEST_LOCK: parking_lot::ReentrantMutex<()> = parking_lot::ReentrantMutex::new(());
 
 #[ztracing::instrument(skip_all)]
 pub fn with_parser<F, R>(func: F) -> R
 where
     F: FnOnce(&mut Parser) -> R,
 {
+    #[cfg(test)]
+    let _test_lock = PARSER_TEST_LOCK.lock();
+
     let mut parser = PARSERS.lock().pop().unwrap_or_else(|| {
         let mut parser = Parser::new();
         parser
@@ -172,36 +177,36 @@ pub static PLAIN_TEXT: LazyLock<Arc<Language>> = LazyLock::new(|| {
             brackets: BracketPairConfig {
                 pairs: vec![
                     BracketPair {
-                        start: "(".to_string(),
-                        end: ")".to_string(),
+                        start: "(".to_owned(),
+                        end: ")".to_owned(),
                         close: true,
                         surround: true,
                         newline: false,
                     },
                     BracketPair {
-                        start: "[".to_string(),
-                        end: "]".to_string(),
+                        start: "[".to_owned(),
+                        end: "]".to_owned(),
                         close: true,
                         surround: true,
                         newline: false,
                     },
                     BracketPair {
-                        start: "{".to_string(),
-                        end: "}".to_string(),
+                        start: "{".to_owned(),
+                        end: "}".to_owned(),
                         close: true,
                         surround: true,
                         newline: false,
                     },
                     BracketPair {
-                        start: "\"".to_string(),
-                        end: "\"".to_string(),
+                        start: "\"".to_owned(),
+                        end: "\"".to_owned(),
                         close: true,
                         surround: true,
                         newline: false,
                     },
                     BracketPair {
-                        start: "'".to_string(),
-                        end: "'".to_string(),
+                        start: "'".to_owned(),
+                        end: "'".to_owned(),
                         close: true,
                         surround: true,
                         newline: false,
@@ -1520,7 +1525,7 @@ pub fn rust_lang() -> Arc<Language> {
         LanguageConfig {
             name: "Rust".into(),
             matcher: LanguageMatcher {
-                path_suffixes: vec!["rs".to_string()],
+                path_suffixes: vec!["rs".to_owned()],
                 ..Default::default()
             },
             line_comments: vec!["// ".into(), "/// ".into(), "//! ".into()],
@@ -1688,6 +1693,7 @@ mod tests {
         use tree_sitter::{Language as TsLanguage, ParseOptions};
 
         let rust_language: TsLanguage = tree_sitter_rust::LANGUAGE.into();
+        let _test_lock = PARSER_TEST_LOCK.lock();
 
         // Drain the shared pool so this test sees a deterministic LIFO order:
         // the parser we push at the end of the first `with_parser` call is the

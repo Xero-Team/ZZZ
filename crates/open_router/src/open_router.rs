@@ -275,7 +275,7 @@ impl From<String> for MessageContent {
 
 impl From<&str> for MessageContent {
     fn from(text: &str) -> Self {
-        Self::Plain(text.to_string())
+        Self::Plain(text.to_owned())
     }
 }
 
@@ -581,21 +581,18 @@ pub async fn list_models(
                         .next_back()
                         .unwrap_or(&entry.name)
                         .trim()
-                        .to_string(),
+                        .to_owned(),
                 ),
                 max_tokens: entry.context_length.unwrap_or(2000000),
-                supports_tools: Some(entry.supported_parameters.contains(&"tools".to_string())),
+                supports_tools: Some(entry.supported_parameters.contains(&"tools".to_owned())),
                 supports_images: Some(
                     entry
                         .architecture
                         .as_ref()
-                        .map(|arch| arch.input_modalities.contains(&"image".to_string()))
+                        .map(|arch| arch.input_modalities.contains(&"image".to_owned()))
                         .unwrap_or(false),
                 ),
-                mode: if entry
-                    .supported_parameters
-                    .contains(&"reasoning".to_string())
-                {
+                mode: if entry.supported_parameters.contains(&"reasoning".to_owned()) {
                     ModelMode::Thinking {
                         budget_tokens: Some(4_096),
                     }

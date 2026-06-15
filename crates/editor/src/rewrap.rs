@@ -85,7 +85,7 @@ impl Editor {
                             .find_map(|prefix_regex| {
                                 prefix_regex.find(&line_text_after_indent).map(|mat| {
                                     if mat.start() == 0 {
-                                        Some(mat.as_str().to_string())
+                                        Some(mat.as_str().to_owned())
                                     } else {
                                         None
                                     }

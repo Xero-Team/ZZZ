@@ -618,7 +618,7 @@ async fn handle_envs(
     }
 
     if !env_obj.is_empty() {
-        config.insert("env".to_string(), Value::Object(env_obj));
+        config.insert("env".to_owned(), Value::Object(env_obj));
     }
 
     // remove envFile now that it's been handled

@@ -457,7 +457,7 @@ impl From<String> for LanguageModelProviderSetting {
 
 impl From<&str> for LanguageModelProviderSetting {
     fn from(provider: &str) -> Self {
-        Self(provider.to_string())
+        Self(provider.to_owned())
     }
 }
 

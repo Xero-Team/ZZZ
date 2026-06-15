@@ -112,7 +112,7 @@ impl AgentTool for FindPathTool {
         input: Result<Self::Input, serde_json::Value>,
         _cx: &mut App,
     ) -> SharedString {
-        let mut title = "Find paths".to_string();
+        let mut title = "Find paths".to_owned();
         if let Ok(input) = input {
             title.push_str(&format!(" matching “`{}`”", input.glob));
         }
@@ -136,7 +136,7 @@ impl AgentTool for FindPathTool {
             let matches = futures::select! {
                 result = search_paths_task.fuse() => result.map_err(|e| FindPathToolOutput::Error { error: e.to_string() })?,
                 _ = event_stream.cancelled_by_user().fuse() => {
-                    return Err(FindPathToolOutput::Error { error: "Path search cancelled by user".to_string() });
+                    return Err(FindPathToolOutput::Error { error: "Path search cancelled by user".to_owned() });
                 }
             };
             let paginated_matches: &[PathBuf] = &matches[cmp::min(input.offset, matches.len())

@@ -18,8 +18,8 @@ impl BatchRequestItem {
     pub fn new(custom_id: String, request: Request) -> Self {
         Self {
             custom_id,
-            method: "POST".to_string(),
-            url: "/v1/chat/completions".to_string(),
+            method: "POST".to_owned(),
+            url: "/v1/chat/completions".to_owned(),
             body: request,
         }
     }
@@ -43,8 +43,8 @@ impl CreateBatchRequest {
     pub fn new(input_file_id: String) -> Self {
         Self {
             input_file_id,
-            endpoint: "/v1/chat/completions".to_string(),
-            completion_window: "24h".to_string(),
+            endpoint: "/v1/chat/completions".to_owned(),
+            completion_window: "24h".to_owned(),
             metadata: None,
         }
     }

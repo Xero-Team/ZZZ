@@ -53,7 +53,7 @@ impl StreamingFuzzyMatcher {
 
             // Split into lines and add to query_lines
             for line in complete_part.lines() {
-                self.query_lines.push(line.to_string());
+                self.query_lines.push(line.to_owned());
             }
 
             self.incomplete_line.replace_range(..last_pos + 1, "");

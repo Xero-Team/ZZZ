@@ -990,7 +990,7 @@ fn initialize_settings(
                 session
                     .send(proto::Toast {
                         project_id: REMOTE_SERVER_PROJECT_ID,
-                        notification_id: "server-settings-failed".to_string(),
+                        notification_id: "server-settings-failed".to_owned(),
                         message: format!(
                             "Error in settings on remote host {:?}: {}",
                             paths::settings_file(),
@@ -1002,7 +1002,7 @@ fn initialize_settings(
                 session
                     .send(proto::HideToast {
                         project_id: REMOTE_SERVER_PROJECT_ID,
-                        notification_id: "server-settings-failed".to_string(),
+                        notification_id: "server-settings-failed".to_owned(),
                     })
                     .log_err();
             }

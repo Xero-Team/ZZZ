@@ -547,8 +547,8 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
     }
 
     fn write_credentials(&self, url: &str, username: &str, password: &[u8]) -> Task<Result<()>> {
-        let url = url.to_string();
-        let username = username.to_string();
+        let url = url.to_owned();
+        let username = username.to_owned();
         let password = password.to_vec();
         self.background_executor().spawn(async move {
             let keyring = oo7::Keyring::new().await?;
@@ -566,7 +566,7 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
     }
 
     fn read_credentials(&self, url: &str) -> Task<Result<Option<(String, Vec<u8>)>>> {
-        let url = url.to_string();
+        let url = url.to_owned();
         self.background_executor().spawn(async move {
             let keyring = oo7::Keyring::new().await?;
             keyring.unlock().await?;
@@ -592,7 +592,7 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
     }
 
     fn delete_credentials(&self, url: &str) -> Task<Result<()>> {
-        let url = url.to_string();
+        let url = url.to_owned();
         self.background_executor().spawn(async move {
             let keyring = oo7::Keyring::new().await?;
             keyring.unlock().await?;

@@ -2194,7 +2194,7 @@ impl MultiBuffer {
             }
         }
 
-        let title = title.trim_end().to_string();
+        let title = title.trim_end().to_owned();
 
         if title.is_empty() {
             return None;

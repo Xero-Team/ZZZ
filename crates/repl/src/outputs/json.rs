@@ -23,7 +23,7 @@ pub struct JsonView {
 impl JsonView {
     pub fn from_value(value: Value) -> anyhow::Result<Self> {
         let mut expanded_paths = HashMap::new();
-        expanded_paths.insert("root".to_string(), true);
+        expanded_paths.insert("root".to_owned(), true);
 
         Ok(Self {
             root: value,
@@ -33,7 +33,7 @@ impl JsonView {
 
     fn toggle_path(&mut self, path: &str, cx: &mut Context<Self>) {
         let current = self.expanded_paths.get(path).copied().unwrap_or(false);
-        self.expanded_paths.insert(path.to_string(), !current);
+        self.expanded_paths.insert(path.to_owned(), !current);
         cx.notify();
     }
 
@@ -214,7 +214,7 @@ impl JsonView {
             .when_some(key, |this, k| {
                 this.child(Label::new(format!("{}: ", k)).color(Color::Accent))
             })
-            .child(Label::new(value.to_string()).color(color))
+            .child(Label::new(value.to_owned()).color(color))
             .into_any_element()
     }
 }
@@ -222,7 +222,7 @@ impl JsonView {
 impl Render for JsonView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let root_clone = self.root.clone();
-        let root_element = self.render_value("root".to_string(), None, &root_clone, 0, window, cx);
+        let root_element = self.render_value("root".to_owned(), None, &root_clone, 0, window, cx);
         div().w_full().child(root_element)
     }
 }

@@ -200,7 +200,7 @@ fn process_content(
         if is_empty {
             "The user stopped this command. No output was captured before stopping.\n\n\
             Since the user intentionally interrupted this command, ask them what they would like to do next \
-            rather than automatically retrying or assuming something went wrong.".to_string()
+            rather than automatically retrying or assuming something went wrong.".to_owned()
         } else {
             format!(
                 "The user stopped this command. Output captured before stopping:\n\n{}\n\n\
@@ -223,7 +223,7 @@ fn process_content(
         match exit_code {
             Some(0) => {
                 if is_empty {
-                    "Command executed successfully.".to_string()
+                    "Command executed successfully.".to_owned()
                 } else {
                     content
                 }
@@ -240,7 +240,7 @@ fn process_content(
             }
             None => {
                 if is_empty {
-                    "Command terminated unexpectedly. No output was captured.".to_string()
+                    "Command terminated unexpectedly. No output was captured.".to_owned()
                 } else {
                     format!(
                         "Command terminated unexpectedly. Output captured:\n\n{}",

@@ -93,7 +93,7 @@ pub fn suggest_on_worktree_updated(
 
     let abs_path = worktree.abs_path();
     let project_path = abs_path.to_string_lossy().to_string();
-    let worktree_name = worktree.root_name_str().to_string();
+    let worktree_name = worktree.root_name_str().to_owned();
     let key_for_dismiss = project_devcontainer_key(&project_path);
 
     let already_dismissed = KeyValueStore::global(cx)
@@ -154,7 +154,7 @@ pub fn suggest_on_worktree_updated(
                         let key = key_for_dismiss.clone();
                         let kvp = KeyValueStore::global(cx);
                         cx.background_spawn(async move {
-                            kvp.write_kvp(key, "dismissed".to_string())
+                            kvp.write_kvp(key, "dismissed".to_owned())
                                 .await
                                 .log_err();
                         })

@@ -271,7 +271,7 @@ thread_local! {
         let current_thread = std::thread::current();
         let thread_name = current_thread.name();
         let thread_id = current_thread.id();
-        let timings = ThreadTimings::new(thread_name.map(|e| e.to_string()), thread_id);
+        let timings = ThreadTimings::new(thread_name.map(|e| e.to_owned()), thread_id);
         let timings = Arc::new(spin::Mutex::new(timings));
 
         {

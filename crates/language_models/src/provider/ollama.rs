@@ -475,7 +475,7 @@ impl LanguageModel for OllamaLanguageModel {
     }
 
     fn name(&self) -> LanguageModelName {
-        LanguageModelName::from(self.model.display_name().to_string())
+        LanguageModelName::from(self.model.display_name().to_owned())
     }
 
     fn provider_id(&self) -> LanguageModelProviderId {
@@ -700,7 +700,7 @@ impl ConfigurationView {
     }
 
     fn save_api_key(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_string();
+        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_owned();
         if api_key.is_empty() {
             return;
         }
@@ -734,7 +734,7 @@ impl ConfigurationView {
     }
 
     fn save_api_url(&self, cx: &mut Context<Self>) {
-        let api_url = self.api_url_editor.read(cx).text(cx).trim().to_string();
+        let api_url = self.api_url_editor.read(cx).text(cx).trim().to_owned();
         let current_url = OllamaLanguageModelProvider::api_url(cx);
         if !api_url.is_empty() && &api_url != &current_url {
             let fs = <dyn Fs>::global(cx);
@@ -771,7 +771,7 @@ impl ConfigurationView {
             .read(cx)
             .text(cx)
             .trim()
-            .to_string();
+            .to_owned();
         let current_context_window = OllamaLanguageModelProvider::settings(cx).context_window;
 
         if let Ok(context_window) = context_window_str.parse::<u64>() {
@@ -851,7 +851,7 @@ impl ConfigurationView {
         let configured_card_label = if env_var_set {
             format!("API key set in {API_KEY_ENV_VAR_NAME} environment variable.")
         } else {
-            "API key configured".to_string()
+            "API key configured".to_owned()
         };
 
         if !state.api_key_state.has_key() {

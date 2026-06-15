@@ -66,8 +66,8 @@ impl Vim {
                 );
                 reversed.push(selection.reversed)
             }
-            vim.set_mark("<".to_string(), starts, editor.buffer(), window, cx);
-            vim.set_mark(">".to_string(), ends, editor.buffer(), window, cx);
+            vim.set_mark("<".to_owned(), starts, editor.buffer(), window, cx);
+            vim.set_mark(">".to_owned(), ends, editor.buffer(), window, cx);
         });
 
         self.stored_visual_mode.replace((mode, reversed));
@@ -276,7 +276,7 @@ impl Vim {
             return;
         };
         if name == "`" {
-            name = "'".to_string();
+            name = "'".to_owned();
         }
         if matches!(&name[..], "-" | " ") {
             // Not allowed marks

@@ -86,7 +86,7 @@ impl WslRunningKernel {
 
             // Use 127.0.0.1 and rely on WSL 2 localhost forwarding.
             // This avoids issues where the VM IP is unreachable or binding fails on Windows.
-            let connect_ip = "127.0.0.1".to_string();
+            let connect_ip = "127.0.0.1".to_owned();
 
             let ports = peek_ports(bind_ip).await?;
 
@@ -98,7 +98,7 @@ impl WslRunningKernel {
                 hb_port: ports[2],
                 shell_port: ports[3],
                 iopub_port: ports[4],
-                signature_scheme: "hmac-sha256".to_string(),
+                signature_scheme: "hmac-sha256".to_owned(),
                 key: uuid::Uuid::new_v4().to_string(),
                 kernel_name: Some(format!("zed-wsl-{}", kernel_specification.name)),
             };
@@ -132,7 +132,7 @@ impl WslRunningKernel {
             if !output.status.success() {
                 anyhow::bail!("Failed to convert path to WSL path: {:?}", output);
             }
-            let wsl_connection_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let wsl_connection_path = String::from_utf8_lossy(&output.stdout).trim().to_owned();
 
             // Construct the kernel command
             // The kernel spec argv might have absolute paths valid INSIDE WSL.
@@ -163,7 +163,7 @@ impl WslRunningKernel {
                 let wd_output = wslpath_wd_cmd.output().await;
                 if let Ok(output) = wd_output {
                     if output.status.success() {
-                        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+                        Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
                     } else {
                         None
                     }
@@ -221,7 +221,7 @@ impl WslRunningKernel {
                 }
 
                 if !env_assignments.is_empty() {
-                    kernel_args.push("env".to_string());
+                    kernel_args.push("env".to_owned());
                     kernel_args.extend(env_assignments.iter().cloned());
                 }
             }
@@ -527,7 +527,7 @@ pub async fn wsl_kernel_specifications(
 
     let distros: Vec<String> = distros_str
         .lines()
-        .map(|line| line.trim().to_string())
+        .map(|line| line.trim().to_owned())
         .filter(|line| !line.is_empty())
         .collect();
 

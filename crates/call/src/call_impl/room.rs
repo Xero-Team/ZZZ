@@ -1412,7 +1412,7 @@ impl Room {
             .read(cx)
             .current_user()
             .and_then(|user| user.name.clone())
-            .unwrap_or_else(|| "unknown".to_string());
+            .unwrap_or_else(|| "unknown".to_owned());
 
         cx.spawn(async move |this, cx| {
             let publication = room

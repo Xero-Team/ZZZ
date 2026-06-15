@@ -705,7 +705,7 @@ fn project_name(paths: &PathList) -> String {
         .collect::<Vec<_>>()
         .join(", ");
     if joined.is_empty() {
-        "Untitled".to_string()
+        "Untitled".to_owned()
     } else {
         joined
     }

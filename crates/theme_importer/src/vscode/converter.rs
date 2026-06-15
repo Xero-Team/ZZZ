@@ -70,7 +70,7 @@ impl VsCodeThemeConverter {
         let vscode_colors = &self.theme.colors;
 
         let vscode_base_status_colors = StatusColorsContent {
-            hint: Some("#969696ff".to_string()),
+            hint: Some("#969696ff".to_owned()),
             ..Default::default()
         };
 
@@ -247,7 +247,7 @@ impl VsCodeThemeConverter {
                         .scope
                         .as_ref()
                         .map(|scope| format!("{:?}", scope)))
-                    .unwrap_or_else(|| "no identifier".to_string())
+                    .unwrap_or_else(|| "no identifier".to_owned())
             );
 
             let highlight_style = HighlightStyleContent {

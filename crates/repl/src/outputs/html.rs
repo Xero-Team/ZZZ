@@ -73,7 +73,7 @@ fn clean_markdown_tables(markdown: &str) -> String {
         } else {
             // Not a table row
             if !trimmed.is_empty() {
-                result.push(trimmed.to_string());
+                result.push(trimmed.to_owned());
             }
             in_table = false;
             has_separator = false;
@@ -86,8 +86,8 @@ fn clean_markdown_tables(markdown: &str) -> String {
 /// Normalize a table row by trimming cells and ensuring consistent spacing.
 fn normalize_table_row(row: &str) -> String {
     let parts: Vec<&str> = row.split('|').collect();
-    let normalized: Vec<String> = parts.iter().map(|cell| cell.trim().to_string()).collect();
-    normalized.join(" | ").trim().to_string()
+    let normalized: Vec<String> = parts.iter().map(|cell| cell.trim().to_owned()).collect();
+    normalized.join(" | ").trim().to_owned()
 }
 
 #[cfg(test)]

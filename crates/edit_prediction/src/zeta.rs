@@ -168,7 +168,7 @@ pub fn request_prediction_with_zeta(
                                 ranges.editable_350_context_150.clone(),
                             );
                             let stop_tokens = vec![
-                                EDITABLE_REGION_END_MARKER.to_string(),
+                                EDITABLE_REGION_END_MARKER.to_owned(),
                                 format!("{EDITABLE_REGION_END_MARKER}\n"),
                                 format!("{EDITABLE_REGION_END_MARKER}\n\n"),
                                 format!("{EDITABLE_REGION_END_MARKER}\n\n\n"),
@@ -553,7 +553,7 @@ pub(crate) fn active_buffer_diagnostics(
                         &snippet,
                         MAX_ACTIVE_BUFFER_DIAGNOSTIC_SNIPPET_TOKENS_TO_COLLECT,
                     )
-                    .to_string();
+                    .to_owned();
                     let snippet_start_offset = snippet_point_range.start.to_offset(snapshot);
                     let diagnostic_offset_range = diagnostic_point_range.to_offset(snapshot);
                     let diagnostic_range_start = diagnostic_offset_range

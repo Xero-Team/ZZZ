@@ -359,7 +359,7 @@ fn parse_named_destinations(
             if let Some(page_index) =
                 resolve_destination_object(file, value, page_id_to_index, &destinations)
             {
-                destinations.insert(name.as_str().to_string(), page_index);
+                destinations.insert(name.as_str().to_owned(), page_index);
             }
         }
     }
@@ -424,7 +424,7 @@ fn parse_named_destinations(
 fn destination_name(object: &PdfObject) -> Option<String> {
     match object {
         PdfObject::String(string) => Some(decode_pdf_text(string.as_bytes())),
-        PdfObject::Name(name) => Some(name.as_str().to_string()),
+        PdfObject::Name(name) => Some(name.as_str().to_owned()),
         _ => None,
     }
 }
@@ -449,7 +449,7 @@ fn decode_pdf_text(bytes: &[u8]) -> String {
         String::from_utf8_lossy(bytes).into_owned()
     }
     .trim()
-    .to_string()
+    .to_owned()
 }
 
 fn render_image_from_rgba(width: u32, height: u32, mut rgba: Vec<u8>) -> Option<Arc<RenderImage>> {

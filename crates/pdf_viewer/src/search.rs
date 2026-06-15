@@ -27,7 +27,7 @@ impl PdfView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let query = query.trim().to_string();
+        let query = query.trim().to_owned();
         let Some(state) = self.loaded_mut() else {
             return;
         };

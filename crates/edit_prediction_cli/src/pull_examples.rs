@@ -640,7 +640,7 @@ pub async fn fetch_rejected_examples_after(
 }
 
 fn format_limit(limit: Option<usize>) -> String {
-    return limit.map(|l| l.to_string()).unwrap_or("NULL".to_string());
+    return limit.map(|l| l.to_string()).unwrap_or("NULL".to_owned());
 }
 
 pub async fn fetch_requested_examples_after(
@@ -1111,9 +1111,9 @@ fn build_rated_example(
 
     let mut tags = Vec::with_capacity(3);
     tags.push(if is_positive {
-        "rated:positive".to_string()
+        "rated:positive".to_owned()
     } else {
-        "rated:negative".to_string()
+        "rated:negative".to_owned()
     });
     if let Some(experiment) = experiment_name {
         tags.push(format!("experiment:{experiment}"));
@@ -1211,7 +1211,7 @@ fn requested_examples_from_response<'a>(
                         device_id,
                         time,
                         input,
-                        vec!["requested".to_string()],
+                        vec!["requested".to_owned()],
                         None,
                         zed_version,
                     ))
@@ -1502,7 +1502,7 @@ fn build_settled_example(
         device_id,
         time,
         input,
-        vec!["settled".to_string()],
+        vec!["settled".to_owned()],
         None,
         zed_version,
     );
@@ -1855,7 +1855,7 @@ pub(crate) fn get_column_indices(
         for (index, col) in meta.row_type.iter().enumerate() {
             for &name in names {
                 if col.name.eq_ignore_ascii_case(name) {
-                    indices.insert(name.to_string(), index);
+                    indices.insert(name.to_owned(), index);
                 }
             }
         }

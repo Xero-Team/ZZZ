@@ -1860,7 +1860,7 @@ impl EditorElement {
                         if let Some(text) = snapshot.grapheme_at(cursor_position).or_else(|| {
                             if snapshot.is_empty() {
                                 snapshot.placeholder_text().and_then(|s| {
-                                    s.graphemes(true).next().map(|s| s.to_string().into())
+                                    s.graphemes(true).next().map(|s| s.to_owned().into())
                                 })
                             } else {
                                 None
@@ -3886,7 +3886,7 @@ impl EditorElement {
                         ..Default::default()
                     };
                     let line = window.text_system().shape_line(
-                        line.to_string().into(),
+                        line.to_owned().into(),
                         font_size,
                         &[run],
                         None,
@@ -8303,7 +8303,7 @@ pub fn render_breadcrumb_text(
                                     }) {
                                         if let Some(path_str) = abs_path.to_str() {
                                             cx.write_to_clipboard(ClipboardItem::new_string(
-                                                path_str.to_string(),
+                                                path_str.to_owned(),
                                             ));
                                         }
                                     }
@@ -8620,7 +8620,7 @@ pub(crate) fn render_buffer_header(
                                     Some(parent) if !parent.is_empty() => {
                                         format!("{}{}", parent, filename.as_str())
                                     }
-                                    _ => filename.as_str().to_string(),
+                                    _ => filename.as_str().to_owned(),
                                 };
 
                                 path_header

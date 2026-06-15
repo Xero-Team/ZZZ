@@ -124,11 +124,11 @@ pub fn insert_zed_terminal_env(
     env: &mut HashMap<String, String>,
     version: &impl std::fmt::Display,
 ) {
-    env.insert("ZED_TERM".to_string(), "true".to_string());
-    env.insert("TERM_PROGRAM".to_string(), "zed".to_string());
-    env.insert("TERM".to_string(), "xterm-256color".to_string());
-    env.insert("COLORTERM".to_string(), "truecolor".to_string());
-    env.insert("TERM_PROGRAM_VERSION".to_string(), version.to_string());
+    env.insert("ZED_TERM".to_owned(), "true".to_owned());
+    env.insert("TERM_PROGRAM".to_owned(), "zed".to_owned());
+    env.insert("TERM".to_owned(), "xterm-256color".to_owned());
+    env.insert("COLORTERM".to_owned(), "truecolor".to_owned());
+    env.insert("TERM_PROGRAM_VERSION".to_owned(), version.to_string());
 }
 
 ///Upward flowing events, for changing the title and such
@@ -307,7 +307,7 @@ impl TerminalError {
                     Err(s) => s,
                 }
             })
-            .unwrap_or_else(|| "<none specified>".to_string())
+            .unwrap_or_else(|| "<none specified>".to_owned())
     }
 
     pub fn fmt_shell(&self) -> String {
@@ -463,8 +463,8 @@ impl TerminalBuilder {
             // and the Project doesn't have a locale set, then
             // set a fallback for our child environment to use.
             if std::env::var("LANG").is_err() {
-                env.entry("LANG".to_string())
-                    .or_insert_with(|| "en_US.UTF-8".to_string());
+                env.entry("LANG".to_owned())
+                    .or_insert_with(|| "en_US.UTF-8".to_owned());
             }
 
             insert_zed_terminal_env(&mut env, &version);
@@ -1739,7 +1739,7 @@ impl Terminal {
     }
 
     fn process_line(&self, line: String) -> Option<String> {
-        let trimmed = line.trim_end().to_string();
+        let trimmed = line.trim_end().to_owned();
         if !trimmed.is_empty() {
             Some(trimmed)
         } else {
@@ -2187,7 +2187,7 @@ impl Terminal {
                                 if !argv.is_empty() {
                                     format!(" {}", (argv[1..]).join(" "))
                                 } else {
-                                    "".to_string()
+                                    "".to_owned()
                                 }
                             );
                             let (process_file, process_name) = if truncate {
@@ -2200,8 +2200,8 @@ impl Terminal {
                             };
                             format!("{process_file} — {process_name}")
                         })
-                        .unwrap_or_else(|| "Terminal".to_string()),
-                    TerminalType::DisplayOnly => "Terminal".to_string(),
+                        .unwrap_or_else(|| "Terminal".to_owned()),
+                    TerminalType::DisplayOnly => "Terminal".to_owned(),
                 }),
         }
     }

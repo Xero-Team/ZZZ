@@ -40,8 +40,8 @@ impl Model {
         Self {
             name: name.to_owned(),
             display_name: display_name
-                .map(ToString::to_string)
-                .or_else(|| name.strip_suffix(":latest").map(ToString::to_string)),
+                .map(str::to_owned)
+                .or_else(|| name.strip_suffix(":latest").map(str::to_owned)),
             max_tokens: max_tokens.unwrap_or_else(|| get_max_tokens(name)),
             keep_alive: Some(KeepAlive::indefinite()),
             supports_tools,

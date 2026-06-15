@@ -289,7 +289,7 @@ async fn write_keymap_migration(fs: Arc<dyn Fs>) -> Result<()> {
     if fs.is_file(keymap_path).await {
         fs.atomic_write(paths::keymap_backup_file().to_path_buf(), old_text)
             .await
-            .with_context(|| "Failed to create settings backup in home directory".to_string())?;
+            .with_context(|| "Failed to create settings backup in home directory".to_owned())?;
         let resolved_path = fs
             .canonicalize(keymap_path)
             .await
@@ -314,7 +314,7 @@ async fn write_settings_migration(fs: Arc<dyn Fs>) -> Result<()> {
     if fs.is_file(settings_path).await {
         fs.atomic_write(paths::settings_backup_file().to_path_buf(), old_text)
             .await
-            .with_context(|| "Failed to create settings backup in home directory".to_string())?;
+            .with_context(|| "Failed to create settings backup in home directory".to_owned())?;
         let resolved_path = fs
             .canonicalize(settings_path)
             .await

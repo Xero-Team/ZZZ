@@ -60,7 +60,7 @@ impl AgentTool for ApplyCodeActionTool {
                 .as_ref()
                 .and_then(|pending| {
                     let index = input.index.checked_sub(1)? as usize;
-                    Some(pending.actions.get(index)?.lsp_action.title().to_string())
+                    Some(pending.actions.get(index)?.lsp_action.title().to_owned())
                 });
             if let Some(title) = title {
                 format!("Apply code action: {title}").into()
@@ -87,13 +87,13 @@ impl AgentTool for ApplyCodeActionTool {
                 .map_err(|e| format!("Failed to receive tool input: {e}"))?;
 
             let pending = store.update(cx, |store, _cx| store.take()).ok_or_else(|| {
-                "No code actions available. Call get_code_actions first.".to_string()
+                "No code actions available. Call get_code_actions first.".to_owned()
             })?;
 
             let zero_based_index = input
                 .index
                 .checked_sub(1)
-                .ok_or_else(|| "Index must be 1 or greater.".to_string())?;
+                .ok_or_else(|| "Index must be 1 or greater.".to_owned())?;
 
             let action = pending
                 .actions
@@ -107,7 +107,7 @@ impl AgentTool for ApplyCodeActionTool {
                     )
                 })?;
 
-            let title = action.lsp_action.title().to_string();
+            let title = action.lsp_action.title().to_owned();
             let buffer = pending.buffer.clone();
 
             let apply_task = project.update(cx, |project, cx| {
@@ -134,7 +134,7 @@ impl AgentTool for ApplyCodeActionTool {
                     let path = buffer
                         .file()
                         .map(|f| f.full_path(cx).display().to_string())
-                        .unwrap_or_else(|| "<untitled>".to_string());
+                        .unwrap_or_else(|| "<untitled>".to_owned());
                     writeln!(output, "- {path}").ok();
                 });
             }

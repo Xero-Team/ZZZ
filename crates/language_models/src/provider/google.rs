@@ -125,7 +125,7 @@ impl GoogleLanguageModelProvider {
 
     fn create_language_model(&self, model: google_ai::Model) -> Arc<dyn LanguageModel> {
         Arc::new(GoogleLanguageModel {
-            id: LanguageModelId::from(model.id().to_string()),
+            id: LanguageModelId::from(model.id().to_owned()),
             model,
             state: self.state.clone(),
             http_client: self.http_client.clone(),
@@ -182,7 +182,7 @@ impl LanguageModelProvider for GoogleLanguageModelProvider {
         // Add base models from google_ai::Model::iter()
         for model in google_ai::Model::iter() {
             if !matches!(model, google_ai::Model::Custom { .. }) {
-                models.insert(model.id().to_string(), model);
+                models.insert(model.id().to_owned(), model);
             }
         }
 
@@ -203,7 +203,7 @@ impl LanguageModelProvider for GoogleLanguageModelProvider {
             .into_values()
             .map(|model| {
                 Arc::new(GoogleLanguageModel {
-                    id: LanguageModelId::from(model.id().to_string()),
+                    id: LanguageModelId::from(model.id().to_owned()),
                     model,
                     state: self.state.clone(),
                     http_client: self.http_client.clone(),
@@ -285,7 +285,7 @@ impl LanguageModel for GoogleLanguageModel {
     }
 
     fn name(&self) -> LanguageModelName {
-        LanguageModelName::from(self.model.display_name().to_string())
+        LanguageModelName::from(self.model.display_name().to_owned())
     }
 
     fn provider_id(&self) -> LanguageModelProviderId {
@@ -348,7 +348,7 @@ impl LanguageModel for GoogleLanguageModel {
     > {
         let request = into_google(
             request,
-            self.model.request_id().to_string(),
+            self.model.request_id().to_owned(),
             self.model.mode(),
         );
         let request = self.stream_completion(request, cx);
@@ -403,7 +403,7 @@ impl ConfigurationView {
     }
 
     fn save_api_key(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_string();
+        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_owned();
         if api_key.is_empty() {
             return;
         }
@@ -450,7 +450,7 @@ impl Render for ConfigurationView {
         } else {
             let api_url = GoogleLanguageModelProvider::api_url(cx);
             if api_url == google_ai::API_URL {
-                "API key configured".to_string()
+                "API key configured".to_owned()
             } else {
                 format!("API key configured for {}", api_url)
             }

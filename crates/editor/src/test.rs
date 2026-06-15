@@ -197,7 +197,7 @@ pub fn editor_content_with_blocks_and_size(
     let (snapshot, mut lines, blocks) = editor.update_in(cx, |editor, window, cx| {
         let snapshot = editor.snapshot(window, cx);
         let text = editor.display_text(cx);
-        let lines = text.lines().map(|s| s.to_string()).collect::<Vec<String>>();
+        let lines = text.lines().map(|s| s.to_owned()).collect::<Vec<String>>();
         let blocks = snapshot
             .blocks_in_range(DisplayRow(0)..snapshot.max_point().row())
             .map(|(row, block)| (row, block.clone()))
@@ -226,7 +226,7 @@ pub fn editor_content_with_blocks_and_size(
                         lines[row.0 as usize].push_str(block_lines[0].trim_end());
                         for i in 1..height as usize {
                             if row.0 as usize + i >= lines.len() {
-                                lines.push("".to_string());
+                                lines.push("".to_owned());
                             };
                             lines[row.0 as usize + i].push_str("§ ");
                             lines[row.0 as usize + i].push_str(block_lines[i].trim_end());

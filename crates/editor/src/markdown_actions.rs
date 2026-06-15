@@ -13,7 +13,7 @@ impl Editor {
             for line in lines.iter_mut() {
                 let stripped_line = match line.strip_prefix("> ").or_else(|| line.strip_prefix('>'))
                 {
-                    Some(rest) => rest.to_string(),
+                    Some(rest) => rest.to_owned(),
                     None => line.to_string(),
                 };
 

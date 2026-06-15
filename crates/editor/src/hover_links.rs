@@ -95,7 +95,7 @@ pub fn document_link_target_to_hover_link(target: &str, server_id: LanguageServe
             server_id,
         );
     }
-    HoverLink::Url(target.to_string())
+    HoverLink::Url(target.to_owned())
 }
 
 /// Parse a URI fragment such as `9,16`, `9:16`, `L9`, or `L9:16` into an
@@ -681,7 +681,7 @@ pub(crate) fn find_url(
         if link.start() <= relative_offset && link.end() >= relative_offset {
             let range = snapshot.anchor_before(token_start + link.start())
                 ..snapshot.anchor_after(token_start + link.end());
-            return Some((range, link.as_str().to_string()));
+            return Some((range, link.as_str().to_owned()));
         }
     }
     None
@@ -739,7 +739,7 @@ pub(crate) fn find_url_from_range(
         && link.start() == 0
         && link.end() == text.len()
     {
-        return Some(link.as_str().to_string());
+        return Some(link.as_str().to_owned());
     }
 
     None
@@ -952,7 +952,7 @@ fn link_pattern_file_candidates(candidate: &str) -> Vec<(String, Range<usize>)> 
     // This also handles bare (path) wrapping.
     if let Some(captures) = MD_LINK_REGEX.captures(candidate) {
         if let Some(link) = captures.get(1) {
-            let link_str = link.as_str().to_string();
+            let link_str = link.as_str().to_owned();
             let link_range = link.range();
             // Avoid duplicate if punctuation trimming already found this
             if !candidates.iter().any(|(s, _)| s == &link_str) {
@@ -962,7 +962,7 @@ fn link_pattern_file_candidates(candidate: &str) -> Vec<(String, Range<usize>)> 
     }
 
     // Always include the raw candidate as fallback (lowest priority)
-    candidates.push((candidate.to_string(), 0..candidate_len));
+    candidates.push((candidate.to_owned(), 0..candidate_len));
 
     candidates
 }

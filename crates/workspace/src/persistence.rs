@@ -203,7 +203,7 @@ pub async fn write_default_window_bounds(
 ) -> anyhow::Result<()> {
     let persisted = WindowBoundsJson::from(bounds);
     let json_str = serde_json::to_string(&(display_uuid, persisted))?;
-    kvp.write_kvp(DEFAULT_WINDOW_BOUNDS_KEY.to_string(), json_str)
+    kvp.write_kvp(DEFAULT_WINDOW_BOUNDS_KEY.to_owned(), json_str)
         .await?;
     Ok(())
 }
@@ -401,7 +401,7 @@ pub async fn write_default_dock_state(
     docks: DockStructure,
 ) -> anyhow::Result<()> {
     let json_str = serde_json::to_string(&docks)?;
-    kvp.write_kvp(DEFAULT_DOCK_STATE_KEY.to_string(), json_str)
+    kvp.write_kvp(DEFAULT_DOCK_STATE_KEY.to_owned(), json_str)
         .await?;
     Ok(())
 }

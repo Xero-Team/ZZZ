@@ -824,7 +824,7 @@ impl Item for BufferDiagnosticsEditor {
             self.project_path
                 .path
                 .file_name()
-                .map(|s| s.to_string())
+                .map(|s| s.to_owned())
                 .unwrap_or_else(|| self.project_path.path.display(path_style).to_string()),
         );
 

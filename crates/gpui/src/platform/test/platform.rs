@@ -225,8 +225,8 @@ impl TestPlatform {
             .borrow_mut()
             .multiple_choice
             .push_back(TestPrompt {
-                msg: msg.to_string(),
-                detail: detail.map(|s| s.to_string()),
+                msg: msg.to_owned(),
+                detail: detail.map(|s| s.to_owned()),
                 answers,
                 tx,
             });
@@ -371,7 +371,7 @@ impl Platform for TestPlatform {
     }
 
     fn open_url(&self, url: &str) {
-        *self.opened_url.borrow_mut() = Some(url.to_string())
+        *self.opened_url.borrow_mut() = Some(url.to_owned())
     }
 
     fn on_open_urls(&self, _callback: Box<dyn FnMut(Vec<String>)>) {

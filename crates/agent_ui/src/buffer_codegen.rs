@@ -503,14 +503,14 @@ impl CodegenAlternative {
 
             let tools = vec![
                 LanguageModelRequestTool {
-                    name: REWRITE_SECTION_TOOL_NAME.to_string(),
-                    description: "Replaces text in <rewrite_this></rewrite_this> tags with your replacement_text.".to_string(),
+                    name: REWRITE_SECTION_TOOL_NAME.to_owned(),
+                    description: "Replaces text in <rewrite_this></rewrite_this> tags with your replacement_text.".to_owned(),
                     input_schema: language_model::tool_schema::root_schema_for::<RewriteSectionInput>(tool_input_format).to_value(),
                     use_input_streaming: false,
                 },
                 LanguageModelRequestTool {
-                    name: FAILURE_MESSAGE_TOOL_NAME.to_string(),
-                    description: "Use this tool to provide a message to the user when you're unable to complete a task.".to_string(),
+                    name: FAILURE_MESSAGE_TOOL_NAME.to_owned(),
+                    description: "Use this tool to provide a message to the user when you're unable to complete a task.".to_owned(),
                     input_schema: language_model::tool_schema::root_schema_for::<FailureMessageInput>(tool_input_format).to_value(),
                     use_input_streaming: false,
                 },
@@ -1135,7 +1135,7 @@ impl CodegenAlternative {
                         else {
                             return None;
                         };
-                        let text = text_slice.to_string();
+                        let text = text_slice.to_owned();
                         *chars_read_so_far = input.replacement_text.len();
                         Some(ToolUseOutput::Rewrite {
                             text,

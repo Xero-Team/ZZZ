@@ -94,7 +94,7 @@ impl AgentTool for UpdatePlanTool {
 
             event_stream.update_plan(Self::to_plan(input));
 
-            Ok("Plan updated".to_string())
+            Ok("Plan updated".to_owned())
         })
     }
 

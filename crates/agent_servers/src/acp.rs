@@ -988,7 +988,7 @@ impl AcpConnection {
                 "args": gemini_args,
                 "env": original_command.env.unwrap_or_default(),
             });
-            let meta = acp::Meta::from_iter([("terminal-auth".to_string(), value)]);
+            let meta = acp::Meta::from_iter([("terminal-auth".to_owned(), value)]);
             vec![acp::AuthMethod::Agent(
                 acp::AuthMethodAgent::new(GEMINI_TERMINAL_AUTH_METHOD_ID, "Login")
                     .description("Login with your Google or Vertex AI account")
@@ -4148,7 +4148,7 @@ fn handle_session_notification(
                         .signal(
                             term_exit
                                 .get("signal")
-                                .and_then(|v| v.as_str().map(|s| s.to_string())),
+                                .and_then(|v| v.as_str().map(|s| s.to_owned())),
                         );
 
                     thread

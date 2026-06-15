@@ -61,7 +61,7 @@ pub fn codestral_api_url(cx: &App) -> SharedString {
         .codestral
         .api_url
         .clone()
-        .unwrap_or_else(|| CODESTRAL_API_URL.to_string())
+        .unwrap_or_else(|| CODESTRAL_API_URL.to_owned())
         .into()
 }
 
@@ -249,7 +249,7 @@ impl EditPredictionDelegate for CodestralEditPredictionDelegate {
             .codestral
             .model
             .clone()
-            .unwrap_or_else(|| "codestral-latest".to_string());
+            .unwrap_or_else(|| "codestral-latest".to_owned());
         let max_tokens = settings.edit_predictions.codestral.max_tokens;
         let api_url = codestral_api_url(cx).to_string();
 

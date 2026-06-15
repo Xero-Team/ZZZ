@@ -230,7 +230,7 @@ impl AgentTool for RestoreFileFromDiskTool {
                         }
                     }
                     _ = event_stream.cancelled_by_user().fuse() => {
-                        return Err("Restore cancelled by user".to_string());
+                        return Err("Restore cancelled by user".to_owned());
                     }
                 };
 
@@ -252,7 +252,7 @@ impl AgentTool for RestoreFileFromDiskTool {
                 let result = futures::select! {
                     result = reload_task.fuse() => result,
                     _ = event_stream.cancelled_by_user().fuse() => {
-                        return Err("Restore cancelled by user".to_string());
+                        return Err("Restore cancelled by user".to_owned());
                     }
                 };
                 if let Err(error) = result {
@@ -298,7 +298,7 @@ impl AgentTool for RestoreFileFromDiskTool {
             }
 
             if lines.is_empty() {
-                Ok("No paths provided.".to_string())
+                Ok("No paths provided.".to_owned())
             } else {
                 Ok(lines.join("\n"))
             }

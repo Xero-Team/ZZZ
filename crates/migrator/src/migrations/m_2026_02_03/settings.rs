@@ -48,7 +48,7 @@ fn migrate_provider_field(obj: &mut serde_json::Map<String, Value>, field_name: 
     };
 
     obj.insert(
-        field_name.to_string(),
-        Value::String(provider_name.to_string()),
+        field_name.to_owned(),
+        Value::String(provider_name.to_owned()),
     );
 }

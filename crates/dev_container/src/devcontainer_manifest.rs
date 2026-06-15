@@ -98,7 +98,7 @@ impl DevContainerManifest {
             local_project_directory: local_project_path.to_path_buf(),
             local_environment: environment,
             config_directory: devcontainer_directory.to_path_buf(),
-            file_name: file_name.to_string(),
+            file_name: file_name.to_owned(),
             root_image: None,
             features_build_info: None,
             features: Vec::new(),
@@ -708,10 +708,10 @@ impl DevContainerManifest {
         let dest = FEATURES_CONTAINER_TEMP_DEST_FOLDER;
 
         let feature_content_source_stage = if use_buildkit {
-            "".to_string()
+            "".to_owned()
         } else {
             "\nFROM dev_container_feature_content_temp as dev_containers_feature_content_source\n"
-                .to_string()
+                .to_owned()
         };
 
         let builtin_env_source_path = if use_buildkit {
@@ -798,19 +798,19 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
             None
         } else {
             let mut entrypoint_script_lines = vec![
-                "echo Container started".to_string(),
-                "trap \"exit 0\" 15".to_string(),
+                "echo Container started".to_owned(),
+                "trap \"exit 0\" 15".to_owned(),
             ];
 
             for entrypoint in self.features.iter().filter_map(|f| f.entrypoint()) {
                 entrypoint_script_lines.push(entrypoint.clone());
             }
             entrypoint_script_lines.append(&mut vec![
-                "exec \"$@\"".to_string(),
-                "while sleep 1 & wait $!; do :; done".to_string(),
+                "exec \"$@\"".to_owned(),
+                "while sleep 1 & wait $!; do :; done".to_owned(),
             ]);
 
-            Some(entrypoint_script_lines.join("\n").trim().to_string())
+            Some(entrypoint_script_lines.join("\n").trim().to_owned())
         };
 
         Ok(DockerBuildResources {
@@ -978,19 +978,19 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
             let build_args = if !supports_buildkit {
                 HashMap::from([
                     (
-                        "_DEV_CONTAINERS_BASE_IMAGE".to_string(),
-                        "dev_container_auto_added_stage_label".to_string(),
+                        "_DEV_CONTAINERS_BASE_IMAGE".to_owned(),
+                        "dev_container_auto_added_stage_label".to_owned(),
                     ),
-                    ("_DEV_CONTAINERS_IMAGE_USER".to_string(), "root".to_string()),
+                    ("_DEV_CONTAINERS_IMAGE_USER".to_owned(), "root".to_owned()),
                 ])
             } else {
                 HashMap::from([
-                    ("BUILDKIT_INLINE_CACHE".to_string(), "1".to_string()),
+                    ("BUILDKIT_INLINE_CACHE".to_owned(), "1".to_owned()),
                     (
-                        "_DEV_CONTAINERS_BASE_IMAGE".to_string(),
-                        "dev_container_auto_added_stage_label".to_string(),
+                        "_DEV_CONTAINERS_BASE_IMAGE".to_owned(),
+                        "dev_container_auto_added_stage_label".to_owned(),
                     ),
-                    ("_DEV_CONTAINERS_IMAGE_USER".to_string(), "root".to_string()),
+                    ("_DEV_CONTAINERS_IMAGE_USER".to_owned(), "root".to_owned()),
                 ])
             };
 
@@ -998,7 +998,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                 None
             } else {
                 Some(HashMap::from([(
-                    "dev_containers_feature_content_source".to_string(),
+                    "dev_containers_feature_content_source".to_owned(),
                     features_build_info
                         .features_content_dir
                         .display()
@@ -1027,7 +1027,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                                     }),
                             ),
                             dockerfile: Some(dockerfile_path.display().to_string()),
-                            target: Some("dev_containers_target_stage".to_string()),
+                            target: Some("dev_containers_target_stage".to_owned()),
                             args: Some(build_args),
                             additional_contexts,
                         }),
@@ -1086,14 +1086,14 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
 
                 let build_args = if !supports_buildkit {
                     HashMap::from([
-                        ("_DEV_CONTAINERS_BASE_IMAGE".to_string(), image.clone()),
-                        ("_DEV_CONTAINERS_IMAGE_USER".to_string(), "root".to_string()),
+                        ("_DEV_CONTAINERS_BASE_IMAGE".to_owned(), image.clone()),
+                        ("_DEV_CONTAINERS_IMAGE_USER".to_owned(), "root".to_owned()),
                     ])
                 } else {
                     HashMap::from([
-                        ("BUILDKIT_INLINE_CACHE".to_string(), "1".to_string()),
-                        ("_DEV_CONTAINERS_BASE_IMAGE".to_string(), image.clone()),
-                        ("_DEV_CONTAINERS_IMAGE_USER".to_string(), "root".to_string()),
+                        ("BUILDKIT_INLINE_CACHE".to_owned(), "1".to_owned()),
+                        ("_DEV_CONTAINERS_BASE_IMAGE".to_owned(), image.clone()),
+                        ("_DEV_CONTAINERS_IMAGE_USER".to_owned(), "root".to_owned()),
                     ])
                 };
 
@@ -1101,7 +1101,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                     None
                 } else {
                     Some(HashMap::from([(
-                        "dev_containers_feature_content_source".to_string(),
+                        "dev_containers_feature_content_source".to_owned(),
                         features_build_info
                             .features_content_dir
                             .display()
@@ -1124,7 +1124,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                                     features_build_info.empty_context_dir.display().to_string(),
                                 ),
                                 dockerfile: Some(dockerfile_path.display().to_string()),
-                                target: Some("dev_containers_target_stage".to_string()),
+                                target: Some("dev_containers_target_stage".to_owned()),
                                 args: Some(build_args),
                                 additional_contexts,
                             }),
@@ -1232,11 +1232,11 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                 DevContainerError::ContainerNotValid(resources.image.id.clone())
             })?;
 
-            runtime_labels.insert("devcontainer.metadata".to_string(), serialized_metadata);
+            runtime_labels.insert("devcontainer.metadata".to_owned(), serialized_metadata);
         }
 
         for (k, v) in self.identifying_labels() {
-            runtime_labels.insert(k.to_string(), v.to_string());
+            runtime_labels.insert(k.to_owned(), v.to_string());
         }
 
         let config_volumes: HashMap<String, DockerComposeVolume> = resources
@@ -1271,17 +1271,17 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
 
         let entrypoint = resources.entrypoint_script.map(|script| {
             vec![
-                "/bin/sh".to_string(),
-                "-c".to_string(),
+                "/bin/sh".to_owned(),
+                "-c".to_owned(),
                 script,
-                "-".to_string(),
+                "-".to_owned(),
             ]
         });
 
         let mut main_service = DockerComposeService {
             entrypoint,
-            cap_add: Some(vec!["SYS_PTRACE".to_string()]),
-            security_opt: Some(vec!["seccomp=unconfined".to_string()]),
+            cap_add: Some(vec!["SYS_PTRACE".to_owned()]),
+            security_opt: Some(vec!["seccomp=unconfined".to_owned()]),
             labels: Some(runtime_labels),
             volumes,
             privileged: Some(resources.privileged),
@@ -1300,7 +1300,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                             Some(port.to_string())
                         } else if parts.len() == 2 {
                             if parts[0] == main_service_name {
-                                Some(parts[1].to_string())
+                                Some(parts[1].to_owned())
                             } else {
                                 None
                             }
@@ -1321,7 +1321,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                         });
                     } else {
                         service_declarations.insert(
-                            network_service_name.to_string(),
+                            network_service_name.to_owned(),
                             DockerComposeService {
                                 ports: vec![DockerComposeServicePort {
                                     target: port.clone(),
@@ -1361,17 +1361,17 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
             for (service_name, port) in other_service_ports {
                 if let Some(service) = service_declarations.get_mut(service_name) {
                     service.ports.push(DockerComposeServicePort {
-                        target: port.to_string(),
-                        published: port.to_string(),
+                        target: port.to_owned(),
+                        published: port.to_owned(),
                         ..Default::default()
                     });
                 } else {
                     service_declarations.insert(
-                        service_name.to_string(),
+                        service_name.to_owned(),
                         DockerComposeService {
                             ports: vec![DockerComposeServicePort {
-                                target: port.to_string(),
-                                published: port.to_string(),
+                                target: port.to_owned(),
+                                published: port.to_owned(),
                                 ..Default::default()
                             }],
                             ..Default::default()
@@ -1381,7 +1381,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
             }
         }
 
-        service_declarations.insert(main_service_name.to_string(), main_service);
+        service_declarations.insert(main_service_name.to_owned(), main_service);
         let new_docker_compose_config = DockerComposeConfig {
             name: None,
             services: service_declarations,
@@ -1487,7 +1487,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
             .image_user
             .as_deref()
             .unwrap_or("root")
-            .to_string();
+            .to_owned();
 
         let host_uid = Command::new("id")
             .arg("-u")
@@ -1495,7 +1495,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
             .await
             .map_err(|e| {
                 log::error!("Failed to get host UID: {e}");
-                DevContainerError::CommandFailed("id -u".to_string())
+                DevContainerError::CommandFailed("id -u".to_owned())
             })
             .and_then(|output| {
                 String::from_utf8_lossy(&output.stdout)
@@ -1503,7 +1503,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                     .parse::<u32>()
                     .map_err(|e| {
                         log::error!("Failed to parse host UID: {e}");
-                        DevContainerError::CommandFailed("id -u".to_string())
+                        DevContainerError::CommandFailed("id -u".to_owned())
                     })
             })?;
 
@@ -1513,7 +1513,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
             .await
             .map_err(|e| {
                 log::error!("Failed to get host GID: {e}");
-                DevContainerError::CommandFailed("id -g".to_string())
+                DevContainerError::CommandFailed("id -g".to_owned())
             })
             .and_then(|output| {
                 String::from_utf8_lossy(&output.stdout)
@@ -1521,7 +1521,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                     .parse::<u32>()
                     .map_err(|e| {
                         log::error!("Failed to parse host GID: {e}");
-                        DevContainerError::CommandFailed("id -g".to_string())
+                        DevContainerError::CommandFailed("id -g".to_owned())
                     })
             })?;
 
@@ -1611,7 +1611,7 @@ USER $IMAGE_USER
 
 # Ensure that /etc/profile does not clobber the existing path
 RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
-"#.to_string();
+"#.to_owned();
         for feature in &self.features {
             let container_env_layer = feature.generate_dockerfile_env();
             dockerfile = format!("{dockerfile}\n{container_env_layer}");
@@ -1727,7 +1727,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
                 self.root_image
                     .as_ref()
                     .and_then(|docker_image| docker_image.config.image_user.as_ref())
-                    .unwrap_or(&"root".to_string())
+                    .unwrap_or(&"root".to_owned())
             ),
         ]);
 
@@ -2298,7 +2298,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
         let key_regex = Regex::new(r"(?:^|\s)(\w+)=").expect("valid regex");
 
         for line in contents.lines() {
-            let mut parsed_line = line.to_string();
+            let mut parsed_line = line.to_owned();
             // Replace from devcontainer args first, since they take precedence
             for (key, value) in &devcontainer_args {
                 parsed_line = parsed_line.replace(&format!("${{{key}}}"), value)
@@ -2327,7 +2327,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
                     } else {
                         raw_value
                     };
-                    inline_args.push((key, value.to_string()));
+                    inline_args.push((key, value.to_owned()));
                 }
             }
             parsed_lines.push(parsed_line);
@@ -2569,7 +2569,7 @@ fn derive_project_name(
         Some(dir) => dir
             .file_name()
             .map(|f| f.to_string_lossy().into_owned())
-            .unwrap_or_else(|| workspace_fallback.to_string()),
+            .unwrap_or_else(|| workspace_fallback.to_owned()),
         None => format!("{workspace_fallback}_devcontainer"),
     };
     sanitize_compose_project_name(&raw)
@@ -2603,7 +2603,7 @@ fn parse_dotenv_compose_project_name(contents: &str) -> Option<String> {
             continue;
         }
         if let Some(value) = trimmed.strip_prefix("COMPOSE_PROJECT_NAME=") {
-            return Some(value.trim().to_string());
+            return Some(value.trim().to_owned());
         }
     }
     None
@@ -2622,7 +2622,7 @@ fn compose_fragment_declares_name(contents: &str) -> bool {
     let Some(yaml_rust2::Yaml::Hash(h)) = docs.into_iter().next() else {
         return false;
     };
-    h.contains_key(&yaml_rust2::Yaml::String("name".to_string()))
+    h.contains_key(&yaml_rust2::Yaml::String("name".to_owned()))
 }
 
 /// Extracts the short feature ID from a full feature reference string.
@@ -2781,7 +2781,7 @@ fn dockerfile_inject_alias(
     };
 
     let Some(&(line_idx, from_line)) = target_entry else {
-        return dockerfile_content.to_string();
+        return dockerfile_content.to_owned();
     };
 
     let parts: Vec<&str> = from_line.split_whitespace().collect();
@@ -2792,7 +2792,7 @@ fn dockerfile_inject_alias(
 
     if has_alias {
         let Some(existing_alias) = parts.last() else {
-            return dockerfile_content.to_string();
+            return dockerfile_content.to_owned();
         };
         format!("{dockerfile_content}\nFROM {existing_alias} AS {alias}")
     } else {
@@ -2856,7 +2856,7 @@ fn get_remote_user_from_config(
         for metadatum in metadata {
             if let Some(remote_user) = metadatum.get("remoteUser") {
                 if let Some(remote_user_str) = remote_user.as_str() {
-                    return Ok(remote_user_str.to_string());
+                    return Ok(remote_user_str.to_owned());
                 }
             }
         }
@@ -2866,7 +2866,7 @@ fn get_remote_user_from_config(
             return Ok(image_user.to_string());
         }
     }
-    Ok("root".to_string())
+    Ok("root".to_owned())
 }
 
 // This should come from spec - see the docs
@@ -2881,7 +2881,7 @@ fn get_container_user_from_config(
         for metadatum in metadata {
             if let Some(container_user) = metadatum.get("containerUser") {
                 if let Some(container_user_str) = container_user.as_str() {
-                    return Ok(container_user_str.to_string());
+                    return Ok(container_user_str.to_owned());
                 }
             }
         }
@@ -2890,7 +2890,7 @@ fn get_container_user_from_config(
         return Ok(image_user.to_string());
     }
 
-    Ok("root".to_string())
+    Ok("root".to_owned())
 }
 
 #[cfg(test)]

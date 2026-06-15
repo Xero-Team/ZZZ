@@ -685,7 +685,7 @@ impl EditPredictionButton {
             .handler(move |window, cx| {
                 window.dispatch_action(
                     OpenSettingsAt {
-                        path: "edit_predictions.providers".to_string(),
+                        path: "edit_predictions.providers".to_owned(),
                     }
                     .boxed_clone(),
                     cx,
@@ -1753,7 +1753,7 @@ fn copilot_settings_url(enterprise_uri: Option<&str>) -> String {
         Some(uri) => {
             format!("{}{}", uri.trim_end_matches('/'), COPILOT_SETTINGS_PATH)
         }
-        None => COPILOT_SETTINGS_URL.to_string(),
+        None => COPILOT_SETTINGS_URL.to_owned(),
     }
 }
 

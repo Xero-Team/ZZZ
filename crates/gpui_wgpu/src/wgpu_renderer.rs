@@ -1139,7 +1139,7 @@ impl WgpuRenderer {
             }
             wgpu::CurrentSurfaceTexture::Validation => {
                 *self.last_error.lock().unwrap() =
-                    Some("Surface texture validation error".to_string());
+                    Some("Surface texture validation error".to_owned());
                 return false;
             }
         };

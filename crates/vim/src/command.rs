@@ -864,7 +864,7 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
         let n = if count > 1 {
             format!(".,.+{}", count.saturating_sub(1))
         } else {
-            ".".to_string()
+            ".".to_owned()
         };
         workspace.update(cx, |workspace, cx| {
             command_palette::CommandPalette::toggle(workspace, &n, window, cx);
@@ -1153,20 +1153,20 @@ impl VimCommand {
     fn get_parsed_query(&self, query: String) -> Option<ParsedQuery> {
         let rest = query
             .strip_prefix(self.prefix)?
-            .to_string()
+            .to_owned()
             .chars()
-            .zip_longest(self.suffix.to_string().chars())
+            .zip_longest(self.suffix.to_owned().chars())
             .skip_while(|e| e.clone().both().map(|(s, q)| s == q).unwrap_or(false))
             .filter_map(|e| e.left())
             .collect::<String>();
         let has_bang = rest.starts_with('!');
         let has_space = rest.starts_with("! ") || rest.starts_with(' ');
         let args = if has_bang {
-            rest.strip_prefix('!')?.trim_start().to_string()
+            rest.strip_prefix('!')?.trim_start().to_owned()
         } else if rest.is_empty() {
             "".into()
         } else {
-            rest.strip_prefix(' ')?.trim_start().to_string()
+            rest.strip_prefix(' ')?.trim_start().to_owned()
         };
         Some(ParsedQuery {
             args,
@@ -1185,7 +1185,7 @@ impl VimCommand {
             args,
             has_bang,
             has_space: _,
-        } = self.get_parsed_query(query.to_string())?;
+        } = self.get_parsed_query(query.to_owned())?;
         let action = if has_bang && let Some(bang_action) = self.bang_action.as_ref() {
             bang_action.boxed_clone()
         } else if let Some(action) = self.action.as_ref() {
@@ -1883,7 +1883,7 @@ pub fn command_interceptor(
         let (prefix, option) = query.split_once(' ').unwrap();
         let mut commands = VimOption::possible_commands(option);
         if !commands.is_empty() {
-            let query = prefix.to_string() + " " + option;
+            let query = prefix.to_owned() + " " + option;
             for command in &mut commands {
                 command.positions = generate_positions(&command.string, &query);
             }
@@ -1933,7 +1933,7 @@ pub fn command_interceptor(
     };
 
     if let Some(action) = action {
-        let string = input.to_string();
+        let string = input.to_owned();
         let positions = generate_positions(&string, &(range_prefix + query));
         return Task::ready(CommandInterceptResult {
             results: vec![CommandInterceptItem {
@@ -2392,7 +2392,7 @@ impl Vim {
                 *range.end.row_mut() -= 1
             }
             if range.end.row() == range.start.row() {
-                ".!".to_string()
+                ".!".to_owned()
             } else {
                 format!(".,.+{}!", (range.end.row() - range.start.row()).0)
             }
@@ -2431,7 +2431,7 @@ impl Vim {
                 })
             }
             if range.end.row() == range.start.row() {
-                ".!".to_string()
+                ".!".to_owned()
             } else {
                 format!(".,.+{}!", (range.end.row() - range.start.row()).0)
             }
@@ -2455,7 +2455,7 @@ impl ShellExec {
 
         Some(
             ShellExec {
-                command: after.trim().to_string(),
+                command: after.trim().to_owned(),
                 range,
                 is_read: !before.is_empty(),
             }
@@ -2478,7 +2478,7 @@ impl ShellExec {
                 let shell = Shell::System;
 
                 let spawn_in_terminal = SpawnInTerminal {
-                    id: TaskId("vim".to_string()),
+                    id: TaskId("vim".to_owned()),
                     full_label: command.clone(),
                     label: command.clone(),
                     command: Some(command.clone()),

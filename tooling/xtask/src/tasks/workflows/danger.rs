@@ -39,7 +39,7 @@ fn danger_job() -> NamedJob {
     }
 
     NamedJob {
-        name: "danger".to_string(),
+        name: "danger".to_owned(),
         job: Job::default()
             .with_repository_owner_guard()
             .runs_on(runners::LINUX_SMALL)

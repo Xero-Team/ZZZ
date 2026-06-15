@@ -40,7 +40,7 @@ fn replace_setting_value(
         return None;
     };
 
-    Some((value_range, new_value.to_string()))
+    Some((value_range, new_value.to_owned()))
 }
 
 fn replace_setting_name(
@@ -61,5 +61,5 @@ fn replace_setting_name(
         return None;
     };
 
-    Some((setting_name_range, new_setting_name.to_string()))
+    Some((setting_name_range, new_setting_name.to_owned()))
 }

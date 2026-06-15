@@ -11,15 +11,15 @@ use semver::Version;
 static RAW_RELEASE_CHANNEL_NAME: LazyLock<String> = LazyLock::new(|| {
     if cfg!(debug_assertions) {
         env::var("ZED_RELEASE_CHANNEL")
-            .unwrap_or_else(|_| include_str!("../../zed/RELEASE_CHANNEL").trim().to_string())
+            .unwrap_or_else(|_| include_str!("../../zed/RELEASE_CHANNEL").trim().to_owned())
     } else {
-        include_str!("../../zed/RELEASE_CHANNEL").trim().to_string()
+        include_str!("../../zed/RELEASE_CHANNEL").trim().to_owned()
     }
 });
 
 /// stable | dev
 pub static RELEASE_CHANNEL_NAME: LazyLock<String> =
-    LazyLock::new(|| RELEASE_CHANNEL.dev_name().to_string());
+    LazyLock::new(|| RELEASE_CHANNEL.dev_name().to_owned());
 
 #[doc(hidden)]
 pub static RELEASE_CHANNEL: LazyLock<ReleaseChannel> =

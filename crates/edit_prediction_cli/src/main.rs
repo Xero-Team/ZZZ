@@ -739,21 +739,21 @@ async fn load_examples(
     for input in &args.inputs {
         let input_string = input.to_string_lossy();
         if let Some(timestamp) = pull_examples::parse_captured_after_input(input_string.as_ref()) {
-            captured_after_timestamps.push(timestamp.to_string());
+            captured_after_timestamps.push(timestamp.to_owned());
         } else if let Some(timestamp) =
             pull_examples::parse_rejected_after_input(input_string.as_ref())
         {
-            rejected_after_timestamps.push(timestamp.to_string());
+            rejected_after_timestamps.push(timestamp.to_owned());
         } else if let Some(timestamp) =
             pull_examples::parse_requested_after_input(input_string.as_ref())
         {
-            requested_after_timestamps.push(timestamp.to_string());
+            requested_after_timestamps.push(timestamp.to_owned());
         } else if let Some(timestamp) = parse_settled_after_input(input_string.as_ref()) {
-            settled_after_timestamps.push(timestamp.to_string());
+            settled_after_timestamps.push(timestamp.to_owned());
         } else if let Some((timestamp, rating_filter)) =
             pull_examples::parse_rated_after_input(input_string.as_ref())
         {
-            rated_after_inputs.push((timestamp.to_string(), rating_filter));
+            rated_after_inputs.push((timestamp.to_owned(), rating_filter));
         } else {
             file_inputs.push(input.clone());
         }

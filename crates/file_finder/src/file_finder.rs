@@ -1260,7 +1260,7 @@ impl FileFinderDelegate {
                         let filename = components.next_back().unwrap_or("");
                         let prefix = components.rest();
                         (
-                            filename.to_string(),
+                            filename.to_owned(),
                             Vec::new(),
                             prefix.display(path_style).to_string() + path_style.primary_separator(),
                             Vec::new(),
@@ -1287,7 +1287,7 @@ impl FileFinderDelegate {
                 } => (
                     channel_name.to_string(),
                     string_match.positions.clone(),
-                    "Channel Notes".to_string(),
+                    "Channel Notes".to_owned(),
                     vec![],
                 ),
                 Match::CreateNew(project_path) => (
@@ -1389,7 +1389,7 @@ impl FileFinderDelegate {
         let full_path = full_path
             .display(path_style)
             .trim_end_matches(&file_name)
-            .to_string();
+            .to_owned();
         path_positions.retain(|idx| *idx < full_path.len());
 
         debug_assert!(
@@ -1406,7 +1406,7 @@ impl FileFinderDelegate {
         );
 
         (
-            file_name.to_string(),
+            file_name.to_owned(),
             file_name_positions,
             full_path,
             path_positions,

@@ -53,7 +53,7 @@ impl OutputContent for MarkdownView {
     }
 
     fn buffer_content(&mut self, _: &mut Window, cx: &mut App) -> Option<Entity<Buffer>> {
-        let source = self.markdown.read(cx).source().to_string();
+        let source = self.markdown.read(cx).source().to_owned();
         let buffer = cx.new(|cx| {
             let mut buffer =
                 Buffer::local(source.clone(), cx).with_language(language::PLAIN_TEXT.clone(), cx);

@@ -258,7 +258,7 @@ fn parse_alter_table(remaining_sql_str: &str) -> Option<(String, String)> {
                     .take_while(|c| !c.is_whitespace())
                     .collect::<String>()
             } else {
-                "__place_holder_column_for_syntax_checking".to_string()
+                "__place_holder_column_for_syntax_checking".to_owned()
             };
             return Some((table_to_alter, column_name));
         }

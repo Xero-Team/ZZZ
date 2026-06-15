@@ -1136,21 +1136,21 @@ impl Operator {
             Operator::Literal {
                 prefix: Some(prefix),
             } => format!("^V{}", make_visible(prefix)),
-            Operator::AutoIndent => "=".to_string(),
-            Operator::ShellCommand => "=".to_string(),
-            Operator::HelixMatch => "m".to_string(),
-            Operator::HelixNext { .. } => "]".to_string(),
-            Operator::HelixPrevious { .. } => "[".to_string(),
-            Operator::HelixJump { .. } => "gw".to_string(),
-            Operator::HelixSurroundAdd => "ms".to_string(),
+            Operator::AutoIndent => "=".to_owned(),
+            Operator::ShellCommand => "=".to_owned(),
+            Operator::HelixMatch => "m".to_owned(),
+            Operator::HelixNext { .. } => "]".to_owned(),
+            Operator::HelixPrevious { .. } => "[".to_owned(),
+            Operator::HelixJump { .. } => "gw".to_owned(),
+            Operator::HelixSurroundAdd => "ms".to_owned(),
             Operator::HelixSurroundReplace {
                 replaced_char: None,
-            } => "mr".to_string(),
+            } => "mr".to_owned(),
             Operator::HelixSurroundReplace {
                 replaced_char: Some(c),
             } => format!("mr{}", c),
-            Operator::HelixSurroundDelete => "md".to_string(),
-            _ => self.id().to_string(),
+            Operator::HelixSurroundDelete => "md".to_owned(),
+            _ => self.id().to_owned(),
         }
     }
 
@@ -1318,12 +1318,12 @@ impl PickerDelegate for RegistersViewDelegate {
                 break;
             }
             let replace = match c {
-                '\t' => Some("\\t".to_string()),
-                '\n' => Some("\\n".to_string()),
-                '\r' => Some("\\r".to_string()),
+                '\t' => Some("\\t".to_owned()),
+                '\n' => Some("\\n".to_owned()),
+                '\r' => Some("\\r".to_owned()),
                 c if is_invisible(c) => {
                     if c <= '\x1f' {
-                        replacement(c).map(|s| s.to_string())
+                        replacement(c).map(|s| s.to_owned())
                     } else {
                         Some(format!("\\u{:04X}", c as u32))
                     }

@@ -34,8 +34,8 @@ fn remove_formatters_on_save_inner(value: &mut Value, path: &[&str]) -> Result<(
         fmt_path(path, "formatter")
     );
 
-    obj.insert("format_on_save".to_string(), serde_json::json!("on"));
-    obj.insert("formatter".to_string(), format_on_save);
+    obj.insert("format_on_save".to_owned(), serde_json::json!("on"));
+    obj.insert("formatter".to_owned(), format_on_save);
 
     Ok(())
 }

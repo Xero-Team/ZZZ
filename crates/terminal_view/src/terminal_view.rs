@@ -371,7 +371,7 @@ impl TerminalView {
     pub(crate) fn commit_text(&mut self, text: &str, cx: &mut Context<Self>) {
         if !text.is_empty() {
             self.terminal.update(cx, |term, _| {
-                term.input(text.to_string().into_bytes());
+                term.input(text.to_owned().into_bytes());
             });
         }
     }
@@ -418,7 +418,7 @@ impl TerminalView {
         };
         self.rename_editor_subscription = None;
         if save {
-            let new_label = editor.read(cx).text(cx).trim().to_string();
+            let new_label = editor.read(cx).text(cx).trim().to_owned();
             let label = if new_label.is_empty() {
                 None
             } else {

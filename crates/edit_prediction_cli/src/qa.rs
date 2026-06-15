@@ -133,24 +133,24 @@ fn parse_response(response_text: &str) -> QaResult {
                 reasoning: parsed
                     .get("reasoning")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_string()),
+                    .map(|s| s.to_owned()),
                 reverts_edits: parsed.get("reverts_edits").and_then(|v| v.as_bool()),
                 confidence: parsed
                     .get("confidence")
                     .and_then(|v| v.as_u64())
                     .map(|v| v as u8),
-                response: Some(response_text.to_string()),
+                response: Some(response_text.to_owned()),
                 error: None,
             };
         }
     }
 
     QaResult {
-        reasoning: Some(response_text.to_string()),
+        reasoning: Some(response_text.to_owned()),
         reverts_edits: None,
         confidence: None,
-        response: Some(response_text.to_string()),
-        error: Some("Could not parse JSON from response".to_string()),
+        response: Some(response_text.to_owned()),
+        error: Some("Could not parse JSON from response".to_owned()),
     }
 }
 

@@ -221,7 +221,7 @@ fn handle_frontmatter(book: &mut Book, errors: &mut HashSet<PreprocessorError>) 
                 };
                 let name = name.trim();
                 let value = value.trim();
-                metadata.insert(name.to_string(), value.to_string());
+                metadata.insert(name.to_owned(), value.to_owned());
             }
             FRONT_MATTER_COMMENT.replace(
                 "{}",
@@ -261,7 +261,7 @@ fn template_and_validate_keybindings(book: &mut Book, errors: &mut HashSet<Prepr
 
                 if is_missing_action(action) {
                     errors.insert(PreprocessorError::new_for_not_found_action(
-                        action.to_string(),
+                        action.to_owned(),
                     ));
                     return String::new();
                 }
@@ -269,7 +269,7 @@ fn template_and_validate_keybindings(book: &mut Book, errors: &mut HashSet<Prepr
                 let overlay = if let Some(name) = overlay_name {
                     let Some(overlay) = KeymapOverlay::parse(name) else {
                         errors.insert(PreprocessorError::UnknownKeymapOverlay {
-                            overlay_name: name.to_string(),
+                            overlay_name: name.to_owned(),
                         });
                         return String::new();
                     };
@@ -286,7 +286,7 @@ fn template_and_validate_keybindings(book: &mut Book, errors: &mut HashSet<Prepr
                         .unwrap_or_default();
 
                 if macos_binding.is_empty() && linux_binding.is_empty() {
-                    return "<div>No default binding</div>".to_string();
+                    return "<div>No default binding</div>".to_owned();
                 }
 
                 let formatted_macos_binding = format_binding(macos_binding);
@@ -307,9 +307,7 @@ fn template_and_validate_actions(book: &mut Book, errors: &mut HashSet<Preproces
                 let name = caps[1].trim();
                 let Some(action) = find_action_by_name(name) else {
                     if actions_available() {
-                        errors.insert(PreprocessorError::new_for_not_found_action(
-                            name.to_string(),
-                        ));
+                        errors.insert(PreprocessorError::new_for_not_found_action(name.to_owned()));
                     }
                     return format!("<code class=\"hljs\">{}</code>", name);
                 };
@@ -356,7 +354,7 @@ fn find_binding_in_keymap(keymap: &KeymapFile, action: &str) -> Option<String> {
     }
 
     // Look for parameterized match
-    find(&|a| name_for_action(a.to_string()) == action)
+    find(&|a| name_for_action(a.to_owned()) == action)
 }
 
 fn find_binding(os: Os, action: &str) -> Option<String> {
@@ -418,7 +416,7 @@ fn template_and_validate_json_snippets(book: &mut Book, errors: &mut HashSet<Pre
                         chapter,
                         loc,
                         chapter.content[loc..tag_start].to_string(),
-                        "Unclosed JSON block tag".to_string(),
+                        "Unclosed JSON block tag".to_owned(),
                     ));
                     continue;
                 };
@@ -431,7 +429,7 @@ fn template_and_validate_json_snippets(book: &mut Book, errors: &mut HashSet<Pre
                         chapter,
                         loc,
                         chapter.content[loc..tag_start].to_string(),
-                        "Unclosed JSON block tag".to_string(),
+                        "Unclosed JSON block tag".to_owned(),
                     ));
                     continue;
                 }
@@ -445,7 +443,7 @@ fn template_and_validate_json_snippets(book: &mut Book, errors: &mut HashSet<Pre
                         chapter,
                         loc,
                         chapter.content[loc..tag_end + 1].to_string(),
-                        "Missing closing code block".to_string(),
+                        "Missing closing code block".to_owned(),
                     ));
                     continue;
                 };
@@ -471,14 +469,14 @@ fn template_and_validate_json_snippets(book: &mut Book, errors: &mut HashSet<Pre
 
     for_each_labeled_code_block_mut(book, errors, &|label, snippet_json| {
         let mut snippet_json_fixed = snippet_json
-            .to_string()
+            .to_owned()
             .replace("\n>", "\n")
             .trim()
-            .to_string();
+            .to_owned();
         while snippet_json_fixed.starts_with("//") {
             if let Some(line_end) = snippet_json_fixed.find('\n') {
                 snippet_json_fixed.replace_range(0..line_end, "");
-                snippet_json_fixed = snippet_json_fixed.trim().to_string();
+                snippet_json_fixed = snippet_json_fixed.trim().to_owned();
             }
         }
         match label {
@@ -581,7 +579,7 @@ fn name_for_action(action_as_str: String) -> String {
     action_as_str
         .split(",")
         .next()
-        .map(|name| name.trim_matches('"').to_string())
+        .map(|name| name.trim_matches('"').to_owned())
         .unwrap_or(action_as_str)
 }
 
@@ -670,16 +668,16 @@ fn handle_postprocessing() -> Result<()> {
         .expect("Default description not found")
         .as_str()
         .expect("Default description not a string")
-        .to_string();
+        .to_owned();
     let default_title = zed_html
         .get("default-title")
         .expect("Default title not found")
         .as_str()
         .expect("Default title not a string")
-        .to_string();
+        .to_owned();
     let amplitude_key = std::env::var("DOCS_AMPLITUDE_API_KEY").unwrap_or_default();
     let consent_io_instance = std::env::var("DOCS_CONSENT_IO_INSTANCE").unwrap_or_default();
-    let docs_channel = std::env::var("DOCS_CHANNEL").unwrap_or_else(|_| "stable".to_string());
+    let docs_channel = std::env::var("DOCS_CHANNEL").unwrap_or_else(|_| "stable".to_owned());
     let noindex = if docs_channel == "nightly" || docs_channel == "preview" {
         "<meta name=\"robots\" content=\"noindex, nofollow\">"
     } else {
@@ -783,7 +781,7 @@ fn handle_postprocessing() -> Result<()> {
             .strip_suffix("- Zed")
             .unwrap_or(title_tag_contents)
             .trim()
-            .to_string()
+            .to_owned()
     }
 }
 

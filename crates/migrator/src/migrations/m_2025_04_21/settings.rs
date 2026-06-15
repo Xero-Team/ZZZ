@@ -21,5 +21,5 @@ fn rename_tools(contents: &str, mat: &QueryMatch, query: &Query) -> Option<(Rang
         _ => return None,
     };
 
-    Some((tool_name_range, new_name.to_string()))
+    Some((tool_name_range, new_name.to_owned()))
 }

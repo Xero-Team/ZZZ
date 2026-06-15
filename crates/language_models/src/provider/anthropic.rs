@@ -504,7 +504,7 @@ impl LanguageModel for AnthropicModel {
         >,
     > {
         let has_tools = !request.tools.is_empty();
-        let request_id = self.model.request_id(has_tools).to_string();
+        let request_id = self.model.request_id(has_tools).to_owned();
         let mut request = into_anthropic(
             request,
             request_id,
@@ -613,7 +613,7 @@ impl Render for ConfigurationView {
         } else {
             let api_url = AnthropicLanguageModelProvider::api_url(cx);
             if api_url == ANTHROPIC_API_URL {
-                "API key configured".to_string()
+                "API key configured".to_owned()
             } else {
                 format!("API key configured for {}", api_url)
             }

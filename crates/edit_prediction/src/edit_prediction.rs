@@ -2787,8 +2787,8 @@ impl EditPredictionStore {
                         organization_id: organization.map(|organization| organization.id.clone()),
                         request_id: prediction_id,
                         rating: match rating {
-                            EditPredictionRating::Positive => "positive".to_string(),
-                            EditPredictionRating::Negative => "negative".to_string(),
+                            EditPredictionRating::Positive => "positive".to_owned(),
+                            EditPredictionRating::Negative => "negative".to_owned(),
                         },
                         inputs: inputs?,
                         output,

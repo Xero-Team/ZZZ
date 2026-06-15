@@ -188,9 +188,9 @@ impl CommitTooltip {
                 author_name: blame
                     .author
                     .clone()
-                    .unwrap_or("<no name>".to_string())
+                    .unwrap_or("<no name>".to_owned())
                     .into(),
-                author_email: blame.author_mail.clone().unwrap_or("".to_string()).into(),
+                author_email: blame.author_mail.clone().unwrap_or("".to_owned()).into(),
                 message: details,
             },
             repository,
@@ -239,7 +239,7 @@ impl Render for CommitTooltip {
             .commit
             .sha
             .get(0..8)
-            .map(|sha| sha.to_string().into())
+            .map(|sha| sha.to_owned().into())
             .unwrap_or_else(|| self.commit.sha.clone());
         let full_sha = self.commit.sha.to_string();
         let local_offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
@@ -288,7 +288,7 @@ impl Render for CommitTooltip {
                         .next()
                         .unwrap()
                         .trim_end()
-                        .to_string()
+                        .to_owned()
                         .into()
                 }),
             commit_timestamp: self.commit.commit_time.unix_timestamp(),
@@ -410,7 +410,7 @@ fn blame_entry_timestamp(blame_entry: &BlameEntry, format: time_format::Timestam
                 format,
             )
         }
-        Err(_) => "Error parsing date".to_string(),
+        Err(_) => "Error parsing date".to_owned(),
     }
 }
 

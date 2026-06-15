@@ -258,7 +258,7 @@ impl DiagnosticCount {
 
     fn capped_count(count: usize) -> String {
         if count > 99 {
-            "99+".to_string()
+            "99+".to_owned()
         } else {
             count.to_string()
         }
@@ -1863,7 +1863,7 @@ impl ProjectPanel {
             // this can cause project panel to create a new entry with a trailing dot
             // while the actual one without the dot gets populated by the file watcher
             while let Some(trimmed) = filename.strip_suffix('.') {
-                filename = trimmed.to_string();
+                filename = trimmed.to_owned();
             }
         }
         if filename.trim().is_empty() {
@@ -2251,9 +2251,9 @@ impl ProjectPanel {
                     validation_state: ValidationState::None,
                     temporarily_unfolded: None,
                 });
-                let file_name = entry.path.file_name().unwrap_or_default().to_string();
+                let file_name = entry.path.file_name().unwrap_or_default().to_owned();
                 let selection = selection.unwrap_or_else(|| {
-                    let file_stem = entry.path.file_stem().map(|s| s.to_string());
+                    let file_stem = entry.path.file_stem().map(|s| s.to_owned());
                     let selection_end =
                         file_stem.map_or(file_name.len(), |file_stem| file_stem.len());
                     0..selection_end
@@ -2312,7 +2312,7 @@ impl ProjectPanel {
                 return None;
             }
 
-            let file_name = entry.path.file_name()?.to_string();
+            let file_name = entry.path.file_name()?.to_owned();
 
             let answer = if !action.skip_prompt {
                 let prompt = tr(
@@ -2477,7 +2477,7 @@ impl ProjectPanel {
                     Some((
                         selection.entry_id,
                         selection.worktree_id,
-                        project_path.path.file_name()?.to_string(),
+                        project_path.path.file_name()?.to_owned(),
                     ))
                 })
                 .collect::<Vec<_>>();
@@ -3223,13 +3223,13 @@ impl ProjectPanel {
             .worktree_for_entry(source.entry_id, cx)?;
         let source_entry = source_worktree.read(cx).entry_for_id(source.entry_id)?;
 
-        let clipboard_entry_file_name = source_entry.path.file_name()?.to_string();
+        let clipboard_entry_file_name = source_entry.path.file_name()?.to_owned();
         new_path.push(RelPath::unix(&clipboard_entry_file_name).unwrap());
 
         let (extension, file_name_without_extension) = if source_entry.is_file() {
             (
-                new_path.extension().map(|s| s.to_string()),
-                new_path.file_stem()?.to_string(),
+                new_path.extension().map(|s| s.to_owned()),
+                new_path.file_stem()?.to_owned(),
             )
         } else {
             (None, clipboard_entry_file_name.clone())
@@ -3445,7 +3445,7 @@ impl ProjectPanel {
                 let filename = entry
                     .path
                     .file_name()
-                    .map(str::to_string)
+                    .map(str::to_owned)
                     .unwrap_or_default();
                 files_to_download.push((
                     selected.worktree_id,
@@ -3457,7 +3457,7 @@ impl ProjectPanel {
                 let dir_name = entry
                     .path
                     .file_name()
-                    .map(str::to_string)
+                    .map(str::to_owned)
                     .unwrap_or_default();
                 let base_path = entry.path.clone();
 
@@ -3480,7 +3480,7 @@ impl ProjectPanel {
                                     child_entry
                                         .path
                                         .file_name()
-                                        .map(str::to_string)
+                                        .map(str::to_owned)
                                         .unwrap_or_default(),
                                 )
                             });
@@ -4535,7 +4535,7 @@ impl ProjectPanel {
             {
                 let target_path = target_directory.join(RelPath::unix(name).unwrap());
                 if worktree.read(cx).entry_for_path(&target_path).is_some() {
-                    paths_to_replace.push((name.to_string(), path.clone()));
+                    paths_to_replace.push((name.to_owned(), path.clone()));
                 }
             }
         }
@@ -6415,8 +6415,8 @@ impl ProjectPanel {
             entry
                 .path
                 .file_name()
-                .map(|name| name.to_string())
-                .unwrap_or_else(|| root_name.as_unix_str().to_string())
+                .map(|name| name.to_owned())
+                .unwrap_or_else(|| root_name.as_unix_str().to_owned())
         };
 
         let selection = SelectedEntry {

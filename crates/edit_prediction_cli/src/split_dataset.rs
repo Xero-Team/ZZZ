@@ -334,16 +334,16 @@ fn group_lines(lines: &[String], stratify: Stratify) -> Vec<Vec<String>> {
             Stratify::Repo => json
                 .get("repository_url")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+                .map(|s| s.to_owned()),
             Stratify::CursorPath => json
                 .get("cursor_path")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+                .map(|s| s.to_owned()),
             Stratify::Project => json
                 .get("cursor_path")
                 .and_then(|v| v.as_str())
                 .and_then(|s| s.split(['/', '\\']).next())
-                .map(|s| s.to_string()),
+                .map(|s| s.to_owned()),
             Stratify::None => unreachable!(),
         }
     };

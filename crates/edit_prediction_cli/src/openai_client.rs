@@ -37,7 +37,7 @@ impl PlainOpenAiClient {
         messages: Vec<RequestMessage>,
     ) -> Result<OpenAiResponse> {
         let request = OpenAiRequest {
-            model: model.to_string(),
+            model: model.to_owned(),
             messages,
             stream: false,
             stream_options: None,
@@ -171,7 +171,7 @@ impl BatchingOpenAiClient {
             .collect();
 
         let serializable_request = SerializableRequest {
-            model: model.to_string(),
+            model: model.to_owned(),
             max_tokens,
             messages: serializable_messages,
         };
@@ -274,7 +274,7 @@ impl BatchingOpenAiClient {
                     .custom_id
                     .strip_prefix("req_hash_")
                     .unwrap_or(&result.custom_id)
-                    .to_string();
+                    .to_owned();
 
                 if let Some(response_body) = result.response {
                     if response_body.status_code == 200 {
@@ -393,7 +393,7 @@ impl BatchingOpenAiClient {
                         .custom_id
                         .strip_prefix("req_hash_")
                         .unwrap_or(&result.custom_id)
-                        .to_string();
+                        .to_owned();
 
                     if let Some(response_body) = result.response {
                         if response_body.status_code == 200 {
@@ -600,10 +600,10 @@ impl BatchingOpenAiClient {
 
 fn message_role_to_string(msg: &RequestMessage) -> String {
     match msg {
-        RequestMessage::User { .. } => "user".to_string(),
-        RequestMessage::Assistant { .. } => "assistant".to_string(),
-        RequestMessage::System { .. } => "system".to_string(),
-        RequestMessage::Tool { .. } => "tool".to_string(),
+        RequestMessage::User { .. } => "user".to_owned(),
+        RequestMessage::Assistant { .. } => "assistant".to_owned(),
+        RequestMessage::System { .. } => "system".to_owned(),
+        RequestMessage::Tool { .. } => "tool".to_owned(),
     }
 }
 

@@ -94,7 +94,7 @@ impl McpServer {
         let description = input_schema
             .get("description")
             .and_then(|desc| desc.as_str())
-            .map(|desc| desc.to_string());
+            .map(|desc| desc.to_owned());
         debug_assert!(
             description.is_some(),
             "Input schema struct must include a doc comment for the tool description"

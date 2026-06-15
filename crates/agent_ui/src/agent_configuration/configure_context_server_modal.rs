@@ -39,7 +39,7 @@ fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
 
 fn template_text(cx: Option<&App>, key: &'static str, fallback: &'static str) -> String {
     cx.map(|cx| app_i18n::tr(cx, key, fallback))
-        .unwrap_or_else(|| fallback.to_string())
+        .unwrap_or_else(|| fallback.to_owned())
 }
 
 enum ConfigurationTarget {
@@ -259,10 +259,10 @@ fn context_server_input(
             (id.0.to_string(), cmd_path, args, env)
         }
         None => (
-            "some-mcp-server".to_string(),
-            "".to_string(),
-            "[]".to_string(),
-            "{}".to_string(),
+            "some-mcp-server".to_owned(),
+            "".to_owned(),
+            "[]".to_owned(),
+            "{}".to_owned(),
         ),
     };
 
@@ -320,7 +320,7 @@ fn context_server_http_input(
     let (name, url, headers, oauth) = match existing {
         Some((id, url, headers, oauth)) => {
             let headers = if headers.is_empty() {
-                r#"// "Authorization": "Bearer <token>"#.to_string()
+                r#"// "Authorization": "Bearer <token>"#.to_owned()
             } else {
                 let json = serde_json::to_string_pretty(&headers).unwrap();
                 let mut lines = json.split("\n").collect::<Vec<_>>();
@@ -336,9 +336,9 @@ fn context_server_http_input(
             (id.0.to_string(), url, headers, oauth)
         }
         None => (
-            "some-remote-server".to_string(),
-            "https://example.com/mcp".to_string(),
-            r#"// "Authorization": "Bearer <token>"#.to_string(),
+            "some-remote-server".to_owned(),
+            "https://example.com/mcp".to_owned(),
+            r#"// "Authorization": "Bearer <token>"#.to_owned(),
             None,
         ),
     };

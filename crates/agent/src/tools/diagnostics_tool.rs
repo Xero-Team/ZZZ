@@ -71,7 +71,7 @@ async fn with_cancellation<T>(f: impl Future<Output = T>, s: &ToolCallEventStrea
     futures::select! {
         result = f.fuse() => Ok(result),
         _ = s.cancelled_by_user().fuse() => {
-            Err("Diagnostics cancelled by user".to_string())
+            Err("Diagnostics cancelled by user".to_owned())
         }
     }
 }

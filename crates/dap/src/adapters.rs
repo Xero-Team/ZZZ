@@ -100,7 +100,7 @@ impl From<SharedString> for DebugAdapterName {
 
 impl<'a> From<&'a str> for DebugAdapterName {
     fn from(str: &'a str) -> DebugAdapterName {
-        DebugAdapterName(str.to_string().into())
+        DebugAdapterName(str.to_owned().into())
     }
 }
 

@@ -142,7 +142,7 @@ impl OpenRequest {
                 if user.is_empty() {
                     anyhow::bail!("user is empty in wsl argument");
                 }
-                (Some(user.to_string()), distro.to_string())
+                (Some(user.to_owned()), distro.to_owned())
             } else {
                 (None, wsl)
             };
@@ -164,16 +164,16 @@ impl OpenRequest {
             } else if let Some(file) = url.strip_prefix("zzz://file") {
                 this.parse_file_path(file)
             } else if let Some(file) = url.strip_prefix("zzz://ssh") {
-                let ssh_url = "ssh:/".to_string() + file;
+                let ssh_url = "ssh:/".to_owned() + file;
                 this.parse_ssh_file_path(&ssh_url, cx)?
             } else if let Some(extension_id) = url.strip_prefix("zzz://extension/") {
                 this.kind = Some(OpenRequestKind::Extension {
-                    extension_id: extension_id.to_string(),
+                    extension_id: extension_id.to_owned(),
                 });
             } else if let Some(session_id_str) = url.strip_prefix("zzz://agent/shared/") {
                 if uuid::Uuid::parse_str(session_id_str).is_ok() {
                     this.kind = Some(OpenRequestKind::SharedAgentThread {
-                        session_id: session_id_str.to_string(),
+                        session_id: session_id_str.to_owned(),
                     });
                 } else {
                     log::error!("Invalid session ID in URL: {}", session_id_str);
@@ -184,13 +184,13 @@ impl OpenRequest {
                 this.kind = Some(OpenRequestKind::FocusApp);
             } else if let Some(schema_path) = url.strip_prefix("zzz://schemas/") {
                 this.kind = Some(OpenRequestKind::BuiltinJsonSchema {
-                    schema_path: schema_path.to_string(),
+                    schema_path: schema_path.to_owned(),
                 });
             } else if url == "zzz://settings" || url == "zzz://settings/" {
                 this.kind = Some(OpenRequestKind::Setting { setting_path: None });
             } else if let Some(setting_path) = url.strip_prefix("zzz://settings/") {
                 this.kind = Some(OpenRequestKind::Setting {
-                    setting_path: Some(setting_path.to_string()),
+                    setting_path: Some(setting_path.to_owned()),
                 });
             } else if let Some(clone_path) = url.strip_prefix("zzz://git/clone") {
                 this.parse_git_clone_url(clone_path)?
@@ -273,7 +273,7 @@ impl OpenRequest {
         self.open_paths.push(repo);
 
         self.kind = Some(OpenRequestKind::GitCommit {
-            sha: sha.to_string(),
+            sha: sha.to_owned(),
         });
 
         Ok(())
@@ -285,7 +285,7 @@ impl OpenRequest {
             .host()
             .with_context(|| format!("missing host in ssh url: {url}"))?
         {
-            url::Host::Domain(host) => host.to_string(),
+            url::Host::Domain(host) => host.to_owned(),
             url::Host::Ipv4(host) => host.to_string(),
             url::Host::Ipv6(host) => host.to_string(),
         };
@@ -366,7 +366,7 @@ fn parse_ssh_url(url: &str) -> Result<url::Url> {
             };
         format!("{username}{colon_password}@{host}")
     } else {
-        authority.to_string()
+        authority.to_owned()
     };
 
     Ok(url::Url::parse(&format!(
@@ -434,7 +434,7 @@ fn connect_to_cli(
     mpsc::UnboundedReceiver<CliRequest>,
     Box<dyn CliResponseSink>,
 )> {
-    let handshake_tx = ipc::IpcSender::<IpcHandshake>::connect(server_name.to_string())
+    let handshake_tx = ipc::IpcSender::<IpcHandshake>::connect(server_name.to_owned())
         .context("error connecting to cli")?;
     let (request_tx, request_rx) = ipc::channel::<CliRequest>()?;
     let (response_tx, response_rx) = ipc::channel::<CliResponse>()?;

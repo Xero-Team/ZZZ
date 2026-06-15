@@ -108,7 +108,7 @@ impl SharedThread {
             messages: thread.messages.clone(),
             updated_at: thread.updated_at,
             model: thread.model.clone(),
-            version: Self::VERSION.to_string(),
+            version: Self::VERSION.to_owned(),
         }
     }
 

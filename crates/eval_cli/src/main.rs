@@ -193,10 +193,10 @@ fn main() {
             let duration = start.elapsed();
 
             let (status, error, exit_code) = match &outcome {
-                Ok(()) => ("completed".to_string(), None, EXIT_OK),
+                Ok(()) => ("completed".to_owned(), None, EXIT_OK),
                 Err(e) => {
                     eprintln!("Error: {e:#}");
-                    ("error".to_string(), Some(format!("{e:#}")), EXIT_ERROR)
+                    ("error".to_owned(), Some(format!("{e:#}")), EXIT_ERROR)
                 }
             };
 
@@ -377,7 +377,7 @@ fn model_not_found_error(model_name: &str, cx: &gpui::App) -> anyhow::Error {
         .map(|model| format!("{}/{}", model.provider_id().0, model.id().0))
         .collect::<Vec<_>>();
     let available = if available.is_empty() {
-        "(none)".to_string()
+        "(none)".to_owned()
     } else {
         available.join(", ")
     };
@@ -469,10 +469,10 @@ async fn run_agent(
         let effort = if enable_thinking {
             match reasoning_effort {
                 Some(level) => format!("\"{level}\""),
-                None => "\"high\"".to_string(),
+                None => "\"high\"".to_owned(),
             }
         } else {
-            "null".to_string()
+            "null".to_owned()
         };
         let provider_id = selected.provider.0.to_string();
         SettingsStore::update_global(cx, |store, cx| {

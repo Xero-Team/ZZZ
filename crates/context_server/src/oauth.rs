@@ -514,7 +514,7 @@ pub fn determine_registration_strategy(
 ) -> ClientRegistrationStrategy {
     if auth_server_metadata.client_id_metadata_document_supported {
         ClientRegistrationStrategy::Cimd {
-            client_id: CIMD_URL.to_string(),
+            client_id: CIMD_URL.to_owned(),
         }
     } else if let Some(ref endpoint) = auth_server_metadata.registration_endpoint {
         ClientRegistrationStrategy::Dcr {
@@ -663,15 +663,15 @@ pub fn token_exchange_params(
     client_secret: Option<&str>,
 ) -> Vec<(&'static str, String)> {
     let mut params = vec![
-        ("grant_type", "authorization_code".to_string()),
-        ("code", code.to_string()),
-        ("redirect_uri", redirect_uri.to_string()),
-        ("client_id", client_id.to_string()),
-        ("code_verifier", code_verifier.to_string()),
-        ("resource", resource.to_string()),
+        ("grant_type", "authorization_code".to_owned()),
+        ("code", code.to_owned()),
+        ("redirect_uri", redirect_uri.to_owned()),
+        ("client_id", client_id.to_owned()),
+        ("code_verifier", code_verifier.to_owned()),
+        ("resource", resource.to_owned()),
     ];
     if let Some(secret) = client_secret {
-        params.push(("client_secret", secret.to_string()));
+        params.push(("client_secret", secret.to_owned()));
     }
     params
 }
@@ -684,13 +684,13 @@ pub fn token_refresh_params(
     client_secret: Option<&str>,
 ) -> Vec<(&'static str, String)> {
     let mut params = vec![
-        ("grant_type", "refresh_token".to_string()),
-        ("refresh_token", refresh_token.to_string()),
-        ("client_id", client_id.to_string()),
-        ("resource", resource.to_string()),
+        ("grant_type", "refresh_token".to_owned()),
+        ("refresh_token", refresh_token.to_owned()),
+        ("client_id", client_id.to_owned()),
+        ("resource", resource.to_owned()),
     ];
     if let Some(secret) = client_secret {
-        params.push(("client_secret", secret.to_string()));
+        params.push(("client_secret", secret.to_owned()));
     }
     params
 }

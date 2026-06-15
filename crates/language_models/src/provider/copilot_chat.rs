@@ -210,11 +210,11 @@ pub struct CopilotChatLanguageModel {
 
 impl LanguageModel for CopilotChatLanguageModel {
     fn id(&self) -> LanguageModelId {
-        LanguageModelId::from(self.model.id().to_string())
+        LanguageModelId::from(self.model.id().to_owned())
     }
 
     fn name(&self) -> LanguageModelName {
-        LanguageModelName::from(self.model.display_name().to_string())
+        LanguageModelName::from(self.model.display_name().to_owned())
     }
 
     fn provider_id(&self) -> LanguageModelProviderId {
@@ -336,7 +336,7 @@ impl LanguageModel for CopilotChatLanguageModel {
 
                 let mut anthropic_request = into_anthropic(
                     request,
-                    model.id().to_string(),
+                    model.id().to_owned(),
                     0.0,
                     model.max_output_tokens() as u64,
                     if model.supports_adaptive_thinking() {
@@ -378,7 +378,7 @@ impl LanguageModel for CopilotChatLanguageModel {
 
                 let anthropic_beta =
                     if !model.supports_adaptive_thinking() && model.supports_thinking() {
-                        Some("interleaved-thinking-2025-05-14".to_string())
+                        Some("interleaved-thinking-2025-05-14".to_owned())
                     } else {
                         None
                     };
@@ -590,13 +590,13 @@ pub fn map_to_language_model_completion_events(
                                     let mut details = serde_json::Map::new();
                                     if let Some(opaque) = state.reasoning_opaque.take() {
                                         details.insert(
-                                            "reasoning_opaque".to_string(),
+                                            "reasoning_opaque".to_owned(),
                                             serde_json::Value::String(opaque),
                                         );
                                     }
                                     if let Some(text) = state.reasoning_text.take() {
                                         details.insert(
-                                            "reasoning_text".to_string(),
+                                            "reasoning_text".to_owned(),
                                             serde_json::Value::String(text),
                                         );
                                     }
@@ -828,7 +828,7 @@ impl CopilotResponsesEventMapper {
                     }
                     None => (
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        "response.failed".to_string(),
+                        "response.failed".to_owned(),
                     ),
                 };
                 vec![Err(LanguageModelCompletionError::HttpResponseError {
@@ -952,7 +952,7 @@ fn reasoning_input_item_from_output(
         return None;
     }
     Some(copilot_responses::ResponseReasoningInputItem {
-        id: Some(id.to_string()),
+        id: Some(id.to_owned()),
         summary: Vec::new(),
         encrypted_content,
     })
@@ -1007,7 +1007,7 @@ fn into_copilot_chat(
                                             tool_result.tool_name
                                         );
                                         ChatMessagePart::Text {
-                                            text: "[Tool responded with an image, but this model does not support vision]".to_string(),
+                                            text: "[Tool responded with an image, but this model does not support vision]".to_owned(),
                                         }
                                     }
                                 }
@@ -1100,11 +1100,11 @@ fn into_copilot_chat(
                         let opaque = details
                             .get("reasoning_opaque")
                             .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
+                            .map(|s| s.to_owned());
                         let text = details
                             .get("reasoning_text")
                             .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
+                            .map(|s| s.to_owned());
                         (opaque, text)
                     } else {
                         (None, None)
@@ -1143,7 +1143,7 @@ fn into_copilot_chat(
         n: 1,
         stream: model.uses_streaming(),
         temperature: temperature.unwrap_or(0.1),
-        model: model.id().to_string(),
+        model: model.id().to_owned(),
         messages,
         tools,
         tool_choice: tool_choice.map(|choice| match choice {
@@ -1249,7 +1249,7 @@ fn into_copilot_responses(
                                                     tool_result.tool_name
                                                 );
                                                 responses::ResponseInputContent::InputText {
-                                                    text: "[Tool responded with an image, but this model does not support vision]".to_string(),
+                                                    text: "[Tool responded with an image, but this model does not support vision]".to_owned(),
                                                 }
                                             }
                                         }
@@ -1326,7 +1326,7 @@ fn into_copilot_responses(
                         }
                         MessageContent::Image(_) => {
                             parts.push(responses::ResponseInputContent::OutputText {
-                                text: "[image omitted]".to_string(),
+                                text: "[image omitted]".to_owned(),
                             });
                         }
                         _ => {}
@@ -1380,7 +1380,7 @@ fn into_copilot_responses(
     });
 
     responses::Request {
-        model: model.id().to_string(),
+        model: model.id().to_owned(),
         input: input_items,
         stream: model.uses_streaming(),
         temperature,

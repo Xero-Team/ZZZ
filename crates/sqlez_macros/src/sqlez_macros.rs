@@ -128,18 +128,18 @@ fn flatten_stream(tokens: TokenStream, result: &mut Vec<(String, Span)>) {
 
 fn open_delimiter(delimiter: Delimiter) -> String {
     match delimiter {
-        Delimiter::Parenthesis => "( ".to_string(),
-        Delimiter::Brace => "[ ".to_string(),
-        Delimiter::Bracket => "{ ".to_string(),
-        Delimiter::None => "".to_string(),
+        Delimiter::Parenthesis => "( ".to_owned(),
+        Delimiter::Brace => "[ ".to_owned(),
+        Delimiter::Bracket => "{ ".to_owned(),
+        Delimiter::None => "".to_owned(),
     }
 }
 
 fn close_delimiter(delimiter: Delimiter) -> String {
     match delimiter {
-        Delimiter::Parenthesis => " ) ".to_string(),
-        Delimiter::Brace => " ] ".to_string(),
-        Delimiter::Bracket => " } ".to_string(),
-        Delimiter::None => "".to_string(),
+        Delimiter::Parenthesis => " ) ".to_owned(),
+        Delimiter::Brace => " ] ".to_owned(),
+        Delimiter::Bracket => " } ".to_owned(),
+        Delimiter::None => "".to_owned(),
     }
 }

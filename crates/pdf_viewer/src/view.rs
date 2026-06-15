@@ -502,8 +502,8 @@ impl PdfView {
             .read(cx)
             .path
             .file_name()
-            .map(|name| name.to_string())
-            .unwrap_or_else(|| "PDF".to_string())
+            .map(|name| name.to_owned())
+            .unwrap_or_else(|| "PDF".to_owned())
     }
 
     pub(crate) fn abs_path(&self, cx: &App) -> Option<PathBuf> {
@@ -537,7 +537,7 @@ impl PdfView {
                 lines.push(format!("Author: {author}"));
             }
             if summary.security == crate::document::PdfSecurity::Encrypted {
-                lines.push("Encrypted document".to_string());
+                lines.push("Encrypted document".to_owned());
             }
             lines.push(format!(
                 "PDF {}.{} · {} page{}",

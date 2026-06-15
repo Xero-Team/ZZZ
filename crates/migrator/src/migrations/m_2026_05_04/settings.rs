@@ -34,5 +34,5 @@ fn replace_setting_value(
         return None;
     }
 
-    Some((value_range, "\"on_typing_and_action\"".to_string()))
+    Some((value_range, "\"on_typing_and_action\"".to_owned()))
 }

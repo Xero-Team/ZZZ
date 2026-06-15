@@ -282,7 +282,11 @@ impl<'a> OffsetUnifiedDiffBuilder<'a> {
 
     fn print_tokens(&mut self, tokens: &[Token], prefix: char) {
         for &token in tokens {
-            writeln!(&mut self.buffer, "{prefix}{}", self.interner[token]).unwrap();
+            self.buffer.push(prefix);
+            self.buffer.push_str(self.interner[token]);
+            if !self.interner[token].ends_with('\n') {
+                self.buffer.push('\n');
+            }
         }
     }
 

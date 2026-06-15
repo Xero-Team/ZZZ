@@ -73,7 +73,7 @@ impl PythonDebugAdapter {
                     vec![format!("--host={}", host), format!("--port={}", port)]
                 }
                 DebugpyLaunchMode::AttachWithConnect { host } => {
-                    let mut args = vec!["connect".to_string()];
+                    let mut args = vec!["connect".to_owned()];
 
                     if let Some(host) = host {
                         args.push(format!("{host}:"));

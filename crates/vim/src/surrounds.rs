@@ -626,8 +626,8 @@ pub fn bracket_pair_for_str_vim(text: &str) -> BracketPair {
         .and_then(surround_pair_for_char_vim)
         .map(|p| p.to_bracket_pair())
         .unwrap_or_else(|| BracketPair {
-            start: text.to_string(),
-            end: text.to_string(),
+            start: text.to_owned(),
+            end: text.to_owned(),
             close: true,
             surround: true,
             newline: false,
@@ -650,8 +650,8 @@ pub fn bracket_pair_for_str_helix(text: &str) -> BracketPair {
         .and_then(surround_pair_for_char_helix)
         .map(|p| p.to_bracket_pair())
         .unwrap_or_else(|| BracketPair {
-            start: text.to_string(),
-            end: text.to_string(),
+            start: text.to_owned(),
+            end: text.to_owned(),
             close: true,
             surround: true,
             newline: false,

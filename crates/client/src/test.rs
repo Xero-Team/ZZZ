@@ -230,7 +230,7 @@ pub fn parse_authorization_header(req: &Request<AsyncBody>) -> Option<Credential
     let access_token = auth_header.next()?;
     Some(Credentials {
         user_id,
-        access_token: access_token.to_string(),
+        access_token: access_token.to_owned(),
     })
 }
 
@@ -242,7 +242,7 @@ pub fn make_get_authenticated_user_response(
         user: AuthenticatedUser {
             id: user_id,
             metrics_id: format!("metrics-id-{user_id}"),
-            avatar_url: "".to_string(),
+            avatar_url: "".to_owned(),
             github_login,
             name: None,
             is_staff: false,

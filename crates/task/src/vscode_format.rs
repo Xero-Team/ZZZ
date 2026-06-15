@@ -76,12 +76,12 @@ fn generate_label(command: &Option<Command>) -> String {
         Some(Command::Gulp { task }) => format!("gulp: {}", task),
         Some(Command::Shell { command, .. }) => {
             if command.trim().is_empty() {
-                "shell".to_string()
+                "shell".to_owned()
             } else {
                 command.clone()
             }
         }
-        None => "Untitled Task".to_string(),
+        None => "Untitled Task".to_owned(),
     }
 }
 
@@ -106,7 +106,7 @@ impl VsCodeTaskDefinition {
         };
 
         let (command, args) = match command {
-            Command::Npm { script } => ("npm".to_owned(), vec!["run".to_string(), script]),
+            Command::Npm { script } => ("npm".to_owned(), vec!["run".to_owned(), script]),
             Command::Shell { command, args } => (command, args),
             Command::Gulp { task } => ("gulp".to_owned(), vec![task]),
         };

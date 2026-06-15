@@ -84,7 +84,7 @@ where
     DropdownMenu::new(
         dropdown_id,
         current_device
-            .map(|info| info.desc.name().to_string())
+            .map(|info| info.desc.name().to_owned())
             .unwrap_or_else(|| {
                 app_i18n::tr(cx, "settings_ui.audio.system_default", "System Default")
             }),

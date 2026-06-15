@@ -177,7 +177,7 @@ impl AgentTool for CopyPathTool {
             let result = futures::select! {
                 result = copy_task.fuse() => result,
                 _ = event_stream.cancelled_by_user().fuse() => {
-                    return Err("Copy cancelled by user".to_string());
+                    return Err("Copy cancelled by user".to_owned());
                 }
             };
             result.map_err(|e| {

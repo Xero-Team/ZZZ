@@ -35,24 +35,24 @@ pub fn generate_feature_flags_schema() -> Schema {
         let variants = (descriptor.variants)();
         let enum_values: Vec<Value> = variants
             .iter()
-            .map(|v| Value::String(v.override_key.to_string()))
+            .map(|v| Value::String(v.override_key.to_owned()))
             .collect();
         let enum_descriptions: Vec<Value> = variants
             .iter()
-            .map(|v| Value::String(v.label.to_string()))
+            .map(|v| Value::String(v.label.to_owned()))
             .collect();
 
         let mut property = Map::new();
-        property.insert("type".to_string(), Value::String("string".to_string()));
-        property.insert("enum".to_string(), Value::Array(enum_values));
+        property.insert("type".to_owned(), Value::String("string".to_owned()));
+        property.insert("enum".to_owned(), Value::Array(enum_values));
         // VS Code / json-language-server use `enumDescriptions` for hover docs
         // on each enum value; schemars passes them through untouched.
         property.insert(
-            "enumDescriptions".to_string(),
+            "enumDescriptions".to_owned(),
             Value::Array(enum_descriptions),
         );
         property.insert(
-            "description".to_string(),
+            "description".to_owned(),
             Value::String(format!(
                 "Override for the `{}` feature flag. Default: `{}` (the {} variant).",
                 descriptor.name,
@@ -61,7 +61,7 @@ pub fn generate_feature_flags_schema() -> Schema {
             )),
         );
 
-        properties.insert(descriptor.name.to_string(), Value::Object(property));
+        properties.insert(descriptor.name.to_owned(), Value::Object(property));
     }
 
     json_schema!({

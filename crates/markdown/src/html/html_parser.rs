@@ -633,7 +633,7 @@ fn extract_styles_from_attributes(attrs: &RefCell<Vec<Attribute>>) -> HashMap<St
         for declaration in style.split(';') {
             let mut parts = declaration.splitn(2, ':');
             if let Some((key, value)) = parts.next().zip(parts.next()) {
-                styles.insert(key.trim().to_lowercase(), value.trim().to_string());
+                styles.insert(key.trim().to_lowercase(), value.trim().to_owned());
             }
         }
     }

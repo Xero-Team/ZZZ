@@ -69,7 +69,7 @@ impl DockerExecConnection {
     ) -> Result<Self> {
         let mut this = Self {
             proxy_process: Mutex::new(None),
-            remote_dir_for_server: "/".to_string(),
+            remote_dir_for_server: "/".to_owned(),
             remote_binary_relpath: None,
             connection_options,
             remote_platform: None,
@@ -96,7 +96,7 @@ impl DockerExecConnection {
         this.shell = this.discover_shell().await;
         log::info!("Remote shell discovered: {}", this.shell);
 
-        this.remote_dir_for_server = this.docker_user_home_dir().await?.trim().to_string();
+        this.remote_dir_for_server = this.docker_user_home_dir().await?.trim().to_owned();
 
         this.remote_binary_relpath = Some(
             this.ensure_server_binary(
@@ -185,7 +185,7 @@ impl DockerExecConnection {
             .context("No remote platform defined; cannot proceed.")?;
 
         let version_str = match release_channel {
-            ReleaseChannel::Dev => "build".to_string(),
+            ReleaseChannel::Dev => "build".to_owned(),
             ReleaseChannel::Stable => version.to_string(),
         };
         let binary_name = format!(
@@ -464,7 +464,7 @@ impl DockerExecConnection {
         let full_server_path = format!("{}/{}", remote_dir_for_server, dest_path_str);
 
         Self::upload_and_chown(
-            self.docker_cli().to_string(),
+            self.docker_cli().to_owned(),
             self.connection_options.clone(),
             src_path_display,
             full_server_path,
@@ -500,25 +500,25 @@ impl DockerExecConnection {
         program_args: &[impl AsRef<str>],
     ) -> Result<String> {
         let mut args = match working_directory {
-            Some(dir) => vec!["-w".to_string(), dir.to_string()],
+            Some(dir) => vec!["-w".to_owned(), dir.to_owned()],
             None => vec![],
         };
 
-        args.push("-u".to_string());
+        args.push("-u".to_owned());
         args.push(self.connection_options.remote_user.clone());
 
         for (k, v) in self.connection_options.remote_env.iter() {
-            args.push("-e".to_string());
+            args.push("-e".to_owned());
             args.push(format!("{k}={v}"));
         }
 
         for (k, v) in env.iter() {
-            args.push("-e".to_string());
+            args.push("-e".to_owned());
             args.push(format!("{k}={v}"));
         }
 
         args.push(self.connection_options.container_id.clone());
-        args.push(inner_program.to_string());
+        args.push(inner_program.to_owned());
 
         for arg in program_args {
             args.push(arg.as_ref().to_owned());
@@ -642,25 +642,25 @@ impl RemoteConnection for DockerExecConnection {
             return Task::ready(Err(anyhow!("Remote binary path not set")));
         };
 
-        let mut docker_args = vec!["exec".to_string()];
+        let mut docker_args = vec!["exec".to_owned()];
 
         for (k, v) in self.connection_options.remote_env.iter() {
-            docker_args.push("-e".to_string());
+            docker_args.push("-e".to_owned());
             docker_args.push(format!("{k}={v}"));
         }
         for env_var in ["RUST_LOG", "RUST_BACKTRACE", "ZED_GENERATE_MINIDUMPS"] {
             if let Ok(value) = std::env::var(env_var) {
-                docker_args.push("-e".to_string());
+                docker_args.push("-e".to_owned());
                 docker_args.push(format!("{env_var}={value}"));
             }
         }
 
         docker_args.extend([
-            "-u".to_string(),
+            "-u".to_owned(),
             self.connection_options.remote_user.to_string(),
-            "-w".to_string(),
+            "-w".to_owned(),
             self.remote_dir_for_server.clone(),
-            "-i".to_string(),
+            "-i".to_owned(),
             self.connection_options.container_id.to_string(),
         ]);
 
@@ -668,11 +668,11 @@ impl RemoteConnection for DockerExecConnection {
             .display(self.path_style())
             .into_owned();
         docker_args.push(val);
-        docker_args.push("proxy".to_string());
-        docker_args.push("--identifier".to_string());
+        docker_args.push("proxy".to_owned());
+        docker_args.push("--identifier".to_owned());
         docker_args.push(unique_identifier);
         if reconnect {
-            docker_args.push("--reconnect".to_string());
+            docker_args.push("--reconnect".to_owned());
         }
         let mut command = util::command::new_command(self.docker_cli());
         command
@@ -719,7 +719,7 @@ impl RemoteConnection for DockerExecConnection {
         let src_path_display = src_path.display().to_string();
 
         let upload_task = Self::upload_and_chown(
-            self.docker_cli().to_string(),
+            self.docker_cli().to_owned(),
             self.connection_options.clone(),
             src_path_display,
             dest_path_str,
@@ -771,40 +771,40 @@ impl RemoteConnection for DockerExecConnection {
             }
         } else {
             inner_program.push(self.shell());
-            inner_program.push("-l".to_string());
+            inner_program.push("-l".to_owned());
         };
 
         let mut docker_args = vec![
-            "exec".to_string(),
-            "-u".to_string(),
+            "exec".to_owned(),
+            "-u".to_owned(),
             self.connection_options.remote_user.clone(),
         ];
 
         if let Some(parsed_working_dir) = parsed_working_dir {
-            docker_args.push("-w".to_string());
+            docker_args.push("-w".to_owned());
             docker_args.push(parsed_working_dir);
         }
 
         for (k, v) in self.connection_options.remote_env.iter() {
-            docker_args.push("-e".to_string());
+            docker_args.push("-e".to_owned());
             docker_args.push(format!("{k}={v}"));
         }
 
         for (k, v) in env.iter() {
-            docker_args.push("-e".to_string());
+            docker_args.push("-e".to_owned());
             docker_args.push(format!("{k}={v}"));
         }
 
         match interactive {
-            Interactive::Yes => docker_args.push("-it".to_string()),
-            Interactive::No => docker_args.push("-i".to_string()),
+            Interactive::Yes => docker_args.push("-it".to_owned()),
+            Interactive::No => docker_args.push("-i".to_owned()),
         }
         docker_args.push(self.connection_options.container_id.to_string());
 
         docker_args.append(&mut inner_program);
 
         Ok(CommandTemplate {
-            program: self.docker_cli().to_string(),
+            program: self.docker_cli().to_owned(),
             args: docker_args,
             // Docker-exec pipes in environment via the "-e" argument
             env: Default::default(),

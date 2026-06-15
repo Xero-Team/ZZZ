@@ -146,7 +146,7 @@ pub(super) fn find_from_grid_point<T: EventListener>(
                 let path = maybe_url_or_path
                     .strip_prefix("file://")
                     .unwrap_or(&maybe_url_or_path);
-                (path.to_string(), false, word_match)
+                (path.to_owned(), false, word_match)
             } else {
                 (maybe_url_or_path, true, word_match)
             }

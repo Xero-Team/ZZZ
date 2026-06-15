@@ -103,10 +103,7 @@ fn check_version_changed() -> (NamedJob, StepOutput, StepOutput) {
         .with_repository_owner_guard()
         .outputs([
             (version_changed.name.to_owned(), version_changed.to_string()),
-            (
-                current_version.name.to_string(),
-                current_version.to_string(),
-            ),
+            (current_version.name.to_owned(), current_version.to_string()),
         ])
         .runs_on(runners::LINUX_SMALL)
         .timeout_minutes(1u32)

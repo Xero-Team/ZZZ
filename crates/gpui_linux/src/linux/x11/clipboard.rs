@@ -1114,7 +1114,7 @@ impl Drop for Clipboard {
                 // Let's try extracting the error message
                 let message;
                 if let Some(msg) = e.downcast_ref::<&'static str>() {
-                    message = Some((*msg).to_string());
+                    message = Some((*msg).to_owned());
                 } else if let Some(msg) = e.downcast_ref::<String>() {
                     message = Some(msg.clone());
                 } else {

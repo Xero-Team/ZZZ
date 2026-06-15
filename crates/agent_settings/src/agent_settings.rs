@@ -406,7 +406,7 @@ impl CompiledRegex {
             .case_insensitive(!case_sensitive)
             .build()?;
         Ok(Self {
-            pattern: pattern.to_string(),
+            pattern: pattern.to_owned(),
             case_sensitive,
             regex,
         })
@@ -569,7 +569,7 @@ fn expand_rm_to_single_path_commands(command: &str) -> Vec<String> {
                 } else if suffix.starts_with('/') {
                     let normalized_suffix = normalize_path(suffix);
                     let reconstructed = if normalized_suffix == "/" {
-                        prefix.to_string()
+                        prefix.to_owned()
                     } else {
                         format!("{prefix}{normalized_suffix}")
                     };
@@ -585,7 +585,7 @@ fn expand_rm_to_single_path_commands(command: &str) -> Vec<String> {
 
         let mut normalized = normalize_path(path);
         if normalized.is_empty() && !Path::new(path).has_root() {
-            normalized = ".".to_string();
+            normalized = ".".to_owned();
         }
 
         results.push(format!("rm {flags_str}{normalized}"));
@@ -751,8 +751,8 @@ fn compile_regex_rules(
         if rule.pattern.is_empty() {
             errors.push(InvalidRegexPattern {
                 pattern: rule.pattern,
-                rule_type: rule_type.to_string(),
-                error: "empty regex patterns are not allowed".to_string(),
+                rule_type: rule_type.to_owned(),
+                error: "empty regex patterns are not allowed".to_owned(),
             });
             continue;
         }
@@ -762,7 +762,7 @@ fn compile_regex_rules(
             Err(error) => {
                 errors.push(InvalidRegexPattern {
                     pattern: rule.pattern,
-                    rule_type: rule_type.to_string(),
+                    rule_type: rule_type.to_owned(),
                     error: error.to_string(),
                 });
             }

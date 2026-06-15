@@ -837,8 +837,8 @@ fn registry_archive_kind_for_url(archive_url: &str) -> Result<RegistryArchiveKin
 
     let archive_path = Url::parse(archive_url)
         .ok()
-        .map(|url| url.path().to_string())
-        .unwrap_or_else(|| archive_url.to_string());
+        .map(|url| url.path().to_owned())
+        .unwrap_or_else(|| archive_url.to_owned());
     let lowercase_path = archive_path.to_lowercase();
 
     if lowercase_path.ends_with(".zip") {
@@ -925,7 +925,7 @@ fn sanitize_path_component(input: &str) -> String {
         .collect::<String>();
 
     if sanitized.is_empty() {
-        "unknown".to_string()
+        "unknown".to_owned()
     } else {
         sanitized
     }
@@ -1064,7 +1064,7 @@ impl ExternalAgentServer for LocalRegistryArchiveAgent {
                         {
                             asset.digest.as_ref().and_then(|d| {
                                 d.strip_prefix("sha256:")
-                                    .map(|s| s.to_string())
+                                    .map(|s| s.to_owned())
                                     .or_else(|| Some(d.clone()))
                             })
                         } else {
@@ -1201,8 +1201,8 @@ impl ExternalAgentServer for LocalRegistryNpxAgent {
             fs.create_dir(&prefix_dir).await?;
 
             let mut exec_args = vec![
-                "--yes".to_string(),
-                "--".to_string(),
+                "--yes".to_owned(),
+                "--".to_owned(),
                 bounded_npm_package_spec(package.as_ref()),
             ];
             exec_args.extend(args);
@@ -1264,10 +1264,10 @@ impl ExternalAgentServer for LocalRegistryNpxAgent {
 /// interpreted as input redirection. See zed-industries/zed#55921.
 fn bounded_npm_package_spec(package_spec: &str) -> String {
     let Some((package_name, version)) = package_spec.rsplit_once('@') else {
-        return package_spec.to_string();
+        return package_spec.to_owned();
     };
     if package_name.is_empty() || Version::parse(version).is_err() {
-        return package_spec.to_string();
+        return package_spec.to_owned();
     }
 
     format!("{package_name}@0.0.0 - {version}")

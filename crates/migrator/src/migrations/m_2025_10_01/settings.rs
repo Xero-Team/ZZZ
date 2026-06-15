@@ -67,7 +67,7 @@ pub fn flatten_code_actions_formatters(value: &mut Value) -> Result<()> {
                 _ => continue,
             };
 
-            obj.insert(key.to_string(), new_formatter);
+            obj.insert(key.to_owned(), new_formatter);
         }
         return Ok(());
     })

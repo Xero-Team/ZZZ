@@ -1482,7 +1482,9 @@ mod tests {
         assert!(edge_sexp.contains("sep: (delimiter)"));
         assert!(edge_sexp.contains("(string (non_escaped))"));
 
-        let crlf_source = read_csv_testdata("crlf.csv");
+        let crlf_source = read_csv_testdata("crlf.csv")
+            .replace("\r\n", "\n")
+            .replace('\n', "\r\n");
         assert!(crlf_source.contains("\r\n"));
         assert_csv_parses(&crlf_source);
 

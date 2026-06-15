@@ -355,7 +355,7 @@ impl DebugAdapter for CodeLldbDebugAdapter {
                     version_path
                 }
                 Err(e) => {
-                    delegate.output_to_console("Unable to fetch latest version".to_string());
+                    delegate.output_to_console("Unable to fetch latest version".to_owned());
                     log::error!("Error fetching latest version of {}: {}", self.name(), e);
                     delegate.output_to_console(format!(
                         "Searching for adapters in: {}",

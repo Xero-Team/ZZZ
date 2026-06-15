@@ -26,7 +26,7 @@ fn rename_enable_preview_from_code_navigation_setting(
 
     Some((
         setting_name_range,
-        "enable_keep_preview_on_code_navigation".to_string(),
+        "enable_keep_preview_on_code_navigation".to_owned(),
     ))
 }
 

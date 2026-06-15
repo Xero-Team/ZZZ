@@ -343,7 +343,7 @@ impl TaskTemplate {
                 && !without_prefix.starts_with("CUSTOM_")
                 && variable_name.parse::<VariableName>().is_err()
             {
-                unknown.insert(variable_name.to_string());
+                unknown.insert(variable_name.to_owned());
             }
 
             None::<&str>

@@ -226,7 +226,7 @@ impl AgentTool for SaveFileTool {
                         }
                     }
                     _ = event_stream.cancelled_by_user().fuse() => {
-                        return Err("Save cancelled by user".to_string());
+                        return Err("Save cancelled by user".to_owned());
                     }
                 };
 
@@ -249,14 +249,14 @@ impl AgentTool for SaveFileTool {
                             .map(|file| file.path().to_rel_path_buf())
                             .map(|path| path.as_rel_path().as_unix_str().to_owned())
                     })
-                    .unwrap_or_else(|| "<unknown>".to_string());
+                    .unwrap_or_else(|| "<unknown>".to_owned());
 
                 let save_task = project.update(cx, |project, cx| project.save_buffer(buffer, cx));
 
                 let save_result = futures::select! {
                     result = save_task.fuse() => result,
                     _ = event_stream.cancelled_by_user().fuse() => {
-                        return Err("Save cancelled by user".to_string());
+                        return Err("Save cancelled by user".to_owned());
                     }
                 };
                 if let Err(error) = save_result {
@@ -303,7 +303,7 @@ impl AgentTool for SaveFileTool {
             }
 
             if lines.is_empty() {
-                Ok("No paths provided.".to_string())
+                Ok("No paths provided.".to_owned())
             } else {
                 Ok(lines.join("\n"))
             }

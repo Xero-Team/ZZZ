@@ -661,7 +661,7 @@ impl LanguageModel for OpenCodeLanguageModel {
                 };
                 let anthropic_request = into_anthropic(
                     request,
-                    self.model.id().to_string(),
+                    self.model.id().to_owned(),
                     1.0,
                     self.model.max_output_tokens().unwrap_or(8192),
                     mode,
@@ -726,7 +726,7 @@ impl LanguageModel for OpenCodeLanguageModel {
             ApiProtocol::Google => {
                 let google_request = into_google(
                     request,
-                    self.model.id().to_string(),
+                    self.model.id().to_owned(),
                     google_ai::GoogleModelMode::Default,
                 );
                 let stream = self.stream_google(google_request, http_client, extra_headers, cx);
@@ -779,7 +779,7 @@ impl ConfigurationView {
     }
 
     fn save_api_key(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_string();
+        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_owned();
         if api_key.is_empty() {
             return;
         }
@@ -846,7 +846,7 @@ impl Render for ConfigurationView {
         } else {
             let api_url = OpenCodeLanguageModelProvider::api_url(cx);
             if api_url == OPENCODE_API_URL {
-                "API key configured".to_string()
+                "API key configured".to_owned()
             } else {
                 format!("API key configured for {}", api_url)
             }

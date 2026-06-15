@@ -77,7 +77,7 @@ impl CheckoutStep {
     }
 
     pub fn with_custom_name(mut self, name: &str) -> Self {
-        self.name = Some(name.to_string());
+        self.name = Some(name.to_owned());
         self
     }
 
@@ -97,12 +97,12 @@ impl CheckoutStep {
     }
 
     pub fn with_path(mut self, path: &str) -> Self {
-        self.path = Some(path.to_string());
+        self.path = Some(path.to_owned());
         self
     }
 
     pub fn with_repository(mut self, repository: &str) -> Self {
-        self.repository = Some(repository.to_string());
+        self.repository = Some(repository.to_owned());
         self
     }
 
@@ -114,7 +114,7 @@ impl CheckoutStep {
 
 impl From<CheckoutStep> for Step<Use> {
     fn from(value: CheckoutStep) -> Self {
-        Step::new(value.name.unwrap_or("steps::checkout_repo".to_string()))
+        Step::new(value.name.unwrap_or("steps::checkout_repo".to_owned()))
             .uses(
                 "actions",
                 "checkout",
@@ -507,7 +507,7 @@ pub mod named {
     /// (typically 1).
     /// This only works because xtask always runs debug builds.
     pub fn function_name(i: usize) -> String {
-        let mut name = "<unknown>".to_string();
+        let mut name = "<unknown>".to_owned();
         let mut count = 0;
         backtrace::trace(|frame| {
             if count < i + 3 {
@@ -683,7 +683,7 @@ impl BotCommitStep {
         Self {
             message: message.to_string(),
             branch: branch.to_string(),
-            files: "**".to_string(),
+            files: "**".to_owned(),
             token: token.to_string(),
         }
     }
@@ -844,9 +844,9 @@ impl CreatePrStep {
     pub fn new(title: impl ToString, branch: impl ToString, token: &StepOutput) -> Self {
         Self {
             title: title.to_string(),
-            body: "Release Notes:\n\n- N/A".to_string(),
+            body: "Release Notes:\n\n- N/A".to_owned(),
             branch: branch.to_string(),
-            base: "main".to_string(),
+            base: "main".to_owned(),
             token: token.to_string(),
             assignees: Some(Context::github().actor().to_string()),
             labels: None,

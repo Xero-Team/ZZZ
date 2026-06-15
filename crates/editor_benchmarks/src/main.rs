@@ -55,7 +55,7 @@ fn parse_args() -> Args {
                 );
                 std::process::exit(0);
             }
-            other => positional.push(other.to_string()),
+            other => positional.push(other.to_owned()),
         }
     }
 
@@ -103,7 +103,7 @@ fn main() {
     };
 
     if let Some(replacement) = args.replace.as_deref() {
-        query = query.with_replacement(replacement.to_string());
+        query = query.with_replacement(replacement.to_owned());
     }
 
     let query = Arc::new(query);

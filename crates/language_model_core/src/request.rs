@@ -44,7 +44,7 @@ impl LanguageModelImage {
 
         let source = source?;
         Some(Self {
-            source: SharedString::from(source.to_string()),
+            source: SharedString::from(source.to_owned()),
         })
     }
 
@@ -283,7 +283,7 @@ impl From<String> for MessageContent {
 
 impl From<&str> for MessageContent {
     fn from(value: &str) -> Self {
-        MessageContent::Text(value.to_string())
+        MessageContent::Text(value.to_owned())
     }
 }
 

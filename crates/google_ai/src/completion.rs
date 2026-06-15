@@ -52,7 +52,7 @@ pub fn into_google(
                 MessageContent::Image(image) => {
                     vec![Part::InlineDataPart(InlineDataPart {
                         inline_data: GenerativeContentBlob {
-                            mime_type: "image/png".to_string(),
+                            mime_type: "image/png".to_owned(),
                             data: image.source.to_string(),
                         },
                     })]
@@ -81,7 +81,7 @@ pub fn into_google(
                             language_model_core::LanguageModelToolResultContent::Image(image) => {
                                 images.push(InlineDataPart {
                                     inline_data: GenerativeContentBlob {
-                                        mime_type: "image/png".to_string(),
+                                        mime_type: "image/png".to_owned(),
                                         data: image.source.to_string(),
                                     },
                                 });
@@ -89,7 +89,7 @@ pub fn into_google(
                         }
                     }
                     let output = if text_output.is_empty() && !images.is_empty() {
-                        "Tool responded with an image".to_string()
+                        "Tool responded with an image".to_owned()
                     } else {
                         text_output
                     };
@@ -322,7 +322,7 @@ impl GoogleEventMapper {
                         Part::FunctionResponsePart(_) => {}
                         Part::ThoughtPart(part) => {
                             events.push(Ok(LanguageModelCompletionEvent::Thinking {
-                                text: "(Encrypted thought)".to_string(), // TODO: Can we populate this from thought summaries?
+                                text: "(Encrypted thought)".to_owned(), // TODO: Can we populate this from thought summaries?
                                 signature: Some(part.thought_signature),
                             }));
                         }

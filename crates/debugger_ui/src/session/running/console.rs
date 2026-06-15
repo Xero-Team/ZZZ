@@ -587,7 +587,7 @@ impl CompletionProvider for ConsoleQueryBarCompletionProvider {
                     .capabilities()
                     .completion_trigger_characters
                     .as_ref()
-                    .map(|triggers| triggers.contains(&text.to_string()))
+                    .map(|triggers| triggers.contains(&text.to_owned()))
             })
             .ok()
             .flatten()

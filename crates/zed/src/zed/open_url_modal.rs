@@ -48,7 +48,7 @@ impl OpenUrlModal {
 
     fn confirm(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
         let url = self.editor.update(cx, |editor, cx| {
-            let text = editor.text(cx).trim().to_string();
+            let text = editor.text(cx).trim().to_owned();
             editor.clear(window, cx);
             text
         });

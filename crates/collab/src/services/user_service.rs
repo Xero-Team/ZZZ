@@ -125,7 +125,7 @@ impl UserService for CloudUserService {
                         &self.zed_cloud_url
                     ))
                     .json(&LookUpUserByGithubLoginBody {
-                        github_login: github_login.to_string(),
+                        github_login: github_login.to_owned(),
                     }),
             )
             .await?;
@@ -142,7 +142,7 @@ impl UserService for CloudUserService {
                         &self.zed_cloud_url
                     ))
                     .json(&FuzzySearchUsersBody {
-                        query: query.to_string(),
+                        query: query.to_owned(),
                         limit,
                     }),
             )
@@ -166,7 +166,7 @@ impl UserService for CloudUserService {
                     ))
                     .json(&FuzzySearchChannelMembersByGithubLoginBody {
                         channel_id: channel.root_id().0,
-                        query: query.to_string(),
+                        query: query.to_owned(),
                         limit,
                     }),
             )
@@ -283,7 +283,7 @@ mod fake_user_service {
                     id: user_id,
                     avatar_url: format!("https://github.com/{}.png?size=128", params.github_login),
                     github_login: params.github_login,
-                    name: name.map(|name| name.to_string()),
+                    name: name.map(|name| name.to_owned()),
                     admin,
                     connected_once: false,
                 },

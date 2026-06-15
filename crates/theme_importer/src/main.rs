@@ -102,9 +102,9 @@ fn main() -> Result<()> {
         .context(format!("failed to parse theme {theme_file_path:?}"))?;
 
     let theme_metadata = ThemeMetadata {
-        name: vscode_theme.name.clone().unwrap_or("".to_string()),
+        name: vscode_theme.name.clone().unwrap_or("".to_owned()),
         appearance: ThemeAppearanceJson::Dark,
-        file_name: "".to_string(),
+        file_name: "".to_owned(),
     };
 
     let converter = VsCodeThemeConverter::new(vscode_theme, theme_metadata, IndexMap::default());
@@ -112,8 +112,8 @@ fn main() -> Result<()> {
     let theme = converter.convert()?;
     let mut theme = serde_json::to_value(theme).unwrap();
     theme.as_object_mut().unwrap().insert(
-        "$schema".to_string(),
-        serde_json::Value::String(ZED_THEME_SCHEMA_URL.to_string()),
+        "$schema".to_owned(),
+        serde_json::Value::String(ZED_THEME_SCHEMA_URL.to_owned()),
     );
     let theme_json = serde_json::to_string_pretty(&theme).unwrap();
 

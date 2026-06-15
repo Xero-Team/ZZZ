@@ -66,7 +66,7 @@ impl Gitee {
 #[async_trait]
 impl GitHostingProvider for Gitee {
     fn name(&self) -> String {
-        "Gitee".to_string()
+        "Gitee".to_owned()
     }
 
     fn base_url(&self) -> Url {

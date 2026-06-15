@@ -199,7 +199,7 @@ impl HttpTransport {
                     .get(HEADER_SESSION_ID)
                     .and_then(|v| v.to_str().ok())
                 {
-                    *self.session_id.lock() = Some(session_id.to_string());
+                    *self.session_id.lock() = Some(session_id.to_owned());
                     log::debug!("Session ID set: {}", session_id);
                 }
 
@@ -291,7 +291,7 @@ impl HttpTransport {
                                         log::trace!("Received SSE ping");
                                         continue;
                                     }
-                                    data_buffer.push(data.to_string());
+                                    data_buffer.push(data.to_owned());
                                     in_message = true;
                                 }
                             } else if line.starts_with("event:")
@@ -332,7 +332,7 @@ impl Transport for HttpTransport {
     }
 
     fn set_protocol_version(&self, version: &str) {
-        *self.protocol_version.lock() = Some(version.to_string());
+        *self.protocol_version.lock() = Some(version.to_owned());
     }
 }
 

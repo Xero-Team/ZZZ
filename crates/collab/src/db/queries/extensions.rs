@@ -377,7 +377,7 @@ fn metadata_from_extension_and_version(
             authors: version
                 .authors
                 .split(',')
-                .map(|author| author.trim().to_string())
+                .map(|author| author.trim().to_owned())
                 .collect::<Vec<_>>(),
             description: Some(version.description),
             repository: version.repository,

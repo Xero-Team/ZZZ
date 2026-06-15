@@ -3158,7 +3158,7 @@ impl InlayHints {
                     }
                 }),
             }),
-            kind: response_hint.kind.map(|kind| kind.name().to_string()),
+            kind: response_hint.kind.map(|kind| kind.name().to_owned()),
             tooltip: response_hint.tooltip.map(|response_tooltip| {
                 let proto_tooltip = match response_tooltip {
                     InlayHintTooltip::String(s) => proto::inlay_hint_tooltip::Content::Value(s),

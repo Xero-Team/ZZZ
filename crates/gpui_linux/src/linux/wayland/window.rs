@@ -1293,7 +1293,7 @@ impl PlatformWindow for WaylandWindow {
 
     fn set_title(&mut self, title: &str) {
         if let Some(toplevel) = self.borrow().surface_state.toplevel() {
-            toplevel.set_title(title.to_string());
+            toplevel.set_title(title.to_owned());
         }
     }
 

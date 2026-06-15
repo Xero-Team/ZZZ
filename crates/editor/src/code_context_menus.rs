@@ -943,7 +943,7 @@ impl CompletionsMenu {
                                     None
                                 } else {
                                     Some(
-                                        Label::new(text.trim().to_string())
+                                        Label::new(text.trim().to_owned())
                                             .ml_4()
                                             .size(LabelSize::Small)
                                             .color(Color::Muted),

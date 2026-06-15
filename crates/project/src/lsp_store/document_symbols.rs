@@ -317,7 +317,7 @@ fn enriched_symbol_text(
     let adjusted_start = start_offset + leading_ws;
 
     Some((
-        trimmed.to_string(),
+        trimmed.to_owned(),
         vec![name_start..trimmed.len()],
         snapshot.anchor_after(adjusted_start)..snapshot.anchor_before(end_offset),
     ))

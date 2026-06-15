@@ -437,7 +437,7 @@ impl Prettier {
                             let mut options = prettier_settings.options.clone();
                             if !options.contains_key("tabWidth") {
                                 options.insert(
-                                    "tabWidth".to_string(),
+                                    "tabWidth".to_owned(),
                                     serde_json::Value::Number(serde_json::Number::from(
                                         language_settings.tab_size.get(),
                                     )),
@@ -445,7 +445,7 @@ impl Prettier {
                             }
                             if !options.contains_key("printWidth") {
                                 options.insert(
-                                    "printWidth".to_string(),
+                                    "printWidth".to_owned(),
                                     serde_json::Value::Number(serde_json::Number::from(
                                         language_settings.preferred_line_length,
                                     )),
@@ -453,7 +453,7 @@ impl Prettier {
                             }
                             if !options.contains_key("useTabs") {
                                 options.insert(
-                                    "useTabs".to_string(),
+                                    "useTabs".to_owned(),
                                     serde_json::Value::Bool(language_settings.hard_tabs),
                                 );
                             }
@@ -540,7 +540,7 @@ impl Prettier {
                                     .find('\n')
                                     .map(|pos| start_byte + pos)
                                     .unwrap_or(text.len());
-                                let mut suffix = RANGE_FORMAT_SUFFIX.to_string();
+                                let mut suffix = RANGE_FORMAT_SUFFIX.to_owned();
                                 if let Some(parser) = &parser {
                                     suffix = format!("{suffix}\n{parser}");
                                 }
@@ -731,7 +731,7 @@ mod tests {
             "/root",
             json!({
                 ".config": {
-                    "zed": {
+                    "ZZZ": {
                         "settings.json": r#"{ "formatter": "auto" }"#,
                     },
                 },

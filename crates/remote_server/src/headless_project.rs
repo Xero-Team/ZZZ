@@ -445,7 +445,7 @@ impl HeadlessProject {
                 self.session
                     .send(proto::Toast {
                         project_id: REMOTE_SERVER_PROJECT_ID,
-                        notification_id: "lsp".to_string(),
+                        notification_id: "lsp".to_owned(),
                         message: message.clone(),
                     })
                     .log_err();
@@ -638,7 +638,7 @@ impl HeadlessProject {
 
         let format = image::guess_format(&content)
             .map(|f| format!("{:?}", f).to_lowercase())
-            .unwrap_or_else(|_| "unknown".to_string());
+            .unwrap_or_else(|_| "unknown".to_owned());
 
         let state = proto::ImageState {
             id: image_id.to_proto(),

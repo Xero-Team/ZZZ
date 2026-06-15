@@ -396,8 +396,8 @@ pub fn authorize_file_edit(
     }
 
     let path_owned = path.to_path_buf();
-    let display_description = display_description.to_string();
-    let tool_name = tool_name.to_string();
+    let display_description = display_description.to_owned();
+    let tool_name = tool_name.to_owned();
     let thread = thread.clone();
     let event_stream = event_stream.clone();
 

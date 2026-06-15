@@ -199,7 +199,7 @@ async fn handle_liveness_probe(app_state: Option<Extension<Arc<AppState>>>) -> R
         state.db.project_count_excluding_admins().await?;
     }
 
-    Ok("ok".to_string())
+    Ok("ok".to_owned())
 }
 
 pub fn init_tracing(config: &Config) -> Option<()> {

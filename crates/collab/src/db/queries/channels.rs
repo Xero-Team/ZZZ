@@ -80,7 +80,7 @@ impl Database {
 
             let channel = channel::ActiveModel {
                 id: ActiveValue::NotSet,
-                name: ActiveValue::Set(name.to_string()),
+                name: ActiveValue::Set(name.to_owned()),
                 visibility: ActiveValue::Set(ChannelVisibility::Members),
                 parent_path: ActiveValue::Set(parent_path),
                 requires_zed_cla: ActiveValue::NotSet,
@@ -349,7 +349,7 @@ impl Database {
         new_name: &str,
     ) -> Result<channel::Model> {
         self.transaction(move |tx| async move {
-            let new_name = Self::sanitize_channel_name(new_name)?.to_string();
+            let new_name = Self::sanitize_channel_name(new_name)?.to_owned();
 
             let channel = self.get_channel_internal(channel_id, &tx).await?;
             self.check_user_is_channel_admin(&channel, admin_id, &tx)
@@ -894,7 +894,7 @@ impl Database {
         } else {
             let result = room::Entity::insert(room::ActiveModel {
                 channel_id: ActiveValue::Set(Some(channel_id)),
-                live_kit_room: ActiveValue::Set(livekit_room.to_string()),
+                live_kit_room: ActiveValue::Set(livekit_room.to_owned()),
                 ..Default::default()
             })
             .exec(tx)

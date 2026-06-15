@@ -399,7 +399,7 @@ impl LogStore {
             let server_id = server.server_id();
             server_state.io_logs_subscription = Some(server.on_io(move |io_kind, message| {
                 io_tx
-                    .unbounded_send((server_id, io_kind, message.to_string()))
+                    .unbounded_send((server_id, io_kind, message.to_owned()))
                     .ok();
             }));
         }
@@ -418,7 +418,7 @@ impl LogStore {
         let language_server_state = self.get_language_server_state(id)?;
 
         let log_lines = &mut language_server_state.log_messages;
-        let message = message.trim_end().to_string();
+        let message = message.trim_end().to_owned();
         if !store_logs {
             // Send all messages regardless of the visibility in case of not storing, to notify the receiver anyway
             self.emit_event(
@@ -463,14 +463,14 @@ impl LogStore {
                 Event::NewServerLogEntry {
                     id,
                     kind: LanguageServerLogType::Trace { verbose_info },
-                    text: message.trim().to_string(),
+                    text: message.trim().to_owned(),
                 },
                 cx,
             );
         } else if let Some(new_message) = Self::push_new_message(
             log_lines,
             TraceMessage {
-                message: message.trim().to_string(),
+                message: message.trim().to_owned(),
                 is_verbose: false,
             },
             TraceValue::Messages,
@@ -507,7 +507,7 @@ impl LogStore {
         }
         let visible = message.should_include(current_severity);
 
-        let visible_message = visible.then(|| message.as_ref().to_string());
+        let visible_message = visible.then(|| message.as_ref().to_owned());
         log_lines.push_back(message);
         visible_message
     }
@@ -539,14 +539,14 @@ impl LogStore {
             };
             if store_logs {
                 rpc_log_lines.push_back(RpcMessage {
-                    message: line_before_message.to_string(),
+                    message: line_before_message.to_owned(),
                 });
             }
             // Do not send a synthetic message over the wire, it will be derived from the actual RPC message
             cx.emit(Event::NewServerLogEntry {
                 id: language_server_id,
                 kind: LanguageServerLogType::Rpc { received },
-                text: line_before_message.to_string(),
+                text: line_before_message.to_owned(),
             });
         }
 

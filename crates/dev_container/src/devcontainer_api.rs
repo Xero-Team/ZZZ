@@ -35,14 +35,14 @@ pub struct DevContainerConfig {
 impl DevContainerConfig {
     pub fn default_config() -> Self {
         Self {
-            name: "default".to_string(),
+            name: "default".to_owned(),
             config_path: PathBuf::from(".devcontainer/devcontainer.json"),
         }
     }
 
     pub fn root_config() -> Self {
         Self {
-            name: "root".to_string(),
+            name: "root".to_owned(),
             config_path: PathBuf::from(".devcontainer.json"),
         }
     }
@@ -92,30 +92,29 @@ impl Display for DevContainerError {
             f,
             "{}",
             match self {
-                DevContainerError::DockerNotAvailable =>
-                    "docker CLI not found on $PATH".to_string(),
+                DevContainerError::DockerNotAvailable => "docker CLI not found on $PATH".to_owned(),
                 DevContainerError::ContainerNotValid(id) => format!(
                     "docker image {id} did not have expected configuration for a dev container"
                 ),
                 DevContainerError::DevContainerScriptsFailed =>
-                    "lifecycle scripts could not execute for dev container".to_string(),
+                    "lifecycle scripts could not execute for dev container".to_owned(),
                 DevContainerError::DevContainerUpFailed(_) => {
-                    "DevContainer creation failed".to_string()
+                    "DevContainer creation failed".to_owned()
                 }
                 DevContainerError::DevContainerTemplateApplyFailed(_) => {
-                    "DevContainer template apply failed".to_string()
+                    "DevContainer template apply failed".to_owned()
                 }
                 DevContainerError::DevContainerNotFound =>
-                    "No valid dev container definition found in project".to_string(),
+                    "No valid dev container definition found in project".to_owned(),
                 DevContainerError::DevContainerParseFailed =>
-                    "Failed to parse file .devcontainer/devcontainer.json".to_string(),
-                DevContainerError::NotInValidProject => "Not within a valid project".to_string(),
+                    "Failed to parse file .devcontainer/devcontainer.json".to_owned(),
+                DevContainerError::NotInValidProject => "Not within a valid project".to_owned(),
                 DevContainerError::CommandFailed(program) =>
                     format!("Failure running external program {program}"),
                 DevContainerError::FilesystemError =>
-                    "Error downloading resources locally".to_string(),
+                    "Error downloading resources locally".to_owned(),
                 DevContainerError::ResourceFetchFailed =>
-                    "Failed to fetch resources from template or feature repository".to_string(),
+                    "Failed to fetch resources from template or feature repository".to_owned(),
                 DevContainerError::DevContainerValidationFailed(failure) => failure.to_string(),
                 DevContainerError::MultipleMatchingContainers(ids) => format!(
                     "Multiple containers match this project's dev container labels ({}). \
@@ -194,7 +193,7 @@ pub fn find_configs_in_snapshot(snapshot: &Snapshot) -> Vec<DevContainerConfig> 
                     let subfolder_name = entry
                         .path
                         .file_name()
-                        .map(|n| n.to_string())
+                        .map(|n| n.to_owned())
                         .unwrap_or_default();
 
                     let config_json_path =
@@ -435,7 +434,7 @@ fn insert_features_into_devcontainer_json(
     features: &HashSet<DevContainerFeature>,
 ) -> String {
     if features.is_empty() {
-        return content.to_string();
+        return content.to_owned();
     }
 
     let features_value: serde_json::Value = features
@@ -461,7 +460,7 @@ fn insert_features_into_devcontainer_json(
         None,
     );
 
-    let mut result = content.to_string();
+    let mut result = content.to_owned();
     result.replace_range(range, &replacement);
     result
 }
@@ -478,8 +477,8 @@ fn get_backup_project_name(remote_workspace_folder: &str, container_id: &str) ->
     Path::new(remote_workspace_folder)
         .file_name()
         .and_then(|name| name.to_str())
-        .map(|string| string.to_string())
-        .unwrap_or_else(|| container_id.to_string())
+        .map(|string| string.to_owned())
+        .unwrap_or_else(|| container_id.to_owned())
 }
 
 #[cfg(test)]

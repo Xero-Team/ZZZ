@@ -53,7 +53,7 @@ fn read_gpui_version() -> Result<String> {
         .and_then(|v| v.as_str())
         .context("Failed to find version in crates/gpui/Cargo.toml")?;
 
-    Ok(version.to_string())
+    Ok(version.to_owned())
 }
 
 fn publish_dependencies(new_version: &str, dry_run: bool, skip_to: Option<&str>) -> Result<()> {
@@ -158,7 +158,7 @@ fn update_crate_package_fields(
 
 fn publish_crate(crate_name: &str, dry_run: bool) -> Result<()> {
     let publish_crate_impl = |crate_name, dry_run| {
-        let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+        let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned());
 
         let mut command = Command::new(&cargo);
         command

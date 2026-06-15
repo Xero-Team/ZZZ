@@ -18,7 +18,7 @@ impl GdbDebugAdapter {
 /// Ensures that "-i=dap" is present in the GDB argument list.
 fn ensure_dap_interface(mut gdb_args: Vec<String>) -> Vec<String> {
     if !gdb_args.iter().any(|arg| arg.trim() == "-i=dap") {
-        gdb_args.insert(0, "-i=dap".to_string());
+        gdb_args.insert(0, "-i=dap".to_owned());
     }
     gdb_args
 }
@@ -188,7 +188,7 @@ impl DebugAdapter for GdbDebugAdapter {
             .config
             .get("gdb_path")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(|s| s.to_owned());
 
         let gdb_path = if let Some(path) = gdb_path_from_config {
             path
@@ -196,12 +196,12 @@ impl DebugAdapter for GdbDebugAdapter {
             // Original logic: use user_installed_path or search in system path
             let user_setting_path = user_installed_path
                 .filter(|p| p.exists())
-                .and_then(|p| p.to_str().map(|s| s.to_string()));
+                .and_then(|p| p.to_str().map(|s| s.to_owned()));
 
             let gdb_path_result = delegate
                 .which(OsStr::new("gdb"))
                 .await
-                .and_then(|p| p.to_str().map(|s| s.to_string()))
+                .and_then(|p| p.to_str().map(|s| s.to_owned()))
                 .context("Could not find gdb in path");
 
             if gdb_path_result.is_err() && user_setting_path.is_none() {
@@ -219,7 +219,7 @@ impl DebugAdapter for GdbDebugAdapter {
                 .and_then(|v| v.as_array())
                 .map(|arr| {
                     arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .filter_map(|v| v.as_str().map(|s| s.to_owned()))
                         .collect::<Vec<_>>()
                 })
                 .or(user_args.clone())
@@ -243,7 +243,7 @@ impl DebugAdapter for GdbDebugAdapter {
             .and_then(|v| v.as_object())
             .map(|obj| {
                 obj.iter()
-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_owned())))
                     .collect::<HashMap<String, String>>()
             })
             .unwrap_or_else(HashMap::default);

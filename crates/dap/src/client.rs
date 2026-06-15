@@ -106,7 +106,7 @@ impl DebugAdapterClient {
 
         let request = crate::messages::Request {
             seq: sequence_id,
-            command: R::COMMAND.to_string(),
+            command: R::COMMAND.to_owned(),
             arguments: Some(serialized_arguments),
         };
         self.transport_delegate
@@ -124,7 +124,7 @@ impl DebugAdapterClient {
 
         self.send_message(Message::Request(request)).await?;
 
-        let command = R::COMMAND.to_string();
+        let command = R::COMMAND.to_owned();
 
         let response = callback_rx.await??;
         log::debug!(

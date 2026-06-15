@@ -79,7 +79,7 @@ impl SerializableItem for PdfView {
         let path = self.abs_path(cx)?;
         let page = self.current_page() as i64;
         let zoom = self.zoom();
-        let zoom_mode = self.zoom_mode_key().to_string();
+        let zoom_mode = self.zoom_mode_key().to_owned();
         let db = PdfViewerDb::global(cx);
 
         Some(cx.background_spawn(async move {

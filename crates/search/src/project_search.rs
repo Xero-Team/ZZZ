@@ -425,7 +425,7 @@ impl ProjectSearch {
         let search = self.project.update(cx, |project, cx| {
             project
                 .search_history_mut(SearchInputKind::Query)
-                .add(&mut self.search_history_cursor, query.as_str().to_string());
+                .add(&mut self.search_history_cursor, query.as_str().to_owned());
             let included = query.as_inner().files_to_include().sources().join(",");
             if !included.is_empty() {
                 project
@@ -440,7 +440,7 @@ impl ProjectSearch {
             }
             project.search(query.clone(), cx)
         });
-        self.last_search_query_text = Some(query.as_str().to_string());
+        self.last_search_query_text = Some(query.as_str().to_owned());
         self.search_id += 1;
         self.active_query = Some(query);
         self.match_ranges.clear();
@@ -1040,7 +1040,7 @@ impl ProjectSearchView {
             project = entity.project.clone();
             excerpts = entity.excerpts.clone();
             if let Some(active_query) = entity.active_query.as_ref() {
-                query_text = active_query.as_str().to_string();
+                query_text = active_query.as_str().to_owned();
                 replacement_text = active_query.replacement().map(ToOwned::to_owned);
                 options = SearchOptions::from_query(active_query);
             }
@@ -2213,7 +2213,7 @@ impl ProjectSearchBar {
                                 project
                                     .search_history_mut(kind)
                                     .next(model.cursor_mut(kind))
-                                    .map(str::to_string)
+                                    .map(str::to_owned)
                             }) {
                                 Some(new_query)
                             } else {
@@ -2266,7 +2266,7 @@ impl ProjectSearchBar {
                                 .read(cx)
                                 .search_history(kind)
                                 .current(search_view.entity.read(cx).cursor(kind))
-                                .map(str::to_string)
+                                .map(str::to_owned)
                         {
                             search_view.set_search_editor(kind, &new_query, window, cx);
                             return;
@@ -2279,7 +2279,7 @@ impl ProjectSearchBar {
                                 project
                                     .search_history_mut(kind)
                                     .previous(model.cursor_mut(kind), &current_query)
-                                    .map(str::to_string)
+                                    .map(str::to_owned)
                             })
                         }) {
                             search_view.set_search_editor(kind, &new_query, window, cx);
@@ -2368,7 +2368,7 @@ impl Render for ProjectSearchBar {
                     None
                 }
             })
-            .unwrap_or_else(|| "0/0".to_string());
+            .unwrap_or_else(|| "0/0".to_owned());
 
         let query_focus = search.query_editor.focus_handle(cx);
 

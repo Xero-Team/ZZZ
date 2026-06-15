@@ -235,7 +235,7 @@ impl CallStatsModal {
                 let (rt, rc) = rate(v);
                 (rt, rc, format_value(v))
             }
-            None => ("—", Color::Muted, "—".to_string()),
+            None => ("—", Color::Muted, "—".to_owned()),
         };
 
         h_flex()
@@ -245,9 +245,9 @@ impl CallStatsModal {
             .justify_between()
             .child(
                 v_flex()
-                    .child(Label::new(title.to_string()).size(LabelSize::Default))
+                    .child(Label::new(title.to_owned()).size(LabelSize::Default))
                     .child(
-                        Label::new(description.to_string())
+                        Label::new(description.to_owned())
                             .size(LabelSize::Small)
                             .color(Color::Muted),
                     ),

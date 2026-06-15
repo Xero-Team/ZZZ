@@ -351,7 +351,7 @@ impl ConnectionIdentifier {
     // So our strings should be at most 20 characters or so.
     fn to_string(&self, cx: &App) -> String {
         let identifier_prefix = match ReleaseChannel::global(cx) {
-            ReleaseChannel::Stable => "".to_string(),
+            ReleaseChannel::Stable => "".to_owned(),
             release_channel => format!("{}-", release_channel.dev_name()),
         };
         match self {
@@ -561,7 +561,7 @@ impl RemoteClient {
             let state = if let Some(state) = self.state.as_ref() {
                 state.to_string()
             } else {
-                "no state set".to_string()
+                "no state set".to_owned()
             };
             log::info!(
                 "aborting reconnect, because not in state that allows reconnecting: {state}"

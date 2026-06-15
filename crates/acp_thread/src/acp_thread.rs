@@ -231,7 +231,7 @@ impl AssistantMessageChunk {
 
     fn to_markdown(&self, cx: &App) -> String {
         match self {
-            Self::Message { block } => block.to_markdown(cx).to_string(),
+            Self::Message { block } => block.to_markdown(cx).to_owned(),
             Self::Thought { block } => {
                 format!("<thinking>\n{}\n</thinking>", block.to_markdown(cx))
             }
@@ -265,7 +265,7 @@ impl AgentThreadEntry {
             Self::CompletedPlan(entries) => {
                 let mut md = String::from("## Plan\n\n");
                 for entry in entries {
-                    let source = entry.content.read(cx).source().to_string();
+                    let source = entry.content.read(cx).source().to_owned();
                     md.push_str(&format!("- [x] {}\n", source));
                 }
                 md
@@ -868,7 +868,7 @@ impl ContentBlock {
         if let Some(uri) = MentionUri::parse(uri, path_style).log_err() {
             uri.as_link().to_string()
         } else {
-            uri.to_string()
+            uri.to_owned()
         }
     }
 
@@ -982,7 +982,7 @@ impl ToolCallContent {
 
     pub fn to_markdown(&self, cx: &App) -> String {
         match self {
-            Self::ContentBlock(content) => content.to_markdown(cx).to_string(),
+            Self::ContentBlock(content) => content.to_markdown(cx).to_owned(),
             Self::Diff(diff) => diff.read(cx).to_markdown(cx),
             Self::Terminal(terminal) => terminal.read(cx).to_markdown(cx),
         }

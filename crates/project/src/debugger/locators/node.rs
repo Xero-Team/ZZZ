@@ -49,7 +49,7 @@ impl DapLocator for NodeLocator {
 
         Some(DebugScenario {
             adapter: adapter.0.clone(),
-            label: resolved_label.to_string().into(),
+            label: resolved_label.to_owned().into(),
             build: None,
             config,
             tcp_connection: None,

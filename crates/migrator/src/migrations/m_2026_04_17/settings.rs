@@ -42,6 +42,6 @@ fn migrate_title_bar_value(object: &mut serde_json::Map<String, Value>) {
     }
 
     if old_value == Value::Bool(true) {
-        title_bar.insert(NEW_KEY.to_string(), Value::Bool(true));
+        title_bar.insert(NEW_KEY.to_owned(), Value::Bool(true));
     }
 }

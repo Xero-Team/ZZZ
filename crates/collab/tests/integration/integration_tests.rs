@@ -3451,11 +3451,11 @@ async fn test_local_settings(
         .insert_tree(
             "/dir",
             json!({
-                ".zed": {
+                ".ZZZ": {
                     "settings.json": r#"{ "tab_size": 2 }"#
                 },
                 "a": {
-                    ".zed": {
+                    ".ZZZ": {
                         "settings.json": r#"{ "tab_size": 8 }"#
                     },
                     "a.txt": "a-contents",
@@ -3524,7 +3524,7 @@ async fn test_local_settings(
         .unwrap();
     client_a
         .fs()
-        .create_dir("/dir/b/.zed".as_ref())
+        .create_dir("/dir/b/.ZZZ".as_ref())
         .await
         .unwrap();
     client_a

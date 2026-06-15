@@ -31,7 +31,7 @@ pub fn prompt(
     } else if options.len() == 1 {
         return Task::ready(Some(0));
     }
-    let prompt = prompt.to_string().into();
+    let prompt = prompt.to_owned().into();
 
     window.spawn(cx, async move |cx| {
         // Modal branch picker has a longer trailoff than a popover one.

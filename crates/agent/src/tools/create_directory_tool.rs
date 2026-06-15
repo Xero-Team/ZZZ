@@ -145,7 +145,7 @@ impl AgentTool for CreateDirectoryTool {
             let create_entry = project.update(cx, |project, cx| {
                 match project.find_project_path(&input.path, cx) {
                     Some(project_path) => Ok(project.create_entry(project_path, true, cx)),
-                    None => Err("Path to create was outside the project".to_string()),
+                    None => Err("Path to create was outside the project".to_owned()),
                 }
             })?;
 
@@ -154,7 +154,7 @@ impl AgentTool for CreateDirectoryTool {
                     result.map_err(|e| format!("Creating directory {destination_path}: {e}"))?;
                 }
                 _ = event_stream.cancelled_by_user().fuse() => {
-                    return Err("Create directory cancelled by user".to_string());
+                    return Err("Create directory cancelled by user".to_owned());
                 }
             }
 

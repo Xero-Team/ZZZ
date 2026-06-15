@@ -97,7 +97,7 @@ impl AgentTool for WebSearchTool {
             let search_task = cx.update(|cx| {
                 let Some(provider) = WebSearchRegistry::read_global(cx).active_provider() else {
                     return Err(WebSearchToolOutput::Error {
-                        error: "Web search is not available.".to_string(),
+                        error: "Web search is not available.".to_owned(),
                     });
                 };
                 Ok(provider.search(input.query, cx))
@@ -115,7 +115,7 @@ impl AgentTool for WebSearchTool {
                     }
                 }
                 _ = event_stream.cancelled_by_user().fuse() => {
-                    return Err(WebSearchToolOutput::Error { error: "Web search cancelled by user".to_string() });
+                    return Err(WebSearchToolOutput::Error { error: "Web search cancelled by user".to_owned() });
                 }
             };
 
@@ -140,7 +140,7 @@ impl AgentTool for WebSearchTool {
 
 fn emit_update(response: &WebSearchResponse, event_stream: &ToolCallEventStream) {
     let result_text = if response.results.len() == 1 {
-        "1 result".to_string()
+        "1 result".to_owned()
     } else {
         format!("{} results", response.results.len())
     };

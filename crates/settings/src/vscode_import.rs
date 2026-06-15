@@ -140,7 +140,7 @@ impl VsCodeSettings {
         let mut add_font = |buffer: &mut String| {
             let trimmed = buffer.trim();
             if !trimmed.is_empty() {
-                fonts.push(trimmed.to_string().into());
+                fonts.push(trimmed.to_owned().into());
             }
 
             buffer.clear();
@@ -650,7 +650,7 @@ impl VsCodeSettings {
                 disabled_globs
                     .iter()
                     .filter_map(|glob| glob.as_str())
-                    .map(|s| s.to_string())
+                    .map(|s| s.to_owned())
                     .collect(),
             ),
             ..Default::default()

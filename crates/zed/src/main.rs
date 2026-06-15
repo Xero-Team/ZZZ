@@ -292,7 +292,7 @@ fn main() {
 
     let version = option_env!("ZED_BUILD_ID");
     let app_commit_sha =
-        option_env!("ZED_COMMIT_SHA").map(|commit_sha| AppCommitSha::new(commit_sha.to_string()));
+        option_env!("ZED_COMMIT_SHA").map(|commit_sha| AppCommitSha::new(commit_sha.to_owned()));
     let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"), version, app_commit_sha.clone());
 
     if args.system_specs {
@@ -1225,8 +1225,8 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
 }
 
 async fn installation_id(db: KeyValueStore) -> Result<IdType> {
-    let legacy_key_name = "device_id".to_string();
-    let key_name = "installation_id".to_string();
+    let legacy_key_name = "device_id".to_owned();
+    let key_name = "installation_id".to_owned();
 
     // Migrate legacy key to new key
     if let Ok(Some(installation_id)) = db.read_kvp(&legacy_key_name) {
@@ -1424,7 +1424,7 @@ async fn restorable_workspaces(
                 .session
                 .read(cx)
                 .last_session_id()
-                .map(str::to_string)
+                .map(str::to_owned)
         })
     });
     Some(cx.update(|cx| {
@@ -1448,7 +1448,7 @@ pub(crate) async fn restorable_workspace_locations(
         let session = session_handle.read(cx);
 
         (
-            session.last_session_id().map(|id| id.to_string()),
+            session.last_session_id().map(|id| id.to_owned()),
             session.last_session_window_stack(),
         )
     });

@@ -14,7 +14,7 @@ use crate::{
 /// have a theme available at compile time for tests.
 pub fn zed_default_themes() -> ThemeFamily {
     ThemeFamily {
-        id: "zed-default".to_string(),
+        id: "zed-default".to_owned(),
         name: "Zed Default".into(),
         author: "".into(),
         themes: vec![zed_default_dark()],
@@ -105,7 +105,7 @@ pub(crate) fn zed_default_dark() -> Theme {
 
     let player = PlayerColors::dark();
     Theme {
-        id: "one_dark".to_string(),
+        id: "one_dark".to_owned(),
         name: DEFAULT_DARK_THEME.into(),
         appearance: Appearance::Dark,
         styles: ThemeStyles {

@@ -696,11 +696,11 @@ impl LspAdapter for PyrightLspAdapter {
                     if let Some(parent) = venv_dir.parent() {
                         // Use relative path if the venv is inside the workspace
                         let venv_path = if parent == adapter.worktree_root_path() {
-                            ".".to_string()
+                            ".".to_owned()
                         } else {
                             parent.to_string_lossy().into_owned()
                         };
-                        object.insert("venvPath".to_string(), Value::String(venv_path));
+                        object.insert("venvPath".to_owned(), Value::String(venv_path));
                     }
 
                     if let Some(venv_name) = venv_dir.file_name() {
@@ -1090,7 +1090,7 @@ impl PythonContextProvider {
             (None, Some(method_name)) => {
                 format!("{file_path}::{method_name}")
             }
-            (None, None) => file_path.to_string(),
+            (None, None) => file_path.to_owned(),
         };
 
         Some((PYTHON_TEST_TARGET_TASK_VARIABLE.clone(), pytest_target_str))
@@ -1213,7 +1213,7 @@ async fn get_worktree_venv_declaration(worktree_root: &Path) -> Option<String> {
         .read_line(&mut venv_name)
         .await
         .ok()?;
-    Some(venv_name.trim().to_string())
+    Some(venv_name.trim().to_owned())
 }
 
 fn get_venv_parent_dir(env: &PythonEnvironment) -> Option<PathBuf> {
@@ -1362,7 +1362,7 @@ impl ToolchainLister for PythonToolchainProvider {
             let conda_ordering = || {
                 if lhs.kind == Some(PythonEnvironmentKind::Conda) {
                     environment
-                        .get_env_var("CONDA_PREFIX".to_string())
+                        .get_env_var("CONDA_PREFIX".to_owned())
                         .map(|conda_prefix| {
                             let is_match = |exe: &Option<PathBuf>| {
                                 exe.as_ref().is_some_and(|e| e.starts_with(&conda_prefix))
@@ -1680,8 +1680,8 @@ impl pet_core::os_environment::Environment for EnvironmentApi<'_> {
         if self.global_search_locations.lock().is_empty() {
             let mut paths = std::env::split_paths(
                 &self
-                    .get_env_var("PATH".to_string())
-                    .or_else(|| self.get_env_var("Path".to_string()))
+                    .get_env_var("PATH".to_owned())
+                    .or_else(|| self.get_env_var("Path".to_owned()))
                     .unwrap_or_default(),
             )
             .collect::<Vec<PathBuf>>();
@@ -1872,7 +1872,7 @@ impl LspAdapter for PyLspAdapter {
                         .or_insert(Value::Object(serde_json::Map::default()))
                         .as_object_mut()
                     {
-                        jedi.entry("environment".to_string())
+                        jedi.entry("environment".to_owned())
                             .or_insert_with(|| Value::String(toolchain.path.clone().into()));
                     }
                     if let Some(pylint) = python
@@ -1880,7 +1880,7 @@ impl LspAdapter for PyLspAdapter {
                         .or_insert(Value::Object(serde_json::Map::default()))
                         .as_object_mut()
                     {
-                        pylint.entry("overrides".to_string()).or_insert_with(|| {
+                        pylint.entry("overrides".to_owned()).or_insert_with(|| {
                             Value::Array(vec![
                                 Value::String("--python-executable".into()),
                                 Value::String(toolchain.path.into()),
@@ -1892,7 +1892,7 @@ impl LspAdapter for PyLspAdapter {
                 }
             }
             user_settings = Value::Object(serde_json::Map::from_iter([(
-                "pylsp".to_string(),
+                "pylsp".to_owned(),
                 user_settings,
             )]));
 
@@ -2144,11 +2144,11 @@ impl LspAdapter for BasedPyrightLspAdapter {
                     if let Some(parent) = venv_dir.parent() {
                         // Use relative path if the venv is inside the workspace
                         let venv_path = if parent == adapter.worktree_root_path() {
-                            ".".to_string()
+                            ".".to_owned()
                         } else {
                             parent.to_string_lossy().into_owned()
                         };
-                        object.insert("venvPath".to_string(), Value::String(venv_path));
+                        object.insert("venvPath".to_owned(), Value::String(venv_path));
                     }
 
                     if let Some(venv_name) = venv_dir.file_name() {
@@ -2344,13 +2344,13 @@ impl RuffLspAdapter {
 
                     if let Some(doc) = value.get("doc").and_then(|d| d.as_str()) {
                         schema_entry.insert(
-                            "markdownDescription".to_string(),
-                            serde_json::Value::String(doc.to_string()),
+                            "markdownDescription".to_owned(),
+                            serde_json::Value::String(doc.to_owned()),
                         );
                     }
 
                     if let Some(default_val) = value.get("default") {
-                        schema_entry.insert("default".to_string(), default_val.clone());
+                        schema_entry.insert("default".to_owned(), default_val.clone());
                     }
 
                     if let Some(value_type) = value.get("value_type").and_then(|v| v.as_str()) {
@@ -2359,19 +2359,18 @@ impl RuffLspAdapter {
                                 .split('|')
                                 .map(|s| s.trim().trim_matches('"'))
                                 .filter(|s| !s.is_empty())
-                                .map(|s| serde_json::Value::String(s.to_string()))
+                                .map(|s| serde_json::Value::String(s.to_owned()))
                                 .collect();
 
                             if !enum_values.is_empty() {
-                                schema_entry
-                                    .insert("type".to_string(), serde_json::json!("string"));
+                                schema_entry.insert("type".to_owned(), serde_json::json!("string"));
                                 schema_entry.insert(
-                                    "enum".to_string(),
+                                    "enum".to_owned(),
                                     serde_json::Value::Array(enum_values),
                                 );
                             }
                         } else if value_type.starts_with("list[") {
-                            schema_entry.insert("type".to_string(), serde_json::json!("array"));
+                            schema_entry.insert("type".to_owned(), serde_json::json!("array"));
                             if let Some(item_type) = value_type
                                 .strip_prefix("list[")
                                 .and_then(|s| s.strip_suffix(']'))
@@ -2383,12 +2382,12 @@ impl RuffLspAdapter {
                                     _ => "string",
                                 };
                                 schema_entry.insert(
-                                    "items".to_string(),
+                                    "items".to_owned(),
                                     serde_json::json!({"type": json_type}),
                                 );
                             }
                         } else if value_type.starts_with("dict[") {
-                            schema_entry.insert("type".to_string(), serde_json::json!("object"));
+                            schema_entry.insert("type".to_owned(), serde_json::json!("object"));
                         } else {
                             let json_type = match value_type {
                                 "bool" => "boolean",
@@ -2397,8 +2396,8 @@ impl RuffLspAdapter {
                                 _ => "string",
                             };
                             schema_entry.insert(
-                                "type".to_string(),
-                                serde_json::Value::String(json_type.to_string()),
+                                "type".to_owned(),
+                                serde_json::Value::String(json_type.to_owned()),
                             );
                         }
                     }

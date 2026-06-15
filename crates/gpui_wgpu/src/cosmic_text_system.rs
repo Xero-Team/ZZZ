@@ -64,13 +64,13 @@ impl CosmicTextSystem {
             swash_scale_context: ScaleContext::new(),
             loaded_fonts: Vec::new(),
             font_ids_by_family_cache: HashMap::default(),
-            system_font_fallback: system_font_fallback.to_string(),
+            system_font_fallback: system_font_fallback.to_owned(),
         }))
     }
 
     pub fn new_without_system_fonts(system_font_fallback: &str) -> Self {
         let font_system = FontSystem::new_with_locale_and_db(
-            "en-US".to_string(),
+            "en-US".to_owned(),
             cosmic_text::fontdb::Database::new(),
         );
 
@@ -80,7 +80,7 @@ impl CosmicTextSystem {
             swash_scale_context: ScaleContext::new(),
             loaded_fonts: Vec::new(),
             font_ids_by_family_cache: HashMap::default(),
-            system_font_fallback: system_font_fallback.to_string(),
+            system_font_fallback: system_font_fallback.to_owned(),
         }))
     }
 }

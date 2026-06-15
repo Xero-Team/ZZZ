@@ -442,7 +442,7 @@ impl EditFileTool {
                 }
                 _ = event_stream.cancelled_by_user().fuse() => {
                     return EditSessionResult::Failed {
-                        error: "Edit cancelled by user".to_string(),
+                        error: "Edit cancelled by user".to_owned(),
                         session,
                     };
                 }
@@ -496,14 +496,14 @@ impl AgentTool for EditFileTool {
                                     .read(cx)
                                     .short_full_path_for_project_path(&project_path, cx)
                             })
-                            .unwrap_or_else(|| path.to_string())
+                            .unwrap_or_else(|| path.to_owned())
                             .into();
                     }
 
                     let description = input.display_description.unwrap_or_default();
                     let description = description.trim();
                     if !description.is_empty() {
-                        return description.to_string().into();
+                        return description.to_owned().into();
                     }
                 }
 
@@ -545,7 +545,7 @@ impl AgentTool for EditFileTool {
                         .thread
                         .read_with(cx, |thread, _cx| thread.project().clone())
                         .map_err(|_| EditFileToolOutput::Error {
-                            error: "thread was dropped".to_string(),
+                            error: "thread was dropped".to_owned(),
                         })?;
 
                     let result: anyhow::Result<EditFileToolOutput> = async {
@@ -784,7 +784,7 @@ impl EditSession {
         cx: &mut AsyncApp,
     ) -> Result<Self, String> {
         let input = EditFileToolInput {
-            display_description: display_description.to_string(),
+            display_description: display_description.to_owned(),
             path: path.clone(),
             mode: mode.clone(),
             content: None,
@@ -863,14 +863,14 @@ impl EditSession {
             EditFileMode::Overwrite | EditFileMode::Create => {
                 let content = input
                     .content
-                    .ok_or_else(|| "'content' field is required for write mode".to_string())?;
+                    .ok_or_else(|| "'content' field is required for write mode".to_owned())?;
                 let events = self.parser.finalize_content(&content);
                 self.process_events(&events, tool, event_stream, cx)
             }
             EditFileMode::Edit => {
                 let edits = input
                     .edits
-                    .ok_or_else(|| "'edits' field is required for edit mode".to_string())?;
+                    .ok_or_else(|| "'edits' field is required for edit mode".to_owned())?;
                 let events = self.parser.finalize_edits(&edits);
                 self.process_events(&events, tool, event_stream, cx)
             }
@@ -925,7 +925,7 @@ impl EditSession {
         let action_log = tool
             .thread
             .read_with(cx, |thread, _cx| thread.action_log().clone())
-            .map_err(|_| "thread was dropped".to_string())?;
+            .map_err(|_| "thread was dropped".to_owned())?;
         for event in events {
             match event {
                 ToolEditEvent::ContentChunk { chunk } => {
@@ -1198,7 +1198,7 @@ fn ensure_buffer_saved(
                 .action_log()
                 .read_with(cx, |log, _| log.file_read_time(abs_path))
         })
-        .map_err(|_| "thread was dropped".to_string())?;
+        .map_err(|_| "thread was dropped".to_owned())?;
 
     let (current_mtime, is_dirty, has_save_tool, has_restore_tool) = thread
         .read_with(cx, |thread, cx| {
@@ -1211,7 +1211,7 @@ fn ensure_buffer_saved(
             let has_restore = thread.has_tool(RestoreFileFromDiskTool::NAME);
             (current, dirty, has_save, has_restore)
         })
-        .map_err(|_| "thread was dropped".to_string())?;
+        .map_err(|_| "thread was dropped".to_owned())?;
 
     if is_dirty {
         let message = match (has_save_tool, has_restore_tool) {
@@ -1228,7 +1228,7 @@ fn ensure_buffer_saved(
                 "This file has unsaved changes. Ask the user whether they want to keep or discard those changes, then ask them to save or revert the file manually and inform you when it's ok to proceed."
             }
         };
-        return Err(message.to_string());
+        return Err(message.to_owned());
     }
 
     if let (Some(last_read), Some(current)) = (last_read_mtime, current_mtime)

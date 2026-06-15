@@ -179,7 +179,7 @@ fn expand_rm_to_single_path_commands(command: &str) -> Vec<String> {
                 } else if suffix.starts_with('/') {
                     let normalized_suffix = normalize_path(suffix);
                     let reconstructed = if normalized_suffix == "/" {
-                        prefix.to_string()
+                        prefix.to_owned()
                     } else {
                         format!("{prefix}{normalized_suffix}")
                     };
@@ -195,7 +195,7 @@ fn expand_rm_to_single_path_commands(command: &str) -> Vec<String> {
 
         let mut normalized = normalize_path(path);
         if normalized.is_empty() && !Path::new(path).has_root() {
-            normalized = ".".to_string();
+            normalized = ".".to_owned();
         }
 
         results.push(format!("rm {flags_str}{normalized}"));
@@ -538,7 +538,7 @@ pub fn decide_permission_for_path(
     raw_path: &str,
     settings: &AgentSettings,
 ) -> ToolPermissionDecision {
-    decide_permission_for_paths(tool_name, &[raw_path.to_string()], settings)
+    decide_permission_for_paths(tool_name, &[raw_path.to_owned()], settings)
 }
 
 pub fn most_restrictive(

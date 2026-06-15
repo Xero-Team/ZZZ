@@ -222,7 +222,7 @@ impl<'de> Deserialize<'de> for BuildTaskDefinition {
         let mut template_value = helper.rest;
         if let serde_json::Value::Object(ref mut map) = template_value {
             map.insert(
-                "label".to_string(),
+                "label".to_owned(),
                 serde_json::to_value(helper.label.unwrap_or_else(|| "debug-build".to_owned()))
                     .map_err(serde::de::Error::custom)?,
             );

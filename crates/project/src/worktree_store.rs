@@ -790,7 +790,7 @@ impl WorktreeStore {
             abs_path = abs_path[1..].to_string();
         }
         if abs_path.is_empty() {
-            abs_path = "~/".to_string();
+            abs_path = "~/".to_owned();
         }
 
         cx.spawn(async move |this, cx| {

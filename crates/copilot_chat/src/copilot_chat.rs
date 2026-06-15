@@ -31,7 +31,7 @@ impl CopilotChatConfiguration {
         if let Some(enterprise_uri) = &self.enterprise_uri {
             Self::parse_domain(enterprise_uri)
         } else {
-            "github.com".to_string()
+            "github.com".to_owned()
         }
     }
 
@@ -40,7 +40,7 @@ impl CopilotChatConfiguration {
             let domain = Self::parse_domain(enterprise_uri);
             format!("https://{}/api/graphql", domain)
         } else {
-            "https://api.github.com/graphql".to_string()
+            "https://api.github.com/graphql".to_owned()
         }
     }
 
@@ -64,11 +64,11 @@ impl CopilotChatConfiguration {
         let uri = enterprise_uri.trim_end_matches('/');
 
         if let Some(domain) = uri.strip_prefix("https://") {
-            domain.split('/').next().unwrap_or(domain).to_string()
+            domain.split('/').next().unwrap_or(domain).to_owned()
         } else if let Some(domain) = uri.strip_prefix("http://") {
-            domain.split('/').next().unwrap_or(domain).to_string()
+            domain.split('/').next().unwrap_or(domain).to_owned()
         } else {
-            uri.split('/').next().unwrap_or(uri).to_string()
+            uri.split('/').next().unwrap_or(uri).to_owned()
         }
     }
 }
@@ -735,7 +735,7 @@ impl CopilotChat {
                     "Failed to discover Copilot API endpoint via GraphQL, \
                          falling back to {DEFAULT_COPILOT_API_ENDPOINT}: {error:#}"
                 );
-                DEFAULT_COPILOT_API_ENDPOINT.to_string()
+                DEFAULT_COPILOT_API_ENDPOINT.to_owned()
             }
         };
 
@@ -922,7 +922,7 @@ fn extract_oauth_token(contents: String, domain: &str) -> Option<String> {
             v.as_object().and_then(|obj| {
                 obj.iter().find_map(|(key, value)| {
                     if key.starts_with(domain) {
-                        value["oauth_token"].as_str().map(|v| v.to_string())
+                        value["oauth_token"].as_str().map(|v| v.to_owned())
                     } else {
                         None
                     }

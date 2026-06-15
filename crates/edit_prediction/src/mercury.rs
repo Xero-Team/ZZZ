@@ -372,7 +372,7 @@ fn is_mercury_payment_required_error(error: &anyhow::Error) -> bool {
 fn mercury_payment_required_message(body: &[u8]) -> SharedString {
     serde_json::from_slice::<MercuryErrorResponse>(body)
         .map(|response| response.error.message.into())
-        .unwrap_or_else(|_| String::from_utf8_lossy(body).trim().to_string().into())
+        .unwrap_or_else(|_| String::from_utf8_lossy(body).trim().to_owned().into())
 }
 
 pub static MERCURY_TOKEN_ENV_VAR: std::sync::LazyLock<EnvVar> = env_var!("MERCURY_AI_TOKEN");

@@ -48,23 +48,23 @@ pub async fn stream_completion(
             budget_tokens: Some(budget_tokens),
         }) => {
             let thinking_config = HashMap::from([
-                ("type".to_string(), Document::String("enabled".to_string())),
+                ("type".to_owned(), Document::String("enabled".to_owned())),
                 (
-                    "budget_tokens".to_string(),
+                    "budget_tokens".to_owned(),
                     Document::Number(AwsNumber::PosInt(budget_tokens)),
                 ),
             ]);
-            additional_fields.insert("thinking".to_string(), Document::from(thinking_config));
+            additional_fields.insert("thinking".to_owned(), Document::from(thinking_config));
         }
         Some(Thinking::Adaptive { effort: _ }) => {
             let thinking_config = HashMap::from([
-                ("type".to_string(), Document::String("adaptive".to_string())),
+                ("type".to_owned(), Document::String("adaptive".to_owned())),
                 (
-                    "display".to_string(),
-                    Document::String("summarized".to_string()),
+                    "display".to_owned(),
+                    Document::String("summarized".to_owned()),
                 ),
             ]);
-            additional_fields.insert("thinking".to_string(), Document::from(thinking_config));
+            additional_fields.insert("thinking".to_owned(), Document::from(thinking_config));
         }
         _ => {}
     }
@@ -119,7 +119,7 @@ pub async fn stream_completion(
                 let err = ctx.into_err();
                 match &err {
                     ConverseStreamError::ValidationException(e) => BedrockError::Validation(
-                        e.message().unwrap_or("validation error").to_string(),
+                        e.message().unwrap_or("validation error").to_owned(),
                     ),
                     ConverseStreamError::ThrottlingException(_) => BedrockError::RateLimited,
                     ConverseStreamError::ServiceUnavailableException(_)
@@ -127,11 +127,11 @@ pub async fn stream_completion(
                         BedrockError::ServiceUnavailable
                     }
                     ConverseStreamError::AccessDeniedException(e) => BedrockError::AccessDenied(
-                        e.message().unwrap_or("access denied").to_string(),
+                        e.message().unwrap_or("access denied").to_owned(),
                     ),
                     ConverseStreamError::InternalServerException(e) => {
                         BedrockError::InternalServer(
-                            e.message().unwrap_or("internal server error").to_string(),
+                            e.message().unwrap_or("internal server error").to_owned(),
                         )
                     }
                     _ => BedrockError::Other(err.into()),

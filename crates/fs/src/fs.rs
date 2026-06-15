@@ -806,7 +806,7 @@ impl Fs for RealFs {
 
         let (tx, rx) = futures::channel::oneshot::channel();
         std::thread::Builder::new()
-            .name("trash file or dir".to_string())
+            .name("trash file or dir".to_owned())
             .spawn(|| tx.send(trash::delete_with_info(path)))
             .expect("The os can spawn threads");
 
@@ -1287,7 +1287,7 @@ impl Fs for RealFs {
 
         let (tx, rx) = futures::channel::oneshot::channel();
         std::thread::Builder::new()
-            .name("restore trashed item".to_string())
+            .name("restore trashed item".to_owned())
             .spawn(move || {
                 let res = trash::restore_all([trashed_entry.into_trash_item()]);
                 tx.send(res)

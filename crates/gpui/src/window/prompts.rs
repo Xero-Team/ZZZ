@@ -81,8 +81,8 @@ pub fn fallback_prompt_renderer(
 ) -> RenderablePromptHandle {
     let renderer = cx.new(|cx| FallbackPromptRenderer {
         _level: level,
-        message: message.to_string(),
-        detail: detail.map(ToString::to_string),
+        message: message.to_owned(),
+        detail: detail.map(str::to_owned),
         actions: actions.to_vec(),
         focus: cx.focus_handle(),
     });

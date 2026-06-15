@@ -156,7 +156,7 @@ impl CredentialsProvider for DevelopmentCredentialsProvider {
     ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
         async move {
             let mut credentials = self.load_credentials().unwrap_or_default();
-            credentials.insert(url.to_string(), (username.to_string(), password.to_vec()));
+            credentials.insert(url.to_owned(), (username.to_owned(), password.to_vec()));
 
             self.save_credentials(&credentials)
         }

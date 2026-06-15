@@ -1150,7 +1150,7 @@ impl Client {
             log::debug!("waiting for server hello");
             let message = incoming.next().await.context("no hello message received")?;
             log::debug!("got server hello");
-            let hello_message_type_name = message.payload_type_name().to_string();
+            let hello_message_type_name = message.payload_type_name().to_owned();
             let hello = message
                 .into_any()
                 .downcast::<TypedEnvelope<proto::Hello>>()
@@ -1281,7 +1281,7 @@ impl Client {
                 .context("missing location header in /rpc response")?
                 .to_str()
                 .map_err(EstablishConnectionError::other)?
-                .to_string();
+                .to_owned();
             Url::parse(&collab_url).with_context(|| format!("parsing collab rpc url {collab_url}"))
         }
     }
@@ -1900,7 +1900,7 @@ pub fn parse_zed_link(link: &str, cx: &App) -> Option<ZedLink> {
     if let Some(heading) = next.strip_prefix("notes#") {
         return Some(ZedLink::ChannelNotes {
             channel_id,
-            heading: Some(heading.to_string()),
+            heading: Some(heading.to_owned()),
         });
     }
 

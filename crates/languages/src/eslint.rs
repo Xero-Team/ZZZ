@@ -192,7 +192,7 @@ impl EslintSettingsOverrides {
         if let Some(use_flat_config) = self.use_flat_config
             && let Some(workspace_configuration) = workspace_configuration.as_object_mut()
         {
-            workspace_configuration.insert("useFlatConfig".to_string(), json!(use_flat_config));
+            workspace_configuration.insert("useFlatConfig".to_owned(), json!(use_flat_config));
         }
 
         if let Some(experimental_use_flat_config) = self.experimental_use_flat_config
@@ -203,7 +203,7 @@ impl EslintSettingsOverrides {
                 .or_insert_with(|| json!({}));
             if let Some(experimental) = experimental.as_object_mut() {
                 experimental.insert(
-                    "useFlatConfig".to_string(),
+                    "useFlatConfig".to_owned(),
                     json!(experimental_use_flat_config),
                 );
             }
@@ -444,7 +444,7 @@ fn normalize_path_separators(path: &str) -> String {
     }
     #[cfg(not(windows))]
     {
-        path.to_string()
+        path.to_owned()
     }
 }
 

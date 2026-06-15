@@ -361,7 +361,7 @@ impl LspStore {
                 .target
                 .as_ref()
                 .and_then(|s| lsp::Uri::from_str(s).ok()),
-            tooltip: cached_link.tooltip.as_deref().map(str::to_string),
+            tooltip: cached_link.tooltip.as_deref().map(str::to_owned),
             data: cached_link.data.clone(),
         };
 

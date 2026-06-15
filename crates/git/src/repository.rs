@@ -184,16 +184,16 @@ fn parse_cat_file_commit(sha: Oid, content: &str) -> Option<CommitData> {
                             commit_timestamp = ts;
                         }
                         if let Some((name, email)) = name_email.rsplit_once(" <") {
-                            author_name = SharedString::from(name.to_string());
+                            author_name = SharedString::from(name.to_owned());
                             author_email =
-                                SharedString::from(email.trim_end_matches('>').to_string());
+                                SharedString::from(email.trim_end_matches('>').to_owned());
                         }
                     }
                 }
             }
         } else {
             if subject.is_none() {
-                subject = Some(SharedString::from(line.to_string()));
+                subject = Some(SharedString::from(line.to_owned()));
             }
             message_lines.push(line);
         }
@@ -333,7 +333,7 @@ impl Worktree {
 
     pub fn directory_name(&self, main_worktree_path: Option<&Path>) -> String {
         if self.is_main {
-            return "main worktree".to_string();
+            return "main worktree".to_owned();
         }
 
         let dir_name = self
@@ -351,12 +351,12 @@ impl Worktree {
                     .and_then(|p| p.file_name())
                     .and_then(|n| n.to_str())
                 {
-                    return parent_name.to_string();
+                    return parent_name.to_owned();
                 }
             }
         }
 
-        dir_name.to_string()
+        dir_name.to_owned()
     }
 }
 
@@ -380,11 +380,11 @@ pub fn parse_worktrees_from_str<T: AsRef<str>>(
                 continue;
             }
             if let Some(rest) = line.strip_prefix("worktree ") {
-                path = Some(rest.to_string());
+                path = Some(rest.to_owned());
             } else if let Some(rest) = line.strip_prefix("HEAD ") {
-                sha = Some(rest.to_string());
+                sha = Some(rest.to_owned());
             } else if let Some(rest) = line.strip_prefix("branch ") {
-                ref_name = Some(rest.to_string());
+                ref_name = Some(rest.to_owned());
             } else if line == "bare" {
                 is_bare = true;
             }
@@ -636,7 +636,7 @@ impl GitExcludeOverride {
         self.added_excludes = Some(if let Some(ref already_added) = self.added_excludes {
             format!("{already_added}\n{excludes}")
         } else {
-            excludes.to_string()
+            excludes.to_owned()
         });
 
         let mut content = self.original_excludes.clone().unwrap_or_default();
@@ -664,7 +664,7 @@ impl GitExcludeOverride {
     fn remove_auto_generated_block(content: &str) -> String {
         let start_marker = Self::START_BLOCK_MARKER;
         let end_marker = Self::END_BLOCK_MARKER;
-        let mut content = content.to_string();
+        let mut content = content.to_owned();
 
         let start_index = content.find(start_marker);
         let end_index = content.rfind(end_marker);
@@ -1296,11 +1296,11 @@ impl GitRepository for RealGitRepository {
                 if fields.len() != 6 {
                     bail!("unexpected git-show output for {commit:?}: {output:?}")
                 }
-                let sha = fields[0].to_string().into();
-                let message = fields[1].to_string().into();
+                let sha = fields[0].to_owned().into();
+                let message = fields[1].to_owned().into();
                 let commit_timestamp = fields[2].parse()?;
-                let author_email = fields[3].to_string().into();
-                let author_name = fields[4].to_string().into();
+                let author_email = fields[3].to_owned().into();
+                let author_name = fields[4].to_owned().into();
                 Ok(CommitDetails {
                     sha,
                     message,
@@ -1594,7 +1594,7 @@ impl GitRepository for RealGitRepository {
                     .await
                     .context("failed to run git config --get commit.template")?;
 
-                let raw_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let raw_path = String::from_utf8_lossy(&output.stdout).trim().to_owned();
                 if !output.status.success() || raw_path.is_empty() {
                     return Ok(None);
                 }
@@ -1689,7 +1689,7 @@ impl GitRepository for RealGitRepository {
             .spawn(async move {
                 let repo = repo.lock();
                 let remote = repo.find_remote(&name).ok()?;
-                remote.url().ok().map(|url| url.to_string())
+                remote.url().ok().map(|url| url.to_owned())
             })
             .boxed()
     }
@@ -1725,7 +1725,7 @@ impl GitRepository for RealGitRepository {
                         if line.ends_with("missing") {
                             None
                         } else {
-                            Some(line.to_string())
+                            Some(line.to_owned())
                         }
                     })
                     .collect::<Vec<_>>();
@@ -1867,7 +1867,7 @@ impl GitRepository for RealGitRepository {
                     // git symbolic-ref returns a non-0 exit code if HEAD points
                     // to something other than a branch
                     if output.status.success() {
-                        let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                        let name = String::from_utf8_lossy(&output.stdout).trim().to_owned();
 
                         branches.push(Branch {
                             ref_name: name.into(),
@@ -2050,7 +2050,7 @@ impl GitRepository for RealGitRepository {
             Ok(branch
                 .name()?
                 .context("cannot checkout anonymous branch")?
-                .to_string())
+                .to_owned())
         });
 
         self.executor
@@ -2277,7 +2277,7 @@ impl GitRepository for RealGitRepository {
         self.executor
             .spawn(async move {
                 let git = git_binary?;
-                let mut args = vec!["stash".to_string(), "pop".to_string()];
+                let mut args = vec!["stash".to_owned(), "pop".to_owned()];
                 if let Some(index) = index {
                     args.push(format!("stash@{{{}}}", index));
                 }
@@ -2302,7 +2302,7 @@ impl GitRepository for RealGitRepository {
         self.executor
             .spawn(async move {
                 let git = git_binary?;
-                let mut args = vec!["stash".to_string(), "apply".to_string()];
+                let mut args = vec!["stash".to_owned(), "apply".to_owned()];
                 if let Some(index) = index {
                     args.push(format!("stash@{{{}}}", index));
                 }
@@ -2327,7 +2327,7 @@ impl GitRepository for RealGitRepository {
         self.executor
             .spawn(async move {
                 let git = git_binary?;
-                let mut args = vec!["stash".to_string(), "drop".to_string()];
+                let mut args = vec!["stash".to_owned(), "drop".to_owned()];
                 if let Some(index) = index {
                     args.push(format!("stash@{{{}}}", index));
                 }
@@ -2547,7 +2547,7 @@ impl GitRepository for RealGitRepository {
                     .split('/')
                     .next()
                     .map(|name| Remote {
-                        name: name.trim().to_string().into(),
+                        name: name.trim().to_owned().into(),
                     });
 
                 Ok(remote_name)
@@ -2570,7 +2570,7 @@ impl GitRepository for RealGitRepository {
 
                 let remote_name = String::from_utf8_lossy(&output.stdout);
                 return Ok(Some(Remote {
-                    name: remote_name.trim().to_string().into(),
+                    name: remote_name.trim().to_owned().into(),
                 }));
             })
             .boxed()
@@ -2595,7 +2595,7 @@ impl GitRepository for RealGitRepository {
                         let remote_name = split_line.next()?;
 
                         Some(Remote {
-                            name: remote_name.trim().to_string().into(),
+                            name: remote_name.trim().to_owned().into(),
                         })
                     })
                     .collect();
@@ -3025,7 +3025,7 @@ impl GitRepository for RealGitRepository {
                     break;
                 }
 
-                let line = line_buffer.trim_end_matches('\n').to_string();
+                let line = line_buffer.trim_end_matches('\n').to_owned();
                 lines.push(line);
 
                 if lines.len() >= GRAPH_CHUNK_SIZE {
@@ -3241,7 +3241,7 @@ fn parse_initial_graph_output<'a>(
             } else {
                 ref_names_str
                     .split(", ")
-                    .map(|s| SharedString::from(s.to_string()))
+                    .map(|s| SharedString::from(s.to_owned()))
                     .collect()
             };
 
@@ -3621,16 +3621,16 @@ fn parse_branch_input(input: &str) -> Result<Vec<Branch>> {
         let Some(head) = fields.next() else {
             continue;
         };
-        let Some(head_sha) = fields.next().map(|f| f.to_string().into()) else {
+        let Some(head_sha) = fields.next().map(|f| f.to_owned().into()) else {
             continue;
         };
-        let Some(parent_sha) = fields.next().map(|f| f.to_string()) else {
+        let Some(parent_sha) = fields.next().map(|f| f.to_owned()) else {
             continue;
         };
-        let Some(ref_name) = fields.next().map(|f| f.to_string().into()) else {
+        let Some(ref_name) = fields.next().map(|f| f.to_owned().into()) else {
             continue;
         };
-        let Some(upstream_name) = fields.next().map(|f| f.to_string()) else {
+        let Some(upstream_name) = fields.next().map(|f| f.to_owned()) else {
             continue;
         };
         let Some(upstream_tracking) = fields.next().and_then(|f| parse_upstream_track(f).ok())
@@ -3640,10 +3640,10 @@ fn parse_branch_input(input: &str) -> Result<Vec<Branch>> {
         let Some(commiterdate) = fields.next().and_then(|f| f.parse::<i64>().ok()) else {
             continue;
         };
-        let Some(author_name) = fields.next().map(|f| f.to_string().into()) else {
+        let Some(author_name) = fields.next().map(|f| f.to_owned().into()) else {
             continue;
         };
-        let Some(subject) = fields.next().map(|f| f.to_string().into()) else {
+        let Some(subject) = fields.next().map(|f| f.to_owned().into()) else {
             continue;
         };
 
@@ -3713,10 +3713,10 @@ fn parse_upstream_track(upstream_track: &str) -> Result<UpstreamTracking> {
 
 fn checkpoint_author_envs() -> HashMap<String, String> {
     HashMap::from_iter([
-        ("GIT_AUTHOR_NAME".to_string(), "Zed".to_string()),
-        ("GIT_AUTHOR_EMAIL".to_string(), "hi@zed.dev".to_string()),
-        ("GIT_COMMITTER_NAME".to_string(), "Zed".to_string()),
-        ("GIT_COMMITTER_EMAIL".to_string(), "hi@zed.dev".to_string()),
+        ("GIT_AUTHOR_NAME".to_owned(), "Zed".to_owned()),
+        ("GIT_AUTHOR_EMAIL".to_owned(), "hi@zed.dev".to_owned()),
+        ("GIT_COMMITTER_NAME".to_owned(), "Zed".to_owned()),
+        ("GIT_COMMITTER_EMAIL".to_owned(), "hi@zed.dev".to_owned()),
     ])
 }
 

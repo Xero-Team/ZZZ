@@ -86,7 +86,7 @@ impl Vim {
             return;
         };
 
-        self.set_mark(".".to_string(), new_positions, &buffer, window, cx)
+        self.set_mark(".".to_owned(), new_positions, &buffer, window, cx)
     }
 }
 

@@ -264,10 +264,7 @@ impl RemoteConnectionModal {
                 (options.distro_name.clone(), None, true, false)
             }
             RemoteConnectionOptions::Docker(options) => (options.name.clone(), None, false, true),
-            #[cfg(any(test, feature = "test-support"))]
-            RemoteConnectionOptions::Mock(options) => {
-                (format!("mock-{}", options.id), None, false, false)
-            }
+            _ => (connection_options.display_name(), None, false, false),
         };
         Self {
             prompt: cx.new(|cx| {
@@ -519,7 +516,7 @@ impl remote::RemoteClientDelegate for RemoteClientDelegate {
                     version
                         .as_ref()
                         .map(|v| format!("{}", v))
-                        .unwrap_or("unknown".to_string()),
+                        .unwrap_or("unknown".to_owned()),
                     platform.os,
                     platform.arch,
                 )
@@ -552,7 +549,7 @@ impl RemoteClientDelegate {
         cx.update(|cx| {
             self.ui
                 .update(cx, |modal, cx| {
-                    modal.set_status(status.map(|s| s.to_string()), cx);
+                    modal.set_status(status.map(|s| s.to_owned()), cx);
                 })
                 .ok()
         });
@@ -684,7 +681,7 @@ impl remote::RemoteClientDelegate for BackgroundRemoteClientDelegate {
                     version
                         .as_ref()
                         .map(|v| format!("{v}"))
-                        .unwrap_or("unknown".to_string()),
+                        .unwrap_or("unknown".to_owned()),
                     platform.os,
                     platform.arch,
                 )
@@ -813,7 +810,7 @@ async fn fetch_remote_server_release_asset(
         version.build = semver::BuildMetadata::EMPTY;
         version.to_string()
     } else {
-        "latest".to_string()
+        "latest".to_owned()
     };
 
     let path = format!("/releases/{}/{}/asset", release_channel.dev_name(), version);

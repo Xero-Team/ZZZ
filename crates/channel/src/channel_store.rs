@@ -100,7 +100,7 @@ impl Channel {
             .map(|c| if c.is_alphanumeric() { c } else { '-' })
             .collect();
 
-        slug.trim_matches(|c| c == '-').to_string()
+        slug.trim_matches(|c| c == '-').to_owned()
     }
 }
 
@@ -728,7 +728,7 @@ impl ChannelStore {
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
         let client = self.client.clone();
-        let name = new_name.to_string();
+        let name = new_name.to_owned();
         cx.spawn(async move |this, cx| {
             let channel = client
                 .request(proto::RenameChannel {

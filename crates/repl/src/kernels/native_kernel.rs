@@ -132,7 +132,7 @@ impl NativeRunningKernel {
                 hb_port: ports[2],
                 shell_port: ports[3],
                 iopub_port: ports[4],
-                signature_scheme: "hmac-sha256".to_string(),
+                signature_scheme: "hmac-sha256".to_owned(),
                 key: uuid::Uuid::new_v4().to_string(),
                 kernel_name: Some(format!("zed-{}", kernel_specification.name)),
             };

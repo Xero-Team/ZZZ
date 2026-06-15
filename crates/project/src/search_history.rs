@@ -104,7 +104,7 @@ impl SearchHistory {
             .and_then(|i| self.history.get(i))
             .is_some_and(|entry| entry == current_query);
         if !matches_history {
-            cursor.draft = Some(current_query.to_string());
+            cursor.draft = Some(current_query.to_owned());
         }
 
         let prev_index = match cursor.selection {

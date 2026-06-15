@@ -110,7 +110,7 @@ fn read_global_last_used_agent(kvp: &KeyValueStore) -> Option<Agent> {
 
 async fn write_global_last_used_agent(kvp: KeyValueStore, agent: Agent) {
     if let Some(json) = serde_json::to_string(&LastUsedAgent { agent }).log_err() {
-        kvp.write_kvp(LAST_USED_AGENT_KEY.to_string(), json)
+        kvp.write_kvp(LAST_USED_AGENT_KEY.to_owned(), json)
             .await
             .log_err();
     }
@@ -308,7 +308,7 @@ pub fn init(cx: &mut App) {
                         acp::ContentBlock::Text(acp::TextContent::new(
                             "Please review this branch diff carefully. Point out any issues, \
                              potential bugs, or improvement opportunities you find.\n\n"
-                                .to_string(),
+                                .to_owned(),
                         )),
                         acp::ContentBlock::Resource(acp::EmbeddedResource::new(
                             acp::EmbeddedResourceResource::TextResourceContents(
@@ -551,7 +551,7 @@ fn format_timestamp_human(dt: &DateTime<Utc>) -> String {
     let duration = now.signed_duration_since(*dt);
 
     let relative = if duration.num_seconds() < 0 {
-        "in the future".to_string()
+        "in the future".to_owned()
     } else if duration.num_seconds() < 60 {
         let seconds = duration.num_seconds();
         format!("{seconds} seconds ago")

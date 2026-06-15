@@ -711,7 +711,7 @@ impl LanguageRegistry {
                         .path_suffixes
                         .iter()
                         .fold(0, |acc: usize, path_suffix: &String| {
-                            let ext = ".".to_string() + path_suffix;
+                            let ext = ".".to_owned() + path_suffix;
 
                             let matched_suffix_len = path_suffixes
                                 .iter()

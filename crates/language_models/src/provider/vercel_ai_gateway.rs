@@ -169,8 +169,8 @@ impl VercelAiGatewayLanguageModelProvider {
 
     fn default_available_model() -> AvailableModel {
         AvailableModel {
-            name: "openai/gpt-5.3-codex".to_string(),
-            display_name: Some("GPT 5.3 Codex".to_string()),
+            name: "openai/gpt-5.3-codex".to_owned(),
+            display_name: Some("GPT 5.3 Codex".to_owned()),
             max_tokens: 400_000,
             max_output_tokens: Some(128_000),
             max_completion_tokens: None,
@@ -339,7 +339,7 @@ fn map_open_ai_error(error: open_ai::RequestError) -> LanguageModelCompletionErr
 fn extract_error_message(body: &str) -> String {
     let json = match serde_json::from_str::<serde_json::Value>(body) {
         Ok(json) => json,
-        Err(_) => return body.to_string(),
+        Err(_) => return body.to_owned(),
     };
 
     let message = json
@@ -351,8 +351,8 @@ fn extract_error_message(body: &str) -> String {
                 .or_else(|| value.as_str())
         })
         .or_else(|| json.get("message").and_then(serde_json::Value::as_str))
-        .map(ToString::to_string)
-        .unwrap_or_else(|| body.to_string());
+        .map(str::to_owned)
+        .unwrap_or_else(|| body.to_owned());
 
     clean_error_message(&message)
 }
@@ -361,14 +361,14 @@ fn clean_error_message(message: &str) -> String {
     let lower = message.to_lowercase();
 
     if lower.contains("vercel_oidc_token") && lower.contains("oidc token") {
-        return "Authentication failed for Vercel AI Gateway. Use a Vercel AI Gateway key (vck_...).\nCreate or manage keys in Vercel AI Gateway console.\nIf this persists, regenerate the key and update it in Vercel AI Gateway provider settings in ZZZ.".to_string();
+        return "Authentication failed for Vercel AI Gateway. Use a Vercel AI Gateway key (vck_...).\nCreate or manage keys in Vercel AI Gateway console.\nIf this persists, regenerate the key and update it in Vercel AI Gateway provider settings in ZZZ.".to_owned();
     }
 
     if lower.contains("invalid api key") || lower.contains("invalid_api_key") {
-        return "Authentication failed for Vercel AI Gateway. Check that your Vercel AI Gateway key starts with vck_ and is active.".to_string();
+        return "Authentication failed for Vercel AI Gateway. Check that your Vercel AI Gateway key starts with vck_ and is active.".to_owned();
     }
 
-    message.to_string()
+    message.to_owned()
 }
 
 fn has_tag(tags: &[String], expected: &str) -> bool {
@@ -635,7 +635,7 @@ impl ConfigurationView {
     }
 
     fn save_api_key(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_string();
+        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_owned();
         if api_key.is_empty() {
             return;
         }
@@ -678,7 +678,7 @@ impl Render for ConfigurationView {
         } else {
             let api_url = VercelAiGatewayLanguageModelProvider::api_url(cx);
             if api_url == API_URL {
-                "API key configured".to_string()
+                "API key configured".to_owned()
             } else {
                 format!("API key configured for {}", api_url)
             }

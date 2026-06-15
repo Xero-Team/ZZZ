@@ -151,7 +151,7 @@ impl ComponentMetadata {
             .split("::")
             .last()
             .unwrap_or(&self.name)
-            .to_string()
+            .to_owned()
             .into()
     }
 

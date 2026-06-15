@@ -365,7 +365,7 @@ impl LanguageSettings {
             Vec<LanguageServerName>,
         ) = configured_language_servers.iter().partition_map(
             |language_server| match language_server.strip_prefix('!') {
-                Some(disabled) => Either::Left(LanguageServerName(disabled.to_string().into())),
+                Some(disabled) => Either::Left(LanguageServerName(disabled.to_owned().into())),
                 None => Either::Right(LanguageServerName(language_server.clone().into())),
             },
         );

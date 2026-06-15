@@ -62,7 +62,7 @@ impl MultibufferHint {
 
         let kvp = KeyValueStore::global(cx);
         db::write_and_log(cx, move || async move {
-            kvp.write_kvp(SHOWN_COUNT_KEY.to_string(), format!("{}", count))
+            kvp.write_kvp(SHOWN_COUNT_KEY.to_owned(), format!("{}", count))
                 .await
         });
     }

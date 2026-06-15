@@ -185,29 +185,29 @@ impl LspAdapter for TailwindLspAdapter {
 
     fn language_ids(&self) -> HashMap<LanguageName, String> {
         HashMap::from_iter([
-            (LanguageName::new_static("Astro"), "astro".to_string()),
-            (LanguageName::new_static("HTML"), "html".to_string()),
-            (LanguageName::new_static("Gleam"), "html".to_string()),
-            (LanguageName::new_static("CSS"), "css".to_string()),
+            (LanguageName::new_static("Astro"), "astro".to_owned()),
+            (LanguageName::new_static("HTML"), "html".to_owned()),
+            (LanguageName::new_static("Gleam"), "html".to_owned()),
+            (LanguageName::new_static("CSS"), "css".to_owned()),
             (
                 LanguageName::new_static("JavaScript"),
-                "javascript".to_string(),
+                "javascript".to_owned(),
             ),
             (
                 LanguageName::new_static("TypeScript"),
-                "typescript".to_string(),
+                "typescript".to_owned(),
             ),
             (
                 LanguageName::new_static("TSX"),
-                "typescriptreact".to_string(),
+                "typescriptreact".to_owned(),
             ),
-            (LanguageName::new_static("Svelte"), "svelte".to_string()),
-            (LanguageName::new_static("Elixir"), "elixir".to_string()),
-            (LanguageName::new_static("HEEx"), "heex".to_string()),
-            (LanguageName::new_static("ERB"), "erb".to_string()),
-            (LanguageName::new_static("HTML+ERB"), "erb".to_string()),
-            (LanguageName::new_static("PHP"), "php".to_string()),
-            (LanguageName::new_static("Vue.js"), "vue".to_string()),
+            (LanguageName::new_static("Svelte"), "svelte".to_owned()),
+            (LanguageName::new_static("Elixir"), "elixir".to_owned()),
+            (LanguageName::new_static("HEEx"), "heex".to_owned()),
+            (LanguageName::new_static("ERB"), "erb".to_owned()),
+            (LanguageName::new_static("HTML+ERB"), "erb".to_owned()),
+            (LanguageName::new_static("PHP"), "php".to_owned()),
+            (LanguageName::new_static("Vue.js"), "vue".to_owned()),
         ])
     }
 }

@@ -585,7 +585,7 @@ impl Project {
         cx: &mut App,
     ) -> Shared<Task<Option<HashMap<String, String>>>> {
         if let Some(path) = &path {
-            let shell = Shell::Program(shell.to_string());
+            let shell = Shell::Program(shell.to_owned());
             self.environment
                 .update(cx, |project_env, cx| match &remote_client {
                     Some(remote_client) => project_env.remote_directory_environment(
@@ -692,7 +692,7 @@ fn quote_prepared_task_arg_for_activation<'a>(
 fn quote_cmd_command_arg_for_outer_shell(arg: &str, shell_kind: ShellKind) -> Option<String> {
     match shell_kind {
         ShellKind::PowerShell | ShellKind::Pwsh => Some(format!("'{}'", arg.replace('\'', "''"))),
-        ShellKind::Cmd => Some(arg.to_string()),
+        ShellKind::Cmd => Some(arg.to_owned()),
         ShellKind::Posix
         | ShellKind::Csh
         | ShellKind::Tcsh

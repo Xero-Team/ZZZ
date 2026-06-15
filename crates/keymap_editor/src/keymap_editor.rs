@@ -1408,7 +1408,7 @@ impl KeymapEditor {
             .selected_binding()
             .and_then(|binding| binding.context())
             .and_then(KeybindContextString::local_str)
-            .map(|context| context.to_string());
+            .map(|context| context.to_owned());
         let Some(context) = context else {
             return;
         };
@@ -1423,7 +1423,7 @@ impl KeymapEditor {
     ) {
         let action = self
             .selected_binding()
-            .map(|binding| binding.action().name.to_string());
+            .map(|binding| binding.action().name.to_owned());
         let Some(action) = action else {
             return;
         };
@@ -2275,7 +2275,7 @@ impl Render for KeymapEditor {
                                                             None
                                                         }
                                                     }.map(|source| format!("This keybinding is overridden by the '{}' binding from {}.", binding.action().humanized_name, source))
-                                                }).unwrap_or_else(|| "This binding is overridden.".to_string());
+                                                }).unwrap_or_else(|| "This binding is overridden.".to_owned());
 
                                                 row.tooltip(Tooltip::text(context))
                                             },
@@ -2501,7 +2501,7 @@ impl KeybindingEditorModal {
 
             let action_name_to_static: HashMap<String, &'static str> = actions
                 .iter()
-                .map(|&name| (name.to_string(), name))
+                .map(|&name| (name.to_owned(), name))
                 .collect();
 
             let editor = cx.new(|cx| {
@@ -2777,7 +2777,7 @@ impl KeybindingEditorModal {
                         "Could not find action in keybindings with index {}",
                         first_conflict_index
                     );
-                    "Your keybind would conflict with other actions".to_string()
+                    "Your keybind would conflict with other actions".to_owned()
                 }
             };
 

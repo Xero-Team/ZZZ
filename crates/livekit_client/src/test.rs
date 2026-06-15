@@ -797,11 +797,11 @@ impl Room {
     }
 
     pub fn name(&self) -> String {
-        "test_room".to_string()
+        "test_room".to_owned()
     }
 
     pub async fn sid(&self) -> String {
-        "RM_test_session".to_string()
+        "RM_test_session".to_owned()
     }
 
     pub fn play_remote_audio_track(

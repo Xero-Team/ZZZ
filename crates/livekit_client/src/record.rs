@@ -25,8 +25,8 @@ impl CaptureInput {
         let (device, config) = crate::default_device(true, input_device.as_ref())?;
         let name = device
             .description()
-            .map(|desc| desc.name().to_string())
-            .unwrap_or("<unknown>".to_string());
+            .map(|desc| desc.name().to_owned())
+            .unwrap_or("<unknown>".to_owned());
         log::info!("Using microphone: {}", name);
 
         let samples = Arc::new(Mutex::new(Vec::new()));

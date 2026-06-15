@@ -50,7 +50,7 @@ fn migrate(text: &str, patterns: MigrationPatterns, query: &Query) -> Result<Opt
     if edits.is_empty() {
         Ok(None)
     } else {
-        let mut new_text = text.to_string();
+        let mut new_text = text.to_owned();
         for (range, replacement) in edits.iter().rev() {
             new_text.replace_range(range.clone(), replacement);
         }
@@ -73,7 +73,7 @@ fn run_migrations(text: &str, migrations: &[MigrationType]) -> Result<Option<Str
         return Ok(None);
     }
 
-    let mut current_text = text.to_string();
+    let mut current_text = text.to_owned();
     let mut result: Option<String> = None;
     let json_indent_size = infer_json_indent_size(&current_text);
     for migration in migrations.iter() {

@@ -352,10 +352,10 @@ impl<D: PickerDelegate> Picker<D> {
             picker_bounds: Rc::new(Cell::new(None)),
             item_bounds: Rc::new(RefCell::new(HashMap::default())),
         };
-        this.update_matches("".to_string(), window, cx);
+        this.update_matches("".to_owned(), window, cx);
         // give the delegate 4ms to render the first set of suggestions.
         this.delegate
-            .finalize_update_matches("".to_string(), Duration::from_millis(4), window, cx);
+            .finalize_update_matches("".to_owned(), Duration::from_millis(4), window, cx);
         this
     }
 
@@ -769,7 +769,7 @@ impl<D: PickerDelegate> Picker<D> {
     pub fn query(&self, cx: &App) -> String {
         match &self.head {
             Head::Editor(editor) => editor.text(cx),
-            Head::Empty(_) => "".to_string(),
+            Head::Empty(_) => "".to_owned(),
         }
     }
 

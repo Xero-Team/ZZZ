@@ -66,7 +66,7 @@ fn migrate_agent_tool_permissions(agent: &mut Value) -> Result<()> {
             None | Some(Value::Null)
         ) {
             agent_object.insert(
-                TOOL_PERMISSIONS_KEY.to_string(),
+                TOOL_PERMISSIONS_KEY.to_owned(),
                 Value::Object(Default::default()),
             );
         }
@@ -84,7 +84,7 @@ fn migrate_agent_tool_permissions(agent: &mut Value) -> Result<()> {
             && !tool_permissions_object.contains_key(DEFAULT_MODE_KEY)
         {
             tool_permissions_object
-                .insert(DEFAULT_KEY.to_string(), Value::String("allow".to_string()));
+                .insert(DEFAULT_KEY.to_owned(), Value::String("allow".to_owned()));
         }
     }
 
@@ -102,7 +102,7 @@ fn migrate_default_mode_to_default(tool_permissions: &mut Value) -> Result<()> {
 
     if let Some(default_mode) = tool_permissions_object.remove(DEFAULT_MODE_KEY) {
         if !tool_permissions_object.contains_key(DEFAULT_KEY) {
-            tool_permissions_object.insert(DEFAULT_KEY.to_string(), default_mode);
+            tool_permissions_object.insert(DEFAULT_KEY.to_owned(), default_mode);
         }
     }
 
@@ -112,7 +112,7 @@ fn migrate_default_mode_to_default(tool_permissions: &mut Value) -> Result<()> {
                 if let Some(tool_rules_object) = tool_rules.as_object_mut() {
                     if let Some(default_mode) = tool_rules_object.remove(DEFAULT_MODE_KEY) {
                         if !tool_rules_object.contains_key(DEFAULT_KEY) {
-                            tool_rules_object.insert(DEFAULT_KEY.to_string(), default_mode);
+                            tool_rules_object.insert(DEFAULT_KEY.to_owned(), default_mode);
                         }
                     }
                 }

@@ -306,7 +306,7 @@ impl CommitView {
                         .is_some_and(|text| is_binary_content(text.as_bytes()));
 
                 let new_text = if is_binary {
-                    "(binary file not shown)".to_string()
+                    "(binary file not shown)".to_owned()
                 } else {
                     raw_new_text
                 };
@@ -323,7 +323,7 @@ impl CommitView {
                 let file_name = file
                     .path
                     .file_name()
-                    .map(|name| name.to_string())
+                    .map(|name| name.to_owned())
                     .unwrap_or_else(|| file.path.display(PathStyle::local()).to_string());
                 let display_name = format!("{short_sha} - {file_name}");
 
@@ -1035,8 +1035,8 @@ impl Item for CommitView {
         let subject = self.commit.message.split('\n').next().unwrap();
 
         Some(TabTooltipContent::Custom(Box::new(Tooltip::element({
-            let subject = subject.to_string();
-            let short_sha = short_sha.to_string();
+            let subject = subject.to_owned();
+            let short_sha = short_sha.to_owned();
 
             move |_, _| {
                 v_flex()

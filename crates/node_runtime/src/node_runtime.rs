@@ -153,7 +153,7 @@ impl NodeRuntime {
                 Some(err @ DetectError::NotInPath(_)) => (Level::Info, err.to_string()),
                 None => (
                     Level::Info,
-                    "`node.ignore_system_version` is `true` in settings".to_string(),
+                    "`node.ignore_system_version` is `true` in settings".to_owned(),
                 ),
             };
             match ManagedNodeRuntime::install_if_needed(&state.http).await {
@@ -201,7 +201,7 @@ impl NodeRuntime {
             // error message.
             Box::new(UnavailableNodeRuntime {
                 error_message: "`node` settings do not allow any way to use Node.js"
-                    .to_string()
+                    .to_owned()
                     .into(),
             })
         };
@@ -1024,7 +1024,7 @@ fn proxy_argument(proxy: Option<&Url>) -> Option<String> {
         let _ = proxy.set_ip_host(IpAddr::V4(Ipv4Addr::LOCALHOST));
     }
 
-    Some(proxy.as_str().to_string())
+    Some(proxy.as_str().to_owned())
 }
 
 fn build_npm_command_args(
@@ -1045,7 +1045,7 @@ fn build_npm_command_args(
         command_args.push("--prefix".into());
         command_args.push(prefix_dir.to_string_lossy().into_owned());
     }
-    command_args.push(subcommand.to_string());
+    command_args.push(subcommand.to_owned());
     command_args.push(format!("--cache={}", cache_dir.display()));
     if let Some(user_config) = user_config {
         command_args.push("--userconfig".into());
@@ -1072,7 +1072,7 @@ fn npm_command_env(node_binary: Option<&Path>) -> HashMap<String, String> {
 
     if let Ok(node_ca_certs) = env::var(NODE_CA_CERTS_ENV_VAR) {
         if !node_ca_certs.is_empty() {
-            command_env.insert(NODE_CA_CERTS_ENV_VAR.to_string(), node_ca_certs);
+            command_env.insert(NODE_CA_CERTS_ENV_VAR.to_owned(), node_ca_certs);
         }
     }
 

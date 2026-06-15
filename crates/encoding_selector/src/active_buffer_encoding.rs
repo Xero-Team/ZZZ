@@ -70,7 +70,7 @@ impl Render for ActiveBufferEncoding {
             return div().hidden();
         }
 
-        let mut text = active_encoding.name().to_string();
+        let mut text = active_encoding.name().to_owned();
         if self.has_bom {
             text.push_str(" (BOM)");
         }

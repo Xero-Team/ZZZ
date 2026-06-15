@@ -2268,7 +2268,7 @@ impl Editor {
                             Self::open_transaction_for_hidden_buffers(
                                 workspace,
                                 transaction.clone(),
-                                "Rename".to_string(),
+                                "Rename".to_owned(),
                                 window,
                                 cx,
                             );
@@ -2288,7 +2288,7 @@ impl Editor {
                             Self::open_transaction_for_hidden_buffers(
                                 workspace,
                                 transaction.clone(),
-                                "LSP Edit".to_string(),
+                                "LSP Edit".to_owned(),
                                 window,
                                 cx,
                             );
@@ -4082,10 +4082,7 @@ impl Editor {
                 );
 
                 // Remove shortcode from buffer
-                edits.push((
-                    emoji_shortcode_start..selection.start,
-                    "".to_string().into(),
-                ));
+                edits.push((emoji_shortcode_start..selection.start, "".to_owned().into()));
                 new_selections.push((
                     Selection {
                         id: selection.id,
@@ -4582,7 +4579,7 @@ impl Editor {
 
             let start_of_line = snapshot.clip_point(Point::new(row, 0), Bias::Left);
 
-            let newline = "\n".to_string();
+            let newline = "\n".to_owned();
             edits.push((start_of_line..start_of_line, newline));
 
             rows.push(row + rows_inserted as u32);
@@ -7490,7 +7487,7 @@ impl Editor {
                                 }
                                 EditPredictionGranularity::Line => {
                                     if let Some(line) = text.split_inclusive('\n').next() {
-                                        line.to_string()
+                                        line.to_owned()
                                     } else {
                                         text.to_string()
                                     }
@@ -9306,7 +9303,7 @@ impl Editor {
                 true,
             )))
             .when(is_platform_style_mac, |parent| {
-                parent.child(keystroke.key().to_string())
+                parent.child(keystroke.key().to_owned())
             })
             .when(!is_platform_style_mac, |parent| {
                 parent.child(
@@ -12308,8 +12305,8 @@ impl Editor {
             window,
             cx,
             |text| match base64::engine::general_purpose::STANDARD.decode(text) {
-                Ok(bytes) => String::from_utf8(bytes).unwrap_or_else(|_| text.to_string()),
-                Err(_) => text.to_string(),
+                Ok(bytes) => String::from_utf8(bytes).unwrap_or_else(|_| text.to_owned()),
+                Err(_) => text.to_owned(),
             },
         )
     }
@@ -19343,7 +19340,7 @@ impl Editor {
             return None;
         }
 
-        Some(text.to_string())
+        Some(text.to_owned())
     }
 
     pub fn set_text(
@@ -19797,7 +19794,7 @@ impl Editor {
         };
         let overlay = &self.diff_review_overlays[overlay_index];
 
-        let comment_text = overlay.prompt_editor.read(cx).text(cx).trim().to_string();
+        let comment_text = overlay.prompt_editor.read(cx).text(cx).trim().to_owned();
         if comment_text.is_empty() {
             return;
         }
@@ -20173,7 +20170,7 @@ impl Editor {
             })
             .as_ref()
             .and_then(|overlay| overlay.inline_edit_editors.get(&comment_id))
-            .map(|editor| editor.read(cx).text(cx).trim().to_string());
+            .map(|editor| editor.read(cx).text(cx).trim().to_owned());
 
         if let Some(new_text) = new_text {
             if !new_text.is_empty() {
@@ -20703,7 +20700,7 @@ impl Editor {
         if let Some(path) = self.target_file_abs_path(cx)
             && let Some(path) = path.to_str()
         {
-            cx.write_to_clipboard(ClipboardItem::new_string(path.to_string()));
+            cx.write_to_clipboard(ClipboardItem::new_string(path.to_owned()));
         } else {
             cx.propagate();
         }
@@ -20803,7 +20800,7 @@ impl Editor {
             let file = buffer.read(cx).file()?;
             file.path().file_stem()
         }) {
-            cx.write_to_clipboard(ClipboardItem::new_string(file_stem.to_string()));
+            cx.write_to_clipboard(ClipboardItem::new_string(file_stem.to_owned()));
         }
     }
 
@@ -20812,7 +20809,7 @@ impl Editor {
             let file = buffer.read(cx).file()?;
             Some(file.file_name(cx))
         }) {
-            cx.write_to_clipboard(ClipboardItem::new_string(file_name.to_string()));
+            cx.write_to_clipboard(ClipboardItem::new_string(file_name.to_owned()));
         }
     }
 
@@ -22700,7 +22697,7 @@ impl Editor {
             .as_ref()
             .and_then(|file| Path::new(file.file_name(cx)).extension())
             .and_then(|e| e.to_str())
-            .map(|a| a.to_string()));
+            .map(|a| a.to_owned()));
 
         let vim_mode = vim_mode_setting::VimModeSetting::try_get(cx)
             .map(|vim_mode| vim_mode.0)
@@ -22976,7 +22973,7 @@ impl Editor {
             .collect();
 
         if !self.input_enabled || self.read_only || !self.focus_handle.is_focused(window) {
-            pending = "".to_string();
+            pending = "".to_owned();
         }
 
         let existing_pending = self
@@ -23512,7 +23509,7 @@ impl Editor {
                         if multibuffer.is_singleton() {
                             multibuffer.title(cx).to_string()
                         } else {
-                            "untitled".to_string()
+                            "untitled".to_owned()
                         }
                     })
             });

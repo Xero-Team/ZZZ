@@ -743,7 +743,7 @@ impl AgentConfiguration {
                         .or_else(|| name.strip_suffix(" MCP"))
                         .or_else(|| name.strip_suffix(" Context Server"))
                         .unwrap_or(name);
-                    SharedString::from(stripped.to_string())
+                    SharedString::from(stripped.to_owned())
                 })
                 .unwrap_or_else(|| item_id.clone())
         } else {
@@ -1617,7 +1617,7 @@ async fn open_new_agent_servers_entry_in_settings_editor(
                     let server_name: Option<String> = (0..u8::MAX)
                         .map(|i| {
                             if i == 0 {
-                                "your_agent".to_string()
+                                "your_agent".to_owned()
                             } else {
                                 format!("your_agent_{}", i)
                             }

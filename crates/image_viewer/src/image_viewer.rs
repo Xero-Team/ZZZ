@@ -505,7 +505,7 @@ impl Item for ImageView {
             .read(cx)
             .file
             .file_name(cx)
-            .to_string()
+            .to_owned()
             .into()
     }
 

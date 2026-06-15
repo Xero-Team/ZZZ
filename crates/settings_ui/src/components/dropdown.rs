@@ -73,7 +73,7 @@ where
                         if self.should_do_title_case {
                             label.to_title_case()
                         } else {
-                            label.to_string()
+                            label.to_owned()
                         },
                         value == current_value,
                         IconPosition::End,
@@ -92,7 +92,7 @@ where
             if self.should_do_title_case {
                 current_value_label.to_title_case()
             } else {
-                current_value_label.to_string()
+                current_value_label.to_owned()
             },
             context_menu,
         )

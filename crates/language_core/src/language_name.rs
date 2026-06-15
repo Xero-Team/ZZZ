@@ -47,7 +47,7 @@ impl LanguageName {
 
     pub fn lsp_id(&self) -> String {
         match self.0.as_ref() {
-            "Plain Text" => "plaintext".to_string(),
+            "Plain Text" => "plaintext".to_owned(),
             language_name => language_name.to_lowercase(),
         }
     }

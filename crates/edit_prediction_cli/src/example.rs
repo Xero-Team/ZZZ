@@ -173,12 +173,12 @@ impl Example {
             let owner = segments
                 .next()
                 .context("expected owner path segment")?
-                .to_string();
+                .to_owned();
             let repo = segments
                 .next()
                 .context("expected repo path segment")?
                 .trim_end_matches(".git")
-                .to_string();
+                .to_owned();
             assert!(segments.next().is_none());
 
             Ok(RepoName {
@@ -223,7 +223,7 @@ pub fn read_example_files(inputs: &[PathBuf]) -> Vec<Example> {
                 .map(|ext| ext.to_string_lossy().to_string())
                 .unwrap_or_else(|| panic!("{} should have an extension", path.display()))
         } else {
-            "jsonl".to_string()
+            "jsonl".to_owned()
         };
 
         match ext.as_ref() {

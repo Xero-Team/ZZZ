@@ -1546,7 +1546,7 @@ pub mod test {
         }
 
         pub fn with_label(mut self, state: &str) -> Self {
-            self.label = state.to_string();
+            self.label = state.to_owned();
             self
         }
 

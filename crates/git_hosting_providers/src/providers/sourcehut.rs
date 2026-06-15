@@ -18,7 +18,7 @@ pub struct SourceHut {
 impl SourceHut {
     pub fn new(name: &str, base_url: Url) -> Self {
         Self {
-            name: name.to_string(),
+            name: name.to_owned(),
             base_url,
         }
     }

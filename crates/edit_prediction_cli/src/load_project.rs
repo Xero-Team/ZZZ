@@ -79,7 +79,7 @@ pub async fn run_load_project(
         let language_name = buffer
             .language()
             .map(|l| l.name().to_string())
-            .unwrap_or_else(|| "Unknown".to_string());
+            .unwrap_or_else(|| "Unknown".to_owned());
 
         let (excerpt_point_range, excerpt_offset_range, cursor_offset_in_excerpt) =
             compute_cursor_excerpt(&snapshot, cursor_offset);

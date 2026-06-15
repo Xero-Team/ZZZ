@@ -443,7 +443,7 @@ async fn rebuild_related_files(
             {
                 project.read_with(cx, |project, cx| {
                     if let Some(worktree) = project.worktree_for_id(worktree_id, cx) {
-                        e.insert(worktree.read(cx).root_name().as_unix_str().to_string());
+                        e.insert(worktree.read(cx).root_name().as_unix_str().to_owned());
                     }
                 });
             }

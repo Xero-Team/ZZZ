@@ -24,6 +24,17 @@ pub struct TestDb {
     pub connection: Option<sqlx::AnyConnection>,
 }
 
+pub fn should_run_postgres_tests() -> bool {
+    if std::env::var("CI").is_ok() {
+        return cfg!(target_os = "linux");
+    }
+
+    matches!(
+        std::env::var("USE_POSTGRES").ok().as_deref(),
+        Some("1" | "true")
+    )
+}
+
 impl TestDb {
     pub fn sqlite(executor: BackgroundExecutor) -> Self {
         let url = "sqlite::memory:";
@@ -124,9 +135,7 @@ macro_rules! test_both_dbs {
     ($test_name:ident, $postgres_test_name:ident, $sqlite_test_name:ident) => {
         #[gpui::test]
         async fn $postgres_test_name(cx: &mut gpui::TestAppContext) {
-            // In CI, only run postgres tests on Linux (where we have the postgres service).
-            // Locally, always run them (assuming postgres is available).
-            if std::env::var("CI").is_ok() && !cfg!(target_os = "linux") {
+            if !$crate::db_tests::should_run_postgres_tests() {
                 return;
             }
             let test_db = $crate::db_tests::TestDb::postgres(cx.executor().clone());

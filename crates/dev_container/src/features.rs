@@ -116,7 +116,7 @@ RUN chmod -R 0755 {full_dest} \
     }
 
     pub(crate) fn generate_dockerfile_env(&self) -> String {
-        let mut layer = "".to_string();
+        let mut layer = "".to_owned();
         let env = self.container_env();
         let mut env: Vec<(&String, &String)> = env.iter().collect();
         env.sort();
@@ -142,7 +142,7 @@ RUN chmod -R 0755 {full_dest} \
         match options {
             FeatureOptions::Bool(_) => {}
             FeatureOptions::String(version) => {
-                merged.insert("VERSION".to_string(), version.clone());
+                merged.insert("VERSION".to_owned(), version.clone());
             }
             FeatureOptions::Options(map) => {
                 for (key, value) in map {
@@ -165,7 +165,7 @@ RUN chmod -R 0755 {full_dest} \
 
         let env_file_content = env_vars
             .iter()
-            .fold("".to_string(), |acc, (k, v)| format!("{acc}{}={}\n", k, v));
+            .fold("".to_owned(), |acc, (k, v)| format!("{acc}{}={}\n", k, v));
 
         fs.write(
             &self.file_path.join("devcontainer-features.env"),
@@ -234,7 +234,7 @@ pub(crate) fn parse_oci_feature_ref(input: &str) -> Option<OciFeatureRef> {
                 input_lower[..colon].to_string(),
                 input_lower[colon + 1..].to_string(),
             ),
-            _ => (input_lower, "latest".to_string()),
+            _ => (input_lower, "latest".to_owned()),
         }
     };
 
@@ -243,7 +243,7 @@ pub(crate) fn parse_oci_feature_ref(input: &str) -> Option<OciFeatureRef> {
         return None;
     }
 
-    let registry = parts[0].to_string();
+    let registry = parts[0].to_owned();
     let path = parts[1..].join("/");
 
     Some(OciFeatureRef {

@@ -1292,9 +1292,9 @@ impl RunningState {
             .clone()
             .filter(|title| !title.is_empty())
             .or_else(|| command.clone())
-            .unwrap_or_else(|| "Debug terminal".to_string());
+            .unwrap_or_else(|| "Debug terminal".to_owned());
         let kind = task::SpawnInTerminal {
-            id: task::TaskId("debug".to_string()),
+            id: task::TaskId("debug".to_owned()),
             full_label: title.clone(),
             label: title.clone(),
             command,

@@ -155,7 +155,7 @@ impl Model {
 
         let mut extra_beta_headers = Vec::new();
         if supports_speed {
-            extra_beta_headers.push(FAST_MODE_BETA_HEADER.to_string());
+            extra_beta_headers.push(FAST_MODE_BETA_HEADER.to_owned());
         }
 
         Self {

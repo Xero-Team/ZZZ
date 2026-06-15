@@ -864,7 +864,7 @@ impl ToolchainSelectorDelegate {
                 Some(())
             }
         });
-        let placeholder_text = "Select a toolchain...".to_string().into();
+        let placeholder_text = "Select a toolchain...".to_owned().into();
         Self {
             toolchain_selector,
             candidates: Default::default(),

@@ -1078,13 +1078,13 @@ impl StatefulModal for DevContainerModal {
                 self.render_confirming_write_dev_container(template_entry, window, cx)
             }
             DevContainerState::TemplateWriteFailed(dev_container_error) => self.render_error(
-                "Error Creating Dev Container Definition".to_string(),
+                "Error Creating Dev Container Definition".to_owned(),
                 dev_container_error,
                 window,
                 cx,
             ),
             DevContainerState::TemplateQueryReturned(Err(e)) => {
-                self.render_error("Error Retrieving Templates".to_string(), e, window, cx)
+                self.render_error("Error Retrieving Templates".to_owned(), e, window, cx)
             }
         }
     }
@@ -1158,7 +1158,7 @@ impl StatefulModal for DevContainerModal {
                     .collect::<Vec<TemplateEntry>>();
                 if self.state == DevContainerState::QueryingTemplates {
                     let delegate = TemplatePickerDelegate::new(
-                        "Select a template".to_string(),
+                        "Select a template".to_owned(),
                         cx.weak_entity(),
                         items.clone(),
                         Box::new(|entry, this, window, cx| {
@@ -1214,7 +1214,7 @@ impl StatefulModal for DevContainerModal {
                     description: first_option
                         .description
                         .clone()
-                        .unwrap_or_else(|| "".to_string()),
+                        .unwrap_or_else(|| "".to_owned()),
                     navigable_options: next_option_entries,
                 });
 
@@ -1256,7 +1256,7 @@ impl StatefulModal for DevContainerModal {
                     description: next_option
                         .description
                         .clone()
-                        .unwrap_or_else(|| "".to_string()),
+                        .unwrap_or_else(|| "".to_owned()),
                     navigable_options: next_option_entries,
                 });
 
@@ -1289,7 +1289,7 @@ impl StatefulModal for DevContainerModal {
                         })
                         .collect::<Vec<FeatureEntry>>();
                     let delegate = FeaturePickerDelegate::new(
-                        "Select features to add".to_string(),
+                        "Select features to add".to_owned(),
                         cx.weak_entity(),
                         features,
                         template_entry.clone(),
@@ -1443,9 +1443,9 @@ impl TemplateOptions {
             // If not string, must be boolean
             _ => {
                 if self.default == "true" {
-                    vec!["true".to_string(), "false".to_string()]
+                    vec!["true".to_owned(), "false".to_owned()]
                 } else {
-                    vec!["false".to_string(), "true".to_string()]
+                    vec!["false".to_owned(), "true".to_owned()]
                 }
             }
         }
@@ -1464,9 +1464,9 @@ struct DevContainerFeature {
 impl DevContainerFeature {
     fn major_version(&self) -> String {
         let Some(mv) = self.version.get(..1) else {
-            return "".to_string();
+            return "".to_owned();
         };
-        mv.to_string()
+        mv.to_owned()
     }
 }
 

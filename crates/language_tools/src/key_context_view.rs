@@ -79,7 +79,7 @@ impl KeyContextView {
                     let predicate = if let Some(predicate) = binding.predicate() {
                         format!("{}", predicate)
                     } else {
-                        "".to_string()
+                        "".to_owned()
                     };
                     let mut name = binding.action().name();
                     if name == "zed::NoAction" {

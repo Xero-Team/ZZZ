@@ -13,8 +13,8 @@ fn migrate_one(obj: &mut serde_json::Map<String, Value>) -> Result<()> {
     };
 
     *relative_line_numbers = match relative_line_numbers {
-        Value::Bool(true) => Value::String("enabled".to_string()),
-        Value::Bool(false) => Value::String("disabled".to_string()),
+        Value::Bool(true) => Value::String("enabled".to_owned()),
+        Value::Bool(false) => Value::String("disabled".to_owned()),
         Value::String(s) if s == "enabled" || s == "disabled" || s == "wrapped" => return Ok(()),
         _ => anyhow::bail!("Expected relative_line_numbers to be a boolean"),
     };

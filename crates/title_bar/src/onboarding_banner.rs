@@ -40,7 +40,7 @@ impl OnboardingBanner {
             entity: cx.entity(),
         });
         Self {
-            source: source.to_string(),
+            source: source.to_owned(),
             details: BannerDetails {
                 action,
                 icon_name,
@@ -70,7 +70,7 @@ impl OnboardingBanner {
 
 fn dismissed_at_key(source: &str) -> String {
     if source == "Git Onboarding" {
-        "zed_git_banner_dismissed_at".to_string()
+        "zed_git_banner_dismissed_at".to_owned()
     } else {
         format!(
             "{}_banner_dismissed_at",

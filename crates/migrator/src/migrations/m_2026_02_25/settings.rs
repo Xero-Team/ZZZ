@@ -101,22 +101,22 @@ fn migrate_builtin_entry(
         }
 
         let mut custom_obj = serde_json::Map::new();
-        custom_obj.insert("type".to_string(), Value::String("custom".to_string()));
+        custom_obj.insert("type".to_owned(), Value::String("custom".to_owned()));
 
         if has_command {
             if let Some(command) = old_obj.get("command") {
-                custom_obj.insert("command".to_string(), command.clone());
+                custom_obj.insert("command".to_owned(), command.clone());
             }
             if let Some(args) = old_obj.get("args") {
                 if !args.as_array().is_some_and(|a| a.is_empty()) {
-                    custom_obj.insert("args".to_string(), args.clone());
+                    custom_obj.insert("args".to_owned(), args.clone());
                 }
             }
         } else {
             // ignore_system_version: false — the user wants the binary from $PATH
             custom_obj.insert(
-                "command".to_string(),
-                Value::String(mapping.old_key.to_string()),
+                "command".to_owned(),
+                Value::String(mapping.old_key.to_owned()),
             );
         }
 
@@ -128,7 +128,7 @@ fn migrate_builtin_entry(
                     Value::Object(map) if map.is_empty() => {}
                     Value::Null => {}
                     _ => {
-                        custom_obj.insert(field.to_string(), value.clone());
+                        custom_obj.insert(field.to_owned(), value.clone());
                     }
                 }
             }
@@ -138,7 +138,7 @@ fn migrate_builtin_entry(
     } else {
         // Build a registry entry with compatible fields only.
         let mut registry_obj = serde_json::Map::new();
-        registry_obj.insert("type".to_string(), Value::String("registry".to_string()));
+        registry_obj.insert("type".to_owned(), Value::String("registry".to_owned()));
 
         for &field in REGISTRY_COMPATIBLE_FIELDS {
             if let Some(value) = old_obj.get(field) {
@@ -147,15 +147,12 @@ fn migrate_builtin_entry(
                     Value::Object(map) if map.is_empty() => {}
                     Value::Null => {}
                     _ => {
-                        registry_obj.insert(field.to_string(), value.clone());
+                        registry_obj.insert(field.to_owned(), value.clone());
                     }
                 }
             }
         }
 
-        servers_map.insert(
-            mapping.registry_key.to_string(),
-            Value::Object(registry_obj),
-        );
+        servers_map.insert(mapping.registry_key.to_owned(), Value::Object(registry_obj));
     }
 }

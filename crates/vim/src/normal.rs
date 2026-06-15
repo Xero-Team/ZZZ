@@ -356,14 +356,14 @@ pub(crate) fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
                             )
                             .unwrap_or(old_text.len());
                         points.end.column -= (old_text.len() - common_suffix_starts_at) as u32;
-                        old_text = old_text.split_at(common_suffix_starts_at).0.to_string();
+                        old_text = old_text.split_at(common_suffix_starts_at).0.to_owned();
                         let common_prefix_len = old_text
                             .char_indices()
                             .zip(new_text.chars())
                             .find_map(|((i, a), b)| if a != b { Some(i) } else { None })
                             .unwrap_or(0);
                         points.start.column = common_prefix_len as u32;
-                        old_text = old_text.split_at(common_prefix_len).1.to_string();
+                        old_text = old_text.split_at(common_prefix_len).1.to_owned();
 
                         Some((points, old_text))
                     })
@@ -818,7 +818,7 @@ impl Vim {
                         snapshot.indent_and_comment_for_line(MultiBufferRow(row), cx)
                     };
                     let end_of_line = Point::new(row, snapshot.line_len(MultiBufferRow(row)));
-                    let edit = (end_of_line..end_of_line, "\n".to_string() + &indent);
+                    let edit = (end_of_line..end_of_line, "\n".to_owned() + &indent);
                     if auto_indent_mode == AutoIndentMode::None {
                         plain_edits.push(edit);
                     } else {

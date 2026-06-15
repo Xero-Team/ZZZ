@@ -312,7 +312,7 @@ impl KernelSpecification {
             Self::PythonEnv(spec) => SharedString::from(
                 spec.environment_kind
                     .clone()
-                    .unwrap_or_else(|| "Python Environment".to_string()),
+                    .unwrap_or_else(|| "Python Environment".to_owned()),
             ),
             Self::JupyterServer(_) => "Jupyter Server".into(),
             Self::SshRemote(_) => "SSH Remote".into(),
@@ -402,7 +402,7 @@ fn extract_environment_kind(toolchain_json: &serde_json::Value) -> Option<String
         "UvWorkspace" => "uv (Workspace)",
         _ => kind_str,
     };
-    Some(label.to_string())
+    Some(label.to_owned())
 }
 
 pub fn python_env_kernel_specifications(
@@ -467,13 +467,13 @@ pub fn python_env_kernel_specifications(
                         let default_kernelspec = JupyterKernelspec {
                             argv: vec![
                                 toolchain.path.to_string(),
-                                "-m".to_string(),
-                                "ipykernel_launcher".to_string(),
-                                "-f".to_string(),
-                                "{connection_file}".to_string(),
+                                "-m".to_owned(),
+                                "ipykernel_launcher".to_owned(),
+                                "-f".to_owned(),
+                                "{connection_file}".to_owned(),
                             ],
                             display_name: toolchain.name.to_string(),
-                            language: "python".to_string(),
+                            language: "python".to_owned(),
                             interrupt_mode: None,
                             metadata: None,
                             env: None,
@@ -520,12 +520,12 @@ pub fn python_env_kernel_specifications(
                             let mut paths = std::env::split_paths(&path_var).collect::<Vec<_>>();
                             paths.insert(0, python_bin_dir.to_path_buf());
                             if let Ok(new_path) = std::env::join_paths(paths) {
-                                env.insert("PATH".to_string(), new_path.to_string_lossy().to_string());
+                                env.insert("PATH".to_owned(), new_path.to_string_lossy().to_string());
                             }
                         }
 
                         if let Some(venv_root) = python_bin_dir.parent() {
-                            env.insert("VIRTUAL_ENV".to_string(), venv_root.to_string_lossy().to_string());
+                            env.insert("VIRTUAL_ENV".to_owned(), venv_root.to_string_lossy().to_string());
                         }
                     }
 
@@ -543,13 +543,13 @@ pub fn python_env_kernel_specifications(
                     let kernelspec = JupyterKernelspec {
                         argv: vec![
                             python_path.clone(),
-                            "-m".to_string(),
-                            "ipykernel_launcher".to_string(),
-                            "-f".to_string(),
-                            "{connection_file}".to_string(),
+                            "-m".to_owned(),
+                            "ipykernel_launcher".to_owned(),
+                            "-f".to_owned(),
+                            "{connection_file}".to_owned(),
                         ],
                         display_name: toolchain.name.to_string(),
-                        language: "python".to_string(),
+                        language: "python".to_owned(),
                         interrupt_mode: None,
                         metadata: None,
                         env: Some(env),
@@ -694,13 +694,13 @@ impl KernelStatus {
 impl ToString for KernelStatus {
     fn to_string(&self) -> String {
         match self {
-            KernelStatus::Idle => "Idle".to_string(),
-            KernelStatus::Busy => "Busy".to_string(),
-            KernelStatus::Starting => "Starting".to_string(),
-            KernelStatus::Error => "Error".to_string(),
-            KernelStatus::ShuttingDown => "Shutting Down".to_string(),
-            KernelStatus::Shutdown => "Shutdown".to_string(),
-            KernelStatus::Restarting => "Restarting".to_string(),
+            KernelStatus::Idle => "Idle".to_owned(),
+            KernelStatus::Busy => "Busy".to_owned(),
+            KernelStatus::Starting => "Starting".to_owned(),
+            KernelStatus::Error => "Error".to_owned(),
+            KernelStatus::ShuttingDown => "Shutting Down".to_owned(),
+            KernelStatus::Shutdown => "Shutdown".to_owned(),
+            KernelStatus::Restarting => "Restarting".to_owned(),
         }
     }
 }

@@ -39,7 +39,7 @@ fn format_report(snapshot: &InputLatencySnapshot, previous: &ReporterState) -> S
     let total = histogram.len();
 
     if total == 0 {
-        return "No input latency samples recorded yet.\n\nTry typing or clicking in a buffer first.".to_string();
+        return "No input latency samples recorded yet.\n\nTry typing or clicking in a buffer first.".to_owned();
     }
 
     let percentiles: &[(&str, f64)] = &[

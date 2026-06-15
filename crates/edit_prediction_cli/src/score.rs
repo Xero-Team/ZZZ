@@ -174,7 +174,7 @@ pub fn print_report(examples: &[Example], verbose: bool) {
             let qa_conf_str = qa_result
                 .and_then(|q| q.confidence)
                 .map(|v| format!("{}", v))
-                .unwrap_or("-".to_string());
+                .unwrap_or("-".to_owned());
 
             // Format wrong editable region metric
             let wrong_er_str = match score.wrong_editable_region {
@@ -185,10 +185,10 @@ pub fn print_report(examples: &[Example], verbose: bool) {
 
             // Format cursor metric
             let cursor_str = match (score.cursor_exact_match, score.cursor_distance) {
-                (Some(true), _) => "✓".to_string(),
+                (Some(true), _) => "✓".to_owned(),
                 (Some(false), Some(dist)) => format!("±{}", dist),
-                (Some(false), None) => "✗".to_string(),
-                (None, _) => "-".to_string(),
+                (Some(false), None) => "✗".to_owned(),
+                (None, _) => "-".to_owned(),
             };
 
             if verbose || printed_lines < MAX_EXAMPLES_DEFAULT {
@@ -313,7 +313,7 @@ pub fn print_report(examples: &[Example], verbose: bool) {
                 qa_reverts_count as f32 / qa_reverts_total as f32 * 100.0
             )
         } else {
-            "-".to_string()
+            "-".to_owned()
         };
         let qa_conf_str = if qa_confidence_count > 0 {
             format!(
@@ -321,7 +321,7 @@ pub fn print_report(examples: &[Example], verbose: bool) {
                 qa_confidence_sum as f32 / qa_confidence_count as f32
             )
         } else {
-            "-".to_string()
+            "-".to_owned()
         };
         let cursor_str = if cursor_total > 0 {
             format!(
@@ -329,7 +329,7 @@ pub fn print_report(examples: &[Example], verbose: bool) {
                 cursor_exact_matches as f32 / cursor_total as f32 * 100.0
             )
         } else {
-            "-".to_string()
+            "-".to_owned()
         };
         let wrong_er_str = if wrong_editable_region_total > 0 {
             format!(
@@ -337,7 +337,7 @@ pub fn print_report(examples: &[Example], verbose: bool) {
                 wrong_editable_region_count as f32 / wrong_editable_region_total as f32 * 100.0
             )
         } else {
-            "-".to_string()
+            "-".to_owned()
         };
         let isolated_ws_str = if total_scores > 0 {
             format!(
@@ -347,7 +347,7 @@ pub fn print_report(examples: &[Example], verbose: bool) {
                 isolated_whitespace_count as f32 / total_scores as f32 * 100.0
             )
         } else {
-            "-".to_string()
+            "-".to_owned()
         };
         let avg_cursor_distance = if cursor_distance_count > 0 {
             Some(cursor_distance_sum as f32 / cursor_distance_count as f32)
@@ -480,7 +480,7 @@ fn percentile(sorted_values: &[usize], p: usize) -> usize {
 
 fn truncate_name(name: &str, max_len: usize) -> String {
     if name.len() <= max_len {
-        name.to_string()
+        name.to_owned()
     } else {
         format!("{}...", &name[..max_len - 3])
     }

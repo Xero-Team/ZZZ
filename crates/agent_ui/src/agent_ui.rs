@@ -90,7 +90,7 @@ pub(crate) fn resolve_agent_image(
 ) -> Option<ImageSource> {
     if dest_url.starts_with("http://") || dest_url.starts_with("https://") {
         return Some(ImageSource::Resource(Resource::Uri(SharedUri::from(
-            dest_url.to_string(),
+            dest_url.to_owned(),
         ))));
     }
 
@@ -621,8 +621,8 @@ fn maybe_backfill_editor_layout(fs: Arc<dyn Fs>, is_new_install: bool, cx: &mut 
 
         db::write_and_log(cx, move || async move {
             kvp.write_kvp(
-                PARALLEL_AGENT_LAYOUT_BACKFILL_KEY.to_string(),
-                "1".to_string(),
+                PARALLEL_AGENT_LAYOUT_BACKFILL_KEY.to_owned(),
+                "1".to_owned(),
             )
             .await
         });

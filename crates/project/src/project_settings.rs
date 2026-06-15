@@ -690,7 +690,7 @@ impl Settings for ProjectSettings {
             worktree_directory: git
                 .worktree_directory
                 .clone()
-                .unwrap_or_else(|| DEFAULT_WORKTREE_DIRECTORY.to_string()),
+                .unwrap_or_else(|| DEFAULT_WORKTREE_DIRECTORY.to_owned()),
         };
         Self {
             context_servers: project

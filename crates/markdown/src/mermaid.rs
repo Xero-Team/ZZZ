@@ -164,7 +164,7 @@ fn build_mermaid_theme(cx: &Context<Markdown>) -> mermaid_rs_renderer::Theme {
     let theme_settings = ThemeSettings::get_global(cx);
     let mut theme = mermaid_rs_renderer::Theme::modern();
 
-    theme.font_family = mermaid_font_family(theme_settings.ui_font.family.as_ref()).to_string();
+    theme.font_family = mermaid_font_family(theme_settings.ui_font.family.as_ref()).to_owned();
     theme.background = hsla_to_hex(colors.editor_background);
     theme.primary_color = hsla_to_hex(colors.surface_background);
     theme.primary_text_color = hsla_to_hex(colors.text);
@@ -181,7 +181,7 @@ fn build_mermaid_theme(cx: &Context<Markdown>) -> mermaid_rs_renderer::Theme {
         std::array::from_fn(|i| hsla_to_hex(accents.color_for_index(i as u32)));
     theme.pie_colors = pie_colors;
     theme.pie_title_text_color = hsla_to_hex(colors.text);
-    theme.pie_section_text_color = "#fff".to_string();
+    theme.pie_section_text_color = "#fff".to_owned();
     theme.pie_legend_text_color = hsla_to_hex(colors.text);
     theme.pie_stroke_color = hsla_to_hex(colors.border);
     theme.pie_outer_stroke_color = hsla_to_hex(colors.border);
@@ -198,7 +198,7 @@ fn build_mermaid_theme(cx: &Context<Markdown>) -> mermaid_rs_renderer::Theme {
     theme.git_colors = std::array::from_fn(|i| hsla_to_hex(players.0[i % players.0.len()].cursor));
     theme.git_inv_colors =
         std::array::from_fn(|i| hsla_to_hex(players.0[i % players.0.len()].background));
-    theme.git_branch_label_colors = std::array::from_fn(|_| "#fff".to_string());
+    theme.git_branch_label_colors = std::array::from_fn(|_| "#fff".to_owned());
     theme.git_commit_label_color = hsla_to_hex(colors.text);
     theme.git_commit_label_background = hsla_to_hex(colors.element_background);
     theme.git_tag_label_color = hsla_to_hex(colors.text);
@@ -307,7 +307,7 @@ pub(crate) fn extract_mermaid_diagrams(
         let contents = source[metadata.content_range.clone()]
             .strip_suffix('\n')
             .unwrap_or(&source[metadata.content_range.clone()])
-            .to_string();
+            .to_owned();
         mermaid_diagrams.insert(
             source_range.start,
             ParsedMarkdownMermaidDiagram {

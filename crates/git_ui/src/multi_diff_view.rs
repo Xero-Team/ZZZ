@@ -240,7 +240,7 @@ impl MultiDiffView {
 
     fn title(&self) -> SharedString {
         let suffix = if self.file_count == 1 {
-            "1 file".to_string()
+            "1 file".to_owned()
         } else {
             format!("{} files", self.file_count)
         };

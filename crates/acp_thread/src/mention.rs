@@ -223,7 +223,7 @@ impl MentionUri {
                     })
                 } else if path.starts_with("/agent/pasted-image") {
                     let name =
-                        single_query_param(&url, "name")?.unwrap_or_else(|| "Image".to_string());
+                        single_query_param(&url, "name")?.unwrap_or_else(|| "Image".to_owned());
                     Ok(Self::PastedImage { name })
                 } else if path.starts_with("/agent/untitled-buffer") {
                     let fragment = url
@@ -244,7 +244,7 @@ impl MentionUri {
                     let path =
                         single_query_param(&url, "path")?.context("Missing path for symbol")?;
                     Ok(Self::Symbol {
-                        name: name.to_string(),
+                        name: name.to_owned(),
                         abs_path: path.into(),
                         line_range,
                     })
@@ -273,13 +273,13 @@ impl MentionUri {
                     })
                 } else if path.starts_with("/agent/terminal-selection") {
                     let line_count = single_query_param(&url, "lines")?
-                        .unwrap_or_else(|| "0".to_string())
+                        .unwrap_or_else(|| "0".to_owned())
                         .parse::<u32>()
                         .unwrap_or(0);
                     Ok(Self::TerminalSelection { line_count })
                 } else if path.starts_with("/agent/git-diff") {
                     let base_ref =
-                        single_query_param(&url, "base")?.unwrap_or_else(|| "main".to_string());
+                        single_query_param(&url, "base")?.unwrap_or_else(|| "main".to_owned());
                     Ok(Self::GitDiff { base_ref })
                 } else if path.starts_with("/agent/merge-conflict") {
                     let file_path = single_query_param(&url, "path")?.unwrap_or_default();
@@ -304,10 +304,10 @@ impl MentionUri {
             MentionUri::Symbol { name, .. } => name.clone(),
             MentionUri::Thread { name, .. } => name.clone(),
             MentionUri::Rule { name, .. } => name.clone(),
-            MentionUri::Diagnostics { .. } => "Diagnostics".to_string(),
+            MentionUri::Diagnostics { .. } => "Diagnostics".to_owned(),
             MentionUri::TerminalSelection { line_count } => {
                 if *line_count == 1 {
-                    "Terminal (1 line)".to_string()
+                    "Terminal (1 line)".to_owned()
                 } else {
                     format!("Terminal ({} lines)", line_count)
                 }

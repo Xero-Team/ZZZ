@@ -203,7 +203,7 @@ impl ThemeRegistry {
             .read()
             .themes
             .get(name)
-            .ok_or_else(|| ThemeNotFoundError(name.to_string().into()))
+            .ok_or_else(|| ThemeNotFoundError(name.to_owned().into()))
             .cloned()
     }
 
@@ -231,7 +231,7 @@ impl ThemeRegistry {
             .read()
             .icon_themes
             .get(name)
-            .ok_or_else(|| IconThemeNotFoundError(name.to_string().into()))
+            .ok_or_else(|| IconThemeNotFoundError(name.to_owned().into()))
             .cloned()
     }
 

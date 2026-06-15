@@ -1156,9 +1156,9 @@ impl Vim {
             } => {
                 self.update_editor(cx, |vim, editor, cx| {
                     let mark = if *is_deactivate {
-                        "\"".to_string()
+                        "\"".to_owned()
                     } else {
-                        "'".to_string()
+                        "'".to_owned()
                     };
                     vim.set_mark(mark, vec![*anchor], editor.buffer(), window, cx);
                 });
@@ -1457,7 +1457,7 @@ impl Vim {
             Mode::HelixNormal => "helix_normal",
             Mode::HelixSelect => "helix_select",
         }
-        .to_string();
+        .to_owned();
 
         let mut operator_id = "none";
 
@@ -1471,13 +1471,13 @@ impl Vim {
         if let Some(active_operator) = active_operator {
             if active_operator.is_waiting(self.mode) {
                 if matches!(active_operator, Operator::Literal { .. }) {
-                    mode = "literal".to_string();
+                    mode = "literal".to_owned();
                 } else {
-                    mode = "waiting".to_string();
+                    mode = "waiting".to_owned();
                 }
             } else {
                 operator_id = active_operator.id();
-                mode = "operator".to_string();
+                mode = "operator".to_owned();
             }
         }
 

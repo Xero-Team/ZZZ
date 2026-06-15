@@ -20,7 +20,7 @@ fn rename_path_search_tool(
     let tool_name = contents.get(tool_name_range.clone())?;
 
     if tool_name == "path_search" {
-        return Some((tool_name_range, "find_path".to_string()));
+        return Some((tool_name_range, "find_path".to_owned()));
     }
 
     None

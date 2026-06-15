@@ -65,7 +65,7 @@ fn to_anthropic_content(content: MessageContent) -> Option<RequestContent> {
     match content {
         MessageContent::Text(text) => {
             let text = if text.chars().last().is_some_and(|c| c.is_whitespace()) {
-                text.trim_end().to_string()
+                text.trim_end().to_owned()
             } else {
                 text
             };
@@ -103,8 +103,8 @@ fn to_anthropic_content(content: MessageContent) -> Option<RequestContent> {
         }
         MessageContent::Image(image) => Some(RequestContent::Image {
             source: ImageSource {
-                source_type: "base64".to_string(),
-                media_type: "image/png".to_string(),
+                source_type: "base64".to_owned(),
+                media_type: "image/png".to_owned(),
                 data: image.source.to_string(),
             },
             cache_control: None,
@@ -130,8 +130,8 @@ fn to_anthropic_content(content: MessageContent) -> Option<RequestContent> {
                             },
                             LanguageModelToolResultContent::Image(image) => ToolResultPart::Image {
                                 source: ImageSource {
-                                    source_type: "base64".to_string(),
-                                    media_type: "image/png".to_string(),
+                                    source_type: "base64".to_owned(),
+                                    media_type: "image/png".to_owned(),
                                     data: image.source.to_string(),
                                 },
                             },
@@ -392,7 +392,7 @@ impl AnthropicEventMapper {
                 }
                 ContentDelta::SignatureDelta { signature } => {
                     vec![Ok(LanguageModelCompletionEvent::Thinking {
-                        text: "".to_string(),
+                        text: "".to_owned(),
                         signature: Some(signature),
                     })]
                 }

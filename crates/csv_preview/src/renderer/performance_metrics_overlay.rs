@@ -56,12 +56,12 @@ fn format_performance_metrics(metrics: &PerformanceMetrics) -> Vec<String> {
     if !timing_display.is_empty() {
         lines.extend(timing_display.lines().map(|line| format!("- {}", line)));
     } else {
-        lines.push("- No timing data yet".to_string());
+        lines.push("- No timing data yet".to_owned());
     }
 
     // Add rendered indices information
     if metrics.rendered_indices.is_empty() {
-        lines.push("- Rendered: none".to_string());
+        lines.push("- Rendered: none".to_owned());
     } else {
         lines.push(format!(
             "- Rendered: {} rows",

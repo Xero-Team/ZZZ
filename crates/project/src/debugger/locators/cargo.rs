@@ -103,7 +103,7 @@ impl DapLocator for CargoLocator {
         };
         Some(DebugScenario {
             adapter: adapter.0.clone(),
-            label: resolved_label.to_string().into(),
+            label: resolved_label.to_owned().into(),
             build: Some(BuildTaskDefinition::Template {
                 task_template,
                 locator_name: Some(self.name()),

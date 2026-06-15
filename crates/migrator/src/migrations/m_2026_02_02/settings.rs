@@ -35,7 +35,7 @@ fn migrate_one(obj: &mut serde_json::Map<String, Value>) -> Result<()> {
     };
 
     if !edit_predictions_obj.contains_key("provider") {
-        edit_predictions_obj.insert("provider".to_string(), provider);
+        edit_predictions_obj.insert("provider".to_owned(), provider);
     }
 
     Ok(())

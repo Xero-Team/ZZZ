@@ -13,7 +13,7 @@ pub fn publish_extension_cli() -> Workflow {
     let update_sha_in_extensions = update_sha_in_extensions(&publish);
 
     named::workflow()
-        .on(Event::default().push(Push::default().tags(vec!["extension-cli".to_string()])))
+        .on(Event::default().push(Push::default().tags(vec!["extension-cli".to_owned()])))
         .add_env(("CARGO_TERM_COLOR", "always"))
         .add_env(("CARGO_INCREMENTAL", 0))
         .add_job(publish.name, publish.job)

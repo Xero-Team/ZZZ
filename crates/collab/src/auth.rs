@@ -23,7 +23,7 @@ pub async fn validate_header(mut req: Request, next: Next) -> impl IntoResponse 
         .ok_or_else(|| {
             Error::http(
                 StatusCode::UNAUTHORIZED,
-                "missing authorization header".to_string(),
+                "missing authorization header".to_owned(),
             )
         })?
         .split_whitespace();
@@ -34,21 +34,21 @@ pub async fn validate_header(mut req: Request, next: Next) -> impl IntoResponse 
     if first == "dev-server-token" {
         Err(Error::http(
             StatusCode::UNAUTHORIZED,
-            "Dev servers were removed in Zed 0.157 please upgrade to SSH remoting".to_string(),
+            "Dev servers were removed in Zed 0.157 please upgrade to SSH remoting".to_owned(),
         ))?;
     }
 
     let user_id = UserId(first.parse().map_err(|_| {
         Error::http(
             StatusCode::BAD_REQUEST,
-            "missing user id in authorization header".to_string(),
+            "missing user id in authorization header".to_owned(),
         )
     })?);
 
     let access_token = auth_header.next().ok_or_else(|| {
         Error::http(
             StatusCode::BAD_REQUEST,
-            "missing access token in authorization header".to_string(),
+            "missing access token in authorization header".to_owned(),
         )
     })?;
 
@@ -82,6 +82,6 @@ pub async fn validate_header(mut req: Request, next: Next) -> impl IntoResponse 
 
     Err(Error::http(
         StatusCode::UNAUTHORIZED,
-        "invalid credentials".to_string(),
+        "invalid credentials".to_owned(),
     ))
 }

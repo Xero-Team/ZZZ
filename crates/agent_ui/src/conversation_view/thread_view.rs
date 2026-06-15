@@ -81,7 +81,7 @@ impl ThreadFeedbackState {
                     agent: agent_telemetry_id.to_string(),
                     session_id: session_id.to_string(),
                     parent_session_id: parent_session_id.map(|id| id.to_string()),
-                    rating: rating.to_string(),
+                    rating: rating.to_owned(),
                     thread,
                 })
                 .await?;
@@ -2455,7 +2455,7 @@ impl ThreadView {
                         });
 
                         let file_name = path.file_name().map(|name| {
-                            Label::new(name.to_string())
+                            Label::new(name.to_owned())
                                 .size(LabelSize::XSmall)
                                 .buffer_font(cx)
                                 .ml_1()
@@ -2647,7 +2647,7 @@ impl ThreadView {
                     return None;
                 };
                 let info = tool_call.subagent_session_info.as_ref()?;
-                let summary_text = tool_call.label.read(cx).source().to_string();
+                let summary_text = tool_call.label.read(cx).source().to_owned();
                 let subagent_summary = if summary_text.is_empty() {
                     tr(cx, "agent_ui.thread_view.subagent", "Subagent")
                 } else {
@@ -2974,7 +2974,7 @@ impl ThreadView {
                 v_flex().children(plan.entries.iter().enumerate().flat_map(|(index, entry)| {
                     let entry_bg = cx.theme().colors().editor_background;
                     let tooltip_text: SharedString =
-                        entry.content.read(cx).source().to_string().into();
+                        entry.content.read(cx).source().to_owned().into();
 
                     Some(
                         h_flex()
@@ -6044,7 +6044,7 @@ impl ThreadView {
                                 if markdown.trim().is_empty() {
                                     None
                                 } else {
-                                    Some(markdown.to_string())
+                                    Some(markdown.to_owned())
                                 }
                             }
                             AssistantMessageChunk::Thought { .. } => None,
@@ -6110,7 +6110,7 @@ impl ThreadView {
             .strip_prefix("```\n")
             .and_then(|s| s.strip_suffix("\n```"))
             .unwrap_or(&command_source)
-            .to_string();
+            .to_owned();
 
         let mut style = MarkdownStyle::themed(MarkdownFont::Agent, window, cx).with_buffer_font(cx);
         style.container_style.text.font_size = Some(rems_from_px(12.).into());
@@ -6219,7 +6219,7 @@ impl ThreadView {
         let working_dir = working_dir
             .as_ref()
             .map(|path| path.display().to_string())
-            .unwrap_or_else(|| "current directory".to_string());
+            .unwrap_or_else(|| "current directory".to_owned());
 
         let command_element = self.render_collapsible_command(
             header_group.clone(),
@@ -7975,7 +7975,7 @@ impl ThreadView {
                     .to_string()
                     .into()
             } else {
-                abs_path.to_string().into()
+                abs_path.to_owned().into()
             }
         } else {
             uri.clone()
@@ -8288,7 +8288,7 @@ impl ThreadView {
             .as_ref()
             .and_then(|t| t.read(cx).title())
             .filter(|t| !t.is_empty());
-        let tool_call_label = tool_call.label.read(cx).source().to_string();
+        let tool_call_label = tool_call.label.read(cx).source().to_owned();
         let has_tool_call_label = !tool_call_label.is_empty();
 
         let has_title = thread_title.is_some() || has_tool_call_label;
@@ -8696,7 +8696,7 @@ impl ThreadView {
             tool_call.content.iter().find_map(|content| {
                 if let ToolCallContent::ContentBlock(block) = content {
                     if let acp_thread::ContentBlock::Markdown { markdown } = block {
-                        let source = markdown.read(cx).source().to_string();
+                        let source = markdown.read(cx).source().to_owned();
                         if !source.is_empty() {
                             if source == "User canceled" {
                                 return None;
@@ -9323,7 +9323,7 @@ impl ThreadView {
             .next()
             .and_then(|p| p.file_name())
             .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| "one folder".to_string());
+            .unwrap_or_else(|| "one folder".to_owned());
 
         let description = app_i18n::tr(
             cx,

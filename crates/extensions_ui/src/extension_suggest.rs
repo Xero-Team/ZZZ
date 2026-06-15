@@ -197,7 +197,7 @@ pub(crate) fn suggest(buffer: Entity<Buffer>, window: &mut Window, cx: &mut Cont
                     let key = language_extension_key(&extension_id);
                     let kvp = KeyValueStore::global(cx);
                     cx.background_spawn(async move {
-                        kvp.write_kvp(key, "dismissed".to_string()).await.log_err()
+                        kvp.write_kvp(key, "dismissed".to_owned()).await.log_err()
                     })
                     .detach();
                 })

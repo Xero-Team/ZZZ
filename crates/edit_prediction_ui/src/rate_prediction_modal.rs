@@ -1299,9 +1299,9 @@ impl RatePredictionsModal {
                         "edit_prediction_ui.rate_prediction.untitled",
                         "untitled",
                     ),
-                    |file| file.file_name(cx).to_string().into(),
+                    |file| file.file_name(cx).to_owned().into(),
                 );
-                let file_path = file.map(|file| file.path().as_unix_str().to_string());
+                let file_path = file.map(|file| file.path().as_unix_str().to_owned());
 
                 ListItem::new(completion.id.clone())
                     .inset(true)

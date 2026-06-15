@@ -131,7 +131,7 @@ impl Progress {
     pub fn start_group(self: &Arc<Self>, example_name: &str) -> ExampleProgress {
         ExampleProgress {
             progress: self.clone(),
-            example_name: example_name.to_string(),
+            example_name: example_name.to_owned(),
         }
     }
 
@@ -205,7 +205,7 @@ impl Progress {
             inner.max_example_name_len = example_name.len().min(max_name_width);
         }
         inner.in_progress.insert(
-            example_name.to_string(),
+            example_name.to_owned(),
             InProgressTask {
                 step,
                 started_at: Instant::now(),
@@ -236,7 +236,7 @@ impl Progress {
         StepProgress {
             progress: self.clone(),
             step,
-            example_name: example_name.to_string(),
+            example_name: example_name.to_owned(),
         }
     }
 
@@ -255,7 +255,7 @@ impl Progress {
 
             inner.completed.push(CompletedTask {
                 step: task.step,
-                example_name: example_name.to_string(),
+                example_name: example_name.to_owned(),
                 duration,
                 info: task.info,
             });
@@ -269,7 +269,7 @@ impl Progress {
             }
             Self::print_status_lines(&mut inner);
         } else {
-            inner.in_progress.insert(example_name.to_string(), task);
+            inner.in_progress.insert(example_name.to_owned(), task);
         }
     }
 

@@ -1539,7 +1539,7 @@ impl RemoteServerProjects {
             return;
         };
         let query = self.filter_editor.read(cx).text(cx);
-        let query = query.trim().to_string();
+        let query = query.trim().to_owned();
 
         // Signal cancellation to the previously-spawned task: it still holds
         // its own `Arc` clone of the old `filter_cancel`, so this store is
@@ -1871,10 +1871,10 @@ impl RemoteServerProjects {
                                     "Failed to connect",
                                 )
                             })
-                            .unwrap_or_else(|_| "Failed to connect".to_string());
+                            .unwrap_or_else(|_| "Failed to connect".to_owned());
                         let ok_label = cx
                             .update(|_, cx| i18n::tr(cx, "zed.common.ok", "Ok"))
-                            .unwrap_or_else(|_| "Ok".to_string());
+                            .unwrap_or_else(|_| "Ok".to_owned());
                         cx.prompt(
                             gpui::PromptLevel::Critical,
                             &title,
@@ -2183,11 +2183,11 @@ impl RemoteServerProjects {
                                 )
                             })
                             .unwrap_or_else(|_| {
-                                "Failed to start Dev Container. See logs for details".to_string()
+                                "Failed to start Dev Container. See logs for details".to_owned()
                             });
                         let ok_label = cx
                             .update(|_, cx| i18n::tr(cx, "zed.common.ok", "Ok"))
-                            .unwrap_or_else(|_| "Ok".to_string());
+                            .unwrap_or_else(|_| "Ok".to_owned());
                         cx.prompt(
                             gpui::PromptLevel::Critical,
                             &title,
@@ -2251,10 +2251,10 @@ impl RemoteServerProjects {
                             "Failed to connect",
                         )
                     })
-                    .unwrap_or_else(|_| "Failed to connect".to_string());
+                    .unwrap_or_else(|_| "Failed to connect".to_owned());
                 let ok_label = cx
                     .update(|_, cx| i18n::tr(cx, "zed.common.ok", "Ok"))
-                    .unwrap_or_else(|_| "Ok".to_string());
+                    .unwrap_or_else(|_| "Ok".to_owned());
                 cx.prompt(
                     gpui::PromptLevel::Critical,
                     &title,
@@ -3460,7 +3460,7 @@ fn spawn_ssh_config_watch(fs: Arc<dyn Fs>, cx: &Context<RemoteServerProjects>) -
 }
 
 fn get_text(element: &Entity<Editor>, cx: &mut App) -> String {
-    element.read(cx).text(cx).trim().to_string()
+    element.read(cx).text(cx).trim().to_owned()
 }
 
 impl ModalView for RemoteServerProjects {

@@ -104,11 +104,11 @@ impl SshRunningKernel {
                 .context("missing hb_port")? as u16;
 
             let forwards = vec![
-                (local_ports[0], "127.0.0.1".to_string(), remote_shell_port),
-                (local_ports[1], "127.0.0.1".to_string(), remote_iopub_port),
-                (local_ports[2], "127.0.0.1".to_string(), remote_stdin_port),
-                (local_ports[3], "127.0.0.1".to_string(), remote_control_port),
-                (local_ports[4], "127.0.0.1".to_string(), remote_hb_port),
+                (local_ports[0], "127.0.0.1".to_owned(), remote_shell_port),
+                (local_ports[1], "127.0.0.1".to_owned(), remote_iopub_port),
+                (local_ports[2], "127.0.0.1".to_owned(), remote_stdin_port),
+                (local_ports[3], "127.0.0.1".to_owned(), remote_control_port),
+                (local_ports[4], "127.0.0.1".to_owned(), remote_hb_port),
             ];
 
             let remote_client = remote_client.ok_or_else(|| anyhow::anyhow!("no remote client"))?;

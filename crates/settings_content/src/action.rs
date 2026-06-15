@@ -26,7 +26,7 @@ fn add_deprecation(schema: &mut Schema, message: String) {
 /// Small helper function to populate the schema's `description` field with the
 /// provided description.
 fn add_description(schema: &mut Schema, description: &str) {
-    schema.insert("description".into(), Value::String(description.to_string()));
+    schema.insert("description".into(), Value::String(description.to_owned()));
 }
 
 impl ActionName {

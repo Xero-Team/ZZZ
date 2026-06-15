@@ -40,7 +40,7 @@ impl PlainLlmClient {
         messages: Vec<Message>,
     ) -> Result<AnthropicResponse> {
         let request = AnthropicRequest {
-            model: model.to_string(),
+            model: model.to_owned(),
             max_tokens,
             messages,
             tools: Vec::new(),
@@ -82,7 +82,7 @@ impl PlainLlmClient {
         F: FnMut(usize, &str),
     {
         let request = AnthropicRequest {
-            model: model.to_string(),
+            model: model.to_owned(),
             max_tokens,
             messages,
             tools: Vec::new(),
@@ -243,15 +243,15 @@ impl BatchingLlmClient {
             .iter()
             .map(|msg| SerializableMessage {
                 role: match msg.role {
-                    Role::User => "user".to_string(),
-                    Role::Assistant => "assistant".to_string(),
+                    Role::User => "user".to_owned(),
+                    Role::Assistant => "assistant".to_owned(),
                 },
                 content: message_content_to_string(&msg.content),
             })
             .collect();
 
         let serializable_request = SerializableRequest {
-            model: model.to_string(),
+            model: model.to_owned(),
             max_tokens,
             messages: serializable_messages,
         };
@@ -353,7 +353,7 @@ impl BatchingLlmClient {
                     .custom_id
                     .strip_prefix("req_hash_")
                     .unwrap_or(&result.custom_id)
-                    .to_string();
+                    .to_owned();
 
                 match result.result {
                     anthropic::batches::BatchResult::Succeeded { message } => {
@@ -459,7 +459,7 @@ impl BatchingLlmClient {
                         .custom_id
                         .strip_prefix("req_hash_")
                         .unwrap_or(&result.custom_id)
-                        .to_string();
+                        .to_owned();
 
                     match result.result {
                         anthropic::batches::BatchResult::Succeeded { message } => {

@@ -110,7 +110,7 @@ impl OpenAiLanguageModelProvider {
 
     fn create_language_model(&self, model: open_ai::Model) -> Arc<dyn LanguageModel> {
         Arc::new(OpenAiLanguageModel {
-            id: LanguageModelId::from(model.id().to_string()),
+            id: LanguageModelId::from(model.id().to_owned()),
             model,
             state: self.state.clone(),
             http_client: self.http_client.clone(),
@@ -167,7 +167,7 @@ impl LanguageModelProvider for OpenAiLanguageModelProvider {
         // Add base models from open_ai::Model::iter()
         for model in open_ai::Model::iter() {
             if !matches!(model, open_ai::Model::Custom { .. }) {
-                models.insert(model.id().to_string(), model);
+                models.insert(model.id().to_owned(), model);
             }
         }
 
@@ -407,7 +407,7 @@ impl LanguageModel for OpenAiLanguageModel {
     }
 
     fn name(&self) -> LanguageModelName {
-        LanguageModelName::from(self.model.display_name().to_string())
+        LanguageModelName::from(self.model.display_name().to_owned())
     }
 
     fn provider_id(&self) -> LanguageModelProviderId {
@@ -585,7 +585,7 @@ impl ConfigurationView {
     }
 
     fn save_api_key(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_string();
+        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_owned();
         if api_key.is_empty() {
             return;
         }
@@ -629,7 +629,7 @@ impl Render for ConfigurationView {
         } else {
             let api_url = OpenAiLanguageModelProvider::api_url(cx);
             if api_url == OPEN_AI_API_URL {
-                "API key configured".to_string()
+                "API key configured".to_owned()
             } else {
                 format!("API key configured for {}", api_url)
             }

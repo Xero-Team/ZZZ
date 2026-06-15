@@ -226,7 +226,7 @@ fn get_cursor_path(line: &str) -> Option<String> {
     value
         .get("cursor_path")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
+        .map(|s| s.to_owned())
 }
 
 pub fn run_filter_languages(
@@ -410,7 +410,7 @@ fn run_stats(input: &Path, extension_map: &HashMap<String, String>) -> Result<()
             Some(p) => p,
             None => {
                 *language_counts
-                    .entry("<no cursor_path>".to_string())
+                    .entry("<no cursor_path>".to_owned())
                     .or_default() += 1;
                 continue;
             }
@@ -424,16 +424,16 @@ fn run_stats(input: &Path, extension_map: &HashMap<String, String>) -> Result<()
                 let ext = Path::new(&cursor_path)
                     .extension()
                     .and_then(OsStr::to_str)
-                    .map(|s| s.to_string())
+                    .map(|s| s.to_owned())
                     .unwrap_or_else(|| {
                         Path::new(&cursor_path)
                             .file_name()
                             .and_then(OsStr::to_str)
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| "<no extension>".to_string())
+                            .map(|s| s.to_owned())
+                            .unwrap_or_else(|| "<no extension>".to_owned())
                     });
                 *unknown_extensions.entry(ext).or_default() += 1;
-                *language_counts.entry("<unknown>".to_string()).or_default() += 1;
+                *language_counts.entry("<unknown>".to_owned()).or_default() += 1;
             }
         }
     }

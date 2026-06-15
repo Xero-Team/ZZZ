@@ -76,7 +76,7 @@ impl SettingsProfileSelectorDelegate {
         let settings_store = cx.global::<SettingsStore>();
         let mut profile_names: Vec<Option<String>> = settings_store
             .configured_settings_profiles()
-            .map(|s| Some(s.to_string()))
+            .map(|s| Some(s.to_owned()))
             .collect();
         profile_names.insert(0, None);
 

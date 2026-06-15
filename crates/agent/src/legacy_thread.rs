@@ -106,7 +106,7 @@ impl SerializedThreadV0_1_0 {
 
         SerializedThread {
             messages,
-            version: SerializedThread::VERSION.to_string(),
+            version: SerializedThread::VERSION.to_owned(),
             ..self.0
         }
     }
@@ -175,7 +175,7 @@ struct LegacySerializedThread {
 impl LegacySerializedThread {
     pub fn upgrade(self) -> SerializedThread {
         SerializedThread {
-            version: SerializedThread::VERSION.to_string(),
+            version: SerializedThread::VERSION.to_owned(),
             summary: self.summary,
             updated_at: self.updated_at,
             messages: self.messages.into_iter().map(|msg| msg.upgrade()).collect(),

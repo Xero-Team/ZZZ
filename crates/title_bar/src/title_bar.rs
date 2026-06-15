@@ -217,7 +217,7 @@ impl Render for TitleBar {
                 .read(cx)
                 .root_name()
                 .file_name()
-                .map(|name| SharedString::from(name.to_string()));
+                .map(|name| SharedString::from(name.to_owned()));
             if let Some(repo) = &repository {
                 let repo = repo.read(cx);
                 linked_worktree_name = repo
@@ -247,12 +247,12 @@ impl Render for TitleBar {
                         worktree_abs_path.strip_prefix(&*repo.work_directory_abs_path)
                     {
                         if relative.as_os_str().is_empty() {
-                            repo_name.to_string()
+                            repo_name.to_owned()
                         } else {
                             format!("{}/{}", repo_name, relative.display())
                         }
                     } else {
-                        repo_name.to_string()
+                        repo_name.to_owned()
                     };
                     project_name = Some(SharedString::from(name));
                 }

@@ -82,10 +82,10 @@ impl Display for MountDefinition {
                     || source.get(1..3) == Some(":\\")
                     || source.get(1..3) == Some(":/")
                 {
-                    return "bind".to_string();
+                    return "bind".to_owned();
                 }
             }
-            "volume".to_string()
+            "volume".to_owned()
         });
         write!(f, "type={}", mount_type)?;
         if let Some(source) = &self.source {
@@ -286,8 +286,7 @@ impl DevContainer {
                     || (self.workspace_folder.is_none() && self.workspace_mount.is_some())
                 {
                     return Err(DevContainerError::DevContainerValidationFailed(
-                        "workspaceMount and workspaceFolder must both be defined, or neither defined"
-                            .to_string(),
+                        "workspaceMount and workspaceFolder must both be defined, or neither defined".to_owned(),
                     ));
                 }
                 Ok(())
@@ -295,7 +294,7 @@ impl DevContainer {
             DevContainerBuildType::DockerCompose => {
                 if self.service.is_none() {
                     return Err(DevContainerError::DevContainerValidationFailed(
-                        "must specify a connecting service for docker-compose".to_string(),
+                        "must specify a connecting service for docker-compose".to_owned(),
                     ));
                 }
                 Ok(())
@@ -335,12 +334,12 @@ impl LifecycleScript {
         }
     }
     fn from_str(args: &str) -> Self {
-        let script: Vec<String> = args.split(" ").map(|a| a.to_string()).collect();
+        let script: Vec<String> = args.split(" ").map(|a| a.to_owned()).collect();
 
         Self::from_args(script)
     }
     fn from_args(args: Vec<String>) -> Self {
-        Self::from_map(HashMap::from([("default".to_string(), args)]))
+        Self::from_map(HashMap::from([("default".to_owned(), args)]))
     }
     pub fn script_commands(&self) -> HashMap<String, Command> {
         self.scripts
@@ -435,12 +434,12 @@ impl<'de> Deserialize<'de> for LifecycleScript {
                     let value: Value = map.next_value()?;
                     let script_args = match value {
                         Value::String(s) => {
-                            s.split(" ").map(|s| s.to_string()).collect::<Vec<String>>()
+                            s.split(" ").map(|s| s.to_owned()).collect::<Vec<String>>()
                         }
                         Value::Array(arr) => {
                             let strings: Vec<String> = arr
                                 .into_iter()
-                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .filter_map(|v| v.as_str().map(|s| s.to_owned()))
                                 .collect();
                             strings
                         }
@@ -485,9 +484,9 @@ where
                 let part = part.trim();
                 if let Some((key, value)) = part.split_once('=') {
                     match key.trim() {
-                        "source" => source = Some(value.trim().to_string()),
-                        "target" => target = Some(value.trim().to_string()),
-                        "type" => mount_type = Some(value.trim().to_string()),
+                        "source" => source = Some(value.trim().to_owned()),
+                        "target" => target = Some(value.trim().to_owned()),
+                        "type" => mount_type = Some(value.trim().to_owned()),
                         _ => {} // Ignore unknown keys
                     }
                 }
@@ -538,9 +537,9 @@ where
                     let part = part.trim();
                     if let Some((key, value)) = part.split_once('=') {
                         match key.trim() {
-                            "source" => source = Some(value.trim().to_string()),
-                            "target" => target = Some(value.trim().to_string()),
-                            "type" => mount_type = Some(value.trim().to_string()),
+                            "source" => source = Some(value.trim().to_owned()),
+                            "target" => target = Some(value.trim().to_owned()),
+                            "type" => mount_type = Some(value.trim().to_owned()),
                             _ => {} // Ignore unknown keys
                         }
                     }

@@ -17,7 +17,7 @@ fn rename_context_key(
         .nodes_for_capture_index(context_predicate_ix)
         .next()?
         .byte_range();
-    let old_predicate = contents.get(context_predicate_range.clone())?.to_string();
+    let old_predicate = contents.get(context_predicate_range.clone())?.to_owned();
     let mut new_predicate = old_predicate.clone();
 
     const REPLACEMENTS: &[(&str, &str)] = &[

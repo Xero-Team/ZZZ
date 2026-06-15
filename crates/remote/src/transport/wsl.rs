@@ -174,7 +174,7 @@ impl WslRemoteConnection {
         cx: &mut AsyncApp,
     ) -> Result<Arc<RelPath>> {
         let version_str = match release_channel {
-            ReleaseChannel::Dev => "build".to_string(),
+            ReleaseChannel::Dev => "build".to_owned(),
             _ => version.to_string(),
         };
 
@@ -448,7 +448,7 @@ impl RemoteConnection for WslRemoteConnection {
         let shell_kind = self.shell_kind;
         let working_dir = working_dir
             .map(|working_dir| RemotePathBuf::new(working_dir, PathStyle::Posix).to_string())
-            .unwrap_or("~".to_string());
+            .unwrap_or("~".to_owned());
 
         let mut exec = String::from("exec env ");
 
@@ -478,29 +478,29 @@ impl RemoteConnection for WslRemoteConnection {
 
         let mut wsl_args = if let Some(user) = &self.connection_options.user {
             vec![
-                "--distribution".to_string(),
+                "--distribution".to_owned(),
                 self.connection_options.distro_name.clone(),
-                "--user".to_string(),
+                "--user".to_owned(),
                 user.clone(),
-                "--cd".to_string(),
+                "--cd".to_owned(),
                 working_dir,
-                "--".to_string(),
+                "--".to_owned(),
                 command,
             ]
         } else {
             vec![
-                "--distribution".to_string(),
+                "--distribution".to_owned(),
                 self.connection_options.distro_name.clone(),
-                "--cd".to_string(),
+                "--cd".to_owned(),
                 working_dir,
-                "--".to_string(),
+                "--".to_owned(),
                 command,
             ]
         };
         wsl_args.extend(args);
 
         Ok(CommandTemplate {
-            program: "wsl.exe".to_string(),
+            program: "wsl.exe".to_owned(),
             args: wsl_args,
             env: HashMap::default(),
         })

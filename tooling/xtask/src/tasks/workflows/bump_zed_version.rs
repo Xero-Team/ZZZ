@@ -7,7 +7,7 @@ use crate::tasks::workflows::{
 };
 
 pub fn bump_zed_version() -> Workflow {
-    let target = WorkflowInput::string("target", Some("all".to_string()))
+    let target = WorkflowInput::string("target", Some("all".to_owned()))
         .description("Which channels to bump: all, main, preview, or stable");
 
     let (versions_job, outputs) = resolve_versions();

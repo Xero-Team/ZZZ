@@ -831,10 +831,10 @@ fn find_matched_patterns(tool_id: &str, input: &str, cx: &App) -> Vec<MatchedPat
     let (inputs_to_check, allow_enabled) = if tool_id == TerminalTool::NAME {
         match extract_commands(input) {
             Some(cmds) => (cmds, true),
-            None => (vec![input.to_string()], false),
+            None => (vec![input.to_owned()], false),
         }
     } else {
-        (vec![input.to_string()], true)
+        (vec![input.to_owned()], true)
     };
 
     let mut has_deny_match = false;
@@ -941,7 +941,7 @@ fn evaluate_test_input(tool_id: &str, input: &str, cx: &App) -> ToolPermissionDe
     // for other tools, the check returns None immediately.
     ToolPermissionDecision::from_input(
         tool_id,
-        &[input.to_string()],
+        &[input.to_owned()],
         &settings.tool_permissions,
         ShellKind::system(),
     )
@@ -1054,7 +1054,7 @@ fn render_invalid_patterns_section(
                         "always_deny" => ToolPermissionMode::Deny,
                         _ => ToolPermissionMode::Confirm,
                     };
-                    let tool_id_for_delete = tool_id.to_string();
+                    let tool_id_for_delete = tool_id.to_owned();
                     let delete_id =
                         format!("{}-invalid-delete-{}", tool_id, invalid.pattern.clone());
 
@@ -1189,8 +1189,8 @@ fn render_user_pattern_row(
 ) -> AnyElement {
     let pattern_for_delete = pattern.clone();
     let pattern_for_update = pattern.clone();
-    let tool_id_for_delete = tool_id.to_string();
-    let tool_id_for_update = tool_id.to_string();
+    let tool_id_for_delete = tool_id.to_owned();
+    let tool_id_for_update = tool_id.to_owned();
     let input_id = format!("{}-{:?}-pattern-{}", tool_id, rule_type, index);
     let delete_id = format!("{}-{:?}-delete-{}", tool_id, rule_type, index);
     let settings_window = cx.entity().downgrade();
@@ -1216,7 +1216,7 @@ fn render_user_pattern_row(
         )
         .on_confirm(move |new_pattern, _window, cx| {
             if let Some(new_pattern) = new_pattern {
-                let new_pattern = new_pattern.trim().to_string();
+                let new_pattern = new_pattern.trim().to_owned();
                 if !new_pattern.is_empty() && new_pattern != pattern_for_update {
                     let updated = update_pattern(
                         &tool_id_for_update,
@@ -1251,7 +1251,7 @@ fn render_add_pattern_input(
     rule_type: ToolPermissionMode,
     cx: &mut Context<SettingsWindow>,
 ) -> AnyElement {
-    let tool_id_owned = tool_id.to_string();
+    let tool_id_owned = tool_id.to_owned();
     let input_id = format!("{}-{:?}-new-pattern", tool_id, rule_type);
     let settings_window = cx.entity().downgrade();
 
@@ -1269,7 +1269,7 @@ fn render_add_pattern_input(
         .clear_on_confirm()
         .on_confirm(move |pattern, _window, cx| {
             if let Some(pattern) = pattern {
-                let trimmed = pattern.trim().to_string();
+                let trimmed = pattern.trim().to_owned();
                 if !trimmed.is_empty() {
                     save_pattern(&tool_id_owned, rule_type, trimmed.clone(), cx);
 
@@ -1368,7 +1368,7 @@ fn render_default_mode_section(
 ) -> AnyElement {
     let mode_label = mode_display_label(current_mode, cx);
 
-    let tool_id_owned = tool_id.to_string();
+    let tool_id_owned = tool_id.to_owned();
 
     h_flex()
         .min_w_0()
@@ -1486,7 +1486,7 @@ fn get_tool_rules(tool_name: &str, cx: &App) -> ToolRulesView {
 }
 
 fn save_pattern(tool_name: &str, rule_type: ToolPermissionMode, pattern: String, cx: &mut App) {
-    let tool_name = tool_name.to_string();
+    let tool_name = tool_name.to_owned();
 
     SettingsStore::global(cx).update_settings_file(<dyn fs::Fs>::global(cx), move |settings, _| {
         let tool_permissions = settings
@@ -1535,8 +1535,8 @@ fn update_pattern(
         }
     }
 
-    let tool_name = tool_name.to_string();
-    let old_pattern = old_pattern.to_string();
+    let tool_name = tool_name.to_owned();
+    let old_pattern = old_pattern.to_owned();
 
     SettingsStore::global(cx).update_settings_file(<dyn fs::Fs>::global(cx), move |settings, _| {
         let tool_permissions = settings
@@ -1567,8 +1567,8 @@ fn update_pattern(
 }
 
 fn delete_pattern(tool_name: &str, rule_type: ToolPermissionMode, pattern: &str, cx: &mut App) {
-    let tool_name = tool_name.to_string();
-    let pattern = pattern.to_string();
+    let tool_name = tool_name.to_owned();
+    let pattern = pattern.to_owned();
 
     SettingsStore::global(cx).update_settings_file(<dyn fs::Fs>::global(cx), move |settings, _| {
         let tool_permissions = settings
@@ -1603,7 +1603,7 @@ fn set_global_default_permission(mode: ToolPermissionMode, cx: &mut App) {
 }
 
 fn set_default_mode(tool_name: &str, mode: ToolPermissionMode, cx: &mut App) {
-    let tool_name = tool_name.to_string();
+    let tool_name = tool_name.to_owned();
 
     SettingsStore::global(cx).update_settings_file(<dyn fs::Fs>::global(cx), move |settings, _| {
         let tool_permissions = settings

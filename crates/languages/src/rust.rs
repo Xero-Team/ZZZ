@@ -996,7 +996,7 @@ impl ContextProvider for RustContextProvider {
                     } else {
                         variables.insert(
                             RUST_BIN_REQUIRED_FEATURES_FLAG_TASK_VARIABLE.clone(),
-                            "--features".to_string(),
+                            "--features".to_owned(),
                         );
                         variables.insert(
                             RUST_BIN_REQUIRED_FEATURES_TASK_VARIABLE.clone(),
@@ -1168,7 +1168,7 @@ impl ContextProvider for RustContextProvider {
                 .map(|mut task_template| {
                     let mut args = task_template.args.split_off(1);
                     task_template.args.append(&mut vec![
-                        "--target-dir".to_string(),
+                        "--target-dir".to_owned(),
                         custom_target_dir.clone(),
                     ]);
                     task_template.args.append(&mut args);

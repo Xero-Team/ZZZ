@@ -224,7 +224,7 @@ impl GitRepository for FakeGitRepository {
     }
 
     fn remote_url(&self, name: &str) -> BoxFuture<'_, Option<String>> {
-        let name = name.to_string();
+        let name = name.to_owned();
         let fut = self.with_state_async(false, move |state| {
             state
                 .remotes
@@ -539,12 +539,12 @@ impl GitRepository for FakeGitRepository {
                     .refs
                     .get("HEAD")
                     .cloned()
-                    .unwrap_or_else(|| "0000000".to_string());
+                    .unwrap_or_else(|| "0000000".to_owned());
                 let branch_ref = state
                     .current_branch_name
                     .as_ref()
                     .map(|name| format!("refs/heads/{name}"))
-                    .unwrap_or_else(|| "refs/heads/main".to_string());
+                    .unwrap_or_else(|| "refs/heads/main".to_owned());
                 let main_wt = Worktree {
                     path: work_dir,
                     ref_name: Some(branch_ref.into()),
@@ -572,12 +572,12 @@ impl GitRepository for FakeGitRepository {
 
                     let ref_name = head_content
                         .strip_prefix("ref: ")
-                        .map(|s| s.trim().to_string());
+                        .map(|s| s.trim().to_owned());
                     let sha = ref_name
                         .as_ref()
                         .and_then(|r| refs.get(r))
                         .cloned()
-                        .unwrap_or_else(|| head_content.trim().to_string());
+                        .unwrap_or_else(|| head_content.trim().to_owned());
 
                     let worktree_path = PathBuf::from(gitdir_content.trim())
                         .parent()
@@ -651,7 +651,7 @@ impl GitRepository for FakeGitRepository {
                                     .refs
                                     .get(&ref_name)
                                     .cloned()
-                                    .unwrap_or_else(|| "fake-sha".to_string()),
+                                    .unwrap_or_else(|| "fake-sha".to_owned()),
                             )
                         }
                     })??;
@@ -662,14 +662,14 @@ impl GitRepository for FakeGitRepository {
                     base_sha: start_point,
                 } => (
                     Some(branch_name),
-                    start_point.unwrap_or_else(|| "fake-sha".to_string()),
+                    start_point.unwrap_or_else(|| "fake-sha".to_owned()),
                     true,
                 ),
                 CreateWorktreeTarget::Detached {
                     base_sha: start_point,
                 } => (
                     None,
-                    start_point.unwrap_or_else(|| "fake-sha".to_string()),
+                    start_point.unwrap_or_else(|| "fake-sha".to_owned()),
                     false,
                 ),
             };

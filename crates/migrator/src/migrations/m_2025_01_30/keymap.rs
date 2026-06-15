@@ -48,7 +48,7 @@ fn action_argument_snake_case(
     let new_value = if argument_value_node.kind() == "string" {
         format!("\"{}\"", to_snake_case(argument_value.trim_matches('"')))
     } else {
-        argument_value.to_string()
+        argument_value.to_owned()
     };
 
     let range_to_replace = mat.nodes_for_capture_index(array_ix).next()?.byte_range();

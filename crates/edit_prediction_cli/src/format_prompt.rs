@@ -243,7 +243,7 @@ impl TeacherPrompt {
         let lines: Vec<&str> = edit_history.lines().collect();
 
         if lines.is_empty() {
-            return "(No edit history)".to_string();
+            return "(No edit history)".to_owned();
         }
 
         if lines.len() > Self::MAX_HISTORY_LINES {
@@ -261,11 +261,11 @@ impl TeacherPrompt {
             .and_then(|pi| pi.related_files.as_deref());
 
         let Some(related_files) = related_files else {
-            return "(No context)".to_string();
+            return "(No context)".to_owned();
         };
 
         if related_files.is_empty() {
-            return "(No context)".to_string();
+            return "(No context)".to_owned();
         }
 
         let prefix = "`````";
@@ -310,12 +310,12 @@ impl TeacherPrompt {
         }
 
         let region = &text[start..end];
-        Ok(region.strip_suffix('\n').unwrap_or(region).to_string())
+        Ok(region.strip_suffix('\n').unwrap_or(region).to_owned())
     }
 
     fn format_diagnostics(example: &Example) -> String {
         let Some(prompt_inputs) = example.prompt_inputs.as_ref() else {
-            return "No Diagnostics".to_string();
+            return "No Diagnostics".to_owned();
         };
 
         let cursor_buffer_row = prompt_inputs.excerpt_start_row.map(|excerpt_start_row| {
@@ -336,9 +336,9 @@ impl TeacherPrompt {
             .unwrap_or(&diagnostics);
 
         if diagnostics.is_empty() {
-            "No Diagnostics".to_string()
+            "No Diagnostics".to_owned()
         } else {
-            diagnostics.to_string()
+            diagnostics.to_owned()
         }
     }
 }
@@ -480,7 +480,7 @@ impl TeacherMultiRegionPrompt {
         let lines: Vec<&str> = edit_history.lines().collect();
 
         if lines.is_empty() {
-            return "(No edit history)".to_string();
+            return "(No edit history)".to_owned();
         }
 
         if lines.len() > Self::MAX_HISTORY_LINES {
@@ -497,11 +497,11 @@ impl TeacherMultiRegionPrompt {
             .as_ref()
             .and_then(|pi| pi.related_files.as_deref());
         let Some(related_files) = related_files else {
-            return "(No context)".to_string();
+            return "(No context)".to_owned();
         };
 
         if related_files.is_empty() {
-            return "(No context)".to_string();
+            return "(No context)".to_owned();
         }
 
         let prefix = "`````";

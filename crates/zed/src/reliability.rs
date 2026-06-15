@@ -101,7 +101,7 @@ fn save_hang_trace(
         .into_iter()
         .map(|mut timings| {
             if timings.thread_id == main_thread_id {
-                timings.thread_name = Some("main".to_string());
+                timings.thread_name = Some("main".to_owned());
             }
 
             SerializedThreadTaskTimings::convert(*STARTUP_TIME.get().unwrap(), timings)

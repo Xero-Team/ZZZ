@@ -444,7 +444,7 @@ impl<'de> Deserialize<'de> for ModelName {
         let string = String::deserialize(deserializer)?;
         if let Some(id) = string.strip_prefix(MODEL_NAME_PREFIX) {
             Ok(Self {
-                model_id: id.to_string(),
+                model_id: id.to_owned(),
             })
         } else {
             Err(serde::de::Error::custom(format!(

@@ -24,8 +24,8 @@ pub struct FakeLanguageModelProvider {
 impl Default for FakeLanguageModelProvider {
     fn default() -> Self {
         Self {
-            id: LanguageModelProviderId::from("fake".to_string()),
-            name: LanguageModelProviderName::from("Fake".to_string()),
+            id: LanguageModelProviderId::from("fake".to_owned()),
+            name: LanguageModelProviderName::from("Fake".to_owned()),
             models: vec![Arc::new(FakeLanguageModel::default())],
         }
     }
@@ -131,10 +131,10 @@ pub struct FakeLanguageModel {
 impl Default for FakeLanguageModel {
     fn default() -> Self {
         Self {
-            id: LanguageModelId::from("fake".to_string()),
-            name: LanguageModelName::from("Fake".to_string()),
-            provider_id: LanguageModelProviderId::from("fake".to_string()),
-            provider_name: LanguageModelProviderName::from("Fake".to_string()),
+            id: LanguageModelId::from("fake".to_owned()),
+            name: LanguageModelName::from("Fake".to_owned()),
+            provider_id: LanguageModelProviderId::from("fake".to_owned()),
+            provider_name: LanguageModelProviderName::from("Fake".to_owned()),
             current_completion_txs: Mutex::new(Vec::new()),
             forbid_requests: AtomicBool::new(false),
             supports_thinking: AtomicBool::new(false),
@@ -152,9 +152,9 @@ impl FakeLanguageModel {
         supports_thinking: bool,
     ) -> Self {
         Self {
-            id: LanguageModelId::from(id.to_string()),
-            name: LanguageModelName::from(name.to_string()),
-            provider_id: LanguageModelProviderId::from(provider_id.to_string()),
+            id: LanguageModelId::from(id.to_owned()),
+            name: LanguageModelName::from(name.to_owned()),
+            provider_id: LanguageModelProviderId::from(provider_id.to_owned()),
             supports_thinking: AtomicBool::new(supports_thinking),
             ..Default::default()
         }
@@ -298,7 +298,7 @@ impl LanguageModel for FakeLanguageModel {
     }
 
     fn telemetry_id(&self) -> String {
-        "fake".to_string()
+        "fake".to_owned()
     }
 
     fn max_token_count(&self) -> u64 {

@@ -501,7 +501,7 @@ impl WindowButtonLayout {
                     "maximize" => Some(WindowButton::Maximize),
                     "close" => Some(WindowButton::Close),
                     other => {
-                        unrecognized.push(other.to_string());
+                        unrecognized.push(other.to_owned());
                         None
                     }
                 };

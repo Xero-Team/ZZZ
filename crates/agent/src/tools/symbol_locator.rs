@@ -61,7 +61,7 @@ impl LocationDisplay {
             .read(cx)
             .file()
             .map(|f| f.full_path(cx).display().to_string())
-            .unwrap_or_else(|| "<untitled>".to_string());
+            .unwrap_or_else(|| "<untitled>".to_owned());
 
         let start_line = range.start.row + 1;
         let end_line = range.end.row + 1;
@@ -74,7 +74,7 @@ impl LocationDisplay {
             .skip_while(|c| c.is_whitespace())
             .take(MAX_LINE_DISPLAY_LEN)
             .collect::<String>();
-        let snippet = snippet.trim_end().to_string();
+        let snippet = snippet.trim_end().to_owned();
 
         Self {
             path,
@@ -206,7 +206,7 @@ impl SymbolLocator {
                 .skip_while(|c| c.is_whitespace())
                 .take(MAX_LINE_DISPLAY_LEN)
                 .collect::<String>();
-            let display_text = display_text.trim_end().to_string();
+            let display_text = display_text.trim_end().to_owned();
 
             Ok((position, display_text, truncated))
         })?;

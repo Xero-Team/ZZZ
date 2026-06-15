@@ -196,7 +196,7 @@ pub fn show_onboarding_view(app_state: Arc<AppState>, cx: &mut App) -> Task<anyh
             };
             let kvp = KeyValueStore::global(cx);
             db::write_and_log(cx, move || async move {
-                kvp.write_kvp(FIRST_OPEN.to_string(), "false".to_string())
+                kvp.write_kvp(FIRST_OPEN.to_owned(), "false".to_owned())
                     .await
             });
         },

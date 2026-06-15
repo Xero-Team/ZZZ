@@ -2244,7 +2244,7 @@ fn main() {
 
     let after = r#"
 fn main() {
-    let y: hello… = "hello\n world";
+    let y: hello... = "hello\n world";
 }
 "#
     .unindent();

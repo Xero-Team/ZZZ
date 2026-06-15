@@ -166,7 +166,7 @@ impl ComponentPreview {
     pub fn active_page_id(&self, _cx: &App) -> ActivePageId {
         match &self.active_page {
             PreviewPage::AllComponents => ActivePageId::default(),
-            PreviewPage::Component(component_id) => ActivePageId(component_id.0.to_string()),
+            PreviewPage::Component(component_id) => ActivePageId(component_id.0.to_owned()),
         }
     }
 
@@ -693,13 +693,13 @@ pub struct ActivePageId(pub String);
 
 impl Default for ActivePageId {
     fn default() -> Self {
-        ActivePageId("AllComponents".to_string())
+        ActivePageId("AllComponents".to_owned())
     }
 }
 
 impl From<ComponentId> for ActivePageId {
     fn from(id: ComponentId) -> Self {
-        Self(id.0.to_string())
+        Self(id.0.to_owned())
     }
 }
 
@@ -904,7 +904,7 @@ impl ComponentPreviewPage {
     /// as that is the default state
     fn render_component_status(&self, cx: &App) -> Option<impl IntoElement> {
         let status = self.component.status();
-        let status_description = status.description().to_string();
+        let status_description = status.description().to_owned();
 
         let color = match status {
             ComponentStatus::Deprecated => Color::Error,

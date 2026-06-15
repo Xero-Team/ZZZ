@@ -391,7 +391,7 @@ impl Grammar {
             .map(|&name| match name {
                 "run" => RunnableCapture::Run,
                 "run_item" => RunnableCapture::RunItem,
-                name => RunnableCapture::Named(name.to_string().into()),
+                name => RunnableCapture::Named(name.to_owned().into()),
             })
             .collect();
         let supports_grouped_runnables = extra_captures
@@ -691,7 +691,7 @@ impl Grammar {
             override_configs_by_id.insert(
                 ix as u32,
                 OverrideEntry {
-                    name: name.to_string(),
+                    name: name.to_owned(),
                     range_is_inclusive,
                     value,
                 },

@@ -55,7 +55,7 @@ impl Transform for ToJsonSchemaSubsetTransform {
 
             // oneOf is not supported, use anyOf instead
             if let Some(one_of) = obj.remove("oneOf") {
-                obj.insert("anyOf".to_string(), one_of);
+                obj.insert("anyOf".to_owned(), one_of);
             }
         }
 
@@ -96,11 +96,11 @@ fn preprocess_json_schema(json: &mut Value) -> Result<()> {
         && matches!(obj.get("type"), Some(Value::String(s)) if s == "object")
     {
         if !obj.contains_key("additionalProperties") {
-            obj.insert("additionalProperties".to_string(), Value::Bool(false));
+            obj.insert("additionalProperties".to_owned(), Value::Bool(false));
         }
 
         if !obj.contains_key("properties") {
-            obj.insert("properties".to_string(), Value::Object(Default::default()));
+            obj.insert("properties".to_owned(), Value::Object(Default::default()));
         }
     }
     Ok(())
@@ -152,7 +152,7 @@ fn adapt_to_json_schema_subset(json: &mut Value) -> Result<()> {
                 || obj.contains_key("oneOf")
                 || obj.contains_key("allOf"))
         {
-            obj.insert("type".to_string(), Value::String("string".to_string()));
+            obj.insert("type".to_owned(), Value::String("string".to_owned()));
         }
 
         if let Some(subschemas) = obj.get_mut("oneOf")
@@ -212,7 +212,7 @@ fn convert_null_in_types_to_nullable(obj: &mut Map<String, Value>) {
         }
     }
     if nullable_found_in_type {
-        obj.insert("nullable".to_string(), Value::Bool(true));
+        obj.insert("nullable".to_owned(), Value::Bool(true));
     }
 }
 
@@ -242,11 +242,11 @@ fn push_any_of_constraint(obj: &mut Map<String, Value>, any_of_schemas: Value) {
         // skipped when `allOf` was non-empty, which silently dropped it.
         all_of.push(json!({"anyOf": existing_any_of}));
         all_of.push(json!({"anyOf": any_of_schemas}));
-        obj.insert("allOf".to_string(), Value::Array(all_of));
+        obj.insert("allOf".to_owned(), Value::Array(all_of));
     } else if let Some(all_of) = obj.get_mut("allOf").and_then(|v| v.as_array_mut()) {
         all_of.push(json!({"anyOf": any_of_schemas}));
     } else {
-        obj.insert("anyOf".to_string(), any_of_schemas);
+        obj.insert("anyOf".to_owned(), any_of_schemas);
     }
 }
 
@@ -272,11 +272,11 @@ fn collapse_nullable_only_any_of(obj: &mut Map<String, Value>) {
     });
 
     if !found_nullable_only {
-        obj.insert("anyOf".to_string(), Value::Array(any_of));
+        obj.insert("anyOf".to_owned(), Value::Array(any_of));
         return;
     }
 
-    obj.insert("nullable".to_string(), Value::Bool(true));
+    obj.insert("nullable".to_owned(), Value::Bool(true));
 
     if any_of.is_empty() {
         return;
@@ -299,7 +299,7 @@ fn collapse_nullable_only_any_of(obj: &mut Map<String, Value>) {
         return;
     }
 
-    obj.insert("anyOf".to_string(), Value::Array(any_of));
+    obj.insert("anyOf".to_owned(), Value::Array(any_of));
 }
 
 #[cfg(test)]

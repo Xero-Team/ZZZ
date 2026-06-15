@@ -50,7 +50,7 @@ impl BlameRenderer for GitBlameRenderer {
                     email
                         .trim_start_matches('<')
                         .trim_end_matches('>')
-                        .to_string(),
+                        .to_owned(),
                 )
             });
             Some(
@@ -193,7 +193,7 @@ impl BlameRenderer for GitBlameRenderer {
         let author: SharedString = blame
             .author
             .clone()
-            .unwrap_or("<no name>".to_string())
+            .unwrap_or("<no name>".to_owned())
             .into();
         let author_email = blame.author_mail.as_deref().unwrap_or_default();
         let author_email_for_avatar = blame.author_mail.as_ref().map(|email| {
@@ -201,7 +201,7 @@ impl BlameRenderer for GitBlameRenderer {
                 email
                     .trim_start_matches('<')
                     .trim_end_matches('>')
-                    .to_string(),
+                    .to_owned(),
             )
         });
         let avatar = CommitAvatar::new(
@@ -213,7 +213,7 @@ impl BlameRenderer for GitBlameRenderer {
 
         let short_commit_id = sha
             .get(..8)
-            .map(|sha| sha.to_string().into())
+            .map(|sha| sha.to_owned().into())
             .unwrap_or_else(|| sha.clone());
         let local_offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
         let absolute_timestamp = time_format::format_localized_timestamp(
@@ -263,7 +263,7 @@ impl BlameRenderer for GitBlameRenderer {
                             .split('\n')
                             .next()?
                             .trim_end()
-                            .to_string()
+                            .to_owned()
                             .into(),
                     )
                 })
@@ -441,6 +441,6 @@ fn blame_entry_relative_timestamp(blame_entry: &BlameEntry) -> String {
                 time_format::TimestampFormat::Relative,
             )
         }
-        Err(_) => "Error parsing date".to_string(),
+        Err(_) => "Error parsing date".to_owned(),
     }
 }

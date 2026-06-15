@@ -883,7 +883,7 @@ impl ConfigureMode {
         while args.peek().is_some_and(|arg| arg.contains('=')) {
             let arg = args.next().unwrap();
             let (lhs, rhs) = arg.split_once('=').unwrap();
-            env.insert(lhs.to_string(), rhs.to_string());
+            env.insert(lhs.to_owned(), rhs.to_owned());
         }
 
         let program = if let Some(program) = args.next() {
@@ -1311,7 +1311,7 @@ impl PickerDelegate for DebugDelegate {
         while args.peek().is_some_and(|arg| arg.contains('=')) {
             let arg = args.next().unwrap();
             let (lhs, rhs) = arg.split_once('=').unwrap();
-            env.insert(lhs.to_string(), rhs.to_string());
+            env.insert(lhs.to_owned(), rhs.to_owned());
         }
 
         let program = if let Some(program) = args.next() {

@@ -1222,7 +1222,7 @@ pub async fn handle_websocket_request(
     if protocol_version != rpc::PROTOCOL_VERSION {
         return (
             StatusCode::UPGRADE_REQUIRED,
-            "client must be upgraded".to_string(),
+            "client must be upgraded".to_owned(),
         )
             .into_response();
     }
@@ -1230,7 +1230,7 @@ pub async fn handle_websocket_request(
     let Some(version) = app_version_header.map(|header| ZedVersion(header.0.0)) else {
         return (
             StatusCode::UPGRADE_REQUIRED,
-            "no version header found".to_string(),
+            "no version header found".to_owned(),
         )
             .into_response();
     };
@@ -1240,7 +1240,7 @@ pub async fn handle_websocket_request(
     if !version.can_collaborate() {
         return (
             StatusCode::UPGRADE_REQUIRED,
-            "client must be upgraded".to_string(),
+            "client must be upgraded".to_owned(),
         )
             .into_response();
     }
@@ -2429,7 +2429,7 @@ where
     response.peer.respond_with_error(
         response.receipt,
         ErrorCode::Forbidden
-            .message("request is not allowed for guests".to_string())
+            .message("request is not allowed for guests".to_owned())
             .to_proto(),
     )?;
     response.responded.store(true, SeqCst);
@@ -3794,7 +3794,7 @@ async fn mark_notification_as_read(
 
 fn to_axum_message(message: TungsteniteMessage) -> anyhow::Result<AxumMessage> {
     let message = match message {
-        TungsteniteMessage::Text(payload) => AxumMessage::Text(payload.as_str().to_string().into()),
+        TungsteniteMessage::Text(payload) => AxumMessage::Text(payload.as_str().to_owned().into()),
         TungsteniteMessage::Binary(payload) => AxumMessage::Binary(payload),
         TungsteniteMessage::Ping(payload) => AxumMessage::Ping(payload),
         TungsteniteMessage::Pong(payload) => AxumMessage::Pong(payload),

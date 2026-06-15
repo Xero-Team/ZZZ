@@ -186,11 +186,11 @@ async fn test_assemble_excerpts(cx: &mut TestAppContext) {
                 struct User {
                     first_name: String,
                     last_name: String,
-                …
+                ...
                 }
 
                 impl User {
-                …
+                ...
                     pub fn full_name(&self) -> String {
                         format!("{} {}", self.first_name, self.last_name)
                     }
@@ -215,7 +215,7 @@ async fn test_assemble_excerpts(cx: &mut TestAppContext) {
                     last_name: String,
                     age: u32,
                 }
-                …
+                ...
             "#},
         ),
         (
@@ -242,7 +242,7 @@ async fn test_assemble_excerpts(cx: &mut TestAppContext) {
                     fn provide_foo(&self, id: usize) -> Foo;
 
                     fn provide_foo_batched(&self, ids: &[usize]) -> Vec<Foo> {
-                …
+                ...
                     }
 
                     fn sync(&self);
@@ -277,7 +277,7 @@ async fn test_assemble_excerpts(cx: &mut TestAppContext) {
                     fn method1(&self, id: usize) -> Foo;
 
                     fn method2(&self, ids: &[usize]) -> Vec<Foo> {
-                …
+                ...
                     }
 
                     fn sync(&self);

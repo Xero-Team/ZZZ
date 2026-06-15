@@ -88,7 +88,7 @@ impl Azure {
 #[async_trait]
 impl GitHostingProvider for Azure {
     fn name(&self) -> String {
-        "Azure DevOps".to_string()
+        "Azure DevOps".to_owned()
     }
 
     fn base_url(&self) -> Url {

@@ -300,7 +300,7 @@ async fn test_debug_modal_subtitles_with_multiple_worktrees(
     fs.insert_tree(
         path!("/workspace1"),
         json!({
-            ".zed": {
+            ".ZZZ": {
                 "debug.json": r#"[
                     {
                         "adapter": "fake-adapter",
@@ -351,10 +351,7 @@ async fn test_debug_modal_subtitles_with_multiple_worktrees(
         modal.debug_picker_candidate_subtitles(cx)
     });
 
-    assert_eq!(
-        subtitles.as_slice(),
-        [path!(".ZZZ/debug.json"), path!(".ZZZ/debug.json")]
-    );
+    assert_eq!(subtitles.as_slice(), [path!(".ZZZ"), path!(".ZZZ")]);
 }
 
 #[gpui::test]

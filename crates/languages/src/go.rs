@@ -94,7 +94,7 @@ impl LspInstaller for GoLspAdapter {
 
         let release =
             latest_github_release("golang/tools", false, false, delegate.http_client()).await?;
-        let version: Option<String> = release.tag_name.strip_prefix("gopls/v").map(str::to_string);
+        let version: Option<String> = release.tag_name.strip_prefix("gopls/v").map(str::to_owned);
         if version.is_none() {
             log::warn!(
                 "couldn't infer gopls version from GitHub release tag name '{}'",
@@ -485,15 +485,15 @@ fn go_test_task_template(arg: &serde_json::Value) -> Option<task::TaskTemplate> 
         return None;
     }
 
-    let mut go_args = vec!["test".to_string(), "-test.fullpath=true".to_string()];
+    let mut go_args = vec!["test".to_owned(), "-test.fullpath=true".to_owned()];
 
     if tests.is_empty() {
-        go_args.push("-benchmem".to_string());
-        go_args.push("-run=^$".to_string());
+        go_args.push("-benchmem".to_owned());
+        go_args.push("-run=^$".to_owned());
     } else {
-        go_args.push("-timeout".to_string());
-        go_args.push("30s".to_string());
-        go_args.push("-run".to_string());
+        go_args.push("-timeout".to_owned());
+        go_args.push("30s".to_owned());
+        go_args.push("-run".to_owned());
         if tests.len() == 1 {
             go_args.push(format!("^{}$", tests[0]));
         } else {
@@ -502,7 +502,7 @@ fn go_test_task_template(arg: &serde_json::Value) -> Option<task::TaskTemplate> 
     }
 
     if !benchmarks.is_empty() {
-        go_args.push("-bench".to_string());
+        go_args.push("-bench".to_owned());
         if benchmarks.len() == 1 {
             go_args.push(format!("^{}$", benchmarks[0]));
         } else {
@@ -510,7 +510,7 @@ fn go_test_task_template(arg: &serde_json::Value) -> Option<task::TaskTemplate> 
         }
     }
 
-    go_args.push(".".to_string());
+    go_args.push(".".to_owned());
 
     let label = if !tests.is_empty() {
         format!("go test {}", tests.join(", "))
@@ -527,7 +527,7 @@ fn go_test_task_template(arg: &serde_json::Value) -> Option<task::TaskTemplate> 
 
     Some(task::TaskTemplate {
         label,
-        command: "go".to_string(),
+        command: "go".to_owned(),
         args: go_args,
         cwd,
         ..task::TaskTemplate::default()
@@ -626,7 +626,7 @@ impl RunnableResolver for GoRunnableResolver {
         Some(ResolvedRunnable {
             run_range: run_capture.range(),
             extra_captures: smallvec::smallvec![(
-                TABLE_TEST_CASE_NAME.to_string(),
+                TABLE_TEST_CASE_NAME.to_owned(),
                 buffer.text_for_range(run_capture.range()).collect(),
             )],
         })
@@ -690,7 +690,7 @@ impl ContextProvider for GoContextProvider {
                     .ancestors()
                     .find(|dir| dir.join("go.mod").is_file())
                     .map(|dir| dir.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| ".".to_string());
+                    .unwrap_or_else(|| ".".to_owned());
 
                 (GO_MODULE_ROOT_TASK_VARIABLE.clone(), module_dir)
             });
@@ -731,7 +731,7 @@ impl ContextProvider for GoContextProvider {
         let package_cwd = if GO_PACKAGE_TASK_VARIABLE.template_value() == "." {
             None
         } else {
-            Some("$ZED_DIRNAME".to_string())
+            Some("$ZED_DIRNAME".to_owned())
         };
         let module_cwd = Some(GO_MODULE_ROOT_TASK_VARIABLE.template_value());
 

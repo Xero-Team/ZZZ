@@ -74,7 +74,7 @@ impl RepoState {
     }
 
     fn mark_processed(&mut self, commit_sha: &str, examples_count: usize) {
-        self.processed_commits.insert(commit_sha.to_string());
+        self.processed_commits.insert(commit_sha.to_owned());
         self.examples_generated += examples_count;
     }
 }
@@ -266,13 +266,13 @@ fn repo_name_from_url(url: &str) -> String {
         .next()
         .unwrap_or(url)
         .trim_end_matches(".git")
-        .to_string()
+        .to_owned()
 }
 
 fn truncate_message(msg: &str, max_len: usize) -> String {
     let first_line = msg.lines().next().unwrap_or("");
     if first_line.len() <= max_len {
-        first_line.to_string()
+        first_line.to_owned()
     } else {
         format!("{}...", &first_line[..max_len - 3])
     }
@@ -341,8 +341,8 @@ async fn list_commits(
         if parts.len() < 3 {
             continue;
         }
-        let sha = parts[0].to_string();
-        let parent_sha = parts[1].split_whitespace().next().unwrap_or("").to_string();
+        let sha = parts[0].to_owned();
+        let parent_sha = parts[1].split_whitespace().next().unwrap_or("").to_owned();
         if parent_sha.is_empty() {
             continue;
         }
@@ -360,7 +360,7 @@ async fn list_commits(
         commits.push(CommitInfo {
             sha,
             parent_sha,
-            message: parts[2].to_string(),
+            message: parts[2].to_owned(),
             diff,
             expanded_diff,
         });
@@ -563,8 +563,8 @@ fn parse_claude_response(response: &str) -> Result<Option<ClaudeResponse>> {
     let name = response
         .lines()
         .find(|l| l.starts_with("NAME:"))
-        .map(|l| l.strip_prefix("NAME:").unwrap_or("").trim().to_string())
-        .unwrap_or_else(|| "unnamed example".to_string());
+        .map(|l| l.strip_prefix("NAME:").unwrap_or("").trim().to_owned())
+        .unwrap_or_else(|| "unnamed example".to_owned());
 
     // Parse ANALYSIS section (Claude's planning) - this is the primary reasoning
     let reasoning = extract_section(
@@ -606,7 +606,7 @@ fn extract_section(text: &str, start_marker: &str, end_markers: &[&str]) -> Opti
         .map(|idx| content_start + idx)
         .unwrap_or(text.len());
 
-    Some(text[content_start..end_idx].trim().to_string())
+    Some(text[content_start..end_idx].trim().to_owned())
 }
 
 fn extract_diff_block(text: &str, section_marker: &str) -> Result<Vec<String>> {
@@ -677,7 +677,7 @@ fn split_into_hunks(diff: &str) -> Vec<String> {
                 hunks.push(hunk_text);
                 current_hunk.clear();
             }
-            current_file_header = Some(line.to_string());
+            current_file_header = Some(line.to_owned());
             in_hunk = false;
         } else if line.starts_with("+++ b/") || line.starts_with("+++ /") {
             if let Some(ref mut header) = current_file_header {
@@ -696,10 +696,10 @@ fn split_into_hunks(diff: &str) -> Vec<String> {
                 hunks.push(hunk_text);
                 current_hunk.clear();
             }
-            current_hunk.push(line.to_string());
+            current_hunk.push(line.to_owned());
             in_hunk = true;
         } else if in_hunk {
-            current_hunk.push(line.to_string());
+            current_hunk.push(line.to_owned());
         }
     }
 
@@ -735,7 +735,7 @@ async fn build_example(
     // Parse the expected patch to determine cursor file
     let expected_patch = &response.expected_patch_hunks[0];
     let cursor_file = extract_file_from_hunk(expected_patch)
-        .ok_or_else(|| "Could not determine file from expected patch".to_string())?;
+        .ok_or_else(|| "Could not determine file from expected patch".to_owned())?;
 
     // Get the file content before the commit
     let before_content = run_git(
@@ -762,7 +762,7 @@ async fn build_example(
         .map_err(|e| format!("Failed to parse expected patch: {}", e))?;
     if edits.is_empty() {
         return Err(
-            "Could not locate expected patch in file (context not found or ambiguous)".to_string(),
+            "Could not locate expected patch in file (context not found or ambiguous)".to_owned(),
         );
     }
 
@@ -782,7 +782,7 @@ async fn build_example(
     );
     let mut spec = ExampleSpec {
         name: response.name.clone(),
-        repository_url: repo_url.to_string(),
+        repository_url: repo_url.to_owned(),
         revision: commit.parent_sha.clone(),
         tags: Vec::new(),
         reasoning: Some(reasoning_with_source),
@@ -806,10 +806,10 @@ async fn build_example(
 fn extract_file_from_hunk(hunk: &str) -> Option<String> {
     for line in hunk.lines() {
         if let Some(path) = line.strip_prefix("+++ b/") {
-            return Some(path.to_string());
+            return Some(path.to_owned());
         }
         if let Some(path) = line.strip_prefix("--- a/") {
-            return Some(path.to_string());
+            return Some(path.to_owned());
         }
     }
     None
@@ -818,7 +818,7 @@ fn extract_file_from_hunk(hunk: &str) -> Option<String> {
 /// Ensure a hunk has proper file headers
 fn ensure_diff_header(hunk: &str, file_path: &str) -> String {
     if hunk.contains("--- a/") || hunk.contains("+++ b/") {
-        return hunk.to_string();
+        return hunk.to_owned();
     }
     format!("--- a/{}\n+++ b/{}\n{}", file_path, file_path, hunk)
 }
@@ -833,7 +833,7 @@ fn apply_edit_history_to_content(
     let file_diff = extract_file_diff_from_combined(edit_history, cursor_file);
 
     if file_diff.is_empty() {
-        return Ok(content.to_string());
+        return Ok(content.to_owned());
     }
 
     apply_diff_to_string(&file_diff, content)

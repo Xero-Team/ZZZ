@@ -4594,7 +4594,7 @@ fn window_and_layout_page() -> SettingsPage {
                                 settings::WindowButtonLayoutContentDiscriminants::Custom => {
                                     settings::WindowButtonLayoutContent::Custom(
                                         current_custom_layout.unwrap_or_else(|| {
-                                            "close:minimize,maximize".to_string()
+                                            "close:minimize,maximize".to_owned()
                                         }),
                                     )
                                 }

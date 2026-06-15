@@ -246,7 +246,7 @@ fn runnable_ranges_from_grouped_matches(
         .filter_map(|capture| {
             capture.name().map(|name| {
                 (
-                    name.to_string(),
+                    name.to_owned(),
                     buffer.text_for_range(capture.range()).collect::<String>(),
                 )
             })

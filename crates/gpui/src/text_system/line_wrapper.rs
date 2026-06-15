@@ -726,7 +726,7 @@ mod tests {
         perform_test(
             &mut wrapper,
             "aa bbb cccc ddddd eeee ffff gggg",
-            "aa bbb cccc ddddd eee...",
+            "aa bbb cccc ddddd e...",
             "...",
         );
         perform_test(
@@ -738,7 +738,7 @@ mod tests {
         perform_test(
             &mut wrapper,
             "aa bbb cccc 🦀🦀🦀🦀🦀 eeee ffff gggg",
-            "aa bbb cccc 🦀🦀🦀🦀...",
+            "aa bbb cccc 🦀🦀🦀...",
             "...",
         );
     }
@@ -776,7 +776,7 @@ mod tests {
         perform_test(
             &mut wrapper,
             "aaaa bbbb cccc ddddd eeee fff gg",
-            "…ccc ddddd eeee fff gg",
+            "...c ddddd eeee fff gg",
             "...",
         );
         perform_test(
@@ -788,7 +788,7 @@ mod tests {
         perform_test(
             &mut wrapper,
             "aaaa bbbb cccc 🦀🦀🦀🦀🦀 eeee fff gg",
-            "…🦀🦀🦀🦀 eeee fff gg",
+            "...🦀🦀🦀 eeee fff gg",
             "...",
         );
     }
@@ -824,14 +824,7 @@ mod tests {
         //
         // Truncate res: abcd… (truncate_at = 4)
         // Run res: Run0 { string: abcd…, len: 7, ... }
-        perform_test(
-            &mut wrapper,
-            "abcdefghijkl",
-            "abcd...",
-            &[12],
-            &[7],
-            px(50.),
-        );
+        perform_test(&mut wrapper, "abcdefghijkl", "ab...", &[12], &[5], px(50.));
         // Case 1: Drop some runs
         // Text: abcdefghijkl
         // Runs: Run0 { len: 4, ... }, Run1 { len: 4, ... }, Run2 { len: 4, ... }
@@ -842,9 +835,9 @@ mod tests {
         perform_test(
             &mut wrapper,
             "abcdefghijkl",
-            "abcdef...",
+            "abcd...",
             &[4, 4, 4],
-            &[4, 5],
+            &[4, 3],
             px(70.),
         );
         // Case 2: Truncate at start of some run
@@ -857,9 +850,9 @@ mod tests {
         perform_test(
             &mut wrapper,
             "abcdefghijkl",
-            "abcdefgh...",
+            "abcdef...",
             &[4, 4, 4],
-            &[4, 4, 3],
+            &[4, 5],
             px(90.),
         );
     }
@@ -896,7 +889,7 @@ mod tests {
         //
         // Truncate res: …ijkl (truncate_at = 9)
         // Run res: Run0 { string: …ijkl, len: 7, ... }
-        perform_test(&mut wrapper, "abcdefghijkl", "…ijkl", &[12], &[7], px(50.));
+        perform_test(&mut wrapper, "abcdefghijkl", "...kl", &[12], &[5], px(50.));
         // Case 1: Drop some runs
         // Text: abcdefghijkl
         // Runs: Run0 { len: 4, ... }, Run1 { len: 4, ... }, Run2 { len: 4, ... }
@@ -907,9 +900,9 @@ mod tests {
         perform_test(
             &mut wrapper,
             "abcdefghijkl",
-            "…ghijkl",
+            "...ijkl",
             &[4, 4, 4],
-            &[5, 4],
+            &[3, 4],
             px(70.),
         );
         // Case 2: Truncate at start of some run
@@ -922,9 +915,9 @@ mod tests {
         perform_test(
             &mut wrapper,
             "abcdefghijkl",
-            "…efghijkl",
+            "...ghijkl",
             &[4, 4, 4],
-            &[3, 4, 4],
+            &[5, 4],
             px(90.),
         );
     }

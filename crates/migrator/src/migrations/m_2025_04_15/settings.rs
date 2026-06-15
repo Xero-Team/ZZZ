@@ -25,5 +25,5 @@ fn replace_bash_with_terminal_in_profiles(
         return None;
     }
 
-    Some((tool_name_range, "terminal".to_string()))
+    Some((tool_name_range, "terminal".to_owned()))
 }

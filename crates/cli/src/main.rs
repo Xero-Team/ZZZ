@@ -688,7 +688,7 @@ fn run() -> Result<()> {
         .unwrap();
 
     let sender: JoinHandle<anyhow::Result<()>> = thread::Builder::new()
-        .name("CliReceiver".to_string())
+        .name("CliReceiver".to_owned())
         .spawn({
             let exit_status = exit_status.clone();
             let user_data_dir_for_thread = user_data_dir.clone();
@@ -742,7 +742,7 @@ fn run() -> Result<()> {
     let stdin_pipe_handle: Option<JoinHandle<anyhow::Result<()>>> =
         stdin_tmp_file.map(|mut tmp_file| {
             thread::Builder::new()
-                .name("CliStdin".to_string())
+                .name("CliStdin".to_owned())
                 .spawn(move || {
                     let mut stdin = std::io::stdin().lock();
                     if !io::IsTerminal::is_terminal(&stdin) {
@@ -757,7 +757,7 @@ fn run() -> Result<()> {
         .into_iter()
         .map(|(mut file, mut tmp_file)| {
             thread::Builder::new()
-                .name("CliAnonymousFd".to_string())
+                .name("CliAnonymousFd".to_owned())
                 .spawn(move || io::copy(&mut file, &mut tmp_file))
                 .unwrap()
         })
@@ -923,14 +923,14 @@ mod linux {
             format!(
                 "Zed {}{}{} – {}",
                 if *release_channel::RELEASE_CHANNEL_NAME == "stable" {
-                    "".to_string()
+                    "".to_owned()
                 } else {
                     format!("{} ", *release_channel::RELEASE_CHANNEL_NAME)
                 },
                 option_env!("RELEASE_VERSION").unwrap_or_default(),
                 match option_env!("ZED_COMMIT_SHA") {
                     Some(commit_sha) => format!(" {commit_sha} "),
-                    None => "".to_string(),
+                    None => "".to_owned(),
                 },
                 self.0.display(),
             )

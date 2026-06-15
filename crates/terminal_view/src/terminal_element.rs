@@ -1550,7 +1550,7 @@ impl InputHandler for TerminalInputHandler {
         cx: &mut App,
     ) {
         self.terminal_view.update(cx, |view, view_cx| {
-            view.set_marked_text(new_text.to_string(), view_cx);
+            view.set_marked_text(new_text.to_owned(), view_cx);
         });
     }
 

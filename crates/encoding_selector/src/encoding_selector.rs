@@ -152,7 +152,7 @@ impl EncodingSelectorDelegate {
         if candidate_encoding.name() == current_encoding.name() {
             format!("{} (current)", candidate_encoding.name())
         } else {
-            candidate_encoding.name().to_string()
+            candidate_encoding.name().to_owned()
         }
     }
 }

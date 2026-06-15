@@ -26,10 +26,10 @@ impl ModelContextProtocol {
 
     fn supported_protocols() -> Vec<types::ProtocolVersion> {
         vec![
-            types::ProtocolVersion(types::LATEST_PROTOCOL_VERSION.to_string()),
-            types::ProtocolVersion(types::VERSION_2025_06_18.to_string()),
-            types::ProtocolVersion(types::VERSION_2025_03_26.to_string()),
-            types::ProtocolVersion(types::VERSION_2024_11_05.to_string()),
+            types::ProtocolVersion(types::LATEST_PROTOCOL_VERSION.to_owned()),
+            types::ProtocolVersion(types::VERSION_2025_06_18.to_owned()),
+            types::ProtocolVersion(types::VERSION_2025_03_26.to_owned()),
+            types::ProtocolVersion(types::VERSION_2024_11_05.to_owned()),
         ]
     }
 
@@ -38,7 +38,7 @@ impl ModelContextProtocol {
         client_info: types::Implementation,
     ) -> Result<InitializedContextServerProtocol> {
         let params = types::InitializeParams {
-            protocol_version: types::ProtocolVersion(types::LATEST_PROTOCOL_VERSION.to_string()),
+            protocol_version: types::ProtocolVersion(types::LATEST_PROTOCOL_VERSION.to_owned()),
             capabilities: types::ClientCapabilities {
                 experimental: None,
                 sampling: None,

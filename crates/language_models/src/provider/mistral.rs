@@ -121,7 +121,7 @@ impl MistralLanguageModelProvider {
 
     fn create_language_model(&self, model: mistral::Model) -> Arc<dyn LanguageModel> {
         Arc::new(MistralLanguageModel {
-            id: LanguageModelId::from(model.id().to_string()),
+            id: LanguageModelId::from(model.id().to_owned()),
             model,
             state: self.state.clone(),
             http_client: self.http_client.clone(),
@@ -178,7 +178,7 @@ impl LanguageModelProvider for MistralLanguageModelProvider {
         // Add base models from mistral::Model::iter()
         for model in mistral::Model::iter() {
             if !matches!(model, mistral::Model::Custom { .. }) {
-                models.insert(model.id().to_string(), model);
+                models.insert(model.id().to_owned(), model);
             }
         }
 
@@ -203,7 +203,7 @@ impl LanguageModelProvider for MistralLanguageModelProvider {
             .into_values()
             .map(|model| {
                 Arc::new(MistralLanguageModel {
-                    id: LanguageModelId::from(model.id().to_string()),
+                    id: LanguageModelId::from(model.id().to_owned()),
                     model,
                     state: self.state.clone(),
                     http_client: self.http_client.clone(),
@@ -293,7 +293,7 @@ impl LanguageModel for MistralLanguageModel {
     }
 
     fn name(&self) -> LanguageModelName {
-        LanguageModelName::from(self.model.display_name().to_string())
+        LanguageModelName::from(self.model.display_name().to_owned())
     }
 
     fn provider_id(&self) -> LanguageModelProviderId {
@@ -402,7 +402,7 @@ pub fn into_mistral(
                                         text_parts.push(text.to_string());
                                     }
                                     LanguageModelToolResultContent::Image(_) => {
-                                        text_parts.push("[Tool responded with an image, but Zed doesn't support these in Mistral models yet]".to_string());
+                                        text_parts.push("[Tool responded with an image, but Zed doesn't support these in Mistral models yet]".to_owned());
                                     }
                                 }
                             }
@@ -516,7 +516,7 @@ pub fn into_mistral(
 
     (
         mistral::Request {
-            model: model.id().to_string(),
+            model: model.id().to_owned(),
             messages,
             stream,
             stream_options: if stream {
@@ -786,7 +786,7 @@ impl ConfigurationView {
     }
 
     fn save_api_key(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_string();
+        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_owned();
         if api_key.is_empty() {
             return;
         }
@@ -830,7 +830,7 @@ impl Render for ConfigurationView {
         } else {
             let api_url = MistralLanguageModelProvider::api_url(cx);
             if api_url == MISTRAL_API_URL {
-                "API key configured".to_string()
+                "API key configured".to_owned()
             } else {
                 format!("API key configured for {}", api_url)
             }

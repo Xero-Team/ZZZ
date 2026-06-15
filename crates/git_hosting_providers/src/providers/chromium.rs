@@ -83,7 +83,7 @@ impl Chromium {
 #[async_trait]
 impl GitHostingProvider for Chromium {
     fn name(&self) -> String {
-        "Chromium".to_string()
+        "Chromium".to_owned()
     }
 
     fn base_url(&self) -> Url {

@@ -168,11 +168,11 @@ impl AgentTool for FetchTool {
             let text = futures::select! {
                 result = fetch_task.fuse() => result.map_err(|e| e.to_string())?,
                 _ = event_stream.cancelled_by_user().fuse() => {
-                    return Err("Fetch cancelled by user".to_string());
+                    return Err("Fetch cancelled by user".to_owned());
                 }
             };
             if text.trim().is_empty() {
-                return Err("no textual content found".to_string());
+                return Err("no textual content found".to_owned());
             }
             Ok(text)
         })

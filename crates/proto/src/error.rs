@@ -169,7 +169,7 @@ impl RpcError {
     /// an RpcError.
     pub fn from_proto(error: &crate::Error, request: &str) -> anyhow::Error {
         RpcError {
-            request: Some(request.to_string()),
+            request: Some(request.to_owned()),
             code: error.code(),
             msg: error.message.clone(),
             tags: error.tags.clone(),

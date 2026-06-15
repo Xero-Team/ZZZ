@@ -88,7 +88,7 @@ fn parse_stash_line(line: &str) -> Result<StashEntry> {
     Ok(StashEntry {
         index,
         oid,
-        message: message.to_string(),
+        message: message.to_owned(),
         branch: branch.map(Into::into),
         timestamp,
     })

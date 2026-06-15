@@ -86,7 +86,9 @@ fn cargo_fmt_package(package_name: &StepOutput) -> Step<Run> {
 }
 
 fn run_clippy(package_name: &StepOutput) -> Step<Run> {
-    named::bash(r#"cargo clippy -p "$PACKAGE_NAME" --release --all-features -- --deny warnings"#)
+    named::bash(
+        r#"cargo clippy -p "$PACKAGE_NAME" --release --all-features -- --deny warnings --deny clippy::manual_range_contains --deny clippy::match_result_ok"#,
+    )
         .add_env(("PACKAGE_NAME", package_name.to_string()))
 }
 

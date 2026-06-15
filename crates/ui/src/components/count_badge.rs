@@ -19,7 +19,7 @@ impl CountBadge {
 impl RenderOnce for CountBadge {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let label = if self.count > 99 {
-            "99+".to_string()
+            "99+".to_owned()
         } else {
             self.count.to_string()
         };

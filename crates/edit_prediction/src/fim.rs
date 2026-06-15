@@ -195,25 +195,25 @@ fn format_fim_prompt(
 
 fn get_fim_stop_tokens() -> Vec<String> {
     vec![
-        "<|endoftext|>".to_string(),
-        "<|file_separator|>".to_string(),
-        "<|fim_pad|>".to_string(),
-        "<|fim_prefix|>".to_string(),
-        "<|fim_middle|>".to_string(),
-        "<|fim_suffix|>".to_string(),
-        "<fim_prefix>".to_string(),
-        "<fim_middle>".to_string(),
-        "<fim_suffix>".to_string(),
-        "<PRE>".to_string(),
-        "<SUF>".to_string(),
-        "<MID>".to_string(),
-        "[PREFIX]".to_string(),
-        "[SUFFIX]".to_string(),
+        "<|endoftext|>".to_owned(),
+        "<|file_separator|>".to_owned(),
+        "<|fim_pad|>".to_owned(),
+        "<|fim_prefix|>".to_owned(),
+        "<|fim_middle|>".to_owned(),
+        "<|fim_suffix|>".to_owned(),
+        "<fim_prefix>".to_owned(),
+        "<fim_middle>".to_owned(),
+        "<fim_suffix>".to_owned(),
+        "<PRE>".to_owned(),
+        "<SUF>".to_owned(),
+        "<MID>".to_owned(),
+        "[PREFIX]".to_owned(),
+        "[SUFFIX]".to_owned(),
     ]
 }
 
 fn clean_fim_completion(response: &str) -> String {
-    let mut result = response.to_string();
+    let mut result = response.to_owned();
 
     let end_tokens = [
         "<|endoftext|>",

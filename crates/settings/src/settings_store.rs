@@ -861,7 +861,7 @@ impl SettingsStore {
         let mut key_path = Vec::new();
         let mut edits = Vec::new();
         let tab_size = infer_json_indent_size(&text);
-        let mut text = text.to_string();
+        let mut text = text.to_owned();
         update_value_in_json_text(
             &mut text,
             &mut key_path,
@@ -924,7 +924,7 @@ impl SettingsStore {
                 migration_status: MigrationStatus::NotNeeded,
             };
         }
-        self.last_user_settings_content = Some(user_settings_content.to_string());
+        self.last_user_settings_content = Some(user_settings_content.to_owned());
 
         let (settings, parse_result) = self.parse_and_migrate_zed_settings::<UserSettingsContent>(
             user_settings_content,
@@ -951,7 +951,7 @@ impl SettingsStore {
                 migration_status: MigrationStatus::NotNeeded,
             };
         }
-        self.last_global_settings_content = Some(global_settings_content.to_string());
+        self.last_global_settings_content = Some(global_settings_content.to_owned());
 
         let (settings, parse_result) = self.parse_and_migrate_zed_settings::<SettingsContent>(
             global_settings_content,
@@ -1034,7 +1034,7 @@ impl SettingsStore {
         match (path.clone(), kind, content) {
             (LocalSettingsPath::InWorktree(directory_path), LocalSettingsKind::Tasks, _) => {
                 return Err(InvalidSettingsError::Tasks {
-                    message: "Attempted to submit tasks into the settings store".to_string(),
+                    message: "Attempted to submit tasks into the settings store".to_owned(),
                     path: directory_path
                         .join(RelPath::unix(task_file_name()).unwrap())
                         .as_std_path()
@@ -1044,7 +1044,7 @@ impl SettingsStore {
             (LocalSettingsPath::InWorktree(directory_path), LocalSettingsKind::Debug, _) => {
                 return Err(InvalidSettingsError::Debug {
                     message: "Attempted to submit debugger config into the settings store"
-                        .to_string(),
+                        .to_owned(),
                     path: directory_path
                         .join(RelPath::unix(task_file_name()).unwrap())
                         .as_std_path()
@@ -1210,13 +1210,13 @@ impl SettingsStore {
                     if let Some(properties) = base_lsp_settings.get_mut("properties") {
                         if let Some(properties_object) = properties.as_object_mut() {
                             properties_object.insert(
-                            "initialization_options".to_string(),
+                            "initialization_options".to_owned(),
                             serde_json::json!({
                                 "$ref": format!("{LSP_SETTINGS_SCHEMA_URL_PREFIX}{adapter_name}/initialization_options")
                             }),
                         );
                             properties_object.insert(
-                            "settings".to_string(),
+                            "settings".to_owned(),
                             serde_json::json!({
                                 "$ref": format!("{LSP_SETTINGS_SCHEMA_URL_PREFIX}{adapter_name}/settings")
                             }),

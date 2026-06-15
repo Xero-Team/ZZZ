@@ -32,7 +32,7 @@ fn rename_restore_on_startup_values(
         _ => return None,
     };
 
-    Some((setting_value_range, new_value.to_string()))
+    Some((setting_value_range, new_value.to_owned()))
 }
 
 fn is_restore_on_startup_setting(contents: &str, mat: &QueryMatch, query: &Query) -> bool {

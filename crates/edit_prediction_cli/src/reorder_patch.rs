@@ -205,13 +205,13 @@ impl Patch {
                     current_file = path.into();
                 }
             } else if let Some(line) = line.strip_prefix("+") {
-                hunk.lines.push(PatchLine::Addition(line.to_string()));
+                hunk.lines.push(PatchLine::Addition(line.to_owned()));
             } else if let Some(line) = line.strip_prefix("-") {
-                hunk.lines.push(PatchLine::Deletion(line.to_string()));
+                hunk.lines.push(PatchLine::Deletion(line.to_owned()));
             } else if let Some(line) = line.strip_prefix(" ") {
-                hunk.lines.push(PatchLine::Context(line.to_string()));
+                hunk.lines.push(PatchLine::Context(line.to_owned()));
             } else {
-                hunk.lines.push(PatchLine::Garbage(line.to_string()));
+                hunk.lines.push(PatchLine::Garbage(line.to_owned()));
             }
         }
 
@@ -377,7 +377,7 @@ impl Hunk {
             new_start,
             new_count,
             comment,
-            filename: filename.to_string(),
+            filename: filename.to_owned(),
             is_filename_inherited,
             lines: Vec::new(),
         }
@@ -403,7 +403,7 @@ impl Hunk {
                 .join(" ")
                 .trim_start_matches("@@")
                 .trim()
-                .to_string()
+                .to_owned()
         } else {
             String::new()
         };
@@ -445,13 +445,13 @@ pub enum PatchLine {
 impl PatchLine {
     pub fn parse(line: &str) -> Self {
         if let Some(line) = line.strip_prefix("+") {
-            Self::Addition(line.to_string())
+            Self::Addition(line.to_owned())
         } else if let Some(line) = line.strip_prefix("-") {
-            Self::Deletion(line.to_string())
+            Self::Deletion(line.to_owned())
         } else if let Some(line) = line.strip_prefix(" ") {
-            Self::Context(line.to_string())
+            Self::Context(line.to_owned())
         } else {
-            Self::Garbage(line.to_string())
+            Self::Garbage(line.to_owned())
         }
     }
 }

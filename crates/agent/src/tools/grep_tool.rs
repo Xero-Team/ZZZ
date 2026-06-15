@@ -186,7 +186,7 @@ impl AgentTool for GrepTool {
                 let search_result = futures::select! {
                     result = rx.next().fuse() => result,
                     _ = event_stream.cancelled_by_user().fuse() => {
-                        return Err("Search cancelled by user".to_string());
+                        return Err("Search cancelled by user".to_owned());
                     }
                 };
 
@@ -1042,7 +1042,7 @@ mod tests {
         fs.insert_tree(
             path!("/worktree1"),
             json!({
-                ".zed": {
+                ".ZZZ": {
                     "settings.json": r#"{
                         "file_scan_exclusions": ["**/fixture.*"],
                         "private_files": ["**/secret.rs"]
@@ -1065,7 +1065,7 @@ mod tests {
         fs.insert_tree(
             path!("/worktree2"),
             json!({
-                ".zed": {
+                ".ZZZ": {
                     "settings.json": r#"{
                         "file_scan_exclusions": ["**/internal.*"],
                         "private_files": ["**/private.js", "**/data.json"]

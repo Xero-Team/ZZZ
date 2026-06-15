@@ -338,18 +338,18 @@ impl NotebookEditor {
 
         let spec = spec.unwrap_or_else(|| {
             KernelSpecification::Jupyter(LocalKernelSpecification {
-                name: "python3".to_string(),
+                name: "python3".to_owned(),
                 path: PathBuf::from("python3"),
                 kernelspec: JupyterKernelspec {
                     argv: vec![
-                        "python3".to_string(),
-                        "-m".to_string(),
-                        "ipykernel_launcher".to_string(),
-                        "-f".to_string(),
-                        "{connection_file}".to_string(),
+                        "python3".to_owned(),
+                        "-m".to_owned(),
+                        "ipykernel_launcher".to_owned(),
+                        "-f".to_owned(),
+                        "{connection_file}".to_owned(),
                     ],
-                    display_name: "Python 3".to_string(),
-                    language: "python".to_string(),
+                    display_name: "Python 3".to_owned(),
+                    language: "python".to_owned(),
                     interrupt_mode: None,
                     metadata: None,
                     env: None,
@@ -1115,7 +1115,7 @@ impl NotebookEditor {
                             .kernel_specification
                             .as_ref()
                             .map(|spec| spec.name().to_string())
-                            .unwrap_or_else(|| "Select Kernel".to_string());
+                            .unwrap_or_else(|| "Select Kernel".to_owned());
                         IconButton::new("repl", icon)
                             .icon_color(icon_color)
                             .tooltip(move |window, cx| {
@@ -1142,7 +1142,7 @@ impl NotebookEditor {
             .kernel_specification
             .as_ref()
             .map(|spec| spec.name().to_string())
-            .unwrap_or_else(|| "Select Kernel".to_string());
+            .unwrap_or_else(|| "Select Kernel".to_owned());
 
         let (status_icon, status_color) = match &kernel_status {
             KernelStatus::Idle => (IconName::Circle, Color::Success),
@@ -1691,7 +1691,7 @@ impl Item for NotebookEditor {
             .project_path
             .path
             .file_name()
-            .map(|s| s.to_string())
+            .map(|s| s.to_owned())
             .unwrap_or_default()
             .into()
     }

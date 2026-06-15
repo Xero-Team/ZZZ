@@ -103,7 +103,7 @@ impl XAiLanguageModelProvider {
 
     fn create_language_model(&self, model: x_ai::Model) -> Arc<dyn LanguageModel> {
         Arc::new(XAiLanguageModel {
-            id: LanguageModelId::from(model.id().to_string()),
+            id: LanguageModelId::from(model.id().to_owned()),
             model,
             state: self.state.clone(),
             http_client: self.http_client.clone(),
@@ -159,7 +159,7 @@ impl LanguageModelProvider for XAiLanguageModelProvider {
 
         for model in x_ai::Model::iter() {
             if !matches!(model, x_ai::Model::Custom { .. }) {
-                models.insert(model.id().to_string(), model);
+                models.insert(model.id().to_owned(), model);
             }
         }
 
@@ -335,7 +335,7 @@ impl LanguageModel for XAiLanguageModel {
     }
 
     fn name(&self) -> LanguageModelName {
-        LanguageModelName::from(self.model.display_name().to_string())
+        LanguageModelName::from(self.model.display_name().to_owned())
     }
 
     fn provider_id(&self) -> LanguageModelProviderId {
@@ -476,7 +476,7 @@ impl ConfigurationView {
     }
 
     fn save_api_key(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_string();
+        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_owned();
         if api_key.is_empty() {
             return;
         }
@@ -520,7 +520,7 @@ impl Render for ConfigurationView {
         } else {
             let api_url = XAiLanguageModelProvider::api_url(cx);
             if api_url == XAI_API_URL {
-                "API key configured".to_string()
+                "API key configured".to_owned()
             } else {
                 format!("API key configured for {}", api_url)
             }

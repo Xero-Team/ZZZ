@@ -61,8 +61,8 @@ fn window_button_layout_schema(_: &mut SchemaGenerator) -> Schema {
 impl From<WindowButtonLayoutContent> for String {
     fn from(value: WindowButtonLayoutContent) -> Self {
         match value {
-            WindowButtonLayoutContent::PlatformDefault => "platform_default".to_string(),
-            WindowButtonLayoutContent::Standard => "standard".to_string(),
+            WindowButtonLayoutContent::PlatformDefault => "platform_default".to_owned(),
+            WindowButtonLayoutContent::Standard => "standard".to_owned(),
             WindowButtonLayoutContent::Custom(s) => s,
         }
     }

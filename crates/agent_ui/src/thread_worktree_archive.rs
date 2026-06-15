@@ -177,7 +177,7 @@ pub fn build_root_plan(
     let branch_name = linked_snapshot
         .branch
         .as_ref()
-        .map(|branch| branch.name().to_string());
+        .map(|branch| branch.name().to_owned());
 
     Some(RootPlan {
         root_path: path,
@@ -440,7 +440,7 @@ pub async fn persist_worktree_state(root: &RootPlan, cx: &mut AsyncApp) -> Resul
             repo.snapshot()
                 .branch
                 .as_ref()
-                .map(|branch| branch.name().to_string())
+                .map(|branch| branch.name().to_owned())
         })
     });
 

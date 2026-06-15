@@ -149,7 +149,7 @@ impl Vim {
     ) {
         let buffer = editor.buffer().read(cx).snapshot(cx);
         self.set_mark(
-            "[".to_string(),
+            "[".to_owned(),
             selections
                 .iter()
                 .map(|s| buffer.anchor_before(s.start))
@@ -159,7 +159,7 @@ impl Vim {
             cx,
         );
         self.set_mark(
-            "]".to_string(),
+            "]".to_owned(),
             selections
                 .iter()
                 .map(|s| buffer.anchor_after(s.end))

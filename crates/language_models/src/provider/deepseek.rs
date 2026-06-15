@@ -114,7 +114,7 @@ impl DeepSeekLanguageModelProvider {
 
     fn create_language_model(&self, model: deepseek::Model) -> Arc<dyn LanguageModel> {
         Arc::new(DeepSeekLanguageModel {
-            id: LanguageModelId::from(model.id().to_string()),
+            id: LanguageModelId::from(model.id().to_owned()),
             model,
             state: self.state.clone(),
             http_client: self.http_client.clone(),
@@ -264,7 +264,7 @@ impl LanguageModel for DeepSeekLanguageModel {
     }
 
     fn name(&self) -> LanguageModelName {
-        LanguageModelName::from(self.model.display_name().to_string())
+        LanguageModelName::from(self.model.display_name().to_owned())
     }
 
     fn provider_id(&self) -> LanguageModelProviderId {
@@ -424,12 +424,12 @@ pub fn into_deepseek(
                                 text_parts.push(text.to_string());
                             }
                             LanguageModelToolResultContent::Image(_) => {
-                                text_parts.push("[Tool responded with an image]".to_string());
+                                text_parts.push("[Tool responded with an image]".to_owned());
                             }
                         }
                     }
                     let content = if text_parts.is_empty() {
-                        "<Tool returned an empty string>".to_string()
+                        "<Tool returned an empty string>".to_owned()
                     } else {
                         text_parts.join("\n")
                     };
@@ -443,7 +443,7 @@ pub fn into_deepseek(
     }
 
     deepseek::Request {
-        model: model.id().to_string(),
+        model: model.id().to_owned(),
         messages,
         stream: true,
         max_tokens: max_output_tokens,
@@ -676,7 +676,7 @@ impl ConfigurationView {
     }
 
     fn save_api_key(&mut self, _: &menu::Confirm, _window: &mut Window, cx: &mut Context<Self>) {
-        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_string();
+        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_owned();
         if api_key.is_empty() {
             return;
         }
@@ -716,7 +716,7 @@ impl Render for ConfigurationView {
         } else {
             let api_url = DeepSeekLanguageModelProvider::api_url(cx);
             if api_url == DEEPSEEK_API_URL {
-                "API key configured".to_string()
+                "API key configured".to_owned()
             } else {
                 format!("API key configured for {}", api_url)
             }

@@ -126,7 +126,7 @@ fn render_flag_variants(
                         }
                         FeatureFlagStore::set_override(
                             name,
-                            key.to_string(),
+                            key.to_owned(),
                             <dyn Fs>::global(cx),
                             cx,
                         );

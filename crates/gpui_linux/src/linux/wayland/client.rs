@@ -387,7 +387,7 @@ impl WaylandClientStatePtr {
             let layout_name = keymap.layout_get_name(layout_idx);
             let changed = layout_name != state.keyboard_layout.name();
             if changed {
-                state.keyboard_layout = LinuxKeyboardLayout::new(layout_name.to_string().into());
+                state.keyboard_layout = LinuxKeyboardLayout::new(layout_name.to_owned().into());
             }
             changed
         } else {
@@ -901,7 +901,7 @@ impl LinuxClient for WaylandClient {
             state.globals.activation.clone(),
             state.mouse_focused_window.clone(),
         ) {
-            state.pending_activation = Some(PendingActivation::Uri(uri.to_string()));
+            state.pending_activation = Some(PendingActivation::Uri(uri.to_owned()));
             let token = activation.get_activation_token(&state.globals.qh, ());
             let serial = state.serial_tracker.get(SerialKind::MousePress);
             token.set_serial(serial, &state.wl_seat);
@@ -966,10 +966,10 @@ impl LinuxClient for WaylandClient {
             let serial = state.serial_tracker.get_latest();
             let data_source = primary_selection_manager.create_source(&state.globals.qh, ());
             for mime_type in PLAIN_TEXT_MIME_TYPES {
-                data_source.offer(mime_type.to_string());
+                data_source.offer(mime_type.to_owned());
             }
             if has_html {
-                data_source.offer(HTML_MIME_TYPE.to_string());
+                data_source.offer(HTML_MIME_TYPE.to_owned());
             }
             data_source.offer(state.clipboard.self_mime());
             primary_selection.set_selection(Some(&data_source), serial);
@@ -990,10 +990,10 @@ impl LinuxClient for WaylandClient {
             let serial = state.serial_tracker.get_latest();
             let data_source = data_device_manager.create_data_source(&state.globals.qh, ());
             for mime_type in PLAIN_TEXT_MIME_TYPES {
-                data_source.offer(mime_type.to_string());
+                data_source.offer(mime_type.to_owned());
             }
             if has_html {
-                data_source.offer(HTML_MIME_TYPE.to_string());
+                data_source.offer(HTML_MIME_TYPE.to_owned());
             }
             data_source.offer(state.clipboard.self_mime());
             data_device.set_selection(Some(&data_source), serial);
@@ -2298,7 +2298,7 @@ impl Dispatch<wl_data_device::WlDataDevice, ()> for WaylandClientStatePtr {
                     data_offer.set_actions(ACTIONS, ACTIONS);
 
                     let pipe = Pipe::new().unwrap();
-                    data_offer.receive(FILE_LIST_MIME_TYPE.to_string(), unsafe {
+                    data_offer.receive(FILE_LIST_MIME_TYPE.to_owned(), unsafe {
                         BorrowedFd::borrow_raw(pipe.write.as_raw_fd())
                     });
                     let fd = pipe.read;

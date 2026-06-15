@@ -298,7 +298,7 @@ impl KeymapFile {
                         }
                         Err(err) => {
                             let mut lines = err.lines();
-                            let mut indented_err = lines.next().unwrap().to_string();
+                            let mut indented_err = lines.next().unwrap().to_owned();
                             for line in lines {
                                 indented_err.push_str("  ");
                                 indented_err.push_str(line);
@@ -330,7 +330,7 @@ impl KeymapFile {
                         }
                         Err(err) => {
                             let mut lines = err.lines();
-                            let mut indented_err = lines.next().unwrap().to_string();
+                            let mut indented_err = lines.next().unwrap().to_owned();
                             for line in lines {
                                 indented_err.push_str("  ");
                                 indented_err.push_str(line);
@@ -440,7 +440,7 @@ impl KeymapFile {
         )?;
 
         if key_binding.action().partial_eq(&NoAction) {
-            return Err("expected action name string or [name, input] array.".to_string());
+            return Err("expected action name string or [name, input] array.".to_owned());
         }
 
         if key_binding.action().name() == Unbind::name_for_type() {
@@ -658,7 +658,7 @@ impl KeymapFile {
             schema.insert(
                 // deprecationMessage is not part of the JSON Schema spec, but
                 // json-language-server recognizes it.
-                "deprecationMessage".to_string(),
+                "deprecationMessage".to_owned(),
                 Value::String(message),
             );
         }
@@ -669,8 +669,8 @@ impl KeymapFile {
 
         fn add_description(schema: &mut schemars::Schema, description: &str) {
             schema.insert(
-                "description".to_string(),
-                Value::String(description.to_string()),
+                "description".to_owned(),
+                Value::String(description.to_owned()),
             );
         }
 
@@ -689,7 +689,7 @@ impl KeymapFile {
         });
         let no_action_message = "No action named this.";
         add_description(&mut empty_action_name, no_action_message);
-        add_deprecation(&mut empty_action_name, no_action_message.to_string());
+        add_deprecation(&mut empty_action_name, no_action_message.to_owned());
         let empty_action_name_with_input = json_schema!({
             "type": "array",
             "items": [
@@ -794,7 +794,7 @@ impl KeymapFile {
             add_deprecation(
                 &mut actions_with_empty_input,
                 "This action does not take input - just the action name string should be used."
-                    .to_string(),
+                    .to_owned(),
             );
             action_with_arguments_alternatives.push(actions_with_empty_input);
         }
@@ -814,7 +814,7 @@ impl KeymapFile {
             add_deprecation(
                 &mut actions_with_empty_input,
                 "This action does not take input - just the action name string should be used."
-                    .to_string(),
+                    .to_owned(),
             );
             unbind_target_action_alternatives.push(actions_with_empty_input);
         }
@@ -1043,7 +1043,7 @@ impl KeymapFile {
         {
             let mut value = serde_json::Map::with_capacity(4);
             if let Some(context) = keybinding.context {
-                value.insert("context".to_string(), context.into());
+                value.insert("context".to_owned(), context.into());
             }
             let use_key_equivalents = from.and_then(|from| {
                 let action_value = from.action_value().context("Failed to serialize action value. `use_key_equivalents` on new keybinding may be incorrect.").log_err()?;
@@ -1052,10 +1052,10 @@ impl KeymapFile {
                 Some(keymap.0[binding_location.index].use_key_equivalents)
             }).unwrap_or(false);
             if use_key_equivalents {
-                value.insert("use_key_equivalents".to_string(), true.into());
+                value.insert("use_key_equivalents".to_owned(), true.into());
             }
 
-            value.insert("bindings".to_string(), {
+            value.insert("bindings".to_owned(), {
                 let mut bindings = serde_json::Map::new();
                 let action = keybinding.action_value()?;
                 bindings.insert(keybinding.keystrokes_unparsed(), action);
@@ -1073,9 +1073,9 @@ impl KeymapFile {
         if let Some(suppression_unbind) = suppression_unbind {
             let mut value = serde_json::Map::with_capacity(2);
             if let Some(context) = suppression_unbind.context {
-                value.insert("context".to_string(), context.into());
+                value.insert("context".to_owned(), context.into());
             }
-            value.insert("unbind".to_string(), {
+            value.insert("unbind".to_owned(), {
                 let mut unbind = serde_json::Map::new();
                 unbind.insert(
                     suppression_unbind.keystrokes_unparsed(),
@@ -1410,7 +1410,7 @@ impl ActionSequence {
                             Ok((action, _)) => Ok(action),
                             Err(err) => {
                                 return Err(ActionBuildError::BuildError {
-                                    name: Self::name_for_type().to_string(),
+                                    name: Self::name_for_type().to_owned(),
                                     error: anyhow::anyhow!(
                                         "error at sequence index {index}: {err}"
                                     ),
@@ -1427,7 +1427,7 @@ impl ActionSequence {
 
     fn expected_array_error() -> ActionBuildError {
         ActionBuildError::BuildError {
-            name: Self::name_for_type().to_string(),
+            name: Self::name_for_type().to_owned(),
             error: anyhow::anyhow!("expected array of actions"),
         }
     }

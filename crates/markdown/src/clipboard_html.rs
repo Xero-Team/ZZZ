@@ -737,7 +737,7 @@ impl<'a> ClipboardHtmlSerializer<'a> {
     fn resolve_image_src(&self, original_src: &str) -> String {
         self.resolve_image_src
             .and_then(|resolver| resolver(original_src))
-            .unwrap_or_else(|| original_src.to_string())
+            .unwrap_or_else(|| original_src.to_owned())
     }
 }
 

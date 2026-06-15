@@ -414,7 +414,7 @@ async fn convert_response(
     for (key, value) in response.headers() {
         extension_response
             .headers
-            .push((key.to_string(), value.to_str().unwrap_or("").to_string()));
+            .push((key.to_string(), value.to_str().unwrap_or("").to_owned()));
     }
 
     response

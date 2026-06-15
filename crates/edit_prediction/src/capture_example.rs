@@ -248,9 +248,9 @@ fn generate_timestamp_name() -> String {
             let now = time::OffsetDateTime::now_local()
                 .unwrap_or_else(|_| time::OffsetDateTime::now_utc());
             now.format(&format)
-                .unwrap_or_else(|_| "unknown-time".to_string())
+                .unwrap_or_else(|_| "unknown-time".to_owned())
         }
-        Err(_) => "unknown-time".to_string(),
+        Err(_) => "unknown-time".to_owned(),
     }
 }
 
@@ -542,6 +542,7 @@ mod tests {
     }
 
     fn init_test(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);

@@ -90,7 +90,7 @@ impl WorktreePicker {
             repo.read(cx)
                 .branch
                 .as_ref()
-                .map(|branch| branch.name().to_string())
+                .map(|branch| branch.name().to_owned())
         });
 
         let all_worktrees_request = repository
@@ -299,8 +299,8 @@ impl RemoteBranchName {
             return None;
         }
         Some(Self {
-            remote_name: remote_name.to_string(),
-            branch_name: branch_name.to_string(),
+            remote_name: remote_name.to_owned(),
+            branch_name: branch_name.to_owned(),
         })
     }
 
@@ -1032,7 +1032,7 @@ impl PickerDelegate for WorktreePickerDelegate {
                 } else {
                     self.current_branch_name
                         .clone()
-                        .unwrap_or_else(|| "HEAD".to_string())
+                        .unwrap_or_else(|| "HEAD".to_owned())
                 };
 
                 let label = app_i18n::tr(
@@ -1043,7 +1043,7 @@ impl PickerDelegate for WorktreePickerDelegate {
                 .replacen("{}", &branch_label, 1);
 
                 let item = create_new_list_item(
-                    "create-from-current".to_string().into(),
+                    "create-from-current".to_owned().into(),
                     label.into(),
                     self.creation_blocked_reason(cx),
                     selected,
@@ -1061,7 +1061,7 @@ impl PickerDelegate for WorktreePickerDelegate {
                 .replacen("{}", &default_branch_name, 1);
 
                 let item = create_new_list_item(
-                    "create-from-main".to_string().into(),
+                    "create-from-main".to_owned().into(),
                     label.into(),
                     self.creation_blocked_reason(cx),
                     selected,
@@ -1130,7 +1130,7 @@ impl PickerDelegate for WorktreePickerDelegate {
                                                 .min_w_0()
                                                 .gap_1p5()
                                                 .when_some(
-                                                    worktree.branch_name().map(|b| b.to_string()),
+                                                    worktree.branch_name().map(|b| b.to_owned()),
                                                     |this, branch| {
                                                         this.child(
                                                             Label::new(branch)
@@ -1251,7 +1251,7 @@ impl PickerDelegate for WorktreePickerDelegate {
                     .unwrap_or_else(|| {
                         self.current_branch_name
                             .clone()
-                            .unwrap_or_else(|| "HEAD".to_string())
+                            .unwrap_or_else(|| "HEAD".to_owned())
                     });
                 let label = app_i18n::tr(
                     cx,
@@ -1262,7 +1262,7 @@ impl PickerDelegate for WorktreePickerDelegate {
                 .replacen("{}", &branch_label, 1);
                 let element_id = match from_branch {
                     Some(branch) => format!("create-named-from-{}", branch.display_name()),
-                    None => "create-named-from-current".to_string(),
+                    None => "create-named-from-current".to_owned(),
                 };
 
                 let item = create_new_list_item(

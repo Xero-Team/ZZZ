@@ -232,7 +232,7 @@ fn split_leading_icon_char(
 
     Some((
         first_char.to_string().into(),
-        trimmed_title.to_string().into(),
+        trimmed_title.to_owned().into(),
         adjusted_positions,
     ))
 }

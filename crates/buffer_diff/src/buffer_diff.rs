@@ -2169,7 +2169,7 @@ pub fn assert_hunks<ExpectedText, HunkIter>(
             (
                 Point::new(line_range.start, 0)..Point::new(line_range.end, 0),
                 deleted_text.as_ref(),
-                added_text.as_ref().to_string(),
+                added_text.as_ref().to_owned(),
                 *status,
             )
         })

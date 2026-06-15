@@ -74,7 +74,7 @@ impl Render for ImageInfo {
                 ImageFormat::Avif => "Avif",
                 _ => "Unknown",
             }
-            .to_string(),
+            .to_owned(),
         );
 
         div().child(Label::new(components.join(" • ")).size(LabelSize::Small))

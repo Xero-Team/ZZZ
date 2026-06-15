@@ -272,7 +272,7 @@ fn collect_linux_proc_info() -> anyhow::Result<Value> {
         let pid_u32 = pid.as_u32();
 
         let wchan = match std::fs::read_to_string(format!("/proc/{pid_u32}/wchan")) {
-            Ok(s) => Value::String(s.trim().to_string()),
+            Ok(s) => Value::String(s.trim().to_owned()),
             Err(err) => {
                 log::warn!("git runtime diagnostics: failed to read /proc/{pid_u32}/wchan: {err}");
                 Value::Null
@@ -283,7 +283,7 @@ fn collect_linux_proc_info() -> anyhow::Result<Value> {
             Ok(contents) => contents
                 .lines()
                 .find(|l| l.starts_with("State:"))
-                .map(|l| Value::String(l.trim_start_matches("State:").trim().to_string()))
+                .map(|l| Value::String(l.trim_start_matches("State:").trim().to_owned()))
                 .unwrap_or(Value::Null),
             Err(err) => {
                 log::warn!("git runtime diagnostics: failed to read /proc/{pid_u32}/status: {err}");

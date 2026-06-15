@@ -721,7 +721,7 @@ impl MessageEditor {
                         command_name,
                         agent_id,
                         if available_commands.is_empty() {
-                            "none".to_string()
+                            "none".to_owned()
                         } else {
                             available_commands
                                 .iter()
@@ -857,7 +857,7 @@ impl MessageEditor {
 
     fn insert_context_prefix(&mut self, prefix: &str, window: &mut Window, cx: &mut Context<Self>) {
         let editor = self.editor.clone();
-        let prefix = prefix.to_string();
+        let prefix = prefix.to_owned();
 
         cx.spawn_in(window, async move |_, cx| {
             editor
@@ -1055,7 +1055,7 @@ impl MessageEditor {
                                     .update(cx, |project, cx| {
                                         project.project_path_for_absolute_path(&file_path, cx)
                                     })
-                                    .ok_or_else(|| "project path not found".to_string())?;
+                                    .ok_or_else(|| "project path not found".to_owned())?;
 
                                 let buffer = project
                                     .update(cx, |project, cx| project.open_buffer(project_path, cx))
@@ -1596,7 +1596,7 @@ impl MessageEditor {
                         MentionUri::parse(&uri, path_style)
                     } else {
                         Ok(MentionUri::PastedImage {
-                            name: "Image".to_string(),
+                            name: "Image".to_owned(),
                         })
                     };
                     let Some(mention_uri) = mention_uri.log_err() else {

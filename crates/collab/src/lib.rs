@@ -262,7 +262,7 @@ impl AppState {
             },
             user_service: Arc::new(CloudUserService::new(
                 http_client,
-                config.zed_cloud_url().to_string(),
+                config.zed_cloud_url().to_owned(),
                 config.zed_cloud_internal_api_key.clone(),
             )),
             config,

@@ -266,7 +266,7 @@ impl State {
                 let profile_name = settings
                     .profile_name
                     .clone()
-                    .unwrap_or_else(|| "default".to_string());
+                    .unwrap_or_else(|| "default".to_owned());
 
                 let auth = match method {
                     BedrockAuthMethod::Automatic => BedrockAuth::Automatic,
@@ -320,7 +320,7 @@ impl State {
                             .value
                             .as_deref()
                             .filter(|s| !s.is_empty())
-                            .map(|s| s.to_string());
+                            .map(|s| s.to_owned());
                         (
                             Some(BedrockAuth::IamCredentials {
                                 access_key_id: access_key_id.to_string(),
@@ -380,14 +380,14 @@ impl State {
         // Priority: env var > settings > default
         if let Some(region) = ZED_BEDROCK_REGION_VAR.value.as_deref() {
             if !region.is_empty() {
-                return region.to_string();
+                return region.to_owned();
             }
         }
 
         self.settings
             .as_ref()
             .and_then(|s| s.region.clone())
-            .unwrap_or_else(|| "us-east-1".to_string())
+            .unwrap_or_else(|| "us-east-1".to_owned())
     }
 
     fn get_allow_global(&self) -> bool {
@@ -435,7 +435,7 @@ impl BedrockLanguageModelProvider {
 
     fn create_language_model(&self, model: bedrock::Model) -> Arc<dyn LanguageModel> {
         Arc::new(BedrockModel {
-            id: LanguageModelId::from(model.id().to_string()),
+            id: LanguageModelId::from(model.id().to_owned()),
             model,
             http_client: self.http_client.clone(),
             handle: self.handle.clone(),
@@ -473,7 +473,7 @@ impl LanguageModelProvider for BedrockLanguageModelProvider {
 
         for model in bedrock::Model::iter() {
             if !matches!(model, bedrock::Model::Custom { .. }) {
-                models.insert(model.id().to_string(), model);
+                models.insert(model.id().to_owned(), model);
             }
         }
 
@@ -648,7 +648,7 @@ impl LanguageModel for BedrockModel {
     }
 
     fn name(&self) -> LanguageModelName {
-        LanguageModelName::from(self.model.display_name().to_string())
+        LanguageModelName::from(self.model.display_name().to_owned())
     }
 
     fn provider_id(&self) -> LanguageModelProviderId {
@@ -778,7 +778,7 @@ impl LanguageModel for BedrockModel {
         };
 
         let request = self.stream_completion(request, cx);
-        let display_name = self.model.display_name().to_string();
+        let display_name = self.model.display_name().to_owned();
         let future = self.request_limiter.stream(async move {
             let response = request.await.map_err(|err| match err {
                 BedrockError::Validation(ref msg) => {
@@ -1250,7 +1250,7 @@ pub fn map_to_language_model_completion_events(
                                 }
                                 ReasoningContentBlockDelta::RedactedContent(redacted) => {
                                     let content = String::from_utf8(redacted.into_inner())
-                                        .unwrap_or("REDACTED".to_string());
+                                        .unwrap_or("REDACTED".to_owned());
                                     Some(Ok(LanguageModelCompletionEvent::Thinking {
                                         text: content,
                                         signature: None,
@@ -1428,30 +1428,25 @@ impl ConfigurationView {
             .read(cx)
             .text(cx)
             .trim()
-            .to_string();
+            .to_owned();
         let secret_access_key = self
             .secret_access_key_editor
             .read(cx)
             .text(cx)
             .trim()
-            .to_string();
+            .to_owned();
         let session_token = self
             .session_token_editor
             .read(cx)
             .text(cx)
             .trim()
-            .to_string();
+            .to_owned();
         let session_token = if session_token.is_empty() {
             None
         } else {
             Some(session_token)
         };
-        let bearer_token = self
-            .bearer_token_editor
-            .read(cx)
-            .text(cx)
-            .trim()
-            .to_string();
+        let bearer_token = self.bearer_token_editor.read(cx).text(cx).trim().to_owned();
         let bearer_token = if bearer_token.is_empty() {
             None
         } else {
@@ -1570,7 +1565,7 @@ impl Render for ConfigurationView {
         } else if is_settings_derived {
             Some(
                 "Authentication method is configured in settings. Edit settings.json to change."
-                    .to_string(),
+                    .to_owned(),
             )
         } else {
             None

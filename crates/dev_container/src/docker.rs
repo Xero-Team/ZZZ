@@ -61,7 +61,7 @@ impl DockerInspectConfig {
                 log::warn!("Skipping environment variable without a value: {env_var}");
                 continue;
             };
-            map.insert(key.to_string(), value.to_string());
+            map.insert(key.to_owned(), value.to_owned());
         }
         Ok(map)
     }
@@ -208,7 +208,7 @@ impl Docker {
             );
         }
         Self {
-            docker_cli: docker_cli.to_string(),
+            docker_cli: docker_cli.to_owned(),
             has_buildx,
         }
     }
@@ -354,7 +354,7 @@ impl DockerClient for Docker {
 
         let output = command.output().await.map_err(|e| {
             log::error!("Error running command {e} in container exec");
-            DevContainerError::ContainerNotValid(container_id.to_string())
+            DevContainerError::ContainerNotValid(container_id.to_owned())
         })?;
         if !output.status.success() {
             let std_err = String::from_utf8_lossy(&output.stderr);
@@ -506,7 +506,7 @@ where
                     .iter()
                     .filter_map(|v| {
                         let (key, value) = v.split_once('=')?;
-                        Some((key.to_string(), value.to_string()))
+                        Some((key.to_owned(), value.to_owned()))
                     })
                     .collect(),
             ))
@@ -608,8 +608,8 @@ fn parse_compose_volume_string(s: &str) -> Option<MountDefinition> {
         }
 
         Some(MountDefinition {
-            source: Some(source.to_string()),
-            target: target.to_string(),
+            source: Some(source.to_owned()),
+            target: target.to_owned(),
             mount_type: None,
         })
     } else {
@@ -619,7 +619,7 @@ fn parse_compose_volume_string(s: &str) -> Option<MountDefinition> {
         }
         Some(MountDefinition {
             source: None,
-            target: s.to_string(),
+            target: s.to_owned(),
             mount_type: None,
         })
     }

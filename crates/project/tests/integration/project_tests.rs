@@ -256,7 +256,7 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
             tab_width = 10
             max_line_length = off
         "#,
-        ".zed": {
+        ".ZZZ": {
             "settings.json": r#"{
                 "tab_size": 8,
                 "hard_tabs": false,
@@ -911,7 +911,7 @@ async fn test_git_provider_project_setting(cx: &mut gpui::TestAppContext) {
     fs.insert_tree(
         path!("/dir"),
         json!({
-            ".zed": {
+            ".ZZZ": {
                 "settings.json": r#"{
                     "git_hosting_providers": [
                         {
@@ -970,7 +970,7 @@ async fn test_managing_project_specific_settings(cx: &mut gpui::TestAppContext) 
     fs.insert_tree(
         path!("/dir"),
         json!({
-            ".zed": {
+            ".ZZZ": {
                 "settings.json": r#"{ "tab_size": 8 }"#,
                 "tasks.json": r#"[{
                     "label": "cargo check all",
@@ -982,7 +982,7 @@ async fn test_managing_project_specific_settings(cx: &mut gpui::TestAppContext) 
                 "a.rs": "fn a() {\n    A\n}"
             },
             "b": {
-                ".zed": {
+                ".ZZZ": {
                     "settings.json": r#"{ "tab_size": 2 }"#,
                     "tasks.json": r#"[{
                         "label": "cargo check",
@@ -1012,8 +1012,8 @@ async fn test_managing_project_specific_settings(cx: &mut gpui::TestAppContext) 
 
     let topmost_local_task_source_kind = TaskSourceKind::Worktree {
         id: worktree_id,
-        directory_in_worktree: rel_path(".zed").into(),
-        id_base: "local worktree tasks from directory \".zed\"".into(),
+        directory_in_worktree: rel_path(".ZZZ").into(),
+        id_base: "local worktree tasks from directory \".ZZZ\"".into(),
     };
 
     let buffer_a = project
@@ -1056,8 +1056,8 @@ async fn test_managing_project_specific_settings(cx: &mut gpui::TestAppContext) 
             (
                 TaskSourceKind::Worktree {
                     id: worktree_id,
-                    directory_in_worktree: rel_path("b/.zed").into(),
-                    id_base: "local worktree tasks from directory \"b/.zed\"".into()
+                    directory_in_worktree: rel_path("b/.ZZZ").into(),
+                    id_base: "local worktree tasks from directory \"b/.ZZZ\"".into()
                 },
                 "cargo check".to_string(),
                 vec!["check".to_string()],
@@ -1137,8 +1137,8 @@ async fn test_managing_project_specific_settings(cx: &mut gpui::TestAppContext) 
             (
                 TaskSourceKind::Worktree {
                     id: worktree_id,
-                    directory_in_worktree: rel_path("b/.zed").into(),
-                    id_base: "local worktree tasks from directory \"b/.zed\"".into()
+                    directory_in_worktree: rel_path("b/.ZZZ").into(),
+                    id_base: "local worktree tasks from directory \"b/.ZZZ\"".into()
                 },
                 "cargo check".to_string(),
                 vec!["check".to_string()],
@@ -1175,7 +1175,7 @@ async fn test_invalid_local_tasks_shows_toast_with_doc_link(cx: &mut gpui::TestA
     fs.insert_tree(
         path!("/dir"),
         json!({
-            ".zed": {
+            ".ZZZ": {
                 "tasks.json": r#"[{ "label": "valid task", "command": "echo" }]"#,
             },
             "file.rs": ""
@@ -1231,7 +1231,7 @@ async fn test_fallback_to_single_worktree_tasks(cx: &mut gpui::TestAppContext) {
     fs.insert_tree(
         path!("/dir"),
         json!({
-            ".zed": {
+            ".ZZZ": {
                 "tasks.json": r#"[{
                     "label": "test worktree root",
                     "command": "echo $ZED_WORKTREE_ROOT"
@@ -1306,8 +1306,8 @@ async fn test_fallback_to_single_worktree_tasks(cx: &mut gpui::TestAppContext) {
         vec![(
             TaskSourceKind::Worktree {
                 id: worktree_id,
-                directory_in_worktree: rel_path(".zed").into(),
-                id_base: "local worktree tasks from directory \".zed\"".into(),
+                directory_in_worktree: rel_path(".ZZZ").into(),
+                id_base: "local worktree tasks from directory \".ZZZ\"".into(),
             },
             "echo /dir".to_string(),
         )]
@@ -1366,7 +1366,7 @@ async fn test_running_multiple_instances_of_a_single_server_in_one_worktree(
     fs.insert_tree(
         path!("/the-root"),
         json!({
-            ".zed": {
+            ".ZZZ": {
                 "settings.json": r#"
                 {
                     "languages": {
@@ -2043,7 +2043,7 @@ async fn test_language_server_relative_path(cx: &mut gpui::TestAppContext) {
     fs.insert_tree(
         path!("/the-root"),
         json!({
-            ".zed": {
+            ".ZZZ": {
                 "settings.json": settings_json_contents.to_string(),
             },
             ".relative_path": {
@@ -2120,11 +2120,23 @@ async fn test_language_server_tilde_path(cx: &mut gpui::TestAppContext) {
     fs.insert_tree(
         path!("/root"),
         json!({
-            ".zed": {
+            ".ZZZ": {
                 "settings.json": settings_json_contents.to_string(),
             },
             "src": {
                 "main.rs": "fn main() {}",
+            }
+        }),
+    )
+    .await;
+    let home_dir = paths::home_dir();
+    fs.insert_tree(
+        home_dir.as_path(),
+        json!({
+            ".local": {
+                "bin": {
+                    "rust-analyzer": ""
+                }
             }
         }),
     )
@@ -2151,7 +2163,8 @@ async fn test_language_server_tilde_path(cx: &mut gpui::TestAppContext) {
         .unwrap();
 
     let lsp_path = tilde_lsp.next().await.unwrap().binary.path;
-    let expected_path = paths::home_dir().join(".local/bin/rust-analyzer");
+    let expected_path = PathBuf::from(std::env::var("HOME").expect("HOME should be set"))
+        .join(".local/bin/rust-analyzer");
     assert_eq!(
         lsp_path, expected_path,
         "Tilde path should expand to home directory"
@@ -6482,12 +6495,19 @@ async fn test_terminal_toolchain_lookup_is_scoped_to_terminal_worktree(
 
     let terminal = project
         .update(cx, |project, cx| {
+            #[cfg(target_os = "windows")]
+            let (command, args) = (
+                "cmd.exe".to_string(),
+                vec!["/C".into(), "echo".into(), "terminal".into()],
+            );
+            #[cfg(not(target_os = "windows"))]
+            let (command, args) = ("sh".to_string(), vec!["-lc".into(), "echo terminal".into()]);
             project.create_terminal_task(
                 SpawnInTerminal {
                     full_label: "scope test".into(),
                     label: "scope test".into(),
-                    command: Some("cmd.exe".into()),
-                    args: vec!["/C".into(), "echo".into(), "terminal".into()],
+                    command: Some(command.into()),
+                    args,
                     cwd: Some(project_b_path.clone()),
                     shell: Shell::System,
                     ..SpawnInTerminal::default()
@@ -12702,14 +12722,14 @@ async fn test_initial_scan_complete(cx: &mut gpui::TestAppContext) {
         json!({
             "a": {
                 ".git": {},
-                ".zed": {
+                ".ZZZ": {
                     "tasks.json": r#"[{"label": "task-a", "command": "echo a"}]"#
                 },
                 "src": { "main.rs": "" }
             },
             "b": {
                 ".git": {},
-                ".zed": {
+                ".ZZZ": {
                     "tasks.json": r#"[{"label": "task-b", "command": "echo b"}]"#
                 },
                 "src": { "lib.rs": "" }

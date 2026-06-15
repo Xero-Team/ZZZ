@@ -313,7 +313,7 @@ impl LspLogView {
                 .status
                 .binary
                 .as_ref()
-                .map_or_else(|| "Unknown".to_string(), |binary| format!("{:#?}", binary)),
+                .map_or_else(|| "Unknown".to_owned(), |binary| format!("{:#?}", binary)),
             WORKSPACE_FOLDERS = info
                 .status
                 .workspace_folders
@@ -329,7 +329,7 @@ impl LspLogView {
                 .map(|configuration| serde_json::to_string_pretty(&configuration))
                 .transpose()
                 .unwrap_or_else(|e| Some(format!("Failed to serialize configuration: {e}")))
-                .unwrap_or_else(|| "Unknown".to_string()),
+                .unwrap_or_else(|| "Unknown".to_owned()),
         );
         let editor = initialize_new_editor(server_info, false, window, cx);
         let editor_subscription = cx.subscribe(
@@ -397,8 +397,8 @@ impl LspLogView {
                     let worktree_root_name = state
                         .worktree_id
                         .and_then(|id| self.project.read(cx).worktree_for_id(id, cx))
-                        .map(|worktree| worktree.read(cx).root_name_str().to_string())
-                        .unwrap_or_else(|| "Unknown worktree".to_string());
+                        .map(|worktree| worktree.read(cx).root_name_str().to_owned())
+                        .unwrap_or_else(|| "Unknown worktree".to_owned());
 
                     LogMenuItem {
                         server_id: *server_id,
@@ -415,7 +415,7 @@ impl LspLogView {
                     server_id: *server_id,
                     server_name: state.name.clone().unwrap_or(unknown_server.clone()),
                     server_kind: state.kind.clone(),
-                    worktree_root_name: "supplementary".to_string(),
+                    worktree_root_name: "supplementary".to_owned(),
                     rpc_trace_enabled: state.rpc_state.is_some(),
                     selected_entry: self.active_entry_kind,
                     trace_level: lsp::TraceValue::Off,
@@ -431,7 +431,7 @@ impl LspLogView {
                             server_id,
                             server_name: name,
                             server_kind: state.kind.clone(),
-                            worktree_root_name: "supplementary".to_string(),
+                            worktree_root_name: "supplementary".to_owned(),
                             rpc_trace_enabled: state.rpc_state.is_some(),
                             selected_entry: self.active_entry_kind,
                             trace_level: lsp::TraceValue::Off,

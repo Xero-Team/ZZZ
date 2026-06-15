@@ -1162,7 +1162,7 @@ impl Session {
                 this.respond_to_client(
                     request_seq,
                     success,
-                    StartDebugging::COMMAND.to_string(),
+                    StartDebugging::COMMAND.to_owned(),
                     None,
                     cx,
                 )
@@ -1200,7 +1200,7 @@ impl Session {
                             this.respond_to_client(
                                 request.seq,
                                 false,
-                                StartDebugging::COMMAND.to_string(),
+                                StartDebugging::COMMAND.to_owned(),
                                 error,
                                 cx,
                             )
@@ -1224,7 +1224,7 @@ impl Session {
         cx.spawn(async move |session, cx| {
             let result = util::maybe!(async move {
                 rx.next().await.ok_or_else(|| {
-                    anyhow!("failed to receive response from spawn terminal".to_string())
+                    anyhow!("failed to receive response from spawn terminal".to_owned())
                 })?
             })
             .await;
@@ -1259,7 +1259,7 @@ impl Session {
                     session.respond_to_client(
                         seq,
                         success,
-                        RunInTerminal::COMMAND.to_string(),
+                        RunInTerminal::COMMAND.to_owned(),
                         body,
                         cx,
                     )

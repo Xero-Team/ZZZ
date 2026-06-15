@@ -757,7 +757,7 @@ pub(super) async fn format_with_prettier(
 
     let prettier_description = match prettier_path.as_ref() {
         Some(path) => format!("prettier at {path:?}"),
-        None => "default prettier instance".to_string(),
+        None => "default prettier instance".to_owned(),
     };
 
     let request_timeout: Duration = cx.update(|app| {
@@ -933,7 +933,7 @@ async fn install_prettier_packages(
     let packages_to_install = plugins_to_install
         .iter()
         .map(|package_name| package_name.to_string())
-        .chain(Some("prettier".to_string()))
+        .chain(Some("prettier".to_owned()))
         .collect::<Vec<_>>();
 
     let default_prettier_dir = default_prettier_dir().as_path();

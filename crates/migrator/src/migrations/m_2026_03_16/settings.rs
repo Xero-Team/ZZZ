@@ -22,7 +22,7 @@ fn rename_heex_settings(
         .next()?
         .byte_range();
 
-    Some((setting_name_range, "HEEx".to_string()))
+    Some((setting_name_range, "HEEx".to_owned()))
 }
 
 fn is_heex_settings(contents: &str, mat: &QueryMatch, query: &Query) -> bool {

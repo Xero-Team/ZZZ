@@ -97,7 +97,7 @@ fn build_qa_feedback(example: &Example) -> Option<String> {
         .map_or("unknown", |v| if v { "yes" } else { "no" });
     let confidence = qa
         .confidence
-        .map_or("unknown".to_string(), |v| v.to_string());
+        .map_or("unknown".to_owned(), |v| v.to_string());
 
     Some(format!(
         "- **Reverts user edits**: {reverts_edits}\n\
@@ -130,7 +130,7 @@ fn build_score_feedback(example: &Example) -> Option<String> {
              the expected editable region, or producing changes misaligned with the editable \
              region boundaries. Make sure the prediction only modifies code within the editable \
              region and is properly aligned."
-                .to_string(),
+                .to_owned(),
         );
     }
 
@@ -141,8 +141,7 @@ fn build_score_feedback(example: &Example) -> Option<String> {
             Examples of more focused predictions: \
             - Predicting a function outline but not its body. \
             - Predicting only the first logical step and not speculating about further steps.
-            In general, the smaller the prediction you make, the higher the chance it will be correct."
-                .to_string(),
+            In general, the smaller the prediction you make, the higher the chance it will be correct.".to_owned(),
         );
     }
 

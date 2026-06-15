@@ -24,7 +24,7 @@ use crate::TitleBar;
 fn format_stat(value: Option<f64>, format: impl Fn(f64) -> String) -> String {
     match value {
         Some(v) => format(v),
-        None => "—".to_string(),
+        None => "—".to_owned(),
     }
 }
 

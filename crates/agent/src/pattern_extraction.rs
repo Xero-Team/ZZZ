@@ -187,7 +187,7 @@ pub fn extract_url_pattern(url: &str) -> Option<String> {
 pub fn extract_url_pattern_display(url: &str) -> Option<String> {
     let parsed = Url::parse(url).ok()?;
     let domain = parsed.host_str()?;
-    Some(domain.to_string())
+    Some(domain.to_owned())
 }
 
 #[cfg(test)]

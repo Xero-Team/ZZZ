@@ -79,7 +79,7 @@ impl From<&str> for SshConnectionHost {
         if let Ok(address) = value.parse() {
             Self::IpAddr(address)
         } else {
-            Self::Hostname(value.to_string())
+            Self::Hostname(value.to_owned())
         }
     }
 }
@@ -104,7 +104,7 @@ fn bracket_ipv6(host: &str) -> String {
     if host.contains(':') && !host.starts_with('[') {
         format!("[{}]", host)
     } else {
-        host.to_string()
+        host.to_owned()
     }
 }
 
@@ -790,7 +790,7 @@ impl SshRemoteConnection {
         cx: &mut AsyncApp,
     ) -> Result<Arc<RelPath>> {
         let version_str = match release_channel {
-            ReleaseChannel::Dev => "build".to_string(),
+            ReleaseChannel::Dev => "build".to_owned(),
             _ => version.to_string(),
         };
         let binary_name = format!(
@@ -1153,7 +1153,7 @@ impl SshRemoteConnection {
             self.socket
                 .connection_options
                 .port
-                .map(|port| vec!["-P".to_string(), port.to_string()])
+                .map(|port| vec!["-P".to_owned(), port.to_string()])
                 .unwrap_or_default(),
         );
         if let Some(args) = args {
@@ -1173,7 +1173,7 @@ impl SshRemoteConnection {
             self.socket
                 .connection_options
                 .port
-                .map(|port| vec!["-P".to_string(), port.to_string()])
+                .map(|port| vec!["-P".to_owned(), port.to_string()])
                 .unwrap_or_default(),
         );
         command.arg("-b").arg("-");
@@ -1376,9 +1376,9 @@ impl SshSocket {
         let arguments = {
             let mut args = arguments;
             args.extend(vec![
-                "-o".to_string(),
-                "ControlMaster=no".to_string(),
-                "-o".to_string(),
+                "-o".to_owned(),
+                "ControlMaster=no".to_owned(),
+                "-o".to_owned(),
                 format!("ControlPath={}", self.socket_path.display()),
             ]);
             args
@@ -1606,14 +1606,14 @@ impl SshConnectionOptions {
                 username = tokens.next();
                 continue;
             } else if let Some(l) = arg.strip_prefix("-l") {
-                username = Some(l.to_string());
+                username = Some(l.to_owned());
                 continue;
             }
             if arg == "-L" || arg.starts_with("-L") {
                 let forward_spec = if arg == "-L" {
                     tokens.next()
                 } else {
-                    Some(arg.strip_prefix("-L").unwrap().to_string())
+                    Some(arg.strip_prefix("-L").unwrap().to_owned())
                 };
 
                 if let Some(spec) = forward_spec {
@@ -1642,7 +1642,7 @@ impl SshConnectionOptions {
             // Destination might be: username1@username2@ip2@ip1
             if let Some((u, rest)) = input.rsplit_once('@') {
                 input = rest;
-                username = Some(u.to_string());
+                username = Some(u.to_owned());
             }
 
             // Handle port parsing, accounting for IPv6 addresses
@@ -1662,7 +1662,7 @@ impl SshConnectionOptions {
                 port = p.parse().ok();
             }
 
-            hostname = Some(input.to_string())
+            hostname = Some(input.to_owned())
         }
 
         let Some(hostname) = hostname else {
@@ -1708,11 +1708,11 @@ impl SshConnectionOptions {
         let mut args = self.additional_args_for_scp();
 
         if let Some(timeout) = self.connection_timeout {
-            args.extend(["-o".to_string(), format!("ConnectTimeout={}", timeout)]);
+            args.extend(["-o".to_owned(), format!("ConnectTimeout={}", timeout)]);
         }
 
         if let Some(port) = self.port {
-            args.push("-p".to_string());
+            args.push("-p".to_owned());
             args.push(port.to_string());
         }
 

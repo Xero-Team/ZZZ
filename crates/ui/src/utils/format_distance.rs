@@ -109,41 +109,41 @@ fn distance_string(
         } else {
             "less than 5 seconds"
         }
-        .to_string()
+        .to_owned()
     } else if distance < 10 && include_seconds {
         if hide_prefix {
             "10 seconds"
         } else {
             "less than 10 seconds"
         }
-        .to_string()
+        .to_owned()
     } else if distance < 20 && include_seconds {
         if hide_prefix {
             "20 seconds"
         } else {
             "less than 20 seconds"
         }
-        .to_string()
+        .to_owned()
     } else if distance < 40 && include_seconds {
-        "half a minute".to_string()
+        "half a minute".to_owned()
     } else if distance < 60 && include_seconds {
         if hide_prefix {
             "a minute"
         } else {
             "less than a minute"
         }
-        .to_string()
+        .to_owned()
     } else if distance < 90 && include_seconds {
-        "1 minute".to_string()
+        "1 minute".to_owned()
     } else if distance < 30 {
         if hide_prefix {
             "a minute"
         } else {
             "less than a minute"
         }
-        .to_string()
+        .to_owned()
     } else if distance < 90 {
-        "1 minute".to_string()
+        "1 minute".to_owned()
     } else if distance < 2_700 {
         format!("{} minutes", minutes)
     } else if distance < 5_400 {
@@ -152,7 +152,7 @@ fn distance_string(
         } else {
             "about 1 hour"
         }
-        .to_string()
+        .to_owned()
     } else if distance < 86_400 {
         if hide_prefix {
             format!("{} hours", hours)
@@ -160,7 +160,7 @@ fn distance_string(
             format!("about {} hours", hours)
         }
     } else if distance < 172_800 {
-        "1 day".to_string()
+        "1 day".to_owned()
     } else if distance < 2_592_000 {
         format!("{} days", days)
     } else if distance < 5_184_000 {
@@ -169,14 +169,14 @@ fn distance_string(
         } else {
             "about 1 month"
         }
-        .to_string()
+        .to_owned()
     } else if distance < 7_776_000 {
         if hide_prefix {
             "2 months"
         } else {
             "about 2 months"
         }
-        .to_string()
+        .to_owned()
     } else if distance < 31_540_000 {
         format!("{} months", months)
     } else if distance < 39_425_000 {
@@ -185,16 +185,16 @@ fn distance_string(
         } else {
             "about 1 year"
         }
-        .to_string()
+        .to_owned()
     } else if distance < 55_195_000 {
-        if hide_prefix { "1 year" } else { "over 1 year" }.to_string()
+        if hide_prefix { "1 year" } else { "over 1 year" }.to_owned()
     } else if distance < 63_080_000 {
         if hide_prefix {
             "2 years"
         } else {
             "almost 2 years"
         }
-        .to_string()
+        .to_owned()
     } else {
         let years = distance / 31_536_000;
         let remaining_months = (distance % 31_536_000) / 2_592_000;

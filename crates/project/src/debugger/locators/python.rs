@@ -71,11 +71,11 @@ impl DapLocator for PythonLocator {
         });
         if let Some(config_obj) = config.as_object_mut() {
             if let Some(module) = mod_name {
-                config_obj.insert("module".to_string(), module.clone().into());
+                config_obj.insert("module".to_owned(), module.clone().into());
             }
             if let Some(program) = program_position {
                 config_obj.insert(
-                    "program".to_string(),
+                    "program".to_owned(),
                     build_config.args[program].clone().into(),
                 );
             }
@@ -83,7 +83,7 @@ impl DapLocator for PythonLocator {
 
         Some(DebugScenario {
             adapter: adapter.0.clone(),
-            label: resolved_label.to_string().into(),
+            label: resolved_label.to_owned().into(),
             build: None,
             config,
             tcp_connection: None,

@@ -286,7 +286,7 @@ pub fn background_thread_queue() -> WriteQueueConstructor {
         let (sender, receiver) = channel::<QueuedWrite>();
 
         thread::Builder::new()
-            .name("sqlezWorker".to_string())
+            .name("sqlezWorker".to_owned())
             .spawn(move || {
                 while let Ok(write) = receiver.recv() {
                     write()

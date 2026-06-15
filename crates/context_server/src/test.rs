@@ -24,11 +24,11 @@ pub fn create_fake_transport(
 
 fn create_initialize_response(server_name: String) -> InitializeResponse {
     InitializeResponse {
-        protocol_version: ProtocolVersion(crate::types::LATEST_PROTOCOL_VERSION.to_string()),
+        protocol_version: ProtocolVersion(crate::types::LATEST_PROTOCOL_VERSION.to_owned()),
         server_info: Implementation {
             name: server_name,
             title: None,
-            version: "1.0.0".to_string(),
+            version: "1.0.0".to_owned(),
             description: None,
         },
         capabilities: ServerCapabilities::default(),

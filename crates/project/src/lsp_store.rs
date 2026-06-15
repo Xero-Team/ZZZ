@@ -725,9 +725,14 @@ impl LocalLspStore {
                 }
                 let mut env = delegate.shell_env().await;
                 env.extend(settings.env.unwrap_or_default());
+                let path = if path.to_string_lossy().starts_with('~') {
+                    PathBuf::from(shellexpand::tilde(&path.to_string_lossy()).into_owned())
+                } else {
+                    delegate.resolve_relative_path(path)
+                };
 
                 Ok(LanguageServerBinary {
-                    path: delegate.resolve_relative_path(path),
+                    path,
                     env: Some(env),
                     arguments: settings
                         .arguments
@@ -3882,7 +3887,7 @@ impl LocalLspStore {
 
         registrations
             .did_change_watched_files
-            .insert(registration_id.to_string(), params.watchers);
+            .insert(registration_id.to_owned(), params.watchers);
 
         self.rebuild_watched_paths(language_server_id, cx);
     }
@@ -4941,7 +4946,7 @@ impl LspStore {
             let mut lines = content.chunks_in_range(0..first_bytes).lines();
             for _ in 0..modeline_lines {
                 if let Some(line) = lines.next() {
-                    first_lines.push(line.to_string());
+                    first_lines.push(line.to_owned());
                 } else {
                     break;
                 }
@@ -4956,7 +4961,7 @@ impl LspStore {
                 .lines();
             for _ in 0..modeline_lines {
                 if let Some(line) = lines.next() {
-                    last_lines.push(line.to_string());
+                    last_lines.push(line.to_owned());
                 } else {
                     break;
                 }
@@ -7950,7 +7955,7 @@ impl LspStore {
         if let Some((upstream_client, project_id)) = self.upstream_client().as_ref() {
             let request = upstream_client.request(proto::GetProjectSymbols {
                 project_id: *project_id,
-                query: query.to_string(),
+                query: query.to_owned(),
             });
             cx.foreground_executor().spawn(async move {
                 let response = request.await?;
@@ -8021,7 +8026,7 @@ impl LspStore {
                     server
                         .request::<lsp::request::WorkspaceSymbolRequest>(
                             lsp::WorkspaceSymbolParams {
-                                query: query.to_string(),
+                                query: query.to_owned(),
                                 ..Default::default()
                             },
                             request_timeout,
@@ -11755,7 +11760,7 @@ impl LspStore {
                         markdown: adapter.as_ref().and_then(|adapter| {
                             adapter.diagnostic_message_to_markdown(&diagnostic.message)
                         }),
-                        message: diagnostic.message.trim().to_string(),
+                        message: diagnostic.message.trim().to_owned(),
                         group_id,
                         is_primary: true,
                         is_disk_based,
@@ -11783,7 +11788,7 @@ impl LspStore {
                                     markdown: adapter.as_ref().and_then(|adapter| {
                                         adapter.diagnostic_message_to_markdown(&info.message)
                                     }),
-                                    message: info.message.trim().to_string(),
+                                    message: info.message.trim().to_owned(),
                                     group_id,
                                     is_primary: false,
                                     is_disk_based,
@@ -14592,7 +14597,7 @@ impl From<lsp::Documentation> for CompletionDocumentation {
         match docs {
             lsp::Documentation::String(text) => {
                 if text.lines().count() <= 1 {
-                    CompletionDocumentation::SingleLine(text.trim().to_string().into())
+                    CompletionDocumentation::SingleLine(text.trim().to_owned().into())
                 } else {
                     CompletionDocumentation::MultiLinePlainText(text.into())
                 }
@@ -14846,7 +14851,7 @@ impl LspAdapterDelegate for LocalLspAdapterDelegate {
             .output()
             .await?;
         let global_node_modules =
-            PathBuf::from(String::from_utf8_lossy(&output.stdout).trim().to_string());
+            PathBuf::from(String::from_utf8_lossy(&output.stdout).trim().to_owned());
 
         if let Some(version) =
             read_package_installed_version(global_node_modules.clone(), package_name).await?

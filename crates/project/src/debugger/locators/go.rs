@@ -102,7 +102,7 @@ impl DapLocator for GoLocator {
 
         match go_action.as_str() {
             "test" => {
-                let mut program = ".".to_string();
+                let mut program = ".".to_owned();
                 let mut args = Vec::default();
                 let mut build_flags = Vec::default();
 
@@ -167,12 +167,12 @@ impl DapLocator for GoLocator {
                     }
                 }
                 if !seen_v {
-                    args.push("-test.v".to_string());
+                    args.push("-test.v".to_owned());
                 }
 
                 let config: serde_json::Value = serde_json::to_value(DelveLaunchRequest {
-                    request: "launch".to_string(),
-                    mode: "test".to_string(),
+                    request: "launch".to_owned(),
+                    mode: "test".to_owned(),
                     program,
                     args,
                     build_flags,
@@ -182,7 +182,7 @@ impl DapLocator for GoLocator {
                 .unwrap();
 
                 Some(DebugScenario {
-                    label: resolved_label.to_string().into(),
+                    label: resolved_label.to_owned().into(),
                     adapter: adapter.0.clone(),
                     build: None,
                     config,
@@ -193,7 +193,7 @@ impl DapLocator for GoLocator {
                 let mut next_arg_is_build = false;
                 let mut seen_pkg = false;
 
-                let mut program = ".".to_string();
+                let mut program = ".".to_owned();
                 let mut args = Vec::default();
                 let mut build_flags = Vec::default();
 
@@ -217,8 +217,8 @@ impl DapLocator for GoLocator {
                 let config: serde_json::Value = serde_json::to_value(DelveLaunchRequest {
                     cwd: build_config.cwd.clone(),
                     env: build_config.env.clone(),
-                    request: "launch".to_string(),
-                    mode: "debug".to_string(),
+                    request: "launch".to_owned(),
+                    mode: "debug".to_owned(),
                     program,
                     args,
                     build_flags,
@@ -226,7 +226,7 @@ impl DapLocator for GoLocator {
                 .unwrap();
 
                 Some(DebugScenario {
-                    label: resolved_label.to_string().into(),
+                    label: resolved_label.to_owned().into(),
                     adapter: adapter.0.clone(),
                     build: None,
                     config,

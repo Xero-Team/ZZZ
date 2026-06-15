@@ -202,7 +202,7 @@ impl RemoteConnection for MockRemoteConnection {
         _port_forward: Option<(u16, String, u16)>,
         _interactive: Interactive,
     ) -> Result<CommandTemplate> {
-        let shell_program = program.unwrap_or_else(|| "sh".to_string());
+        let shell_program = program.unwrap_or_else(|| "sh".to_owned());
         let mut shell_args = Vec::new();
         shell_args.push(shell_program);
         shell_args.extend(args.iter().cloned());

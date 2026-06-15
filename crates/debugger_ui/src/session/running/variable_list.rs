@@ -1181,7 +1181,7 @@ impl VariableList {
 
         let char_count = s.chars().count();
         if char_count <= max_chars {
-            return s.to_string();
+            return s.to_owned();
         }
 
         if ELLIPSIS.len() + MIN_LENGTH > max_chars {

@@ -1993,11 +1993,11 @@ impl CollabPanel {
             async move {
                 if is_enabled {
                     kvp_store
-                        .write_kvp(FILTER_OCCUPIED_CHANNELS_KEY.to_string(), "1".to_string())
+                        .write_kvp(FILTER_OCCUPIED_CHANNELS_KEY.to_owned(), "1".to_owned())
                         .await?;
                 } else {
                     kvp_store
-                        .delete_kvp(FILTER_OCCUPIED_CHANNELS_KEY.to_string())
+                        .delete_kvp(FILTER_OCCUPIED_CHANNELS_KEY.to_owned())
                         .await?;
                 }
                 anyhow::Ok(())
@@ -2019,7 +2019,7 @@ impl CollabPanel {
             async move {
                 let json = serde_json::to_string(&favorite_ids)?;
                 kvp_store
-                    .write_kvp(FAVORITE_CHANNELS_KEY.to_string(), json)
+                    .write_kvp(FAVORITE_CHANNELS_KEY.to_owned(), json)
                     .await?;
                 anyhow::Ok(())
             }
@@ -2168,9 +2168,9 @@ impl CollabPanel {
             .detach_and_prompt_err("Failed to set channel visibility", window, cx, |e, _, _| match e.error_code() {
                 ErrorCode::BadPublicNesting =>
                     if e.error_tag("direction") == Some("parent") {
-                        Some("To make a channel public, its parent channel must be public.".to_string())
+                        Some("To make a channel public, its parent channel must be public.".to_owned())
                     } else {
-                        Some("To make a channel private, all of its subchannels must be private.".to_string())
+                        Some("To make a channel private, all of its subchannels must be private.".to_owned())
                     },
                 _ => None
             });

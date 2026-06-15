@@ -76,7 +76,7 @@ impl FilterData {
             let display_host_byte_len = display_host.len();
             let search_host = match server.host_alias() {
                 Some(alias) => format!("{display_host} {alias}"),
-                None => display_host.to_string(),
+                None => display_host.to_owned(),
             };
             let match_host_byte_len = search_host.len();
             match server {

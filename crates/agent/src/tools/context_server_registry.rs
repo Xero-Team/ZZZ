@@ -451,7 +451,7 @@ pub fn get_prompt(
         return Task::ready(Err(anyhow::anyhow!("Context server not initialized")));
     };
 
-    let prompt_name = prompt_name.to_string();
+    let prompt_name = prompt_name.to_owned();
 
     cx.background_spawn(async move {
         let response = protocol

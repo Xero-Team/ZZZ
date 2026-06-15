@@ -1501,7 +1501,7 @@ impl GitStore {
             .and_then(|b| b.upstream.as_ref())
             .and_then(|b| b.remote_name())
             .unwrap_or("origin")
-            .to_string();
+            .to_owned();
 
         let rx = repo.update(cx, |repo, _| {
             repo.send_job("get_permalink_to_line", None, move |state, cx| async move {
@@ -5237,7 +5237,7 @@ impl Repository {
         paths: Vec<RepoPath>,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        let commit = commit.to_string();
+        let commit = commit.to_owned();
         let id = self.id;
 
         self.spawn_job_with_tracking(
@@ -6786,7 +6786,7 @@ impl Repository {
         let askpass_id = util::post_inc(&mut self.latest_askpass_id);
         let id = self.id;
 
-        let mut status = "git pull".to_string();
+        let mut status = "git pull".to_owned();
         if rebase {
             status.push_str(" --rebase");
         }
@@ -7125,7 +7125,7 @@ impl Repository {
         let id = self.id;
         let job_description = match target.branch_name() {
             Some(branch_name) => format!("git worktree add: {branch_name}"),
-            None => "git worktree add (detached)".to_string(),
+            None => "git worktree add (detached)".to_owned(),
         };
         self.send_job(
             "create_worktree",
@@ -8625,13 +8625,13 @@ pub fn linked_worktree_short_name(
     let project_name = main_worktree_path.file_name()?.to_str()?;
     let directory_name = linked_worktree_path.file_name()?.to_str()?;
     let name = if directory_name != project_name {
-        directory_name.to_string()
+        directory_name.to_owned()
     } else {
         linked_worktree_path
             .parent()?
             .file_name()?
             .to_str()?
-            .to_string()
+            .to_owned()
     };
     Some(name.into())
 }

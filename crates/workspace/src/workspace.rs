@@ -2178,7 +2178,7 @@ impl Workspace {
         let left_visible = left_dock.is_open();
         let left_active_panel = left_dock
             .active_panel()
-            .map(|panel| panel.persistent_name().to_string());
+            .map(|panel| panel.persistent_name().to_owned());
         // `zoomed_position` is kept in sync with individual panel zoom state
         // by the dock code in `Dock::new` and `Dock::add_panel`.
         let left_dock_zoom = self.zoomed_position == Some(DockPosition::Left);
@@ -2187,14 +2187,14 @@ impl Workspace {
         let right_visible = right_dock.is_open();
         let right_active_panel = right_dock
             .active_panel()
-            .map(|panel| panel.persistent_name().to_string());
+            .map(|panel| panel.persistent_name().to_owned());
         let right_dock_zoom = self.zoomed_position == Some(DockPosition::Right);
 
         let bottom_dock = self.bottom_dock.read(cx);
         let bottom_visible = bottom_dock.is_open();
         let bottom_active_panel = bottom_dock
             .active_panel()
-            .map(|panel| panel.persistent_name().to_string());
+            .map(|panel| panel.persistent_name().to_owned());
         let bottom_dock_zoom = self.zoomed_position == Some(DockPosition::Bottom);
 
         DockStructure {
@@ -2347,7 +2347,7 @@ impl Workspace {
         };
 
         let kvp = db::kvp::KeyValueStore::global(cx);
-        let panel_key = panel_key.to_string();
+        let panel_key = panel_key.to_owned();
         cx.background_spawn(async move {
             let scope = kvp.scoped(dock::PANEL_SIZE_STATE_KEY);
             scope
@@ -6020,7 +6020,7 @@ impl Workspace {
         }
 
         if title.is_empty() {
-            title = "empty project".to_string();
+            title = "empty project".to_owned();
         }
 
         let active_project_path = self.active_item(cx).and_then(|item| item.project_path(cx));
@@ -7247,7 +7247,7 @@ impl Workspace {
     pub fn key_context(&self, cx: &App) -> KeyContext {
         let mut context = KeyContext::new_with_defaults();
         context.add("Workspace");
-        context.set("keyboard_layout", cx.keyboard_layout().name().to_string());
+        context.set("keyboard_layout", cx.keyboard_layout().name().to_owned());
         if let Some(status) = self
             .debugger_provider
             .as_ref()

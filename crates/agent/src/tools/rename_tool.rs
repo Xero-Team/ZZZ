@@ -117,7 +117,7 @@ impl AgentTool for RenameTool {
                     let path = buffer
                         .file()
                         .map(|f| f.full_path(cx).display().to_string())
-                        .unwrap_or_else(|| "<untitled>".to_string());
+                        .unwrap_or_else(|| "<untitled>".to_owned());
                     writeln!(output, "- {path}").ok();
                 });
             }

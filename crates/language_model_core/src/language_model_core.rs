@@ -182,7 +182,7 @@ impl LanguageModelCompletionError {
             .get("message")
             .and_then(|v| v.as_str())
             .unwrap_or(message)
-            .to_string();
+            .to_owned();
         Some((upstream_status, inner_message))
     }
 

@@ -275,7 +275,7 @@ impl Component for AiSettingItem {
                         )
                         .child(
                             div().min_w_0().flex_1().child(
-                                Label::new(SharedString::from(message.to_string()))
+                                Label::new(SharedString::from(message.to_owned()))
                                     .color(Color::Muted)
                                     .size(LabelSize::Small),
                             ),

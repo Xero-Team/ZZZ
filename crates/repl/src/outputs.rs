@@ -146,7 +146,7 @@ impl Output {
             Output::Stream { content } => {
                 let text = content.read(cx).full_text();
                 Some(nbformat::v4::Output::Stream {
-                    name: "stdout".to_string(),
+                    name: "stdout".to_owned(),
                     text: nbformat::v4::MultilineString(text),
                 })
             }
@@ -164,7 +164,7 @@ impl Output {
             Output::ErrorOutput(error_view) => {
                 let traceback_text = error_view.traceback.read(cx).full_text();
                 let traceback_lines: Vec<String> =
-                    traceback_text.lines().map(|s| s.to_string()).collect();
+                    traceback_text.lines().map(|s| s.to_owned()).collect();
                 Some(nbformat::v4::Output::Error(nbformat::v4::ErrorOutput {
                     ename: error_view.ename.clone(),
                     evalue: error_view.evalue.clone(),
@@ -232,7 +232,7 @@ impl Output {
                                             let mut multi_buffer =
                                                 MultiBuffer::singleton(buffer.clone(), cx);
 
-                                            multi_buffer.set_title("REPL Output".to_string(), cx);
+                                            multi_buffer.set_title("REPL Output".to_owned(), cx);
                                             multi_buffer
                                         });
 
@@ -353,8 +353,7 @@ impl Output {
                                             let multibuffer = cx.new(|cx| {
                                                 let mut multi_buffer =
                                                     MultiBuffer::singleton(buffer.clone(), cx);
-                                                multi_buffer
-                                                    .set_title("Full Error".to_string(), cx);
+                                                multi_buffer.set_title("Full Error".to_owned(), cx);
                                                 multi_buffer
                                             });
                                             Editor::for_multibuffer(multibuffer, None, window, cx)
@@ -404,7 +403,7 @@ impl Output {
                     content: cx.new(|_| json_view),
                     display_id,
                 },
-                Err(_) => Output::Message("Failed to parse JSON".to_string()),
+                Err(_) => Output::Message("Failed to parse JSON".to_owned()),
             },
             Some(MimeType::Plain(text)) => Output::Plain {
                 content: cx.new(|cx| TerminalOutput::from(text, window, cx)),
@@ -449,7 +448,7 @@ impl Output {
                 },
             },
             // Any other media types are not supported
-            _ => Output::Message("Unsupported media type".to_string()),
+            _ => Output::Message("Unsupported media type".to_owned()),
         }
     }
 }
@@ -716,7 +715,7 @@ impl ExecutionView {
             return None;
         }
 
-        Some(trimmed.to_string())
+        Some(trimmed.to_owned())
     }
 
     fn apply_terminal_text(
@@ -799,7 +798,7 @@ impl Render for ExecutionView {
 
         let pending_input_element = self.pending_input.as_ref().map(|pending_input| {
             let prompt_label = if pending_input.prompt.is_empty() {
-                "Input:".to_string()
+                "Input:".to_owned()
             } else {
                 pending_input.prompt.clone()
             };

@@ -32,7 +32,7 @@ fn discover_examples() -> Result<Vec<String>> {
         let path = entry?.path();
         if path.extension().and_then(|e| e.to_str()) == Some("rs") {
             if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                names.push(stem.to_string());
+                names.push(stem.to_owned());
             }
         }
     }
@@ -46,7 +46,7 @@ fn discover_examples() -> Result<Vec<String>> {
 }
 
 pub fn run_web_examples(args: WebExamplesArgs) -> Result<()> {
-    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned());
     let profile = if args.release { "release" } else { "debug" };
     let out_dir = "target/web-examples";
 

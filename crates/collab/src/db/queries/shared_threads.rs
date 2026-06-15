@@ -11,7 +11,7 @@ impl Database {
         title: &str,
         data: Vec<u8>,
     ) -> Result<()> {
-        let title = title.to_string();
+        let title = title.to_owned();
         self.transaction(|tx| {
             let title = title.clone();
             let data = data.clone();
@@ -68,7 +68,7 @@ impl Database {
 
             let username = user
                 .map(|u| u.github_login)
-                .unwrap_or_else(|| "Unknown".to_string());
+                .unwrap_or_else(|| "Unknown".to_owned());
 
             Ok(Some((thread, username)))
         })

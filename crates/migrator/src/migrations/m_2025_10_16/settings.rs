@@ -51,7 +51,7 @@ fn restore_code_actions_on_format_inner(value: &mut Value, path: &[&str]) -> Res
                 fmt_path(path, "formatter"),
             );
         };
-        code_action_formatters.push(code_action_name.to_string());
+        code_action_formatters.push(code_action_name.to_owned());
     }
 
     code_actions_map.extend(
@@ -61,7 +61,7 @@ fn restore_code_actions_on_format_inner(value: &mut Value, path: &[&str]) -> Res
             .map(|code_action| (code_action, Value::Bool(true))),
     );
 
-    obj.insert("formatter".to_string(), Value::Array(vec![]));
+    obj.insert("formatter".to_owned(), Value::Array(vec![]));
     obj.insert(
         "code_actions_on_format".into(),
         Value::Object(code_actions_map),

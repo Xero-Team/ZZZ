@@ -185,7 +185,7 @@ impl AgentTool for DeletePathTool {
                 let path_result = futures::select! {
                     path = paths_rx.next().fuse() => path,
                     _ = event_stream.cancelled_by_user().fuse() => {
-                        return Err("Delete cancelled by user".to_string());
+                        return Err("Delete cancelled by user".to_owned());
                     }
                 };
                 let Some(path) = path_result else {
@@ -214,7 +214,7 @@ impl AgentTool for DeletePathTool {
                     result.map_err(|e| format!("Deleting {path}: {e}"))?;
                 }
                 _ = event_stream.cancelled_by_user().fuse() => {
-                    return Err("Delete cancelled by user".to_string());
+                    return Err("Delete cancelled by user".to_owned());
                 }
             }
             Ok(format!("Deleted {path}"))

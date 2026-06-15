@@ -159,7 +159,7 @@ impl RenderOnce for KeyBinding {
                         "KEY_BINDING-{}",
                         keystrokes
                             .iter()
-                            .map(|k| k.key().to_string())
+                            .map(|k| k.key().to_owned())
                             .collect::<Vec<_>>()
                             .join(" ")
                     )

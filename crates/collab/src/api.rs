@@ -27,7 +27,7 @@ impl Header for CloudflareIpCountryHeader {
             .to_str()
             .map_err(|_| Error::invalid())?;
 
-        Ok(Self(country_code.to_string()))
+        Ok(Self(country_code.to_owned()))
     }
 
     fn encode<E: Extend<axum::http::HeaderValue>>(&self, _values: &mut E) {
@@ -60,7 +60,7 @@ impl Header for SystemIdHeader {
             .to_str()
             .map_err(|_| Error::invalid())?;
 
-        Ok(Self(system_id.to_string()))
+        Ok(Self(system_id.to_owned()))
     }
 
     fn encode<E: Extend<axum::http::HeaderValue>>(&self, _values: &mut E) {

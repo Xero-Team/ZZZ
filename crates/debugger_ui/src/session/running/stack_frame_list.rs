@@ -53,8 +53,8 @@ impl StackFrameFilter {
 impl From<StackFrameFilter> for String {
     fn from(filter: StackFrameFilter) -> Self {
         match filter {
-            StackFrameFilter::All => "all".to_string(),
-            StackFrameFilter::OnlyUserFrames => "user".to_string(),
+            StackFrameFilter::All => "all".to_owned(),
+            StackFrameFilter::OnlyUserFrames => "user".to_owned(),
         }
     }
 }

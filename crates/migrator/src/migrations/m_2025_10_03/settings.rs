@@ -26,5 +26,5 @@ fn rename_agent_font_size(
         return None;
     }
 
-    Some((setting_name_range, "agent_ui_font_size".to_string()))
+    Some((setting_name_range, "agent_ui_font_size".to_owned()))
 }

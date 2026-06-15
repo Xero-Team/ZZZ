@@ -108,12 +108,12 @@ impl Display for SystemSpecs {
             self.app_version,
             match &self.commit_sha {
                 Some(commit_sha) => format!("{} {}", self.release_channel, commit_sha),
-                None => self.release_channel.to_string(),
+                None => self.release_channel.to_owned(),
             },
             if let Some(bundle_type) = &self.bundle_type {
                 format!("({bundle_type})")
             } else {
-                "".to_string()
+                "".to_owned()
             },
             if cfg!(debug_assertions) {
                 "(Taylor's Version)"
@@ -162,7 +162,7 @@ fn try_determine_available_gpus() -> Option<String> {
                 ]
                 .join("\n")
             })
-            .or(Some("Failed to run `vulkaninfo --summary`".to_string()))
+            .or(Some("Failed to run `vulkaninfo --summary`".to_owned()))
     }
     #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
     {
@@ -199,7 +199,7 @@ pub fn read_gpu_info_from_sys_class_drm() -> anyhow::Result<Vec<GpuInfo>> {
                 .file_name()
                 .and_then(std::ffi::OsStr::to_str)
                 .map(str::trim)
-                .map(str::to_string)
+                .map(str::to_owned)
         }) else {
             continue;
         };
@@ -216,7 +216,7 @@ pub fn read_gpu_info_from_sys_class_drm() -> anyhow::Result<Vec<GpuInfo>> {
                     .file_name()
                     .and_then(std::ffi::OsStr::to_str)
                     .map(str::trim)
-                    .map(str::to_string)
+                    .map(str::to_owned)
             });
         let driver_version = driver_name
             .as_ref()
@@ -225,7 +225,7 @@ pub fn read_gpu_info_from_sys_class_drm() -> anyhow::Result<Vec<GpuInfo>> {
             })
             .as_deref()
             .map(str::trim)
-            .map(str::to_string);
+            .map(str::to_owned);
 
         let already_found = gpus
             .iter()
@@ -288,6 +288,6 @@ fn read_pci_id_from_path(path: impl AsRef<std::path::Path>) -> anyhow::Result<u1
 /// cannot have this baked in.
 fn bundle_type() -> Option<String> {
     option_env!("ZED_BUNDLE_TYPE")
-        .map(|bundle_type| bundle_type.to_string())
+        .map(|bundle_type| bundle_type.to_owned())
         .or_else(|| env::var("ZED_BUNDLE_TYPE").ok())
 }

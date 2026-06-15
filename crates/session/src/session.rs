@@ -15,7 +15,7 @@ impl Session {
     pub async fn new(session_id: String, db: KeyValueStore) -> Self {
         let old_session_id = db.read_kvp(SESSION_ID_KEY).ok().flatten();
 
-        db.write_kvp(SESSION_ID_KEY.to_string(), session_id.clone())
+        db.write_kvp(SESSION_ID_KEY.to_owned(), session_id.clone())
             .await
             .log_err();
 
@@ -142,7 +142,7 @@ fn window_stack(cx: &App) -> Option<Vec<u64>> {
 
 async fn store_window_stack(db: KeyValueStore, windows: &[u64]) {
     if let Ok(window_ids_json) = serde_json::to_string(windows) {
-        db.write_kvp(SESSION_WINDOW_STACK_KEY.to_string(), window_ids_json)
+        db.write_kvp(SESSION_WINDOW_STACK_KEY.to_owned(), window_ids_json)
             .await
             .log_err();
     }

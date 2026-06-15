@@ -62,9 +62,9 @@ impl From<SharedUri> for ImageSource {
 impl<'a> From<&'a str> for ImageSource {
     fn from(s: &'a str) -> Self {
         if is_uri(s) {
-            Self::Resource(Resource::Uri(s.to_string().into()))
+            Self::Resource(Resource::Uri(s.to_owned().into()))
         } else {
-            Self::Resource(Resource::Embedded(s.to_string().into()))
+            Self::Resource(Resource::Embedded(s.to_owned().into()))
         }
     }
 }

@@ -4292,7 +4292,7 @@ impl Window {
                     .collect::<Vec<_>>()
                     .join(" ")
             })
-            .unwrap_or_else(|| action.name().to_string())
+            .unwrap_or_else(|| action.name().to_owned())
     }
 
     /// Dispatch a mouse or keyboard event on the window.
@@ -4509,7 +4509,7 @@ impl Window {
                 };
                 if let Some(key) = key {
                     keystroke = Some(Keystroke {
-                        key: key.to_string(),
+                        key: key.to_owned(),
                         key_char: None,
                         modifiers: Modifiers::default(),
                     });

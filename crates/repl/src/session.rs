@@ -525,7 +525,7 @@ impl Session {
 
             editor.splice_inlays(&[], vec![inlay], cx);
             self.result_inlays.insert(
-                message_id.to_string(),
+                message_id.to_owned(),
                 (
                     InlayId::ReplResult(inlay_id),
                     code_range.clone(),

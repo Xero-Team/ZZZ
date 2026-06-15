@@ -3460,6 +3460,9 @@ async fn test_building_request_with_pending_tools(cx: &mut TestAppContext) {
 async fn test_tool_updates_to_completion(cx: &mut TestAppContext) {
     let ThreadTest { thread, model, .. } = setup(cx, TestModel::Fake).await;
     thread.update(cx, |thread, _cx| thread.add_tool(EchoTool));
+    thread.update(cx, |thread, _cx| {
+        thread.add_tool(StreamingJsonErrorContextTool)
+    });
     let fake_model = model.as_fake();
 
     let _events = thread
@@ -3476,8 +3479,8 @@ async fn test_tool_updates_to_completion(cx: &mut TestAppContext) {
     let tool_use = LanguageModelToolUse {
         id: "tool_1".into(),
         name: StreamingJsonErrorContextTool::NAME.into(),
-        raw_input: "partial".into(),
-        input: json!({}),
+        raw_input: r#"{"text":"partial""#.into(),
+        input: json!({ "text": "partial" }),
         is_input_complete: false,
         thought_signature: None,
     };
@@ -5067,7 +5070,7 @@ async fn test_edit_file_tool_allow_still_prompts_for_local_settings(cx: &mut Tes
     fs.insert_tree(
         "/root",
         json!({
-            ".zed": {
+            ".ZZZ": {
                 "settings.json": "{}"
             },
             "README.md": "# Hello"

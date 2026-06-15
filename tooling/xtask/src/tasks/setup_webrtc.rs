@@ -256,7 +256,7 @@ fn update_cargo_config(webrtc_path: &Path) -> Result<()> {
 
 fn clean_webrtc_path(path: &Path) -> Result<String> {
     let path_str = path.to_str().context("webrtc path is not valid UTF-8")?;
-    let mut cleaned = path_str.to_string();
+    let mut cleaned = path_str.to_owned();
     if cleaned.starts_with(r"\\?\") {
         cleaned = cleaned[4..].to_string();
     }

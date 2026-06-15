@@ -236,7 +236,7 @@ impl AgentServer for CustomAgentServer {
 
         settings
             .as_ref()
-            .and_then(|s| s.default_config_option(config_id).map(|s| s.to_string()))
+            .and_then(|s| s.default_config_option(config_id).map(|s| s.to_owned()))
     }
 
     fn set_default_config_option(
@@ -247,8 +247,8 @@ impl AgentServer for CustomAgentServer {
         cx: &mut App,
     ) {
         let agent_id = self.agent_id();
-        let config_id = config_id.to_string();
-        let value_id = value_id.map(|s| s.to_string());
+        let config_id = config_id.to_owned();
+        let value_id = value_id.map(|s| s.to_owned());
         update_settings_file(fs, cx, move |settings, _cx| {
             let settings = settings
                 .agent_servers
@@ -375,13 +375,13 @@ fn api_key_for_gemini_cli(cx: &mut App) -> Task<Result<String>> {
         return Task::ready(Ok(key));
     }
     let credentials_provider = zed_credentials_provider::global(cx);
-    let api_url = google_ai::API_URL.to_string();
+    let api_url = google_ai::API_URL.to_owned();
     cx.spawn(async move |cx| {
         Ok(
             ApiKey::load_from_system_keychain(&api_url, credentials_provider.as_ref(), cx)
                 .await?
                 .key()
-                .to_string(),
+                .to_owned(),
         )
     })
 }

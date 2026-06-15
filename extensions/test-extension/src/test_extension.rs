@@ -146,7 +146,7 @@ impl zed::Extension for TestExtension {
     ) -> Result<zed::Command> {
         Ok(zed::Command {
             command: self.language_server_binary_path(language_server_id, worktree)?,
-            args: vec!["lsp".to_string()],
+            args: vec!["lsp".to_owned()],
             env: Default::default(),
         })
     }

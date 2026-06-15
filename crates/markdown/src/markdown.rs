@@ -2245,7 +2245,7 @@ impl Element for MarkdownElement {
                                     };
 
                                     let checkbox = Checkbox::new(
-                                        ElementId::Name(source.to_string().into()),
+                                        ElementId::Name(source.to_owned().into()),
                                         toggle_state,
                                     )
                                     .fill();
@@ -4007,10 +4007,12 @@ mod tests {
         let (view, cx) = cx.add_window_view(|_, cx| TestWindow {
             markdown: cx.new(|cx| Markdown::new(source.into(), None, None, cx)),
         });
-
-        cx.dispatch_action(SelectAll);
-
         let markdown = view.read_with(cx, |view, _| view.markdown.clone());
+
+        cx.focus(&markdown);
+        cx.dispatch_action(SelectAll);
+        cx.run_until_parked();
+
         assert_eq!(
             markdown.read_with(cx, |markdown, _| markdown.selected_text()),
             Some(source.to_string())

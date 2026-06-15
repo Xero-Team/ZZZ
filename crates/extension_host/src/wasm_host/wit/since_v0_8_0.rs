@@ -743,7 +743,7 @@ async fn convert_response(
     for (key, value) in response.headers() {
         extension_response
             .headers
-            .push((key.to_string(), value.to_str().unwrap_or("").to_string()));
+            .push((key.to_string(), value.to_str().unwrap_or("").to_owned()));
     }
 
     response
@@ -1020,7 +1020,7 @@ impl ExtensionImports for WasmState {
                                 ..
                             } => Ok(serde_json::to_string(&settings::ContextServerSettings {
                                 command: Some(settings::CommandSettings {
-                                    path: command.path.to_str().map(|path| path.to_string()),
+                                    path: command.path.to_str().map(|path| path.to_owned()),
                                     arguments: Some(command.args),
                                     env: command.env.map(|env| env.into_iter().collect()),
                                 }),

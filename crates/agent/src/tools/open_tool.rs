@@ -120,7 +120,7 @@ impl AgentTool for OpenTool {
             futures::select! {
                 result = authorize.fuse() => result.map_err(|e| e.to_string())?,
                 _ = event_stream.cancelled_by_user().fuse() => {
-                    return Err("Open cancelled by user".to_string());
+                    return Err("Open cancelled by user".to_owned());
                 }
             }
 

@@ -71,7 +71,7 @@ async fn test_sharing_an_ssh_remote_project(
             path!("/code"),
             json!({
                 "project1": {
-                    ".zed": {
+                    ".ZZZ": {
                         "settings.json": r#"{"languages":{"Rust":{"language_servers":["override-rust-analyzer"]}}}"#
                     },
                     "README.md": "# project 1",
@@ -1137,7 +1137,7 @@ async fn test_ssh_remote_worktree_trust(cx_a: &mut TestAppContext, server_cx: &m
             path!("/projects"),
             json!({
                 "project_a": {
-                    ".zed": {
+                    ".ZZZ": {
                         "settings.json": r#"{"languages":{"Rust":{"language_servers":["override-rust-analyzer"]}}}"#
                     },
                     "main.rs": "fn main() {}"

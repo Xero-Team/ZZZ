@@ -598,7 +598,7 @@ pub fn all_theme_colors(cx: &mut App) -> Vec<(Hsla, SharedString)> {
     ThemeColorField::iter()
         .map(|field| {
             let color = theme.colors().color(field);
-            let name = field.as_ref().to_string();
+            let name = field.as_ref().to_owned();
             (color, SharedString::from(name))
         })
         .collect()

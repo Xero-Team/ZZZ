@@ -99,7 +99,7 @@ impl HighlightCategory {
                     }
                     (Some(token_type), None) => format!("semantic token: {token_type}"),
                     (None, Some(modifiers)) => format!("semantic token [{modifiers}]"),
-                    (None, None) => "semantic token".to_string(),
+                    (None, None) => "semantic token".to_owned(),
                 };
 
                 if let Some(theme_key) = theme_key {
@@ -1119,7 +1119,7 @@ fn excerpt_label_for(
             let full_path = file.full_path(cx);
             full_path.to_string_lossy().to_string()
         })
-        .unwrap_or_else(|| "untitled".to_string());
+        .unwrap_or_else(|| "untitled".to_owned());
     path_label.into()
 }
 
@@ -1202,13 +1202,13 @@ fn build_highlight_entries(
 
             let theme_key = syntax_theme
                 .get_capture_name(highlight_id)
-                .map(|theme_key| SharedString::from(theme_key.to_string()));
+                .map(|theme_key| SharedString::from(theme_key.to_owned()));
 
             let capture_name = grammars[capture.grammar_index]
                 .highlights_config
                 .as_ref()
                 .and_then(|config| config.query.capture_names().get(capture.index as usize))
-                .map(|capture_name| SharedString::from((*capture_name).to_string()))
+                .map(|capture_name| SharedString::from((*capture_name).to_owned()))
                 .unwrap_or_else(|| SharedString::from("unknown"));
 
             let start_anchor = buffer_snapshot.anchor_before(capture.node.start_byte());
@@ -1301,20 +1301,20 @@ fn render_style_preview(style: HighlightStyle, selected: bool, cx: &App) -> Div 
         parts.push(format_hsla_as_hex(color));
     }
     if style.font_weight.is_some() {
-        parts.push("bold".to_string());
+        parts.push("bold".to_owned());
     }
     if style.font_style.is_some() {
-        parts.push("italic".to_string());
+        parts.push("italic".to_owned());
     }
     if style.strikethrough.is_some() {
-        parts.push("strike".to_string());
+        parts.push("strike".to_owned());
     }
     if style.underline.is_some() {
-        parts.push("underline".to_string());
+        parts.push("underline".to_owned());
     }
 
     let label_text = if parts.is_empty() {
-        "none".to_string()
+        "none".to_owned()
     } else {
         parts.join(" ")
     };

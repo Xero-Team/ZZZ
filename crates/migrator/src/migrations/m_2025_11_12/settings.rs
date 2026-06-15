@@ -30,7 +30,7 @@ fn rename_open_file_on_paste_setting(
         .next()?
         .byte_range();
 
-    Some((setting_name_range, "auto_open".to_string()))
+    Some((setting_name_range, "auto_open".to_owned()))
 }
 
 fn replace_open_file_on_paste_setting_value(

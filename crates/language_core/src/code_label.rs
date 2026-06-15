@@ -85,7 +85,7 @@ impl From<String> for CodeLabel {
 
 impl From<&str> for CodeLabel {
     fn from(value: &str) -> Self {
-        Self::plain(value.to_string(), None)
+        Self::plain(value.to_owned(), None)
     }
 }
 

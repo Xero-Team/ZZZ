@@ -193,7 +193,7 @@ impl AgentTool for MovePathTool {
             futures::select! {
                 result = rename_task.fuse() => result.map_err(|e| format!("Moving {} to {}: {e}", input.source_path, input.destination_path))?,
                 _ = event_stream.cancelled_by_user().fuse() => {
-                    return Err("Move cancelled by user".to_string());
+                    return Err("Move cancelled by user".to_owned());
                 }
             };
             Ok(format!(

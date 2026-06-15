@@ -233,16 +233,16 @@ impl UserMessage {
         const OPEN_DIFFS_TAG: &str = "<diffs>";
         const MERGE_CONFLICT_TAG: &str = "<merge_conflicts>";
 
-        let mut file_context = OPEN_FILES_TAG.to_string();
-        let mut directory_context = OPEN_DIRECTORIES_TAG.to_string();
-        let mut symbol_context = OPEN_SYMBOLS_TAG.to_string();
-        let mut selection_context = OPEN_SELECTIONS_TAG.to_string();
-        let mut thread_context = OPEN_THREADS_TAG.to_string();
-        let mut fetch_context = OPEN_FETCH_TAG.to_string();
-        let mut rules_context = OPEN_RULES_TAG.to_string();
-        let mut diagnostics_context = OPEN_DIAGNOSTICS_TAG.to_string();
-        let mut diffs_context = OPEN_DIFFS_TAG.to_string();
-        let mut merge_conflict_context = MERGE_CONFLICT_TAG.to_string();
+        let mut file_context = OPEN_FILES_TAG.to_owned();
+        let mut directory_context = OPEN_DIRECTORIES_TAG.to_owned();
+        let mut symbol_context = OPEN_SYMBOLS_TAG.to_owned();
+        let mut selection_context = OPEN_SELECTIONS_TAG.to_owned();
+        let mut thread_context = OPEN_THREADS_TAG.to_owned();
+        let mut fetch_context = OPEN_FETCH_TAG.to_owned();
+        let mut rules_context = OPEN_RULES_TAG.to_owned();
+        let mut diagnostics_context = OPEN_DIAGNOSTICS_TAG.to_owned();
+        let mut diffs_context = OPEN_DIFFS_TAG.to_owned();
+        let mut merge_conflict_context = MERGE_CONFLICT_TAG.to_owned();
 
         for chunk in &self.content {
             let chunk = match chunk {
@@ -906,9 +906,9 @@ impl ToolPermissionContext {
         }
 
         push_choice(
-            "Only this time".to_string(),
-            "allow".to_string(),
-            "deny".to_string(),
+            "Only this time".to_owned(),
+            "allow".to_owned(),
+            "deny".to_owned(),
             acp::PermissionOptionKind::AllowOnce,
             acp::PermissionOptionKind::RejectOnce,
             vec![],
@@ -1918,15 +1918,15 @@ impl Thread {
     pub fn push_acp_agent_block(&mut self, block: acp::ContentBlock, cx: &mut Context<Self>) {
         let text = match block {
             acp::ContentBlock::Text(text_content) => text_content.text,
-            acp::ContentBlock::Image(_) => "[image]".to_string(),
-            acp::ContentBlock::Audio(_) => "[audio]".to_string(),
+            acp::ContentBlock::Image(_) => "[image]".to_owned(),
+            acp::ContentBlock::Audio(_) => "[audio]".to_owned(),
             acp::ContentBlock::ResourceLink(resource_link) => resource_link.uri,
             acp::ContentBlock::Resource(resource) => match resource.resource {
                 acp::EmbeddedResourceResource::TextResourceContents(resource) => resource.uri,
                 acp::EmbeddedResourceResource::BlobResourceContents(resource) => resource.uri,
-                _ => "[resource]".to_string(),
+                _ => "[resource]".to_owned(),
             },
-            _ => "[unknown]".to_string(),
+            _ => "[unknown]".to_owned(),
         };
 
         self.messages.push(Message::Agent(AgentMessage {
@@ -3652,13 +3652,13 @@ impl ThreadEventStream {
 
     fn send_text(&self, text: &str) {
         self.0
-            .unbounded_send(Ok(ThreadEvent::AgentText(text.to_string())))
+            .unbounded_send(Ok(ThreadEvent::AgentText(text.to_owned())))
             .ok();
     }
 
     fn send_thinking(&self, text: &str) {
         self.0
-            .unbounded_send(Ok(ThreadEvent::AgentThinking(text.to_string())))
+            .unbounded_send(Ok(ThreadEvent::AgentThinking(text.to_owned())))
             .ok();
     }
 
@@ -4160,7 +4160,7 @@ impl ToolCallEventStream {
                     !sub_patterns.is_empty(),
                     "empty sub_patterns for tool {tool} — callers should pass None instead"
                 );
-                let tool = tool.to_string();
+                let tool = tool.to_owned();
                 let sub_patterns = sub_patterns.clone();
                 cx.update(|cx| {
                     update_settings_file(fs, cx, move |settings, _| {
@@ -4183,7 +4183,7 @@ impl ToolCallEventStream {
                 });
             }
             None => {
-                let tool = tool.to_string();
+                let tool = tool.to_owned();
                 cx.update(|cx| {
                     update_settings_file(fs, cx, move |settings, _| {
                         settings
@@ -4292,7 +4292,7 @@ impl UserMessageContent {
             acp::ContentBlock::Image(image_content) => Self::Image(convert_image(image_content)),
             acp::ContentBlock::Audio(_) => {
                 // TODO
-                Self::Text("[audio]".to_string())
+                Self::Text("[audio]".to_owned())
             }
             acp::ContentBlock::ResourceLink(resource_link) => {
                 match MentionUri::parse(&resource_link.uri, path_style) {
@@ -4327,16 +4327,16 @@ impl UserMessageContent {
                 }
                 acp::EmbeddedResourceResource::BlobResourceContents(_) => {
                     // TODO
-                    Self::Text("[blob]".to_string())
+                    Self::Text("[blob]".to_owned())
                 }
                 other => {
                     log::warn!("Unexpected content type: {:?}", other);
-                    Self::Text("[unknown]".to_string())
+                    Self::Text("[unknown]".to_owned())
                 }
             },
             other => {
                 log::warn!("Unexpected content type: {:?}", other);
-                Self::Text("[unknown]".to_string())
+                Self::Text("[unknown]".to_owned())
             }
         }
     }

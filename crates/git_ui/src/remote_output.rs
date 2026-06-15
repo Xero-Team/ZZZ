@@ -120,7 +120,7 @@ pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> Succ
         }
         RemoteAction::Push(branch_name, remote_ref) => {
             let message = if output.stderr.ends_with("Everything up-to-date\n") {
-                "Push: Everything is up-to-date".to_string()
+                "Push: Everything is up-to-date".to_owned()
             } else {
                 format!("Pushed {} to {}", branch_name, remote_ref.name)
             };
@@ -150,7 +150,7 @@ pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> Succ
                                     .find(|link| *link.kind() == LinkKind::Url)
                                     .map(|link| SuccessStyle::PushPrLink {
                                         text: mapped.to_string(),
-                                        link: link.as_str().to_string(),
+                                        link: link.as_str().to_owned(),
                                     })
                             })
                     })

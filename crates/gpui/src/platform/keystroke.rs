@@ -158,7 +158,7 @@ impl Keystroke {
                 continue;
             }
 
-            let mut key_str = component.to_string();
+            let mut key_str = component.to_owned();
 
             if let Some(next) = components.peek() {
                 if next.is_empty() && source.ends_with('-') {
@@ -194,15 +194,15 @@ impl Keystroke {
             use std::mem;
             // std::mem::take clears bool incase its true
             if mem::take(&mut modifiers.shift) {
-                Some("shift".to_string())
+                Some("shift".to_owned())
             } else if mem::take(&mut modifiers.control) {
-                Some("control".to_string())
+                Some("control".to_owned())
             } else if mem::take(&mut modifiers.alt) {
-                Some("alt".to_string())
+                Some("alt".to_owned())
             } else if mem::take(&mut modifiers.platform) {
-                Some("platform".to_string())
+                Some("platform".to_owned())
             } else if mem::take(&mut modifiers.function) {
-                Some("function".to_string())
+                Some("function".to_owned())
             } else {
                 None
             }

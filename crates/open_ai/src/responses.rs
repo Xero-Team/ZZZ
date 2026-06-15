@@ -483,7 +483,7 @@ pub async fn stream_response(
                                                     item_id: item_id.clone(),
                                                     output_index,
                                                     content_index: None,
-                                                    delta: text_str.to_string(),
+                                                    delta: text_str.to_owned(),
                                                 });
                                             }
                                         }

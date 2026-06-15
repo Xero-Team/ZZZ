@@ -160,7 +160,7 @@ fn parse_emacs_key_value(part: &str, settings: &mut ModelineSettings, bare: bool
 
         match key.to_lowercase().as_str() {
             "mode" => {
-                settings.mode = Some(value.to_string());
+                settings.mode = Some(value.to_owned());
             }
             "c-basic-offset" | "python-indent-offset" => {
                 if let Ok(size) = value.parse::<NonZeroU32>() {
@@ -191,11 +191,11 @@ fn parse_emacs_key_value(part: &str, settings: &mut ModelineSettings, bare: bool
             }
             key => settings
                 .emacs_extra_variables
-                .push((key.to_string(), value.to_string())),
+                .push((key.to_owned(), value.to_owned())),
         }
     } else if bare {
         // Handle bare mode specification (e.g., -*- rust -*-)
-        settings.mode = Some(part.to_string());
+        settings.mode = Some(part.to_owned());
     }
 }
 
@@ -269,7 +269,7 @@ fn parse_vim_settings(content: &str, settings: &mut ModelineSettings) {
             if let Some((key, value)) = part.split_once('=') {
                 match key {
                     "ft" | "filetype" => {
-                        settings.mode = Some(value.to_string());
+                        settings.mode = Some(value.to_owned());
                     }
                     "ts" | "tabstop" => {
                         if let Ok(size) = value.parse::<NonZeroU32>() {
@@ -289,7 +289,7 @@ fn parse_vim_settings(content: &str, settings: &mut ModelineSettings) {
                     _ => {
                         settings
                             .vim_extra_variables
-                            .push((key.to_string(), Some(value.to_string())));
+                            .push((key.to_owned(), Some(value.to_owned())));
                     }
                 }
             } else {
@@ -316,7 +316,7 @@ fn parse_vim_settings(content: &str, settings: &mut ModelineSettings) {
                         // Ignore the "set" keyword itself
                     }
                     _ => {
-                        settings.vim_extra_variables.push((part.to_string(), None));
+                        settings.vim_extra_variables.push((part.to_owned(), None));
                     }
                 }
             }

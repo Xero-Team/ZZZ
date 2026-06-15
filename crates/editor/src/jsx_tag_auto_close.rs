@@ -121,7 +121,7 @@ pub(crate) fn generate_auto_close_edits(
                         .iter()
                         .any(|alternate| alternate == node.kind())
             })
-            .map_or("".to_string(), |node| {
+            .map_or("".to_owned(), |node| {
                 buffer.text_for_range(node.byte_range()).collect::<String>()
             });
 

@@ -462,7 +462,7 @@ fn push_response_image_part(
 ) {
     match role {
         Role::Assistant => parts.push(ResponseInputContent::OutputText {
-            text: "[image omitted]".to_string(),
+            text: "[image omitted]".to_owned(),
             annotations: Vec::new(),
         }),
         _ => parts.push(ResponseInputContent::Image {
@@ -490,7 +490,7 @@ fn flush_response_parts(
         },
         content: parts.clone(),
         phase: match role {
-            Role::Assistant => phase.map(str::to_string),
+            Role::Assistant => phase.map(str::to_owned),
             Role::User | Role::System => None,
         },
     });
@@ -886,7 +886,7 @@ impl OpenAiResponseEventMapper {
             ResponsesStreamEvent::ReasoningSummaryPartAdded { summary_index, .. } => {
                 if summary_index > 0 {
                     vec![Ok(LanguageModelCompletionEvent::Thinking {
-                        text: "\n\n".to_string(),
+                        text: "\n\n".to_owned(),
                         signature: None,
                     })]
                 } else {
@@ -1006,7 +1006,7 @@ impl OpenAiResponseEventMapper {
             .phase
             .as_deref()
             .and_then(normalize_response_message_phase)
-            .map(str::to_string);
+            .map(str::to_owned);
 
         if self.current_message_phase.is_none() && self.reasoning_items.is_empty() {
             return Vec::new();
@@ -1074,7 +1074,7 @@ fn response_message_phase_from_details(details: Option<&serde_json::Value>) -> O
         .phase
         .as_deref()
         .and_then(normalize_response_message_phase)
-        .map(str::to_string)
+        .map(str::to_owned)
 }
 
 fn normalize_response_message_phase(phase: &str) -> Option<&'static str> {
@@ -1094,7 +1094,7 @@ fn response_failure_message(response: &ResponsesSummary) -> String {
         .status
         .as_deref()
         .map(|status| format!("response.{status}"))
-        .unwrap_or_else(|| "response.failed".to_string())
+        .unwrap_or_else(|| "response.failed".to_owned())
 }
 
 fn response_error_message(error: &ResponseError) -> String {
@@ -1103,9 +1103,9 @@ fn response_error_message(error: &ResponseError) -> String {
 
     match (code, message.is_empty()) {
         (Some(code), false) => format!("{code}: {message}"),
-        (Some(code), true) => code.to_string(),
-        (None, false) => message.to_string(),
-        (None, true) => "response error".to_string(),
+        (Some(code), true) => code.to_owned(),
+        (None, false) => message.to_owned(),
+        (None, true) => "response error".to_owned(),
     }
 }
 

@@ -138,7 +138,7 @@ fn format_installed_extensions_for_clipboard(cx: &mut App) -> String {
     lines.sort();
 
     if lines.is_empty() {
-        return "No extensions installed.".to_string();
+        return "No extensions installed.".to_owned();
     }
 
     format!(

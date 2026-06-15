@@ -156,7 +156,7 @@ pub fn handle_schema_request(
         return Task::ready(Ok(cached));
     }
 
-    let path = path.to_string();
+    let path = path.to_owned();
     let uri_clone = uri.clone();
     cx.spawn(async move |cx| {
         let schema = resolve_dynamic_schema(lsp_store, &path, cx).await?;
@@ -173,8 +173,8 @@ fn resolve_static_schema(path: &str) -> Option<String> {
     let schema_name = schema_name.unwrap_or(path);
 
     match schema_name {
-        "tsconfig" => Some(TSCONFIG_SCHEMA.to_string()),
-        "package_json" => Some(PACKAGE_JSON_SCHEMA.to_string()),
+        "tsconfig" => Some(TSCONFIG_SCHEMA.to_owned()),
+        "package_json" => Some(PACKAGE_JSON_SCHEMA.to_owned()),
         "tasks" => Some(TASKS_SCHEMA.clone()),
         "snippets" => Some(SNIPPETS_SCHEMA.clone()),
         "jsonc" => Some(JSONC_SCHEMA.clone()),

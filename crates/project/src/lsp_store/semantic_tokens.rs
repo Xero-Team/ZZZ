@@ -460,7 +460,7 @@ impl SemanticTokenStylizer {
             .map(|(i, token_type)| {
                 (
                     TokenType(i as u32),
-                    SharedString::from(token_type.as_str().to_string()),
+                    SharedString::from(token_type.as_str().to_owned()),
                 )
             })
             .collect();
@@ -468,7 +468,7 @@ impl SemanticTokenStylizer {
             .token_modifiers
             .iter()
             .enumerate()
-            .map(|(i, modifier)| (SharedString::from(modifier.as_str().to_string()), 1 << i))
+            .map(|(i, modifier)| (SharedString::from(modifier.as_str().to_owned()), 1 << i))
             .collect();
 
         let global_rules = &ProjectSettings::get_global(cx)
