@@ -4384,7 +4384,9 @@ impl Editor {
                                 prevent_auto_indent: false,
                             };
 
-                            let comment_delimiter = maybe!({
+                            let mut delimiter = None;
+
+                            if let Some(comment_delimiter) = maybe!({
                                 if !selection_is_empty {
                                     return None;
                                 }
@@ -4398,9 +4400,16 @@ impl Editor {
                                     &buffer,
                                     language,
                                 );
-                            });
-
-                            let doc_delimiter = maybe!({
+                            }) {
+                                delimiter = Some(comment_delimiter);
+                                if let NewlineConfig::Newline {
+                                    extra_line_additional_indent,
+                                    ..
+                                } = &mut newline_config
+                                {
+                                    *extra_line_additional_indent = None;
+                                }
+                            } else if let Some(doc_delimiter) = maybe!({
                                 if !selection_is_empty {
                                     return None;
                                 }
@@ -4415,9 +4424,9 @@ impl Editor {
                                     language,
                                     &mut newline_config,
                                 );
-                            });
-
-                            let list_delimiter = maybe!({
+                            }) {
+                                delimiter = Some(doc_delimiter);
+                            } else if let Some(list_delimiter) = maybe!({
                                 if !selection_is_empty {
                                     return None;
                                 }
@@ -4432,12 +4441,11 @@ impl Editor {
                                     language,
                                     &mut newline_config,
                                 );
-                            });
+                            }) {
+                                delimiter = Some(list_delimiter);
+                            }
 
-                            (
-                                comment_delimiter.or(doc_delimiter).or(list_delimiter),
-                                newline_config,
-                            )
+                            (delimiter, newline_config)
                         } else {
                             (
                                 None,
