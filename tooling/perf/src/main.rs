@@ -1,3 +1,21 @@
+#![warn(missing_docs)]
+#![warn(
+    clippy::all,
+    clippy::pedantic,
+    clippy::style,
+    clippy::missing_docs_in_private_items
+)]
+#![deny(
+    clippy::as_underscore,
+    clippy::allow_attributes,
+    clippy::allow_attributes_without_reason
+)]
+#![forbid(
+    clippy::let_underscore_must_use,
+    clippy::undocumented_unsafe_blocks,
+    clippy::missing_safety_doc
+)]
+
 //! Perf profiler for Zed tests. Outputs timings of tests marked with the `#[perf]`
 //! attribute to stdout in Markdown. See the documentation of `util_macros::perf`
 //! for usage details on the actual attribute.
@@ -139,6 +157,10 @@ impl OutputKind<'_> {
 
 /// Runs a given metadata-returning function from a test handler, parsing its
 /// output into a `TestMdata`.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "perf intentionally shells out to test binaries and helper tools"
+)]
 fn parse_mdata(t_bin: &str, mdata_fn: &str) -> Result<TestMdata, FailKind> {
     let mut cmd = Command::new(t_bin);
     cmd.args([mdata_fn, "--exact", "--nocapture"]);
@@ -300,6 +322,10 @@ fn compare_profiles(args: &[String]) {
 /// and giving back the list of tests we care about.
 ///
 /// The output of this is an iterator over `test_fn_name, test_mdata_name`.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "perf intentionally shells out to test binaries and helper tools"
+)]
 fn get_tests(t_bin: &str) -> impl ExactSizeIterator<Item = (String, String)> {
     let mut cmd = Command::new(t_bin);
     // --format=json is nightly-only :(
@@ -362,6 +388,10 @@ fn get_tests(t_bin: &str) -> impl ExactSizeIterator<Item = (String, String)> {
 /// Runs the specified test `count` times, returning the time taken if the test
 /// succeeded.
 #[inline]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "perf intentionally shells out to test binaries and helper tools"
+)]
 fn spawn_and_iterate(t_bin: &str, t_name: &str, count: NonZero<usize>) -> Option<Duration> {
     let mut cmd = Command::new(t_bin);
     cmd.args([t_name, "--exact"]);
@@ -411,6 +441,10 @@ fn triage_test(
 }
 
 /// Try to find the hyperfine binary the user has installed.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "perf intentionally shells out to test binaries and helper tools"
+)]
 fn hyp_binary() -> Option<Command> {
     const HYP_PATH: &str = "hyperfine";
     const HYP_HOME: &str = "~/.cargo/bin/hyperfine";
@@ -427,6 +461,10 @@ fn hyp_binary() -> Option<Command> {
 
 /// Profiles a given test with hyperfine, returning the mean and standard deviation
 /// for its runtime. If the test errors, returns `None` instead.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "perf intentionally shells out to test binaries and helper tools"
+)]
 fn hyp_profile(t_bin: &str, t_name: &str, iterations: NonZero<usize>) -> Option<Timings> {
     let mut perf_cmd = hyp_binary().expect("Couldn't find the Hyperfine binary on the system");
 
@@ -563,7 +601,6 @@ fn main() {
                 final_iter_count,
                 FailKind::Profile
             );
-            continue;
         }
     }
     if !QUIET.load(Ordering::Relaxed) {

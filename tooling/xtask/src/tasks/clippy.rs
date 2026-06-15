@@ -16,7 +16,7 @@ pub struct ClippyArgs {
 }
 
 pub fn run_clippy(args: ClippyArgs) -> Result<()> {
-    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned());
 
     let mut clippy_command = Command::new(&cargo);
     clippy_command.arg("clippy");
@@ -40,6 +40,8 @@ pub fn run_clippy(args: ClippyArgs) -> Result<()> {
 
     // Deny all warnings.
     clippy_command.args(["--deny", "warnings"]);
+    clippy_command.args(["--deny", "clippy::manual_range_contains"]);
+    clippy_command.args(["--deny", "clippy::match_result_ok"]);
 
     eprintln!(
         "running: {cargo} {}",
