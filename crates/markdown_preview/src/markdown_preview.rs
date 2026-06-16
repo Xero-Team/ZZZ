@@ -6,6 +6,8 @@ pub mod markdown_preview_view;
 
 pub use zed_actions::preview::markdown::{OpenPreview, OpenPreviewToTheSide};
 
+use crate::markdown_preview_view::MarkdownPreviewView;
+
 actions!(
     markdown,
     [
@@ -33,6 +35,8 @@ actions!(
 );
 
 pub fn init(cx: &mut App) {
+    workspace::register_serializable_item::<MarkdownPreviewView>(cx);
+
     cx.observe_new(|workspace: &mut Workspace, window, cx| {
         let Some(window) = window else {
             return;
