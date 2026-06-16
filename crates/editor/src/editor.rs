@@ -725,9 +725,6 @@ impl EditorActionId {
     }
 }
 
-// type GetFieldEditorTheme = dyn Fn(&theme::Theme) -> theme::FieldEditor;
-// type OverrideTextStyle = dyn Fn(&EditorStyle) -> Option<HighlightStyle>;
-
 type BackgroundHighlight = (
     Arc<dyn Fn(&usize, &Theme) -> Hsla + Send + Sync>,
     Arc<[Range<Anchor>]>,
@@ -22496,7 +22493,7 @@ impl Editor {
         cx.notify();
     }
 
-    fn theme_changed(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+    fn theme_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.mode.is_full() {
             return;
         }
@@ -22510,13 +22507,7 @@ impl Editor {
         self.invalidate_semantic_tokens(None);
         self.refresh_semantic_tokens(None, None, cx);
         self.refresh_outline_symbols_at_cursor(cx);
-
-        if let Some(highlights) = self.highlighted_rows.get_mut(&TypeId::of::<ActiveDebugLine>()) {
-            let color = cx.theme().colors().editor_debugger_active_line_background;
-            for highlight in highlights {
-                highlight.color = color;
-            }
-        }
+        self.go_to_active_debug_line(window, cx);
     }
 
     pub fn set_searchable(&mut self, searchable: bool) {
