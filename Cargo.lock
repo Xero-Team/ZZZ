@@ -10449,6 +10449,7 @@ dependencies = [
  "node_runtime",
  "pulldown-cmark",
  "settings",
+ "smallvec",
  "spider-html5ever",
  "spider-markup5ever_rcdom",
  "stacksafe",
