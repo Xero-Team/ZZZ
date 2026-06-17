@@ -243,13 +243,26 @@ impl Render for TitleBar {
                 };
 
                 if let Some(repo_name) = display_name.and_then(|n| n.to_str()) {
+<<<<<<< HEAD
                     let name = if let Ok(relative) =
                         worktree_abs_path.strip_prefix(&*repo.work_directory_abs_path)
                     {
                         if relative.as_os_str().is_empty() {
                             repo_name.to_owned()
+=======
+                    let visible_worktrees_in_repo = self.visible_worktrees_in_repository(repo, cx);
+                    let name = if visible_worktrees_in_repo == 1 {
+                        if let Ok(relative) =
+                            worktree_abs_path.strip_prefix(&*repo.work_directory_abs_path)
+                        {
+                            if relative.as_os_str().is_empty() {
+                                repo_name.to_string()
+                            } else {
+                                format!("{}/{}", repo_name, relative.display())
+                            }
+>>>>>>> 45afbac0a5 (Fix project grouping for Git repo subdirectories (#57998))
                         } else {
-                            format!("{}/{}", repo_name, relative.display())
+                            repo_name.to_string()
                         }
                     } else {
                         repo_name.to_owned()
@@ -501,6 +514,22 @@ impl TitleBar {
             })
             .max_by_key(|repo| repo.read(cx).work_directory_abs_path.as_os_str().len())
             .cloned()
+    }
+
+    fn visible_worktrees_in_repository(
+        &self,
+        repository: &project::git_store::Repository,
+        cx: &App,
+    ) -> usize {
+        let repo_path = &repository.work_directory_abs_path;
+        self.project
+            .read(cx)
+            .visible_worktrees(cx)
+            .filter(|worktree| {
+                let worktree_path = worktree.read(cx).abs_path();
+                worktree_path == *repo_path || worktree_path.starts_with(repo_path.as_ref())
+            })
+            .count()
     }
 
     fn render_remote_project_connection(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
