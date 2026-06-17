@@ -16600,6 +16600,51 @@ impl Editor {
         });
     }
 
+    pub fn select_inside_delimiters(
+        &mut self,
+        _: &SelectInsideDelimiters,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.select_delimiters_impl(false, window, cx);
+    }
+
+    pub fn select_around_delimiters(
+        &mut self,
+        _: &SelectAroundDelimiters,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.select_delimiters_impl(true, window, cx);
+    }
+
+    fn select_delimiters_impl(
+        &mut self,
+        include_brackets: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.change_selections(Default::default(), window, cx, |s| {
+            s.move_offsets_with(&mut |snapshot, selection| {
+                let Some((open, close)) = snapshot
+                    .innermost_enclosing_bracket_ranges(selection.start..selection.end, None)
+                else {
+                    return;
+                };
+
+                let (start, end) = if include_brackets {
+                    (open.start, close.end)
+                } else {
+                    (open.end, close.start)
+                };
+                selection.start = start;
+                selection.end = end;
+                selection.reversed = false;
+                selection.goal = SelectionGoal::None;
+            })
+        });
+    }
+
     pub fn undo_selection(
         &mut self,
         _: &UndoSelection,
