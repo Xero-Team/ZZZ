@@ -39,8 +39,8 @@ use gpui::{
     FocusHandle, Focusable, FontStyle, FontWeight, GlobalElementId, Hitbox, Hsla, Image,
     ImageFormat, ImageSource, KeyContext, Length, MouseButton, MouseDownEvent, MouseEvent,
     MouseMoveEvent, MouseUpEvent, Point, ScrollHandle, Stateful, StrikethroughStyle,
-    StyleRefinement, StyledText, Task, TextAlign, TextLayout, TextRun, TextStyle,
-    TextStyleRefinement, WrappedLineLayout, actions, img, point, quad,
+    StyleRefinement, StyledImage, StyledText, Subscription, Task, TextAlign, TextLayout, TextRun,
+    TextStyle, TextStyleRefinement, WrappedLineLayout, actions, img, point, quad,
 };
 use language::{CharClassifier, Language, LanguageRegistry, Rope};
 use parser::CodeBlockMetadata;
@@ -812,14 +812,17 @@ impl Markdown {
         active: Option<usize>,
         cx: &mut Context<Self>,
     ) {
-        debug_assert!(
-            highlights
-                .windows(2)
-                .all(|ranges| (ranges[0].start, ranges[0].end) <= (ranges[1].start, ranges[1].end))
-        );
-        self.search_highlights = highlights;
-        self.active_search_highlight =
-            active.filter(|active| *active < self.search_highlights.len());
+        let mut indexed_highlights = highlights.into_iter().enumerate().collect::<Vec<_>>();
+        indexed_highlights.sort_by_key(|(_, range)| (range.start, range.end));
+        self.active_search_highlight = active.and_then(|active| {
+            indexed_highlights
+                .iter()
+                .position(|(original_ix, _)| *original_ix == active)
+        });
+        self.search_highlights = indexed_highlights
+            .into_iter()
+            .map(|(_, range)| range)
+            .collect();
         cx.notify();
     }
 
