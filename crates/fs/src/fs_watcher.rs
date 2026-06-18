@@ -191,7 +191,6 @@ fn register_existing_path(
             poll_interval().as_millis(),
             path.display()
         );
-        telemetry::event!("fs_watcher_poll", path = path.display().to_string());
         WatcherMode::Poll
     } else {
         WatcherMode::Native
@@ -813,7 +812,7 @@ impl GlobalWatcher {
         // file read in a watched directory would queue events, increasing the
         // risk of queue overflows (and thus full rescans) under read-heavy
         // workloads like grep or language server indexing.
-        let config = notify::Config::default().with_event_kinds(notify::EventKindMask::CORE);
+        let config = notify::Config::default();
         let watcher = <notify::RecommendedWatcher as notify::Watcher>::new(
             |event| global_watcher().enqueue(WatcherMode::Native, event),
             config,
