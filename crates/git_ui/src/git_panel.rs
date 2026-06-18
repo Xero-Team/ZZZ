@@ -4323,7 +4323,7 @@ impl GitPanel {
                     }
                     (Toast, false) => this,
                     (ToastWithLog { output }, false) => {
-                        this.action("View Log", move |window, cx| {
+                        this.action(view_log.clone(), move |window, cx| {
                             let output = output.clone();
                             let output =
                                 format!("stdout:\n{}\nstderr:\n{}", output.stdout, output.stderr);
