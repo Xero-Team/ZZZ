@@ -3357,7 +3357,7 @@ dependencies = [
  "component",
  "db",
  "editor",
- "env_logger 0.11.8",
+ "env_logger 0.11.10",
  "fs",
  "gpui",
  "gpui_platform",
