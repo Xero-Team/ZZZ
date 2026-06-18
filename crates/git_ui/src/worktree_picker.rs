@@ -690,9 +690,6 @@ impl WorktreePickerDelegate {
         window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) {
-        if self.deleting_worktree_paths.contains(worktree_path) {
-            return;
-        }
         let Some(workspace_to_remove) = self.workspace_for_open_worktree(worktree_path, window, cx)
         else {
             return;

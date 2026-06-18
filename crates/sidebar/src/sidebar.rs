@@ -1874,7 +1874,6 @@ impl Sidebar {
                         this.toggle_collapse(&key_for_toggle, window, cx);
                     }
                 }),
-<<<<<<< HEAD
             )
             .block_mouse_except_scroll();
 

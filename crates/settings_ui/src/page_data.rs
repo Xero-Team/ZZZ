@@ -10636,10 +10636,15 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
             SettingsPageItem::DynamicItem(DynamicItem {
                 discriminant: SettingItem {
                     files: USER,
-                    title: "Limit Markdown Preview Width",
-                    description: "Whether to constrain the markdown preview content to a maximum width, centering it when the pane is wider, for optimal readability.",
+                    title: lt(
+                        "settings_ui.page_data.title.limit.markdown.preview.width",
+                        "Limit Markdown Preview Width",
+                    ),
+                    description: lt(
+                        "settings_ui.page_data.description.whether.to.constrain.the.markdown.preview.content.to.a.maximum.width.centering.it.when.the.pane.is.wider.for.optimal.readability",
+                        "Whether to constrain the markdown preview content to a maximum width, centering it when the pane is wider, for optimal readability.",
+                    ),
                     field: Box::new(SettingField::<bool> {
-                        organization_override: None,
                         json_path: Some("markdown_preview.limit_content_width"),
                         pick: |settings_content| {
                             settings_content
@@ -10669,10 +10674,15 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
                     vec![],
                     vec![SettingItem {
                         files: USER,
-                        title: "Max Width",
-                        description: "Maximum content width in pixels. Content will be centered when the pane is wider than this value.",
+                        title: lt(
+                            "settings_ui.page_data.title.max.markdown.preview.width",
+                            "Max Width",
+                        ),
+                        description: lt(
+                            "settings_ui.page_data.description.maximum.markdown.preview.content.width.in.pixels.content.will.be.centered.when.the.pane.is.wider.than.this.value",
+                            "Maximum content width in pixels. Content will be centered when the pane is wider than this value.",
+                        ),
                         field: Box::new(SettingField {
-                            organization_override: None,
                             json_path: Some("markdown_preview.max_width"),
                             pick: |settings_content| {
                                 settings_content
