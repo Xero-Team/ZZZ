@@ -3188,8 +3188,6 @@ impl BackgroundScannerState {
             }
             watcher.remove(&removed_dir_abs_path).log_err();
         }
-<<<<<<< HEAD
-=======
 
         self.snapshot
             .external_canonical_to_relative
@@ -3203,7 +3201,6 @@ impl BackgroundScannerState {
                     true
                 }
             });
->>>>>>> 2252cad9b9 (git: Fix `.git` directory being removed from watcher when excluded via `file_scan_exclusions` (#57895))
     }
 
     fn remove_path_from_snapshot(&mut self, path: &RelPath) -> Vec<PathBuf> {
