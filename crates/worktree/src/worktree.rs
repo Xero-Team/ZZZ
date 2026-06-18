@@ -796,7 +796,7 @@ impl Worktree {
 
     pub fn load_binary_file(
         &self,
-        _path: &RelPath,
+        path: &RelPath,
         cx: &Context<Worktree>,
     ) -> Task<Result<LoadedBinaryFile>> {
         match self {
@@ -1431,7 +1431,7 @@ impl LocalWorktree {
 
     fn load_binary_file(
         &self,
-        _path: &RelPath,
+        path: &RelPath,
         cx: &Context<Worktree>,
     ) -> Task<Result<LoadedBinaryFile>> {
         let path = Arc::from(path);
@@ -2599,7 +2599,7 @@ impl Snapshot {
         include_files: bool,
         include_dirs: bool,
         include_ignored: bool,
-        _path: &RelPath,
+        path: &RelPath,
     ) -> Traversal<'_> {
         Traversal::new(self, include_files, include_dirs, include_ignored, path)
     }
@@ -3053,7 +3053,7 @@ impl BackgroundScannerState {
     fn entry_id_for(
         &mut self,
         next_entry_id: &AtomicUsize,
-        _path: &RelPath,
+        path: &RelPath,
         metadata: &fs::Metadata,
     ) -> ProjectEntryId {
         // If an entry with the same inode was removed from the worktree during this scan,
