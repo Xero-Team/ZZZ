@@ -1795,6 +1795,16 @@ impl GitRepository for RealGitRepository {
     }
 
     fn diff_tree(&self, request: DiffTreeType) -> BoxFuture<'_, Result<TreeDiff>> {
+        let git = self.git_binary_in_worktree();
+        self.executor
+            .spawn(async move {
+                git?.run(&["rev-parse"]).await?;
+                Ok(())
+            })
+            .boxed()
+    }
+
+    fn diff_tree(&self, request: DiffTreeType) -> BoxFuture<'_, Result<TreeDiff>> {
         let git = match self.git_binary_in_worktree() {
             Ok(git) => git,
             Err(e) => return Task::ready(Err(e)).boxed(),
