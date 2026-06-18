@@ -94,7 +94,6 @@ impl TextSystem {
         );
         names.push(".SystemUIFont".to_owned());
         names.sort_unstable();
->>>>>>> 78658778a2 (Use unstable sorts if deduplicating (#58751))
         names.dedup();
         names
     }
