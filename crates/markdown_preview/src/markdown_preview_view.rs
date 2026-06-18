@@ -35,6 +35,7 @@ use workspace::searchable::{
 };
 use workspace::{OpenOptions, OpenVisible, Pane, Workspace};
 
+use crate::markdown_preview_settings::MarkdownPreviewSettings;
 use crate::{
     OpenFollowingPreview, OpenPreview, OpenPreviewToTheSide, ScrollDown, ScrollDownByItem,
 };
@@ -1235,7 +1236,8 @@ impl Render for MarkdownPreviewView {
                         let markdown_element =
                             self.render_markdown_element(&preview_theme, window, cx);
                         let markdown = self.markdown.clone();
-                        right_click_menu("markdown-preview-context-menu")
+                        let max_width = MarkdownPreviewSettings::get_global(cx).max_width;
+                        let content = right_click_menu("markdown-preview-context-menu")
                             .trigger(move |_, _, _| markdown_element)
                             .menu(move |window, cx| {
                                 let focus = window.focused(cx);
@@ -1251,7 +1253,11 @@ impl Render for MarkdownPreviewView {
                                             })
                                         })
                                 })
-                            })
+                            });
+                        div()
+                            .w_full()
+                            .when_some(max_width, |this, max_width| this.max_w(max_width).mx_auto())
+                            .child(content)
                     }),
             )
             .vertical_scrollbar_for(&self.scroll_handle, window, cx)
