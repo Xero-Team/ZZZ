@@ -3969,7 +3969,6 @@ mod tests {
             assert_eq!(markdown.active_search_highlight(), None);
         });
     }
-
     fn render_markdown_with_code_span_link(
         markdown: &str,
         callback: impl Fn(&str, &App) -> Option<SharedString> + 'static,
