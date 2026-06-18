@@ -5,13 +5,10 @@ use collections::HashMap;
 use serde::Deserialize;
 use settings::CommandAliasTarget;
 pub use settings::{
-<<<<<<< HEAD
-    ActionName, AutosaveSetting, BottomDockLayout, DisplayLanguage, EncodingDisplayOptions,
-    InactiveOpacity, PaneSplitDirectionHorizontal, PaneSplitDirectionVertical, RegisterSetting,
-=======
-    AutosaveSetting, BottomDockLayout, EncodingDisplayOptions, InactiveOpacity,
+    AutosaveSetting, BottomDockLayout, DisplayLanguage, EncodingDisplayOptions, InactiveOpacity,
     PaneSplitDirectionHorizontal, PaneSplitDirectionVertical, RegisterSetting,
->>>>>>> e017293aed (settings: Fix command aliases json schema (#57812))
+    RestoreOnStartupBehavior, Settings,
+};
     RestoreOnStartupBehavior, Settings,
 };
 
