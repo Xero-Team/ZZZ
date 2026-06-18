@@ -368,34 +368,35 @@ impl Render for LanguageServerPrompt {
                                         .tooltip_label("Copy Description"),
                                     )
                                     .child(
-                                        IconButton::new(close_id, close_icon)
-                                    .flex_shrink_0()
-                                            .tooltip(move |_window, cx| {
-                                                if suppress {
-                                                    Tooltip::with_meta(
-                                                        "Suppress",
-                                                        Some(&SuppressNotification),
-                                                        "Click to close",
-                                                        cx,
-                                                    )
-                                                } else {
-                                                    Tooltip::with_meta(
-                                                        "Close",
-                                                        Some(&menu::Cancel),
-                                                        "Suppress with shift-click",
-                                                        cx,
-                                                    )
-                                                }
-                                            })
-                                            .on_click(cx.listener(
-                                                move |this, _: &ClickEvent, _, cx| {
+                                        div().flex_none().child(
+                                            IconButton::new(close_id, close_icon)
+                                                .tooltip(move |_window, cx| {
                                                     if suppress {
-                                                        cx.emit(SuppressEvent);
+                                                        Tooltip::with_meta(
+                                                            "Suppress",
+                                                            Some(&SuppressNotification),
+                                                            "Click to close",
+                                                            cx,
+                                                        )
                                                     } else {
-                                                        this.dismiss_notification(cx);
+                                                        Tooltip::with_meta(
+                                                            "Close",
+                                                            Some(&menu::Cancel),
+                                                            "Suppress with shift-click",
+                                                            cx,
+                                                        )
                                                     }
-                                                },
-                                            )),
+                                                })
+                                                .on_click(cx.listener(
+                                                    move |this, _: &ClickEvent, _, cx| {
+                                                        if suppress {
+                                                            cx.emit(SuppressEvent);
+                                                        } else {
+                                                            this.dismiss_notification(cx);
+                                                        }
+                                                    },
+                                                )),
+                                        ),
                                     ),
                             ),
                     )
@@ -666,35 +667,36 @@ impl RenderOnce for NotificationFrame {
                     .when(self.show_close_button, |this| {
                         this.on_modifiers_changed(move |_, _, cx| cx.notify(entity))
                             .child(
-                                IconButton::new(close_id, close_icon)
-                                    .flex_shrink_0()
-                                    .tooltip(move |_window, cx| {
-                                        if suppress {
-                                            Tooltip::with_meta(
-                                                "Suppress",
-                                                Some(&SuppressNotification),
-                                                "Click to Close",
-                                                cx,
-                                            )
-                                        } else if show_suppress_button {
-                                            Tooltip::with_meta(
-                                                "Close",
-                                                Some(&menu::Cancel),
-                                                "Shift-click to Suppress",
-                                                cx,
-                                            )
-                                        } else {
-                                            Tooltip::for_action("Close", &menu::Cancel, cx)
-                                        }
-                                    })
-                                    .on_click({
-                                        let close = self.close.take();
-                                        move |_, window, cx| {
-                                            if let Some(close) = &close {
-                                                close(&suppress, window, cx)
+                                div().flex_none().child(
+                                    IconButton::new(close_id, close_icon)
+                                        .tooltip(move |_window, cx| {
+                                            if suppress {
+                                                Tooltip::with_meta(
+                                                    "Suppress",
+                                                    Some(&SuppressNotification),
+                                                    "Click to Close",
+                                                    cx,
+                                                )
+                                            } else if show_suppress_button {
+                                                Tooltip::with_meta(
+                                                    "Close",
+                                                    Some(&menu::Cancel),
+                                                    "Shift-click to Suppress",
+                                                    cx,
+                                                )
+                                            } else {
+                                                Tooltip::for_action("Close", &menu::Cancel, cx)
                                             }
-                                        }
-                                    }),
+                                        })
+                                        .on_click({
+                                            let close = self.close.take();
+                                            move |_, window, cx| {
+                                                if let Some(close) = &close {
+                                                    close(&suppress, window, cx)
+                                                }
+                                            }
+                                        }),
+                                ),
                             )
                     }),
             )

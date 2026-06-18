@@ -14,13 +14,8 @@ use editor::{Editor, EditorElement, EditorStyle};
 use extension_host::{ExtensionManifest, ExtensionOperation, ExtensionStore};
 use fuzzy::{StringMatch, StringMatchCandidate, match_strings};
 use gpui::{
-<<<<<<< HEAD
-    Action, Anchor, App, ClipboardItem, Context, Entity, EventEmitter, Focusable,
-    InteractiveElement, KeyContext, ParentElement, Point, Render, Styled, Task, TextStyle,
-=======
     Action, Anchor, App, ClipboardItem, Context, DismissEvent, Entity, EventEmitter, Focusable,
-    InteractiveElement, KeyContext, ParentElement, Point, Render, Styled, Task, TaskExt, TextStyle,
->>>>>>> 5e32405669 (extensions_ui: Add `RebuildDevExtension` action (#55173))
+    InteractiveElement, KeyContext, ParentElement, Point, Render, Styled, Task, TextStyle,
     UniformListScrollHandle, WeakEntity, Window, actions, point, uniform_list,
 };
 use num_format::{Locale, ToFormattedString};
@@ -42,7 +37,6 @@ use vim_mode_setting::VimModeSetting;
 use workspace::{
     Workspace,
     item::{Item, ItemEvent},
-    workspace_error::{ErrorAction, ErrorSeverity, WorkspaceError},
 };
 use zed_actions::ExtensionCategoryFilter;
 
@@ -71,27 +65,17 @@ pub struct RebuildDevExtension {
     pub extension_id: Option<String>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct DevExtensionNotInstalledError {
     extension_id: Option<SharedString>,
 }
 
-impl WorkspaceError for DevExtensionNotInstalledError {
-    fn primary_message(&self) -> SharedString {
+impl std::fmt::Display for DevExtensionNotInstalledError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.extension_id {
-            Some(extension_id) => {
-                format!("Dev extension '{extension_id}' is not installed.").into()
-            }
-            None => "No dev extensions are installed.".into(),
+            Some(extension_id) => write!(f, "Dev extension '{extension_id}' is not installed."),
+            None => write!(f, "No dev extensions are installed."),
         }
-    }
-
-    fn primary_action(&self) -> ErrorAction {
-        ErrorAction::new("Install Dev Extension", InstallDevExtension)
-    }
-
-    fn severity(&self) -> ErrorSeverity {
-        ErrorSeverity::Warning
     }
 }
 
@@ -247,7 +231,7 @@ pub fn init(cx: &mut App) {
                         });
                     } else {
                         workspace.show_error(
-                            DevExtensionNotInstalledError {
+                            &DevExtensionNotInstalledError {
                                 extension_id: Some(SharedString::from(target_id.to_owned())),
                             },
                             cx,
@@ -264,7 +248,7 @@ pub fn init(cx: &mut App) {
 
                 match dev_extensions.len() {
                     0 => {
-                        workspace.show_error(DevExtensionNotInstalledError::default(), cx);
+                        workspace.show_error(&DevExtensionNotInstalledError::default(), cx);
                     }
                     1 => {
                         let extension_id = dev_extensions[0].id.clone();

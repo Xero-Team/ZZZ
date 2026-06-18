@@ -6217,7 +6217,7 @@ dependencies = [
  "picker",
  "project",
  "release_channel",
- "schemars 1.0.4",
+ "schemars 1.2.1",
  "semver",
  "serde",
  "settings",
@@ -11137,7 +11137,6 @@ dependencies = [
  "util",
  "watch",
  "which",
- "windows 0.61.3",
 ]
 
 [[package]]
@@ -14771,7 +14770,6 @@ dependencies = [
  "urlencoding",
  "util",
  "which",
- "windows 0.61.3",
 ]
 
 [[package]]
@@ -19600,7 +19598,7 @@ dependencies = [
  "util_macros",
  "walkdir",
  "which",
- "windows 0.61.3",
+ "windows 0.62.2",
 ]
 
 [[package]]

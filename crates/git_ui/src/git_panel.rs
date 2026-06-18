@@ -6346,14 +6346,9 @@ impl GitPanel {
                     git::AddToGitInfoExclude.boxed_clone(),
                 )
                 .separator()
-<<<<<<< HEAD
                 .action(open_diff.clone(), menu::Confirm.boxed_clone())
                 .action(open_diff_file.clone(), menu::SecondaryConfirm.boxed_clone())
-=======
-                .action("Open Diff", menu::Confirm.boxed_clone())
-                .action("Open Diff (File)", menu::SecondaryConfirm.boxed_clone())
                 .action("View File", ViewFile.boxed_clone())
->>>>>>> c3c38c5c09 (git_ui: Add View File action to Git Panel (#59383))
                 .when(!is_created, |context_menu| {
                     context_menu
                         .separator()
