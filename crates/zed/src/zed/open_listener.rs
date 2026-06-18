@@ -1228,7 +1228,6 @@ mod tests {
     }
 
     #[gpui::test]
-<<<<<<< HEAD
     async fn test_derive_paths_with_position_preserves_parenthesized_directory_names(
         cx: &mut TestAppContext,
     ) {
@@ -1271,43 +1270,6 @@ mod tests {
                 PathWithPosition::from_path(PathBuf::from(path!("/project/foo(1:2)"))),
                 PathWithPosition::from_path(PathBuf::from(path!("/project/测试(2)"))),
                 PathWithPosition::from_path(PathBuf::from(path!("/project/测试目录 (2)"))),
-=======
-    async fn test_derive_paths_with_position_directory_with_position_like_name(
-        cx: &mut TestAppContext,
-    ) {
-        let app_state = init_test(cx);
-        let fs = app_state.fs.as_fake();
-
-        // A folder whose name ends in `(N)` or `(row,col)` would otherwise be parsed as a
-        // path with a row/column suffix (e.g. the MSVC-style `file.c(22)`), truncating the name.
-        fs.insert_tree(
-            path!("/root"),
-            json!({
-                "TEST (1)": {},
-                "Project (2,3)": {},
-                "test 123": {},
-            }),
-        )
-        .await;
-
-        let inputs = vec![
-            path!("/root/TEST (1)").to_string(),
-            path!("/root/Project (2,3)").to_string(),
-            path!("/root/test 123").to_string(),
-        ];
-        let result = derive_paths_with_position(fs.as_ref(), inputs).await;
-
-        let paths: Vec<_> = result
-            .iter()
-            .map(|p| (p.path.to_string_lossy().to_string(), p.row, p.column))
-            .collect();
-        assert_eq!(
-            paths,
-            vec![
-                (path!("/root/TEST (1)").to_string(), None, None),
-                (path!("/root/Project (2,3)").to_string(), None, None),
-                (path!("/root/test 123").to_string(), None, None),
->>>>>>> 362035d52a ( Fix opening folders whose name ends in a position-like suffix (#59384))
             ]
         );
     }
