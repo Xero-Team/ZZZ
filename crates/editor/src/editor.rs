@@ -22419,6 +22419,13 @@ impl Editor {
         self.invalidate_semantic_tokens(None);
         self.refresh_semantic_tokens(None, None, cx);
         self.refresh_outline_symbols_at_cursor(cx);
+
+        if let Some(highlights) = self.highlighted_rows.get_mut(&TypeId::of::<ActiveDebugLine>()) {
+            let color = cx.theme().colors().editor_debugger_active_line_background;
+            for highlight in highlights {
+                highlight.color = color;
+            }
+        }
     }
 
     pub fn set_searchable(&mut self, searchable: bool) {
