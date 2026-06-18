@@ -9,8 +9,6 @@ pub use settings::{
     PaneSplitDirectionHorizontal, PaneSplitDirectionVertical, RegisterSetting,
     RestoreOnStartupBehavior, Settings,
 };
-    RestoreOnStartupBehavior, Settings,
-};
 
 #[derive(RegisterSetting)]
 pub struct WorkspaceSettings {
