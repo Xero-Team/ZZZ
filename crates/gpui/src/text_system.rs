@@ -92,11 +92,7 @@ impl TextSystem {
                 .iter()
                 .map(|font| font.family.to_string()),
         );
-<<<<<<< HEAD
         names.push(".SystemUIFont".to_owned());
-        names.sort();
-=======
-        names.push(".SystemUIFont".to_string());
         names.sort_unstable();
 >>>>>>> 78658778a2 (Use unstable sorts if deduplicating (#58751))
         names.dedup();
