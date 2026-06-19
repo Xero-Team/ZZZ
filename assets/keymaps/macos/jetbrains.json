@@ -107,6 +107,13 @@
     },
   },
   {
+    "context": "AcpThreadSearchBar",
+    "bindings": {
+      "f3": "agent::SelectNextThreadMatch",
+      "shift-f3": "agent::SelectPreviousThreadMatch",
+    },
+  },
+  {
     "context": "Workspace",
     "bindings": {
       "cmd-shift-f12": "workspace::ToggleAllDocks",

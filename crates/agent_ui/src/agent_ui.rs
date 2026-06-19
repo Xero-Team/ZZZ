@@ -192,6 +192,8 @@ actions!(
         OpenActiveThreadAsMarkdown,
         /// Opens the agent diff view to review changes.
         OpenAgentDiff,
+        /// Toggles in-thread search for the active thread.
+        ToggleSearch,
         /// Copies the current thread to the clipboard as JSON for debugging.
         CopyThreadToClipboard,
         /// Loads a thread from the clipboard JSON for debugging.
