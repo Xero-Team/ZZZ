@@ -216,7 +216,7 @@ impl WorkDirectory {
     fn path_key(&self) -> PathKey {
         match self {
             WorkDirectory::InProject { relative_path } => PathKey(relative_path.clone()),
-            WorkDirectory::AboveProject { .. } => PathKey(RelPath::empty().into()),
+            WorkDirectory::AboveProject { .. } => PathKey(RelPath::empty_arc()),
         }
     }
 
@@ -424,7 +424,6 @@ impl Worktree {
         } else {
             None
         };
-
         Ok(cx.new(move |cx: &mut Context<Worktree>| {
             let mut snapshot = LocalSnapshot {
                 ignores_by_parent_abs_path: Default::default(),
@@ -436,9 +435,7 @@ impl Worktree {
                     abs_path
                         .file_name()
                         .and_then(|f| f.to_str())
-                        .map_or(RelPath::empty().into(), |f| {
-                            RelPath::unix(f).unwrap().into()
-                        }),
+                        .map_or(RelPath::empty_arc(), |f| RelPath::unix(f).unwrap().into()),
                     abs_path.clone(),
                     PathStyle::local(),
                 ),
@@ -467,7 +464,7 @@ impl Worktree {
             let share_private_files = false;
             if let Some(metadata) = metadata {
                 let mut entry = Entry::new(
-                    RelPath::empty().into(),
+                    RelPath::empty_arc(),
                     &metadata,
                     ProjectEntryId::new(&next_entry_id),
                     snapshot.root_char_bag,
@@ -525,8 +522,7 @@ impl Worktree {
         cx.new(|cx: &mut Context<Self>| {
             let mut snapshot = Snapshot::new(
                 WorktreeId::from_proto(worktree.id),
-                RelPath::from_proto(&worktree.root_name)
-                    .unwrap_or_else(|_| RelPath::empty().into()),
+                RelPath::from_proto(&worktree.root_name).unwrap_or_else(|_| RelPath::empty_arc()),
                 Path::new(&worktree.abs_path).into(),
                 path_style,
             );
@@ -596,21 +592,44 @@ impl Worktree {
                         }
 
                         let old_root_repo_common_dir = this.snapshot.root_repo_common_dir.clone();
-                        let mut entries_changed = false;
+                        let mut changed_entries: Vec<(Arc<RelPath>, ProjectEntryId, PathChange)> =
+                            Vec::new();
                         {
                             let mut lock = this.background_snapshot.lock();
-                            this.snapshot = lock.0.clone();
+                            // Replace the snapshot, keeping the previous one around so we can
+                            // resolve the paths of removed entries (the new snapshot no longer
+                            // contains them, and the wire format only carries their ids).
+                            let old_snapshot = mem::replace(&mut this.snapshot, lock.0.clone());
                             for update in lock.1.drain(..) {
-                                entries_changed |= !update.updated_entries.is_empty()
-                                    || !update.removed_entries.is_empty();
+                                for entry_id in &update.removed_entries {
+                                    let entry_id = ProjectEntryId::from_proto(*entry_id);
+                                    if let Some(entry) = old_snapshot.entry_for_id(entry_id) {
+                                        changed_entries.push((
+                                            entry.path.clone(),
+                                            entry_id,
+                                            PathChange::Removed,
+                                        ));
+                                    }
+                                }
+                                for entry in &update.updated_entries {
+                                    // Remote updates don't distinguish creation from
+                                    // modification, so report `AddedOrUpdated`.
+                                    if let Some(path) = RelPath::from_proto(&entry.path).log_err() {
+                                        changed_entries.push((
+                                            path,
+                                            ProjectEntryId::from_proto(entry.id),
+                                            PathChange::AddedOrUpdated,
+                                        ));
+                                    }
+                                }
                                 if let Some(tx) = &this.update_observer {
                                     tx.unbounded_send(update).ok();
                                 }
                             }
                         };
 
-                        if entries_changed {
-                            cx.emit(Event::UpdatedEntries(Arc::default()));
+                        if !changed_entries.is_empty() {
+                            cx.emit(Event::UpdatedEntries(changed_entries.into()));
                         }
                         let is_first_update = !this.received_initial_update;
                         this.received_initial_update = true;
@@ -1548,7 +1567,7 @@ impl LocalWorktree {
             }
         }
 
-        lowest_ancestor.unwrap_or_else(|| RelPath::empty().into())
+        lowest_ancestor.unwrap_or_else(|| RelPath::empty_arc())
     }
 
     pub fn create_entry(
@@ -2053,9 +2072,7 @@ impl LocalWorktree {
             .as_path()
             .file_name()
             .and_then(|f| f.to_str())
-            .map_or(RelPath::empty().into(), |f| {
-                RelPath::unix(f).unwrap().into()
-            });
+            .map_or(RelPath::empty_arc(), |f| RelPath::unix(f).unwrap().into());
         self.snapshot.update_abs_path(new_path, root_name);
         self.restart_background_scanners(cx);
     }
@@ -3153,9 +3170,19 @@ impl BackgroundScannerState {
         self.snapshot.check_invariants(false);
     }
 
-    fn remove_path_from_snapshot_and_unwatch(&mut self, path: &RelPath, watcher: &dyn Watcher) {
+    fn remove_path_from_snapshot_and_unwatch(
+        &mut self,
+        path: &RelPath,
+        watcher: &dyn Watcher,
+        preserve_repository_watches: bool,
+    ) {
         let removed_descendant_abs_paths = self.remove_path_from_snapshot(path);
-        self.unwatch_path(watcher, path, removed_descendant_abs_paths);
+        self.unwatch_path(
+            watcher,
+            path,
+            removed_descendant_abs_paths,
+            preserve_repository_watches,
+        );
     }
 
     fn unwatch_path(
@@ -3163,8 +3190,20 @@ impl BackgroundScannerState {
         watcher: &dyn Watcher,
         _path: &RelPath,
         removed_descendant_abs_paths: Vec<PathBuf>,
+        preserve_repository_watches: bool,
     ) {
+        let mut repository_watches_to_preserve = HashSet::<Arc<Path>>::default();
+        if preserve_repository_watches {
+            for repository in self.snapshot.git_repositories.values() {
+                repository_watches_to_preserve.insert(repository.common_dir_abs_path.clone());
+                repository_watches_to_preserve.insert(repository.repository_dir_abs_path.clone());
+            }
+        }
+
         for removed_dir_abs_path in removed_descendant_abs_paths {
+            if repository_watches_to_preserve.contains(removed_dir_abs_path.as_path()) {
+                continue;
+            }
             watcher.remove(&removed_dir_abs_path).log_err();
         }
     }
@@ -3313,6 +3352,16 @@ impl BackgroundScannerState {
             .add(&repository_dir_abs_path)
             .context("failed to add repository directory to watcher")
             .log_err();
+
+        // On Linux and FreeBSD, the native watcher is non-recursive, so subdirectories inside `.git` need explicit watching.
+        // For repos using the reftable backend, watch the `.git/reftable` directory so that ref changes are detected.
+        let reftable_path = common_dir_abs_path.join("reftable");
+        if fs.is_dir(&reftable_path).await {
+            watcher
+                .add(&reftable_path)
+                .context("failed to add reftable directory to watcher")
+                .log_err();
+        }
 
         let work_directory_id = work_dir_entry.id;
 
@@ -3688,7 +3737,7 @@ impl<S: Summary> Summary for PathSummary<S> {
 
     fn zero(cx: Self::Context<'_>) -> Self {
         Self {
-            max_path: RelPath::empty().into(),
+            max_path: RelPath::empty_arc(),
             item_summary: S::zero(cx),
         }
     }
@@ -3945,7 +3994,7 @@ pub struct PathKey(pub Arc<RelPath>);
 
 impl Default for PathKey {
     fn default() -> Self {
-        Self(RelPath::empty().into())
+        Self(RelPath::empty_arc())
     }
 }
 
@@ -4933,7 +4982,11 @@ impl BackgroundScanner {
                 self.state
                     .lock()
                     .await
-                    .remove_path_from_snapshot_and_unwatch(&child_path, self.watcher.as_ref());
+                    .remove_path_from_snapshot_and_unwatch(
+                        &child_path,
+                        self.watcher.as_ref(),
+                        true,
+                    );
                 continue;
             }
 
@@ -5237,11 +5290,21 @@ impl BackgroundScanner {
                 }
                 Ok(None) => {
                     self.remove_repo_path(path.clone(), &mut state.snapshot);
-                    state.unwatch_path(self.watcher.as_ref(), path, removed_descendant_abs_paths);
+                    state.unwatch_path(
+                        self.watcher.as_ref(),
+                        path,
+                        removed_descendant_abs_paths,
+                        false,
+                    );
                 }
                 Err(err) => {
                     log::error!("error reading file {abs_path:?} on event: {err:#}");
-                    state.unwatch_path(self.watcher.as_ref(), path, removed_descendant_abs_paths);
+                    state.unwatch_path(
+                        self.watcher.as_ref(),
+                        path,
+                        removed_descendant_abs_paths,
+                        false,
+                    );
                 }
             }
         }

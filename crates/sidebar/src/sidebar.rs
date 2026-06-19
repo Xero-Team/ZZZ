@@ -24,8 +24,9 @@ use feature_flags::{
 };
 use gpui::{
     Action as _, AnyElement, App, ClickEvent, Context, DismissEvent, Entity, EntityId, FocusHandle,
-    Focusable, KeyContext, ListState, Modifiers, Pixels, Render, SharedString, Task, WeakEntity,
-    Window, WindowHandle, linear_color_stop, linear_gradient, list, prelude::*, px,
+    Focusable, KeyContext, ListState, Modifiers, Pixels, Render, SharedString, Task,
+    WeakEntity, Window, WindowBackgroundAppearance, WindowHandle, linear_color_stop,
+    linear_gradient, list, prelude::*, px,
 };
 use i18n as app_i18n;
 use menu::{
@@ -1068,7 +1069,7 @@ impl Sidebar {
             .iter()
             .flat_map(|group| group.key.path_list().paths().iter().cloned())
             .collect();
-        all_paths.sort();
+        all_paths.sort_unstable();
         all_paths.dedup();
         let path_details =
             util::disambiguate::compute_disambiguation_details(&all_paths, |path, detail| {
@@ -1676,13 +1677,20 @@ impl Sidebar {
         let key_for_toggle = key.clone();
         let key_for_focus = key.clone();
 
+        // The fade gradient renders as a visible patch on transparent windows,
+        // so truncate the label instead.
+        let opaque_window =
+            cx.theme().window_background_appearance() == WindowBackgroundAppearance::Opaque;
+
         let label = if highlight_positions.is_empty() {
             Label::new(label.clone())
                 .when(!is_active, |this| this.color(Color::Muted))
+                .when(!opaque_window, |this| this.truncate())
                 .into_any_element()
         } else {
             HighlightedLabel::new(label.clone(), highlight_positions.to_vec())
                 .when(!is_active, |this| this.color(Color::Muted))
+                .when(!opaque_window, |this| this.truncate())
                 .into_any_element()
         };
 
@@ -1801,10 +1809,12 @@ impl Sidebar {
                         )
                     }),
             )
-            .child(gradient_overlay())
+            .children(opaque_window.then(|| gradient_overlay()))
             .child(
                 h_flex()
-                    .child(gradient_overlay())
+                    .gap_px()
+                    .pr_1p5()
+                    .children(opaque_window.then(|| gradient_overlay()))
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
                         cx.stop_propagation();
                     })
@@ -2725,6 +2735,17 @@ impl Sidebar {
         .detach_and_log_err(cx);
     }
 
+    fn is_thread_active_in_workspace(
+        &self,
+        thread_id: &ThreadId,
+        workspace: &Entity<Workspace>,
+        cx: &App,
+    ) -> bool {
+        self.active_workspace(cx).as_ref() == Some(workspace)
+            && self.active_entry.as_ref().is_some_and(|entry| {
+                entry.is_active_thread(thread_id) && entry.workspace() == workspace
+            })
+    }
     fn activate_thread_locally(
         &mut self,
         metadata: &ThreadMetadata,
@@ -2736,6 +2757,13 @@ impl Sidebar {
         let Some(multi_workspace) = self.multi_workspace.upgrade() else {
             return;
         };
+
+        if self.is_thread_active_in_workspace(&metadata.thread_id, workspace, cx) {
+            workspace.update(cx, |workspace, cx| {
+                workspace.focus_panel::<AgentPanel>(window, cx);
+            });
+            return;
+        }
 
         // Set active_entry eagerly so the sidebar highlight updates
         // immediately, rather than waiting for a deferred AgentPanel
@@ -4321,9 +4349,7 @@ impl Sidebar {
                 |_window, cx| {
                     Tooltip::for_action(
                         app_i18n::tr(cx, "sidebar.recent_projects.add_project", "Add Project"),
-                        &OpenRecent {
-                            create_new_window: false,
-                        },
+                        &OpenRecent::default(),
                         cx,
                     )
                 },
@@ -4635,7 +4661,7 @@ impl Sidebar {
                 .on_click(|_, window, cx| {
                     window.dispatch_action(
                         Open {
-                            create_new_window: false,
+                            create_new_window: Some(false),
                         }
                         .boxed_clone(),
                         cx,

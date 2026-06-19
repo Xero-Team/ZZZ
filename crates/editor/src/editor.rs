@@ -530,13 +530,15 @@ pub struct EditorStyle {
 
 impl Default for EditorStyle {
     fn default() -> Self {
+        static NONE_SYNTAX: std::sync::LazyLock<Arc<SyntaxTheme>> =
+            std::sync::LazyLock::new(|| Arc::new(SyntaxTheme::default()));
         Self {
             background: Hsla::default(),
             border: Hsla::default(),
             local_player: PlayerColor::default(),
             text: TextStyle::default(),
             scrollbar_width: Pixels::default(),
-            syntax: Default::default(),
+            syntax: NONE_SYNTAX.clone(),
             // HACK: Status colors don't have a real default.
             // We should look into removing the status colors from the editor
             // style and retrieve them directly from the theme.
@@ -722,9 +724,6 @@ impl EditorActionId {
         Self(answer)
     }
 }
-
-// type GetFieldEditorTheme = dyn Fn(&theme::Theme) -> theme::FieldEditor;
-// type OverrideTextStyle = dyn Fn(&EditorStyle) -> Option<HighlightStyle>;
 
 type BackgroundHighlight = (
     Arc<dyn Fn(&usize, &Theme) -> Hsla + Send + Sync>,
@@ -5098,6 +5097,9 @@ impl Editor {
             .range_to_buffer_ranges(visible_range)
             .into_iter()
             .filter(|(_, excerpt_visible_range, _)| !excerpt_visible_range.is_empty())
+            .map(|(buffer_snapshot, range, excerpt_visible_range)| {
+                (buffer_snapshot.clone(), range, excerpt_visible_range)
+            })
             .collect()
     }
 
@@ -8278,7 +8280,7 @@ impl Editor {
         anchor: Anchor,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Entity<ui::ContextMenu> {
+    ) -> Entity<ContextMenu> {
         let weak_editor = cx.weak_entity();
         let focus_handle = self.focus_handle(cx);
 
@@ -8339,37 +8341,50 @@ impl Editor {
 
         let run_to_cursor = window.is_action_available(&RunToCursor, cx);
 
-        let toggle_state_msg = breakpoint.as_ref().map_or(None, |bp| match bp.1.state {
-            BreakpointState::Enabled => Some("Disable"),
-            BreakpointState::Disabled => Some("Enable"),
-        });
+        let toggle_state_entry: Option<(&str, Box<dyn Action>)> =
+            breakpoint.as_ref().map(|bp| match bp.1.state {
+                BreakpointState::Enabled => {
+                    ("Disable", crate::actions::DisableBreakpoint.boxed_clone())
+                }
+                BreakpointState::Disabled => {
+                    ("Enable", crate::actions::EnableBreakpoint.boxed_clone())
+                }
+            });
 
         let (anchor, breakpoint) =
             breakpoint.unwrap_or_else(|| (anchor, Arc::new(Breakpoint::new_standard())));
 
-        ui::ContextMenu::build(window, cx, |menu, _, _cx| {
+        ContextMenu::build(window, cx, |menu, _, _cx| {
             menu.on_blur_subscription(Subscription::new(|| {}))
                 .context(focus_handle)
                 .when(run_to_cursor, |this| {
                     let weak_editor = weak_editor.clone();
-                    this.entry("Run to Cursor", None, move |window, cx| {
-                        weak_editor
-                            .update(cx, |editor, cx| {
-                                editor.change_selections(
-                                    SelectionEffects::no_scroll(),
-                                    window,
-                                    cx,
-                                    |s| s.select_ranges([Point::new(row, 0)..Point::new(row, 0)]),
-                                );
-                            })
-                            .ok();
+                    this.entry(
+                        "Run to Cursor",
+                        Some(RunToCursor.boxed_clone()),
+                        move |window, cx| {
+                            weak_editor
+                                .update(cx, |editor, cx| {
+                                    editor.change_selections(
+                                        SelectionEffects::no_scroll(),
+                                        window,
+                                        cx,
+                                        |s| {
+                                            s.select_ranges(
+                                                [Point::new(row, 0)..Point::new(row, 0)],
+                                            )
+                                        },
+                                    );
+                                })
+                                .ok();
 
-                        window.dispatch_action(Box::new(RunToCursor), cx);
-                    })
+                            window.dispatch_action(Box::new(RunToCursor), cx);
+                        },
+                    )
                     .separator()
                 })
-                .when_some(toggle_state_msg, |this, msg| {
-                    this.entry(msg, None, {
+                .when_some(toggle_state_entry, |this, (msg, action)| {
+                    this.entry(msg, Some(action), {
                         let weak_editor = weak_editor.clone();
                         let breakpoint = breakpoint.clone();
                         move |_window, cx| {
@@ -8386,39 +8401,47 @@ impl Editor {
                         }
                     })
                 })
-                .entry(set_breakpoint_msg, None, {
-                    let weak_editor = weak_editor.clone();
-                    let breakpoint = breakpoint.clone();
-                    move |_window, cx| {
-                        weak_editor
-                            .update(cx, |this, cx| {
-                                this.edit_breakpoint_at_anchor(
-                                    anchor,
-                                    breakpoint.as_ref().clone(),
-                                    BreakpointEditAction::Toggle,
-                                    cx,
-                                );
-                            })
-                            .log_err();
-                    }
-                })
-                .entry(log_breakpoint_msg, None, {
-                    let breakpoint = breakpoint.clone();
-                    let weak_editor = weak_editor.clone();
-                    move |window, cx| {
-                        weak_editor
-                            .update(cx, |this, cx| {
-                                this.add_edit_breakpoint_block(
-                                    anchor,
-                                    breakpoint.as_ref(),
-                                    BreakpointPromptEditAction::Log,
-                                    window,
-                                    cx,
-                                );
-                            })
-                            .log_err();
-                    }
-                })
+                .entry(
+                    set_breakpoint_msg,
+                    Some(crate::actions::ToggleBreakpoint.boxed_clone()),
+                    {
+                        let weak_editor = weak_editor.clone();
+                        let breakpoint = breakpoint.clone();
+                        move |_window, cx| {
+                            weak_editor
+                                .update(cx, |this, cx| {
+                                    this.edit_breakpoint_at_anchor(
+                                        anchor,
+                                        breakpoint.as_ref().clone(),
+                                        BreakpointEditAction::Toggle,
+                                        cx,
+                                    );
+                                })
+                                .log_err();
+                        }
+                    },
+                )
+                .entry(
+                    log_breakpoint_msg,
+                    Some(crate::actions::EditLogBreakpoint.boxed_clone()),
+                    {
+                        let breakpoint = breakpoint.clone();
+                        let weak_editor = weak_editor.clone();
+                        move |window, cx| {
+                            weak_editor
+                                .update(cx, |this, cx| {
+                                    this.add_edit_breakpoint_block(
+                                        anchor,
+                                        breakpoint.as_ref(),
+                                        BreakpointPromptEditAction::Log,
+                                        window,
+                                        cx,
+                                    );
+                                })
+                                .log_err();
+                        }
+                    },
+                )
                 .entry(condition_breakpoint_msg, None, {
                     let breakpoint = breakpoint.clone();
                     let weak_editor = weak_editor.clone();
@@ -8465,13 +8488,17 @@ impl Editor {
                     }
                 })
                 .separator()
-                .entry(set_bookmark_msg, None, move |_window, cx| {
-                    weak_editor
-                        .update(cx, |this, cx| {
-                            this.toggle_bookmark_at_anchor(anchor, cx);
-                        })
-                        .log_err();
-                })
+                .entry(
+                    set_bookmark_msg,
+                    Some(ToggleBookmark.boxed_clone()),
+                    move |_window, cx| {
+                        weak_editor
+                            .update(cx, |this, cx| {
+                                this.toggle_bookmark_at_anchor(anchor, cx);
+                            })
+                            .log_err();
+                    },
+                )
         })
     }
 
@@ -16600,6 +16627,67 @@ impl Editor {
         });
     }
 
+    pub fn select_inside_delimiters(
+        &mut self,
+        _: &SelectInsideDelimiters,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.select_delimiters_impl(false, window, cx);
+    }
+
+    pub fn select_around_delimiters(
+        &mut self,
+        _: &SelectAroundDelimiters,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.select_delimiters_impl(true, window, cx);
+    }
+
+    fn select_delimiters_impl(
+        &mut self,
+        include_brackets: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.change_selections(Default::default(), window, cx, |s| {
+            s.move_offsets_with(&mut |snapshot, selection| {
+                let Some(enclosing_bracket_ranges) =
+                    snapshot.enclosing_bracket_ranges(selection.start..selection.end)
+                else {
+                    return;
+                };
+
+                let mut best = None;
+                let mut best_length = usize::MAX;
+
+                for (open, close) in enclosing_bracket_ranges {
+                    let range = if include_brackets {
+                        open.start..close.end
+                    } else {
+                        open.end..close.start
+                    };
+
+                    // Repeatedly invoking the action should expand to the next pair.
+                    if (selection.start..selection.end).contains_inclusive(&range) {
+                        continue;
+                    }
+
+                    let length = close.end - open.start;
+                    if length < best_length {
+                        best_length = length;
+                        best = Some(range);
+                    }
+                }
+
+                if let Some(range) = best {
+                    selection.set_head_tail(range.end, range.start, SelectionGoal::None);
+                }
+            })
+        });
+    }
+
     pub fn undo_selection(
         &mut self,
         _: &UndoSelection,
@@ -18521,7 +18609,6 @@ impl Editor {
 
         self.selections
             .disjoint_anchor_ranges()
-            .filter(|range| range.start != range.end)
             .flat_map(|range| [range.start, range.end])
             .filter_map(|anchor| snapshot.anchor_to_buffer_anchor(anchor))
             .filter_map(|(_, buffer_snapshot)| multi_buffer.buffer(buffer_snapshot.remote_id()))
@@ -22406,7 +22493,7 @@ impl Editor {
         cx.notify();
     }
 
-    fn theme_changed(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+    fn theme_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.mode.is_full() {
             return;
         }
@@ -22420,6 +22507,7 @@ impl Editor {
         self.invalidate_semantic_tokens(None);
         self.refresh_semantic_tokens(None, None, cx);
         self.refresh_outline_symbols_at_cursor(cx);
+        self.go_to_active_debug_line(window, cx);
     }
 
     pub fn set_searchable(&mut self, searchable: bool) {
@@ -24270,7 +24358,7 @@ impl NewlineConfig {
             .range_to_buffer_ranges(range.start..range.end)
             .as_slice()
         {
-            [(buffer_snapshot, range, _)] => (buffer_snapshot.clone(), range.clone()),
+            [(buffer_snapshot, range, _)] => (*buffer_snapshot, range.clone()),
             _ => return false,
         };
         let pair = {

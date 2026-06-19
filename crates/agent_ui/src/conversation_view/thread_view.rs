@@ -2334,6 +2334,10 @@ impl ThreadView {
         let queue_expanded = self.queue_expanded;
 
         let max_content_width = AgentSettings::get_global(cx).max_content_width;
+        // Drop shadows have no opaque surface to blend into on a transparent
+        // window, so they render as a dark halo; only apply them when opaque.
+        let opaque_window =
+            cx.theme().window_background_appearance() == gpui::WindowBackgroundAppearance::Opaque;
 
         h_flex()
             .w_full()
@@ -2351,12 +2355,14 @@ impl ThreadView {
                     .border_b_0()
                     .border_color(cx.theme().colors().border)
                     .rounded_t_md()
-                    .shadow(vec![gpui::BoxShadow {
-                        color: gpui::black().opacity(0.12),
-                        offset: point(px(1.), px(-1.)),
-                        blur_radius: px(2.),
-                        spread_radius: px(0.),
-                    }])
+                    .when(opaque_window, |this| {
+                        this.shadow(vec![gpui::BoxShadow {
+                            color: gpui::black().opacity(0.12),
+                            offset: point(px(1.), px(-1.)),
+                            blur_radius: px(2.),
+                            spread_radius: px(0.),
+                        }])
+                    })
                     .when_some(subagents_awaiting_permission, |this, element| {
                         this.child(element)
                     })
@@ -4607,6 +4613,9 @@ impl ThreadView {
                 let editing = self.editing_message == Some(entry_ix);
                 let editor_focus = editor.focus_handle(cx).is_focused(window);
                 let focus_border = cx.theme().colors().border_focused;
+                // Drop shadows render as a dark halo on transparent windows.
+                let opaque_window = cx.theme().window_background_appearance()
+                    == gpui::WindowBackgroundAppearance::Opaque;
 
                 let has_checkpoint_button = message
                     .checkpoint
@@ -4676,7 +4685,9 @@ impl ThreadView {
                                     .bg(cx.theme().colors().editor_background)
                                     .border_1()
                                     .when(is_indented, |this| {
-                                        this.py_2().px_2().shadow_sm()
+                                        this.py_2().px_2().when(opaque_window, |this| {
+                                            this.shadow_sm()
+                                        })
                                     })
                                     .border_color(cx.theme().colors().border)
                                     .map(|this| {
@@ -4692,9 +4703,10 @@ impl ThreadView {
                                         if editing && !editor_focus {
                                             return this.border_dashed()
                                         }
-                                        this.shadow_md().hover(|s| {
-                                            s.border_color(focus_border.opacity(0.8))
-                                        })
+                                        this.when(opaque_window, |this| this.shadow_md())
+                                            .hover(|s| {
+                                                s.border_color(focus_border.opacity(0.8))
+                                            })
                                     })
                                     .text_xs()
                                     .child(editor.clone().into_any_element())
@@ -7961,7 +7973,12 @@ impl ThreadView {
         };
 
         let label: SharedString = if let Some(abs_path) = is_file {
-            if let Some(project_path) = project
+            // Split off an optional `#L<line>` fragment so the path still resolves.
+            let (abs_path, fragment) = abs_path
+                .split_once('#')
+                .map_or((abs_path, None), |(path, fragment)| (path, Some(fragment)));
+
+            let path_label = if let Some(project_path) = project
                 .read(cx)
                 .project_path_for_absolute_path(&Path::new(abs_path), cx)
                 && let Some(worktree) = project
@@ -7973,9 +7990,13 @@ impl ThreadView {
                     .full_path(&project_path.path)
                     .to_string_lossy()
                     .to_string()
-                    .into()
             } else {
-                abs_path.to_owned().into()
+                abs_path.to_string()
+            };
+
+            match fragment {
+                Some(fragment) => format!("{path_label}#{fragment}").into(),
+                None => path_label.into(),
             }
         } else {
             uri.clone()

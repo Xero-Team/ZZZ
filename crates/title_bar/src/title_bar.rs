@@ -243,13 +243,18 @@ impl Render for TitleBar {
                 };
 
                 if let Some(repo_name) = display_name.and_then(|n| n.to_str()) {
-                    let name = if let Ok(relative) =
-                        worktree_abs_path.strip_prefix(&*repo.work_directory_abs_path)
-                    {
-                        if relative.as_os_str().is_empty() {
-                            repo_name.to_owned()
+                    let visible_worktrees_in_repo = self.visible_worktrees_in_repository(repo, cx);
+                    let name = if visible_worktrees_in_repo == 1 {
+                        if let Ok(relative) =
+                            worktree_abs_path.strip_prefix(&*repo.work_directory_abs_path)
+                        {
+                            if relative.as_os_str().is_empty() {
+                                repo_name.to_string()
+                            } else {
+                                format!("{}/{}", repo_name, relative.display())
+                            }
                         } else {
-                            format!("{}/{}", repo_name, relative.display())
+                            repo_name.to_string()
                         }
                     } else {
                         repo_name.to_owned()
@@ -503,6 +508,22 @@ impl TitleBar {
             .cloned()
     }
 
+    fn visible_worktrees_in_repository(
+        &self,
+        repository: &project::git_store::Repository,
+        cx: &App,
+    ) -> usize {
+        let repo_path = &repository.work_directory_abs_path;
+        self.project
+            .read(cx)
+            .visible_worktrees(cx)
+            .filter(|worktree| {
+                let worktree_path = worktree.read(cx).abs_path();
+                worktree_path == *repo_path || worktree_path.starts_with(repo_path.as_ref())
+            })
+            .count()
+    }
+
     fn render_remote_project_connection(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let workspace = self.workspace.clone();
 
@@ -618,7 +639,7 @@ impl TitleBar {
                     Some(recent_projects::RemoteServerProjects::popover(
                         fs,
                         workspace.clone(),
-                        false,
+                        None,
                         window,
                         cx,
                     ))
@@ -645,10 +666,7 @@ impl TitleBar {
                     move |_window, cx| {
                         Tooltip::with_meta(
                             tooltip_title.clone(),
-                            Some(&OpenRemote {
-                                from_existing_connection: false,
-                                create_new_window: false,
-                            }),
+                            Some(&OpenRemote::default()),
                             meta.clone(),
                             cx,
                         )
@@ -834,7 +852,7 @@ impl TitleBar {
                 Some(recent_projects::RecentProjects::popover(
                     workspace.clone(),
                     window_project_groups.clone(),
-                    false,
+                    None,
                     focus_handle.clone(),
                     window,
                     cx,
@@ -859,9 +877,7 @@ impl TitleBar {
                             "title_bar.project_name.recent_projects",
                             "Recent Projects",
                         ),
-                        &zed_actions::OpenRecent {
-                            create_new_window: false,
-                        },
+                        &zed_actions::OpenRecent::default(),
                         cx,
                     )
                 },
@@ -895,7 +911,7 @@ impl TitleBar {
                 Some(recent_projects::RecentProjects::popover(
                     workspace.clone(),
                     window_project_groups.clone(),
-                    false,
+                    None,
                     focus_handle.clone(),
                     window,
                     cx,
@@ -920,9 +936,7 @@ impl TitleBar {
                             "title_bar.project_name.recent_projects",
                             "Recent Projects",
                         ),
-                        &zed_actions::OpenRecent {
-                            create_new_window: false,
-                        },
+                        &zed_actions::OpenRecent::default(),
                         cx,
                     )
                 },

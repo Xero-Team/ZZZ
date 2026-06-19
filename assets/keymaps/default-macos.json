@@ -325,6 +325,7 @@
     "context": "AcpThread",
     "bindings": {
       "ctrl--": "pane::GoBack",
+      "cmd-alt-y": "agent::AllowAlways",
       "pageup": "agent::ScrollOutputPageUp",
       "pagedown": "agent::ScrollOutputPageDown",
       "home": "agent::ScrollOutputToTop",
@@ -684,10 +685,10 @@
     "bindings": {
       // Change the default action on `menu::Confirm` by setting the parameter
       // "alt-cmd-o": ["projects::OpenRecent", {"create_new_window": true }],
-      "alt-cmd-o": ["projects::OpenRecent", { "create_new_window": false }],
-      "ctrl-r": ["projects::OpenRecent", { "create_new_window": false }],
-      "ctrl-cmd-o": ["projects::OpenRemote", { "from_existing_connection": false, "create_new_window": false }],
-      "ctrl-cmd-shift-o": ["projects::OpenRemote", { "from_existing_connection": true, "create_new_window": false }],
+      "alt-cmd-o": "projects::OpenRecent",
+      "ctrl-r": "projects::OpenRecent",
+      "ctrl-cmd-o": ["projects::OpenRemote", { "from_existing_connection": false }],
+      "ctrl-cmd-shift-o": ["projects::OpenRemote", { "from_existing_connection": true }],
       "cmd-ctrl-b": "branches::OpenRecent",
       "cmd-ctrl-w": "git::Worktree",
       "ctrl-~": "workspace::NewTerminal",
@@ -1539,6 +1540,7 @@
       "cmd--": "image_viewer::ZoomOut",
       "cmd-0": "image_viewer::ResetZoom",
       "cmd-1": "image_viewer::ZoomToActualSize",
+      "cmd-k r": "editor::RevealInFileManager",
       "cmd-shift-0": "image_viewer::FitToView",
     },
   },
@@ -1600,7 +1602,6 @@
       "cmd-m": "notebook::AddCodeBlock",
       "cmd-shift-m": "notebook::AddMarkdownBlock",
       "cmd-shift-r": "notebook::RestartKernel",
-      "cmd-c": "notebook::InterruptKernel",
       "escape": "notebook::EnterCommandMode",
     },
   },

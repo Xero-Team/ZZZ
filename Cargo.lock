@@ -3351,10 +3351,13 @@ name = "component_preview"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assets",
  "client",
  "collections",
  "component",
  "db",
+ "editor",
+ "env_logger 0.11.10",
  "fs",
  "gpui",
  "gpui_platform",
@@ -6203,6 +6206,7 @@ dependencies = [
  "anyhow",
  "cloud_api_types",
  "collections",
+ "command_palette_hooks",
  "db",
  "editor",
  "extension",
@@ -6216,6 +6220,7 @@ dependencies = [
  "picker",
  "project",
  "release_channel",
+ "schemars 1.2.1",
  "semver",
  "serde",
  "settings",
@@ -7254,7 +7259,6 @@ dependencies = [
  "itertools 0.14.0",
  "language",
  "language_model",
- "linkify",
  "log",
  "markdown",
  "menu",
@@ -10447,6 +10451,7 @@ dependencies = [
  "node_runtime",
  "pulldown-cmark",
  "settings",
+ "smallvec",
  "spider-html5ever",
  "spider-markup5ever_rcdom",
  "stacksafe",
@@ -10464,6 +10469,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "buffer_diff",
+ "db",
  "editor",
  "fs",
  "gpui",
@@ -19596,6 +19602,7 @@ dependencies = [
  "util_macros",
  "walkdir",
  "which",
+ "windows 0.62.2",
 ]
 
 [[package]]
