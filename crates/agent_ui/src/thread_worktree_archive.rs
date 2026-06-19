@@ -1,6 +1,7 @@
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
+    time::SystemTime,
 };
 
 use anyhow::{Context as _, Result, anyhow};
@@ -52,6 +53,8 @@ pub struct RootPlan {
     /// used to create temporary remote projects when the main repo isn't
     /// loaded in any open workspace.
     pub remote_connection: Option<RemoteConnectionOptions>,
+    /// Creation time recorded when ZZZ created this worktree.
+    pub recorded_created_at: SystemTime,
 }
 
 /// A `Project` that references a worktree being archived, paired with the
@@ -174,6 +177,9 @@ pub fn build_root_plan(
         return None;
     }
 
+    let recorded_created_at =
+        git_ui::created_worktrees::recorded_created_at(&path, remote_connection, cx)?;
+
     let branch_name = linked_snapshot
         .branch
         .as_ref()
@@ -186,6 +192,7 @@ pub fn build_root_plan(
         worktree_repo: repo,
         branch_name,
         remote_connection: remote_connection.cloned(),
+        recorded_created_at,
     })
 }
 
@@ -198,6 +205,8 @@ pub fn build_root_plan(
 /// delete the worktree directory. If the git removal fails, the worktree
 /// is re-added to each project via [`rollback_root`].
 pub async fn remove_root(root: RootPlan, cx: &mut AsyncApp) -> Result<()> {
+    verify_created_by_zzz(&root, cx).await?;
+
     let release_tasks: Vec<_> = root
         .affected_projects
         .iter()
@@ -217,7 +226,52 @@ pub async fn remove_root(root: RootPlan, cx: &mut AsyncApp) -> Result<()> {
         return Err(error);
     }
 
+    cx.update(|cx| {
+        git_ui::created_worktrees::forget_created_worktree(
+            &root.root_path,
+            root.remote_connection.as_ref(),
+            cx,
+        )
+    })
+    .await
+    .log_err();
+
     Ok(())
+}
+
+async fn verify_created_by_zzz(root: &RootPlan, cx: &mut AsyncApp) -> Result<()> {
+    let receiver = root.worktree_repo.update(cx, |repo: &mut Repository, _cx| {
+        repo.worktree_created_at(root.root_path.clone())
+    });
+    let created_at = receiver
+        .await
+        .map_err(|_| anyhow!("worktree creation time check was canceled"))?
+        .with_context(|| {
+            format!(
+                "refusing to delete worktree at {}: failed to verify that ZZZ created it",
+                root.root_path.display()
+            )
+        })?;
+
+    match created_at {
+        None => Ok(()),
+        Some(created_at) if created_at == root.recorded_created_at => Ok(()),
+        Some(_) => {
+            cx.update(|cx| {
+                git_ui::created_worktrees::forget_created_worktree(
+                    &root.root_path,
+                    root.remote_connection.as_ref(),
+                    cx,
+                )
+            })
+            .await
+            .log_err();
+            Err(anyhow!(
+                "refusing to delete worktree at {}: it is not the worktree ZZZ created (it was likely removed and recreated outside ZZZ)",
+                root.root_path.display()
+            ))
+        }
+    }
 }
 
 async fn remove_root_after_worktree_removal(
@@ -705,6 +759,16 @@ pub async fn restore_worktree_via_git(
     {
         remove_new_worktree_on_error(created_new_worktree, &main_repo, worktree_path, cx).await;
         return Err(error.context("failed to restore archive checkpoint"));
+    }
+
+    if created_new_worktree {
+        git_ui::created_worktrees::record_created_worktree_for_repo(
+            &wt_repo,
+            worktree_path,
+            remote_connection,
+            cx,
+        )
+        .await;
     }
 
     Ok(worktree_path.clone())

@@ -29,6 +29,7 @@ use std::{
     cmp::Ordering,
     path::{Path, PathBuf},
     sync::Arc,
+    time::SystemTime,
 };
 use sum_tree::MapSeekTarget;
 use thiserror::Error;
@@ -74,6 +75,17 @@ pub fn original_repo_path_from_common_dir(common_dir: &Path) -> Option<PathBuf> 
     } else {
         None
     }
+}
+
+fn linked_worktree_git_dir(worktree_path: &Path) -> Result<PathBuf> {
+    let dot_git_path = worktree_path.join(".git");
+    let git_file = std::fs::read_to_string(&dot_git_path)
+        .with_context(|| format!("failed to read {}", dot_git_path.display()))?;
+    let git_dir = git_file
+        .strip_prefix("gitdir:")
+        .context("worktree .git file missing gitdir pointer")?
+        .trim();
+    Ok(worktree_path.join(git_dir))
 }
 
 /// Commit data needed for the git graph visualization.
@@ -841,6 +853,11 @@ pub trait GitRepository: Send + Sync {
     ) -> BoxFuture<'_, Result<()>>;
 
     fn worktrees(&self) -> BoxFuture<'_, Result<Vec<Worktree>>>;
+
+    fn worktree_created_at(
+        &self,
+        worktree_path: PathBuf,
+    ) -> BoxFuture<'_, Result<Option<SystemTime>>>;
 
     fn create_worktree(
         &self,
@@ -1934,6 +1951,35 @@ impl GitRepository for RealGitRepository {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     anyhow::bail!("git worktree list failed: {stderr}");
                 }
+            })
+            .boxed()
+    }
+
+    fn worktree_created_at(
+        &self,
+        worktree_path: PathBuf,
+    ) -> BoxFuture<'_, Result<Option<SystemTime>>> {
+        self.executor
+            .spawn(async move {
+                match std::fs::metadata(&worktree_path) {
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        return Ok(None);
+                    }
+                    Err(error) => {
+                        return Err(error).with_context(|| {
+                            format!("failed to stat {}", worktree_path.display())
+                        });
+                    }
+                    Ok(_) => {}
+                }
+
+                let git_dir = linked_worktree_git_dir(&worktree_path)?;
+                let metadata = std::fs::metadata(&git_dir)
+                    .with_context(|| format!("failed to stat {}", git_dir.display()))?;
+                let created_at = metadata.created().with_context(|| {
+                    format!("creation time unavailable for {}", git_dir.display())
+                })?;
+                Ok(Some(created_at))
             })
             .boxed()
     }
@@ -3814,11 +3860,11 @@ mod tests {
         .unwrap();
 
         assert_same_path(repository.path(), repo_dir.path().join(".git"));
-        assert_same_path(repository.main_repository_path(), repo_dir.path().join(".git"));
         assert_same_path(
-            repository.working_directory().unwrap(),
-            repo_dir.path(),
+            repository.main_repository_path(),
+            repo_dir.path().join(".git"),
         );
+        assert_same_path(repository.working_directory().unwrap(), repo_dir.path());
         assert_same_path(
             original_repo_path_from_common_dir(&repository.main_repository_path()).unwrap(),
             repo_dir.path(),
@@ -3875,10 +3921,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_same_path(
-            repository.working_directory().unwrap(),
-            &worktree_dir,
-        );
+        assert_same_path(repository.working_directory().unwrap(), &worktree_dir);
         assert_same_path(repository.main_repository_path(), repo_dir.join(".git"));
         assert_same_path(
             original_repo_path_from_common_dir(&repository.main_repository_path()).unwrap(),
