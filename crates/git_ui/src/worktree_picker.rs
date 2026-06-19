@@ -25,6 +25,7 @@ use workspace::{
 };
 
 use crate::git_panel::show_error_toast;
+use crate::worktree_service::{RemoteBranchName, WorktreeCreateTarget, worktree_create_targets};
 use zed_actions::{
     CreateWorktree, NewWorktreeBranchTarget, OpenWorktreeInNewWindow, SwitchWorktree,
 };
@@ -285,30 +286,6 @@ enum CreateNamedWorktreeDisabledReason {
     AlreadyExists,
 }
 
-#[derive(Clone)]
-struct RemoteBranchName {
-    remote_name: String,
-    branch_name: String,
-}
-
-impl RemoteBranchName {
-    fn parse(name: &str) -> Option<Self> {
-        let name = name.strip_prefix("refs/remotes/").unwrap_or(name);
-        let (remote_name, branch_name) = name.split_once('/')?;
-        if remote_name.is_empty() || branch_name.is_empty() {
-            return None;
-        }
-        Some(Self {
-            remote_name: remote_name.to_owned(),
-            branch_name: branch_name.to_owned(),
-        })
-    }
-
-    fn display_name(&self) -> String {
-        format!("{}/{}", self.remote_name, self.branch_name)
-    }
-}
-
 struct WorktreePickerDelegate {
     matches: Vec<WorktreeEntry>,
     all_worktrees: Vec<GitWorktree>,
@@ -433,26 +410,19 @@ impl Render for DeleteWorktreeTooltip {
 
 impl WorktreePickerDelegate {
     fn build_fixed_entries(&self) -> Vec<WorktreeEntry> {
-        let mut entries = Vec::new();
-
-        if self.has_multiple_repositories {
-            entries.push(WorktreeEntry::CreateFromCurrentBranch);
-        } else if let Some(ref default_branch) = self.default_branch {
-            let is_different = self
-                .current_branch_name
-                .as_ref()
-                .is_none_or(|current| current != &default_branch.branch_name);
-            entries.push(WorktreeEntry::CreateFromDefaultBranch {
-                default_branch: default_branch.clone(),
-            });
-            if is_different {
-                entries.push(WorktreeEntry::CreateFromCurrentBranch);
+        worktree_create_targets(
+            self.has_multiple_repositories,
+            self.default_branch.clone(),
+            self.current_branch_name.as_deref(),
+        )
+        .into_iter()
+        .map(|target| match target {
+            WorktreeCreateTarget::CurrentBranch => WorktreeEntry::CreateFromCurrentBranch,
+            WorktreeCreateTarget::DefaultBranch(default_branch) => {
+                WorktreeEntry::CreateFromDefaultBranch { default_branch }
             }
-        } else {
-            entries.push(WorktreeEntry::CreateFromCurrentBranch);
-        }
-
-        entries
+        })
+        .collect()
     }
 
     fn all_repo_worktrees(&self) -> &[GitWorktree] {
@@ -1085,17 +1055,10 @@ impl PickerDelegate for WorktreePickerDelegate {
                 .into_any_element(),
             ),
             WorktreeEntry::CreateFromCurrentBranch => {
-                let branch_label = if self.has_multiple_repositories {
-                    app_i18n::tr(
-                        cx,
-                        "git_ui.worktree_picker.current_branches",
-                        "current branches",
-                    )
-                } else {
-                    self.current_branch_name
-                        .clone()
-                        .unwrap_or_else(|| "HEAD".to_owned())
-                };
+                let branch_label = WorktreeCreateTarget::CurrentBranch.branch_label(
+                    self.has_multiple_repositories,
+                    self.current_branch_name.as_deref(),
+                );
 
                 let label = app_i18n::tr(
                     cx,
@@ -1114,7 +1077,11 @@ impl PickerDelegate for WorktreePickerDelegate {
                 Some(item.into_any_element())
             }
             WorktreeEntry::CreateFromDefaultBranch { default_branch } => {
-                let default_branch_name = default_branch.display_name();
+                let default_branch_name =
+                    WorktreeCreateTarget::DefaultBranch(default_branch.clone()).branch_label(
+                        self.has_multiple_repositories,
+                        self.current_branch_name.as_deref(),
+                    );
                 let label = app_i18n::tr(
                     cx,
                     "git_ui.worktree_picker.create_new_worktree_based_on",

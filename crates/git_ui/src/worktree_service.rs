@@ -32,6 +32,92 @@ use crate::askpass_modal::AskPassModal;
 use crate::git_panel::{open_output, show_error_toast};
 use crate::worktree_names;
 
+/// A remote-tracking branch reference parsed into its remote and branch parts,
+/// e.g. `origin/main` -> remote `origin`, branch `main`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RemoteBranchName {
+    pub remote_name: String,
+    pub branch_name: String,
+}
+
+impl RemoteBranchName {
+    pub fn parse(name: &str) -> Option<Self> {
+        let name = name.strip_prefix("refs/remotes/").unwrap_or(name);
+        let (remote_name, branch_name) = name.split_once('/')?;
+        if remote_name.is_empty() || branch_name.is_empty() {
+            return None;
+        }
+        Some(Self {
+            remote_name: remote_name.to_string(),
+            branch_name: branch_name.to_string(),
+        })
+    }
+
+    pub fn display_name(&self) -> String {
+        format!("{}/{}", self.remote_name, self.branch_name)
+    }
+}
+
+/// A "create new worktree" option offered to the user.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WorktreeCreateTarget {
+    CurrentBranch,
+    DefaultBranch(RemoteBranchName),
+}
+
+impl WorktreeCreateTarget {
+    pub fn branch_target(&self) -> NewWorktreeBranchTarget {
+        match self {
+            WorktreeCreateTarget::CurrentBranch => NewWorktreeBranchTarget::CurrentBranch,
+            WorktreeCreateTarget::DefaultBranch(default_branch) => {
+                NewWorktreeBranchTarget::RemoteBranch {
+                    remote_name: default_branch.remote_name.clone(),
+                    branch_name: default_branch.branch_name.clone(),
+                }
+            }
+        }
+    }
+
+    pub fn branch_label(
+        &self,
+        has_multiple_repositories: bool,
+        current_branch_name: Option<&str>,
+    ) -> String {
+        match self {
+            WorktreeCreateTarget::DefaultBranch(default_branch) => default_branch.display_name(),
+            WorktreeCreateTarget::CurrentBranch => {
+                if has_multiple_repositories {
+                    "current branches".to_string()
+                } else {
+                    current_branch_name.unwrap_or("HEAD").to_string()
+                }
+            }
+        }
+    }
+}
+
+pub fn worktree_create_targets(
+    has_multiple_repositories: bool,
+    default_branch: Option<RemoteBranchName>,
+    current_branch_name: Option<&str>,
+) -> Vec<WorktreeCreateTarget> {
+    if has_multiple_repositories {
+        return vec![WorktreeCreateTarget::CurrentBranch];
+    }
+
+    let Some(default_branch) = default_branch else {
+        return vec![WorktreeCreateTarget::CurrentBranch];
+    };
+
+    let is_different =
+        current_branch_name.is_none_or(|current| current != default_branch.branch_name);
+    let mut targets = vec![WorktreeCreateTarget::DefaultBranch(default_branch)];
+    if is_different {
+        targets.push(WorktreeCreateTarget::CurrentBranch);
+    }
+    targets
+}
+
 /// Whether a worktree operation is creating a new one or switching to an
 /// existing one. Controls whether the source workspace's state (dock layout,
 /// open files, agent panel draft) is inherited by the destination.
@@ -1502,6 +1588,79 @@ mod tests {
         assert!(
             !has_modal,
             "security modal should not show for a linked worktree created from a trusted main worktree"
+        );
+    }
+
+    #[test]
+    fn test_remote_branch_name_parse() {
+        assert_eq!(
+            RemoteBranchName::parse("refs/remotes/origin/main"),
+            Some(RemoteBranchName {
+                remote_name: "origin".to_string(),
+                branch_name: "main".to_string(),
+            })
+        );
+        assert_eq!(
+            RemoteBranchName::parse("upstream/feature/foo"),
+            Some(RemoteBranchName {
+                remote_name: "upstream".to_string(),
+                branch_name: "feature/foo".to_string(),
+            })
+        );
+        assert_eq!(RemoteBranchName::parse("main"), None);
+        assert_eq!(RemoteBranchName::parse("origin/"), None);
+    }
+
+    #[test]
+    fn test_worktree_create_targets() {
+        let origin_main = RemoteBranchName {
+            remote_name: "origin".to_string(),
+            branch_name: "main".to_string(),
+        };
+
+        assert_eq!(
+            worktree_create_targets(true, Some(origin_main.clone()), Some("feature")),
+            vec![WorktreeCreateTarget::CurrentBranch]
+        );
+        assert_eq!(
+            worktree_create_targets(false, Some(origin_main.clone()), Some("feature")),
+            vec![
+                WorktreeCreateTarget::DefaultBranch(origin_main.clone()),
+                WorktreeCreateTarget::CurrentBranch,
+            ]
+        );
+        assert_eq!(
+            worktree_create_targets(false, Some(origin_main.clone()), Some("main")),
+            vec![WorktreeCreateTarget::DefaultBranch(origin_main)]
+        );
+        assert_eq!(
+            worktree_create_targets(false, None, Some("feature")),
+            vec![WorktreeCreateTarget::CurrentBranch]
+        );
+    }
+
+    #[test]
+    fn test_worktree_create_target_branch_label() {
+        let origin_main = RemoteBranchName {
+            remote_name: "origin".to_string(),
+            branch_name: "main".to_string(),
+        };
+
+        assert_eq!(
+            WorktreeCreateTarget::DefaultBranch(origin_main).branch_label(false, Some("feature")),
+            "origin/main"
+        );
+        assert_eq!(
+            WorktreeCreateTarget::CurrentBranch.branch_label(false, Some("feature")),
+            "feature"
+        );
+        assert_eq!(
+            WorktreeCreateTarget::CurrentBranch.branch_label(false, None),
+            "HEAD"
+        );
+        assert_eq!(
+            WorktreeCreateTarget::CurrentBranch.branch_label(true, Some("feature")),
+            "current branches"
         );
     }
 }
