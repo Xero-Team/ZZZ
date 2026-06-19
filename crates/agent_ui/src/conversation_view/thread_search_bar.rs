@@ -244,11 +244,13 @@ impl ThreadSearchBar {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)]
     pub(super) fn match_count(&self) -> usize {
         self.matches.len()
     }
 
     #[cfg(test)]
+    #[allow(dead_code)]
     pub(super) fn active_match_index(&self) -> Option<usize> {
         self.active_match
     }
