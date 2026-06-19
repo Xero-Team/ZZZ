@@ -117,6 +117,23 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
     );
 }
 
+/// Returns column 0 of the document's first line, imitating `gg` in Helix.
+///
+/// With a count, Helix treats it as a 1-based line number and clamps to the
+/// final line when the count exceeds the buffer length.
+fn start_of_document(map: &DisplaySnapshot, times: Option<usize>) -> DisplayPoint {
+    let buffer_row = match times {
+        None => 0,
+        Some(times) => (times.saturating_sub(1) as u32).min(map.max_row().0),
+    };
+    map.point_to_display_point(Point::new(buffer_row, 0), Bias::Left)
+}
+
+/// Returns column 0 of the document's last line, imitating `ge` in Helix.
+fn end_of_document(map: &DisplaySnapshot) -> DisplayPoint {
+    map.point_to_display_point(Point::new(map.max_row().0, 0), Bias::Left)
+}
+
 impl Vim {
     pub fn helix_normal_motion(
         &mut self,
@@ -162,6 +179,10 @@ impl Vim {
                     }
 
                     let (new_head, goal) = match motion {
+                        Motion::StartOfDocument => {
+                            (start_of_document(map, times), SelectionGoal::None)
+                        }
+                        Motion::EndOfDocument => (end_of_document(map), SelectionGoal::None),
                         // EndOfLine positions after the last character, but in
                         // helix visual mode we want the selection to end ON the
                         // last character. Adjust left here so the subsequent
@@ -484,6 +505,25 @@ impl Vim {
             Motion::PreviousSubwordEnd { ignore_punctuation } => {
                 let mut is_boundary = Self::subword_boundary_start(ignore_punctuation, true);
                 self.helix_find_range_backward(times, window, cx, &mut is_boundary)
+            }
+            Motion::StartOfDocument => {
+                self.update_editor(cx, |_, editor, cx| {
+                    editor.change_selections(Default::default(), window, cx, |s| {
+                        s.move_with(&mut |map, selection| {
+                            selection
+                                .collapse_to(start_of_document(map, times), SelectionGoal::None)
+                        })
+                    });
+                });
+            }
+            Motion::EndOfDocument => {
+                self.update_editor(cx, |_, editor, cx| {
+                    editor.change_selections(Default::default(), window, cx, |s| {
+                        s.move_with(&mut |map, selection| {
+                            selection.collapse_to(end_of_document(map), SelectionGoal::None)
+                        })
+                    });
+                });
             }
             Motion::EndOfLine { .. } => {
                 // In Helix mode, EndOfLine should position cursor ON the last character,
@@ -4007,5 +4047,185 @@ mod test {
         cx.set_state("«🙂ˇ»", Mode::HelixNormal);
         cx.simulate_keystrokes("r 1");
         cx.assert_state("«1ˇ»", Mode::HelixNormal);
+    }
+
+    #[gpui::test]
+    async fn test_helix_start_of_document(cx: &mut gpui::TestAppContext) {
+        let mut cx = VimTestContext::new(cx, true).await;
+        cx.enable_helix();
+
+        cx.set_state(
+            indoc! {"
+            foo
+              barˇbaz"},
+            Mode::HelixNormal,
+        );
+        cx.simulate_keystrokes("g g");
+        cx.assert_state(
+            indoc! {"
+            ˇfoo
+              barbaz"},
+            Mode::HelixNormal,
+        );
+
+        cx.set_state(
+            indoc! {"
+            foo
+            «bar bazˇ»"},
+            Mode::HelixNormal,
+        );
+        cx.simulate_keystrokes("g g");
+        cx.assert_state(
+            indoc! {"
+            ˇfoo
+            bar baz"},
+            Mode::HelixNormal,
+        );
+
+        cx.set_state(
+            indoc! {"
+            line one
+            line two
+              line threeˇ"},
+            Mode::HelixNormal,
+        );
+        cx.simulate_keystrokes("2 g g");
+        cx.assert_state(
+            indoc! {"
+            line one
+            ˇline two
+              line three"},
+            Mode::HelixNormal,
+        );
+
+        cx.set_state(
+            indoc! {"
+            line one
+            line two
+            ˇline three"},
+            Mode::HelixNormal,
+        );
+        cx.simulate_keystrokes("9 9 9 g g");
+        cx.assert_state(
+            indoc! {"
+            line one
+            line two
+            ˇline three"},
+            Mode::HelixNormal,
+        );
+
+        cx.set_state(
+            indoc! {"
+            line one
+            ˇline two
+            line three"},
+            Mode::HelixNormal,
+        );
+        cx.simulate_keystrokes("v g g");
+        cx.assert_state(
+            indoc! {"
+            «ˇline one
+            l»ine two
+            line three"},
+            Mode::HelixSelect,
+        );
+
+        cx.set_state(
+            indoc! {"
+            line one
+            line «ˇtwo»
+            line three"},
+            Mode::HelixSelect,
+        );
+        cx.simulate_keystrokes("g g");
+        cx.assert_state(
+            indoc! {"
+            «ˇline one
+            line two»
+            line three"},
+            Mode::HelixSelect,
+        );
+    }
+
+    #[gpui::test]
+    async fn test_helix_end_of_document(cx: &mut gpui::TestAppContext) {
+        let mut cx = VimTestContext::new(cx, true).await;
+        cx.enable_helix();
+
+        cx.set_state(
+            indoc! {"
+              fooˇbar
+            baz"},
+            Mode::HelixNormal,
+        );
+        cx.simulate_keystrokes("g e");
+        cx.assert_state(
+            indoc! {"
+              foobar
+            ˇbaz"},
+            Mode::HelixNormal,
+        );
+
+        cx.set_state(
+            indoc! {"
+            «foo barˇ»
+            baz"},
+            Mode::HelixNormal,
+        );
+        cx.simulate_keystrokes("g e");
+        cx.assert_state(
+            indoc! {"
+            foo bar
+            ˇbaz"},
+            Mode::HelixNormal,
+        );
+
+        cx.set_state(
+            indoc! {"
+              line oneˇ
+            line two
+            line three"},
+            Mode::HelixNormal,
+        );
+        cx.simulate_keystrokes("2 g e");
+        cx.assert_state(
+            indoc! {"
+              line one
+            line two
+            ˇline three"},
+            Mode::HelixNormal,
+        );
+
+        cx.set_state(
+            indoc! {"
+            ˇline one
+            line two
+            line three"},
+            Mode::HelixNormal,
+        );
+        cx.simulate_keystrokes("v g e");
+        cx.assert_state(
+            indoc! {"
+            «line one
+            line two
+            lˇ»ine three"},
+            Mode::HelixSelect,
+        );
+
+        cx.set_state(
+            indoc! {"
+            line one
+            line «ˇtwo»
+            line three"},
+            Mode::HelixSelect,
+        );
+        cx.simulate_keystrokes("g e");
+        cx.assert_state(
+            indoc! {"
+            line one
+            line tw«o
+            lˇ»ine three"},
+            Mode::HelixSelect,
+        );
     }
 }
