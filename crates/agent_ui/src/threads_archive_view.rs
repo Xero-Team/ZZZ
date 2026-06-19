@@ -132,6 +132,35 @@ pub fn fuzzy_match_positions(query: &str, candidate: &str) -> Option<Vec<usize>>
     None
 }
 
+fn archive_match_positions(
+    query: &str,
+    session: &ThreadMetadata,
+    default_title: &str,
+) -> Option<Vec<usize>> {
+    if query.is_empty() {
+        return Some(Vec::new());
+    }
+
+    let title = session
+        .title
+        .as_ref()
+        .map(|title| title.as_ref())
+        .unwrap_or(default_title);
+
+    if let Some(positions) = fuzzy_match_positions(query, title) {
+        return Some(positions);
+    }
+
+    let worktree_matched = session.folder_paths().paths().iter().any(|path| {
+        path.as_path()
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| fuzzy_match_positions(query, name).is_some())
+    });
+
+    worktree_matched.then(Vec::new)
+}
+
 pub enum ThreadsArchiveViewEvent {
     Close,
     Activate { thread: ThreadMetadata },
@@ -307,20 +336,10 @@ impl ThreadsArchiveView {
         let mut current_bucket: Option<TimeBucket> = None;
 
         for session in sessions {
-            let highlight_positions = if !query.is_empty() {
-                match fuzzy_match_positions(
-                    &query,
-                    session
-                        .title
-                        .as_ref()
-                        .map(|t| t.as_ref())
-                        .unwrap_or(default_thread_title(cx).as_ref()),
-                ) {
-                    Some(positions) => positions,
-                    None => continue,
-                }
-            } else {
-                Vec::new()
+            let Some(highlight_positions) =
+                archive_match_positions(&query, &session, default_thread_title(cx).as_ref())
+            else {
+                continue;
             };
 
             let entry_bucket = {
@@ -1757,5 +1776,28 @@ mod tests {
                 "position {pos} is not a valid UTF-8 boundary in {text:?}"
             );
         }
+    }
+
+    #[test]
+    fn test_archive_match_positions_matches_worktree_name_when_title_misses() {
+        let session = ThreadMetadata {
+            thread_id: ThreadId::new(),
+            session_id: None,
+            agent_id: AgentId::from("assistant"),
+            title: Some("General discussion".into()),
+            updated_at: Utc::now(),
+            created_at: Some(Utc::now()),
+            interacted_at: None,
+            worktree_paths: crate::thread_metadata_store::WorktreePaths::from_folder_paths(
+                &workspace::PathList::new(&[PathBuf::from("/tmp/my-laravel-project")]),
+            ),
+            remote_connection: None,
+            archived: true,
+        };
+
+        let positions = archive_match_positions("laravel", &session, "New Thread")
+            .expect("worktree basename should match");
+        assert!(positions.is_empty());
+        assert!(archive_match_positions("missing", &session, "New Thread").is_none());
     }
 }
