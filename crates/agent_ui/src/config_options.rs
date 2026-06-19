@@ -271,6 +271,8 @@ struct ConfigOptionSelector {
 }
 
 impl ConfigOptionSelector {
+    const TRUNCATED_LABEL_LIMIT: usize = 32;
+
     pub fn new(
         config_options: Rc<dyn AgentSessionConfigOptions>,
         config_id: acp::SessionConfigId,
@@ -378,9 +380,12 @@ impl ConfigOptionSelector {
             IconName::ChevronDown
         };
 
+        let value_name = self.current_value_name(_cx);
+        let display_name = truncate_button_label(&value_name, Self::TRUNCATED_LABEL_LIMIT);
+
         Button::new(
             ElementId::Name(format!("config-option-{}", option.id.0).into()),
-            self.current_value_name(_cx),
+            display_name,
         )
         .label_size(LabelSize::Small)
         .color(Color::Muted)
@@ -1020,5 +1025,15 @@ fn count_config_options(option: &acp::SessionConfigOption) -> usize {
             _ => 0,
         },
         _ => 0,
+    }
+}
+
+fn truncate_button_label(label: &str, max_chars: usize) -> String {
+    let mut chars = label.chars();
+    let truncated: String = chars.by_ref().take(max_chars).collect();
+    if chars.next().is_some() {
+        format!("{truncated}…")
+    } else {
+        truncated
     }
 }
