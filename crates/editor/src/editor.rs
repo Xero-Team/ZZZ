@@ -13173,7 +13173,7 @@ impl Editor {
                                         &snapshot,
                                         range,
                                         to_insert,
-                                        url::Url::parse(to_insert).ok(),
+                                        is_standalone_url(to_insert),
                                     )
                                 } else {
                                     (range, Cow::Borrowed(to_insert))

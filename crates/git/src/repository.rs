@@ -3813,14 +3813,14 @@ mod tests {
         )
         .unwrap();
 
-        assert_same_path(&repository.git_dir, repo_dir.path().join(".git"));
-        assert_same_path(&repository.common_dir, repo_dir.path().join(".git"));
+        assert_same_path(repository.path(), repo_dir.path().join(".git"));
+        assert_same_path(repository.main_repository_path(), repo_dir.path().join(".git"));
         assert_same_path(
-            repository.working_directory.as_ref().unwrap(),
+            repository.working_directory().unwrap(),
             repo_dir.path(),
         );
         assert_same_path(
-            original_repo_path_from_common_dir(&repository.common_dir).unwrap(),
+            original_repo_path_from_common_dir(&repository.main_repository_path()).unwrap(),
             repo_dir.path(),
         );
     }
@@ -3876,12 +3876,12 @@ mod tests {
         .unwrap();
 
         assert_same_path(
-            repository.working_directory.as_ref().unwrap(),
+            repository.working_directory().unwrap(),
             &worktree_dir,
         );
-        assert_same_path(&repository.common_dir, repo_dir.join(".git"));
+        assert_same_path(repository.main_repository_path(), repo_dir.join(".git"));
         assert_same_path(
-            original_repo_path_from_common_dir(&repository.common_dir).unwrap(),
+            original_repo_path_from_common_dir(&repository.main_repository_path()).unwrap(),
             repo_dir,
         );
     }
@@ -3905,9 +3905,9 @@ mod tests {
         let repository =
             RealGitRepository::new(&repo_dir, None, Some("git".into()), cx.executor()).unwrap();
 
-        assert_same_path(&repository.git_dir, &repo_dir);
-        assert_same_path(&repository.common_dir, &repo_dir);
-        assert_eq!(repository.working_directory, None);
+        assert_same_path(repository.path(), &repo_dir);
+        assert_same_path(repository.main_repository_path(), &repo_dir);
+        assert!(repository.working_directory().is_err());
         assert_same_path(repository.main_repository_path(), &repo_dir);
         assert_eq!(
             repository
