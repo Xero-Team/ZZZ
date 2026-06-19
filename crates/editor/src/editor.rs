@@ -8488,17 +8488,13 @@ impl Editor {
                     }
                 })
                 .separator()
-                .entry(
-                    set_bookmark_msg,
-                    Some(ToggleBookmark.boxed_clone()),
-                    move |_window, cx| {
+                .entry(set_bookmark_msg, None, move |_window, cx| {
                         weak_editor
                             .update(cx, |this, cx| {
                                 this.toggle_bookmark_at_anchor(anchor, cx);
                             })
                             .log_err();
-                    },
-                )
+                })
         })
     }
 
