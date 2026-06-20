@@ -7,7 +7,7 @@ use std::{
 };
 
 use collections::{HashMap, HashSet};
-use gpui::{DismissEvent, EventEmitter, FocusHandle, Focusable, ScrollHandle, WeakEntity};
+use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, WeakEntity};
 use i18n::tr;
 
 use project::{
@@ -21,6 +21,7 @@ use ui::{
     AlertModal, Checkbox, FluentBuilder, KeyBinding, ListBulletItem, ToggleState, WithScrollbar,
     prelude::*,
 };
+use ui_input::InputField;
 
 use crate::{DismissDecision, ModalView, ToggleWorktreeSecurity};
 
@@ -33,6 +34,8 @@ pub struct SecurityModal {
     focus_handle: FocusHandle,
     project_list_scroll_handle: ScrollHandle,
     trusted: Option<bool>,
+    trust_path_input: Entity<InputField>,
+    trust_path_error: Option<SharedString>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -86,6 +89,10 @@ impl Render for SecurityModal {
         };
 
         let trust_label = self.build_trust_label(cx);
+        let trust_input = self
+            .single_trustable_path()
+            .is_some()
+            .then(|| self.trust_path_input.clone());
 
         AlertModal::new("security-modal")
             .width(rems(40.))
@@ -220,19 +227,67 @@ impl Render for SecurityModal {
                                 "MCP Server integrations from installing",
                             ))),
                     )
-                    .map(|this| match trust_label {
-                        Some(trust_label) => this.child(
-                            Checkbox::new("trust-parents", ToggleState::from(self.trust_parents))
-                                .label(trust_label)
-                                .on_click(cx.listener(
-                                    |security_modal, state: &ToggleState, _, cx| {
-                                        security_modal.trust_parents = state.selected();
-                                        cx.notify();
-                                        cx.stop_propagation();
-                                    },
-                                )),
-                        ),
-                        None => this,
+                    .map(|this| {
+                        let Some(trust_label) = trust_label else {
+                            return this;
+                        };
+
+                        match trust_input {
+                            Some(input) => this.child(
+                                v_flex()
+                                    .gap_1()
+                                    .child(
+                                        h_flex()
+                                            .items_start()
+                                            .gap_1p5()
+                                            .child(
+                                                h_flex()
+                                                    .h_8()
+                                                    .child(
+                                                        Checkbox::new(
+                                                            "trust-parents",
+                                                            ToggleState::from(self.trust_parents),
+                                                        )
+                                                        .label("Trust all projects in")
+                                                        .on_click(cx.listener(
+                                                            |security_modal,
+                                                             state: &ToggleState,
+                                                             _,
+                                                             cx| {
+                                                                security_modal.trust_parents =
+                                                                    state.selected();
+                                                                if !security_modal.trust_parents {
+                                                                    security_modal
+                                                                        .trust_path_error = None;
+                                                                }
+                                                                cx.notify();
+                                                                cx.stop_propagation();
+                                                            },
+                                                        )),
+                                                    ),
+                                            )
+                                            .child(input),
+                                    )
+                                    .when_some(self.trust_path_error.clone(), |this, error| {
+                                        this.child(
+                                            Label::new(error)
+                                                .size(LabelSize::Small)
+                                                .color(Color::Error),
+                                        )
+                                    }),
+                            ),
+                            None => this.child(
+                                Checkbox::new("trust-parents", ToggleState::from(self.trust_parents))
+                                    .label(trust_label)
+                                    .on_click(cx.listener(
+                                        |security_modal, state: &ToggleState, _, cx| {
+                                            security_modal.trust_parents = state.selected();
+                                            cx.notify();
+                                            cx.stop_propagation();
+                                        },
+                                    )),
+                            ),
+                        }
                     }),
             )
             .footer(
@@ -292,8 +347,10 @@ impl SecurityModal {
     pub fn new(
         worktree_store: WeakEntity<WorktreeStore>,
         remote_host: Option<impl Into<RemoteHostLocation>>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let trust_path_input = cx.new(|cx| InputField::new(window, cx, "Folder to trust"));
         let mut this = Self {
             worktree_store,
             remote_host: remote_host.map(|host| host.into()),
@@ -303,8 +360,17 @@ impl SecurityModal {
             trust_parents: false,
             home_dir: std::env::home_dir(),
             trusted: None,
+            trust_path_input,
+            trust_path_error: None,
         };
         this.refresh_restricted_paths(cx);
+
+        if let Some(project) = this.single_trustable_path() {
+            let default_scope = project.parent().unwrap_or(project.as_ref()).to_path_buf();
+            this.trust_path_input.update(cx, |field, cx| {
+                field.set_text(&default_scope.to_string_lossy(), window, cx);
+            });
+        }
 
         this
     }
@@ -366,7 +432,32 @@ impl SecurityModal {
         }
     }
 
+    fn edited_trust_scope(&self, cx: &App) -> Result<Option<PathBuf>, SharedString> {
+        if !self.trust_parents {
+            return Ok(None);
+        }
+
+        let Some(project) = self.single_trustable_path() else {
+            return Ok(None);
+        };
+
+        let typed = self.trust_path_input.read(cx).text(cx);
+        validate_trust_scope(&typed, &project, self.home_dir.as_deref()).map(Some)
+    }
+
     fn trust_and_dismiss(&mut self, cx: &mut Context<Self>) {
+        let scope_override = match self.edited_trust_scope(cx) {
+            Ok(scope_override) => {
+                self.trust_path_error = None;
+                scope_override
+            }
+            Err(error) => {
+                self.trust_path_error = Some(error);
+                cx.notify();
+                return;
+            }
+        };
+
         if let Some((trusted_worktrees, worktree_store)) =
             TrustedWorktrees::try_get_global(cx).zip(self.worktree_store.upgrade())
         {
@@ -378,17 +469,21 @@ impl SecurityModal {
                     .map(PathTrust::Worktree)
                     .collect::<HashSet<_>>();
                 if self.trust_parents {
-                    paths_to_trust.extend(self.restricted_paths.values().filter_map(
-                        |restricted_paths| {
-                            if restricted_paths.is_file {
-                                None
-                            } else {
-                                let parent_abs_path =
-                                    restricted_paths.abs_path.parent()?.to_owned();
-                                Some(PathTrust::AbsPath(parent_abs_path))
-                            }
-                        },
-                    ));
+                    if let Some(scope_override) = scope_override.clone() {
+                        paths_to_trust.insert(PathTrust::AbsPath(scope_override));
+                    } else {
+                        paths_to_trust.extend(self.restricted_paths.values().filter_map(
+                            |restricted_paths| {
+                                if restricted_paths.is_file {
+                                    None
+                                } else {
+                                    let parent_abs_path =
+                                        restricted_paths.abs_path.parent()?.to_owned();
+                                    Some(PathTrust::AbsPath(parent_abs_path))
+                                }
+                            },
+                        ));
+                    }
                 }
                 trusted_worktrees.trust(&worktree_store, paths_to_trust, cx);
             });
@@ -400,6 +495,16 @@ impl SecurityModal {
 
     pub fn dismiss(&mut self, cx: &mut Context<Self>) {
         cx.emit(DismissEvent);
+    }
+
+    fn single_trustable_path(&self) -> Option<Arc<Path>> {
+        let mut projects = self
+            .restricted_paths
+            .values()
+            .filter(|restricted_path| !restricted_path.is_file)
+            .map(|restricted_path| restricted_path.abs_path.clone());
+        let only = projects.next()?;
+        projects.next().is_none().then_some(only)
     }
 
     pub fn refresh_restricted_paths(&mut self, cx: &mut Context<Self>) {
@@ -424,6 +529,7 @@ impl SecurityModal {
 
                 if self.restricted_paths != new_restricted_worktrees {
                     self.trust_parents = false;
+                    self.trust_path_error = None;
                     self.restricted_paths = new_restricted_worktrees;
                     if self.restricted_paths.is_empty() {
                         self.trusted = Some(true);
@@ -437,5 +543,83 @@ impl SecurityModal {
             self.restricted_paths.clear();
             cx.notify();
         }
+    }
+}
+
+fn validate_trust_scope(
+    typed: &str,
+    project: &Path,
+    home_dir: Option<&Path>,
+) -> Result<PathBuf, SharedString> {
+    let trimmed = typed.trim();
+    if trimmed.is_empty() {
+        return Err("Enter a folder to trust".into());
+    }
+
+    let expanded = match (trimmed.strip_prefix('~'), home_dir) {
+        (Some(rest), Some(home_dir)) => {
+            home_dir.join(rest.strip_prefix(std::path::MAIN_SEPARATOR).unwrap_or(rest))
+        }
+        _ => PathBuf::from(trimmed),
+    };
+
+    if !expanded.is_absolute() {
+        return Err("Enter an absolute folder path".into());
+    }
+
+    if !project.starts_with(&expanded) {
+        return Err("Must be a parent folder of the project".into());
+    }
+
+    Ok(expanded)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_trust_scope;
+    use gpui::SharedString;
+    use std::path::PathBuf;
+
+    fn sample_home_dir() -> PathBuf {
+        if cfg!(windows) {
+            PathBuf::from(r"C:\Users\tester")
+        } else {
+            PathBuf::from("/root")
+        }
+    }
+
+    fn sample_project_dir() -> PathBuf {
+        sample_home_dir().join("projects").join("demo")
+    }
+
+    #[test]
+    fn validate_trust_scope_accepts_project_ancestor() {
+        let home_dir = sample_home_dir();
+        let project_dir = sample_project_dir();
+        let scope = home_dir.join("projects");
+        let result =
+            validate_trust_scope(scope.to_string_lossy().as_ref(), &project_dir, Some(&home_dir));
+
+        assert_eq!(result, Ok(scope));
+    }
+
+    #[test]
+    fn validate_trust_scope_expands_home_and_rejects_non_ancestor() {
+        let home_dir = sample_home_dir();
+        let project_dir = sample_project_dir();
+        let home_relative_scope = format!("~{}projects", std::path::MAIN_SEPARATOR);
+        let ok = validate_trust_scope(
+            &home_relative_scope,
+            &project_dir,
+            Some(&home_dir),
+        );
+        assert_eq!(ok, Ok(home_dir.join("projects")));
+
+        let err = validate_trust_scope(
+            home_dir.join("elsewhere").to_string_lossy().as_ref(),
+            &project_dir,
+            Some(&home_dir),
+        );
+        assert_eq!(err, Err(SharedString::from("Must be a parent folder of the project")));
     }
 }
