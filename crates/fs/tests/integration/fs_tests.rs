@@ -5,6 +5,8 @@ use std::{
     ffi::OsString,
     io::Write,
     path::{Path, PathBuf},
+    pin::Pin,
+    sync::Arc,
     time::Duration,
 };
 
@@ -826,6 +828,183 @@ async fn test_fake_fs_restore(executor: BackgroundExecutor) {
 
     assert_eq!(fs.files(), vec![PathBuf::from(path!("/root/file_c.txt"))]);
     assert_eq!(fs.trash_entries().len(), 2);
+}
+
+fn make_dir_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, link)
+    }
+    #[cfg(windows)]
+    {
+        std::os::windows::fs::symlink_dir(target, link)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (target, link);
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "symlinks are not supported on this platform",
+        ))
+    }
+}
+
+async fn watcher_delivered_event(
+    events: &mut (impl futures::Stream<Item = Vec<PathEvent>> + Unpin),
+    executor: &BackgroundExecutor,
+    timeout: Duration,
+    path_matches: &(dyn Fn(&Path) -> bool + Send + Sync),
+) -> bool {
+    let timeout = executor.timer(timeout).fuse();
+    futures::pin_mut!(timeout);
+    loop {
+        futures::select_biased! {
+            batch = events.next().fuse() => {
+                let Some(batch) = batch else { return false };
+                let covered = batch.iter().any(|event| {
+                    path_matches(&event.path) || event.kind == Some(PathEventKind::Rescan)
+                });
+                if covered {
+                    return true;
+                }
+            }
+            _ = timeout => return false,
+        }
+    }
+}
+
+#[gpui::test]
+async fn test_realfs_watch_aliased_watch_paths_deliver_events(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+
+    let fs = RealFs::new(None, executor.clone());
+    let temp_dir = TempDir::new().expect("create temp dir");
+    let root = temp_dir.path().to_path_buf();
+    let latency = Duration::from_millis(10);
+
+    std::fs::create_dir_all(root.join("CaseProbe")).expect("create case probe dir");
+    let case_insensitive = root.join("caseprobe").exists();
+
+    struct Scenario {
+        name: &'static str,
+        events: Pin<Box<dyn Send + futures::Stream<Item = Vec<PathEvent>>>>,
+        _watcher: Arc<dyn Watcher>,
+        path_matches: Box<dyn Fn(&Path) -> bool + Send + Sync>,
+        action: Option<Box<dyn FnOnce() + Send>>,
+    }
+
+    let mut scenarios: Vec<Scenario> = Vec::new();
+    let mut skipped: Vec<String> = Vec::new();
+
+    {
+        let real = root.join("ancestor_real");
+        let inner = real.join("inner");
+        std::fs::create_dir_all(&inner).expect("create symlinked-ancestor target");
+        let link = root.join("ancestor_link");
+        match make_dir_symlink(&real, &link) {
+            Ok(()) => {
+                let (events, watcher) = fs.watch(&link.join("inner"), latency).await;
+                let file = inner.join("symlink_ancestor.txt");
+                scenarios.push(Scenario {
+                    name: "symlink_ancestor",
+                    events,
+                    _watcher: watcher,
+                    path_matches: Box::new(|path| {
+                        path.ends_with(Path::new("inner/symlink_ancestor.txt"))
+                    }),
+                    action: Some(Box::new(move || {
+                        std::fs::write(&file, b"x").expect("write symlink-ancestor file");
+                    })),
+                });
+            }
+            Err(error) => skipped.push(format!("symlink_ancestor (cannot symlink: {error})")),
+        }
+    }
+
+    {
+        let real = root.join("root_real");
+        std::fs::create_dir_all(&real).expect("create symlinked-root target");
+        let link = root.join("root_link");
+        match make_dir_symlink(&real, &link) {
+            Ok(()) => {
+                let (events, watcher) = fs.watch(&link, latency).await;
+                let file = real.join("symlink_root.txt");
+                scenarios.push(Scenario {
+                    name: "symlink_root",
+                    events,
+                    _watcher: watcher,
+                    path_matches: Box::new(|path| path.ends_with(Path::new("symlink_root.txt"))),
+                    action: Some(Box::new(move || {
+                        std::fs::write(&file, b"x").expect("write symlink-root file");
+                    })),
+                });
+            }
+            Err(error) => skipped.push(format!("symlink_root (cannot symlink: {error})")),
+        }
+    }
+
+    if case_insensitive {
+        let real = root.join("CaseAlpha");
+        std::fs::create_dir_all(&real).expect("create wrong-case root");
+        let lower = PathBuf::from(real.to_string_lossy().to_lowercase());
+        let (events, watcher) = fs.watch(&lower, latency).await;
+        let file = real.join("alpha.txt");
+        scenarios.push(Scenario {
+            name: "wrong_case_root",
+            events,
+            _watcher: watcher,
+            path_matches: Box::new(|path| path.ends_with(Path::new("alpha.txt"))),
+            action: Some(Box::new(move || {
+                std::fs::write(&file, b"x").expect("write wrong-case-root file");
+            })),
+        });
+    } else {
+        skipped.push("wrong_case_root (case-sensitive fs)".to_owned());
+    }
+
+    if case_insensitive {
+        let real = root.join("CaseBravo").join("Inner");
+        std::fs::create_dir_all(&real).expect("create wrong-case nested dir");
+        let lower = PathBuf::from(real.to_string_lossy().to_lowercase());
+        let (events, watcher) = fs.watch(&lower, latency).await;
+        let file = real.join("bravo.txt");
+        scenarios.push(Scenario {
+            name: "nested_wrong_case",
+            events,
+            _watcher: watcher,
+            path_matches: Box::new(|path| path.ends_with(Path::new("bravo.txt"))),
+            action: Some(Box::new(move || {
+                std::fs::write(&file, b"x").expect("write nested-wrong-case file");
+            })),
+        });
+    } else {
+        skipped.push("nested_wrong_case (case-sensitive fs)".to_owned());
+    }
+
+    let mut failures = Vec::new();
+    for scenario in &mut scenarios {
+        if let Some(action) = scenario.action.take() {
+            action();
+        }
+        if !watcher_delivered_event(
+            &mut scenario.events,
+            &executor,
+            Duration::from_secs(10),
+            scenario.path_matches.as_ref(),
+        )
+        .await
+        {
+            failures.push(scenario.name);
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "watch scenarios that never delivered an event: {failures:?}; skipped: {skipped:?}"
+    );
 }
 
 #[gpui::test]
