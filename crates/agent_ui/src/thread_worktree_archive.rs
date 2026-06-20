@@ -918,10 +918,19 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            cx.set_global(db::AppDatabase::test_new());
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);
             release_channel::init(semver::Version::new(0, 0, 0), cx);
         });
+    }
+
+    async fn record_zed_created_worktree(
+        fs: &FakeFs,
+        worktree_path: &Path,
+        cx: &mut TestAppContext,
+    ) {
+        crate::test_support::record_zed_created_worktree(fs, worktree_path, None, cx).await
     }
 
     #[gpui::test]
@@ -992,6 +1001,8 @@ mod tests {
             },
         )
         .await;
+        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx)
+            .await;
 
         let project = Project::test(
             fs.clone(),
@@ -1153,6 +1164,12 @@ mod tests {
             },
         )
         .await;
+        record_zed_created_worktree(
+            &fs,
+            Path::new("/custom-worktrees/project/feature/project"),
+            cx,
+        )
+        .await;
 
         // Worktree outside the custom managed directory (at the default
         // `../worktrees` location, which is not what the setting says).
@@ -1222,6 +1239,75 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn test_build_root_plan_returns_none_for_manually_created_linked_worktree(
+        cx: &mut TestAppContext,
+    ) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            "/project",
+            json!({
+                ".git": {},
+                "src": { "main.rs": "fn main() {}" }
+            }),
+        )
+        .await;
+        fs.set_branch_name(Path::new("/project/.git"), Some("main"));
+        fs.insert_branches(Path::new("/project/.git"), &["main", "feature"]);
+
+        fs.add_linked_worktree_for_repo(
+            Path::new("/project/.git"),
+            true,
+            GitWorktree {
+                path: PathBuf::from("/worktrees/project/feature/project"),
+                ref_name: Some("refs/heads/feature".into()),
+                sha: "abc123".into(),
+                is_main: false,
+                is_bare: false,
+            },
+        )
+        .await;
+        // Deliberately do not record this worktree in the created-worktrees
+        // registry: it represents a linked worktree created manually by the user.
+
+        let project = Project::test(
+            fs.clone(),
+            [
+                Path::new("/project"),
+                Path::new("/worktrees/project/feature/project"),
+            ],
+            cx,
+        )
+        .await;
+        project
+            .update(cx, |project, cx| project.git_scans_complete(cx))
+            .await;
+
+        let multi_workspace =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = multi_workspace
+            .read_with(cx, |mw, _cx| mw.workspace().clone())
+            .unwrap();
+
+        cx.run_until_parked();
+
+        workspace.read_with(cx, |_workspace, cx| {
+            let plan = build_root_plan(
+                Path::new("/worktrees/project/feature/project"),
+                None,
+                std::slice::from_ref(&workspace),
+                cx,
+            );
+            assert!(
+                plan.is_none(),
+                "build_root_plan should return None for a linked worktree ZZZ didn't create, \
+                 even when it lives inside the managed worktrees directory",
+            );
+        });
+    }
+
+    #[gpui::test]
     async fn test_remove_root_deletes_directory_and_git_metadata(cx: &mut TestAppContext) {
         init_test(cx);
 
@@ -1249,6 +1335,8 @@ mod tests {
             },
         )
         .await;
+        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx)
+            .await;
 
         let project = Project::test(
             fs.clone(),
@@ -1330,6 +1418,8 @@ mod tests {
             },
         )
         .await;
+        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx)
+            .await;
 
         let project = Project::test(
             fs.clone(),
@@ -1390,6 +1480,95 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn test_remove_root_refuses_recreated_worktree_and_forgets_stale_record(
+        cx: &mut TestAppContext,
+    ) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            "/project",
+            json!({
+                ".git": {},
+                "src": { "main.rs": "fn main() {}" }
+            }),
+        )
+        .await;
+        fs.set_branch_name(Path::new("/project/.git"), Some("main"));
+        fs.insert_branches(Path::new("/project/.git"), &["main", "feature"]);
+
+        let worktree_path = Path::new("/worktrees/project/feature/project");
+        let git_dir_path = Path::new("/project/.git/worktrees/feature");
+
+        fs.add_linked_worktree_for_repo(
+            Path::new("/project/.git"),
+            true,
+            GitWorktree {
+                path: worktree_path.to_path_buf(),
+                ref_name: Some("refs/heads/feature".into()),
+                sha: "abc123".into(),
+                is_main: false,
+                is_bare: false,
+            },
+        )
+        .await;
+        record_zed_created_worktree(&fs, worktree_path, cx).await;
+
+        let project = Project::test(fs.clone(), [Path::new("/project"), worktree_path], cx).await;
+        project
+            .update(cx, |project, cx| project.git_scans_complete(cx))
+            .await;
+
+        let multi_workspace =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = multi_workspace
+            .read_with(cx, |mw, _cx| mw.workspace().clone())
+            .unwrap();
+
+        cx.run_until_parked();
+
+        let root = workspace
+            .read_with(cx, |_workspace, cx| {
+                build_root_plan(worktree_path, None, std::slice::from_ref(&workspace), cx)
+            })
+            .expect("should produce a root plan for the linked worktree");
+
+        // Simulate the worktree being removed and recreated outside ZZZ by
+        // changing the gitdir timestamp after the original record was stored.
+        fs.touch_path(git_dir_path).await;
+
+        let task = cx.update(|cx| cx.spawn(async move |cx| remove_root(root, cx).await));
+        let error = task
+            .await
+            .expect_err("remove_root should refuse to delete a recreated worktree");
+        assert!(
+            error
+                .to_string()
+                .contains("not the worktree ZZZ created"),
+            "unexpected error: {error:#}"
+        );
+
+        cx.run_until_parked();
+
+        assert!(
+            fs.is_dir(worktree_path).await,
+            "worktree directory should be left untouched on creation time mismatch"
+        );
+
+        workspace.read_with(cx, |_workspace, cx| {
+            assert!(
+                git_ui::created_worktrees::recorded_created_at(worktree_path, None, cx).is_none(),
+                "stale created-worktree record should be removed"
+            );
+            let plan = build_root_plan(worktree_path, None, std::slice::from_ref(&workspace), cx);
+            assert!(
+                plan.is_none(),
+                "build_root_plan should return None after the stale record is removed"
+            );
+        });
+    }
+
+    #[gpui::test]
     async fn test_remove_root_returns_error_and_rolls_back_on_remove_dir_failure(
         cx: &mut TestAppContext,
     ) {
@@ -1419,6 +1598,8 @@ mod tests {
             },
         )
         .await;
+        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx)
+            .await;
 
         let project = Project::test(
             fs.clone(),
