@@ -389,6 +389,16 @@ impl ConfigOptionSelector {
         )
         .label_size(LabelSize::Small)
         .color(Color::Muted)
+        .when(
+            option.category == Some(acp::SessionConfigOptionCategory::ThoughtLevel),
+            |button| {
+                button.start_icon(
+                    Icon::new(IconName::ThinkingMode)
+                        .size(IconSize::Small)
+                        .color(Color::Muted),
+                )
+            },
+        )
         .end_icon(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
         .disabled(self.setting_value)
     }

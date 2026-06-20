@@ -64,8 +64,8 @@ use rules_library::{RulesLibrary, open_rules_library};
 use settings::{Settings, update_settings_file};
 use theme_settings::ThemeSettings;
 use ui::{
-    Button, ContextMenu, ContextMenuEntry, IconButton, PopoverMenu, PopoverMenuHandle, Tab,
-    Tooltip, prelude::*, utils::WithRemSize,
+    ContextMenu, ContextMenuEntry, IconButton, PopoverMenu, PopoverMenuHandle, Tab, Tooltip,
+    prelude::*, utils::WithRemSize,
 };
 use util::ResultExt as _;
 use workspace::{
@@ -665,6 +665,7 @@ pub struct AgentPanel {
     _active_thread_focus_subscription: Option<Subscription>,
     _base_view_observation: Option<Subscription>,
     _draft_editor_observation: Option<Subscription>,
+    _empty_thread_title_observation: Option<Subscription>,
     _thread_metadata_store_subscription: Subscription,
     last_context_source: Option<AgentContextSource>,
 }
@@ -999,6 +1000,7 @@ impl AgentPanel {
             new_user_onboarding_upsell_dismissed: AtomicBool::new(OnboardingUpsell::dismissed(cx)),
             _base_view_observation: None,
             _draft_editor_observation: None,
+            _empty_thread_title_observation: None,
             _thread_metadata_store_subscription,
             last_context_source: None,
         };
@@ -1214,6 +1216,27 @@ impl AgentPanel {
                 }
             }));
         }
+    }
+
+    fn observe_message_editor_for_toolbar_title(
+        &mut self,
+        conversation_view: &Entity<ConversationView>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(editor) = conversation_view
+            .read(cx)
+            .root_thread_view()
+            .map(|thread_view| thread_view.read(cx).message_editor.clone())
+        else {
+            self._empty_thread_title_observation = None;
+            return;
+        };
+
+        self._empty_thread_title_observation = Some(cx.observe(&editor, |this, _editor, cx| {
+            if !this.active_thread_has_messages(cx) {
+                cx.notify();
+            }
+        }));
     }
 
     pub fn activate_retained_thread(
@@ -2037,8 +2060,10 @@ impl AgentPanel {
     fn refresh_base_view_subscriptions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self._base_view_observation = match &self.base_view {
             BaseView::AgentThread { conversation_view } => {
+                let conversation_view = conversation_view.clone();
                 self._thread_view_subscription =
-                    Self::subscribe_to_active_thread_view(conversation_view, window, cx);
+                    Self::subscribe_to_active_thread_view(&conversation_view, window, cx);
+                self.observe_message_editor_for_toolbar_title(&conversation_view, cx);
                 let focus_handle = conversation_view.focus_handle(cx);
                 self._active_thread_focus_subscription =
                     Some(cx.on_focus_in(&focus_handle, window, |_this, _window, cx| {
@@ -2046,11 +2071,12 @@ impl AgentPanel {
                         cx.notify();
                     }));
                 Some(cx.observe_in(
-                    conversation_view,
+                    &conversation_view,
                     window,
                     |this, server_view, window, cx| {
                         this._thread_view_subscription =
                             Self::subscribe_to_active_thread_view(&server_view, window, cx);
+                        this.observe_message_editor_for_toolbar_title(&server_view, cx);
                         cx.emit(AgentPanelEvent::ActiveViewChanged);
                         this.serialize(cx);
                         cx.notify();
@@ -2060,6 +2086,7 @@ impl AgentPanel {
             BaseView::Uninitialized => {
                 self._thread_view_subscription = None;
                 self._active_thread_focus_subscription = None;
+                self._empty_thread_title_observation = None;
                 None
             }
         };
@@ -2960,7 +2987,6 @@ impl AgentPanel {
             .unwrap_or(false);
 
         let has_custom_icon = selected_agent_custom_icon.is_some();
-        let selected_agent_custom_icon_for_button = selected_agent_custom_icon.clone();
         let selected_agent_builtin_icon = self.selected_agent.icon();
         let selected_agent_label_for_tooltip = selected_agent_label.clone();
 
@@ -3043,6 +3069,17 @@ impl AgentPanel {
         };
 
         let use_v2_empty_toolbar = is_empty_state && !is_in_history_or_config;
+        let empty_thread_title = use_v2_empty_toolbar.then(|| {
+            self.active_thread_id(cx)
+                .and_then(|thread_id| self.editor_text(thread_id, cx))
+                .map(|text| Label::new(text).truncate().into_any_element())
+                .unwrap_or_else(|| {
+                    Label::new(format!("New {} Thread", selected_agent_label))
+                        .color(Color::Muted)
+                        .truncate()
+                        .into_any_element()
+                })
+        });
 
         let max_content_width = AgentSettings::get_global(cx).max_content_width;
 
@@ -3056,52 +3093,24 @@ impl AgentPanel {
             .gap_2();
 
         let toolbar_content = if use_v2_empty_toolbar {
-            let (chevron_icon, icon_color, label_color) =
-                if self.new_thread_menu_handle.is_deployed() {
-                    (IconName::ChevronUp, Color::Accent, Color::Accent)
-                } else {
-                    (IconName::ChevronDown, Color::Muted, Color::Default)
-                };
-
-            let agent_icon = if let Some(icon_path) = selected_agent_custom_icon_for_button {
-                Icon::from_external_svg(icon_path)
-                    .size(IconSize::Small)
-                    .color(icon_color)
-            } else {
-                let icon_name = selected_agent_builtin_icon.unwrap_or(IconName::ZedAgent);
-                Icon::new(icon_name).size(IconSize::Small).color(icon_color)
-            };
-
-            let agent_selector_button = Button::new("agent-selector-trigger", selected_agent_label)
-                .start_icon(agent_icon)
-                .color(label_color)
-                .end_icon(
-                    Icon::new(chevron_icon)
-                        .color(icon_color)
-                        .size(IconSize::XSmall),
-                );
-
-            let agent_selector_menu = PopoverMenu::new("new_thread_menu")
-                .trigger_with_tooltip(agent_selector_button, {
-                    move |_window, cx| {
-                        Tooltip::for_action_in(
-                            tr(cx, "agent_ui.panel.new_thread", "New Thread..."),
-                            &ToggleNewThreadMenu,
-                            &focus_handle,
-                            cx,
-                        )
-                    }
-                })
-                .menu({
-                    let builder = new_thread_menu_builder.clone();
-                    move |window, cx| builder(window, cx)
-                })
+            let new_thread_menu = PopoverMenu::new("new_thread_menu")
+                .trigger_with_tooltip(
+                    IconButton::new("new_thread_menu_btn", IconName::Plus)
+                        .icon_size(IconSize::Small),
+                    {
+                        move |_window, cx| {
+                            Tooltip::for_action_in(
+                                tr(cx, "agent_ui.panel.new_thread", "New Thread..."),
+                                &ToggleNewThreadMenu,
+                                &focus_handle,
+                                cx,
+                            )
+                        }
+                    },
+                )
+                .anchor(Anchor::TopRight)
                 .with_handle(self.new_thread_menu_handle.clone())
-                .anchor(Anchor::TopLeft)
-                .offset(gpui::Point {
-                    x: px(1.0),
-                    y: px(1.0),
-                });
+                .menu(move |window, cx| new_thread_menu_builder(window, cx));
 
             base_container
                 .child(
@@ -3109,7 +3118,8 @@ impl AgentPanel {
                         .size_full()
                         .gap(DynamicSpacing::Base04.rems(cx))
                         .pl(DynamicSpacing::Base04.rems(cx))
-                        .child(agent_selector_menu),
+                        .child(selected_agent.into_any_element())
+                        .child(empty_thread_title.expect("empty toolbar should have a title")),
                 )
                 .child(
                     h_flex()
@@ -3118,6 +3128,7 @@ impl AgentPanel {
                         .gap_1()
                         .pl_1()
                         .pr_1()
+                        .child(new_thread_menu)
                         .child(full_screen_button)
                         .child(self.render_panel_options_menu(window, cx)),
                 )
