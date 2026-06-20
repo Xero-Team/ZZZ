@@ -31,6 +31,32 @@ mod web_search_tool;
 
 use crate::AgentTool;
 use language_model::{LanguageModelRequestTool, LanguageModelToolSchemaFormat};
+use serde::{
+    Deserialize, Deserializer,
+    de::{DeserializeOwned, Error as _},
+};
+
+/// Accept either a structured value or a JSON-encoded string version of it.
+/// Some models still stringify nested arguments, so built-in tools need to
+/// tolerate both forms.
+pub(crate) fn deserialize_maybe_stringified<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+where
+    T: DeserializeOwned,
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum ValueOrJsonString<T> {
+        Value(T),
+        String(String),
+    }
+
+    match ValueOrJsonString::<T>::deserialize(deserializer)? {
+        ValueOrJsonString::Value(value) => Ok(value),
+        ValueOrJsonString::String(string) => serde_json::from_str::<T>(&string)
+            .map_err(|error| D::Error::custom(format!("failed to parse stringified value: {error}"))),
+    }
+}
 
 pub use apply_code_action_tool::*;
 pub use context_server_registry::*;

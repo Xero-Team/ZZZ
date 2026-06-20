@@ -1,3 +1,4 @@
+use super::deserialize_maybe_stringified;
 use super::restore_file_from_disk_tool::RestoreFileFromDiskTool;
 use super::save_file_tool::SaveFileTool;
 use super::tool_edit_parser::{ToolEditEvent, ToolEditParser};
@@ -24,7 +25,7 @@ use language_model::{CompletionIntent, LanguageModelToolResultContent};
 use project::lsp_store::{FormatTrigger, LspFormatTarget};
 use project::{AgentLocation, Project, ProjectPath};
 use schemars::JsonSchema;
-use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -138,26 +139,6 @@ pub(crate) struct PartialEditOperation {
     pub(crate) new_text: Option<String>,
 }
 
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum ValueOrJsonString<T> {
-    Value(T),
-    String(String),
-}
-
-fn deserialize_maybe_stringified<'de, T, D>(deserializer: D) -> Result<T, D::Error>
-where
-    T: DeserializeOwned,
-    D: Deserializer<'de>,
-{
-    match ValueOrJsonString::<T>::deserialize(deserializer)? {
-        ValueOrJsonString::Value(value) => Ok(value),
-        ValueOrJsonString::String(string) => serde_json::from_str::<T>(&string).map_err(|error| {
-            serde::de::Error::custom(format!("failed to parse stringified value: {error}"))
-        }),
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum EditFileToolOutput {
@@ -183,11 +164,7 @@ impl std::fmt::Display for EditFileToolOutput {
                 if diff.is_empty() {
                     write!(f, "No edits were made.")
                 } else {
-                    write!(
-                        f,
-                        "Edited {}:\n\n```diff\n{diff}\n```",
-                        input_path.display()
-                    )
+                    write!(f, "Edited {} successfully", input_path.display())
                 }
             }
             EditFileToolOutput::Error { error } => write!(f, "{error}"),
@@ -1477,6 +1454,18 @@ mod tests {
     fn assert_resolved_path_eq(path: anyhow::Result<ProjectPath>, expected: &RelPath) {
         let actual = path.expect("Should return valid path").path;
         assert_eq!(actual.as_ref(), expected);
+    }
+
+    #[test]
+    fn test_success_output_omits_diff_from_display() {
+        let output = EditFileToolOutput::Success {
+            input_path: PathBuf::from("root/test.txt"),
+            new_text: "new".to_string(),
+            old_text: Arc::new("old".to_string()),
+            diff: "@@ -1 +1 @@\n-old\n+new\n".to_string(),
+        };
+
+        assert_eq!(output.to_string(), "Edited root/test.txt successfully");
     }
 
     #[test]
