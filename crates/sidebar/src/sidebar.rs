@@ -62,8 +62,8 @@ use workspace::{
     notifications::NotificationId, sidebar_side_context_menu,
 };
 
-use zed_actions::{CreateWorktree, NewWorktreeBranchTarget, OpenRecent};
 use zed_actions::editor::{MoveDown, MoveUp};
+use zed_actions::{CreateWorktree, NewWorktreeBranchTarget, OpenRecent};
 
 use zed_actions::agents_sidebar::{FocusSidebarFilter, ToggleThreadSwitcher};
 
@@ -1614,7 +1614,7 @@ impl Sidebar {
                             let panel = panel.read(cx);
                             panel.active_thread_is_draft(cx)
                                 || panel.active_conversation_view().is_none()
-                });
+                        });
                 self.project_header_menu_handles.entry(ix).or_default();
                 self.project_header_new_thread_menu_handles
                     .entry(ix)
@@ -2024,127 +2024,131 @@ impl Sidebar {
                 .map(|workspace| workspace_menu_worktree_labels(workspace, cx))
                 .collect();
 
-            Some(ContextMenu::build(window, cx, move |mut menu, _window, cx| {
-                menu = menu.header("New Thread In...");
+            Some(ContextMenu::build(
+                window,
+                cx,
+                move |mut menu, _window, cx| {
+                    menu = menu.header("New Thread In...");
 
-                for (workspace, labels) in open_workspaces
-                    .iter()
-                    .cloned()
-                    .zip(workspace_labels.iter().cloned())
-                {
-                    let is_active_workspace = active_workspace.as_ref() == Some(&workspace);
-                    let group_key = key.clone();
-                    menu = menu.custom_entry(
-                        move |_window, _cx| {
-                            h_flex()
-                                .w_full()
-                                .gap_2()
-                                .justify_between()
-                                .child(h_flex().min_w_0().gap_1().children(
-                                    labels.iter().enumerate().map(|(label_ix, label)| {
-                                        h_flex()
-                                            .gap_1()
-                                            .when(label_ix > 0, |this| {
-                                                this.child(Label::new("•").alpha(0.25))
-                                            })
-                                            .child(label.render(Color::Default))
-                                            .into_any_element()
-                                    }),
-                                ))
-                                .when(is_active_workspace, |this| {
-                                    this.child(
-                                        Icon::new(IconName::Check)
-                                            .size(IconSize::Small)
-                                            .color(Color::Accent),
-                                    )
-                                })
-                                .into_any_element()
-                        },
-                        {
-                            let workspace = workspace.clone();
-                            let this = this.clone();
-                            move |window, cx| {
-                                this.update(cx, |sidebar, cx| {
-                                    sidebar.set_group_expanded(&group_key, true, cx);
-                                    sidebar.selection = None;
-                                    sidebar.create_new_thread(&workspace, window, cx);
-                                })
-                                .ok();
-                            }
-                        },
-                    );
-                }
+                    for (workspace, labels) in open_workspaces
+                        .iter()
+                        .cloned()
+                        .zip(workspace_labels.iter().cloned())
+                    {
+                        let is_active_workspace = active_workspace.as_ref() == Some(&workspace);
+                        let group_key = key.clone();
+                        menu = menu.custom_entry(
+                            move |_window, _cx| {
+                                h_flex()
+                                    .w_full()
+                                    .gap_2()
+                                    .justify_between()
+                                    .child(h_flex().min_w_0().gap_1().children(
+                                        labels.iter().enumerate().map(|(label_ix, label)| {
+                                            h_flex()
+                                                .gap_1()
+                                                .when(label_ix > 0, |this| {
+                                                    this.child(Label::new("•").alpha(0.25))
+                                                })
+                                                .child(label.render(Color::Default))
+                                                .into_any_element()
+                                        }),
+                                    ))
+                                    .when(is_active_workspace, |this| {
+                                        this.child(
+                                            Icon::new(IconName::Check)
+                                                .size(IconSize::Small)
+                                                .color(Color::Accent),
+                                        )
+                                    })
+                                    .into_any_element()
+                            },
+                            {
+                                let workspace = workspace.clone();
+                                let this = this.clone();
+                                move |window, cx| {
+                                    this.update(cx, |sidebar, cx| {
+                                        sidebar.set_group_expanded(&group_key, true, cx);
+                                        sidebar.selection = None;
+                                        sidebar.create_new_thread(&workspace, window, cx);
+                                    })
+                                    .ok();
+                                }
+                            },
+                        );
+                    }
 
-                let base_workspace = active_workspace
-                    .as_ref()
-                    .filter(|workspace| open_workspaces.contains(workspace))
-                    .cloned()
-                    .or_else(|| open_workspaces.first().cloned());
-                let creation_blocked = base_workspace.as_ref().is_none_or(|base_workspace| {
-                    let project = base_workspace.read(cx).project().read(cx);
-                    project.is_via_collab() || project.repositories(cx).is_empty()
-                });
-
-                if let Some(base_workspace) = base_workspace.filter(|_| !creation_blocked) {
-                    let group_key = key.clone();
-                    menu = menu.separator().submenu("Create New Worktree...", {
-                        let this = this.clone();
-                        move |mut submenu, _window, submenu_cx| {
-                            let project = base_workspace.read(submenu_cx).project().clone();
-                            let project_ref = project.read(submenu_cx);
-                            let has_multiple_repositories =
-                                project_ref.repositories(submenu_cx).len() > 1;
-                            let current_branch =
-                                project_ref.active_repository(submenu_cx).and_then(|repo| {
-                                    repo.read(submenu_cx)
-                                        .branch
-                                        .as_ref()
-                                        .map(|branch| branch.name().to_string())
-                                });
-                            let default_branch = this
-                                .read_with(submenu_cx, |sidebar, _| {
-                                    match sidebar.worktree_default_branches.get(&group_key) {
-                                        Some(DefaultBranchCache::Resolved(branch)) => {
-                                            branch.clone()
-                                        }
-                                        _ => None,
-                                    }
-                                })
-                                .ok()
-                                .flatten();
-
-                            let targets = worktree_create_targets(
-                                has_multiple_repositories,
-                                default_branch,
-                                current_branch.as_deref(),
-                            );
-                            for target in targets {
-                                let label = format!(
-                                    "Based on {}",
-                                    target.branch_label(
-                                        has_multiple_repositories,
-                                        current_branch.as_deref(),
-                                    )
-                                );
-                                let branch_target = target.branch_target();
-                                let workspace = base_workspace.clone();
-                                submenu = submenu.entry(label, None, move |window, cx| {
-                                    create_worktree_in_workspace(
-                                        &workspace,
-                                        branch_target.clone(),
-                                        window,
-                                        cx,
-                                    );
-                                });
-                            }
-
-                            submenu
-                        }
+                    let base_workspace = active_workspace
+                        .as_ref()
+                        .filter(|workspace| open_workspaces.contains(workspace))
+                        .cloned()
+                        .or_else(|| open_workspaces.first().cloned());
+                    let creation_blocked = base_workspace.as_ref().is_none_or(|base_workspace| {
+                        let project = base_workspace.read(cx).project().read(cx);
+                        project.is_via_collab() || project.repositories(cx).is_empty()
                     });
-                }
 
-                menu
-            }))
+                    if let Some(base_workspace) = base_workspace.filter(|_| !creation_blocked) {
+                        let group_key = key.clone();
+                        menu = menu.separator().submenu("Create New Worktree...", {
+                            let this = this.clone();
+                            move |mut submenu, _window, submenu_cx| {
+                                let project = base_workspace.read(submenu_cx).project().clone();
+                                let project_ref = project.read(submenu_cx);
+                                let has_multiple_repositories =
+                                    project_ref.repositories(submenu_cx).len() > 1;
+                                let current_branch =
+                                    project_ref.active_repository(submenu_cx).and_then(|repo| {
+                                        repo.read(submenu_cx)
+                                            .branch
+                                            .as_ref()
+                                            .map(|branch| branch.name().to_string())
+                                    });
+                                let default_branch = this
+                                    .read_with(submenu_cx, |sidebar, _| {
+                                        match sidebar.worktree_default_branches.get(&group_key) {
+                                            Some(DefaultBranchCache::Resolved(branch)) => {
+                                                branch.clone()
+                                            }
+                                            _ => None,
+                                        }
+                                    })
+                                    .ok()
+                                    .flatten();
+
+                                let targets = worktree_create_targets(
+                                    has_multiple_repositories,
+                                    default_branch,
+                                    current_branch.as_deref(),
+                                );
+                                for target in targets {
+                                    let label = format!(
+                                        "Based on {}",
+                                        target.branch_label(
+                                            has_multiple_repositories,
+                                            current_branch.as_deref(),
+                                        )
+                                    );
+                                    let branch_target = target.branch_target();
+                                    let workspace = base_workspace.clone();
+                                    submenu = submenu.entry(label, None, move |window, cx| {
+                                        create_worktree_in_workspace(
+                                            &workspace,
+                                            branch_target.clone(),
+                                            window,
+                                            cx,
+                                        );
+                                    });
+                                }
+
+                                submenu
+                            }
+                        });
+                    }
+
+                    menu
+                },
+            ))
         })
         .into_any_element()
     }

@@ -2298,28 +2298,27 @@ impl AcpThread {
             return;
         };
 
-        let new_status = match &call.status {
-            ToolCallStatus::WaitingForConfirmation { current_status, .. } => {
-                match outcome.option_kind {
+        let new_status =
+            match &call.status {
+                ToolCallStatus::WaitingForConfirmation { current_status, .. } => {
+                    match outcome.option_kind {
+                        acp::PermissionOptionKind::RejectOnce
+                        | acp::PermissionOptionKind::RejectAlways => ToolCallStatus::Rejected,
+                        acp::PermissionOptionKind::AllowOnce
+                        | acp::PermissionOptionKind::AllowAlways => {
+                            ToolCallStatus::status_after_permission_grant(*current_status)
+                        }
+                        _ => ToolCallStatus::status_after_permission_grant(*current_status),
+                    }
+                }
+                _ => match outcome.option_kind {
                     acp::PermissionOptionKind::RejectOnce
                     | acp::PermissionOptionKind::RejectAlways => ToolCallStatus::Rejected,
                     acp::PermissionOptionKind::AllowOnce
-                    | acp::PermissionOptionKind::AllowAlways => {
-                        ToolCallStatus::status_after_permission_grant(*current_status)
-                    }
-                    _ => ToolCallStatus::status_after_permission_grant(*current_status),
-                }
-            }
-            _ => match outcome.option_kind {
-                acp::PermissionOptionKind::RejectOnce | acp::PermissionOptionKind::RejectAlways => {
-                    ToolCallStatus::Rejected
-                }
-                acp::PermissionOptionKind::AllowOnce | acp::PermissionOptionKind::AllowAlways => {
-                    ToolCallStatus::InProgress
-                }
-                _ => ToolCallStatus::InProgress,
-            },
-        };
+                    | acp::PermissionOptionKind::AllowAlways => ToolCallStatus::InProgress,
+                    _ => ToolCallStatus::InProgress,
+                },
+            };
 
         let curr_status = mem::replace(&mut call.status, new_status);
 
@@ -5239,9 +5238,7 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn test_permission_request_tracks_agent_status_until_resolved(
-        cx: &mut TestAppContext,
-    ) {
+    async fn test_permission_request_tracks_agent_status_until_resolved(cx: &mut TestAppContext) {
         init_test(cx);
 
         let fs = FakeFs::new(cx.executor());
