@@ -17,7 +17,7 @@ use std::{
 use url::Url;
 use util::paths::{PathStyle, UrlExt};
 
-const URL_REGEX: &str = r#"(ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:|file://|git://|ssh:|ftp://|zed://)[^\u{0000}-\u{001F}\u{007F}-\u{009F}<>"\s{-}\^⟨⟩`']+"#;
+const URL_REGEX: &str = r#"(ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:|file://|git://|ssh:|ftp://|zzz://)[^\u{0000}-\u{001F}\u{007F}-\u{009F}<>"\s{-}\^⟨⟩`']+"#;
 
 const WIDE_CHAR_SPACERS: Flags =
     Flags::from_bits(Flags::LEADING_WIDE_CHAR_SPACER.bits() | Flags::WIDE_CHAR_SPACER.bits())
@@ -460,8 +460,8 @@ mod tests {
         );
         re_test(
             URL_REGEX,
-            "open zed://channel/the-channel and zed://settings/theme now",
-            vec!["zed://channel/the-channel", "zed://settings/theme"],
+            "open zzz://channel/the-channel and zzz://settings/theme now",
+            vec!["zzz://channel/the-channel", "zzz://settings/theme"],
         );
     }
 
