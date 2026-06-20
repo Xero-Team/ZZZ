@@ -24,6 +24,8 @@ fn init_test(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let settings_store = SettingsStore::test(cx);
         cx.set_global(settings_store);
+        cx.set_global(db::AppDatabase::test_new());
+        i18n::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         editor::init(cx);
         ThreadStore::init_global(cx);
@@ -4898,6 +4900,13 @@ async fn test_archive_last_worktree_thread_removes_workspace(cx: &mut TestAppCon
             is_main: false,
             is_bare: false,
         },
+    )
+    .await;
+    agent_ui::test_support::record_zed_created_worktree(
+        fs.as_ref(),
+        Path::new("/worktrees/project/feature-a/project"),
+        None,
+        cx,
     )
     .await;
 
@@ -10330,6 +10339,13 @@ async fn test_archive_removes_worktree_even_when_workspace_paths_diverge(cx: &mu
         },
     )
     .await;
+    agent_ui::test_support::record_zed_created_worktree(
+        fs.as_ref(),
+        Path::new("/worktrees/project/feature-a/project"),
+        None,
+        cx,
+    )
+    .await;
 
     cx.update(|cx| <dyn fs::Fs>::set_global(fs.clone(), cx));
 
@@ -10480,6 +10496,13 @@ async fn test_archive_mixed_workspace_closes_only_archived_worktree_items(cx: &m
             is_main: false,
             is_bare: false,
         },
+    )
+    .await;
+    agent_ui::test_support::record_zed_created_worktree(
+        fs.as_ref(),
+        Path::new("/worktrees/main-repo/feature-b/main-repo"),
+        None,
+        cx,
     )
     .await;
 
@@ -10835,6 +10858,13 @@ async fn test_remote_archive_thread_with_active_connection(
     // parent repo, so `build_root_plan` targets the linked worktree
     // specifically and knows which main repo owns it.
     let remote_connection = project.read_with(cx, |p, cx| p.remote_connection_options(cx));
+    agent_ui::test_support::record_zed_created_worktree(
+        server_fs.as_ref(),
+        Path::new("/worktrees/project/feature-a/project"),
+        remote_connection.as_ref(),
+        cx,
+    )
+    .await;
     let wt_thread_id = acp::SessionId::new(Arc::from("worktree-thread"));
     cx.update(|_window, cx| {
         let metadata = ThreadMetadata {
