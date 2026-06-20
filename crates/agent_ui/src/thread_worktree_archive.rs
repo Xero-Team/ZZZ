@@ -1569,7 +1569,7 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn test_remove_root_returns_error_and_rolls_back_on_remove_dir_failure(
+    async fn test_remove_root_refuses_worktree_when_layout_changes_before_delete(
         cx: &mut TestAppContext,
     ) {
         init_test(cx);
@@ -1633,8 +1633,8 @@ mod tests {
             })
             .expect("should produce a root plan for the linked worktree");
 
-        // Replace the worktree directory with a file so that fs.remove_dir
-        // fails with a "not a directory" error.
+        // Replace the worktree directory with a file to simulate the layout
+        // changing outside ZZZ after the worktree was recorded.
         let worktree_path = Path::new("/worktrees/project/feature/project");
         fs.remove_dir(
             worktree_path,
@@ -1658,17 +1658,17 @@ mod tests {
 
         assert!(
             result.is_err(),
-            "remove_root should return an error when fs.remove_dir fails"
+            "remove_root should return an error when the worktree layout changes"
         );
         let error_message = format!("{:#}", result.unwrap_err());
         assert!(
-            error_message.contains("failed to delete worktree directory"),
-            "error should mention the directory deletion failure, got: {error_message}"
+            error_message.contains("failed to verify that ZZZ created it"),
+            "error should mention the creator verification failure, got: {error_message}"
         );
 
         cx.run_until_parked();
 
-        // After rollback, the worktree should be re-added to the project.
+        // Verification fails before the worktree is detached from the project.
         let has_worktree = project.read_with(cx, |project, cx| {
             project
                 .worktrees(cx)
