@@ -709,6 +709,7 @@ impl EditAgent {
             thinking_allowed: self.thinking_allowed,
             thinking_effort: None,
             speed: None,
+            compact_at_tokens: None,
         };
 
         Ok(self.model.stream_completion_text(request, cx).await?.stream)

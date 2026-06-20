@@ -2,9 +2,9 @@ use anyhow::Result;
 use collections::HashMap;
 use futures::{Stream, StreamExt};
 use language_model_core::{
-    LanguageModelCompletionError, LanguageModelCompletionEvent, LanguageModelRequest,
-    LanguageModelToolChoice, LanguageModelToolResultContent, LanguageModelToolUse, MessageContent,
-    Role, StopReason, TokenUsage,
+    CompactionContent, LanguageModelCompletionError, LanguageModelCompletionEvent,
+    LanguageModelRequest, LanguageModelToolChoice, LanguageModelToolResultContent,
+    LanguageModelToolUse, MessageContent, Role, StopReason, TokenUsage,
     util::{fix_streamed_json, parse_tool_arguments},
 };
 use std::pin::Pin;
@@ -12,8 +12,9 @@ use std::str::FromStr;
 
 use crate::{
     AdaptiveThinkingDisplay, AnthropicError, AnthropicModelMode, CacheControl, CacheControlType,
-    CacheTtl, ContentDelta, Event, ImageSource, Message, RequestContent, ResponseContent,
-    StringOrContents, Thinking, Tool, ToolChoice, ToolResultContent, ToolResultPart, Usage,
+    CacheTtl, CompactionTrigger, ContentDelta, ContextManagement, ContextManagementEdit, Event,
+    ImageSource, Message, RequestContent, ResponseContent, StringOrContents, Thinking, Tool,
+    ToolChoice, ToolResultContent, ToolResultPart, Usage,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -44,6 +45,10 @@ fn set_cache_control(content: &mut RequestContent, cache_control: Option<CacheCo
             ..
         }
         | RequestContent::ToolResult {
+            cache_control: target,
+            ..
+        }
+        | RequestContent::Compaction {
             cache_control: target,
             ..
         } => {
@@ -147,6 +152,15 @@ fn to_anthropic_content(content: MessageContent) -> Option<RequestContent> {
                 cache_control: None,
             })
         }
+        MessageContent::Compaction(CompactionContent::Summary { content }) => {
+            Some(RequestContent::Compaction {
+                content,
+                cache_control: None,
+            })
+        }
+        MessageContent::Compaction(
+            CompactionContent::Encrypted { .. } | CompactionContent::Pending,
+        ) => None,
     }
 }
 
@@ -316,6 +330,11 @@ pub fn into_anthropic(
         temperature: request.temperature.or(Some(default_temperature)),
         top_k: None,
         top_p: None,
+        context_management: request.compact_at_tokens.map(|value| ContextManagement {
+            edits: vec![ContextManagementEdit::Compact {
+                trigger: Some(CompactionTrigger::InputTokens { value }),
+            }],
+        }),
     }
 }
 
@@ -379,6 +398,11 @@ impl AnthropicEventMapper {
                     );
                     Vec::new()
                 }
+                ResponseContent::Compaction { content } => {
+                    vec![Ok(LanguageModelCompletionEvent::Compaction(
+                        CompactionContent::Summary { content },
+                    ))]
+                }
             },
             Event::ContentBlockDelta { index, delta } => match delta {
                 ContentDelta::TextDelta { text } => {
@@ -420,6 +444,11 @@ impl AnthropicEventMapper {
                         }
                     }
                     vec![]
+                }
+                ContentDelta::CompactionDelta { content } => {
+                    vec![Ok(LanguageModelCompletionEvent::Compaction(
+                        CompactionContent::Summary { content },
+                    ))]
                 }
             },
             Event::ContentBlockStop { index } => {
@@ -563,6 +592,7 @@ mod tests {
             tool_choice: None,
             thinking_allowed: true,
             thinking_effort: None,
+            compact_at_tokens: None,
             speed: None,
         };
 
@@ -584,7 +614,8 @@ mod tests {
                 | RequestContent::Thinking { cache_control, .. }
                 | RequestContent::Image { cache_control, .. }
                 | RequestContent::ToolUse { cache_control, .. }
-                | RequestContent::ToolResult { cache_control, .. } => *cache_control,
+                | RequestContent::ToolResult { cache_control, .. }
+                | RequestContent::Compaction { cache_control, .. } => *cache_control,
                 RequestContent::RedactedThinking { .. } => None,
             };
             assert!(
@@ -667,6 +698,7 @@ mod tests {
             tool_choice: None,
             thinking_allowed: true,
             thinking_effort: None,
+            compact_at_tokens: None,
             speed: None,
         };
 
@@ -737,6 +769,7 @@ mod tests {
             tool_choice: None,
             thinking_allowed: true,
             thinking_effort: None,
+            compact_at_tokens: None,
             speed: None,
         };
 
@@ -774,6 +807,7 @@ mod tests {
             tools: vec![],
             tool_choice: None,
             thinking_allowed: true,
+            compact_at_tokens: None,
             speed: None,
         };
         request.messages.push(LanguageModelRequestMessage {
@@ -867,6 +901,7 @@ mod tests {
             tool_choice: None,
             thinking_allowed: true,
             thinking_effort: Some("xhigh".into()),
+            compact_at_tokens: None,
             speed: None,
         };
 

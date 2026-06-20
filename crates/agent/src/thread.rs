@@ -2423,7 +2423,7 @@ impl Thread {
             Stop(StopReason::Refusal) => return Err(CompletionError::Refusal.into()),
             Stop(StopReason::MaxTokens) => return Err(CompletionError::MaxTokens.into()),
             Stop(StopReason::ToolUse | StopReason::EndTurn) => {}
-            Started | Queued { .. } => {}
+            Started | Queued { .. } | Compaction(_) => {}
         }
 
         Ok(None)
@@ -3002,6 +3002,7 @@ impl Thread {
             thinking_allowed: self.thinking_enabled,
             thinking_effort: self.thinking_effort.clone(),
             speed: self.speed(),
+            compact_at_tokens: None,
         };
 
         log::debug!("Completion request built successfully");

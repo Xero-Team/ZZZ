@@ -2,8 +2,8 @@ use anyhow::{Result, anyhow};
 use collections::HashMap;
 use futures::{Stream, StreamExt};
 use language_model_core::{
-    LanguageModelCompletionError, LanguageModelCompletionEvent, LanguageModelImage,
-    LanguageModelRequest, LanguageModelRequestMessage, LanguageModelToolChoice,
+    CompactionContent, LanguageModelCompletionError, LanguageModelCompletionEvent,
+    LanguageModelImage, LanguageModelRequest, LanguageModelRequestMessage, LanguageModelToolChoice,
     LanguageModelToolResultContent, LanguageModelToolUse, LanguageModelToolUseId, MessageContent,
     Role, StopReason, TokenUsage,
     util::{fix_streamed_json, parse_tool_arguments},
@@ -12,10 +12,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::responses::{
-    Request as ResponseRequest, ResponseError, ResponseFunctionCallItem,
-    ResponseFunctionCallOutputContent, ResponseFunctionCallOutputItem, ResponseIncludable,
-    ResponseInputContent, ResponseInputItem, ResponseMessageItem, ResponseOutputItem,
-    ResponseOutputMessage, ResponseReasoningInputItem, ResponseReasoningItem,
+    ContextManagement, Request as ResponseRequest, ResponseCompactionItem, ResponseError,
+    ResponseFunctionCallItem, ResponseFunctionCallOutputContent, ResponseFunctionCallOutputItem,
+    ResponseIncludable, ResponseInputContent, ResponseInputItem, ResponseMessageItem,
+    ResponseOutputItem, ResponseOutputMessage, ResponseReasoningInputItem, ResponseReasoningItem,
     ResponseReasoningSummaryPart, ResponseSummary as ResponsesSummary,
     ResponseUsage as ResponsesUsage, StreamEvent as ResponsesStreamEvent,
 };
@@ -79,7 +79,7 @@ pub fn into_open_ai(
                         }
                     }
                 }
-                MessageContent::RedactedThinking(_) => {}
+                MessageContent::RedactedThinking(_) | MessageContent::Compaction(_) => {}
                 MessageContent::Image(image) => {
                     add_message_content_part(
                         MessagePart::Image {
@@ -208,6 +208,7 @@ pub fn into_open_ai_response(
         thinking_allowed,
         thinking_effort,
         speed,
+        compact_at_tokens,
     } = request;
 
     let service_tier = service_tier_for(speed);
@@ -295,6 +296,8 @@ pub fn into_open_ai_response(
         },
         reasoning,
         service_tier,
+        context_management: compact_at_tokens
+            .map(|compact_threshold| vec![ContextManagement::Compaction { compact_threshold }]),
     }
 }
 
@@ -332,6 +335,25 @@ fn append_message_to_response_items(
                 push_response_text_part(&role, text, &mut content_parts);
             }
             MessageContent::Thinking { .. } | MessageContent::RedactedThinking(_) => {}
+            MessageContent::Compaction(CompactionContent::Encrypted {
+                id,
+                encrypted_content,
+            }) => {
+                flush_response_parts(
+                    &role,
+                    index,
+                    phase.as_deref(),
+                    &mut content_parts,
+                    input_items,
+                );
+                input_items.push(ResponseInputItem::Compaction(ResponseCompactionItem {
+                    id,
+                    encrypted_content,
+                }));
+            }
+            MessageContent::Compaction(
+                CompactionContent::Summary { .. } | CompactionContent::Pending,
+            ) => {}
             MessageContent::Image(image) => {
                 push_response_image_part(&role, image, &mut content_parts);
             }
@@ -753,6 +775,11 @@ impl OpenAiResponseEventMapper {
                             self.function_calls_by_item.insert(item_id, entry);
                         }
                     }
+                    ResponseOutputItem::Compaction(_) => {
+                        events.push(Ok(LanguageModelCompletionEvent::Compaction(
+                            CompactionContent::Pending,
+                        )));
+                    }
                     ResponseOutputItem::Reasoning(_) | ResponseOutputItem::Unknown => {}
                 }
                 events
@@ -896,6 +923,14 @@ impl OpenAiResponseEventMapper {
             ResponsesStreamEvent::OutputItemDone { item, .. } => match item {
                 ResponseOutputItem::Reasoning(reasoning) => self.capture_reasoning_item(&reasoning),
                 ResponseOutputItem::Message(message) => self.capture_message_phase(&message),
+                ResponseOutputItem::Compaction(compaction) => {
+                    vec![Ok(LanguageModelCompletionEvent::Compaction(
+                        CompactionContent::Encrypted {
+                            id: compaction.id,
+                            encrypted_content: compaction.encrypted_content,
+                        },
+                    ))]
+                }
                 ResponseOutputItem::FunctionCall(_) | ResponseOutputItem::Unknown => Vec::new(),
             },
             ResponsesStreamEvent::OutputTextDone { .. }
@@ -1401,6 +1436,7 @@ mod tests {
             temperature: None,
             thinking_allowed: true,
             thinking_effort: Some("high".into()),
+            compact_at_tokens: None,
             speed: None,
         };
 
@@ -1522,6 +1558,7 @@ mod tests {
             temperature: None,
             thinking_allowed: false,
             thinking_effort: None,
+            compact_at_tokens: None,
             speed: None,
         };
 
@@ -1604,6 +1641,7 @@ mod tests {
             temperature: None,
             thinking_allowed: false,
             thinking_effort: None,
+            compact_at_tokens: None,
             speed: None,
         };
 
@@ -1660,6 +1698,7 @@ mod tests {
             temperature: None,
             thinking_allowed: false,
             thinking_effort: Some("high".into()),
+            compact_at_tokens: None,
             speed: None,
         };
 
@@ -1700,6 +1739,7 @@ mod tests {
                 temperature: None,
                 thinking_allowed: false,
                 thinking_effort: None,
+                compact_at_tokens: None,
                 speed,
             };
 
@@ -1739,6 +1779,7 @@ mod tests {
                 temperature: None,
                 thinking_allowed: false,
                 thinking_effort: None,
+                compact_at_tokens: None,
                 speed,
             };
 
@@ -1773,6 +1814,7 @@ mod tests {
             temperature: None,
             thinking_allowed: false,
             thinking_effort: Some("high".into()),
+            compact_at_tokens: None,
             speed: None,
         };
 
@@ -1811,6 +1853,7 @@ mod tests {
             temperature: None,
             thinking_allowed: true,
             thinking_effort: Some("none".into()),
+            compact_at_tokens: None,
             speed: None,
         };
 
@@ -1861,6 +1904,7 @@ mod tests {
             temperature: None,
             thinking_allowed: true,
             thinking_effort: None,
+            compact_at_tokens: None,
             speed: None,
         };
 
@@ -1950,6 +1994,7 @@ mod tests {
             temperature: None,
             thinking_allowed: true,
             thinking_effort: None,
+            compact_at_tokens: None,
             speed: None,
         };
 
@@ -2037,6 +2082,7 @@ mod tests {
             temperature: None,
             thinking_allowed: false,
             thinking_effort: None,
+            compact_at_tokens: None,
             speed: None,
         };
 
@@ -3065,6 +3111,7 @@ mod tests {
             temperature: None,
             thinking_allowed: true,
             thinking_effort: None,
+            compact_at_tokens: None,
             speed: None,
         };
 

@@ -54,6 +54,7 @@ pub enum LanguageModelCompletionEvent {
     StartMessage {
         message_id: String,
     },
+    Compaction(CompactionContent),
     ReasoningDetails(serde_json::Value),
     UsageUpdate(TokenUsage),
 }

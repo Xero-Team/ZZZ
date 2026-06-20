@@ -1,5 +1,6 @@
 use std::io;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
@@ -616,6 +617,12 @@ pub enum RequestContent {
         #[serde(skip_serializing_if = "Option::is_none")]
         cache_control: Option<CacheControl>,
     },
+    #[serde(rename = "compaction")]
+    Compaction {
+        content: Option<Arc<str>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<CacheControl>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -647,6 +654,8 @@ pub enum ResponseContent {
         name: String,
         input: serde_json::Value,
     },
+    #[serde(rename = "compaction")]
+    Compaction { content: Option<Arc<str>> },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -725,6 +734,27 @@ pub enum StringOrContents {
     Content(Vec<RequestContent>),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextManagement {
+    pub edits: Vec<ContextManagementEdit>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ContextManagementEdit {
+    #[serde(rename = "compact_20260112")]
+    Compact {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        trigger: Option<CompactionTrigger>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum CompactionTrigger {
+    InputTokens { value: u64 },
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Request {
     pub model: String,
@@ -744,6 +774,8 @@ pub struct Request {
     /// we don't have to micromanage per-block breakpoints ourselves.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_control: Option<CacheControl>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_management: Option<ContextManagement>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Metadata>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -842,6 +874,8 @@ pub enum ContentDelta {
     SignatureDelta { signature: String },
     #[serde(rename = "input_json_delta")]
     InputJsonDelta { partial_json: String },
+    #[serde(rename = "compaction_delta")]
+    CompactionDelta { content: Option<Arc<str>> },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
