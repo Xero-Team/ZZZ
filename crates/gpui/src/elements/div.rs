@@ -2387,6 +2387,10 @@ impl Interactivity {
                     .pending_mouse_down
                     .get_or_insert_with(Default::default)
                     .clone();
+                let pending_keyboard_down = element_state
+                    .pending_keyboard_down
+                    .get_or_insert_with(Default::default)
+                    .clone();
 
                 let clicked_state = element_state
                     .clicked_state
@@ -2441,6 +2445,20 @@ impl Interactivity {
                 });
 
                 if is_focused {
+                    window.on_key_event({
+                        let pending_keyboard_down = pending_keyboard_down.clone();
+                        move |event: &KeyDownEvent, phase, window, _cx| {
+                            if phase.bubble() && !window.default_prevented() {
+                                let stroke = &event.keystroke;
+                                let is_activation_key = (stroke.key.eq("enter")
+                                    || stroke.key.eq("space"))
+                                    && !stroke.modifiers.modified();
+                                *pending_keyboard_down.borrow_mut() =
+                                    is_activation_key.then_some(window.focus_generation);
+                            }
+                        }
+                    });
+
                     // Press enter, space to trigger click, when the element is focused.
                     window.on_key_event({
                         let click_listeners = click_listeners.clone();
@@ -2459,6 +2477,12 @@ impl Interactivity {
                                 if let Some(button) = keyboard_button
                                     && !stroke.modifiers.modified()
                                 {
+                                    let pending =
+                                        std::mem::take(&mut *pending_keyboard_down.borrow_mut());
+                                    if pending != Some(window.focus_generation) {
+                                        return;
+                                    }
+
                                     let click_event = ClickEvent::Keyboard(KeyboardClickEvent {
                                         button,
                                         bounds: hitbox.bounds,
@@ -2467,6 +2491,8 @@ impl Interactivity {
                                     for listener in &click_listeners {
                                         listener(&click_event, window, cx);
                                     }
+                                } else {
+                                    *pending_keyboard_down.borrow_mut() = None;
                                 }
                             }
                         }
@@ -2886,6 +2912,7 @@ pub struct InteractiveElementState {
     pub(crate) hover_state: Option<Rc<RefCell<ElementHoverState>>>,
     pub(crate) hover_listener_state: Option<Rc<RefCell<bool>>>,
     pub(crate) pending_mouse_down: Option<Rc<RefCell<Option<MouseDownEvent>>>>,
+    pub(crate) pending_keyboard_down: Option<Rc<RefCell<Option<u64>>>>,
     pub(crate) scroll_offset: Option<Rc<RefCell<Point<Pixels>>>>,
     pub(crate) active_tooltip: Option<Rc<RefCell<Option<ActiveTooltip>>>>,
 }
@@ -3627,8 +3654,8 @@ impl ScrollHandle {
 mod tests {
     use super::*;
     use crate::{
-        AppContext as _, Context, InputEvent, MouseMoveEvent, TestAppContext,
-        util::FluentBuilder as _,
+        AnyWindowHandle, AppContext as _, Context, InputEvent, Keystroke, MouseMoveEvent,
+        TestAppContext, util::FluentBuilder as _,
     };
     use std::rc::Weak;
 
@@ -3936,5 +3963,165 @@ mod tests {
             .unwrap();
 
         assert!(active_tooltip.borrow().is_none());
+    }
+
+    struct KeyboardActivationTest {
+        focus_a: FocusHandle,
+        focus_b: FocusHandle,
+        clicks: Rc<RefCell<Vec<&'static str>>>,
+    }
+
+    impl Render for KeyboardActivationTest {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            let clicks_a = self.clicks.clone();
+            let clicks_b = self.clicks.clone();
+            div()
+                .size_full()
+                .child(
+                    div()
+                        .id("a")
+                        .w(px(50.))
+                        .h(px(50.))
+                        .track_focus(&self.focus_a)
+                        .on_click(move |_, _, _| clicks_a.borrow_mut().push("a")),
+                )
+                .child(
+                    div()
+                        .id("b")
+                        .w(px(50.))
+                        .h(px(50.))
+                        .track_focus(&self.focus_b)
+                        .on_click(move |_, _, _| clicks_b.borrow_mut().push("b")),
+                )
+        }
+    }
+
+    fn setup_keyboard_activation_test() -> (
+        TestAppContext,
+        AnyWindowHandle,
+        Rc<RefCell<Vec<&'static str>>>,
+        FocusHandle,
+        FocusHandle,
+    ) {
+        let mut cx = TestAppContext::single();
+        let (focus_a, focus_b) = cx.update(|cx| (cx.focus_handle(), cx.focus_handle()));
+        let clicks: Rc<RefCell<Vec<&'static str>>> = Rc::new(RefCell::new(Vec::new()));
+        let window = cx.add_window({
+            let focus_a = focus_a.clone();
+            let focus_b = focus_b.clone();
+            let clicks = clicks.clone();
+            move |_, _| KeyboardActivationTest {
+                focus_a,
+                focus_b,
+                clicks,
+            }
+        });
+        (cx, window.into(), clicks, focus_a, focus_b)
+    }
+
+    fn focus_and_draw(cx: &mut TestAppContext, window: AnyWindowHandle, handle: &FocusHandle) {
+        cx.update_window(window, |_, window, cx| window.focus(handle, cx))
+            .unwrap();
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| {
+            window.draw(cx).clear();
+        })
+        .unwrap();
+    }
+
+    fn key_down(cx: &mut TestAppContext, window: AnyWindowHandle, key: &str) {
+        let keystroke = Keystroke::parse(key).unwrap();
+        cx.update_window(window, |_, window, cx| {
+            window.dispatch_event(
+                KeyDownEvent {
+                    keystroke,
+                    is_held: false,
+                    prefer_character_input: false,
+                }
+                .to_platform_input(),
+                cx,
+            );
+        })
+        .unwrap();
+    }
+
+    fn key_up(cx: &mut TestAppContext, window: AnyWindowHandle, key: &str) {
+        let keystroke = Keystroke::parse(key).unwrap();
+        cx.update_window(window, |_, window, cx| {
+            window.dispatch_event(KeyUpEvent { keystroke }.to_platform_input(), cx);
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn keyboard_activation_fires_click_on_same_element() {
+        let (mut cx, window, clicks, focus_a, _focus_b) = setup_keyboard_activation_test();
+
+        focus_and_draw(&mut cx, window, &focus_a);
+        key_down(&mut cx, window, "enter");
+        key_up(&mut cx, window, "enter");
+
+        assert_eq!(*clicks.borrow(), vec!["a"]);
+    }
+
+    #[test]
+    fn keyboard_activation_does_not_leak_across_focus_change() {
+        let (mut cx, window, clicks, focus_a, focus_b) = setup_keyboard_activation_test();
+
+        focus_and_draw(&mut cx, window, &focus_a);
+        key_down(&mut cx, window, "enter");
+        focus_and_draw(&mut cx, window, &focus_b);
+        key_up(&mut cx, window, "enter");
+
+        assert!(clicks.borrow().is_empty(), "clicks: {:?}", clicks.borrow());
+    }
+
+    #[test]
+    fn keyboard_activation_does_not_leak_when_focus_returns() {
+        let (mut cx, window, clicks, focus_a, focus_b) = setup_keyboard_activation_test();
+
+        focus_and_draw(&mut cx, window, &focus_a);
+        key_down(&mut cx, window, "enter");
+        focus_and_draw(&mut cx, window, &focus_b);
+        focus_and_draw(&mut cx, window, &focus_a);
+        key_up(&mut cx, window, "enter");
+
+        assert!(clicks.borrow().is_empty(), "clicks: {:?}", clicks.borrow());
+    }
+
+    #[test]
+    fn keyboard_activation_cleared_by_intervening_keydown() {
+        let (mut cx, window, clicks, focus_a, _focus_b) = setup_keyboard_activation_test();
+
+        focus_and_draw(&mut cx, window, &focus_a);
+        key_down(&mut cx, window, "enter");
+        key_down(&mut cx, window, "a");
+        key_up(&mut cx, window, "enter");
+
+        assert!(clicks.borrow().is_empty(), "clicks: {:?}", clicks.borrow());
+    }
+
+    #[test]
+    fn keyboard_activation_cleared_by_intervening_key_release() {
+        let (mut cx, window, clicks, focus_a, _focus_b) = setup_keyboard_activation_test();
+
+        focus_and_draw(&mut cx, window, &focus_a);
+        key_down(&mut cx, window, "escape");
+        key_down(&mut cx, window, "space");
+        key_up(&mut cx, window, "escape");
+        key_up(&mut cx, window, "space");
+
+        assert!(clicks.borrow().is_empty(), "clicks: {:?}", clicks.borrow());
+    }
+
+    #[test]
+    fn keyboard_activation_ignores_modified_keys() {
+        let (mut cx, window, clicks, focus_a, _focus_b) = setup_keyboard_activation_test();
+
+        focus_and_draw(&mut cx, window, &focus_a);
+        key_down(&mut cx, window, "cmd-enter");
+        key_up(&mut cx, window, "cmd-enter");
+
+        assert!(clicks.borrow().is_empty(), "clicks: {:?}", clicks.borrow());
     }
 }

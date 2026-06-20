@@ -1010,6 +1010,7 @@ pub struct Window {
     pub(crate) refreshing: bool,
     pub(crate) activation_observers: SubscriberSet<(), AnyObserver>,
     pub(crate) focus: Option<FocusId>,
+    pub(crate) focus_generation: u64,
     focus_enabled: bool,
     pending_input: Option<PendingInput>,
     pending_modifier: ModifierState,
@@ -1639,6 +1640,7 @@ impl Window {
             refreshing: false,
             activation_observers: SubscriberSet::new(),
             focus: None,
+            focus_generation: 0,
             focus_enabled: true,
             pending_input: None,
             pending_modifier: ModifierState::default(),
@@ -1795,6 +1797,7 @@ impl Window {
         }
 
         self.focus = Some(handle.id);
+        self.focus_generation += 1;
         self.clear_pending_keystrokes();
 
         // Avoid re-entrant entity updates by deferring observer notifications to the end of the
@@ -1817,8 +1820,10 @@ impl Window {
             return;
         }
 
-        self.focus = None;
-        self.refresh();
+        if self.focus.take().is_some() {
+            self.focus_generation += 1;
+            self.refresh();
+        }
     }
 
     /// Blur the window and don't allow anything in it to be focused again.
