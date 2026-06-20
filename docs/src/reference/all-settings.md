@@ -2961,7 +2961,7 @@ Configuration for various AI model providers including API URLs and authenticati
 
 - Description: Format for line indicator in the status bar
 - Setting: `line_indicator_format`
-- Default: `"short"`
+- Default: `"long"`
 
 **Options**
 
@@ -3320,7 +3320,7 @@ Examples:
 
 - Description: The direction that you want to split panes horizontally
 - Setting: `pane_split_direction_horizontal`
-- Default: `"up"`
+- Default: `"down"`
 
 **Options**
 
@@ -3344,7 +3344,7 @@ Examples:
 
 - Description: The direction that you want to split panes vertically
 - Setting: `pane_split_direction_vertical`
-- Default: `"left"`
+- Default: `"right"`
 
 **Options**
 
