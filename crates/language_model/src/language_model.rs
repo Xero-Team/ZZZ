@@ -178,6 +178,7 @@ pub trait LanguageModel: Send + Sync {
                                 Ok(LanguageModelCompletionEvent::ToolUseJsonParseError {
                                     ..
                                 }) => None,
+                                Ok(LanguageModelCompletionEvent::Compaction(_)) => None,
                                 Ok(LanguageModelCompletionEvent::UsageUpdate(token_usage)) => {
                                     *last_token_usage.lock() = token_usage;
                                     None
@@ -273,6 +274,12 @@ pub trait LanguageModelProvider: 'static {
     fn name(&self) -> LanguageModelProviderName;
     fn icon(&self) -> IconOrSvg {
         IconOrSvg::default()
+    }
+    fn missing_credentials_error_message(&self) -> SharedString {
+        format!("No credentials are configured for {}.", self.name()).into()
+    }
+    fn authentication_error_message(&self) -> SharedString {
+        format!("Authentication with {} failed.", self.name()).into()
     }
     fn default_model(&self, cx: &App) -> Option<Arc<dyn LanguageModel>>;
     fn default_fast_model(&self, cx: &App) -> Option<Arc<dyn LanguageModel>>;

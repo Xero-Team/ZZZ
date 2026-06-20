@@ -391,6 +391,7 @@ pub fn into_deepseek(
                     current_reasoning.get_or_insert_default().push_str(&text);
                 }
                 MessageContent::RedactedThinking(_) => {}
+                MessageContent::Compaction(_) => {}
                 MessageContent::Image(_) => {}
                 MessageContent::ToolUse(tool_use) => {
                     let tool_call = deepseek::ToolCall {

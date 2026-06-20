@@ -916,6 +916,7 @@ pub fn into_bedrock(
 
                             Some(BedrockInnerContent::ReasoningContent(redacted))
                         }
+                        MessageContent::Compaction(_) => None,
                         MessageContent::ToolUse(tool_use) => {
                             messages_contain_tool_content = true;
                             let input = if tool_use.input.is_null() {

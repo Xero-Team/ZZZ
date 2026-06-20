@@ -7,8 +7,8 @@ use editor::{Editor, EditorEvent};
 use futures::{StreamExt, channel::mpsc};
 use fuzzy::StringMatchCandidate;
 use gpui::{
-    Action, App, AsyncApp, ClipboardItem, DEFAULT_ADDITIONAL_WINDOW_SIZE, Div, Entity, FocusHandle,
-    Focusable, Global, KeyContext, ListState, ReadGlobal as _, ScrollHandle, Stateful,
+    Action, AnyView, App, AsyncApp, ClipboardItem, DEFAULT_ADDITIONAL_WINDOW_SIZE, Div, Entity,
+    FocusHandle, Focusable, Global, KeyContext, ListState, ReadGlobal as _, ScrollHandle, Stateful,
     Subscription, Task, Tiling, TitlebarOptions, UniformListScrollHandle, WeakEntity, Window,
     WindowBounds, WindowHandle, WindowOptions, actions, div, list, point, prelude::*, px,
     uniform_list,
@@ -16,6 +16,7 @@ use gpui::{
 use i18n as app_i18n;
 
 use language::Buffer;
+use language_model::LanguageModelProviderId;
 use platform_title_bar::PlatformTitleBar;
 use project::{Project, ProjectPath, Worktree, WorktreeId};
 use release_channel::ReleaseChannel;
@@ -781,6 +782,7 @@ pub struct SettingsWindow {
     shown_errors: HashSet<String>,
     pub(crate) regex_validation_error: Option<String>,
     last_copied_link_path: Option<&'static str>,
+    provider_configuration_views: HashMap<LanguageModelProviderId, AnyView>,
 }
 
 struct SearchDocument {
@@ -1787,6 +1789,7 @@ impl SettingsWindow {
             regex_validation_error: None,
             list_state,
             last_copied_link_path: None,
+            provider_configuration_views: HashMap::default(),
         };
 
         this.fetch_files(window, cx);
@@ -4788,6 +4791,7 @@ pub mod test {
                 shown_errors: HashSet::default(),
                 regex_validation_error: None,
                 last_copied_link_path: None,
+                provider_configuration_views: HashMap::default(),
             }
         }
     }
@@ -4915,6 +4919,7 @@ pub mod test {
             shown_errors: HashSet::default(),
             regex_validation_error: None,
             last_copied_link_path: None,
+            provider_configuration_views: HashMap::default(),
         };
 
         settings_window.build_filter_table();

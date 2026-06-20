@@ -9,7 +9,10 @@ use ui::IntoElement;
 use crate::{
     ActionLink, DynamicItem, PROJECT, SettingField, SettingItem, SettingsFieldMetadata,
     SettingsPage, SettingsPageItem, SubPageLink, USER, UiText, active_language, all_language_names,
-    pages::{render_edit_prediction_setup_page, render_tool_permissions_setup_page},
+    pages::{
+        render_edit_prediction_setup_page, render_llm_providers_page,
+        render_tool_permissions_setup_page,
+    },
 };
 
 const DEFAULT_STRING: String = String::new();
@@ -8758,6 +8761,21 @@ fn ai_page(cx: &App) -> SettingsPage {
                 "settings_ui.page_data.section.agent.configuration",
                 "Agent Configuration",
             )),
+            SettingsPageItem::SubPageLink(SubPageLink {
+                title: lt(
+                    "settings_ui.page_data.title.configure.providers",
+                    "Configure Providers",
+                ),
+                r#type: Default::default(),
+                json_path: Some("language_models"),
+                description: Some(lt(
+                    "settings_ui.page_data.description.configure.local.third.party.language.model.providers.for.agent.workflows",
+                    "Configure local and third-party language model providers for agent workflows.",
+                )),
+                in_json: false,
+                files: USER,
+                render: render_llm_providers_page,
+            }),
             SettingsPageItem::SubPageLink(SubPageLink {
                 title: lt(
                     "settings_ui.page_data.title.tool.permissions",

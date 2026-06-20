@@ -391,6 +391,7 @@ pub fn into_mistral(
                             }
                         }
                         MessageContent::RedactedThinking(_) => {}
+                        MessageContent::Compaction(_) => {}
                         MessageContent::ToolUse(_) => {
                             // Tool use is not supported in User messages for Mistral
                         }
@@ -449,6 +450,7 @@ pub fn into_mistral(
                             }
                         }
                         MessageContent::RedactedThinking(_) => {}
+                        MessageContent::Compaction(_) => {}
                         MessageContent::Image(_) => {}
                         MessageContent::ToolUse(tool_use) => {
                             let tool_call = mistral::ToolCall {
@@ -503,6 +505,7 @@ pub fn into_mistral(
                             }
                         }
                         MessageContent::RedactedThinking(_) => {}
+                        MessageContent::Compaction(_) => {}
                         MessageContent::Image(_)
                         | MessageContent::ToolUse(_)
                         | MessageContent::ToolResult(_) => {
@@ -984,6 +987,7 @@ mod tests {
             prompt_id: None,
             intent: None,
             stop: vec![],
+            compact_at_tokens: None,
             thinking_allowed: true,
             thinking_effort: None,
             speed: Default::default(),
@@ -1020,6 +1024,7 @@ mod tests {
             prompt_id: None,
             intent: None,
             stop: vec![],
+            compact_at_tokens: None,
             thinking_allowed: true,
             thinking_effort: None,
             speed: None,
