@@ -1578,9 +1578,13 @@ impl SerializableItem for MarkdownPreviewView {
             cx.update(|window, cx| {
                 let language_registry = project.read(cx).languages().clone();
                 let workspace_directory = workspace.upgrade().and_then(|workspace| {
-                    workspace.read(cx).project().read(cx).worktrees(cx).next().map(|tree| {
-                        tree.read(cx).abs_path().to_path_buf()
-                    })
+                    workspace
+                        .read(cx)
+                        .project()
+                        .read(cx)
+                        .worktrees(cx)
+                        .next()
+                        .map(|tree| tree.read(cx).abs_path().to_path_buf())
                 });
                 let editor =
                     cx.new(|cx| Editor::for_buffer(buffer, Some(project.clone()), window, cx));
@@ -1699,9 +1703,6 @@ mod persistence {
 #[cfg(test)]
 mod tests {
     use base64::Engine as _;
-    use crate::markdown_preview_view::ImageSource;
-    use crate::markdown_preview_view::Resource;
-    use crate::markdown_preview_view::resolve_preview_image;
     use buffer_diff::BufferDiff;
     use editor::Editor;
     use gpui::{AppContext, Entity, TestAppContext};
