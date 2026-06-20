@@ -1072,28 +1072,12 @@ impl BranchListDelegate {
 impl PickerDelegate for BranchListDelegate {
     type ListItem = ListItem;
 
-    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
         match self.state {
             PickerState::List | PickerState::NewRemote | PickerState::NewBranch => {
-                if self.is_select_only() {
-                    tr(
-                        cx,
-                        "git_ui.branch_picker.placeholder.select_branch",
-                        "Select branch...",
-                    )
-                } else {
-                    tr(
-                        cx,
-                        "git_ui.branch_picker.placeholder.switch_branch",
-                        "Switch branch...",
-                    )
-                }
+                "Switch or type to create a branch…"
             }
-            PickerState::CreateRemote(_) => tr(
-                cx,
-                "git_ui.branch_picker.placeholder.enter_remote_name",
-                "Enter a name for this remote...",
-            ),
+            PickerState::CreateRemote(_) => "Enter a name for this remote…",
         }
         .into()
     }
