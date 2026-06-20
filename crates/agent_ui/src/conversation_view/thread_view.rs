@@ -9,6 +9,7 @@ use std::cell::RefCell;
 use acp_thread::{ContentBlock, PlanEntry, SandboxAuthorizationDetails};
 use cloud_api_types::{SubmitAgentThreadFeedbackBody, SubmitAgentThreadFeedbackCommentsBody};
 use editor::actions::OpenExcerpts;
+use language_model::LanguageModelProvider;
 
 use crate::message_editor::SharedSessionCapabilities;
 
@@ -1500,7 +1501,9 @@ impl ThreadView {
                 ThreadError::NoApiKey { provider } => (
                     "no_api_key",
                     None,
-                    format!("No API key configured for {provider}.").into(),
+                    Self::provider_by_name(provider, cx)
+                        .map(|provider| provider.missing_credentials_error_message())
+                        .unwrap_or_else(|| format!("No credentials configured for {provider}.").into()),
                 ),
                 ThreadError::StreamError { provider } => (
                     "stream_error",
@@ -1510,15 +1513,19 @@ impl ThreadView {
                 ThreadError::InvalidApiKey { provider } => (
                     "invalid_api_key",
                     None,
-                    format!("Invalid or expired API key for {provider}.").into(),
+                    Self::provider_by_name(provider, cx)
+                        .map(|provider| provider.authentication_error_message())
+                        .unwrap_or_else(|| format!("Authentication with {provider} failed.").into()),
                 ),
-                ThreadError::PermissionDenied { provider } => (
+                ThreadError::PermissionDenied { provider, message } => (
                     "permission_denied",
                     None,
-                    format!(
-                        "{provider}'s API rejected the request due to insufficient permissions."
-                    )
-                    .into(),
+                    message.clone().unwrap_or_else(|| {
+                        format!(
+                            "{provider}'s API rejected the request due to insufficient permissions."
+                        )
+                        .into()
+                    }),
                 ),
                 ThreadError::RequestFailed => (
                     "request_failed",
@@ -1609,12 +1616,18 @@ impl ThreadView {
             //
             // If editing the prompt that generated the edits, they are auto-rejected
             // through the `rewind` function in the `acp_thread`.
+            //
+            // Subagent edits are forwarded through the linked action log and do not appear
+            // as diffs in the parent thread entries, so earlier subagent tool calls must
+            // also count as potential pending edits.
             let has_earlier_edits = thread.read_with(cx, |thread, _| {
-                thread
-                    .entries()
-                    .iter()
-                    .take(entry_ix)
-                    .any(|entry| entry.diffs().next().is_some())
+                thread.entries().iter().take(entry_ix).any(|entry| {
+                    entry.diffs().next().is_some()
+                        || matches!(
+                            entry,
+                            AgentThreadEntry::ToolCall(tool_call) if tool_call.is_subagent()
+                        )
+                })
             });
 
             if has_earlier_edits {
@@ -1818,6 +1831,21 @@ impl ThreadView {
         self.set_editor_is_expanded(!self.editor_expanded, cx);
         cx.stop_propagation();
         cx.notify();
+    }
+
+    fn handle_message_editor_move_up(
+        &mut self,
+        _: &zed_actions::editor::MoveUp,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.message_editor.read(cx).is_empty(cx) || self.local_queued_messages.is_empty() {
+            cx.propagate();
+            return;
+        }
+
+        let last_index = self.local_queued_messages.len() - 1;
+        self.move_queued_message_to_main_editor(last_index, None, None, window, cx);
     }
 
     pub fn set_editor_is_expanded(&mut self, is_expanded: bool, cx: &mut Context<Self>) {
@@ -3472,6 +3500,7 @@ impl ThreadView {
             .p_2()
             .bg(editor_bg_color)
             .justify_center()
+            .on_action(cx.listener(Self::handle_message_editor_move_up))
             .map(|this| {
                 if has_messages {
                     this.on_action(cx.listener(Self::expand_message_editor))
@@ -8776,6 +8805,13 @@ impl ThreadView {
         rems_from_px(13.)
     }
 
+    fn provider_by_name(name: &SharedString, cx: &App) -> Option<Arc<dyn LanguageModelProvider>> {
+        LanguageModelRegistry::read_global(cx)
+            .providers()
+            .into_iter()
+            .find(|provider| provider.name().0 == *name)
+    }
+
     pub(crate) fn render_thread_error(
         &mut self,
         window: &mut Window,
@@ -8825,23 +8861,22 @@ impl ThreadView {
                 cx,
             ),
             ThreadError::PromptTooLarge => self.render_prompt_too_large_error(cx),
-            ThreadError::NoApiKey { provider } => self.render_error_callout(
-                tr(
+            ThreadError::NoApiKey { provider } => {
+                let message = Self::provider_by_name(provider, cx)
+                    .map(|provider| provider.missing_credentials_error_message())
+                    .unwrap_or_else(|| format!("No credentials are configured for {provider}.").into());
+                self.render_error_callout(
+                    tr(
+                        cx,
+                        "agent_ui.thread_view.api_key_missing",
+                        "Credentials Missing",
+                    ),
+                    message,
+                    false,
+                    true,
                     cx,
-                    "agent_ui.thread_view.api_key_missing",
-                    "API Key Missing",
-                ),
-                app_i18n::tr(
-                    cx,
-                    "agent_ui.thread_view.api_key_missing_message",
-                    "No API key is configured for {}. Add your key via the Agent Panel settings to continue.",
                 )
-                .replacen("{}", provider, 1)
-                .into(),
-                false,
-                true,
-                cx,
-            ),
+            }
             ThreadError::StreamError { provider } => self.render_error_callout(
                 tr(
                     cx,
@@ -8859,36 +8894,32 @@ impl ThreadView {
                 true,
                 cx,
             ),
-            ThreadError::InvalidApiKey { provider } => self.render_error_callout(
-                tr(
+            ThreadError::InvalidApiKey { provider } => {
+                let message = Self::provider_by_name(provider, cx)
+                    .map(|provider| provider.authentication_error_message())
+                    .unwrap_or_else(|| format!("Could not authenticate with {provider}.").into());
+                self.render_error_callout(
+                    tr(
+                        cx,
+                        "agent_ui.thread_view.invalid_api_key",
+                        "Authentication Failed",
+                    ),
+                    message,
+                    false,
+                    false,
                     cx,
-                    "agent_ui.thread_view.invalid_api_key",
-                    "Invalid API Key",
-                ),
-                app_i18n::tr(
-                    cx,
-                    "agent_ui.thread_view.invalid_api_key_message",
-                    "The API key for {} is invalid or has expired. Update your key via the Agent Panel settings to continue.",
                 )
-                .replacen("{}", provider, 1)
-                .into(),
-                false,
-                false,
-                cx,
-            ),
-            ThreadError::PermissionDenied { provider } => self.render_error_callout(
+            }
+            ThreadError::PermissionDenied { provider, message } => self.render_error_callout(
                 tr(
                     cx,
                     "agent_ui.thread_view.permission_denied",
                     "Permission Denied",
                 ),
-                app_i18n::tr(
-                    cx,
-                    "agent_ui.thread_view.permission_denied_message",
-                    "{}'s API rejected the request due to insufficient permissions. Check that your API key has access to this model.",
-                )
-                .replacen("{}", provider, 1)
-                .into(),
+                message.clone().unwrap_or_else(|| {
+                    format!("{provider} rejected the request due to insufficient permissions.")
+                        .into()
+                }),
                 false,
                 false,
                 cx,

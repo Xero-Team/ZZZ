@@ -273,6 +273,7 @@ impl TerminalInlineAssistant {
                 tool_choice: None,
                 stop: Vec::new(),
                 temperature,
+                compact_at_tokens: None,
                 thinking_allowed: false,
                 thinking_effort: None,
                 speed: None,
