@@ -66,7 +66,8 @@ use search::project_search::ProjectSearchBar;
 use settings::{
     BaseKeymap, DEFAULT_KEYMAP_PATH, DefaultOpenBehavior, InvalidSettingsError, KeybindSource,
     KeymapFile, KeymapFileLoadResult, MigrationStatus, Settings, SettingsFile, SettingsStore,
-    VIM_KEYMAP_PATH, initial_local_debug_tasks_content, initial_project_settings_content,
+    SPECIFIC_OVERRIDES_KEYMAP_PATH, VIM_KEYMAP_PATH, initial_local_debug_tasks_content,
+    initial_project_settings_content,
     initial_tasks_content, update_settings_file,
 };
 use sidebar::Sidebar;
@@ -2208,6 +2209,11 @@ pub fn load_default_keymap(cx: &mut App) {
             KeymapFile::load_asset(VIM_KEYMAP_PATH, Some(KeybindSource::Vim), cx).unwrap(),
         );
     }
+
+    cx.bind_keys(
+        KeymapFile::load_asset(SPECIFIC_OVERRIDES_KEYMAP_PATH, Some(KeybindSource::Base), cx)
+            .unwrap(),
+    );
 }
 
 pub fn open_new_ssh_project_from_project(

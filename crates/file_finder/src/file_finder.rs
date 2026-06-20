@@ -17,7 +17,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, Task, WeakEntity, Window, actions, rems,
 };
 use i18n::tr;
-use language::{BufferSnapshot, Point};
+use language::{BufferSnapshot, HighlightedText, Point};
 use open_path_prompt::{
     OpenPathPrompt,
     file_finder_settings::{FileFinderSettings, FileFinderWidth},
@@ -191,7 +191,8 @@ impl FileFinder {
     }
 
     fn new(delegate: FileFinderDelegate, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let picker = cx.new(|cx| Picker::uniform_list(delegate, window, cx));
+        let project = delegate.project.clone();
+        let picker = cx.new(|cx| Picker::uniform_list_with_preview(delegate, project, window, cx));
         let picker_focus_handle = picker.focus_handle(cx);
         picker.update(cx, |picker, _| {
             picker.delegate.focus_handle = picker_focus_handle.clone();
@@ -1811,6 +1812,22 @@ impl PickerDelegate for FileFinderDelegate {
         self.file_finder
             .update(cx, |_, cx| cx.emit(DismissEvent))
             .log_err();
+    }
+
+    fn try_get_preview_data_for_match(&self, cx: &App) -> Option<picker::PreviewUpdate> {
+        let selected_match = self.matches.get(self.selected_index)?;
+        match selected_match {
+            Match::CreateNew(project_path) => {
+                let path_style = self.project.read(cx).path_style(cx);
+                Some(picker::PreviewUpdate::message(HighlightedText {
+                    text: format!("Create file {}?", project_path.path.display(path_style)).into(),
+                    highlights: Vec::new(),
+                }))
+            }
+            _ => Some(picker::PreviewUpdate::from_path(
+                selected_match.abs_path(&self.project, cx)?,
+            )),
+        }
     }
 
     fn render_match(
