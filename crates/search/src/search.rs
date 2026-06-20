@@ -20,11 +20,13 @@ pub mod buffer_search;
 pub mod project_search;
 pub(crate) mod search_bar;
 pub mod search_status_button;
+pub mod text_finder;
 
 pub fn init(cx: &mut App) {
     menu::init();
     buffer_search::init(cx);
     project_search::init(cx);
+    text_finder::init(cx);
 }
 
 actions!(

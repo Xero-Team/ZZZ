@@ -7,6 +7,7 @@ use crate::{
         ActionButtonState, HistoryNavigationDirection, alignment_element, input_base_styles,
         render_action_button, render_text_input, should_navigate_history,
     },
+    text_finder::TextFinder,
 };
 use anyhow::Context as _;
 use collections::HashMap;
@@ -40,7 +41,10 @@ use std::{
     mem,
     ops::{Not, Range},
     pin::pin,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 use ui::{
     CommonAnimationExt, IconButtonShape, KeyBinding, Toggleable, Tooltip, prelude::*,
@@ -66,7 +70,9 @@ actions!(
         /// Toggles the search filters panel.
         ToggleFilters,
         /// Toggles collapse/expand state of all search result excerpts.
-        ToggleAllSearchResults
+        ToggleAllSearchResults,
+        /// Open a text picker showing the current result in a modal.
+        OpenTextFinder
     ]
 );
 
@@ -97,7 +103,7 @@ fn split_glob_patterns(text: &str) -> Vec<&str> {
 }
 
 #[derive(Default)]
-struct ActiveSettings(HashMap<WeakEntity<Project>, ProjectSearchSettings>);
+pub(crate) struct ActiveSettings(pub(crate) HashMap<WeakEntity<Project>, ProjectSearchSettings>);
 
 impl Global for ActiveSettings {}
 
@@ -229,17 +235,18 @@ fn contains_uppercase(str: &str) -> bool {
 }
 
 pub struct ProjectSearch {
-    project: Entity<Project>,
-    excerpts: Entity<MultiBuffer>,
-    pending_search: Option<Task<Option<()>>>,
-    match_ranges: Vec<Range<Anchor>>,
-    active_query: Option<SearchQuery>,
+    pub(crate) project: Entity<Project>,
+    pub excerpts: Entity<MultiBuffer>,
+    pub pending_search: Option<Task<Option<SearchResults<project::search::SearchResult>>>>,
+    pub match_ranges: Vec<Range<Anchor>>,
+    pub(crate) active_query: Option<SearchQuery>,
     last_search_query_text: Option<String>,
-    search_id: usize,
+    pub search_id: usize,
     search_state: SearchState,
     search_history_cursor: SearchHistoryCursor,
     search_included_history_cursor: SearchHistoryCursor,
     search_excluded_history_cursor: SearchHistoryCursor,
+    pub project_search_turning_into_text_finder: Arc<AtomicBool>,
     _excerpts_subscription: Subscription,
 }
 
@@ -283,14 +290,14 @@ enum InputPanel {
 }
 
 pub struct ProjectSearchView {
-    workspace: WeakEntity<Workspace>,
+    pub(crate) workspace: WeakEntity<Workspace>,
     focus_handle: FocusHandle,
     active_locale: app_i18n::ActiveLocale,
-    entity: Entity<ProjectSearch>,
+    pub(crate) entity: Entity<ProjectSearch>,
     query_editor: Entity<Editor>,
     replacement_editor: Entity<Editor>,
     results_editor: Entity<Editor>,
-    search_options: SearchOptions,
+    pub(crate) search_options: SearchOptions,
     panels_with_errors: HashMap<InputPanel, String>,
     active_match_index: Option<usize>,
     search_id: usize,
@@ -333,6 +340,7 @@ impl ProjectSearch {
             search_history_cursor: Default::default(),
             search_included_history_cursor: Default::default(),
             search_excluded_history_cursor: Default::default(),
+            project_search_turning_into_text_finder: Arc::new(AtomicBool::new(false)),
             _excerpts_subscription: subscription,
         }
     }
@@ -360,6 +368,7 @@ impl ProjectSearch {
                 search_history_cursor: self.search_history_cursor.clone(),
                 search_included_history_cursor: self.search_included_history_cursor.clone(),
                 search_excluded_history_cursor: self.search_excluded_history_cursor.clone(),
+                project_search_turning_into_text_finder: Arc::new(AtomicBool::new(false)),
                 _excerpts_subscription: subscription,
             }
         })
@@ -422,6 +431,8 @@ impl ProjectSearch {
     }
 
     fn search(&mut self, query: SearchQuery, cx: &mut Context<Self>) {
+        let project_search_turning_into_text_finder =
+            Arc::clone(&self.project_search_turning_into_text_finder);
         let search = self.project.update(cx, |project, cx| {
             project
                 .search_history_mut(SearchInputKind::Query)
@@ -446,9 +457,6 @@ impl ProjectSearch {
         self.match_ranges.clear();
         self.search_state = SearchState::Running(SearchActivity::Searching);
         self.pending_search = Some(cx.spawn(async move |project_search, cx| {
-            let SearchResults { rx, _task_handle } = search;
-
-            let mut matches = pin!(rx.ready_chunks(1024));
             project_search
                 .update(cx, |project_search, cx| {
                     project_search.match_ranges.clear();
@@ -458,89 +466,136 @@ impl ProjectSearch {
                 })
                 .ok()?;
 
-            let mut limit_reached = false;
-            while let Some(results) = matches.next().await {
-                let (buffers_with_ranges, has_reached_limit, search_activity) = cx
-                    .background_executor()
-                    .spawn(async move {
-                        let mut limit_reached = false;
-                        let mut search_activity = None;
-                        let mut buffers_with_ranges = Vec::with_capacity(results.len());
-                        for result in results {
-                            match result {
-                                project::search::SearchResult::Buffer { buffer, ranges } => {
-                                    buffers_with_ranges.push((buffer, ranges));
-                                }
-                                project::search::SearchResult::LimitReached => {
-                                    limit_reached = true;
-                                }
-                                project::search::SearchResult::WaitingForScan => {
-                                    search_activity = Some(SearchActivity::WaitingForScan);
-                                }
-                                project::search::SearchResult::Searching => {
-                                    search_activity = Some(SearchActivity::Searching);
-                                }
-                            }
-                        }
-                        (buffers_with_ranges, limit_reached, search_activity)
-                    })
-                    .await;
-                limit_reached |= has_reached_limit;
-                if let Some(search_activity) = search_activity {
-                    project_search
-                        .update(cx, |project_search, cx| {
-                            project_search.search_state = SearchState::Running(search_activity);
-                            cx.notify();
-                        })
-                        .ok()?;
-                }
-                let mut new_ranges = project_search
-                    .update(cx, |project_search, cx| {
-                        project_search.excerpts.update(cx, |excerpts, cx| {
-                            buffers_with_ranges
-                                .into_iter()
-                                .map(|(buffer, ranges)| {
-                                    excerpts.set_anchored_excerpts_for_path(
-                                        PathKey::for_buffer(&buffer, cx),
-                                        buffer,
-                                        ranges,
-                                        multibuffer_context_lines(cx),
-                                        cx,
-                                    )
-                                })
-                                .collect::<FuturesOrdered<_>>()
-                        })
-                    })
-                    .ok()?;
-                while let Some(new_ranges) = new_ranges.next().await {
-                    // `new_ranges.next().await` likely never gets hit while still pending so `async_task`
-                    // will not reschedule, starving other front end tasks, insert a yield point for that here
-                    futures_lite::future::yield_now().await;
-                    project_search
-                        .update(cx, |project_search, cx| {
-                            project_search.match_ranges.extend(new_ranges);
-                            cx.notify();
-                        })
-                        .ok()?;
-                }
-            }
-
-            project_search
-                .update(cx, |project_search, cx| {
-                    project_search.search_state = if project_search.match_ranges.is_empty() {
-                        SearchState::Completed(SearchCompletion::NoResults)
-                    } else {
-                        SearchState::Completed(SearchCompletion::Results { limit_reached })
-                    };
-                    project_search.pending_search.take();
-                    cx.notify();
-                })
-                .ok()?;
-
-            None
+            consume_search_stream(
+                project_search,
+                search,
+                project_search_turning_into_text_finder,
+                cx,
+            )
+            .await
         }));
         cx.notify();
     }
+
+    // At the point this is called the multibuffer has already been filled with
+    // plundered results from the text finder.
+    pub(crate) fn hook_up_ongoing_search(
+        &mut self,
+        search_results: SearchResults<project::search::SearchResult>,
+        cx: &mut Context<Self>,
+    ) {
+        let project_search_turning_into_text_finder =
+            Arc::clone(&self.project_search_turning_into_text_finder);
+
+        self.pending_search = Some(cx.spawn(async move |project_search, cx| {
+            consume_search_stream(
+                project_search,
+                search_results,
+                project_search_turning_into_text_finder,
+                cx,
+            )
+            .await
+        }));
+        cx.notify();
+    }
+}
+
+/// Drain a search result stream into the project search's multibuffer.
+async fn consume_search_stream(
+    project_search: WeakEntity<ProjectSearch>,
+    search_results: SearchResults<project::search::SearchResult>,
+    project_search_turning_into_text_finder: Arc<AtomicBool>,
+    cx: &mut gpui::AsyncApp,
+) -> Option<SearchResults<project::search::SearchResult>> {
+    let mut matches = pin!(search_results.rx.clone().ready_chunks(1024));
+
+    let mut limit_reached = false;
+    while let Some(results) = matches.next().await {
+        let (buffers_with_ranges, has_reached_limit, search_activity) = cx
+            .background_executor()
+            .spawn(async move {
+                let mut limit_reached = false;
+                let mut search_activity = None;
+                let mut buffers_with_ranges = Vec::with_capacity(results.len());
+                for result in results {
+                    match result {
+                        project::search::SearchResult::Buffer { buffer, ranges } => {
+                            buffers_with_ranges.push((buffer, ranges));
+                        }
+                        project::search::SearchResult::LimitReached => {
+                            limit_reached = true;
+                        }
+                        project::search::SearchResult::WaitingForScan => {
+                            search_activity = Some(SearchActivity::WaitingForScan);
+                        }
+                        project::search::SearchResult::Searching => {
+                            search_activity = Some(SearchActivity::Searching);
+                        }
+                    }
+                }
+                (buffers_with_ranges, limit_reached, search_activity)
+            })
+            .await;
+        limit_reached |= has_reached_limit;
+        if let Some(search_activity) = search_activity {
+            project_search
+                .update(cx, |project_search, cx| {
+                    project_search.search_state = SearchState::Running(search_activity);
+                    cx.notify();
+                })
+                .ok()?;
+        }
+        let mut new_ranges = project_search
+            .update(cx, |project_search, cx| {
+                project_search.excerpts.update(cx, |excerpts, cx| {
+                    buffers_with_ranges
+                        .into_iter()
+                        .map(|(buffer, ranges)| {
+                            excerpts.set_anchored_excerpts_for_path(
+                                PathKey::for_buffer(&buffer, cx),
+                                buffer,
+                                ranges,
+                                multibuffer_context_lines(cx),
+                                cx,
+                            )
+                        })
+                        .collect::<FuturesOrdered<_>>()
+                })
+            })
+            .ok()?;
+        while let Some(new_ranges) = new_ranges.next().await {
+            smol::future::yield_now().await;
+            project_search
+                .update(cx, |project_search, cx| {
+                    project_search.match_ranges.extend(new_ranges);
+                    cx.notify();
+                })
+                .ok()?;
+        }
+
+        if project_search_turning_into_text_finder.load(Ordering::Relaxed) {
+            break;
+        }
+    }
+
+    if project_search_turning_into_text_finder.load(Ordering::Relaxed) {
+        project_search_turning_into_text_finder.store(false, Ordering::Relaxed);
+        return Some(search_results);
+    }
+
+    project_search
+        .update(cx, |project_search, cx| {
+            project_search.search_state = if project_search.match_ranges.is_empty() {
+                SearchState::Completed(SearchCompletion::NoResults)
+            } else {
+                SearchState::Completed(SearchCompletion::Results { limit_reached })
+            };
+            project_search.pending_search.take();
+            cx.notify();
+        })
+        .ok()?;
+
+    None
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -558,6 +613,8 @@ impl Render for ProjectSearchView {
         self.update_locale(window, cx);
         if self.has_matches() {
             div()
+                .key_context(KeyContext::default())
+                .on_action(cx.listener(Self::open_text_finder))
                 .flex_1()
                 .size_full()
                 .track_focus(&self.focus_handle(cx))
@@ -605,6 +662,8 @@ impl Render for ProjectSearchView {
             let page_content = page_content.map(|text| div().child(text));
 
             h_flex()
+                .key_context(KeyContext::default())
+                .on_action(cx.listener(Self::open_text_finder))
                 .size_full()
                 .items_center()
                 .justify_center()
@@ -1707,6 +1766,52 @@ impl ProjectSearchView {
         window.focus(&editor_handle, cx);
     }
 
+    fn open_text_finder(
+        &mut self,
+        _: &OpenTextFinder,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        TextFinder::open_from_project_search(cx.entity(), window, cx).detach();
+    }
+
+    pub(crate) fn file_path_filters(&self, cx: &App) -> (PathMatcher, PathMatcher) {
+        if !self.filters_enabled {
+            return (PathMatcher::default(), PathMatcher::default());
+        }
+        let included = self
+            .parse_path_matches(self.included_files_editor.read(cx).text(cx), cx)
+            .unwrap_or_default();
+        let excluded = self
+            .parse_path_matches(self.excluded_files_editor.read(cx).text(cx), cx)
+            .unwrap_or_default();
+        (included, excluded)
+    }
+
+    pub(crate) fn adopt_text_finder_state(
+        &mut self,
+        search_options: SearchOptions,
+        active_query: Option<SearchQuery>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.search_options = search_options;
+        self.adjust_query_regex_language(cx);
+        if let Some(query) = active_query {
+            let query_text = query.as_str().to_string();
+            self.entity.update(cx, |search, _| {
+                search.active_query = Some(query.clone());
+                search.last_search_query_text = Some(query_text.clone());
+                search.search_id += 1;
+            });
+            self.set_search_editor(SearchInputKind::Query, &query_text, window, cx);
+            self.focus_results_editor(window, cx);
+        } else {
+            self.focus_query_editor(window, cx);
+        }
+        self.entity_changed(window, cx);
+    }
+
     fn set_query(&mut self, query: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.set_search_editor(SearchInputKind::Query, query, window, cx);
         if EditorSettings::get_global(cx).use_smartcase_search
@@ -2315,6 +2420,20 @@ impl ProjectSearchBar {
             })
         }
     }
+
+    fn open_text_finder(
+        &mut self,
+        _: &OpenTextFinder,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(search) = &self.active_project_search else {
+            tracing::warn!("active_project_search was none");
+            return;
+        };
+
+        TextFinder::open_from_project_search(Entity::clone(search), window, cx).detach();
+    }
 }
 
 impl Render for ProjectSearchBar {
@@ -2744,6 +2863,7 @@ impl Render for ProjectSearchBar {
             })
             .on_action(cx.listener(Self::select_next_match))
             .on_action(cx.listener(Self::select_prev_match))
+            .on_action(cx.listener(Self::open_text_finder))
             .child(search_line)
             .children(query_error_line)
             .children(replace_line)

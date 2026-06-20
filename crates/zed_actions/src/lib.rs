@@ -423,6 +423,17 @@ pub mod search {
         ]
     );
 }
+pub mod text_finder {
+    use gpui::actions;
+
+    actions!(
+        text_finder,
+        [
+            /// Opens the project search picker.
+            Toggle,
+        ]
+    );
+}
 pub mod buffer_search {
     use gpui::{Action, actions};
     use schemars::JsonSchema;

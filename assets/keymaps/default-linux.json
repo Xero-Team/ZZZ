@@ -467,6 +467,7 @@
       "ctrl-shift-h": "search::ToggleReplace",
       "alt-ctrl-g": "search::ToggleRegex",
       "alt-ctrl-x": "search::ToggleRegex",
+      "ctrl-alt-p": "project_search::OpenTextFinder",
     },
   },
   {
@@ -496,6 +497,7 @@
       "ctrl-shift-h": "search::ToggleReplace",
       "alt-ctrl-g": "search::ToggleRegex",
       "alt-ctrl-x": "search::ToggleRegex",
+      "ctrl-alt-p": "project_search::OpenTextFinder",
     },
   },
   {

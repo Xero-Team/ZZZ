@@ -1,16 +1,19 @@
+mod footer;
 mod head;
 pub mod highlighted_match_with_paths;
+mod preview;
 pub mod popover_menu;
 
 use anyhow::Result;
 
 use gpui::{
-    Action, AnyElement, App, Bounds, ClickEvent, Context, DismissEvent, EventEmitter, FocusHandle,
-    Focusable, Length, ListSizingBehavior, ListState, MouseButton, MouseUpEvent, Pixels, Render,
-    ScrollStrategy, Task, UniformListScrollHandle, Window, actions, canvas, div, list, prelude::*,
-    uniform_list,
+    Action, AnyElement, App, Bounds, ClickEvent, Context, DismissEvent, Entity, EventEmitter,
+    FocusHandle, Focusable, Length, ListSizingBehavior, ListState, MouseButton, MouseUpEvent,
+    Pixels, Render, ScrollStrategy, Task, UniformListScrollHandle, Window, actions, canvas, div,
+    list, prelude::*, uniform_list,
 };
 use head::Head;
+use project::Project;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::{
@@ -18,12 +21,17 @@ use std::{
 };
 use theme_settings::ThemeSettings;
 use ui::{
-    Color, Divider, DocumentationAside, DocumentationSide, Label, ListItem, ListItemSpacing,
-    ScrollAxes, Scrollbars, WithScrollbar, prelude::*, utils::WithRemSize, v_flex,
+    Color, ContextMenu, Divider, DocumentationAside, DocumentationSide, Label, ListItem,
+    ListItemSpacing, PopoverMenuHandle, ScrollAxes, Scrollbars, WithScrollbar, prelude::*,
+    utils::WithRemSize, v_flex,
 };
 use ui_input::{ErasedEditor, ErasedEditorEvent};
 use workspace::{ModalView, item::Settings};
 use zed_actions::editor::{MoveDown, MoveUp};
+
+pub use footer::PickerAction;
+pub use preview::{MatchLocation, Preview, PreviewSource};
+pub use preview::Update as PreviewUpdate;
 
 enum ElementContainer {
     List(ListState),
@@ -45,7 +53,13 @@ actions!(
     picker,
     [
         /// Confirms the selected completion in the picker.
-        ConfirmCompletion
+        ConfirmCompletion,
+        TogglePreview,
+        SetPreviewRight,
+        SetPreviewBelow,
+        SetPreviewHidden,
+        /// Opens the picker's default actions menu.
+        ToggleActionsMenu
     ]
 );
 
@@ -67,6 +81,7 @@ pub struct Picker<D: PickerDelegate> {
     pub delegate: D,
     element_container: ElementContainer,
     head: Head,
+    preview: Option<Preview>,
     pending_update_matches: Option<PendingUpdateMatches>,
     confirm_on_update: Option<bool>,
     width: Option<Length>,
@@ -82,6 +97,7 @@ pub struct Picker<D: PickerDelegate> {
     picker_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     /// Bounds tracking for items (for aside positioning) - maps item index to bounds
     item_bounds: Rc<RefCell<HashMap<usize, Bounds<Pixels>>>>,
+    actions_menu_handle: PopoverMenuHandle<ContextMenu>,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -96,6 +112,11 @@ pub enum PickerEditorPosition {
 pub trait PickerDelegate: Sized + 'static {
     type ListItem: IntoElement;
 
+    /// Stable picker identifier for future per-picker state.
+    /// Defaults to the delegate type name to avoid churn in existing delegates.
+    fn name() -> &'static str {
+        std::any::type_name::<Self>()
+    }
     fn match_count(&self) -> usize;
     fn selected_index(&self) -> usize;
     fn separators_after_indices(&self) -> Vec<usize> {
@@ -200,6 +221,20 @@ pub trait PickerDelegate: Sized + 'static {
         PickerEditorPosition::default()
     }
 
+    /// Prevent closing the picker while a delegate-managed menu is still open.
+    fn has_another_open_menu(&self, _window: &Window, _cx: &App) -> bool {
+        false
+    }
+
+    /// Optional control rendered at the trailing edge of the search bar.
+    fn searchbar_trailer(
+        &self,
+        _window: &mut Window,
+        _cx: &mut Context<Picker<Self>>,
+    ) -> Option<AnyElement> {
+        None
+    }
+
     fn render_editor(
         &self,
         editor: &Arc<dyn ErasedEditor>,
@@ -217,13 +252,23 @@ pub trait PickerDelegate: Sized + 'static {
                     .flex_none()
                     .h_9()
                     .px_2p5()
-                    .child(editor.render(window, cx)),
+                    .child(div().flex_1().child(editor.render(window, cx)))
+                    .children(self.searchbar_trailer(window, cx)),
             )
             .when(
                 self.editor_position() == PickerEditorPosition::Start,
                 |this| this.child(Divider::horizontal()),
             )
     }
+
+    /// Reserved hook for delegates that can provide side-preview content.
+    fn try_get_preview_data_for_match(&self, _cx: &App) -> Option<PreviewUpdate> {
+        None
+    }
+
+    /// Notifies delegates when a future preview layout changes between
+    /// horizontal and vertical modes.
+    fn preview_layout_changed(&mut self, _layout_is_horizontal: bool) {}
 
     fn render_match(
         &self,
@@ -247,6 +292,15 @@ pub trait PickerDelegate: Sized + 'static {
         _: &mut Context<Picker<Self>>,
     ) -> Option<AnyElement> {
         None
+    }
+
+    /// Reserved hook for footer-level actions in richer picker layouts.
+    fn actions_menu(
+        &self,
+        _window: &mut Window,
+        _cx: &mut Context<Picker<Self>>,
+    ) -> Vec<footer::PickerAction> {
+        Vec::new()
     }
 
     fn documentation_aside(
@@ -292,7 +346,7 @@ impl<D: PickerDelegate> Picker<D> {
             cx,
         );
 
-        Self::new(delegate, ContainerKind::UniformList, head, window, cx)
+        Self::new(delegate, ContainerKind::UniformList, head, None, window, cx)
     }
 
     /// A picker, which displays its matches using `gpui::uniform_list`, all matches should have the same height.
@@ -304,7 +358,7 @@ impl<D: PickerDelegate> Picker<D> {
     ) -> Self {
         let head = Head::empty(Self::on_empty_head_blur, window, cx);
 
-        Self::new(delegate, ContainerKind::UniformList, head, window, cx)
+        Self::new(delegate, ContainerKind::UniformList, head, None, window, cx)
     }
 
     /// A picker, which displays its matches using `gpui::list`, matches can have different heights.
@@ -313,7 +367,7 @@ impl<D: PickerDelegate> Picker<D> {
     pub fn nonsearchable_list(delegate: D, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let head = Head::empty(Self::on_empty_head_blur, window, cx);
 
-        Self::new(delegate, ContainerKind::List, head, window, cx)
+        Self::new(delegate, ContainerKind::List, head, None, window, cx)
     }
 
     /// A picker, which displays its matches using `gpui::list`, matches can have different heights.
@@ -327,13 +381,58 @@ impl<D: PickerDelegate> Picker<D> {
             cx,
         );
 
-        Self::new(delegate, ContainerKind::List, head, window, cx)
+        Self::new(delegate, ContainerKind::List, head, None, window, cx)
+    }
+
+    pub fn uniform_list_with_preview(
+        delegate: D,
+        project: Entity<Project>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let head = Head::editor(
+            delegate.placeholder_text(window, cx),
+            Self::on_input_editor_event,
+            window,
+            cx,
+        );
+        Self::new(
+            delegate,
+            ContainerKind::UniformList,
+            head,
+            Some(Preview::new_editor(project, window, cx)),
+            window,
+            cx,
+        )
+    }
+
+    pub fn list_with_preview(
+        delegate: D,
+        project: Entity<Project>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let head = Head::editor(
+            delegate.placeholder_text(window, cx),
+            Self::on_input_editor_event,
+            window,
+            cx,
+        );
+        Self::new(
+            delegate,
+            ContainerKind::List,
+            head,
+            Some(Preview::new_editor(project, window, cx)),
+            window,
+            cx,
+        )
     }
 
     fn new(
         delegate: D,
         container: ContainerKind,
         head: Head,
+        preview: Option<Preview>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -342,6 +441,7 @@ impl<D: PickerDelegate> Picker<D> {
             delegate,
             head,
             element_container,
+            preview,
             pending_update_matches: None,
             confirm_on_update: None,
             width: None,
@@ -351,6 +451,7 @@ impl<D: PickerDelegate> Picker<D> {
             is_modal: true,
             picker_bounds: Rc::new(Cell::new(None)),
             item_bounds: Rc::new(RefCell::new(HashMap::default())),
+            actions_menu_handle: PopoverMenuHandle::default(),
         };
         this.update_matches("".to_owned(), window, cx);
         // give the delegate 4ms to render the first set of suggestions.
@@ -470,6 +571,11 @@ impl<D: PickerDelegate> Picker<D> {
             if let Some(action) = self.delegate.selected_index_changed(ix, window, cx) {
                 action(window, cx);
             }
+            if let Some(preview) = &mut self.preview
+                && let Some(update) = self.delegate.try_get_preview_data_for_match(cx)
+            {
+                preview.update(update, window, cx);
+            }
             if scroll_to_index {
                 self.scroll_to_item_index(ix);
             }
@@ -566,6 +672,15 @@ impl<D: PickerDelegate> Picker<D> {
         }
     }
 
+    fn toggle_actions_menu(
+        &mut self,
+        _: &ToggleActionsMenu,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.actions_menu_handle.toggle(window, cx);
+    }
+
     fn confirm(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
         if self.pending_update_matches.is_some()
             && !self.delegate.finalize_update_matches(
@@ -619,6 +734,33 @@ impl<D: PickerDelegate> Picker<D> {
         }
     }
 
+    fn set_preview_right(
+        &mut self,
+        _: &SetPreviewRight,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_preview_layout(preview::Layout::Right, window, cx);
+    }
+
+    fn set_preview_below(
+        &mut self,
+        _: &SetPreviewBelow,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_preview_layout(preview::Layout::Below, window, cx);
+    }
+
+    fn set_preview_hidden(
+        &mut self,
+        _: &SetPreviewHidden,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_preview_layout(preview::Layout::Hidden, window, cx);
+    }
+
     fn handle_click(
         &mut self,
         ix: usize,
@@ -659,7 +801,10 @@ impl<D: PickerDelegate> Picker<D> {
                 self.update_matches(query, window, cx);
             }
             ErasedEditorEvent::Blurred => {
-                if self.is_modal && window.is_window_active() {
+                let menu_focused = self.actions_menu_handle.is_focused(window, cx)
+                    || self.actions_menu_handle.is_deployed()
+                    || self.delegate.has_another_open_menu(window, cx);
+                if self.is_modal && window.is_window_active() && !menu_focused {
                     self.cancel(&menu::Cancel, window, cx);
                 }
             }
@@ -670,7 +815,10 @@ impl<D: PickerDelegate> Picker<D> {
         let Head::Empty(_) = &self.head else {
             panic!("unexpected call");
         };
-        if window.is_window_active() {
+        let menu_focused = self.actions_menu_handle.is_focused(window, cx)
+            || self.actions_menu_handle.is_deployed()
+            || self.delegate.has_another_open_menu(window, cx);
+        if window.is_window_active() && !menu_focused {
             self.cancel(&menu::Cancel, window, cx);
         }
     }
@@ -738,6 +886,12 @@ impl<D: PickerDelegate> Picker<D> {
         cx: &mut Context<Self>,
     ) {
         let match_count = self.delegate.match_count();
+        if match_count == 0
+            && let Some(preview) = &mut self.preview
+        {
+            preview.clear(cx)
+        }
+
         match &mut self.element_container {
             ElementContainer::List(state) => match scroll_behavior {
                 ScrollBehavior::RevealSelected => {
@@ -760,6 +914,11 @@ impl<D: PickerDelegate> Picker<D> {
             },
         }
         self.pending_update_matches = None;
+        if let Some(update) = self.delegate.try_get_preview_data_for_match(cx)
+            && let Some(preview) = &mut self.preview
+        {
+            preview.update(update, window, cx);
+        }
         if let Some(secondary) = self.confirm_on_update.take() {
             self.do_confirm(secondary, window, cx);
         }
@@ -906,6 +1065,87 @@ impl<D: PickerDelegate> Picker<D> {
                 scroll_handle.logical_scroll_top_index()
             }
         }
+    }
+
+    fn preview_layout(&self) -> Option<preview::Layout> {
+        self.preview.as_ref().map(|preview| preview.layout)
+    }
+
+    fn toggle_preview(&mut self, _: &TogglePreview, window: &mut Window, cx: &mut Context<Self>) {
+        self.toggle_preview_visible(window, cx);
+    }
+
+    fn toggle_preview_visible(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let next = match self.preview_layout() {
+            Some(preview::Layout::Hidden) | None => preview::Layout::Right,
+            Some(_) => preview::Layout::Hidden,
+        };
+        self.set_preview_layout(next, window, cx);
+    }
+
+    fn set_preview_layout(
+        &mut self,
+        layout: preview::Layout,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(preview) = &mut self.preview else {
+            return;
+        };
+        preview.layout = layout;
+        self.delegate
+            .preview_layout_changed(matches!(layout, preview::Layout::Right));
+        cx.notify();
+    }
+
+    fn render_results(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        self.render_picker_results(window, cx).into_any_element()
+    }
+
+    fn render_preview_below(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let preview = self
+            .preview
+            .as_ref()
+            .expect("preview should exist")
+            .render(cx)
+            .into_any_element();
+        v_flex()
+            .w_full()
+            .when_some(self.width, |this, width| this.w(width))
+            .overflow_hidden()
+            .when(self.is_modal, |this| this.elevation_3(cx))
+            .child(self.render_results(window, cx))
+            .child(
+                div()
+                    .h(rems(18.))
+                    .border_t_1()
+                    .border_color(cx.theme().colors().border_variant)
+                    .overflow_hidden()
+                    .child(preview),
+            )
+            .into_any_element()
+    }
+
+    fn render_preview_right(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let preview = self
+            .preview
+            .as_ref()
+            .expect("preview should exist")
+            .render(cx)
+            .into_any_element();
+        h_flex()
+            .when(self.is_modal, |this| this.elevation_3(cx))
+            .overflow_hidden()
+            .child(self.render_results(window, cx))
+            .child(
+                div()
+                    .w(rems(40.))
+                    .border_l_1()
+                    .border_color(cx.theme().colors().border_variant)
+                    .overflow_hidden()
+                    .child(preview),
+            )
+            .into_any_element()
     }
 }
 
@@ -1083,6 +1323,23 @@ impl<D: PickerDelegate> ModalView for Picker<D> {}
 
 impl<D: PickerDelegate> Render for Picker<D> {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(layout) = self.preview_layout() {
+            return match layout {
+                preview::Layout::Below => self.render_preview_below(window, cx),
+                preview::Layout::Right => self.render_preview_right(window, cx),
+                preview::Layout::Hidden => self.render_results(window, cx),
+            };
+        }
+        self.render_results(window, cx)
+    }
+}
+
+impl<D: PickerDelegate> Picker<D> {
+    fn render_picker_results(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx);
         let window_size = window.viewport_size();
         let rem_size = window.rem_size();
@@ -1125,6 +1382,11 @@ impl<D: PickerDelegate> Render for Picker<D> {
             .on_action(cx.listener(Self::secondary_confirm))
             .on_action(cx.listener(Self::confirm_completion))
             .on_action(cx.listener(Self::confirm_input))
+            .on_action(cx.listener(Self::toggle_preview))
+            .on_action(cx.listener(Self::set_preview_right))
+            .on_action(cx.listener(Self::set_preview_below))
+            .on_action(cx.listener(Self::set_preview_hidden))
+            .on_action(cx.listener(Self::toggle_actions_menu))
             .children(match &self.head {
                 Head::Editor(editor) => {
                     if editor_position == PickerEditorPosition::Start {
@@ -1179,7 +1441,7 @@ impl<D: PickerDelegate> Render for Picker<D> {
                     )
                 })
             })
-            .children(self.delegate.render_footer(window, cx))
+            .children(self.render_footer(window, cx))
             .children(match &self.head {
                 Head::Editor(editor) => {
                     if editor_position == PickerEditorPosition::End {
