@@ -81,10 +81,7 @@ impl AgentTool for ApplyCodeActionTool {
         let project = self.project.clone();
         let store = self.code_action_store.clone();
         cx.spawn(async move |cx| {
-            let input = input
-                .recv()
-                .await
-                .map_err(|e| format!("Failed to receive tool input: {e}"))?;
+            let input = input.recv().await.map_err(|e| e.to_string())?;
 
             let pending = store.update(cx, |store, _cx| store.take()).ok_or_else(|| {
                 "No code actions available. Call get_code_actions first.".to_owned()

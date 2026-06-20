@@ -71,10 +71,7 @@ impl AgentTool for GetCodeActionsTool {
         let project = self.project.clone();
         let store = self.code_action_store.clone();
         cx.spawn(async move |cx| {
-            let input = input
-                .recv()
-                .await
-                .map_err(|e| format!("Failed to receive tool input: {e}"))?;
+            let input = input.recv().await.map_err(|e| e.to_string())?;
 
             let resolved = input.symbol.resolve(&project, cx).await?;
 

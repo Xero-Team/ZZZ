@@ -62,10 +62,7 @@ impl AgentTool for GoToDefinitionTool {
     ) -> Task<Result<String, String>> {
         let project = self.project.clone();
         cx.spawn(async move |cx| {
-            let input = input
-                .recv()
-                .await
-                .map_err(|e| format!("Failed to receive tool input: {e}"))?;
+            let input = input.recv().await.map_err(|e| e.to_string())?;
 
             let resolved = input.symbol.resolve(&project, cx).await?;
 
