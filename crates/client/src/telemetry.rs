@@ -63,7 +63,7 @@ static MACOS_VERSION_REGEX: std::sync::LazyLock<Regex> =
 pub fn os_name() -> String {
     #[cfg(target_os = "macos")]
     {
-        "macOS".to_string()
+        "macOS".to_owned()
     }
     #[cfg(target_os = "linux")]
     {
@@ -76,7 +76,7 @@ pub fn os_name() -> String {
 
     #[cfg(target_os = "windows")]
     {
-        "Windows".to_string()
+        "Windows".to_owned()
     }
 }
 
@@ -133,7 +133,7 @@ pub fn os_version() -> String {
             )
             .to_string()
         } else {
-            "unknown".to_string()
+            "unknown".to_owned()
         }
     }
 }

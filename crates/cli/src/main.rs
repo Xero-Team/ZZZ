@@ -1170,14 +1170,14 @@ mod windows {
             format!(
                 "Zed {}{}{} – {}",
                 if *release_channel::RELEASE_CHANNEL_NAME == "stable" {
-                    "".to_string()
+                    "".to_owned()
                 } else {
                     format!("{} ", *release_channel::RELEASE_CHANNEL_NAME)
                 },
                 option_env!("RELEASE_VERSION").unwrap_or_default(),
                 match option_env!("ZED_COMMIT_SHA") {
                     Some(commit_sha) => format!(" {commit_sha} "),
-                    None => "".to_string(),
+                    None => "".to_owned(),
                 },
                 self.0.display(),
             )

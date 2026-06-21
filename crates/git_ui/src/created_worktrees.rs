@@ -22,7 +22,7 @@ struct CreatedWorktreeRecord {
 
 fn record_key(worktree_path: &Path, remote: Option<&RemoteConnectionOptions>) -> String {
     let host = match remote {
-        None => "local".to_string(),
+        None => "local".to_owned(),
         Some(options) => remote_connection_identity(options).persistence_key(),
     };
     format!("{host}\n{}", worktree_path.display())

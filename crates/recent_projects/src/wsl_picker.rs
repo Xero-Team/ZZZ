@@ -241,7 +241,7 @@ impl WslOpenModal {
         let app_state = workspace::AppState::global(cx);
 
         let connection_options = RemoteConnectionOptions::Wsl(WslConnectionOptions {
-            distro_name: distro.to_string(),
+            distro_name: distro.to_owned(),
             user: None,
         });
 

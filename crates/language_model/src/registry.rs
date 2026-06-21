@@ -107,8 +107,8 @@ impl FromStr for SelectedModel {
         }
 
         Ok(SelectedModel {
-            provider: LanguageModelProviderId(provider_id.to_string().into()),
-            model: LanguageModelId(model_id.to_string().into()),
+            provider: LanguageModelProviderId(provider_id.to_owned().into()),
+            model: LanguageModelId(model_id.to_owned().into()),
         })
     }
 }

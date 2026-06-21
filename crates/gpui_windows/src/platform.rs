@@ -541,7 +541,7 @@ impl Platform for WindowsPlatform {
         if url.is_empty() {
             return;
         }
-        let url_string = url.to_string();
+        let url_string = url.to_owned();
         self.background_executor()
             .spawn(async move {
                 open_target(&url_string)

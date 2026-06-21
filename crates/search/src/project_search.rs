@@ -1798,7 +1798,7 @@ impl ProjectSearchView {
         self.search_options = search_options;
         self.adjust_query_regex_language(cx);
         if let Some(query) = active_query {
-            let query_text = query.as_str().to_string();
+            let query_text = query.as_str().to_owned();
             self.entity.update(cx, |search, _| {
                 search.active_query = Some(query.clone());
                 search.last_search_query_text = Some(query_text.clone());

@@ -258,7 +258,7 @@ fn heap_tracing_profile(heap_pid: Option<u32>) -> String {
           </HeapEventProviders>
         </HeapEventCollectorId>
       </Collectors>"#
-                .to_string(),
+                .to_owned(),
         ),
         None => (String::new(), String::new()),
     };

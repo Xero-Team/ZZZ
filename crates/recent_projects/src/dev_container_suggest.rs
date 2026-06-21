@@ -132,7 +132,7 @@ pub fn suggest_on_worktree_updated(
 
     let abs_path = worktree.abs_path();
     let project_path = abs_path.to_string_lossy().to_string();
-    let worktree_name = worktree.root_name_str().to_string();
+    let worktree_name = worktree.root_name_str().to_owned();
     let dismiss_path = dismiss_path_for_worktree(project, abs_path.as_ref(), cx);
     let key_for_dismiss = project_devcontainer_key(&dismiss_path);
 

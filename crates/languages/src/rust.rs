@@ -263,7 +263,7 @@ impl RustLspAdapter {
         #[cfg(target_os = "linux")]
         let arch_server_name = Self::build_arch_server_name_linux().await;
         #[cfg(not(target_os = "linux"))]
-        let arch_server_name = Self::ARCH_SERVER_NAME.to_string();
+        let arch_server_name = Self::ARCH_SERVER_NAME.to_owned();
 
         format!(
             "{}-{}-{}.{}",

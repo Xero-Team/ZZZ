@@ -539,10 +539,10 @@ impl NotebookEditor {
                 .request_tx()
                 .try_send(message)
                 .map_err(|err| format!("failed to send execute request to kernel (the kernel process may have died): {err}")),
-            Kernel::StartingKernel(_) => Err("the kernel is still starting".to_string()),
+            Kernel::StartingKernel(_) => Err("the kernel is still starting".to_owned()),
             Kernel::ErroredLaunch(error) => Err(format!("the kernel failed to launch: {error}")),
-            Kernel::ShuttingDown | Kernel::Shutdown => Err("the kernel is shut down".to_string()),
-            Kernel::Restarting => Err("the kernel is restarting".to_string()),
+            Kernel::ShuttingDown | Kernel::Shutdown => Err("the kernel is shut down".to_owned()),
+            Kernel::Restarting => Err("the kernel is restarting".to_owned()),
         };
 
         if let Some(Cell::Code(cell)) = self.cell_map.get(&cell_id) {

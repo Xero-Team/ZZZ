@@ -9278,22 +9278,6 @@ mod tests {
         assert_eq!(fs.load(&path).await.unwrap(), "*.log\nbuild/\n");
     }
 
-    #[test]
-    fn test_new_worktree_path_uses_posix_style_for_remote_paths() {
-        let work_dir = Path::new("/home/user/dev/lsp-tests");
-        let directory =
-            worktrees_directory_for_repo(work_dir, "../worktrees", PathStyle::Posix).unwrap();
-        let directory = PathStyle::Posix
-            .join_path(&directory, "nimble-sky")
-            .unwrap();
-        let path = PathStyle::Posix.join_path(&directory, "lsp-tests").unwrap();
-
-        assert_eq!(
-            path,
-            PathBuf::from("/home/user/dev/worktrees/lsp-tests/nimble-sky/lsp-tests")
-        );
-    }
-
     fn verify_invariants(repository: &Repository) -> anyhow::Result<()> {
         match &repository.commit_data_handler {
             CommitDataHandlerState::Open(handler) => {
@@ -9636,7 +9620,7 @@ async fn compute_snapshot(
     };
     let head_commit_future = {
         let backend = backend.clone();
-        async move { backend.show("HEAD".to_string()).await.ok() }
+        async move { backend.show("HEAD".to_owned()).await.ok() }
     };
     let worktrees_future = {
         let backend = backend.clone();

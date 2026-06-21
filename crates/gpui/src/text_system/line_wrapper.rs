@@ -270,9 +270,9 @@ impl LineWrapper {
                     back_start_ix,
                 );
                 return (result, Cow::Owned(runs));
-            } else {
-                return (line, Cow::Borrowed(runs));
             }
+
+            return (line, Cow::Borrowed(runs));
         }
 
         if let Some(truncate_ix) =

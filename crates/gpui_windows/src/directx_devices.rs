@@ -117,7 +117,7 @@ fn get_adapter(
         if let Ok(desc) = unsafe { adapter.GetDesc1() } {
             let gpu_name = String::from_utf16_lossy(&desc.Description)
                 .trim_matches(char::from(0))
-                .to_string();
+                .to_owned();
             log::info!("Using GPU: {}", gpu_name);
         }
         // Check to see whether the adapter supports Direct3D 11 and create

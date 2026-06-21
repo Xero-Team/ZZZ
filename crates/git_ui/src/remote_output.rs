@@ -119,7 +119,7 @@ pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> Succ
         RemoteAction::Push(branch_name, remote_ref) => {
             if output.stderr.ends_with("Everything up-to-date\n") {
                 SuccessMessage {
-                    message: "Push: Everything is up-to-date".to_string(),
+                    message: "Push: Everything is up-to-date".to_owned(),
                     style: SuccessStyle::Toast,
                 }
             } else {

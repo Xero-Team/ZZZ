@@ -3874,7 +3874,7 @@ impl LocalLspStore {
             .or_default();
         registrations
             .did_change_watched_files
-            .insert(registration_id.to_string());
+            .insert(registration_id.to_owned());
 
         cx.notify();
     }
@@ -14250,7 +14250,7 @@ struct LazyGlobSet {
 impl LazyGlobSet {
     fn add(&mut self, registration_id: &str, glob: Glob) {
         self.globs
-            .entry(registration_id.to_string())
+            .entry(registration_id.to_owned())
             .or_default()
             .push(glob);
         self.compiled = None;

@@ -48,8 +48,8 @@ impl RemoteBranchName {
             return None;
         }
         Some(Self {
-            remote_name: remote_name.to_string(),
-            branch_name: branch_name.to_string(),
+            remote_name: remote_name.to_owned(),
+            branch_name: branch_name.to_owned(),
         })
     }
 
@@ -87,9 +87,9 @@ impl WorktreeCreateTarget {
             WorktreeCreateTarget::DefaultBranch(default_branch) => default_branch.display_name(),
             WorktreeCreateTarget::CurrentBranch => {
                 if has_multiple_repositories {
-                    "current branches".to_string()
+                    "current branches".to_owned()
                 } else {
-                    current_branch_name.unwrap_or("HEAD").to_string()
+                    current_branch_name.unwrap_or("HEAD").to_owned()
                 }
             }
         }

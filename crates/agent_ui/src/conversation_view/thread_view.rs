@@ -8047,7 +8047,7 @@ impl ThreadView {
                     .to_string_lossy()
                     .to_string()
             } else {
-                abs_path.to_string()
+                abs_path.to_owned()
             };
 
             match fragment {

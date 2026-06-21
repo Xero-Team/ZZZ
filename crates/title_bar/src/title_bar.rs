@@ -249,12 +249,12 @@ impl Render for TitleBar {
                             worktree_abs_path.strip_prefix(&*repo.work_directory_abs_path)
                         {
                             if relative.as_os_str().is_empty() {
-                                repo_name.to_string()
+                                repo_name.to_owned()
                             } else {
                                 format!("{}/{}", repo_name, relative.display())
                             }
                         } else {
-                            repo_name.to_string()
+                            repo_name.to_owned()
                         }
                     } else {
                         repo_name.to_owned()

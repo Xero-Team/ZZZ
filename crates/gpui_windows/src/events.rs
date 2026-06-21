@@ -1434,7 +1434,7 @@ fn parse_immutable(vkey: VIRTUAL_KEY) -> Option<String> {
             VK_F24 => "f24",
             _ => return None,
         }
-        .to_string(),
+        .to_owned(),
     )
 }
 

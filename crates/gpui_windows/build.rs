@@ -128,7 +128,7 @@ mod shader_compilation {
             && output.status.success()
         {
             let path = String::from_utf8_lossy(&output.stdout);
-            return path.trim().to_string();
+            return path.trim().to_owned();
         }
 
         if let Ok(Some(path)) = find_latest_windows_sdk_binary("fxc.exe") {

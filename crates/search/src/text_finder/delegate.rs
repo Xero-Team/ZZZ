@@ -580,17 +580,16 @@ impl PickerDelegate for Delegate {
             h_flex()
                 .gap_1()
                 .child(
-                    IconButton::new(
-                        "text-finder-whole-word",
-                        SearchOption::WholeWord.icon(),
-                    )
-                    .shape(IconButtonShape::Square)
-                    .toggle_state(self.search_options.contains(SearchOptions::WHOLE_WORD))
-                    .tooltip(Tooltip::text(SearchOption::WholeWord.label(cx)))
-                    .on_click(cx.listener(|this, _, _window, cx| {
-                        this.delegate.search_options.toggle(SearchOptions::WHOLE_WORD);
-                        cx.notify();
-                    })),
+                    IconButton::new("text-finder-whole-word", SearchOption::WholeWord.icon())
+                        .shape(IconButtonShape::Square)
+                        .toggle_state(self.search_options.contains(SearchOptions::WHOLE_WORD))
+                        .tooltip(Tooltip::text(SearchOption::WholeWord.label(cx)))
+                        .on_click(cx.listener(|this, _, _window, cx| {
+                            this.delegate
+                                .search_options
+                                .toggle(SearchOptions::WHOLE_WORD);
+                            cx.notify();
+                        })),
                 )
                 .child(
                     IconButton::new(
@@ -840,7 +839,7 @@ impl PickerDelegate for Delegate {
                 let file_name = path
                     .path
                     .file_name()
-                    .map(|name| name.to_string())
+                    .map(|name| name.to_owned())
                     .unwrap_or_default();
                 let directory = path
                     .path
@@ -852,7 +851,11 @@ impl PickerDelegate for Delegate {
                     .file_icons
                     .then(|| FileIcons::get_icon(path.path.as_std_path(), cx))
                     .flatten()
-                    .map(|icon| Icon::from_path(icon).color(Color::Muted).size(IconSize::Small));
+                    .map(|icon| {
+                        Icon::from_path(icon)
+                            .color(Color::Muted)
+                            .size(IconSize::Small)
+                    });
 
                 Some(
                     h_flex()
@@ -1057,5 +1060,5 @@ fn render_matched_line(search_match: &SearchMatch, cx: &App) -> StyledText {
     );
 
     let highlights = gpui::combine_highlights(syntax_highlights, [match_highlight]);
-    StyledText::new(line_text.to_string()).with_default_highlights(&text_style, highlights)
+    StyledText::new(line_text.to_owned()).with_default_highlights(&text_style, highlights)
 }

@@ -710,11 +710,11 @@ impl DirectXRenderer {
         let is_software_emulated = (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32) != 0;
         let device_name = String::from_utf16_lossy(&desc.Description)
             .trim_matches(char::from(0))
-            .to_string();
+            .to_owned();
         let driver_name = match desc.VendorId {
-            0x10DE => "NVIDIA Corporation".to_string(),
-            0x1002 => "AMD Corporation".to_string(),
-            0x8086 => "Intel Corporation".to_string(),
+            0x10DE => "NVIDIA Corporation".to_owned(),
+            0x1002 => "AMD Corporation".to_owned(),
+            0x8086 => "Intel Corporation".to_owned(),
             id => format!("Unknown Vendor (ID: {:#X})", id),
         };
         let driver_version = match desc.VendorId {
@@ -725,7 +725,7 @@ impl DirectXRenderer {
         }
         .context("Failed to get gpu driver info")
         .log_err()
-        .unwrap_or("Unknown Driver".to_string());
+        .unwrap_or("Unknown Driver".to_owned());
         Ok(GpuSpecs {
             is_software_emulated,
             device_name,
@@ -1921,7 +1921,7 @@ mod amd {
                     .to_string_lossy()
                     .into_owned()
             } else {
-                "Unknown Radeon Software Version".to_string()
+                "Unknown Radeon Software Version".to_owned()
             };
 
             let driver_version = if !gpu_info.driver_version.is_null() {
@@ -1929,7 +1929,7 @@ mod amd {
                     .to_string_lossy()
                     .into_owned()
             } else {
-                "Unknown Radeon Driver Version".to_string()
+                "Unknown Radeon Driver Version".to_owned()
             };
 
             ags_deinitialize(context);

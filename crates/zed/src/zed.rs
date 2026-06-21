@@ -65,10 +65,9 @@ use rope::Rope;
 use search::project_search::ProjectSearchBar;
 use settings::{
     BaseKeymap, DEFAULT_KEYMAP_PATH, DefaultOpenBehavior, InvalidSettingsError, KeybindSource,
-    KeymapFile, KeymapFileLoadResult, MigrationStatus, Settings, SettingsFile, SettingsStore,
-    SPECIFIC_OVERRIDES_KEYMAP_PATH, VIM_KEYMAP_PATH, initial_local_debug_tasks_content,
-    initial_project_settings_content,
-    initial_tasks_content, update_settings_file,
+    KeymapFile, KeymapFileLoadResult, MigrationStatus, SPECIFIC_OVERRIDES_KEYMAP_PATH, Settings,
+    SettingsFile, SettingsStore, VIM_KEYMAP_PATH, initial_local_debug_tasks_content,
+    initial_project_settings_content, initial_tasks_content, update_settings_file,
 };
 use sidebar::Sidebar;
 
@@ -2010,11 +2009,11 @@ pub fn handle_keymap_file_changes(
 
     #[cfg(target_os = "windows")]
     {
-        let mut current_layout_id = cx.keyboard_layout().id().to_string();
+        let mut current_layout_id = cx.keyboard_layout().id().to_owned();
         cx.on_keyboard_layout_change(move |cx| {
             let next_layout_id = cx.keyboard_layout().id();
             if next_layout_id != current_layout_id {
-                current_layout_id = next_layout_id.to_string();
+                current_layout_id = next_layout_id.to_owned();
                 keyboard_layout_tx.unbounded_send(()).ok();
             }
         })
@@ -2211,8 +2210,12 @@ pub fn load_default_keymap(cx: &mut App) {
     }
 
     cx.bind_keys(
-        KeymapFile::load_asset(SPECIFIC_OVERRIDES_KEYMAP_PATH, Some(KeybindSource::Base), cx)
-            .unwrap(),
+        KeymapFile::load_asset(
+            SPECIFIC_OVERRIDES_KEYMAP_PATH,
+            Some(KeybindSource::Base),
+            cx,
+        )
+        .unwrap(),
     );
 }
 

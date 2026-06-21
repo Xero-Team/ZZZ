@@ -2091,7 +2091,6 @@ impl Sidebar {
                     if let Some(base_workspace) = base_workspace.filter(|_| !creation_blocked) {
                         let group_key = key.clone();
                         menu = menu.separator().submenu("Create New Worktree...", {
-                            let this = this.clone();
                             move |mut submenu, _window, submenu_cx| {
                                 let project = base_workspace.read(submenu_cx).project().clone();
                                 let project_ref = project.read(submenu_cx);
@@ -2102,7 +2101,7 @@ impl Sidebar {
                                         repo.read(submenu_cx)
                                             .branch
                                             .as_ref()
-                                            .map(|branch| branch.name().to_string())
+                                            .map(|branch| branch.name().to_owned())
                                     });
                                 let default_branch = this
                                     .read_with(submenu_cx, |sidebar, _| {

@@ -804,7 +804,7 @@ pub trait GitRepository: Send + Sync {
 
     /// Returns the URL of the remote with the given name.
     fn remote_url(&self, name: &str) -> BoxFuture<'_, Option<String>> {
-        let name = name.to_string();
+        let name = name.to_owned();
         let fut = self.remote_urls();
         async move { fut.await.remove(&name) }.boxed()
     }
@@ -1720,7 +1720,7 @@ impl GitRepository for RealGitRepository {
                         if let Some(line) = line.strip_suffix(" (fetch)")
                             && let Some((name, url)) = line.split_once(char::is_whitespace)
                         {
-                            urls.insert(name.to_string(), url.trim_start().to_string());
+                            urls.insert(name.to_owned(), url.trim_start().to_owned());
                         }
                     }
                 }
@@ -3825,12 +3825,6 @@ mod tests {
     fn git_init_repo(path: &Path) {
         fs::create_dir_all(path).expect("failed to create repo directory");
         git_command(path, ["init", "-b", "main"]);
-    }
-
-    fn test_commit_envs() -> HashMap<String, String> {
-        let mut env = checkpoint_author_envs();
-        env.insert("GIT_ASKPASS".to_string(), "false".to_string());
-        env
     }
 
     #[track_caller]

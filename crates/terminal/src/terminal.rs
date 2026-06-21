@@ -766,9 +766,9 @@ impl TerminalBuilder {
         use windows::core::HSTRING;
 
         let path = if path.starts_with(r"\\?\") || !path.contains(&['/', '\\']) {
-            path.to_string()
+            path.to_owned()
         } else {
-            r"\\?\".to_string() + path
+            r"\\?\".to_owned() + path
         };
 
         let required_length = unsafe { SearchPathW(None, &HSTRING::from(&path), None, None, None) };

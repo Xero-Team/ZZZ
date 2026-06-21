@@ -1701,7 +1701,7 @@ impl GitGraph {
         if name.is_empty() || name == "HEAD" {
             return None;
         }
-        Some(SharedString::from(name.to_string()))
+        Some(SharedString::from(name.to_owned()))
     }
 
     fn render_chip(
@@ -2365,7 +2365,7 @@ impl GitGraph {
         }
 
         if let Some(ref_name) = ref_name {
-            task_variables.insert(VariableName::GitRef, ref_name.to_string());
+            task_variables.insert(VariableName::GitRef, ref_name.to_owned());
         }
 
         Some(TaskContext {

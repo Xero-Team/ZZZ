@@ -582,7 +582,7 @@ pub fn python_env_kernel_specifications(
                             let replaced_path: String = path.replace('\\', "/");
                             (Some(distro), Some(format!("/{}", replaced_path)))
                         } else {
-                            (Some(path_without_prefix), Some("/".to_string()))
+                            (Some(path_without_prefix), Some("/".to_owned()))
                         }
                     } else if let Some(path_without_prefix) =
                         root_path_str.strip_prefix(r"\\wsl.localhost\")
@@ -591,7 +591,7 @@ pub fn python_env_kernel_specifications(
                             let replaced_path: String = path.replace('\\', "/");
                             (Some(distro), Some(format!("/{}", replaced_path)))
                         } else {
-                            (Some(path_without_prefix), Some("/".to_string()))
+                            (Some(path_without_prefix), Some("/".to_owned()))
                         }
                     } else {
                         (None, None)
@@ -618,7 +618,7 @@ pub fn python_env_kernel_specifications(
                     if let Ok(output) = output {
                         if output.status.success() {
                             let python_cmd =
-                                String::from_utf8_lossy(&output.stdout).trim().to_string();
+                                String::from_utf8_lossy(&output.stdout).trim().to_owned();
                             let (python_path, display_suffix) = if python_cmd.contains('/') {
                                 let venv_name = python_cmd.split('/').next().unwrap_or("venv");
                                 (
@@ -626,20 +626,20 @@ pub fn python_env_kernel_specifications(
                                     format!("({})", venv_name),
                                 )
                             } else {
-                                (python_cmd, "(System)".to_string())
+                                (python_cmd, "(System)".to_owned())
                             };
 
                             let display_name = format!("WSL: {} {}", distro, display_suffix);
                             let default_kernelspec = JupyterKernelspec {
                                 argv: vec![
                                     python_path,
-                                    "-m".to_string(),
-                                    "ipykernel_launcher".to_string(),
-                                    "-f".to_string(),
-                                    "{connection_file}".to_string(),
+                                    "-m".to_owned(),
+                                    "ipykernel_launcher".to_owned(),
+                                    "-f".to_owned(),
+                                    "{connection_file}".to_owned(),
                                 ],
                                 display_name: display_name.clone(),
-                                language: "python".to_string(),
+                                language: "python".to_owned(),
                                 interrupt_mode: None,
                                 metadata: None,
                                 env: None,
@@ -649,7 +649,7 @@ pub fn python_env_kernel_specifications(
                                 WslKernelSpecification {
                                     name: display_name,
                                     kernelspec: default_kernelspec,
-                                    distro: distro.to_string(),
+                                    distro: distro.to_owned(),
                                 },
                             ));
                         }

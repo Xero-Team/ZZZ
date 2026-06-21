@@ -674,8 +674,8 @@ impl PlatformWindow for WindowsWindow {
         answers: &[PromptButton],
     ) -> Option<Receiver<usize>> {
         let (done_tx, done_rx) = oneshot::channel();
-        let msg = msg.to_string();
-        let detail_string = detail.map(|detail| detail.to_string());
+        let msg = msg.to_owned();
+        let detail_string = detail.map(|detail| detail.to_owned());
         let handle = self.0.hwnd;
         let answers = answers.to_vec();
         self.0

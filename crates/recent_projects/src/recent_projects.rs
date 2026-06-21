@@ -358,10 +358,10 @@ pub fn init(cx: &mut App) {
                     "#};
                     let title = cx
                         .update(|_, cx| i18n::tr(cx, "recent_projects.invalid_path", "Invalid path"))
-                        .unwrap_or_else(|_| "Invalid path".to_string());
+                        .unwrap_or_else(|_| "Invalid path".to_owned());
                     let ok_label = cx
                         .update(|_, cx| i18n::tr(cx, "zed.common.ok", "Ok"))
-                        .unwrap_or_else(|_| "Ok".to_string());
+                        .unwrap_or_else(|_| "Ok".to_owned());
 
                     let _ = cx
                         .prompt(
@@ -1502,19 +1502,19 @@ impl PickerDelegate for RecentProjectsDelegate {
                         this.child(
                             IconButton::new("remove_open_project", IconName::Close)
                                 .icon_size(IconSize::Small)
-                            .tooltip({
-                                let focus_handle = self.focus_handle.clone();
-                                move |_, cx| {
-                                    Tooltip::for_action_in(
-                                        i18n::tr(
+                                .tooltip({
+                                    let focus_handle = self.focus_handle.clone();
+                                    move |_, cx| {
+                                        Tooltip::for_action_in(
+                                            i18n::tr(
+                                                cx,
+                                                "recent_projects.remove_project_from_window",
+                                                "Remove Project from Window",
+                                            ),
+                                            &RemoveSelected,
+                                            &focus_handle,
                                             cx,
-                                            "recent_projects.remove_project_from_window",
-                                            "Remove Project from Window",
-                                        ),
-                                        &RemoveSelected,
-                                        &focus_handle,
-                                        cx,
-                                    )
+                                        )
                                     }
                                 })
                                 .on_click({

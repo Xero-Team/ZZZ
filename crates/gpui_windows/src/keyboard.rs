@@ -104,8 +104,8 @@ impl WindowsKeyboardLayout {
 
     pub(crate) fn unknown() -> Self {
         Self {
-            id: "unknown".to_string(),
-            name: "unknown".to_string(),
+            id: "unknown".to_owned(),
+            name: "unknown".to_owned(),
         }
     }
 }

@@ -557,9 +557,9 @@ fn watcher_logging_rate_limited() -> bool {
         if *emitted < 20 {
             log::warn!("filesystem watcher lost sync for many files, not logging more");
             return true;
-        } else {
-            *emitted += 1;
         }
+
+        *emitted += 1;
     } else {
         *emitted = 0;
         *started = Instant::now()
@@ -1286,7 +1286,10 @@ mod tests {
             .expect("add")
             .expect("registered");
 
-        watcher.dispatch(WatcherMode::Native, Ok(modify_event("/repo/project/file.txt")));
+        watcher.dispatch(
+            WatcherMode::Native,
+            Ok(modify_event("/repo/project/file.txt")),
+        );
         assert_eq!(*fired.lock(), 1);
     }
 
@@ -1295,7 +1298,12 @@ mod tests {
         let (fired, cb) = fired_count();
         let watcher = test_watcher_with_backends(Some(Default::default()), None);
         watcher
-            .add(Path::new("/Repo/Proj").into(), WatcherMode::Native, true, cb)
+            .add(
+                Path::new("/Repo/Proj").into(),
+                WatcherMode::Native,
+                true,
+                cb,
+            )
             .expect("add")
             .expect("registered");
 
@@ -1326,11 +1334,21 @@ mod tests {
         let backend = Arc::new(Mutex::new(FakeWatchBackend::default()));
         let watcher = test_watcher_with_backends(Some(backend.clone()), None);
         watcher
-            .add(Path::new("/Repo/Proj").into(), WatcherMode::Native, true, |_| {})
+            .add(
+                Path::new("/Repo/Proj").into(),
+                WatcherMode::Native,
+                true,
+                |_| {},
+            )
             .expect("add")
             .expect("registered");
         watcher
-            .add(Path::new("/repo/proj").into(), WatcherMode::Native, true, |_| {})
+            .add(
+                Path::new("/repo/proj").into(),
+                WatcherMode::Native,
+                true,
+                |_| {},
+            )
             .expect("add")
             .expect("registered");
 
