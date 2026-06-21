@@ -3,7 +3,7 @@ use crate::commit_modal::CommitModal;
 use crate::commit_tooltip::{CommitAvatar, CommitTooltip};
 use crate::commit_view::CommitView;
 use crate::git_panel_settings::GitPanelScrollbarAccessor;
-use crate::project_diff::{self, BranchDiff, Diff, ProjectDiff};
+use crate::project_diff::{BranchDiff, Diff, ProjectDiff};
 use crate::remote_output::{self, RemoteAction, SuccessMessage};
 use crate::solo_diff_view::SoloDiffView;
 use crate::{branch_picker, picker_prompt, render_remote_button};
@@ -151,83 +151,24 @@ pub struct OpenAtCommit {
 }
 
 struct GitMenuState {
-    has_tracked_changes: bool,
-    has_staged_changes: bool,
-    has_unstaged_changes: bool,
-    has_new_changes: bool,
     sort_by_path: bool,
-    has_stash_items: bool,
     tree_view: bool,
 }
 
-fn git_panel_context_menu(
+fn git_panel_view_options_menu(
     focus_handle: FocusHandle,
     state: GitMenuState,
     window: &mut Window,
     cx: &mut App,
 ) -> Entity<ContextMenu> {
-    let stage_all = tr(cx, "git_ui.project_diff.stage_all", "Stage All");
-    let unstage_all = tr(cx, "git_ui.project_diff.unstage_all", "Unstage All");
-    let stash_all = tr(cx, "git_ui.git_panel.stash_all", "Stash All");
-    let stash_pop = tr(cx, "git_ui.git_panel.stash_pop", "Stash Pop");
-    let view_stash = tr(cx, "git_ui.stash_picker.view_stash", "View Stash");
-    let open_diff = tr(cx, "git_ui.git_panel.open_diff", "Open Diff");
-    let discard_tracked_changes = tr(
-        cx,
-        "git_ui.git_panel.discard_tracked_changes",
-        "Discard Tracked Changes",
-    );
-    let trash_untracked_files = tr(
-        cx,
-        "git_ui.git_panel.trash_untracked_files",
-        "Trash Untracked Files",
-    );
     let flat_view = tr(cx, "git_ui.git_panel.flat_view", "Flat View");
     let tree_view = tr(cx, "git_ui.git_panel.tree_view", "Tree View");
     let sort_by_status = tr(cx, "git_ui.git_panel.sort_by_status", "Sort by Status");
     let sort_by_path = tr(cx, "git_ui.git_panel.sort_by_path", "Sort by Path");
+
     ContextMenu::build(window, cx, move |context_menu, _, _| {
         context_menu
-            .context(focus_handle)
-            .action_disabled_when(
-                !state.has_unstaged_changes,
-                stage_all.clone(),
-                StageAll.boxed_clone(),
-            )
-            .action_disabled_when(
-                !state.has_staged_changes,
-                unstage_all.clone(),
-                UnstageAll.boxed_clone(),
-            )
-            .separator()
-            .action_disabled_when(
-                !(state.has_new_changes || state.has_tracked_changes),
-                stash_all.clone(),
-                StashAll.boxed_clone(),
-            )
-            .action_disabled_when(
-                !state.has_stash_items,
-                stash_pop.clone(),
-                StashPop.boxed_clone(),
-            )
-            .action(
-                view_stash.clone(),
-                zed_actions::git::ViewStash.boxed_clone(),
-            )
-            .separator()
-            .action(open_diff.clone(), project_diff::Diff.boxed_clone())
-            .separator()
-            .action_disabled_when(
-                !state.has_tracked_changes,
-                discard_tracked_changes.clone(),
-                RestoreTrackedFiles.boxed_clone(),
-            )
-            .action_disabled_when(
-                !state.has_new_changes,
-                trash_untracked_files.clone(),
-                TrashUntrackedFiles.boxed_clone(),
-            )
-            .separator()
+            .context(focus_handle.clone())
             .entry(
                 if state.tree_view {
                     flat_view.clone()
@@ -248,6 +189,76 @@ fn git_panel_context_menu(
                     move |window, cx| window.dispatch_action(Box::new(ToggleSortByPath), cx),
                 )
             })
+    })
+}
+
+fn git_panel_context_menu(
+    has_tracked_changes: bool,
+    has_staged_changes: bool,
+    has_unstaged_changes: bool,
+    has_new_changes: bool,
+    has_stash_items: bool,
+    focus_handle: FocusHandle,
+    window: &mut Window,
+    cx: &mut App,
+) -> Entity<ContextMenu> {
+    let stage_all = tr(cx, "git_ui.project_diff.stage_all", "Stage All");
+    let unstage_all = tr(cx, "git_ui.project_diff.unstage_all", "Unstage All");
+    let stash_all = tr(cx, "git_ui.git_panel.stash_all", "Stash All");
+    let stash_pop = tr(cx, "git_ui.git_panel.stash_pop", "Stash Pop");
+    let view_stash = tr(cx, "git_ui.stash_picker.view_stash", "View Stash");
+    let open_diff = tr(cx, "git_ui.git_panel.open_diff", "Open Diff");
+    let discard_tracked_changes = tr(
+        cx,
+        "git_ui.git_panel.discard_tracked_changes",
+        "Discard Tracked Changes",
+    );
+    let trash_untracked_files = tr(
+        cx,
+        "git_ui.git_panel.trash_untracked_files",
+        "Trash Untracked Files",
+    );
+    ContextMenu::build(window, cx, move |context_menu, _, _| {
+        context_menu
+            .context(focus_handle.clone())
+            .action_disabled_when(
+                !has_unstaged_changes,
+                stage_all.clone(),
+                StageAll.boxed_clone(),
+            )
+            .action_disabled_when(
+                !has_staged_changes,
+                unstage_all.clone(),
+                UnstageAll.boxed_clone(),
+            )
+            .separator()
+            .action_disabled_when(
+                !(has_new_changes || has_tracked_changes),
+                stash_all.clone(),
+                StashAll.boxed_clone(),
+            )
+            .action_disabled_when(
+                !has_stash_items,
+                stash_pop.clone(),
+                StashPop.boxed_clone(),
+            )
+            .action(
+                view_stash.clone(),
+                zed_actions::git::ViewStash.boxed_clone(),
+            )
+            .separator()
+            .action(open_diff.clone(), project_diff::Diff.boxed_clone())
+            .separator()
+            .action_disabled_when(
+                !has_tracked_changes,
+                discard_tracked_changes.clone(),
+                RestoreTrackedFiles.boxed_clone(),
+            )
+            .action_disabled_when(
+                !has_new_changes,
+                trash_untracked_files.clone(),
+                TrashUntrackedFiles.boxed_clone(),
+            )
     })
 }
 
@@ -4428,29 +4439,20 @@ impl GitPanel {
         path + file_name + depth * 2
     }
 
-    fn render_ellipsis_menu(&self, id: impl Into<ElementId>) -> impl IntoElement {
+    fn render_view_options_menu(&self, id: impl Into<ElementId>) -> impl IntoElement {
         let focus_handle = self.focus_handle.clone();
-        let has_tracked_changes = self.has_tracked_changes();
-        let has_staged_changes = self.has_staged_changes();
-        let has_unstaged_changes = self.has_unstaged_changes();
-        let has_new_changes = self.new_count > 0;
-        let has_stash_items = self.stash_entries.entries.len() > 0;
 
         PopoverMenu::new(id.into())
             .trigger(
-                IconButton::new("overflow-menu-trigger", IconName::Ellipsis)
-                    .icon_size(IconSize::Small),
+                IconButton::new("view-options-menu-trigger", IconName::Sliders)
+                    .icon_size(IconSize::Small)
+                    .tooltip(Tooltip::text("View Options")),
             )
             .menu(move |window, cx| {
-                Some(git_panel_context_menu(
+                Some(git_panel_view_options_menu(
                     focus_handle.clone(),
                     GitMenuState {
-                        has_tracked_changes,
-                        has_staged_changes,
-                        has_unstaged_changes,
-                        has_new_changes,
                         sort_by_path: GitPanelSettings::get_global(cx).sort_by_path,
-                        has_stash_items,
                         tree_view: GitPanelSettings::get_global(cx).tree_view,
                     },
                     window,
@@ -4787,17 +4789,45 @@ impl GitPanel {
         })
     }
 
-    fn render_changes_header(
+    fn render_git_changes_actions_menu(
         &self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<impl IntoElement> {
-        if matches!(self.git_access, GitAccess::No) {
-            return None;
-        }
+        id: impl Into<ElementId>,
+        _cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let has_tracked_changes = self.has_tracked_changes();
+        let has_staged_changes = self.has_staged_changes();
+        let has_unstaged_changes = self.has_unstaged_changes();
+        let has_new_changes = self.new_count > 0;
+        let has_stash_items = self.stash_entries.entries.len() > 0;
+        let focus_handle = self.focus_handle.clone();
 
-        self.active_repository.as_ref()?;
+        PopoverMenu::new(id.into())
+            .trigger(
+                ui::ButtonLike::new_rounded_right("git-changes-actions-split-button-right")
+                    .layer(ui::ElevationIndex::ModalSurface)
+                    .size(ButtonSize::None)
+                    .child(
+                        div()
+                            .px_1()
+                            .child(Icon::new(IconName::ChevronDown).size(IconSize::XSmall)),
+                    ),
+            )
+            .menu(move |window, cx| {
+                Some(git_panel_context_menu(
+                    has_tracked_changes,
+                    has_staged_changes,
+                    has_unstaged_changes,
+                    has_new_changes,
+                    has_stash_items,
+                    focus_handle.clone(),
+                    window,
+                    cx,
+                ))
+            })
+            .anchor(Anchor::TopRight)
+    }
 
+    fn render_git_changes_actions_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let (text, action, stage, tooltip) =
             if self.total_staged_count() == self.entry_count && self.entry_count > 0 {
                 (
@@ -4814,6 +4844,43 @@ impl GitPanel {
                     "git add --all",
                 )
             };
+
+        SplitButton::new(
+            ButtonLike::new_rounded_left("git-changes-actions-split-button-left")
+                .layer(ElevationIndex::ModalSurface)
+                .size(ButtonSize::Compact)
+                .child(Label::new(text).size(LabelSize::Small).mr_0p5())
+                .tooltip(Tooltip::for_action_title_in(
+                    tooltip,
+                    action.as_ref(),
+                    &self.focus_handle,
+                ))
+                .disabled(self.entry_count == 0)
+                .on_click({
+                    let git_panel = cx.weak_entity();
+                    move |_, _, cx| {
+                        git_panel
+                            .update(cx, |git_panel, cx| {
+                                git_panel.change_all_files_stage(stage, cx);
+                            })
+                            .ok();
+                    }
+                }),
+            self.render_git_changes_actions_menu("git-changes-actions-split-button-menu", cx)
+                .into_any_element(),
+        )
+    }
+
+    fn render_changes_header(
+        &self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<impl IntoElement> {
+        if matches!(self.git_access, GitAccess::No) {
+            return None;
+        }
+
+        self.active_repository.as_ref()?;
 
         let diff_stat_total = self.diff_stat_total;
 
@@ -4871,30 +4938,8 @@ impl GitPanel {
                 .child(
                     h_flex()
                         .gap_1()
-                        .child(self.render_ellipsis_menu("overflow_menu"))
-                        .child(
-                            Button::new("stage_unstage_all", text)
-                                .label_size(LabelSize::Small)
-                                .layer(ElevationIndex::ModalSurface)
-                                .size(ButtonSize::Compact)
-                                .style(ButtonStyle::Filled)
-                                .tooltip(Tooltip::for_action_title_in(
-                                    tooltip,
-                                    action.as_ref(),
-                                    &self.focus_handle,
-                                ))
-                                .disabled(self.entry_count == 0)
-                                .on_click({
-                                    let git_panel = cx.weak_entity();
-                                    move |_, _, cx| {
-                                        git_panel
-                                            .update(cx, |git_panel, cx| {
-                                                git_panel.change_all_files_stage(stage, cx);
-                                            })
-                                            .ok();
-                                    }
-                                }),
-                        ),
+                        .child(self.render_view_options_menu("view_options_menu"))
+                        .child(self.render_git_changes_actions_button(cx)),
                 ),
         )
     }
@@ -6383,17 +6428,19 @@ impl GitPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let has_tracked_changes = self.has_tracked_changes();
+        let has_staged_changes = self.has_staged_changes();
+        let has_unstaged_changes = self.has_unstaged_changes();
+        let has_new_changes = self.new_count > 0;
+        let has_stash_items = self.stash_entries.entries.len() > 0;
+
         let context_menu = git_panel_context_menu(
+            has_tracked_changes,
+            has_staged_changes,
+            has_unstaged_changes,
+            has_new_changes,
+            has_stash_items,
             self.focus_handle.clone(),
-            GitMenuState {
-                has_tracked_changes: self.has_tracked_changes(),
-                has_staged_changes: self.has_staged_changes(),
-                has_unstaged_changes: self.has_unstaged_changes(),
-                has_new_changes: self.new_count > 0,
-                sort_by_path: GitPanelSettings::get_global(cx).sort_by_path,
-                has_stash_items: self.stash_entries.entries.len() > 0,
-                tree_view: GitPanelSettings::get_global(cx).tree_view,
-            },
             window,
             cx,
         );
