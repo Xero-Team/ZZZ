@@ -68,7 +68,9 @@ use project::{
 };
 use rand::{RngExt, rngs::StdRng};
 use serde_json::json;
-use settings::{LocalSettingsKind, LocalSettingsPath, Settings, SettingsStore};
+#[cfg(target_os = "linux")]
+use settings::{LocalSettingsKind, LocalSettingsPath};
+use settings::{Settings, SettingsStore};
 #[cfg(not(windows))]
 use std::os;
 use std::{
@@ -6670,7 +6672,7 @@ async fn test_terminal_toolchain_lookup_is_scoped_to_terminal_worktree(
                 SpawnInTerminal {
                     full_label: "scope test".into(),
                     label: "scope test".into(),
-                    command: Some(command.into()),
+                    command: Some(command),
                     args,
                     cwd: Some(project_b_path.clone()),
                     shell: Shell::System,
@@ -13350,6 +13352,7 @@ fn git_commit(msg: &'static str, repo: &git2::Repository) {
     }
 }
 
+#[cfg(any())]
 #[track_caller]
 fn git_cherry_pick(commit: &git2::Commit<'_>, repo: &git2::Repository) {
     repo.cherrypick(commit, None).expect("Failed to cherrypick");

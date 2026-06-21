@@ -1346,7 +1346,7 @@ mod tests {
     };
     use gpui::{AppContext as _, IntoElement as _, div, px};
     use project::project_settings::DiagnosticSeverity;
-    use rand::{Rng as _, rngs::StdRng};
+    use rand::{RngExt as _, rngs::StdRng};
     use settings::SettingsStore;
     use std::sync::Arc;
 

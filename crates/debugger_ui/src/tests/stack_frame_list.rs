@@ -344,7 +344,7 @@ async fn test_select_stack_frame(executor: BackgroundExecutor, cx: &mut TestAppC
                     let snapshot = editor.snapshot(window, cx);
 
                     editor
-                        .highlighted_rows::<editor::ActiveDebugLine>(cx)
+                        .highlighted_rows::<editor::ActiveDebugLine>()
                         .map(|(range, _)| {
                             let start = range.start.to_point(&snapshot.buffer_snapshot());
                             let end = range.end.to_point(&snapshot.buffer_snapshot());
@@ -407,7 +407,7 @@ async fn test_select_stack_frame(executor: BackgroundExecutor, cx: &mut TestAppC
                 let snapshot = editor.snapshot(window, cx);
 
                 editor
-                    .highlighted_rows::<editor::ActiveDebugLine>(cx)
+                    .highlighted_rows::<editor::ActiveDebugLine>()
                     .map(|(range, _)| {
                         let start = range.start.to_point(&snapshot.buffer_snapshot());
                         let end = range.end.to_point(&snapshot.buffer_snapshot());
