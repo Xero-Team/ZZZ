@@ -746,9 +746,7 @@ pub(crate) fn open_options_for_request(
 ) -> workspace::OpenOptions {
     let open_behavior = open_behavior.unwrap_or_else(|| {
         match workspace::WorkspaceSettings::get_global(cx).cli_default_open_behavior {
-            settings::CliDefaultOpenBehavior::ExistingWindow => {
-                cli::OpenBehavior::ExistingWindow
-            }
+            settings::CliDefaultOpenBehavior::ExistingWindow => cli::OpenBehavior::ExistingWindow,
             settings::CliDefaultOpenBehavior::NewWindow => cli::OpenBehavior::Classic,
         }
     });

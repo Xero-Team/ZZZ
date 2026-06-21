@@ -47,9 +47,8 @@ use gpui::{
     MousePressureEvent, MouseUpEvent, PaintQuad, ParentElement, Pixels, PressureStage, ScrollDelta,
     ScrollHandle, ScrollWheelEvent, ShapedLine, SharedString, Size, StatefulInteractiveElement,
     Style, Styled, StyledText, TextAlign, TextRun, TextStyleRefinement, WeakEntity, Window,
-    WindowBackgroundAppearance,
-    anchored, deferred, div, fill, linear_color_stop, linear_gradient, outline, pattern_slash,
-    point, px, quad, relative, size, solid_background, transparent_black,
+    WindowBackgroundAppearance, anchored, deferred, div, fill, linear_color_stop, linear_gradient,
+    outline, pattern_slash, point, px, quad, relative, size, solid_background, transparent_black,
 };
 use itertools::Itertools;
 use language::{
@@ -8533,7 +8532,9 @@ pub(crate) fn render_buffer_header(
                         };
                     border.border_color(border_color)
                 })
-                .when(opaque_window, |el| el.bg(colors.editor_subheader_background))
+                .when(opaque_window, |el| {
+                    el.bg(colors.editor_subheader_background)
+                })
                 .hover(|style| style.bg(colors.element_hover))
                 .map(|header| {
                     let editor = editor.clone();

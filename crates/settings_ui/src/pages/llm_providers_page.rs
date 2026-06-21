@@ -94,11 +94,7 @@ fn render_provider_row(
                         .gap_1p5()
                         .items_center()
                         .child(icon)
-                        .child(
-                            Label::new(provider_name)
-                                .color(Color::Default)
-                                .truncate(),
-                        )
+                        .child(Label::new(provider_name).color(Color::Default).truncate())
                         .when(is_authenticated, |this| {
                             this.child(
                                 Icon::new(IconName::Check)
@@ -119,7 +115,10 @@ fn get_or_create_configuration_view(
     window: &mut Window,
     cx: &mut Context<SettingsWindow>,
 ) -> AnyView {
-    if let Some(view) = settings_window.provider_configuration_views.get(provider_id) {
+    if let Some(view) = settings_window
+        .provider_configuration_views
+        .get(provider_id)
+    {
         return view.clone();
     }
 

@@ -1,8 +1,8 @@
 mod footer;
 mod head;
 pub mod highlighted_match_with_paths;
-mod preview;
 pub mod popover_menu;
+mod preview;
 
 use anyhow::Result;
 
@@ -30,8 +30,8 @@ use workspace::{ModalView, item::Settings};
 use zed_actions::editor::{MoveDown, MoveUp};
 
 pub use footer::PickerAction;
-pub use preview::{MatchLocation, Preview, PreviewSource};
 pub use preview::Update as PreviewUpdate;
+pub use preview::{MatchLocation, Preview, PreviewSource};
 
 enum ElementContainer {
     List(ListState),

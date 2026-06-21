@@ -6,7 +6,7 @@ use gpui::{App, AppContext, Context, Entity, Task, Window};
 use language::{Buffer, HighlightedText, ToPoint};
 use project::Project;
 use rope::Point;
-use ui::{IntoElement, Pixels, px, prelude::*};
+use ui::{IntoElement, Pixels, prelude::*, px};
 
 /// The preview window of a [`Picker`](crate::Picker).
 pub struct Preview {
@@ -271,9 +271,11 @@ impl EditorPreview {
             };
 
             let target_row = range.start.row().0 as f64;
-            let centered_y = editor.visible_line_count().map_or(target_row, |visible_lines| {
-                (target_row - (visible_lines - 1.) / 2.).max(0.)
-            });
+            let centered_y = editor
+                .visible_line_count()
+                .map_or(target_row, |visible_lines| {
+                    (target_row - (visible_lines - 1.) / 2.).max(0.)
+                });
 
             let start_column = range.start.column() as f64;
             let end_column = range.end.column() as f64;
@@ -297,9 +299,10 @@ impl EditorPreview {
                 .font_ui(cx)
                 .text_ui(cx)
                 .text_color(Color::Muted.color(cx))
-                .child(gpui::StyledText::new(message.text.clone()).with_highlights(
-                    message.highlights.iter().cloned(),
-                ))
+                .child(
+                    gpui::StyledText::new(message.text.clone())
+                        .with_highlights(message.highlights.iter().cloned()),
+                )
                 .into_any_element();
         }
 

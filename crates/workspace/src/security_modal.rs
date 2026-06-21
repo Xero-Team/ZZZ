@@ -597,8 +597,11 @@ mod tests {
         let home_dir = sample_home_dir();
         let project_dir = sample_project_dir();
         let scope = home_dir.join("projects");
-        let result =
-            validate_trust_scope(scope.to_string_lossy().as_ref(), &project_dir, Some(&home_dir));
+        let result = validate_trust_scope(
+            scope.to_string_lossy().as_ref(),
+            &project_dir,
+            Some(&home_dir),
+        );
 
         assert_eq!(result, Ok(scope));
     }
@@ -608,11 +611,7 @@ mod tests {
         let home_dir = sample_home_dir();
         let project_dir = sample_project_dir();
         let home_relative_scope = format!("~{}projects", std::path::MAIN_SEPARATOR);
-        let ok = validate_trust_scope(
-            &home_relative_scope,
-            &project_dir,
-            Some(&home_dir),
-        );
+        let ok = validate_trust_scope(&home_relative_scope, &project_dir, Some(&home_dir));
         assert_eq!(ok, Ok(home_dir.join("projects")));
 
         let err = validate_trust_scope(
@@ -620,6 +619,9 @@ mod tests {
             &project_dir,
             Some(&home_dir),
         );
-        assert_eq!(err, Err(SharedString::from("Must be a parent folder of the project")));
+        assert_eq!(
+            err,
+            Err(SharedString::from("Must be a parent folder of the project"))
+        );
     }
 }

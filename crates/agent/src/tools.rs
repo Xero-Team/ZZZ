@@ -53,8 +53,9 @@ where
 
     match ValueOrJsonString::<T>::deserialize(deserializer)? {
         ValueOrJsonString::Value(value) => Ok(value),
-        ValueOrJsonString::String(string) => serde_json::from_str::<T>(&string)
-            .map_err(|error| D::Error::custom(format!("failed to parse stringified value: {error}"))),
+        ValueOrJsonString::String(string) => serde_json::from_str::<T>(&string).map_err(|error| {
+            D::Error::custom(format!("failed to parse stringified value: {error}"))
+        }),
     }
 }
 

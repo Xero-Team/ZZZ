@@ -808,10 +808,11 @@ impl Render for ThreadSearchBar {
                     )),
             );
 
-        let error_row = self
-            .query_error_message
-            .clone()
-            .map(|message| Label::new(message).size(LabelSize::Small).color(Color::Error));
+        let error_row = self.query_error_message.clone().map(|message| {
+            Label::new(message)
+                .size(LabelSize::Small)
+                .color(Color::Error)
+        });
 
         v_flex()
             .w_full()

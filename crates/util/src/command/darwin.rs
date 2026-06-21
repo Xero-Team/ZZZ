@@ -361,7 +361,9 @@ fn spawn_posix_spawn(
         envs.and_then(|envs| {
             envs.iter()
                 .find(|(key, _)| key.as_os_str() == OsStr::new("PATH"))
-                .and_then(|(_, value)| which::which_in(program, Some(value.as_os_str()), current_dir).ok())
+                .and_then(|(_, value)| {
+                    which::which_in(program, Some(value.as_os_str()), current_dir).ok()
+                })
         })
         .map_or_else(
             || program.as_bytes().to_vec(),

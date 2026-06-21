@@ -1001,8 +1001,7 @@ mod tests {
             },
         )
         .await;
-        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx)
-            .await;
+        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx).await;
 
         let project = Project::test(
             fs.clone(),
@@ -1335,8 +1334,7 @@ mod tests {
             },
         )
         .await;
-        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx)
-            .await;
+        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx).await;
 
         let project = Project::test(
             fs.clone(),
@@ -1418,8 +1416,7 @@ mod tests {
             },
         )
         .await;
-        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx)
-            .await;
+        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx).await;
 
         let project = Project::test(
             fs.clone(),
@@ -1542,9 +1539,7 @@ mod tests {
             .await
             .expect_err("remove_root should refuse to delete a recreated worktree");
         assert!(
-            error
-                .to_string()
-                .contains("not the worktree ZZZ created"),
+            error.to_string().contains("not the worktree ZZZ created"),
             "unexpected error: {error:#}"
         );
 
@@ -1598,8 +1593,7 @@ mod tests {
             },
         )
         .await;
-        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx)
-            .await;
+        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx).await;
 
         let project = Project::test(
             fs.clone(),

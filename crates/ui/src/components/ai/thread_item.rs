@@ -439,9 +439,7 @@ impl RenderOnce for ThreadItem {
                             .child(icon)
                             .child(title_label),
                     )
-                    .when(opaque_window, |this| {
-                        this.child(gradient_overlay)
-                    })
+                    .when(opaque_window, |this| this.child(gradient_overlay))
                     .when(self.hovered, |this| {
                         this.when_some(self.action_slot, |this, slot| {
                             this.child(

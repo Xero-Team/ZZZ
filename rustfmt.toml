@@ -1,6 +1,8 @@
-# https://github.com/rust-lang/rustfmt?tab=readme-ov-file#rusts-editions 
+# Keep this file stable-only so `cargo fmt` works with the pinned stable toolchain.
+# https://github.com/rust-lang/rustfmt?tab=readme-ov-file#rusts-editions
 edition = "2024"
 style_edition = "2024"
+max_width = 100
 newline_style = "Unix"
 use_field_init_shorthand = true
 use_try_shorthand = true

@@ -195,8 +195,9 @@ impl TextFinder {
             .delegate
             .text_finder_turning_into_project_search
             .store(true, Ordering::Relaxed);
-        self.picker
-            .update(cx, |picker, _| picker.delegate.in_progress_search.take_connected())
+        self.picker.update(cx, |picker, _| {
+            picker.delegate.in_progress_search.take_connected()
+        })
     }
 
     pub fn open(window: &mut Window, cx: &mut Context<Workspace>) -> Task<()> {

@@ -98,9 +98,7 @@ pub use split::{SplittableEditor, ToggleSplitDiff};
 pub use split_editor_view::SplitEditorView;
 pub use text::Bias;
 
-use ::git::{
-    Blame, Restore, blame::BlameEntry, commit::ParsedCommitMessage, status::FileStatus,
-};
+use ::git::{Blame, Restore, blame::BlameEntry, commit::ParsedCommitMessage, status::FileStatus};
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, BuildError};
 use anyhow::{Context as _, Result, anyhow, bail};
 use blink_manager::BlinkManager;
@@ -8489,11 +8487,11 @@ impl Editor {
                 })
                 .separator()
                 .entry(set_bookmark_msg, None, move |_window, cx| {
-                        weak_editor
-                            .update(cx, |this, cx| {
-                                this.toggle_bookmark_at_anchor(anchor, cx);
-                            })
-                            .log_err();
+                    weak_editor
+                        .update(cx, |this, cx| {
+                            this.toggle_bookmark_at_anchor(anchor, cx);
+                        })
+                        .log_err();
                 })
         })
     }
