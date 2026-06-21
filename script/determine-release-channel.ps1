@@ -10,7 +10,7 @@ if (-not $env:GITHUB_REF) {
     exit 1
 }
 
-$version = & "script/get-crate-version.ps1" "zed"
+$version = & "script/get-crate-version.ps1" "zzz"
 $channel = Get-Content "crates/zed/RELEASE_CHANNEL"
 
 Write-Host "Publishing version: $version on release channel $channel"
