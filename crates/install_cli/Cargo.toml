@@ -19,6 +19,7 @@ anyhow.workspace = true
 client.workspace = true
 gpui.workspace = true
 i18n.workspace = true
+log.workspace = true
 release_channel.workspace = true
 smol.workspace = true
 util.workspace = true

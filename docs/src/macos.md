@@ -96,6 +96,32 @@ If the `zzz` command isn't available after installation:
 2. Try reinstalling the CLI via `cli: install` in the command palette
 3. Open a new terminal window to reload your PATH
 
+### Can't install CLI {#cant-install-cli}
+
+{#action cli::InstallCliBinary} writes a `zzz` symlink to `/usr/local/bin`, which requires administrator privileges. If your macOS account isn't in the `admin` group, ZZZ can't create that symlink and will report that it can't install the CLI automatically.
+
+Instead, you can add an alias pointing to the `cli` binary bundled inside the app. The path depends on where ZZZ is installed:
+
+```sh
+# Default install (ZZZ in /Applications)
+alias zzz="/Applications/ZZZ.app/Contents/MacOS/cli"
+
+# User install (ZZZ in ~/Applications)
+alias zzz="$HOME/Applications/ZZZ.app/Contents/MacOS/cli"
+
+# Preview build (ZZZ Preview in ~/Applications)
+alias zzz="$HOME/Applications/ZZZ Preview.app/Contents/MacOS/cli"
+```
+
+Add the line that matches your install to your shell configuration file. Use `~/.zshrc` for Zsh (the default on modern macOS) or `~/.bashrc` for Bash.
+
+After you restart your shell, you will be able to use `zzz` from your terminal:
+
+```sh
+zzz .              # Open current folder
+zzz file.txt       # Open a file
+```
+
 ### GPU or rendering issues
 
 ZZZ uses Metal for rendering. If you experience graphical glitches:
