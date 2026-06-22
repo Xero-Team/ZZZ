@@ -64,7 +64,10 @@ use project::{
 use prompt_store::RULES_FILE_NAMES;
 use proto::RpcError;
 use serde::{Deserialize, Serialize};
-use settings::{Settings, SettingsStore, StatusStyle, update_settings_file};
+use settings::{
+    GitPanelClickBehavior, GitPanelGroupBy, GitPanelSortBy, Settings, SettingsStore, StatusStyle,
+    update_settings_file,
+};
 use smallvec::SmallVec;
 use std::future::Future;
 use std::ops::Range;
@@ -1468,6 +1471,36 @@ impl GitPanel {
 
             Some(())
         });
+    }
+
+    fn open_selected_entry_on_click(
+        &mut self,
+        secondary: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let entry_primary_click_action =
+            GitPanelSettings::get_global(cx).entry_primary_click_action;
+        let action = match (entry_primary_click_action, secondary) {
+            (GitPanelClickBehavior::ProjectDiff, false) => GitPanelClickBehavior::ProjectDiff,
+            (GitPanelClickBehavior::ProjectDiff, true) => GitPanelClickBehavior::FileDiff,
+            (GitPanelClickBehavior::FileDiff, false) => GitPanelClickBehavior::FileDiff,
+            (GitPanelClickBehavior::FileDiff, true) => GitPanelClickBehavior::ProjectDiff,
+            (GitPanelClickBehavior::ViewFile, false) => GitPanelClickBehavior::ViewFile,
+            (GitPanelClickBehavior::ViewFile, true) => GitPanelClickBehavior::ProjectDiff,
+        };
+        match action {
+            GitPanelClickBehavior::ProjectDiff => {
+                self.open_diff(&Default::default(), window, cx);
+                self.focus_handle.focus(window, cx);
+            }
+            GitPanelClickBehavior::FileDiff => {
+                self.open_solo_diff(&Default::default(), window, cx);
+            }
+            GitPanelClickBehavior::ViewFile => {
+                self.view_file(&Default::default(), window, cx);
+            }
+        }
     }
 
     fn revert_selected(
@@ -6703,12 +6736,7 @@ impl GitPanel {
                 cx.listener(move |this, event: &ClickEvent, window, cx| {
                     this.selected_entry = Some(ix);
                     cx.notify();
-                    if event.modifiers().secondary() {
-                        this.open_solo_diff(&Default::default(), window, cx)
-                    } else {
-                        this.open_diff(&Default::default(), window, cx);
-                        this.focus_handle.focus(window, cx);
-                    }
+                    this.open_selected_entry_on_click(event.modifiers().secondary(), window, cx);
                 })
             })
             .on_mouse_down(
