@@ -12,9 +12,17 @@ use git::{
     blame::Blame,
     repository::{
         AskPassDelegate, Branch, CommitData, CommitDataReader, CommitDetails, CommitOptions,
-        CreateWorktreeTarget, FetchOptions, GRAPH_CHUNK_SIZE, GitRepository,
-        GitRepositoryCheckpoint, InitialGraphCommitData, LogOrder, LogSource, PushOptions, RefEdit,
-        Remote, RepoPath, ResetMode, SearchCommitArgs, Worktree, commit_hash_search_query,
+<<<<<<< HEAD
+        CreateWorktreeTarget, FetchOptions, FileHistoryChangedFileSets, GRAPH_CHUNK_SIZE,
+        GitRepository, GitRepositoryCheckpoint, InitialGraphCommitData, LogOrder, LogSource,
+        PushOptions, RefEdit, Remote, RepoPath, ResetMode, SearchCommitArgs, Worktree,
+        commit_hash_search_query,
+=======
+        CreateWorktreeTarget, FetchOptions, FileHistoryChangedFileSets, GRAPH_CHUNK_SIZE,
+        GitRepository, GitRepositoryCheckpoint, InitialGraphCommitData, LogOrder, LogSource,
+        PushOptions, RefEdit, Remote, RepoPath, ResetMode, SearchCommitArgs, Worktree,
+        commit_hash_search_query,
+>>>>>>> 356e396517 (git_ui: Search commits by hash (#59132))
     },
     stash::GitStash,
     status::{
