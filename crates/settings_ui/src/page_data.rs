@@ -6591,7 +6591,7 @@ fn panels_page() -> SettingsPage {
         ]
     }
 
-    fn git_panel_section() -> [SettingsPageItem; 16] {
+    fn git_panel_section() -> [SettingsPageItem; 17] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.git.panel",
