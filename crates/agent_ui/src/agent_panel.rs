@@ -2834,7 +2834,15 @@ impl AgentPanel {
                                     "agent_ui.panel.add_custom_server",
                                     "Add Custom Server...",
                                 ),
-                                Box::new(AddContextServer),
+                                Box::new(AddContextServer::local()),
+                            )
+                            .action(
+                                tr(
+                                    cx,
+                                    "agent_ui.panel.add_remote_server",
+                                    "Add Remote Server...",
+                                ),
+                                Box::new(AddContextServer::remote()),
                             )
                             .separator()
                             .action(
