@@ -102,7 +102,7 @@ pub fn ensure_only_instance() -> IsOnlyInstance {
     };
 
     thread::Builder::new()
-        .name("EnsureSingleton".to_string())
+        .name("EnsureSingleton".to_owned())
         .spawn(move || {
             for stream in listener.incoming() {
                 let mut stream = match stream {

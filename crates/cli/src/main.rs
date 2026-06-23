@@ -1464,7 +1464,7 @@ mod mac_os {
         fn version(&self) -> String {
             match self {
                 Self::App { plist, .. } => plist.bundle_short_version_string.clone(),
-                Self::LocalPath { .. } => "<development>".to_string(),
+                Self::LocalPath { .. } => "<development>".to_owned(),
             }
         }
 
