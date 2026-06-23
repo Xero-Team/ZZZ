@@ -707,7 +707,7 @@ fn run_visual_test(
     // Get paths
     let baseline_path = get_baseline_path(test_name);
     let output_dir = std::env::var("VISUAL_TEST_OUTPUT_DIR")
-        .unwrap_or_else(|_| "target/visual_tests".to_string());
+        .unwrap_or_else(|_| "target/visual_tests".to_owned());
     let output_path = PathBuf::from(&output_dir).join(format!("{}.png", test_name));
 
     // Ensure output directory exists
@@ -763,7 +763,7 @@ fn run_visual_test(
 #[cfg(target_os = "macos")]
 fn get_baseline_path(test_name: &str) -> PathBuf {
     // Get the workspace root (where Cargo.toml is)
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_owned());
     let workspace_root = PathBuf::from(manifest_dir)
         .parent()
         .and_then(|p| p.parent())
@@ -1362,7 +1362,7 @@ fn run_settings_ui_subpage_visual_tests(
         .update(cx, |_workspace, window, cx| {
             window.dispatch_action(
                 Box::new(OpenSettingsAt {
-                    path: "agent".to_string(),
+                    path: "agent".to_owned(),
                 }),
                 cx,
             );
@@ -1407,7 +1407,7 @@ fn run_settings_ui_subpage_visual_tests(
         .update(cx, |_workspace, window, cx| {
             window.dispatch_action(
                 Box::new(OpenSettingsAt {
-                    path: "edit_predictions.providers".to_string(),
+                    path: "edit_predictions.providers".to_owned(),
                 }),
                 cx,
             );
@@ -1570,7 +1570,7 @@ import { AiPaneTabContext } from 'context';
     // Test 1: Diff view with feature flag enabled
     // Enable the feature flag
     cx.update(|cx| {
-        cx.update_flags(true, vec!["diff-review".to_string()]);
+        cx.update_flags(true, vec!["diff-review".to_owned()]);
     });
 
     let workspace_window: WindowHandle<Workspace> = cx
@@ -1648,7 +1648,7 @@ import { AiPaneTabContext } from 'context';
     // Test 3: Regular editor with flag enabled (should NOT show button)
     // Re-enable the feature flag
     cx.update(|cx| {
-        cx.update_flags(true, vec!["diff-review".to_string()]);
+        cx.update_flags(true, vec!["diff-review".to_owned()]);
     });
 
     // Create a new window with just a regular editor
@@ -2075,7 +2075,7 @@ fn run_agent_thread_view_test(
 
     cx.run_until_parked();
 
-    let worktree_name = cx.read(|cx| worktree.read(cx).root_name_str().to_string());
+    let worktree_name = cx.read(|cx| worktree.read(cx).root_name_str().to_owned());
 
     // Create the necessary entities for the ReadFileTool
     let action_log = cx.update(|cx| cx.new(|_| action_log::ActionLog::new(project.clone())));
@@ -2133,15 +2133,17 @@ fn run_agent_thread_view_test(
 
     // Create stub connection with the real tool output
     let connection = StubAgentConnection::new();
+    let read_file_label = cx.read(|app| {
+        tr(
+            app,
+            "zed.visual_test_runner.agent_thread.read_file",
+            "Read file `{}/test-image.png`",
+        )
+    });
     connection.set_next_prompt_updates(vec![acp::SessionUpdate::ToolCall(
         acp::ToolCall::new(
             "read_file",
-            tr(
-                cx,
-                "zed.visual_test_runner.agent_thread.read_file",
-                "Read file `{}/test-image.png`",
-            )
-            .replacen("{}", &worktree_name, 1),
+            read_file_label.replacen("{}", &worktree_name, 1),
         )
         .kind(acp::ToolKind::Read)
         .status(acp::ToolCallStatus::Completed)
@@ -2426,7 +2428,7 @@ fn run_tool_permissions_visual_tests(
         .update(cx, |_workspace, window, cx| {
             window.dispatch_action(
                 Box::new(OpenSettingsAt {
-                    path: "agent.tool_permissions".to_string(),
+                    path: "agent.tool_permissions".to_owned(),
                 }),
                 cx,
             );
@@ -2446,7 +2448,7 @@ fn run_tool_permissions_visual_tests(
     let settings_window = all_windows.last().copied().context("No windows found")?;
 
     let output_dir = std::env::var("VISUAL_TEST_OUTPUT_DIR")
-        .unwrap_or_else(|_| "target/visual_tests".to_string());
+        .unwrap_or_else(|_| "target/visual_tests".to_owned());
     std::fs::create_dir_all(&output_dir).log_err();
 
     // Navigate to the tool permissions sub-page using the public API
@@ -3734,7 +3736,7 @@ fn run_sidebar_duplicate_project_names_visual_tests(
     std::fs::create_dir_all(&baz_zed)?;
 
     cx.update(|cx| {
-        cx.update_flags(true, vec!["agent-v2".to_string()]);
+        cx.update_flags(true, vec!["agent-v2".to_owned()]);
     });
 
     let mut has_baseline_update = None;
