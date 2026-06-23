@@ -350,6 +350,10 @@ impl VisualTestAppContext {
     }
 
     /// Waits for a condition to become true, with a timeout.
+    #[expect(
+        clippy::future_not_send,
+        reason = "VisualTestAppContext is main-thread-only and uses Rc-backed state"
+    )]
     pub async fn wait_for<T: 'static>(
         &mut self,
         entity: &Entity<T>,
@@ -386,6 +390,10 @@ impl VisualTestAppContext {
     }
 
     /// Waits for animations to complete by waiting a couple of frames.
+    #[expect(
+        clippy::future_not_send,
+        reason = "VisualTestAppContext is main-thread-only and uses Rc-backed state"
+    )]
     pub async fn wait_for_animations(&self) {
         self.background_executor
             .timer(Duration::from_millis(32))
