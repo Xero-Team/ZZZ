@@ -69,16 +69,18 @@ use settings::{
     update_settings_file,
 };
 use smallvec::SmallVec;
+use std::cell::Cell;
 use std::future::Future;
 use std::ops::Range;
 use std::path::Path;
+use std::rc::Rc;
 use std::{sync::Arc, time::Duration, usize};
 use theme_settings::ThemeSettings;
 use time::OffsetDateTime;
 use ui::{
-    ButtonLike, Checkbox, ContextMenu, Divider, ElevationIndex, IndentGuideColors, PopoverMenu,
-    RenderedIndentGuide, ScrollAxes, Scrollbars, SplitButton, Tab, TintColor, Tooltip,
-    WithScrollbar, prelude::*,
+    ButtonLike, Checkbox, ContextMenu, ContextMenuEntry, Divider, ElevationIndex,
+    IndentGuideColors, PopoverMenu, RenderedIndentGuide, ScrollAxes, Scrollbars, SplitButton, Tab,
+    TintColor, Tooltip, WithScrollbar, prelude::*,
 };
 use util::paths::PathStyle;
 use util::{ResultExt, TryFutureExt, markdown::MarkdownInlineCode, maybe, rel_path::RelPath};
@@ -153,14 +155,14 @@ pub struct OpenAtCommit {
     pub sha: String,
 }
 
-struct GitMenuState {
+#[derive(Clone, Copy)]
+struct GitPanelViewOptionsMenuState {
     sort_by_path: bool,
     tree_view: bool,
 }
 
 fn git_panel_view_options_menu(
     focus_handle: FocusHandle,
-    state: GitMenuState,
     window: &mut Window,
     cx: &mut App,
 ) -> Entity<ContextMenu> {
@@ -168,29 +170,74 @@ fn git_panel_view_options_menu(
     let tree_view = tr(cx, "git_ui.git_panel.tree_view", "Tree View");
     let sort_by_status = tr(cx, "git_ui.git_panel.sort_by_status", "Sort by Status");
     let sort_by_path = tr(cx, "git_ui.git_panel.sort_by_path", "Sort by Path");
+    let view_options_menu_state = Rc::new(Cell::new(GitPanelViewOptionsMenuState {
+        sort_by_path: GitPanelSettings::get_global(cx).sort_by_path,
+        tree_view: GitPanelSettings::get_global(cx).tree_view,
+    }));
 
-    ContextMenu::build(window, cx, move |context_menu, _, _| {
+    ContextMenu::build_persistent(window, cx, move |context_menu, _, _| {
+        let state = view_options_menu_state.get();
+
         context_menu
             .context(focus_handle.clone())
-            .entry(
-                if state.tree_view {
-                    flat_view.clone()
-                } else {
-                    tree_view.clone()
-                },
-                Some(Box::new(ToggleTreeView)),
-                move |window, cx| window.dispatch_action(Box::new(ToggleTreeView), cx),
-            )
+            .item({
+                let view_options_menu_state = view_options_menu_state.clone();
+                ContextMenuEntry::new(flat_view.clone())
+                    .toggle(IconPosition::End, !state.tree_view)
+                    .handler(move |window, cx| {
+                        if state.tree_view {
+                            view_options_menu_state.set(GitPanelViewOptionsMenuState {
+                                tree_view: false,
+                                ..state
+                            });
+                            window.dispatch_action(Box::new(ToggleTreeView), cx);
+                        }
+                    })
+            })
+            .item({
+                let view_options_menu_state = view_options_menu_state.clone();
+                ContextMenuEntry::new(tree_view.clone())
+                    .toggle(IconPosition::End, state.tree_view)
+                    .handler(move |window, cx| {
+                        if !state.tree_view {
+                            view_options_menu_state.set(GitPanelViewOptionsMenuState {
+                                tree_view: true,
+                                ..state
+                            });
+                            window.dispatch_action(Box::new(ToggleTreeView), cx);
+                        }
+                    })
+            })
             .when(!state.tree_view, |this| {
-                this.entry(
-                    if state.sort_by_path {
-                        sort_by_status.clone()
-                    } else {
-                        sort_by_path.clone()
-                    },
-                    Some(Box::new(ToggleSortByPath)),
-                    move |window, cx| window.dispatch_action(Box::new(ToggleSortByPath), cx),
-                )
+                this.separator()
+                    .item({
+                        let view_options_menu_state = view_options_menu_state.clone();
+                        ContextMenuEntry::new(sort_by_path.clone())
+                            .toggle(IconPosition::End, state.sort_by_path)
+                            .handler(move |window, cx| {
+                                if !state.sort_by_path {
+                                    view_options_menu_state.set(GitPanelViewOptionsMenuState {
+                                        sort_by_path: true,
+                                        ..state
+                                    });
+                                    window.dispatch_action(Box::new(ToggleSortByPath), cx);
+                                }
+                            })
+                    })
+                    .item({
+                        let view_options_menu_state = view_options_menu_state.clone();
+                        ContextMenuEntry::new(sort_by_status.clone())
+                            .toggle(IconPosition::End, !state.sort_by_path)
+                            .handler(move |window, cx| {
+                                if state.sort_by_path {
+                                    view_options_menu_state.set(GitPanelViewOptionsMenuState {
+                                        sort_by_path: false,
+                                        ..state
+                                    });
+                                    window.dispatch_action(Box::new(ToggleSortByPath), cx);
+                                }
+                            })
+                    })
             })
     })
 }
@@ -4513,10 +4560,6 @@ impl GitPanel {
             .menu(move |window, cx| {
                 Some(git_panel_view_options_menu(
                     focus_handle.clone(),
-                    GitMenuState {
-                        sort_by_path: GitPanelSettings::get_global(cx).sort_by_path,
-                        tree_view: GitPanelSettings::get_global(cx).tree_view,
-                    },
                     window,
                     cx,
                 ))
