@@ -310,10 +310,8 @@ impl TextFinder {
 
     /// The query to seed from the active item, if any.
     ///
-    /// Only an explicit selection seeds from the editor; the bare word under the cursor is
-    /// ignored. Confirming a match jumps to (and places the cursor on) it, so seeding from the
-    /// cursor on reopen would clobber the search you were in the middle of, whereas a deliberate
-    /// selection (e.g. a double-click) is a clear signal to search for that text.
+    /// Honors the active item's own query suggestion, which lets text finder match
+    /// project search / buffer search behavior and respect `seed_search_query_from_cursor`.
     fn active_item_query(
         workspace: &mut Workspace,
         window: &mut Window,
@@ -335,7 +333,7 @@ impl TextFinder {
         }
 
         if let Some(editor) = item.act_as::<Editor>(cx) {
-            let query = editor.query_suggestion(Some(SeedQuerySetting::Selection), window, cx);
+            let query = editor.query_suggestion(Some(SeedQuerySetting::SelectionOrCursor), window, cx);
             if !query.is_empty() {
                 return Some(query);
             }
