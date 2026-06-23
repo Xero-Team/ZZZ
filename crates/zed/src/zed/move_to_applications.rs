@@ -135,7 +135,7 @@ impl MoveToApplicationsRequest {
                         PromptLevel::Critical,
                         &error_title,
                         Some(&error.to_string()),
-                        &[ok_label],
+                        &[PromptButton::ok(ok_label)],
                     )
                     .await
                     .log_err();
@@ -143,7 +143,7 @@ impl MoveToApplicationsRequest {
             }
             2 => {
                 let kvp = cx.update(|_window, cx| KeyValueStore::global(cx))?;
-                kvp.write_kvp(DONT_ASK_AGAIN_KEY.to_string(), "true".to_string())
+                kvp.write_kvp(DONT_ASK_AGAIN_KEY.to_owned(), "true".to_owned())
                     .await?;
             }
             _ => {}
