@@ -94,15 +94,23 @@ cargo build ${build_flag} --package remote_server --target $target_triple
 
 echo "Creating application bundle"
 pushd crates/zed
-cp Cargo.toml Cargo.toml.backup
+manifest_path="Cargo.toml"
+manifest_backup_path="$(mktemp)"
+cp "${manifest_path}" "${manifest_backup_path}"
 sed \
-    -i.backup \
+    -i.bundle-backup \
     "s/package.metadata.bundle-${channel}/package.metadata.bundle/" \
-    Cargo.toml
+    "${manifest_path}"
 
-app_path=$(cargo bundle ${build_flag} --target $target_triple --select-workspace-root | xargs)
+if ! app_path=$(cargo bundle ${build_flag} --target $target_triple --select-workspace-root --bin zzz | xargs); then
+    mv "${manifest_backup_path}" "${manifest_path}"
+    rm -f "${manifest_path}.bundle-backup"
+    popd
+    exit 1
+fi
 
-mv Cargo.toml.backup Cargo.toml
+mv "${manifest_backup_path}" "${manifest_path}"
+rm -f "${manifest_path}.bundle-backup"
 popd
 echo "Bundled ${app_path}"
 
@@ -236,7 +244,9 @@ function sign_app_binaries() {
         open "$app_path"
     fi
 
-    if [[ "$target_dir" = "debug" ]]; then
+    if [ "$local_install" = true ]; then
+        return
+    elif [[ "$target_dir" = "debug" ]]; then
         echo "Debug build detected - skipping DMG creation and signing"
         if [ "$local_install" = false ]; then
             echo "Created application bundle:"
