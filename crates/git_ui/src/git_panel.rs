@@ -10599,7 +10599,6 @@ mod tests {
             assert!(panel.commit_editor.focus_handle(cx).is_focused(window));
         });
     }
-
     #[gpui::test]
     async fn test_remote_operations_are_serialized(cx: &mut TestAppContext) {
         init_test(cx);
