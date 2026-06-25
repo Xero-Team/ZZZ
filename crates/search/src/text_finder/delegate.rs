@@ -363,6 +363,7 @@ impl Delegate {
         };
         let path = selected_match.path.clone();
         let line_number = selected_match.line_number;
+        let column = selected_match.relative_range.start as u32;
         let Some(workspace) = self.project_search_view.read(cx).workspace.upgrade() else {
             return;
         };
@@ -376,7 +377,11 @@ impl Delegate {
                 active_editor
                     .downgrade()
                     .update_in(cx, |editor, window, cx| {
-                        editor.go_to_singleton_buffer_point(text::Point::new(row, 0), window, cx);
+                        editor.go_to_singleton_buffer_point(
+                            text::Point::new(row, column),
+                            window,
+                            cx,
+                        );
                     })
                     .log_err();
             }
@@ -785,6 +790,7 @@ impl PickerDelegate for Delegate {
 
         let path = selected_match.path.clone();
         let line_number = selected_match.line_number;
+        let column = selected_match.relative_range.start as u32;
         let Some(workspace) = self.project_search_view.read(cx).workspace.upgrade() else {
             return;
         };
@@ -800,7 +806,11 @@ impl PickerDelegate for Delegate {
                 active_editor
                     .downgrade()
                     .update_in(cx, |editor, window, cx| {
-                        editor.go_to_singleton_buffer_point(text::Point::new(row, 0), window, cx);
+                        editor.go_to_singleton_buffer_point(
+                            text::Point::new(row, column),
+                            window,
+                            cx,
+                        );
                     })
                     .log_err();
             }
