@@ -595,7 +595,7 @@ impl TerminalBuilder {
 
             let term = Arc::new(FairMutex::new(term));
 
-            let pty_info = PtyProcessInfo::new(&pty);
+            let pty_info = PtyProcessInfo::new(ProcessIdGetter::new(&pty));
 
             //And connect them together
             let event_loop = EventLoop::new(
