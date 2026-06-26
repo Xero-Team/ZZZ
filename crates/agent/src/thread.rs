@@ -1079,8 +1079,6 @@ pub struct Thread {
     prompt_capabilities_tx: watch::Sender<acp::PromptCapabilities>,
     pub(crate) project: Entity<Project>,
     pub(crate) action_log: Entity<ActionLog>,
-    /// True if this thread was imported from a shared thread and can be synced.
-    imported: bool,
     /// If this is a subagent thread, contains context about the parent
     subagent_context: Option<SubagentContext>,
     /// The user's unsent prompt text, persisted so it can be restored when reloading the thread.
@@ -1209,7 +1207,6 @@ impl Thread {
             prompt_capabilities_tx,
             project,
             action_log,
-            imported: false,
             subagent_context: None,
             draft_prompt: None,
             ui_scroll_position: None,
@@ -1258,9 +1255,32 @@ impl Thread {
         &self.id
     }
 
-    /// Returns true if this thread was imported from a shared thread.
-    pub fn is_imported(&self) -> bool {
-        self.imported
+    // Only used by Seatbelt-style sandboxes (macOS); Linux relies on bwrap's
+    // tmpfs `/tmp` and Windows on the WSL bwrap tmpfs, so neither needs a
+    // per-thread temp directory.
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    pub(crate) fn sandboxed_terminal_temp_dir(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Result<PathBuf> {
+        if let Some(temp_dir) = &self.sandboxed_terminal_temp_dir {
+            std::fs::create_dir_all(temp_dir).with_context(|| {
+                format!(
+                    "failed to recreate sandboxed terminal temp directory {}",
+                    temp_dir.display()
+                )
+            })?;
+            return Ok(temp_dir.clone());
+        }
+
+        let temp_dir = tempfile::Builder::new()
+            .prefix("zed-agent-terminal-")
+            .tempdir()
+            .context("failed to create sandboxed terminal temp directory")?;
+        let temp_dir = temp_dir.keep();
+        self.sandboxed_terminal_temp_dir = Some(temp_dir.clone());
+        cx.notify();
+        Ok(temp_dir)
     }
 
     pub fn replay(
@@ -1511,7 +1531,6 @@ impl Thread {
             action_log,
             updated_at: db_thread.updated_at,
             prompt_capabilities_tx,
-            imported: db_thread.imported,
             subagent_context: db_thread.subagent_context,
             draft_prompt: db_thread.draft_prompt,
             ui_scroll_position: db_thread.ui_scroll_position.map(|sp| gpui::ListOffset {
@@ -1535,7 +1554,6 @@ impl Thread {
             request_token_usage: self.request_token_usage.clone(),
             model: (&self.model).into(),
             profile: Some(self.profile_id.clone()),
-            imported: self.imported,
             subagent_context: self.subagent_context.clone(),
             speed: self.speed,
             thinking_enabled: self.thinking_enabled,
@@ -4668,7 +4686,6 @@ mod tests {
                 model: "custom-model-id".to_string(),
             }),
             profile: None,
-            imported: false,
             subagent_context: None,
             speed: None,
             thinking_enabled: false,

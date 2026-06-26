@@ -9,14 +9,20 @@ use std::cell::RefCell;
 use acp_thread::{ContentBlock, PlanEntry, SandboxAuthorizationDetails};
 use cloud_api_types::{SubmitAgentThreadFeedbackBody, SubmitAgentThreadFeedbackCommentsBody};
 use editor::actions::OpenExcerpts;
-use language_model::LanguageModelProvider;
-
 use crate::message_editor::SharedSessionCapabilities;
 
 use gpui::List;
 use heapless::Vec as ArrayVec;
 use i18n as app_i18n;
-use ui::{SpinnerLabel, SpinnerVariant, Tab};
+use language_model::{
+    FastModeConfirmation, LanguageModel, LanguageModelEffortLevel, LanguageModelId,
+    LanguageModelProvider, LanguageModelProviderId, LanguageModelRegistry, Speed,
+};
+use settings::{update_settings_file, update_settings_file_with_completion};
+use ui::{
+    ButtonLike, CalloutBorderPosition, SpinnerLabel, SpinnerVariant, SplitButton, SplitButtonStyle,
+    Tab,
+};
 use workspace::{OpenOptions, SERIALIZATION_THROTTLE_TIME};
 
 use super::thread_search_bar::{ThreadSearchBar, ThreadSearchBarEvent};
@@ -1036,11 +1042,6 @@ impl ThreadView {
 
     pub fn has_queued_messages(&self) -> bool {
         !self.local_queued_messages.is_empty()
-    }
-
-    pub fn is_imported_thread(&self, _cx: &App) -> bool {
-        // Imported threads were a native-agent-only feature; always false for external agents.
-        false
     }
 
     // events
@@ -2261,37 +2262,6 @@ impl ThreadView {
     }
 
     // thread stuff
-
-    fn share_thread(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.workspace.upgrade() {
-            workspace.update(cx, |workspace, cx| {
-                struct ThreadShareUnavailableToast;
-                workspace.show_toast(
-                    Toast::new(
-                        NotificationId::unique::<ThreadShareUnavailableToast>(),
-                        tr(
-                            cx,
-                            "agent_ui.thread_view.thread_sharing_unavailable",
-                            "Thread sharing is not available for external agents.",
-                        )
-                        .to_string(),
-                    )
-                    .autohide(),
-                    cx,
-                );
-            });
-        }
-    }
-
-    pub fn sync_thread(
-        &mut self,
-        _project: Entity<Project>,
-        _server_view: Entity<ConversationView>,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-        // sync_thread was a native-agent-only feature (imported threads no longer exist).
-    }
 
     pub fn restore_checkpoint(&mut self, message_id: &UserMessageId, cx: &mut Context<Self>) {
         self.thread
@@ -5384,42 +5354,6 @@ impl ThreadView {
                             this.handle_feedback_click(ThreadFeedback::Negative, window, cx);
                         })),
                 );
-        }
-
-        if let Some(project) = self.project.upgrade()
-            && let Some(server_view) = self.server_view.upgrade()
-            && cx.has_flag::<AgentSharingFeatureFlag>()
-            && project.read(cx).client().status().borrow().is_connected()
-        {
-            let button = if self.is_imported_thread(cx) {
-                IconButton::new("sync-thread", IconName::ArrowCircle)
-                    .shape(ui::IconButtonShape::Square)
-                    .icon_size(IconSize::Small)
-                    .icon_color(Color::Ignored)
-                    .tooltip(Tooltip::text(tr(
-                        cx,
-                        "agent_ui.thread_view.sync_with_source_thread",
-                        "Sync with source thread",
-                    )))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.sync_thread(project.clone(), server_view.clone(), window, cx);
-                    }))
-            } else {
-                IconButton::new("share-thread", IconName::ArrowUpRight)
-                    .shape(ui::IconButtonShape::Square)
-                    .icon_size(IconSize::Small)
-                    .icon_color(Color::Ignored)
-                    .tooltip(Tooltip::text(tr(
-                        cx,
-                        "agent_ui.thread_view.share_thread",
-                        "Share Thread",
-                    )))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.share_thread(window, cx);
-                    }))
-            };
-
-            container = container.child(button);
         }
 
         container
