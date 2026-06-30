@@ -99,6 +99,7 @@ pub struct Picker<D: PickerDelegate> {
     /// Bounds tracking for items (for aside positioning) - maps item index to bounds
     item_bounds: Rc<RefCell<HashMap<usize, Bounds<Pixels>>>>,
     actions_menu_handle: PopoverMenuHandle<ContextMenu>,
+    reopenable: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -453,7 +454,12 @@ impl<D: PickerDelegate> Picker<D> {
             picker_bounds: Rc::new(Cell::new(None)),
             item_bounds: Rc::new(RefCell::new(HashMap::default())),
             actions_menu_handle: PopoverMenuHandle::default(),
+            reopenable: true,
         };
+        if this.reopenable {
+            let focus_handle = this.focus_handle(cx);
+            workspace::register_reopenable_picker(&focus_handle, cx);
+        }
         this.update_matches("".to_owned(), window, cx);
         // give the delegate 4ms to render the first set of suggestions.
         this.delegate
@@ -494,6 +500,31 @@ impl<D: PickerDelegate> Picker<D> {
 
     pub fn modal(mut self, modal: bool) -> Self {
         self.is_modal = modal;
+        self
+    }
+
+    /// Controls whether a modal hosting this picker can be revealed again with
+    /// `workspace::ReopenLastPicker` after it's dismissed. Defaults to `true`;
+    /// pass `false` to exclude this picker. As a builder, this only takes effect
+    /// while constructing the picker, before it's opened.
+    pub fn reopenable(mut self, reopenable: bool, cx: &mut App) -> Self {
+        if reopenable == self.reopenable {
+            return self;
+        }
+        self.reopenable = reopenable;
+        let focus_handle = self.focus_handle(cx);
+        if reopenable {
+            workspace::register_reopenable_picker(&focus_handle, cx);
+        } else {
+            workspace::deregister_reopenable_picker(&focus_handle, cx);
+        }
+        self
+    }
+
+    /// Presents the picker as embedded inside a larger container that provides
+    /// its own chrome and dismissal, rather than the default self-contained modal.
+    pub fn embedded(mut self) -> Self {
+        self.is_modal = false;
         self
     }
 
