@@ -4631,6 +4631,1482 @@ mod tests {
         (panel, cx)
     }
 
+    async fn setup_visible_panel(
+        cx: &mut TestAppContext,
+    ) -> (Entity<AgentPanel>, VisualTestContext) {
+        setup_visible_panel_with_sidebar(cx, true).await
+    }
+
+    async fn setup_visible_panel_with_sidebar(
+        cx: &mut TestAppContext,
+        threads_list_active: bool,
+    ) -> (Entity<AgentPanel>, VisualTestContext) {
+        init_test(cx);
+        cx.update(|cx| {
+            agent::ThreadStore::init_global(cx);
+            language_model::LanguageModelRegistry::test(cx);
+            AgentSettings::override_global(
+                AgentSettings {
+                    notify_when_agent_waiting: NotifyWhenAgentWaiting::PrimaryScreen,
+                    ..AgentSettings::get_global(cx).clone()
+                },
+                cx,
+            );
+        });
+
+        let fs = FakeFs::new(cx.executor());
+        cx.update(|cx| <dyn fs::Fs>::set_global(fs.clone(), cx));
+        fs.insert_tree("/project", json!({ "file.txt": "" })).await;
+        let project = Project::test(fs.clone(), [Path::new("/project")], cx).await;
+
+        let multi_workspace =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+
+        let workspace = multi_workspace
+            .read_with(cx, |multi_workspace, _cx| {
+                multi_workspace.workspace().clone()
+            })
+            .unwrap();
+
+        let mut cx = VisualTestContext::from_window(multi_workspace.into(), cx);
+        register_test_sidebar(threads_list_active, &mut cx);
+
+        let panel = workspace.update_in(&mut cx, |workspace, window, cx| {
+            let panel = cx.new(|cx| AgentPanel::new(workspace, window, cx));
+            workspace.add_panel(panel.clone(), window, cx);
+            workspace.focus_panel::<AgentPanel>(window, cx);
+            panel
+        });
+
+        (panel, cx)
+    }
+
+    fn expected_terminal_drop_text(paths: &[PathBuf]) -> String {
+        let mut text = String::new();
+        for path in paths {
+            text.push(' ');
+            text.push_str(&shlex::try_quote(path.to_str().unwrap()).unwrap());
+        }
+        text.push(' ');
+        text
+    }
+
+    #[gpui::test]
+    async fn test_terminal_external_image_drop_writes_path(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        cx.update(|_, cx| {
+            cx.update_flags(true, vec!["agent-panel-terminal".to_string()]);
+        });
+
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Image Upload", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        let terminal = panel.read_with(&cx, |panel, cx| {
+            panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel")
+                .view
+                .read(cx)
+                .terminal()
+                .clone()
+        });
+        terminal.update(&mut cx, |terminal, _cx| terminal.take_input_log());
+
+        let image_path = PathBuf::from("/tmp/dropped-image.png");
+        panel.update_in(&mut cx, |panel, window, cx| {
+            let external_paths = ExternalPaths(vec![image_path.clone()].into());
+            panel.paste_external_paths_into_active_terminal(&external_paths, window, cx);
+        });
+
+        let mut input_log = terminal.update(&mut cx, |terminal, _cx| terminal.take_input_log());
+        assert_eq!(input_log.len(), 1, "expected one write to the terminal");
+        let written =
+            String::from_utf8(input_log.remove(0)).expect("terminal write should be valid UTF-8");
+        assert_eq!(
+            written,
+            expected_terminal_drop_text(std::slice::from_ref(&image_path))
+        );
+    }
+
+    #[gpui::test]
+    async fn test_terminal_external_paths_drop_handler_writes_image_path(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        cx.update(|_, cx| {
+            cx.update_flags(true, vec!["agent-panel-terminal".to_string()]);
+        });
+
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Image Upload", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        let terminal = panel.read_with(&cx, |panel, cx| {
+            panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel")
+                .view
+                .read(cx)
+                .terminal()
+                .clone()
+        });
+        terminal.update(&mut cx, |terminal, _cx| terminal.take_input_log());
+
+        let image_path = PathBuf::from("/tmp/dropped-image.png");
+        panel.update_in(&mut cx, |panel, window, cx| {
+            let external_paths = ExternalPaths(vec![image_path.clone()].into());
+            panel.handle_external_paths_drop(&external_paths, window, cx);
+        });
+
+        let mut input_log = terminal.update(&mut cx, |terminal, _cx| terminal.take_input_log());
+        assert_eq!(input_log.len(), 1, "expected one write to the terminal");
+        let written =
+            String::from_utf8(input_log.remove(0)).expect("terminal write should be valid UTF-8");
+        assert_eq!(
+            written,
+            expected_terminal_drop_text(std::slice::from_ref(&image_path))
+        );
+    }
+
+    #[gpui::test]
+    async fn test_external_file_drop_on_thread_does_not_paste_into_later_terminal(
+        cx: &mut TestAppContext,
+    ) {
+        init_test(cx);
+        cx.update(|cx| {
+            agent::ThreadStore::init_global(cx);
+            language_model::LanguageModelRegistry::test(cx);
+            cx.update_flags(true, vec!["agent-panel-terminal".to_string()]);
+        });
+
+        let fs = FakeFs::new(cx.executor());
+        cx.update(|cx| <dyn fs::Fs>::set_global(fs.clone(), cx));
+        fs.insert_tree("/project", json!({ "file.txt": "content" }))
+            .await;
+        let project = Project::test(fs.clone(), [Path::new("/project")], cx).await;
+
+        let multi_workspace =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = multi_workspace
+            .read_with(cx, |multi_workspace, _cx| {
+                multi_workspace.workspace().clone()
+            })
+            .unwrap();
+        let mut cx = VisualTestContext::from_window(multi_workspace.into(), cx);
+
+        let panel = workspace.update_in(&mut cx, |workspace, window, cx| {
+            let panel = cx.new(|cx| AgentPanel::new(workspace, window, cx));
+            workspace.add_panel(panel.clone(), window, cx);
+            panel
+        });
+        open_thread_with_connection(&panel, StubAgentConnection::new(), &mut cx);
+        let thread_id = active_thread_id(&panel, &cx);
+
+        let file_path = PathBuf::from("/project/file.txt");
+        panel.update_in(&mut cx, |panel, window, cx| {
+            let external_paths = ExternalPaths(vec![file_path.clone()].into());
+            panel.handle_external_paths_drop(&external_paths, window, cx);
+        });
+
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Drop Target", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        let terminal = panel.read_with(&cx, |panel, cx| {
+            panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel")
+                .view
+                .read(cx)
+                .terminal()
+                .clone()
+        });
+        terminal.update(&mut cx, |terminal, _cx| terminal.take_input_log());
+
+        cx.run_until_parked();
+
+        let input_log = terminal.update(&mut cx, |terminal, _cx| terminal.take_input_log());
+        assert!(
+            input_log.is_empty(),
+            "thread drop completion should not write to the active terminal"
+        );
+
+        let expected_uri = MentionUri::File {
+            abs_path: file_path,
+        }
+        .to_uri()
+        .to_string();
+        let expected_text = format!("[@file.txt]({expected_uri}) ");
+        let actual_text = panel.read_with(&cx, |panel, cx| panel.editor_text(thread_id, cx));
+        assert_eq!(actual_text.as_deref(), Some(expected_text.as_str()));
+    }
+
+    #[gpui::test]
+    async fn test_terminal_entry_kind_controls_new_entry(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        panel.read_with(&cx, |panel, cx| {
+            assert!(panel.project.read(cx).supports_terminal(cx));
+            assert!(!panel.should_create_terminal_for_new_entry(cx));
+        });
+
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Dev Server", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            assert_eq!(panel.active_terminal_id(), Some(terminal_id));
+            assert!(panel.has_terminal(terminal_id));
+            assert!(panel.should_create_terminal_for_new_entry(cx));
+            let terminals = panel.terminals(cx);
+            assert_eq!(terminals.len(), 1);
+            assert_eq!(terminals[0].title.as_ref(), "Dev Server");
+        });
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.activate_new_thread(false, AgentThreadSource::AgentPanel, window, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            assert_eq!(panel.active_terminal_id(), None);
+            assert!(panel.has_terminal(terminal_id));
+            assert!(!panel.should_create_terminal_for_new_entry(cx));
+        });
+    }
+
+    #[gpui::test]
+    async fn test_skills_menu_entry_shows_manage_skills_shortcut(cx: &mut TestAppContext) {
+        init_test(cx);
+        cx.update(|cx| {
+            let default_key_bindings = settings::KeymapFile::load_asset_allow_partial_failure(
+                "keymaps/default-macos.json",
+                cx,
+            )
+            .unwrap();
+            cx.bind_keys(default_key_bindings);
+            agent::ThreadStore::init_global(cx);
+            language_model::LanguageModelRegistry::test(cx);
+        });
+
+        let fs = FakeFs::new(cx.executor());
+        cx.update(|cx| <dyn fs::Fs>::set_global(fs.clone(), cx));
+        fs.insert_tree("/project", json!({ "file.txt": "" })).await;
+        let project = Project::test(fs.clone(), [Path::new("/project")], cx).await;
+
+        let multi_workspace =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = multi_workspace
+            .read_with(cx, |multi_workspace, _cx| {
+                multi_workspace.workspace().clone()
+            })
+            .unwrap();
+        let mut cx = VisualTestContext::from_window(multi_workspace.into(), cx);
+
+        let panel = workspace.update_in(&mut cx, |workspace, window, cx| {
+            let panel = cx.new(|cx| AgentPanel::new(workspace, window, cx));
+            workspace.add_panel(panel.clone(), window, cx);
+            panel
+        });
+        open_thread_with_connection(&panel, StubAgentConnection::new(), &mut cx);
+        workspace.update_in(&mut cx, |workspace, window, cx| {
+            workspace.focus_panel::<AgentPanel>(window, cx);
+        });
+        cx.run_until_parked();
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.toggle_options_menu(&ToggleOptionsMenu, window, cx);
+        });
+        cx.run_until_parked();
+
+        assert!(
+            cx.debug_bounds("MENU_ITEM-Skills").is_some(),
+            "Skills menu item should be visible"
+        );
+        assert!(
+            cx.debug_bounds("KEY_BINDING-l").is_some(),
+            "Skills menu item should show the ManageSkills shortcut"
+        );
+    }
+
+    #[gpui::test]
+    async fn test_terminal_close_event_closes_without_sidebar(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        cx.update(|_, cx| {
+            TerminalThreadMetadataStore::init_global(cx);
+        });
+
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Dev Server", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        panel.update(&mut cx, |panel, cx| {
+            panel.emit_test_terminal_close(terminal_id, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, _cx| {
+            assert!(!panel.has_terminal(terminal_id));
+        });
+        cx.update(|_, cx| {
+            assert!(
+                TerminalThreadMetadataStore::global(cx)
+                    .read(cx)
+                    .entry(terminal_id)
+                    .is_none(),
+                "terminal metadata should be deleted by the fallback close"
+            );
+        });
+    }
+
+    #[gpui::test]
+    async fn test_terminal_title_omits_placeholder_title(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminals = panel.terminals(cx);
+            assert_eq!(terminals.len(), 1);
+            assert_eq!(terminals[0].title.as_ref(), "");
+            let terminal = panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel");
+            assert_eq!(terminal.title(cx).as_ref(), "");
+        });
+
+        let terminal_view = panel.read_with(&cx, |panel, _cx| {
+            panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel")
+                .view
+                .clone()
+        });
+        let terminal_entity =
+            terminal_view.read_with(&cx, |terminal_view, _cx| terminal_view.terminal().clone());
+        terminal_entity.update(&mut cx, |_terminal, cx| {
+            cx.emit(TerminalEvent::TitleChanged);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminals = panel.terminals(cx);
+            assert_eq!(terminals.len(), 1);
+            assert_eq!(terminals[0].title.as_ref(), "");
+            let terminal = panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel");
+            assert_eq!(terminal.title(cx).as_ref(), "");
+        });
+
+        terminal_entity.update(&mut cx, |terminal, cx| {
+            terminal.breadcrumb_text = "Shell Breadcrumb".to_string();
+            cx.emit(TerminalEvent::BreadcrumbsChanged);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminals = panel.terminals(cx);
+            assert_eq!(terminals.len(), 1);
+            assert_eq!(terminals[0].title.as_ref(), "Shell Breadcrumb");
+            let terminal = panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel");
+            assert_eq!(terminal.title(cx).as_ref(), "Shell Breadcrumb");
+        });
+    }
+
+    #[gpui::test]
+    async fn test_title_edit_affordance_matches_threads_and_terminals(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_panel(cx).await;
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.activate_draft(false, AgentThreadSource::AgentPanel, window, cx);
+        });
+        cx.run_until_parked();
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            assert!(matches!(
+                panel.visible_surface(),
+                VisibleSurface::AgentThread(_)
+            ));
+            assert!(panel.should_show_title_edit(window, cx));
+        });
+
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Dev Server", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            assert!(matches!(
+                panel.visible_surface(),
+                VisibleSurface::Terminal(_)
+            ));
+            assert!(panel.should_show_title_edit(window, cx));
+
+            panel.edit_terminal_title(terminal_id, window, cx);
+            assert!(!panel.should_show_title_edit(window, cx));
+        });
+    }
+
+    #[gpui::test]
+    async fn test_restored_terminal_uses_metadata_title_until_shell_title_arrives(
+        cx: &mut TestAppContext,
+    ) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        let terminal_id = TerminalId::new();
+        let now = Utc::now();
+        let metadata = TerminalThreadMetadata {
+            terminal_id,
+            title: "Persisted Shell Title".into(),
+            custom_title: None,
+            created_at: now,
+            worktree_paths: WorktreePaths::from_folder_paths(&PathList::new(&[PathBuf::from(
+                "/project",
+            )])),
+            remote_connection: None,
+            working_directory: None,
+        };
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel
+                .restore_test_terminal(metadata, true, AgentThreadSource::Sidebar, None, window, cx)
+                .expect("test terminal should be restored");
+        });
+        cx.run_until_parked();
+
+        let terminal_view = panel.read_with(&cx, |panel, cx| {
+            let terminals = panel.terminals(cx);
+            assert_eq!(terminals.len(), 1);
+            assert_eq!(terminals[0].title.as_ref(), "Persisted Shell Title");
+            panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should be restored")
+                .view
+                .clone()
+        });
+
+        let terminal_entity =
+            terminal_view.read_with(&cx, |terminal_view, _cx| terminal_view.terminal().clone());
+        terminal_entity.update(&mut cx, |terminal, cx| {
+            terminal.breadcrumb_text = "Fresh Shell Title".to_string();
+            cx.emit(TerminalEvent::BreadcrumbsChanged);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminals = panel.terminals(cx);
+            assert_eq!(terminals.len(), 1);
+            assert_eq!(terminals[0].title.as_ref(), "Fresh Shell Title");
+        });
+    }
+
+    #[gpui::test]
+    async fn test_restored_terminal_selects_without_focusing(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        let terminal_id = TerminalId::new();
+        let now = Utc::now();
+        let metadata = TerminalThreadMetadata {
+            terminal_id,
+            title: "Persisted Shell Title".into(),
+            custom_title: None,
+            created_at: now,
+            worktree_paths: WorktreePaths::from_folder_paths(&PathList::new(&[PathBuf::from(
+                "/project",
+            )])),
+            remote_connection: None,
+            working_directory: None,
+        };
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel
+                .restore_test_terminal(
+                    metadata,
+                    false,
+                    AgentThreadSource::Sidebar,
+                    None,
+                    window,
+                    cx,
+                )
+                .expect("test terminal should be restored");
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, _cx| {
+            assert_eq!(panel.active_terminal_id(), Some(terminal_id));
+        });
+    }
+
+    #[gpui::test]
+    async fn test_terminal_working_directory_uses_active_workspace_while_workspace_is_updating(
+        cx: &mut TestAppContext,
+    ) {
+        let (workspace, panel, mut cx) = setup_workspace_panel(cx).await;
+        panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Dev Server", false, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            assert_eq!(panel.last_created_entry_kind, AgentPanelEntryKind::Terminal);
+            assert!(panel.should_create_terminal_for_new_entry(cx));
+        });
+
+        workspace.update_in(&mut cx, |workspace, window, cx| {
+            let panel = workspace
+                .panel::<AgentPanel>(cx)
+                .expect("agent panel should be registered in workspace");
+            panel.read_with(cx, |panel, cx| {
+                panel.terminal_working_directory(Some(workspace), cx);
+            });
+            workspace.focus_panel::<AgentPanel>(window, cx);
+        });
+
+        panel.read_with(&cx, |panel, cx| {
+            assert_eq!(panel.last_created_entry_kind, AgentPanelEntryKind::Terminal);
+            assert!(panel.should_create_terminal_for_new_entry(cx));
+        });
+    }
+
+    #[gpui::test]
+    async fn test_terminal_title_editor_is_created_only_while_editing(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Dev Server", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, _cx| {
+            let terminal = panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel");
+            assert!(terminal.title_editor.is_none());
+        });
+
+        panel.update(&mut cx, |panel, cx| {
+            panel.refresh_terminal_metadata(terminal_id, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, _cx| {
+            let terminal = panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel");
+            assert!(terminal.title_editor.is_none());
+        });
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.edit_terminal_title(terminal_id, window, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminal = panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel");
+            let title_editor = terminal
+                .title_editor
+                .as_ref()
+                .expect("terminal title editor should be active while editing");
+            assert_eq!(title_editor.read(cx).text(cx), "Dev Server");
+        });
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.stop_editing_terminal_title(terminal_id, false, window, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, _cx| {
+            let terminal = panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel");
+            assert!(terminal.title_editor.is_none());
+        });
+    }
+
+    #[gpui::test]
+    async fn test_terminal_title_editor_does_not_set_custom_title_when_unchanged(
+        cx: &mut TestAppContext,
+    ) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Initial Custom Title", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        let terminal_view = panel.read_with(&cx, |panel, _cx| {
+            panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel")
+                .view
+                .clone()
+        });
+        terminal_view.update(&mut cx, |terminal_view, cx| {
+            terminal_view.set_custom_title(None, cx);
+        });
+        let terminal_entity =
+            terminal_view.read_with(&cx, |terminal_view, _cx| terminal_view.terminal().clone());
+        terminal_entity.update(&mut cx, |terminal, cx| {
+            terminal.breadcrumb_text = "Shell Breadcrumb".to_string();
+            cx.emit(TerminalEvent::BreadcrumbsChanged);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminals = panel.terminals(cx);
+            assert_eq!(terminals.len(), 1);
+            assert_eq!(terminals[0].title.as_ref(), "Shell Breadcrumb");
+        });
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.edit_terminal_title(terminal_id, window, cx);
+        });
+        cx.run_until_parked();
+
+        let title_editor = panel.read_with(&cx, |panel, cx| {
+            let terminal = panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel");
+            let title_editor = terminal
+                .title_editor
+                .as_ref()
+                .expect("terminal title editor should be active while editing")
+                .clone();
+            assert_eq!(title_editor.read(cx).text(cx), "Shell Breadcrumb");
+            title_editor
+        });
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.handle_terminal_title_editor_event(
+                terminal_id,
+                &title_editor,
+                &editor::EditorEvent::BufferEdited,
+                window,
+                cx,
+            );
+        });
+        cx.run_until_parked();
+
+        terminal_view.read_with(&cx, |terminal_view, _cx| {
+            assert!(terminal_view.custom_title().is_none());
+        });
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.stop_editing_terminal_title(terminal_id, false, window, cx);
+        });
+        terminal_entity.update(&mut cx, |terminal, cx| {
+            terminal.breadcrumb_text = "Updated Shell Breadcrumb".to_string();
+            cx.emit(TerminalEvent::BreadcrumbsChanged);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminals = panel.terminals(cx);
+            assert_eq!(terminals.len(), 1);
+            assert_eq!(terminals[0].title.as_ref(), "Updated Shell Breadcrumb");
+        });
+    }
+
+    #[gpui::test]
+    async fn test_terminal_custom_title_recomposes_with_live_spinner(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Fix bug", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        let terminal_entity = panel.read_with(&cx, |panel, _cx| {
+            panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel")
+                .view
+                .clone()
+        });
+        let terminal_entity =
+            terminal_entity.read_with(&cx, |terminal_view, _cx| terminal_view.terminal().clone());
+
+        terminal_entity.update(&mut cx, |terminal, cx| {
+            terminal.breadcrumb_text = "⠋ Thinking".to_string();
+            cx.emit(TerminalEvent::BreadcrumbsChanged);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminals = panel.terminals(cx);
+            assert_eq!(terminals.len(), 1);
+            assert_eq!(terminals[0].title.as_ref(), "⠋ Fix bug");
+            let metadata = panel
+                .terminal_metadata(terminal_id, cx)
+                .expect("terminal metadata should be available");
+            assert_eq!(metadata.title.as_ref(), "⠋ Thinking");
+            assert_eq!(
+                metadata.custom_title.as_ref().map(|title| title.as_ref()),
+                Some("Fix bug")
+            );
+            assert_eq!(metadata.display_title().as_ref(), "⠋ Fix bug");
+        });
+
+        terminal_entity.update(&mut cx, |terminal, cx| {
+            terminal.breadcrumb_text = "⠙ Thinking".to_string();
+            cx.emit(TerminalEvent::BreadcrumbsChanged);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminals = panel.terminals(cx);
+            assert_eq!(terminals.len(), 1);
+            assert_eq!(terminals[0].title.as_ref(), "⠙ Fix bug");
+            let metadata = panel
+                .terminal_metadata(terminal_id, cx)
+                .expect("terminal metadata should be available");
+            assert_eq!(metadata.title.as_ref(), "⠙ Thinking");
+            assert_eq!(metadata.display_title().as_ref(), "⠙ Fix bug");
+        });
+
+        terminal_entity.update(&mut cx, |terminal, cx| {
+            terminal.breadcrumb_text = "Thinking".to_string();
+            cx.emit(TerminalEvent::BreadcrumbsChanged);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminals = panel.terminals(cx);
+            assert_eq!(terminals.len(), 1);
+            assert_eq!(terminals[0].title.as_ref(), "Fix bug");
+            let metadata = panel
+                .terminal_metadata(terminal_id, cx)
+                .expect("terminal metadata should be available");
+            assert_eq!(metadata.title.as_ref(), "Thinking");
+            assert_eq!(metadata.display_title().as_ref(), "Fix bug");
+        });
+    }
+
+    #[gpui::test]
+    async fn test_terminal_title_editor_excludes_spinner_prefix(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Initial Custom Title", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        let terminal_view = panel.read_with(&cx, |panel, _cx| {
+            panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel")
+                .view
+                .clone()
+        });
+        terminal_view.update(&mut cx, |terminal_view, cx| {
+            terminal_view.set_custom_title(None, cx);
+        });
+        let terminal_entity =
+            terminal_view.read_with(&cx, |terminal_view, _cx| terminal_view.terminal().clone());
+        terminal_entity.update(&mut cx, |terminal, cx| {
+            terminal.breadcrumb_text = "⠋ Thinking".to_string();
+            cx.emit(TerminalEvent::BreadcrumbsChanged);
+        });
+        cx.run_until_parked();
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.edit_terminal_title(terminal_id, window, cx);
+        });
+        cx.run_until_parked();
+
+        let title_editor = panel.read_with(&cx, |panel, cx| {
+            let terminal = panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel");
+            let title_editor = terminal
+                .title_editor
+                .as_ref()
+                .expect("terminal title editor should be active while editing")
+                .clone();
+            assert_eq!(title_editor.read(cx).text(cx), "Thinking");
+            title_editor
+        });
+
+        title_editor.update_in(&mut cx, |editor, window, cx| {
+            editor.set_text("Fix bug", window, cx);
+            editor.focus_handle(cx).focus(window, cx);
+        });
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.handle_terminal_title_editor_event(
+                terminal_id,
+                &title_editor,
+                &editor::EditorEvent::BufferEdited,
+                window,
+                cx,
+            );
+        });
+        cx.run_until_parked();
+
+        terminal_view.read_with(&cx, |terminal_view, _cx| {
+            assert_eq!(terminal_view.custom_title(), Some("Fix bug"));
+        });
+        panel.read_with(&cx, |panel, cx| {
+            let terminals = panel.terminals(cx);
+            assert_eq!(terminals.len(), 1);
+            assert_eq!(terminals[0].title.as_ref(), "⠋ Fix bug");
+            let metadata = panel
+                .terminal_metadata(terminal_id, cx)
+                .expect("terminal metadata should be available");
+            assert_eq!(metadata.title.as_ref(), "⠋ Thinking");
+            assert_eq!(
+                metadata.custom_title.as_ref().map(|title| title.as_ref()),
+                Some("Fix bug")
+            );
+        });
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.stop_editing_terminal_title(terminal_id, false, window, cx);
+            panel.edit_terminal_title(terminal_id, window, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminal = panel
+                .terminals
+                .get(&terminal_id)
+                .expect("terminal should remain in the panel");
+            let title_editor = terminal
+                .title_editor
+                .as_ref()
+                .expect("terminal title editor should be active while editing");
+            assert_eq!(title_editor.read(cx).text(cx), "Fix bug");
+        });
+    }
+
+    #[gpui::test]
+    async fn test_terminal_bell_marks_and_activation_clears_notification(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        let first_terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Build", true, window, cx)
+            })
+            .expect("first test terminal should be inserted");
+        let second_terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Server", true, window, cx)
+            })
+            .expect("second test terminal should be inserted");
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, _cx| {
+            assert_eq!(panel.active_terminal_id(), Some(second_terminal_id));
+        });
+
+        panel.update(&mut cx, |panel, cx| {
+            panel.emit_test_terminal_bell(first_terminal_id, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let first_terminal = panel
+                .terminals(cx)
+                .into_iter()
+                .find(|terminal| terminal.id == first_terminal_id)
+                .expect("first terminal should remain in the panel");
+            assert!(first_terminal.has_notification);
+        });
+
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.activate_terminal(first_terminal_id, true, window, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let first_terminal = panel
+                .terminals(cx)
+                .into_iter()
+                .find(|terminal| terminal.id == first_terminal_id)
+                .expect("first terminal should remain in the panel");
+            assert!(!first_terminal.has_notification);
+        });
+    }
+
+    #[gpui::test]
+    async fn test_visible_terminal_bell_is_suppressed(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_visible_panel(cx).await;
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Claude", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        cx.update(|window, cx| {
+            assert!(window.is_window_active());
+            assert!(panel.read(cx).focus_handle(cx).contains_focused(window, cx));
+        });
+
+        panel.update(&mut cx, |panel, cx| {
+            panel.emit_test_terminal_bell(terminal_id, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminal = panel
+                .terminals(cx)
+                .into_iter()
+                .find(|terminal| terminal.id == terminal_id)
+                .expect("terminal should remain in the panel");
+            assert!(!terminal.has_notification);
+        });
+        assert!(
+            cx.windows()
+                .iter()
+                .all(|window| window.downcast::<AgentNotification>().is_none())
+        );
+    }
+
+    #[gpui::test]
+    async fn test_visible_terminal_bell_is_suppressed_without_focus(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_visible_panel(cx).await;
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Claude", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        let workspace = cx.update(|window, cx| {
+            window
+                .root::<MultiWorkspace>()
+                .flatten()
+                .expect("test window should have a MultiWorkspace root")
+                .read(cx)
+                .workspace()
+                .clone()
+        });
+        workspace.update_in(&mut cx, |workspace, window, cx| {
+            workspace.focus_handle(cx).focus(window, cx);
+        });
+        cx.update(|window, cx| {
+            assert!(window.is_window_active());
+            assert!(workspace.read(cx).focus_handle(cx).is_focused(window));
+            assert!(!panel.read(cx).focus_handle(cx).contains_focused(window, cx));
+        });
+
+        panel.update(&mut cx, |panel, cx| {
+            panel.emit_test_terminal_bell(terminal_id, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminal = panel
+                .terminals(cx)
+                .into_iter()
+                .find(|terminal| terminal.id == terminal_id)
+                .expect("terminal should remain in the panel");
+            assert!(!terminal.has_notification);
+        });
+        assert!(
+            cx.windows()
+                .iter()
+                .all(|window| window.downcast::<AgentNotification>().is_none())
+        );
+    }
+
+    #[gpui::test]
+    async fn test_terminal_bell_marks_without_popup_when_sidebar_open(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_visible_panel(cx).await;
+        let first_terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Build", true, window, cx)
+            })
+            .expect("first test terminal should be inserted");
+        let second_terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Server", true, window, cx)
+            })
+            .expect("second test terminal should be inserted");
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, _cx| {
+            assert_eq!(panel.active_terminal_id(), Some(second_terminal_id));
+        });
+        cx.update(|window, cx| {
+            let multi_workspace = window
+                .root::<MultiWorkspace>()
+                .flatten()
+                .expect("test window should have a MultiWorkspace root");
+            multi_workspace.update(cx, |multi_workspace, cx| {
+                multi_workspace.open_sidebar(cx);
+            });
+        });
+        cx.run_until_parked();
+
+        panel.update(&mut cx, |panel, cx| {
+            panel.emit_test_terminal_bell(first_terminal_id, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let first_terminal = panel
+                .terminals(cx)
+                .into_iter()
+                .find(|terminal| terminal.id == first_terminal_id)
+                .expect("first terminal should remain in the panel");
+            assert!(first_terminal.has_notification);
+        });
+        assert!(
+            cx.windows()
+                .iter()
+                .all(|window| window.downcast::<AgentNotification>().is_none())
+        );
+    }
+
+    #[gpui::test]
+    async fn test_terminal_bell_notifies_when_sidebar_history_open(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_visible_panel_with_sidebar(cx, false).await;
+        let first_terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Build", true, window, cx)
+            })
+            .expect("first test terminal should be inserted");
+        let second_terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Server", true, window, cx)
+            })
+            .expect("second test terminal should be inserted");
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, _cx| {
+            assert_eq!(panel.active_terminal_id(), Some(second_terminal_id));
+        });
+        cx.update(|window, cx| {
+            let multi_workspace = window
+                .root::<MultiWorkspace>()
+                .flatten()
+                .expect("test window should have a MultiWorkspace root");
+            multi_workspace.update(cx, |multi_workspace, cx| {
+                multi_workspace.open_sidebar(cx);
+            });
+        });
+        cx.run_until_parked();
+
+        panel.update(&mut cx, |panel, cx| {
+            panel.emit_test_terminal_bell(first_terminal_id, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let first_terminal = panel
+                .terminals(cx)
+                .into_iter()
+                .find(|terminal| terminal.id == first_terminal_id)
+                .expect("first terminal should remain in the panel");
+            assert!(first_terminal.has_notification);
+        });
+        cx.windows()
+            .iter()
+            .find_map(|window| window.downcast::<AgentNotification>())
+            .expect("terminal bell should notify when the sidebar thread list is hidden");
+    }
+
+    #[gpui::test]
+    async fn test_terminal_notification_dismissed_when_sidebar_opens(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_visible_panel(cx).await;
+        let first_terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Build", true, window, cx)
+            })
+            .expect("first test terminal should be inserted");
+        let second_terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Server", true, window, cx)
+            })
+            .expect("second test terminal should be inserted");
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, _cx| {
+            assert_eq!(panel.active_terminal_id(), Some(second_terminal_id));
+        });
+        panel.update(&mut cx, |panel, cx| {
+            panel.emit_test_terminal_bell(first_terminal_id, cx);
+        });
+        cx.run_until_parked();
+
+        cx.windows()
+            .iter()
+            .find_map(|window| window.downcast::<AgentNotification>())
+            .expect("inactive terminal bell should show a notification");
+
+        cx.update(|window, cx| {
+            let multi_workspace = window
+                .root::<MultiWorkspace>()
+                .flatten()
+                .expect("test window should have a MultiWorkspace root");
+            multi_workspace.update(cx, |multi_workspace, cx| {
+                multi_workspace.open_sidebar(cx);
+            });
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let first_terminal = panel
+                .terminals(cx)
+                .into_iter()
+                .find(|terminal| terminal.id == first_terminal_id)
+                .expect("first terminal should remain in the panel");
+            assert!(first_terminal.has_notification);
+        });
+        assert!(
+            cx.windows()
+                .iter()
+                .all(|window| window.downcast::<AgentNotification>().is_none())
+        );
+    }
+
+    #[gpui::test]
+    async fn test_focused_terminal_bell_notifies_when_window_inactive(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_visible_panel(cx).await;
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Claude", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        cx.update(|window, cx| {
+            assert!(window.is_window_active());
+            assert!(panel.read(cx).focus_handle(cx).contains_focused(window, cx));
+        });
+        cx.deactivate_window();
+        cx.update(|window, _cx| {
+            assert!(!window.is_window_active());
+        });
+
+        panel.update(&mut cx, |panel, cx| {
+            panel.emit_test_terminal_bell(terminal_id, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminal = panel
+                .terminals(cx)
+                .into_iter()
+                .find(|terminal| terminal.id == terminal_id)
+                .expect("terminal should remain in the panel");
+            assert!(terminal.has_notification);
+        });
+        cx.windows()
+            .iter()
+            .find_map(|window| window.downcast::<AgentNotification>())
+            .expect("background terminal bell should show a notification");
+    }
+
+    #[gpui::test]
+    async fn test_active_terminal_notification_clears_when_window_reactivates(
+        cx: &mut TestAppContext,
+    ) {
+        let (panel, mut cx) = setup_visible_panel(cx).await;
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Claude", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        cx.deactivate_window();
+        panel.update(&mut cx, |panel, cx| {
+            panel.emit_test_terminal_bell(terminal_id, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminal = panel
+                .terminals(cx)
+                .into_iter()
+                .find(|terminal| terminal.id == terminal_id)
+                .expect("terminal should remain in the panel");
+            assert!(terminal.has_notification);
+        });
+        cx.windows()
+            .iter()
+            .find_map(|window| window.downcast::<AgentNotification>())
+            .expect("background terminal bell should show a notification");
+
+        cx.update(|window, _cx| {
+            window.activate_window();
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminal = panel
+                .terminals(cx)
+                .into_iter()
+                .find(|terminal| terminal.id == terminal_id)
+                .expect("terminal should remain in the panel");
+            assert!(!terminal.has_notification);
+        });
+        assert!(
+            cx.windows()
+                .iter()
+                .all(|window| window.downcast::<AgentNotification>().is_none())
+        );
+    }
+
+    #[gpui::test]
+    async fn test_terminal_notification_dismissed_when_active_terminal_becomes_visible(
+        cx: &mut TestAppContext,
+    ) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        cx.update(|_window, cx| {
+            AgentSettings::override_global(
+                AgentSettings {
+                    notify_when_agent_waiting: NotifyWhenAgentWaiting::PrimaryScreen,
+                    ..AgentSettings::get_global(cx).clone()
+                },
+                cx,
+            );
+        });
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Claude", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        cx.run_until_parked();
+
+        panel.update(&mut cx, |panel, cx| {
+            panel.emit_test_terminal_bell(terminal_id, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminal = panel
+                .terminals(cx)
+                .into_iter()
+                .find(|terminal| terminal.id == terminal_id)
+                .expect("terminal should remain in the panel");
+            assert!(terminal.has_notification);
+        });
+        cx.windows()
+            .iter()
+            .find_map(|window| window.downcast::<AgentNotification>())
+            .expect("hidden terminal bell should show a notification");
+
+        let workspace = cx.update(|window, cx| {
+            window
+                .root::<MultiWorkspace>()
+                .flatten()
+                .expect("test window should have a MultiWorkspace root")
+                .read(cx)
+                .workspace()
+                .clone()
+        });
+        workspace.update_in(&mut cx, |workspace, window, cx| {
+            workspace.add_panel(panel.clone(), window, cx);
+            workspace.focus_panel::<AgentPanel>(window, cx);
+        });
+        cx.run_until_parked();
+
+        panel.read_with(&cx, |panel, cx| {
+            let terminal = panel
+                .terminals(cx)
+                .into_iter()
+                .find(|terminal| terminal.id == terminal_id)
+                .expect("terminal should remain in the panel");
+            assert!(!terminal.has_notification);
+        });
+        assert!(
+            cx.windows()
+                .iter()
+                .all(|window| window.downcast::<AgentNotification>().is_none())
+        );
+    }
+
+    #[gpui::test]
+    async fn test_terminal_notification_closed_when_panel_dropped(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_panel(cx).await;
+        cx.update(|_window, cx| {
+            AgentSettings::override_global(
+                AgentSettings {
+                    notify_when_agent_waiting: NotifyWhenAgentWaiting::PrimaryScreen,
+                    ..AgentSettings::get_global(cx).clone()
+                },
+                cx,
+            );
+        });
+        let terminal_id = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.insert_test_terminal("Claude", true, window, cx)
+            })
+            .expect("test terminal should be inserted");
+        let weak_panel = panel.downgrade();
+        cx.run_until_parked();
+
+        panel.update(&mut cx, |panel, cx| {
+            panel.emit_test_terminal_bell(terminal_id, cx);
+        });
+        cx.run_until_parked();
+
+        cx.windows()
+            .iter()
+            .find_map(|window| window.downcast::<AgentNotification>())
+            .expect("hidden terminal bell should show a notification");
+
+        drop(panel);
+        cx.update(|_window, _cx| {});
+        cx.run_until_parked();
+
+        assert!(
+            !weak_panel.is_upgradable(),
+            "agent panel should be released after dropping the last handle"
+        );
+        assert!(
+            cx.windows()
+                .iter()
+                .all(|window| window.downcast::<AgentNotification>().is_none())
+        );
+    }
+
+    #[gpui::test]
+    async fn test_terminal_notification_view_activates_terminal_workspace(cx: &mut TestAppContext) {
+        init_test(cx);
+        cx.update(|cx| {
+            agent::ThreadStore::init_global(cx);
+            language_model::LanguageModelRegistry::test(cx);
+            cx.update_flags(true, vec!["agent-panel-terminal".to_string()]);
+            AgentSettings::override_global(
+                AgentSettings {
+                    notify_when_agent_waiting: NotifyWhenAgentWaiting::PrimaryScreen,
+                    ..AgentSettings::get_global(cx).clone()
+                },
+                cx,
+            );
+        });
+
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree("/project_a", json!({ "file.txt": "" }))
+            .await;
+        fs.insert_tree("/project_b", json!({ "file.txt": "" }))
+            .await;
+        let project_a = Project::test(fs.clone(), [Path::new("/project_a")], cx).await;
+        let project_b = Project::test(fs, [Path::new("/project_b")], cx).await;
+
+        let multi_workspace =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project_a.clone(), window, cx));
+        let workspace_a = multi_workspace
+            .read_with(cx, |multi_workspace, _cx| {
+                multi_workspace.workspace().clone()
+            })
+            .unwrap();
+        let workspace_b = multi_workspace
+            .update(cx, |multi_workspace, window, cx| {
+                multi_workspace.test_add_workspace(project_b.clone(), window, cx)
+            })
+            .unwrap();
+
+        let cx = &mut VisualTestContext::from_window(multi_workspace.into(), cx);
+        let panel_a = workspace_a.update_in(cx, |workspace, window, cx| {
+            let panel = cx.new(|cx| AgentPanel::new(workspace, window, cx));
+            workspace.add_panel(panel.clone(), window, cx);
+            panel
+        });
+
+        let first_terminal_id = panel_a
+            .update_in(cx, |panel, window, cx| {
+                panel.insert_test_terminal("Build", true, window, cx)
+            })
+            .expect("first test terminal should be inserted");
+        let second_terminal_id = panel_a
+            .update_in(cx, |panel, window, cx| {
+                panel.insert_test_terminal("Server", true, window, cx)
+            })
+            .expect("second test terminal should be inserted");
+        cx.run_until_parked();
+
+        multi_workspace
+            .read_with(cx, |multi_workspace, _cx| {
+                assert_eq!(multi_workspace.workspace(), &workspace_b);
+            })
+            .unwrap();
+        panel_a.read_with(cx, |panel, _cx| {
+            assert_eq!(panel.active_terminal_id(), Some(second_terminal_id));
+        });
+
+        panel_a.update(cx, |panel, cx| {
+            panel.emit_test_terminal_bell(first_terminal_id, cx);
+        });
+        cx.run_until_parked();
+
+        let notification = cx
+            .windows()
+            .iter()
+            .find_map(|window| window.downcast::<AgentNotification>())
+            .expect("terminal bell should show a notification");
+        notification
+            .update(cx, |notification, _window, cx| notification.accept(cx))
+            .unwrap();
+        assert!(
+            cx.windows()
+                .iter()
+                .all(|window| window.downcast::<AgentNotification>().is_none())
+        );
+        cx.run_until_parked();
+
+        multi_workspace
+            .read_with(cx, |multi_workspace, _cx| {
+                assert_eq!(multi_workspace.workspace(), &workspace_a);
+            })
+            .unwrap();
+        panel_a.read_with(cx, |panel, cx| {
+            assert_eq!(panel.active_terminal_id(), Some(first_terminal_id));
+            let first_terminal = panel
+                .terminals(cx)
+                .into_iter()
+                .find(|terminal| terminal.id == first_terminal_id)
+                .expect("first terminal should remain in the panel");
+            assert!(!first_terminal.has_notification);
+        });
+    }
+
     #[gpui::test]
     async fn test_running_thread_retained_when_navigating_away(cx: &mut TestAppContext) {
         let (panel, mut cx) = setup_panel(cx).await;
