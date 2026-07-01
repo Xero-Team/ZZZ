@@ -65,6 +65,58 @@ const TOOL_CANCELED_MESSAGE: &str = "Tool canceled by user";
 pub const MAX_TOOL_NAME_LENGTH: usize = 64;
 pub const MAX_SUBAGENT_DEPTH: u8 = 1;
 
+pub(crate) fn provider_compatible_tool_name(tool_name: &str) -> String {
+    let mut sanitized = String::new();
+    for character in tool_name.chars() {
+        if sanitized.len() >= MAX_TOOL_NAME_LENGTH {
+            break;
+        }
+
+        if character.is_ascii_alphanumeric() || character == '_' || character == '-' {
+            sanitized.push(character);
+        } else {
+            sanitized.push('_');
+        }
+    }
+
+    if sanitized.is_empty() {
+        sanitized.push_str("tool");
+    }
+
+    sanitized
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SandboxStatusKey {
+    pub settings_sandbox: ThreadSandbox,
+    pub thread_sandbox: ThreadSandbox,
+    pub baseline_writable_paths: Vec<PathBuf>,
+    pub git_paths: Vec<PathBuf>,
+    pub repository_paths: Vec<(PathBuf, PathBuf, PathBuf, PathBuf)>,
+    pub settings_allow_git_access: bool,
+    pub thread_allow_git_access: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedSandboxStatus {
+    pub settings_sandbox: ThreadSandbox,
+    pub thread_sandbox: ThreadSandbox,
+    pub baseline_writable_paths: Vec<PathBuf>,
+}
+
+pub enum SandboxStatusRefresh {
+    Ready(VerifiedSandboxStatus),
+    Pending(Task<VerifiedSandboxStatus>),
+}
+
+/// Auto-compaction is only available for models whose context window is at least
+/// this large. For smaller models there isn't enough headroom for a compaction
+/// pass to be worthwhile, so we leave the thread uncompacted and let the UI warn
+/// the user instead.
+pub const MIN_COMPACTION_CONTEXT_WINDOW: u64 = 80_000;
+
+// Using the heuristic that 1 token is about 4 bytes, keep the last 80K bytes of user-message content (~20k tokens).
+const COMPACTION_RETAINED_USER_MESSAGES_BYTE_BUDGET: usize = 80_000;
 /// Returned when a turn is attempted but no language model has been selected.
 #[derive(Debug)]
 pub struct NoModelConfiguredError;
@@ -3016,15 +3068,10 @@ impl Thread {
         let Some(profile) = AgentSettings::get_global(cx).profiles.get(&self.profile_id) else {
             return BTreeMap::new();
         };
-        fn truncate(tool_name: &SharedString) -> SharedString {
-            if tool_name.len() > MAX_TOOL_NAME_LENGTH {
-                let mut truncated = tool_name.to_string();
-                truncated.truncate(MAX_TOOL_NAME_LENGTH);
-                truncated.into()
-            } else {
-                tool_name.clone()
-            }
-        }
+        // Terminal variants are configured by users under the canonical
+        // `terminal` name. Expose the one matching the current sandbox state
+        // to the model under that name.
+        let use_sandboxed_terminal = sandboxing_enabled_for_project(self.project.read(cx), cx);
 
         let mut tools = self
             .tools
@@ -3033,7 +3080,16 @@ impl Thread {
                 if tool.supports_provider(&model.provider_id())
                     && profile.is_tool_enabled(tool_name)
                 {
-                    Some((truncate(tool_name), tool.clone()))
+                    match (tool_name.as_ref(), use_sandboxed_terminal) {
+                        (TerminalTool::NAME, false) | (SandboxedTerminalTool::NAME, true) => {
+                            Some((SharedString::from(TerminalTool::NAME), tool.clone()))
+                        }
+                        (TerminalTool::NAME | SandboxedTerminalTool::NAME, _) => None,
+                        _ => Some((
+                            provider_compatible_tool_name(tool_name.as_ref()).into(),
+                            tool.clone(),
+                        )),
+                    }
                 } else {
                     None
                 }
@@ -3057,7 +3113,8 @@ impl Thread {
         for (server_id, server_tools) in self.context_server_registry.read(cx).servers() {
             for (tool_name, tool) in server_tools {
                 if profile.is_context_server_tool_enabled(&server_id.0, &tool_name) {
-                    let tool_name = truncate(tool_name);
+                    let tool_name: SharedString =
+                        provider_compatible_tool_name(tool_name.as_ref()).into();
                     if !seen_tools.insert(tool_name.clone()) {
                         duplicate_tool_names.insert(tool_name.clone());
                     }
@@ -3074,7 +3131,8 @@ impl Thread {
             if duplicate_tool_names.contains(&tool_name) {
                 let available = MAX_TOOL_NAME_LENGTH.saturating_sub(tool_name.len());
                 if available >= 2 {
-                    let mut disambiguated = server_id.0.to_snake_case();
+                    let mut disambiguated =
+                        provider_compatible_tool_name(&server_id.0.to_snake_case()).to_string();
                     disambiguated.truncate(available - 1);
                     disambiguated.push('_');
                     disambiguated.push_str(&tool_name);
