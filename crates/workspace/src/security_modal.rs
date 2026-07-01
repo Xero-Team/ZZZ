@@ -492,6 +492,7 @@ impl SecurityModal {
             .upgrade()
             .map(|store| store.read(cx).path_style())
             .unwrap_or_else(PathStyle::local);
+<<<<<<< HEAD
         validate_trust_scope(&typed, &project, self.home_dir.as_deref(), path_style)
             .map(Some)
             .map_err(|error| error.message(cx))
@@ -683,7 +684,6 @@ mod tests {
         let project = Path::new("/Users/me/dev/delta/wt/t1");
         let home = Path::new("/Users/me");
         let style = PathStyle::Posix;
-
         assert_eq!(
             validate_trust_scope("/Users/me/dev/delta/wt", project, None, style).unwrap(),
             PathBuf::from("/Users/me/dev/delta/wt"),
@@ -692,13 +692,17 @@ mod tests {
             validate_trust_scope("~/dev/delta/wt", project, Some(home), style).unwrap(),
             PathBuf::from("/Users/me/dev/delta/wt"),
         );
+        assert_eq!(
+            validate_trust_scope("/Users/me/dev/delta/wt/t1", project, None, style).unwrap(),
+            PathBuf::from("/Users/me/dev/delta/wt/t1"),
+        );
+        assert!(validate_trust_scope("/Users/me/dev", project, None, style).is_ok());
     }
 
     #[test]
     fn validate_trust_scope_rejects_remote_non_ancestor_or_relative_paths() {
         let project = Path::new("/Users/me/dev/delta/wt/t1");
         let style = PathStyle::Posix;
-
         assert_eq!(
             validate_trust_scope("/Users/other", project, None, style),
             Err(TrustScopeValidationError::NotAncestor)
@@ -710,6 +714,21 @@ mod tests {
         assert_eq!(
             validate_trust_scope("   ", project, None, style),
             Err(TrustScopeValidationError::Empty)
+        );
+        assert_eq!(
+            validate_trust_scope("/Users/me/dev/delta/wt/t1/sub", project, None, style),
+            Err(TrustScopeValidationError::NotAncestor)
+        );
+    }
+
+    #[test]
+    fn validate_trust_scope_expands_posix_home_root() {
+        let home = Path::new("/Users/me");
+        let project = Path::new("/Users/me/dev/wt/t1");
+        let style = PathStyle::Posix;
+        assert_eq!(
+            validate_trust_scope("~", project, Some(home), style).unwrap(),
+            PathBuf::from("/Users/me"),
         );
     }
 }
