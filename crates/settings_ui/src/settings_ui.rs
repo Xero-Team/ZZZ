@@ -1466,6 +1466,7 @@ struct SubPageLink {
     title: UiText,
     r#type: SubPageType,
     description: Option<UiText>,
+    search_aliases: &'static [&'static str],
     /// See [`SettingField.json_path`]
     json_path: Option<&'static str>,
     /// Whether or not the settings in this sub page are configurable in settings.json
@@ -2232,15 +2233,16 @@ impl SettingsWindow {
                     SettingsPageItem::SubPageLink(sub_page_link) => {
                         let title = sub_page_link.title.resolve(cx);
                         json_path = sub_page_link.json_path;
+                        let mut parts = vec![page_title.as_ref(), header_text.as_ref(), title.as_ref()];
+                        parts.extend(sub_page_link.search_aliases);
                         documents.push(SearchDocument {
                             id: key_index,
-                            words: split_into_words(&[
-                                page_title.as_ref(),
-                                header_text.as_ref(),
-                                title.as_ref(),
-                            ]),
+                            words: split_into_words(&parts),
                         });
                         push_candidates(&mut fuzzy_match_candidates, key_index, title.as_ref());
+                        for alias in sub_page_link.search_aliases {
+                            push_candidates(&mut fuzzy_match_candidates, key_index, alias);
+                        }
                     }
                     SettingsPageItem::ActionLink(action_link) => {
                         let title = action_link.title.resolve(cx);
@@ -3933,6 +3935,7 @@ impl SettingsWindow {
             title: UiText::from(title.into()),
             r#type: SubPageType::default(),
             description: None,
+            search_aliases: &[],
             json_path,
             in_json: true,
             files: USER,
@@ -5504,6 +5507,74 @@ pub mod test {
             assert_eq!(settings_window.current_file, SettingsUiFile::User);
             assert_eq!(settings_window.sub_page_stack.len(), 1);
             assert_eq!(settings_window.sub_page_stack[0].link.title, sub_page.title);
+        });
+    }
+
+    #[gpui::test]
+    async fn test_sub_page_search_aliases_are_indexed(cx: &mut gpui::TestAppContext) {
+        cx.update(|cx| {
+            register_settings(cx);
+        });
+
+        let (settings_window, cx) = cx.add_window_view(SettingsWindow::test);
+
+        cx.update_window_entity(&settings_window, |settings_window, _window, cx| {
+            settings_window.pages = vec![SettingsPage {
+                title: "Agent".into(),
+                items: Box::new([
+                    SettingsPageItem::SectionHeader("Configuration".into()),
+                    SettingsPageItem::SubPageLink(SubPageLink {
+                        title: UiText::from("Configure Providers"),
+                        r#type: SubPageType::default(),
+                        description: None,
+                        search_aliases: &["openai", "ollama"],
+                        json_path: Some("language_models"),
+                        in_json: false,
+                        files: USER,
+                        render: |_this, _scroll_handle, _window, _cx| div().into_any_element(),
+                    }),
+                    SettingsPageItem::SubPageLink(SubPageLink {
+                        title: UiText::from("Tool Permissions"),
+                        r#type: SubPageType::default(),
+                        description: None,
+                        search_aliases: &[],
+                        json_path: Some("agent.tool_permissions"),
+                        in_json: true,
+                        files: USER,
+                        render: |_this, _scroll_handle, _window, _cx| div().into_any_element(),
+                    }),
+                ]),
+            }];
+            settings_window.build_filter_table();
+            settings_window.build_search_index(cx);
+        });
+
+        cx.update_window_entity(&settings_window, |settings_window, _window, _cx| {
+            let search_index = settings_window
+                .search_index
+                .as_ref()
+                .expect("search index should be built");
+            assert!(
+                search_index.documents[1]
+                    .words
+                    .iter()
+                    .any(|word| word == "openai"),
+                "sub-page search aliases should be indexed as document words"
+            );
+            assert!(
+                search_index
+                    .fuzzy_match_candidates
+                    .iter()
+                    .any(|candidate| candidate.string == "openai"),
+                "sub-page search aliases should be indexed as fuzzy-match candidates"
+            );
+            assert!(
+                !search_index.documents[2]
+                    .words
+                    .iter()
+                    .any(|word| word == "openai"),
+                "unrelated sub-pages should not receive aliases they do not declare"
+            );
         });
     }
 
