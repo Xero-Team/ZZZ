@@ -6,10 +6,10 @@ use crate::{
 use agent_client_protocol::schema as acp;
 use std::cell::RefCell;
 
-use acp_thread::{ContentBlock, PlanEntry, SandboxAuthorizationDetails};
+use crate::message_editor::SharedSessionCapabilities;
+use acp_thread::{PlanEntry, SandboxAuthorizationDetails};
 use cloud_api_types::{SubmitAgentThreadFeedbackBody, SubmitAgentThreadFeedbackCommentsBody};
 use editor::actions::OpenExcerpts;
-use crate::message_editor::SharedSessionCapabilities;
 
 use gpui::List;
 use heapless::Vec as ArrayVec;
@@ -8003,7 +8003,18 @@ impl ThreadView {
     ) -> AnyElement {
         match content {
             ToolCallContent::ContentBlock(content) => {
-                if let Some(resource_link) = content.resource_link() {
+                if let Some((resource, markdown)) = content.embedded_resource() {
+                    self.render_embedded_resource_output(
+                        resource,
+                        markdown.cloned(),
+                        entry_ix,
+                        context_ix,
+                        tool_call,
+                        card_layout,
+                        window,
+                        cx,
+                    )
+                } else if let Some(resource_link) = content.resource_link() {
                     self.render_resource_link(resource_link, cx)
                 } else if let Some(markdown) = content.markdown() {
                     self.render_markdown_output(
@@ -8114,6 +8125,60 @@ impl ThreadView {
                         }
                     })),
             )
+            .into_any_element()
+    }
+
+    fn render_embedded_resource_output(
+        &self,
+        resource: &acp::EmbeddedResource,
+        markdown: Option<Entity<Markdown>>,
+        entry_ix: usize,
+        context_ix: usize,
+        tool_call: &ToolCall,
+        card_layout: bool,
+        window: &Window,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        if let Some(markdown) = markdown {
+            return self.render_markdown_output(
+                markdown,
+                entry_ix,
+                context_ix,
+                tool_call,
+                card_layout,
+                window,
+                cx,
+            );
+        }
+
+        let uri = match &resource.resource {
+            acp::EmbeddedResourceResource::BlobResourceContents(blob) => blob.uri.as_str(),
+            acp::EmbeddedResourceResource::TextResourceContents(text) => text.uri.as_str(),
+            _ => "",
+        };
+
+        v_flex()
+            .gap_1()
+            .map(|this| {
+                if card_layout {
+                    this.p_2().when(context_ix > 0, |this| {
+                        this.border_t_1()
+                            .border_color(self.tool_card_border_color(cx))
+                    })
+                } else {
+                    this.ml(rems(0.4))
+                        .px_3p5()
+                        .border_l_1()
+                        .border_color(self.tool_card_border_color(cx))
+                }
+            })
+            .when(!uri.is_empty(), |this| {
+                this.child(
+                    Label::new(uri.to_string())
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted),
+                )
+            })
             .into_any_element()
     }
 
@@ -8384,8 +8449,8 @@ impl ThreadView {
 
         let is_cancelled = matches!(tool_call.status, ToolCallStatus::Canceled)
             || tool_call.content.iter().any(|c| match c {
-                ToolCallContent::ContentBlock(ContentBlock::Markdown { markdown }) => {
-                    markdown.read(cx).source() == "User canceled"
+                ToolCallContent::ContentBlock(block) => {
+                    block.text_content(cx) == Some("User canceled")
                 }
                 _ => false,
             });
@@ -8801,15 +8866,13 @@ impl ThreadView {
         if matches!(status, ToolCallStatus::Failed) {
             tool_call.content.iter().find_map(|content| {
                 if let ToolCallContent::ContentBlock(block) = content {
-                    if let acp_thread::ContentBlock::Markdown { markdown } = block {
-                        let source = markdown.read(cx).source().to_owned();
-                        if !source.is_empty() {
-                            if source == "User canceled" {
-                                return None;
-                            }
-
-                            return Some(SharedString::from(source));
+                    if let Some(source) = block.text_content(cx).filter(|source| !source.is_empty())
+                    {
+                        if source == "User canceled" {
+                            return None;
                         }
+
+                        return Some(SharedString::from(source));
                     }
                 }
                 None
