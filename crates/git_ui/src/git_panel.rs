@@ -318,6 +318,15 @@ const UPDATE_DEBOUNCE: Duration = Duration::from_millis(50);
 // TODO: We should revise this part. It seems the indentation width is not aligned with the one in project panel
 const TREE_INDENT: f32 = 16.0;
 
+// Remote Git operations can prompt for credentials and mutate shared refs, so
+// we serialize them from the panel UI.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RemoteOperationKind {
+    Fetch,
+    Pull,
+    Push,
+}
+
 fn commit_message_placeholder(placeholder: Option<SharedString>, cx: &App) -> SharedString {
     placeholder.unwrap_or_else(|| {
         tr(
@@ -752,6 +761,7 @@ pub struct GitPanel {
     diff_stat_total: DiffStat,
     new_staged_count: usize,
     pending_commit: Option<Task<()>>,
+    pending_remote_operation: Option<RemoteOperationKind>,
     amend_pending: bool,
     original_commit_message: Option<String>,
     signoff_enabled: bool,
@@ -967,6 +977,7 @@ impl GitPanel {
                 changes_count: 0,
                 diff_stat_total: DiffStat::default(),
                 pending_commit: None,
+                pending_remote_operation: None,
                 amend_pending: false,
                 original_commit_message: None,
                 signoff_enabled: false,
@@ -3156,6 +3167,9 @@ impl GitPanel {
         let Some(repo) = self.active_repository.clone() else {
             return;
         };
+        if !self.start_remote_operation(RemoteOperationKind::Fetch, cx) {
+            return;
+        }
         let askpass = self.askpass_delegate("git fetch", window, cx);
         let this = cx.weak_entity();
 
@@ -3167,6 +3181,9 @@ impl GitPanel {
 
         window
             .spawn(cx, async move |cx| {
+                let _clear_pending_remote_operation = cx.on_drop(&this, |this, cx| {
+                    this.clear_remote_operation(cx);
+                });
                 let Some(fetch_options) = fetch_options.await else {
                     return Ok(());
                 };
@@ -3316,8 +3333,14 @@ impl GitPanel {
             return;
         };
         let branch = branch.clone();
+        if !self.start_remote_operation(RemoteOperationKind::Pull, cx) {
+            return;
+        }
         let remote = self.get_remote(false, false, window, cx);
         cx.spawn_in(window, async move |this, cx| {
+            let _clear_pending_remote_operation = cx.on_drop(&this, |this, cx| {
+                this.clear_remote_operation(cx);
+            });
             let remote = match remote.await {
                 Ok(Some(remote)) => remote,
                 Ok(None) => {
@@ -3393,6 +3416,9 @@ impl GitPanel {
             return;
         };
         let branch = branch.clone();
+        if !self.start_remote_operation(RemoteOperationKind::Push, cx) {
+            return;
+        }
 
         let options = if force_push {
             Some(PushOptions::Force)
@@ -3409,6 +3435,9 @@ impl GitPanel {
         let remote = self.get_remote(select_remote, true, window, cx);
 
         cx.spawn_in(window, async move |this, cx| {
+            let _clear_pending_remote_operation = cx.on_drop(&this, |this, cx| {
+                this.clear_remote_operation(cx);
+            });
             let remote = match remote.await {
                 Ok(Some(remote)) => remote,
                 Ok(None) => {
@@ -3590,6 +3619,26 @@ impl GitPanel {
 
     fn can_push_and_pull(&self, cx: &App) -> bool {
         !self.project.read(cx).is_via_collab()
+    }
+
+    fn start_remote_operation(
+        &mut self,
+        kind: RemoteOperationKind,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.pending_remote_operation.is_some() {
+            return false;
+        }
+
+        self.pending_remote_operation = Some(kind);
+        cx.notify();
+        true
+    }
+
+    fn clear_remote_operation(&mut self, cx: &mut Context<Self>) {
+        if self.pending_remote_operation.take().is_some() {
+            cx.notify();
+        }
     }
 
     fn get_remote(
@@ -5070,6 +5119,7 @@ impl GitPanel {
                         &branch,
                         focus_handle,
                         true,
+                        self.pending_remote_operation,
                         cx,
                     ))
                 })
@@ -10133,6 +10183,35 @@ mod tests {
         cx.dispatch_action(super::ToggleFocus);
         panel.update_in(&mut cx, |panel, window, cx| {
             assert!(panel.commit_editor.focus_handle(cx).is_focused(window));
+        });
+    }
+
+    #[gpui::test]
+    async fn test_remote_operations_are_serialized(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let (_project, _workspace, panel, mut cx) = setup_git_panel_with_changes(
+            cx,
+            json!({
+                ".git": {},
+                "tracked": "tracked\n",
+            }),
+            &[("tracked", StatusCode::Modified)],
+        )
+        .await;
+
+        panel.update_in(&mut cx, |panel, _window, cx| {
+            assert!(panel.start_remote_operation(RemoteOperationKind::Fetch, cx));
+            assert_eq!(
+                panel.pending_remote_operation,
+                Some(RemoteOperationKind::Fetch)
+            );
+
+            assert!(!panel.start_remote_operation(RemoteOperationKind::Push, cx));
+
+            panel.clear_remote_operation(cx);
+            assert!(panel.pending_remote_operation.is_none());
+            assert!(panel.start_remote_operation(RemoteOperationKind::Pull, cx));
         });
     }
 }
