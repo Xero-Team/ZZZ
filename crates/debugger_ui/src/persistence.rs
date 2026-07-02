@@ -3,6 +3,7 @@ use collections::HashMap;
 use dap::{Capabilities, adapters::DebugAdapterName};
 use db::kvp::KeyValueStore;
 use gpui::{Axis, Context, Entity, EntityId, Focusable, Subscription, WeakEntity, Window};
+use i18n::tr;
 use project::Project;
 use serde::{Deserialize, Serialize};
 use ui::{App, SharedString};
@@ -67,28 +68,92 @@ impl DebuggerPaneItem {
             DebuggerPaneItem::MemoryView => SharedString::new_static("Memory View"),
         }
     }
-    pub(crate) fn tab_tooltip(self) -> SharedString {
-        let tooltip = match self {
+    pub(crate) fn localized_title(self, cx: &App) -> SharedString {
+        match self {
             DebuggerPaneItem::Console => {
-                "Displays program output and allows manual input of debugger commands."
+                tr(cx, "debugger_ui.persistence.console.title", "Console").into()
             }
             DebuggerPaneItem::Variables => {
-                "Shows current values of local and global variables in the current stack frame."
+                tr(cx, "debugger_ui.persistence.variables.title", "Variables").into()
             }
-            DebuggerPaneItem::BreakpointList => "Lists all active breakpoints set in the code.",
+            DebuggerPaneItem::BreakpointList => tr(
+                cx,
+                "debugger_ui.persistence.breakpoints.title",
+                "Breakpoints",
+            )
+            .into(),
             DebuggerPaneItem::Frames => {
-                "Displays the call stack, letting you navigate between function calls."
+                tr(cx, "debugger_ui.persistence.frames.title", "Frames").into()
             }
-            DebuggerPaneItem::Modules => "Shows all modules or libraries loaded by the program.",
+            DebuggerPaneItem::Modules => {
+                tr(cx, "debugger_ui.persistence.modules.title", "Modules").into()
+            }
             DebuggerPaneItem::LoadedSources => {
-                "Lists all source files currently loaded and used by the debugger."
+                tr(cx, "debugger_ui.persistence.sources.title", "Sources").into()
             }
             DebuggerPaneItem::Terminal => {
-                "Provides an interactive terminal session within the debugging environment."
+                tr(cx, "debugger_ui.persistence.terminal.title", "Terminal").into()
             }
-            DebuggerPaneItem::MemoryView => "Allows inspection of memory contents.",
-        };
-        SharedString::new_static(tooltip)
+            DebuggerPaneItem::MemoryView => tr(
+                cx,
+                "debugger_ui.persistence.memory_view.title",
+                "Memory View",
+            )
+            .into(),
+        }
+    }
+
+    pub(crate) fn localized_tooltip(self, cx: &App) -> SharedString {
+        match self {
+            DebuggerPaneItem::Console => tr(
+                cx,
+                "debugger_ui.persistence.console.tooltip",
+                "Displays program output and allows manual input of debugger commands.",
+            )
+            .into(),
+            DebuggerPaneItem::Variables => tr(
+                cx,
+                "debugger_ui.persistence.variables.tooltip",
+                "Shows current values of local and global variables in the current stack frame.",
+            )
+            .into(),
+            DebuggerPaneItem::BreakpointList => tr(
+                cx,
+                "debugger_ui.persistence.breakpoints.tooltip",
+                "Lists all active breakpoints set in the code.",
+            )
+            .into(),
+            DebuggerPaneItem::Frames => tr(
+                cx,
+                "debugger_ui.persistence.frames.tooltip",
+                "Displays the call stack, letting you navigate between function calls.",
+            )
+            .into(),
+            DebuggerPaneItem::Modules => tr(
+                cx,
+                "debugger_ui.persistence.modules.tooltip",
+                "Shows all modules or libraries loaded by the program.",
+            )
+            .into(),
+            DebuggerPaneItem::LoadedSources => tr(
+                cx,
+                "debugger_ui.persistence.sources.tooltip",
+                "Lists all source files currently loaded and used by the debugger.",
+            )
+            .into(),
+            DebuggerPaneItem::Terminal => tr(
+                cx,
+                "debugger_ui.persistence.terminal.tooltip",
+                "Provides an interactive terminal session within the debugging environment.",
+            )
+            .into(),
+            DebuggerPaneItem::MemoryView => tr(
+                cx,
+                "debugger_ui.persistence.memory_view.tooltip",
+                "Allows inspection of memory contents.",
+            )
+            .into(),
+        }
     }
 }
 

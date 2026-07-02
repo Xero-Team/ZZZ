@@ -6,6 +6,7 @@ use gpui::{
     Anchor, AnyView, App, Context, Decorations, Entity, IntoElement, ParentElement, Render, Styled,
     Subscription, WeakEntity, Window,
 };
+use i18n::tr;
 use std::any::TypeId;
 use theme::CLIENT_SIDE_DECORATION_ROUNDING;
 use ui::{Divider, Indicator, Tooltip, prelude::*};
@@ -180,7 +181,15 @@ impl StatusBar {
                         .indicator_border_color(Some(indicator_border))
                 })
                 .tooltip(move |_, cx| {
-                    Tooltip::for_action("Open Threads Sidebar", &ToggleWorkspaceSidebar, cx)
+                    Tooltip::for_action(
+                        tr(
+                            cx,
+                            "workspace.status_bar.open_threads_sidebar",
+                            "Open Threads Sidebar",
+                        ),
+                        &ToggleWorkspaceSidebar,
+                        cx,
+                    )
                 })
                 .on_click(move |_, window, cx| {
                     if let Some(multi_workspace) = window.root::<MultiWorkspace>().flatten() {

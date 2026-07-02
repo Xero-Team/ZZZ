@@ -14,6 +14,7 @@ use gpui::{
     Pixels, Point, Render, ScrollWheelEvent, Styled, Subscription, Task, WeakEntity, actions,
     anchored, deferred, div,
 };
+use i18n::tr;
 use itertools::Itertools;
 use menu;
 use persistence::TerminalDb;
@@ -500,32 +501,62 @@ impl TerminalView {
             .upgrade()
             .and_then(|workspace| workspace.read(cx).panel::<TerminalPanel>(cx))
             .is_some_and(|terminal_panel| terminal_panel.read(cx).assistant_enabled());
-        let context_menu = ContextMenu::build(window, cx, |menu, _, _| {
+        let context_menu = ContextMenu::build(window, cx, |menu, _, cx| {
             menu.context(self.focus_handle.clone())
-                .action("New Terminal", Box::new(NewTerminal::default()))
                 .action(
-                    "New Center Terminal",
+                    tr(cx, "workspace.pane.new_terminal", "New Terminal"),
+                    Box::new(NewTerminal::default()),
+                )
+                .action(
+                    tr(
+                        cx,
+                        "workspace.pane.new_center_terminal",
+                        "New Center Terminal",
+                    ),
                     Box::new(NewCenterTerminal::default()),
                 )
                 .separator()
-                .action("Copy", Box::new(Copy))
-                .action("Paste", Box::new(Paste))
-                .action("Paste Text", Box::new(PasteText))
-                .action("Select All", Box::new(SelectAll))
-                .action("Clear", Box::new(Clear))
+                .action(tr(cx, "project_panel.menu.copy", "Copy"), Box::new(Copy))
+                .action(tr(cx, "project_panel.menu.paste", "Paste"), Box::new(Paste))
+                .action(
+                    tr(cx, "terminal_view.context_menu.paste_text", "Paste Text"),
+                    Box::new(PasteText),
+                )
+                .action(
+                    tr(cx, "menu.selection.select_all", "Select All"),
+                    Box::new(SelectAll),
+                )
+                .action(
+                    tr(cx, "terminal_view.context_menu.clear", "Clear"),
+                    Box::new(Clear),
+                )
                 .when(
                     assistant_enabled && !matches!(self.mode, TerminalMode::Embedded { .. }),
                     |menu| {
                         menu.separator()
-                            .action("Inline Assist", Box::new(InlineAssist::default()))
+                            .action(
+                                tr(cx, "zed.quick_action_bar.inline_assist", "Inline Assist"),
+                                Box::new(InlineAssist::default()),
+                            )
                             .when(has_selection, |menu| {
-                                menu.action("Add to Agent Thread", Box::new(AddSelectionToThread))
+                                menu.action(
+                                    tr(
+                                        cx,
+                                        "zed.quick_action_bar.add_to_agent_thread",
+                                        "Add to Agent Thread",
+                                    ),
+                                    Box::new(AddSelectionToThread),
+                                )
                             })
                     },
                 )
                 .separator()
                 .action(
-                    "Close Terminal Tab",
+                    tr(
+                        cx,
+                        "terminal_view.context_menu.close_terminal_tab",
+                        "Close Terminal Tab",
+                    ),
                     Box::new(CloseActiveItem {
                         save_intent: None,
                         close_pinned: true,
@@ -1050,7 +1081,13 @@ impl TerminalView {
                 .size(ButtonSize::Compact)
                 .icon_color(Color::Default)
                 .shape(ui::IconButtonShape::Square)
-                .tooltip(move |_window, cx| Tooltip::for_action("Rerun task", &RerunTask, cx))
+                .tooltip(move |_window, cx| {
+                    Tooltip::for_action(
+                        tr(cx, "terminal_view.tooltip.rerun_task", "Rerun task"),
+                        &RerunTask,
+                        cx,
+                    )
+                })
                 .on_click(move |_, window, cx| {
                     window.dispatch_action(Box::new(terminal_rerun_override(&task_id)), cx);
                 }),
@@ -1397,6 +1434,12 @@ impl Item for TerminalView {
             let terminal = self.terminal().read(cx);
             let title = terminal.title(false);
             let pid = terminal.pid_getter()?.fallback_pid();
+            let process_id_label = tr(
+                cx,
+                "terminal_view.tooltip.process_id",
+                "Process ID (PID): {}",
+            )
+            .replacen("{}", &pid.to_string(), 1);
 
             move |_, _| {
                 v_flex()
@@ -1404,7 +1447,7 @@ impl Item for TerminalView {
                     .child(Label::new(title.clone()))
                     .child(h_flex().flex_grow().child(Divider::horizontal()))
                     .child(
-                        Label::new(format!("Process ID (PID): {}", pid))
+                        Label::new(process_id_label.clone())
                             .color(Color::Muted)
                             .size(LabelSize::Small),
                     )

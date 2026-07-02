@@ -2028,7 +2028,11 @@ impl Sidebar {
                 window,
                 cx,
                 move |mut menu, _window, cx| {
-                    menu = menu.header("New Thread In...");
+                    menu = menu.header(app_i18n::tr(
+                        cx,
+                        "sidebar.project.new_thread_in",
+                        "New Thread In...",
+                    ));
 
                     for (workspace, labels) in open_workspaces
                         .iter()
@@ -2090,59 +2094,76 @@ impl Sidebar {
 
                     if let Some(base_workspace) = base_workspace.filter(|_| !creation_blocked) {
                         let group_key = key.clone();
-                        menu = menu.separator().submenu("Create New Worktree...", {
-                            move |mut submenu, _window, submenu_cx| {
-                                let project = base_workspace.read(submenu_cx).project().clone();
-                                let project_ref = project.read(submenu_cx);
-                                let has_multiple_repositories =
-                                    project_ref.repositories(submenu_cx).len() > 1;
-                                let current_branch =
-                                    project_ref.active_repository(submenu_cx).and_then(|repo| {
-                                        repo.read(submenu_cx)
-                                            .branch
-                                            .as_ref()
-                                            .map(|branch| branch.name().to_owned())
-                                    });
-                                let default_branch = this
-                                    .read_with(submenu_cx, |sidebar, _| {
-                                        match sidebar.worktree_default_branches.get(&group_key) {
-                                            Some(DefaultBranchCache::Resolved(branch)) => {
-                                                branch.clone()
+                        menu = menu.separator().submenu(
+                            app_i18n::tr(
+                                cx,
+                                "sidebar.project.create_new_worktree",
+                                "Create New Worktree...",
+                            ),
+                            {
+                                move |mut submenu, _window, submenu_cx| {
+                                    let project = base_workspace.read(submenu_cx).project().clone();
+                                    let project_ref = project.read(submenu_cx);
+                                    let has_multiple_repositories =
+                                        project_ref.repositories(submenu_cx).len() > 1;
+                                    let current_branch = project_ref
+                                        .active_repository(submenu_cx)
+                                        .and_then(|repo| {
+                                            repo.read(submenu_cx)
+                                                .branch
+                                                .as_ref()
+                                                .map(|branch| branch.name().to_owned())
+                                        });
+                                    let default_branch = this
+                                        .read_with(submenu_cx, |sidebar, _| {
+                                            match sidebar.worktree_default_branches.get(&group_key)
+                                            {
+                                                Some(DefaultBranchCache::Resolved(branch)) => {
+                                                    branch.clone()
+                                                }
+                                                _ => None,
                                             }
-                                            _ => None,
-                                        }
-                                    })
-                                    .ok()
-                                    .flatten();
+                                        })
+                                        .ok()
+                                        .flatten();
 
-                                let targets = worktree_create_targets(
-                                    has_multiple_repositories,
-                                    default_branch,
-                                    current_branch.as_deref(),
-                                );
-                                for target in targets {
-                                    let label = format!(
-                                        "Based on {}",
-                                        target.branch_label(
-                                            has_multiple_repositories,
-                                            current_branch.as_deref(),
-                                        )
+                                    let targets = worktree_create_targets(
+                                        has_multiple_repositories,
+                                        default_branch,
+                                        current_branch.as_deref(),
                                     );
-                                    let branch_target = target.branch_target();
-                                    let workspace = base_workspace.clone();
-                                    submenu = submenu.entry(label, None, move |window, cx| {
-                                        create_worktree_in_workspace(
-                                            &workspace,
-                                            branch_target.clone(),
-                                            window,
-                                            cx,
+                                    for target in targets {
+                                        let label = app_i18n::tr(
+                                            submenu_cx,
+                                            "sidebar.project.based_on",
+                                            "Based on {}",
+                                        )
+                                        .replacen(
+                                            "{}",
+                                            target
+                                                .branch_label(
+                                                    has_multiple_repositories,
+                                                    current_branch.as_deref(),
+                                                )
+                                                .as_ref(),
+                                            1,
                                         );
-                                    });
-                                }
+                                        let branch_target = target.branch_target();
+                                        let workspace = base_workspace.clone();
+                                        submenu = submenu.entry(label, None, move |window, cx| {
+                                            create_worktree_in_workspace(
+                                                &workspace,
+                                                branch_target.clone(),
+                                                window,
+                                                cx,
+                                            );
+                                        });
+                                    }
 
-                                submenu
-                            }
-                        });
+                                    submenu
+                                }
+                            },
+                        );
                     }
 
                     menu
@@ -4232,9 +4253,11 @@ impl Sidebar {
                         }
                     }?;
                     let notified = self.contents.is_thread_notified(&thread.metadata.thread_id);
-                    let timestamp: SharedString =
-                        format_history_entry_timestamp(Self::thread_display_time(&thread.metadata))
-                            .into();
+                    let timestamp: SharedString = format_history_entry_timestamp(
+                        Self::thread_display_time(&thread.metadata),
+                        cx,
+                    )
+                    .into();
                     Some(ThreadSwitcherEntry {
                         session_id,
                         title: thread.metadata.display_title(),
@@ -4485,7 +4508,8 @@ impl Sidebar {
             .title_bar_background
             .blend(color.panel_background.opacity(0.25));
 
-        let timestamp = format_history_entry_timestamp(Self::thread_display_time(&thread.metadata));
+        let timestamp =
+            format_history_entry_timestamp(Self::thread_display_time(&thread.metadata), cx);
 
         let is_remote = thread.workspace.is_remote(cx);
 

@@ -11,6 +11,7 @@ use gpui::{
     FocusHandle, Focusable, Hsla, MouseDownEvent, Point, Subscription, TextStyleRefinement,
     UniformListScrollHandle, WeakEntity, actions, anchored, deferred, uniform_list,
 };
+use i18n::tr;
 use itertools::Itertools;
 use menu::{SelectFirst, SelectLast, SelectNext, SelectPrevious};
 use project::debugger::{
@@ -702,18 +703,39 @@ impl VariableList {
                 None
             };
             cx.update(|window, cx| {
-                let context_menu = ContextMenu::build(window, cx, |menu, _, _| {
+                let context_menu = ContextMenu::build(window, cx, |menu, _, cx| {
                     menu.when_some(entry.as_variable(), |menu, _| {
-                        menu.action("Copy Name", CopyVariableName.boxed_clone())
-                            .action("Copy Value", CopyVariableValue.boxed_clone())
-                            .when(supports_set_variable, |menu| {
-                                menu.action("Edit Value", EditVariable.boxed_clone())
-                            })
-                            .when(supports_go_to_memory, |menu| {
-                                menu.action("Go To Memory", GoToMemory.boxed_clone())
-                            })
-                            .action("Watch Variable", AddWatch.boxed_clone())
-                            .when_some(can_toggle_data_breakpoint, |mut menu, data_info| {
+                        menu.action(
+                            tr(cx, "debugger_ui.variable_list.copy_name", "Copy Name"),
+                            CopyVariableName.boxed_clone(),
+                        )
+                        .action(
+                            tr(cx, "debugger_ui.variable_list.copy_value", "Copy Value"),
+                            CopyVariableValue.boxed_clone(),
+                        )
+                        .when(supports_set_variable, |menu| {
+                            menu.action(
+                                tr(cx, "debugger_ui.variable_list.edit_value", "Edit Value"),
+                                EditVariable.boxed_clone(),
+                            )
+                        })
+                        .when(supports_go_to_memory, |menu| {
+                            menu.action(
+                                tr(cx, "debugger_ui.variable_list.go_to_memory", "Go To Memory"),
+                                GoToMemory.boxed_clone(),
+                            )
+                        })
+                        .action(
+                            tr(
+                                cx,
+                                "debugger_ui.variable_list.watch_variable",
+                                "Watch Variable",
+                            ),
+                            AddWatch.boxed_clone(),
+                        )
+                        .when_some(
+                            can_toggle_data_breakpoint,
+                            |mut menu, data_info| {
                                 menu = menu.separator();
                                 if let Some(access_types) = data_info.access_types {
                                     for access in access_types {
@@ -742,15 +764,28 @@ impl VariableList {
                                             .boxed_clone(),
                                     )
                                 }
-                            })
+                            },
+                        )
                     })
                     .when(entry.as_watcher().is_some(), |menu| {
-                        menu.action("Copy Name", CopyVariableName.boxed_clone())
-                            .action("Copy Value", CopyVariableValue.boxed_clone())
-                            .when(supports_set_variable, |menu| {
-                                menu.action("Edit Value", EditVariable.boxed_clone())
-                            })
-                            .action("Remove Watch", RemoveWatch.boxed_clone())
+                        menu.action(
+                            tr(cx, "debugger_ui.variable_list.copy_name", "Copy Name"),
+                            CopyVariableName.boxed_clone(),
+                        )
+                        .action(
+                            tr(cx, "debugger_ui.variable_list.copy_value", "Copy Value"),
+                            CopyVariableValue.boxed_clone(),
+                        )
+                        .when(supports_set_variable, |menu| {
+                            menu.action(
+                                tr(cx, "debugger_ui.variable_list.edit_value", "Edit Value"),
+                                EditVariable.boxed_clone(),
+                            )
+                        })
+                        .action(
+                            tr(cx, "debugger_ui.variable_list.remove_watch", "Remove Watch"),
+                            RemoveWatch.boxed_clone(),
+                        )
                     })
                     .context(focus_handle.clone())
                 });
@@ -1343,7 +1378,12 @@ impl VariableList {
                         }
                     })
                     .tooltip(move |_window, cx| {
-                        Tooltip::for_action_in("Remove Watch", &RemoveWatch, &focus_handle, cx)
+                        Tooltip::for_action_in(
+                            tr(cx, "debugger_ui.variable_list.remove_watch", "Remove Watch"),
+                            &RemoveWatch,
+                            &focus_handle,
+                            cx,
+                        )
                     })
                     .icon_size(ui::IconSize::Indicator),
                 ),

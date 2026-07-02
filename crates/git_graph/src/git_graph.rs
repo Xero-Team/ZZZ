@@ -19,6 +19,7 @@ use gpui::{
     UniformListScrollHandle, WeakEntity, Window, actions, anchored, deferred, point, prelude::*,
     px, uniform_list,
 };
+use i18n::tr;
 use language::line_diff;
 use menu::{Cancel, SelectFirst, SelectLast, SelectNext, SelectPrevious};
 use picker::{Picker, PickerDelegate};
@@ -131,8 +132,8 @@ struct CommitTagPickerDelegate {
 impl PickerDelegate for CommitTagPickerDelegate {
     type ListItem = ListItem;
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Copy Tag".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(cx, "git_graph.copy_tag", "Copy Tag").into()
     }
 
     fn match_count(&self) -> usize {
@@ -291,7 +292,14 @@ impl ChangedFileEntry {
                 } else {
                     format!("{}/{}", dir_path, file_name).into()
                 };
-                move |_, cx| Tooltip::with_meta("View Changes", None, meta.clone(), cx)
+                move |_, cx| {
+                    Tooltip::with_meta(
+                        tr(cx, "git_graph.view_changes", "View Changes"),
+                        None,
+                        meta.clone(),
+                        cx,
+                    )
+                }
             })
             .on_click({
                 let entry = self.clone();
@@ -390,7 +398,14 @@ impl ChangedFileDirectoryEntry {
             )
             .tooltip({
                 let name = self.name.clone();
-                move |_, cx| Tooltip::with_meta("Toggle Folder", None, name.clone(), cx)
+                move |_, cx| {
+                    Tooltip::with_meta(
+                        tr(cx, "git_graph.toggle_folder", "Toggle Folder"),
+                        None,
+                        name.clone(),
+                        cx,
+                    )
+                }
             })
             .on_click(move |_, _, cx| {
                 git_graph
@@ -1469,7 +1484,11 @@ impl GitGraph {
 
         let search_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Search commits...", window, cx);
+            editor.set_placeholder_text(
+                &tr(cx, "git_graph.search_commits", "Search commits..."),
+                window,
+                cx,
+            );
             editor
         });
 
@@ -2452,12 +2471,12 @@ impl GitGraph {
 
         let focus_handle = self.focus_handle.clone();
         let git_graph = cx.entity();
-        let context_menu = ContextMenu::build(window, cx, |context_menu, window, _| {
+        let context_menu = ContextMenu::build(window, cx, |context_menu, window, cx| {
             context_menu
                 .context(focus_handle)
                 .header(header)
                 .entry(
-                    "View Commit",
+                    tr(cx, "git_ui.ref_picker.title", "View Commit"),
                     Some(OpenCommitView.boxed_clone()),
                     window.handler_for(&git_graph, move |this, window, cx| {
                         this.open_commit_view(index, window, cx);
@@ -2471,9 +2490,13 @@ impl GitGraph {
                     }),
                 )
                 .when_some(ref_name.clone(), |menu, ref_name| {
-                    menu.entry("Copy Ref Name", None, move |_window, cx| {
-                        cx.write_to_clipboard(ClipboardItem::new_string(ref_name.to_string()));
-                    })
+                    menu.entry(
+                        tr(cx, "git_graph.copy_ref_name", "Copy Ref Name"),
+                        None,
+                        move |_window, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(ref_name.to_string()));
+                        },
+                    )
                 })
                 .when(ref_name.is_none(), |menu| {
                     menu.item(
@@ -2486,7 +2509,11 @@ impl GitGraph {
                     )
                 })
                 .when(!git_tasks.is_empty(), |mut menu| {
-                    menu = menu.separator().header("Custom Git Commands");
+                    menu = menu.separator().header(tr(
+                        cx,
+                        "git_graph.custom_git_commands",
+                        "Custom Git Commands",
+                    ));
 
                     for (task_source_kind, resolved_task) in git_tasks {
                         let label = resolved_task.display_label().to_owned();
@@ -2935,10 +2962,28 @@ impl GitGraph {
                                     window.use_keyed_state("sha-copy", cx, CopiedState::new);
                                 let is_copied = copied_state.read(cx).is_copied();
 
-                                let (icon, icon_color, tooltip_label) = if is_copied {
-                                    (IconName::Check, Color::Success, "Commit SHA Copied!")
+                                let (icon, icon_color, tooltip_label): (
+                                    IconName,
+                                    Color,
+                                    SharedString,
+                                ) = if is_copied {
+                                    (
+                                        IconName::Check,
+                                        Color::Success,
+                                        tr(cx, "git_graph.commit_sha_copied", "Commit SHA Copied!")
+                                            .into(),
+                                    )
                                 } else {
-                                    (IconName::Hash, Color::Muted, "Copy Commit SHA")
+                                    (
+                                        IconName::Hash,
+                                        Color::Muted,
+                                        tr(
+                                            cx,
+                                            "git_ui.commit_view.copy_commit_sha",
+                                            "Copy Commit SHA",
+                                        )
+                                        .into(),
+                                    )
                                 };
 
                                 Button::new("sha-button", &full_sha)
@@ -2952,7 +2997,7 @@ impl GitGraph {
                                         let full_sha = full_sha.clone();
                                         move |_, cx| {
                                             Tooltip::with_meta(
-                                                tooltip_label,
+                                                tooltip_label.clone(),
                                                 None,
                                                 full_sha.clone(),
                                                 cx,
@@ -3155,12 +3200,15 @@ impl GitGraph {
             .child(Divider::horizontal())
             .child(
                 h_flex().p_1p5().w_full().child(
-                    Button::new("view-commit", "View Commit")
-                        .full_width()
-                        .style(ButtonStyle::OutlinedGhost)
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.open_selected_commit_view(window, cx);
-                        })),
+                    Button::new(
+                        "view-commit",
+                        tr(cx, "git_ui.ref_picker.title", "View Commit"),
+                    )
+                    .full_width()
+                    .style(ButtonStyle::OutlinedGhost)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.open_selected_commit_view(window, cx);
+                    })),
                 ),
             )
             .into_any_element()
@@ -3780,11 +3828,15 @@ impl Render for GitGraph {
 
         let content = if commit_count == 0 {
             let message = if let Some(error) = &error {
-                format!("Error loading: {}", error)
+                tr(cx, "git_graph.error_loading", "Error loading: {}").replace("{}", error.as_ref())
             } else if is_loading {
-                "Loading".to_owned()
+                tr(cx, "git_ui.git_panel.loading", "Loading...")
             } else {
-                "No commits found".to_owned()
+                tr(
+                    cx,
+                    "git_ui.branch_picker.no_commits_found",
+                    "No commits found",
+                )
             };
             let label = Label::new(message)
                 .color(Color::Muted)
@@ -3831,28 +3883,48 @@ impl Render for GitGraph {
                             if !is_path_history {
                                 TableRow::from_vec(
                                     vec![
-                                        Label::new("Graph")
+                                        Label::new(tr(cx, "git_graph.column.graph", "Graph"))
                                             .color(Color::Muted)
                                             .truncate()
                                             .into_any_element(),
-                                        Label::new("Description")
+                                        Label::new(tr(
+                                            cx,
+                                            "git_graph.column.description",
+                                            "Description",
+                                        ))
+                                        .color(Color::Muted)
+                                        .into_any_element(),
+                                        Label::new(tr(cx, "git_graph.column.date", "Date"))
                                             .color(Color::Muted)
                                             .into_any_element(),
-                                        Label::new("Date").color(Color::Muted).into_any_element(),
-                                        Label::new("Author").color(Color::Muted).into_any_element(),
-                                        Label::new("Commit").color(Color::Muted).into_any_element(),
+                                        Label::new(tr(cx, "git_graph.column.author", "Author"))
+                                            .color(Color::Muted)
+                                            .into_any_element(),
+                                        Label::new(tr(cx, "git_graph.column.commit", "Commit"))
+                                            .color(Color::Muted)
+                                            .into_any_element(),
                                     ],
                                     5,
                                 )
                             } else {
                                 TableRow::from_vec(
                                     vec![
-                                        Label::new("Description")
+                                        Label::new(tr(
+                                            cx,
+                                            "git_graph.column.description",
+                                            "Description",
+                                        ))
+                                        .color(Color::Muted)
+                                        .into_any_element(),
+                                        Label::new(tr(cx, "git_graph.column.date", "Date"))
                                             .color(Color::Muted)
                                             .into_any_element(),
-                                        Label::new("Date").color(Color::Muted).into_any_element(),
-                                        Label::new("Author").color(Color::Muted).into_any_element(),
-                                        Label::new("Commit").color(Color::Muted).into_any_element(),
+                                        Label::new(tr(cx, "git_graph.column.author", "Author"))
+                                            .color(Color::Muted)
+                                            .into_any_element(),
+                                        Label::new(tr(cx, "git_graph.column.commit", "Commit"))
+                                            .color(Color::Muted)
+                                            .into_any_element(),
                                     ],
                                     4,
                                 )
@@ -4123,12 +4195,12 @@ impl Item for GitGraph {
         };
 
         Some(TabTooltipContent::Custom(Box::new(Tooltip::element({
-            move |_, _| {
+            move |_, cx| {
                 v_flex()
                     .child(Label::new(if path_history_path.is_some() {
-                        "Path History"
+                        tr(cx, "git_graph.path_history", "Path History")
                     } else {
-                        "Git Graph"
+                        tr(cx, "git_graph.title", "Git Graph")
                     }))
                     .when_some(path_history_path.clone(), |this, path| {
                         this.child(Label::new(path).color(Color::Muted).size(LabelSize::Small))
@@ -4157,7 +4229,10 @@ impl Item for GitGraph {
                     .file_name()
                     .map(|name| name.to_string_lossy().to_string())
             })
-            .map_or_else(|| "Git Graph".into(), |name| SharedString::from(name))
+            .map_or_else(
+                || tr(cx, "git_graph.title", "Git Graph").into(),
+                SharedString::from,
+            )
     }
 
     fn show_toolbar(&self) -> bool {

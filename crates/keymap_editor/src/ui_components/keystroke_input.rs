@@ -2,6 +2,7 @@ use gpui::{
     Animation, AnimationExt, Context, EventEmitter, FocusHandle, Focusable, FontWeight, KeyContext,
     KeybindingKeystroke, Keystroke, Modifiers, ModifiersChangedEvent, Subscription, Task, actions,
 };
+use i18n::tr;
 use ui::{
     ActiveTheme as _, Color, IconButton, IconButtonShape, IconName, IconSize, Label, LabelSize,
     ParentElement as _, Render, Styled as _, Tooltip, Window, prelude::*,
@@ -502,7 +503,7 @@ impl Render for KeystrokeInput {
             .rounded_sm()
             .child(recording_pulse(Color::Error))
             .child(
-                Label::new("REC")
+                Label::new(tr(cx, "keymap_editor.keystroke_input.rec", "REC"))
                     .size(LabelSize::XSmall)
                     .weight(FontWeight::SEMIBOLD)
                     .color(Color::Error),
@@ -520,7 +521,7 @@ impl Render for KeystrokeInput {
             .rounded_sm()
             .child(recording_pulse(Color::Accent))
             .child(
-                Label::new("SEARCH")
+                Label::new(tr(cx, "keymap_editor.keystroke_input.search", "SEARCH"))
                     .size(LabelSize::XSmall)
                     .weight(FontWeight::SEMIBOLD)
                     .color(Color::Accent),
@@ -629,9 +630,17 @@ impl Render for KeystrokeInput {
                                     .map(|this| {
                                         this.tooltip(Tooltip::for_action_title(
                                             if self.search {
-                                                "Start Searching"
+                                                tr(
+                                                    cx,
+                                                    "keymap_editor.keystroke_input.start_searching",
+                                                    "Start Searching",
+                                                )
                                             } else {
-                                                "Start Recording"
+                                                tr(
+                                                    cx,
+                                                    "keymap_editor.keystroke_input.start_recording",
+                                                    "Start Recording",
+                                                )
                                             },
                                             &StartRecording,
                                         ))
@@ -650,9 +659,17 @@ impl Render for KeystrokeInput {
                                 .shape(IconButtonShape::Square)
                                 .tooltip(move |_, cx| {
                                     Tooltip::with_meta(
-                                        "Clear Keystrokes",
+                                        tr(
+                                            cx,
+                                            "keymap_editor.keystroke_input.clear_keystrokes",
+                                            "Clear Keystrokes",
+                                        ),
                                         Some(&ClearKeystrokes),
-                                        "Hit it three times to execute",
+                                        tr(
+                                            cx,
+                                            "keymap_editor.keystroke_input.clear_keystrokes_meta",
+                                            "Hit it three times to execute",
+                                        ),
                                         cx,
                                     )
                                 })

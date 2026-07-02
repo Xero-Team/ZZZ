@@ -5,6 +5,7 @@ use crate::git_panel::{
 use crate::git_panel_settings::GitPanelSettings;
 use git::repository::CommitOptions;
 use git::{Amend, Commit, GenerateCommitMessage, Signoff};
+use i18n::tr;
 use project::DisableAiSettings;
 use settings::Settings;
 use ui::{
@@ -394,7 +395,10 @@ impl CommitModal {
             .with_handle(self.branch_list_handle.clone())
             .trigger_with_tooltip(
                 branch_picker_button,
-                Tooltip::for_action_title("Switch Branch", &zed_actions::git::Branch),
+                Tooltip::for_action_title(
+                    tr(cx, "git_ui.commit_modal.switch_branch", "Switch Branch"),
+                    &zed_actions::git::Branch,
+                ),
             )
             .anchor(Anchor::BottomLeft)
             .offset(gpui::Point {

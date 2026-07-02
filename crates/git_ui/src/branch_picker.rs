@@ -677,7 +677,6 @@ fn normalize_branch_name(query: &str) -> String {
 
 struct BranchDeleteForceDeletePrompt {
     required_error_substrings: &'static [&'static str],
-    message: fn(&str) -> String,
 }
 
 impl BranchDeleteForceDeletePrompt {
@@ -691,24 +690,25 @@ impl BranchDeleteForceDeletePrompt {
 const BRANCH_DELETE_FORCE_DELETE_PROMPTS: &[BranchDeleteForceDeletePrompt] =
     &[BranchDeleteForceDeletePrompt {
         required_error_substrings: &["not fully merged"],
-        message: unmerged_branch_force_delete_prompt,
     }];
 
-fn unmerged_branch_force_delete_prompt(branch_name: &str) -> String {
-    format!("Branch \"{branch_name}\" is not fully merged. Force delete it?")
+fn unmerged_branch_force_delete_prompt(branch_name: &str, cx: &App) -> String {
+    tr(
+        cx,
+        "git_ui.branch_picker.branch_not_fully_merged_force_delete",
+        "Branch \"{}\" is not fully merged. Force delete it?",
+    )
+    .replacen("{}", branch_name, 1)
 }
 
 // Git only reports these cases via localized stderr, so this best-effort check
 // may miss some locales and fall back to the raw error toast.
-fn force_delete_prompt_for_branch_delete_error(
-    error: &anyhow::Error,
-    branch_name: &str,
-) -> Option<String> {
+fn force_delete_prompt_for_branch_delete_error(error: &anyhow::Error) -> bool {
     let normalized_error_message = error.to_string().to_lowercase();
     BRANCH_DELETE_FORCE_DELETE_PROMPTS
         .iter()
         .find(|prompt| prompt.matches(&normalized_error_message))
-        .map(|prompt| (prompt.message)(branch_name))
+        .is_some()
 }
 
 struct DeleteBranchTooltip {
@@ -990,8 +990,12 @@ impl BranchListDelegate {
                     }
 
                     let force_delete_prompt = (!force)
-                        .then(|| force_delete_prompt_for_branch_delete_error(&error, entry.name()))
-                        .flatten();
+                        .then(|| force_delete_prompt_for_branch_delete_error(&error))
+                        .unwrap_or(false)
+                        .then(|| {
+                            cx.update(|_, cx| unmerged_branch_force_delete_prompt(entry.name(), cx))
+                        })
+                        .transpose()?;
 
                     if let Some(prompt_message) = force_delete_prompt {
                         let answer = cx.update(|window, cx| {
@@ -1072,12 +1076,18 @@ impl BranchListDelegate {
 impl PickerDelegate for BranchListDelegate {
     type ListItem = ListItem;
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
         match self.state {
-            PickerState::List | PickerState::NewRemote | PickerState::NewBranch => {
-                "Switch or type to create a branch…"
-            }
-            PickerState::CreateRemote(_) => "Enter a name for this remote…",
+            PickerState::List | PickerState::NewRemote | PickerState::NewBranch => tr(
+                cx,
+                "git_ui.branch_picker.placeholder.switch_or_create_branch",
+                "Switch or type to create a branch…",
+            ),
+            PickerState::CreateRemote(_) => tr(
+                cx,
+                "git_ui.branch_picker.placeholder.enter_remote_name",
+                "Enter a name for this remote...",
+            ),
         }
         .into()
     }

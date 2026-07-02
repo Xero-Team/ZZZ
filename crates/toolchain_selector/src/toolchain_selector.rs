@@ -11,12 +11,12 @@ use gpui::{
     Focusable, KeyContext, ParentElement, Render, Styled, Subscription, Task, WeakEntity, Window,
     actions, pulsating_between,
 };
+use i18n::tr;
 use language::{Language, LanguageName, Toolchain, ToolchainScope};
 use open_path_prompt::OpenPathDelegate;
 use picker::{Picker, PickerDelegate};
 use project::{DirectoryLister, Project, ProjectPath, Toolchains, WorktreeId};
 use std::{
-    borrow::Cow,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -175,8 +175,14 @@ impl AddToolchainState {
                                 .p_1()
                                 .justify_between()
                                 .gap_2()
-                                .child(Label::new("Select Toolchain Path").color(Color::Muted).map(
-                                    |this| {
+                                .child(
+                                    Label::new(tr(
+                                        cx,
+                                        "toolchain_selector.select_toolchain_path",
+                                        "Select Toolchain Path",
+                                    ))
+                                    .color(Color::Muted)
+                                    .map(|this| {
                                         if is_loading {
                                             this.with_animation(
                                                 "select-toolchain-label",
@@ -189,8 +195,8 @@ impl AddToolchainState {
                                         } else {
                                             this.into_any_element()
                                         }
-                                    },
-                                ))
+                                    }),
+                                )
                                 .when_some(error, |this, error| {
                                     this.child(Label::new(error).color(Color::Error))
                                 }),
@@ -385,7 +391,7 @@ impl Render for AddToolchainState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
         let weak = self.weak.upgrade();
-        let label = SharedString::new_static("Add");
+        let label: SharedString = tr(cx, "toolchain_selector.add", "Add").into();
 
         v_flex()
             .size_full()
@@ -435,7 +441,7 @@ impl Render for AddToolchainState {
                             .child(
                                 v_flex()
                                     .child(
-                                        Label::new("Scope")
+                                        Label::new(tr(cx, "toolchain_selector.scope", "Scope"))
                                             .size(LabelSize::Small)
                                             .color(Color::Muted)
                                             .mt_1()
@@ -793,7 +799,8 @@ impl ToolchainSelectorDelegate {
                 let relative_path = this
                     .update(cx, |this, cx| {
                         this.delegate.add_toolchain_text = format!(
-                            "Add {}",
+                            "{} {}",
+                            tr(cx, "toolchain_selector.add", "Add"),
                             meta.term.as_ref().to_case(convert_case::Case::Title)
                         )
                         .into();
@@ -818,18 +825,30 @@ impl ToolchainSelectorDelegate {
                         )
                     })
                     .await?;
-                let pretty_path = {
-                    if relative_path.is_empty() {
-                        Cow::Borrowed("worktree root")
-                    } else {
-                        Cow::Owned(format!("`{}`", relative_path.display(path_style)))
-                    }
+                let worktree_root_label = this
+                    .update(cx, |_, cx| {
+                        tr(cx, "toolchain_selector.worktree_root", "worktree root")
+                    })
+                    .ok()?;
+                let pretty_path = if relative_path.is_empty() {
+                    worktree_root_label
+                } else {
+                    format!("`{}`", relative_path.display(path_style))
                 };
-                let placeholder_text =
-                    format!("Select a {} for {pretty_path}...", meta.term.to_lowercase(),).into();
+                let placeholder_text = this
+                    .update(cx, |_, cx| {
+                        tr(
+                            cx,
+                            "toolchain_selector.select_for_path",
+                            "Select a {} for {}...",
+                        )
+                        .replacen("{}", &meta.term.to_lowercase(), 1)
+                        .replacen("{}", &pretty_path, 1)
+                    })
+                    .ok()?;
                 let _ = this.update_in(cx, move |this, window, cx| {
                     this.delegate.relative_path = relative_path;
-                    this.delegate.placeholder_text = placeholder_text;
+                    this.delegate.placeholder_text = placeholder_text.into();
                     this.refresh_placeholder(window, cx);
                 });
 
@@ -864,7 +883,12 @@ impl ToolchainSelectorDelegate {
                 Some(())
             }
         });
-        let placeholder_text = "Select a toolchain...".to_owned().into();
+        let placeholder_text = tr(
+            cx,
+            "toolchain_selector.placeholder",
+            "Select a toolchain...",
+        )
+        .into();
         Self {
             toolchain_selector,
             candidates: Default::default(),
@@ -878,7 +902,11 @@ impl ToolchainSelectorDelegate {
             _fetch_candidates_task,
             project,
             focus_handle: cx.focus_handle(),
-            add_toolchain_text: Arc::from("Add Toolchain"),
+            add_toolchain_text: Arc::from(tr(
+                cx,
+                "toolchain_selector.add_toolchain",
+                "Add Toolchain",
+            )),
         }
     }
     fn relativize_path(
@@ -1143,7 +1171,7 @@ impl PickerDelegate for ToolchainSelectorDelegate {
                                 }),
                         )
                         .child(
-                            Button::new("select", "Select")
+                            Button::new("select", tr(cx, "toolchain_selector.select", "Select"))
                                 .key_binding(KeyBinding::for_action_in(
                                     &menu::Confirm,
                                     &self.focus_handle,

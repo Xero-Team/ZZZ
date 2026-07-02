@@ -16,6 +16,7 @@ use gpui::{
     SMOOTH_SVG_SCALE_FACTOR, ScrollHandle, SharedString, SharedUri, Subscription, Task, WeakEntity,
     Window, point,
 };
+use i18n::tr;
 use language::LanguageRegistry;
 use markdown::{
     CodeBlockRenderer, CopyButtonVisibility, Markdown, MarkdownElement, MarkdownFont,
@@ -1224,9 +1225,11 @@ impl Item for MarkdownPreviewView {
             .map(|editor_state| {
                 let buffer = editor_state.editor.read(cx).buffer().read(cx);
                 let title = buffer.title(cx);
-                format!("Preview {}", title).into()
+                tr(cx, "markdown_preview.preview_title", "Preview {}")
+                    .replacen("{}", &title, 1)
+                    .into()
             })
-            .unwrap_or_else(|| SharedString::from("Markdown Preview"))
+            .unwrap_or_else(|| tr(cx, "markdown_preview.tab_title", "Markdown Preview").into())
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
@@ -1374,10 +1377,11 @@ impl Render for MarkdownPreviewView {
                                 let focus = window.focused(cx);
                                 let context_menu_link =
                                     markdown.read(cx).context_menu_link().cloned();
+                                let copy_link = tr(cx, "markdown_preview.copy_link", "Copy Link");
                                 ContextMenu::build(window, cx, move |menu, _, _cx| {
                                     menu.when_some(focus, |menu, focus| menu.context(focus))
                                         .when_some(context_menu_link, |menu, url| {
-                                            menu.entry("Copy Link", None, move |_, cx| {
+                                            menu.entry(copy_link.clone(), None, move |_, cx| {
                                                 cx.write_to_clipboard(ClipboardItem::new_string(
                                                     url.to_string(),
                                                 ));

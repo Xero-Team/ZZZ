@@ -12,6 +12,7 @@ use gpui::{
     Action, AppContext, ClickEvent, Entity, FocusHandle, Focusable, MouseButton, ScrollStrategy,
     Task, UniformListScrollHandle, WeakEntity, actions, uniform_list,
 };
+use i18n::tr;
 use itertools::Itertools;
 use language::Point;
 use project::{
@@ -197,9 +198,21 @@ impl BreakpointList {
     ) {
         self.strip_mode = Some(prop);
         let placeholder = match prop {
-            ActiveBreakpointStripMode::Log => "Set Log Message",
-            ActiveBreakpointStripMode::Condition => "Set Condition",
-            ActiveBreakpointStripMode::HitCondition => "Set Hit Condition",
+            ActiveBreakpointStripMode::Log => tr(
+                cx,
+                "debugger_ui.breakpoint_list.set_log_message",
+                "Set Log Message",
+            ),
+            ActiveBreakpointStripMode::Condition => tr(
+                cx,
+                "debugger_ui.breakpoint_list.set_condition",
+                "Set Condition",
+            ),
+            ActiveBreakpointStripMode::HitCondition => tr(
+                cx,
+                "debugger_ui.breakpoint_list.set_hit_condition",
+                "Set Hit Condition",
+            ),
         };
         let mut is_exception_breakpoint = true;
         let active_value = self.selected_ix.and_then(|ix| {
@@ -220,7 +233,7 @@ impl BreakpointList {
         });
 
         self.input.update(cx, |this, cx| {
-            this.set_placeholder_text(placeholder, window, cx);
+            this.set_placeholder_text(&placeholder, window, cx);
             this.set_read_only(is_exception_breakpoint);
             this.set_text(active_value.as_deref().unwrap_or(""), window, cx);
         });
@@ -580,26 +593,55 @@ impl BreakpointList {
         .flex_1()
     }
 
-    pub(crate) fn render_control_strip(&self) -> AnyElement {
+    pub(crate) fn render_control_strip(&self, cx: &App) -> AnyElement {
         let selection_kind = self.selection_kind();
         let focus_handle = self.focus_handle.clone();
 
         let remove_breakpoint_tooltip = selection_kind.map(|(kind, _)| match kind {
-            SelectedBreakpointKind::Source => "Remove breakpoint from a breakpoint list",
-            SelectedBreakpointKind::Exception => {
-                "Exception Breakpoints cannot be removed from the breakpoint list"
-            }
-            SelectedBreakpointKind::Data => "Remove data breakpoint from a breakpoint list",
+            SelectedBreakpointKind::Source => tr(
+                cx,
+                "debugger_ui.breakpoint_list.remove_breakpoint_meta",
+                "Remove breakpoint from a breakpoint list",
+            ),
+            SelectedBreakpointKind::Exception => tr(
+                cx,
+                "debugger_ui.breakpoint_list.exception_remove_not_supported",
+                "Exception Breakpoints cannot be removed from the breakpoint list",
+            ),
+            SelectedBreakpointKind::Data => tr(
+                cx,
+                "debugger_ui.breakpoint_list.remove_data_breakpoint_meta",
+                "Remove data breakpoint from a breakpoint list",
+            ),
         });
 
         let toggle_label = selection_kind.map(|(_, is_enabled)| {
             if is_enabled {
                 (
-                    "Disable Breakpoint",
-                    "Disable a breakpoint without removing it from the list",
+                    SharedString::from(tr(
+                        cx,
+                        "debugger_ui.breakpoint_list.disable_breakpoint",
+                        "Disable Breakpoint",
+                    )),
+                    SharedString::from(tr(
+                        cx,
+                        "debugger_ui.breakpoint_list.disable_breakpoint_meta",
+                        "Disable a breakpoint without removing it from the list",
+                    )),
                 )
             } else {
-                ("Enable Breakpoint", "Re-enable a breakpoint")
+                (
+                    SharedString::from(tr(
+                        cx,
+                        "debugger_ui.breakpoint_list.enable_breakpoint",
+                        "Enable Breakpoint",
+                    )),
+                    SharedString::from(tr(
+                        cx,
+                        "debugger_ui.breakpoint_list.enable_breakpoint_meta",
+                        "Re-enable a breakpoint",
+                    )),
+                )
             }
         });
 
@@ -615,9 +657,9 @@ impl BreakpointList {
                         let focus_handle = focus_handle.clone();
                         move |_window, cx| {
                             Tooltip::with_meta_in(
-                                label,
+                                label.clone(),
                                 Some(&ToggleEnableBreakpoint),
-                                meta,
+                                meta.clone(),
                                 &focus_handle,
                                 cx,
                             )
@@ -639,11 +681,16 @@ impl BreakpointList {
                     .when_some(remove_breakpoint_tooltip, |this, tooltip| {
                         this.tooltip({
                             let focus_handle = focus_handle.clone();
+                            let tooltip = SharedString::from(tooltip);
                             move |_window, cx| {
                                 Tooltip::with_meta_in(
-                                    "Remove Breakpoint",
+                                    tr(
+                                        cx,
+                                        "debugger_ui.breakpoint_list.remove_breakpoint",
+                                        "Remove Breakpoint",
+                                    ),
                                     Some(&UnsetBreakpoint),
-                                    tooltip,
+                                    tooltip.clone(),
                                     &focus_handle,
                                     cx,
                                 )
@@ -851,16 +898,20 @@ impl LineBreakpoint {
             .tooltip({
                 let focus_handle = focus_handle.clone();
                 move |_window, cx| {
-                    Tooltip::for_action_in(
-                        if is_enabled {
-                            "Disable Breakpoint"
-                        } else {
-                            "Enable Breakpoint"
-                        },
-                        &ToggleEnableBreakpoint,
-                        &focus_handle,
-                        cx,
-                    )
+                    let title = if is_enabled {
+                        tr(
+                            cx,
+                            "debugger_ui.breakpoint_list.disable_breakpoint",
+                            "Disable Breakpoint",
+                        )
+                    } else {
+                        tr(
+                            cx,
+                            "debugger_ui.breakpoint_list.enable_breakpoint",
+                            "Enable Breakpoint",
+                        )
+                    };
+                    Tooltip::for_action_in(&title, &ToggleEnableBreakpoint, &focus_handle, cx)
                 }
             })
             .on_click({
@@ -943,9 +994,19 @@ impl LineBreakpoint {
                             )
                         }))
                         .when_some(self.dir.as_ref(), |this, parent_dir| {
-                            this.tooltip(Tooltip::text(format!(
-                                "Worktree parent path: {parent_dir}"
-                            )))
+                            this.tooltip({
+                                let parent_dir = parent_dir.clone();
+                                move |window, cx| {
+                                    Tooltip::text(
+                                        tr(
+                                            cx,
+                                            "debugger_ui.breakpoint_list.worktree_parent_path",
+                                            "Worktree parent path: {}",
+                                        )
+                                        .replace("{}", parent_dir.as_ref()),
+                                    )(window, cx)
+                                }
+                            })
                         }),
                 )
                 .child(BreakpointOptionsStrip {
@@ -1011,16 +1072,20 @@ impl DataBreakpoint {
                 .tooltip({
                     let focus_handle = focus_handle.clone();
                     move |_window, cx| {
-                        Tooltip::for_action_in(
-                            if is_enabled {
-                                "Disable Data Breakpoint"
-                            } else {
-                                "Enable Data Breakpoint"
-                            },
-                            &ToggleEnableBreakpoint,
-                            &focus_handle,
-                            cx,
-                        )
+                        let title = if is_enabled {
+                            tr(
+                                cx,
+                                "debugger_ui.breakpoint_list.disable_data_breakpoint",
+                                "Disable Data Breakpoint",
+                            )
+                        } else {
+                            tr(
+                                cx,
+                                "debugger_ui.breakpoint_list.enable_data_breakpoint",
+                                "Enable Data Breakpoint",
+                            )
+                        };
+                        Tooltip::for_action_in(&title, &ToggleEnableBreakpoint, &focus_handle, cx)
                     }
                 })
                 .on_click({
@@ -1115,16 +1180,20 @@ impl ExceptionBreakpoint {
                 .tooltip({
                     let focus_handle = focus_handle.clone();
                     move |_window, cx| {
-                        Tooltip::for_action_in(
-                            if is_enabled {
-                                "Disable Exception Breakpoint"
-                            } else {
-                                "Enable Exception Breakpoint"
-                            },
-                            &ToggleEnableBreakpoint,
-                            &focus_handle,
-                            cx,
-                        )
+                        let title = if is_enabled {
+                            tr(
+                                cx,
+                                "debugger_ui.breakpoint_list.disable_exception_breakpoint",
+                                "Disable Exception Breakpoint",
+                            )
+                        } else {
+                            tr(
+                                cx,
+                                "debugger_ui.breakpoint_list.enable_exception_breakpoint",
+                                "Enable Exception Breakpoint",
+                            )
+                        };
+                        Tooltip::for_action_in(&title, &ToggleEnableBreakpoint, &focus_handle, cx)
                     }
                 })
                 .on_click({
@@ -1433,9 +1502,17 @@ impl RenderOnce for BreakpointOptionsStrip {
                         .on_click(self.on_click_callback(ActiveBreakpointStripMode::Log))
                         .tooltip(|_window, cx|  {
                             Tooltip::with_meta(
-                                "Set Log Message",
+                                tr(
+                                    cx,
+                                    "debugger_ui.breakpoint_list.set_log_message",
+                                    "Set Log Message",
+                                ),
                                 None,
-                                "Set log message to display (instead of stopping) when a breakpoint is hit.",
+                                tr(
+                                    cx,
+                                    "debugger_ui.breakpoint_list.set_log_message_meta",
+                                    "Set log message to display (instead of stopping) when a breakpoint is hit.",
+                                ),
                                 cx,
                             )
                         }),
@@ -1469,9 +1546,17 @@ impl RenderOnce for BreakpointOptionsStrip {
                             .on_click(self.on_click_callback(ActiveBreakpointStripMode::Condition))
                             .tooltip(|_window, cx|  {
                                 Tooltip::with_meta(
-                                    "Set Condition",
+                                    tr(
+                                        cx,
+                                        "debugger_ui.breakpoint_list.set_condition",
+                                        "Set Condition",
+                                    ),
                                     None,
-                                    "Set condition to evaluate when a breakpoint is hit. Program execution will stop only when the condition is met.",
+                                    tr(
+                                        cx,
+                                        "debugger_ui.breakpoint_list.set_condition_meta",
+                                        "Set condition to evaluate when a breakpoint is hit. Program execution will stop only when the condition is met.",
+                                    ),
                                     cx,
                                 )
                             }),
@@ -1504,9 +1589,17 @@ impl RenderOnce for BreakpointOptionsStrip {
                         .on_click(self.on_click_callback(ActiveBreakpointStripMode::HitCondition))
                         .tooltip(|_window, cx|  {
                             Tooltip::with_meta(
-                                "Set Hit Condition",
+                                tr(
+                                    cx,
+                                    "debugger_ui.breakpoint_list.set_hit_condition",
+                                    "Set Hit Condition",
+                                ),
                                 None,
-                                "Set expression that controls how many hits of the breakpoint are ignored.",
+                                tr(
+                                    cx,
+                                    "debugger_ui.breakpoint_list.set_hit_condition_meta",
+                                    "Set expression that controls how many hits of the breakpoint are ignored.",
+                                ),
                                 cx,
                             )
                         }),

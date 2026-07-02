@@ -1272,7 +1272,11 @@ impl PickerDelegate for WorktreePickerDelegate {
                                                 IconName::Close,
                                             )
                                             .icon_size(IconSize::Small)
-                                            .tooltip(Tooltip::text("Remove Worktree from Window"))
+                                            .tooltip(Tooltip::text(app_i18n::tr(
+                                                cx,
+                                                "git_ui.worktree_picker.remove_from_window",
+                                                "Remove Worktree from Window",
+                                            )))
                                             .on_click(
                                                 cx.listener(move |picker, _, window, cx| {
                                                     picker.delegate.remove_worktree_from_window(

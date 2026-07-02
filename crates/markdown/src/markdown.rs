@@ -2155,6 +2155,7 @@ impl Element for MarkdownElement {
                                         mermaid_diagram,
                                         &mermaid_state,
                                         &self.style,
+                                        cx,
                                     ),
                                 );
                                 rendered_mermaid_block = true;

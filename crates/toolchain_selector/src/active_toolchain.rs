@@ -5,6 +5,7 @@ use gpui::{
     AsyncWindowContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription,
     Task, WeakEntity, Window, div,
 };
+use i18n::tr;
 use language::{Buffer, BufferEvent, LanguageName, Toolchain, ToolchainScope};
 use project::{Project, ProjectPath, Toolchains, WorktreeId, toolchain_store::ToolchainStoreEvent};
 use ui::{Button, ButtonCommon, Clickable, LabelSize, SharedString, Tooltip};
@@ -47,7 +48,7 @@ impl ActiveToolchain {
         Self {
             active_toolchain: None,
             active_buffer: None,
-            term: SharedString::new_static("Toolchain"),
+            term: tr(cx, "toolchain_selector.active.term", "Toolchain").into(),
             workspace: workspace.weak_handle(),
 
             _update_toolchain_task: Self::spawn_tracker_task(window, cx),
@@ -247,7 +248,13 @@ impl Render for ActiveToolchain {
                         });
                     }
                 }))
-                .tooltip(Tooltip::text(format!("Select {}", &self.term))),
+                .tooltip(Tooltip::text(
+                    tr(cx, "toolchain_selector.active.select", "Select {}").replacen(
+                        "{}",
+                        self.term.as_ref(),
+                        1,
+                    ),
+                )),
         )
     }
 }

@@ -1,4 +1,6 @@
 use anyhow::Context as _;
+use gpui::App;
+use i18n::tr;
 
 use git::repository::{Remote, RemoteCommandOutput};
 use ui::SharedString;
@@ -31,18 +33,54 @@ pub struct SuccessMessage {
     pub style: SuccessStyle,
 }
 
-pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> SuccessMessage {
+fn tr_arg_with(
+    translate: impl Fn(&'static str, &'static str) -> String,
+    key: &'static str,
+    fallback: &'static str,
+    value: &str,
+) -> String {
+    translate(key, fallback).replacen("{}", value, 1)
+}
+
+fn tr_args_with(
+    translate: impl Fn(&'static str, &'static str) -> String,
+    key: &'static str,
+    fallback: &'static str,
+    first: &str,
+    second: &str,
+) -> String {
+    translate(key, fallback)
+        .replacen("{}", first, 1)
+        .replacen("{}", second, 1)
+}
+
+fn format_output_impl(
+    action: &RemoteAction,
+    output: RemoteCommandOutput,
+    translate: impl Fn(&'static str, &'static str) -> String + Copy,
+) -> SuccessMessage {
     match action {
         RemoteAction::Fetch(remote) => {
             if output.stderr.is_empty() {
                 SuccessMessage {
-                    message: "Fetch: Already up to date".into(),
+                    message: translate(
+                        "git_ui.remote_output.fetch_already_up_to_date",
+                        "Fetch: Already up to date",
+                    ),
                     style: SuccessStyle::Toast,
                 }
             } else {
                 let message = match remote {
-                    Some(remote) => format!("Synchronized with {}", remote.name),
-                    None => "Synchronized with remotes".into(),
+                    Some(remote) => tr_arg_with(
+                        translate,
+                        "git_ui.remote_output.synchronized_with",
+                        "Synchronized with {}",
+                        &remote.name,
+                    ),
+                    None => translate(
+                        "git_ui.remote_output.synchronized_with_remotes",
+                        "Synchronized with remotes",
+                    ),
                 };
                 SuccessMessage {
                     message,
@@ -69,20 +107,40 @@ pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> Succ
             };
             if output.stdout.ends_with("Already up to date.\n") {
                 SuccessMessage {
-                    message: "Pull: Already up to date".into(),
+                    message: translate(
+                        "git_ui.remote_output.pull_already_up_to_date",
+                        "Pull: Already up to date",
+                    ),
                     style: SuccessStyle::Toast,
                 }
             } else if output.stdout.starts_with("Updating") {
                 let files_changed = get_changes(&output).log_err();
                 let message = if let Some(files_changed) = files_changed {
-                    format!(
-                        "Received {} file change{} from {}",
-                        files_changed,
-                        if files_changed == 1 { "" } else { "s" },
-                        remote_ref.name
-                    )
+                    let files_changed = files_changed.to_string();
+                    if files_changed == "1" {
+                        tr_args_with(
+                            translate,
+                            "git_ui.remote_output.received_one_file_change_from",
+                            "Received {} file change from {}",
+                            &files_changed,
+                            &remote_ref.name,
+                        )
+                    } else {
+                        tr_args_with(
+                            translate,
+                            "git_ui.remote_output.received_many_file_changes_from",
+                            "Received {} file changes from {}",
+                            &files_changed,
+                            &remote_ref.name,
+                        )
+                    }
                 } else {
-                    format!("Fast forwarded from {}", remote_ref.name)
+                    tr_arg_with(
+                        translate,
+                        "git_ui.remote_output.fast_forwarded_from",
+                        "Fast forwarded from {}",
+                        &remote_ref.name,
+                    )
                 };
                 SuccessMessage {
                     message,
@@ -91,14 +149,31 @@ pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> Succ
             } else if output.stdout.starts_with("Merge") {
                 let files_changed = get_changes(&output).log_err();
                 let message = if let Some(files_changed) = files_changed {
-                    format!(
-                        "Merged {} file change{} from {}",
-                        files_changed,
-                        if files_changed == 1 { "" } else { "s" },
-                        remote_ref.name
-                    )
+                    let files_changed = files_changed.to_string();
+                    if files_changed == "1" {
+                        tr_args_with(
+                            translate,
+                            "git_ui.remote_output.merged_one_file_change_from",
+                            "Merged {} file change from {}",
+                            &files_changed,
+                            &remote_ref.name,
+                        )
+                    } else {
+                        tr_args_with(
+                            translate,
+                            "git_ui.remote_output.merged_many_file_changes_from",
+                            "Merged {} file changes from {}",
+                            &files_changed,
+                            &remote_ref.name,
+                        )
+                    }
                 } else {
-                    format!("Merged from {}", remote_ref.name)
+                    tr_arg_with(
+                        translate,
+                        "git_ui.remote_output.merged_from",
+                        "Merged from {}",
+                        &remote_ref.name,
+                    )
                 };
                 SuccessMessage {
                     message,
@@ -106,12 +181,22 @@ pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> Succ
                 }
             } else if output.stdout.contains("Successfully rebased") {
                 SuccessMessage {
-                    message: format!("Successfully rebased from {}", remote_ref.name),
+                    message: tr_arg_with(
+                        translate,
+                        "git_ui.remote_output.successfully_rebased_from",
+                        "Successfully rebased from {}",
+                        &remote_ref.name,
+                    ),
                     style: SuccessStyle::ToastWithLog { output },
                 }
             } else {
                 SuccessMessage {
-                    message: format!("Successfully pulled from {}", remote_ref.name),
+                    message: tr_arg_with(
+                        translate,
+                        "git_ui.remote_output.successfully_pulled_from",
+                        "Successfully pulled from {}",
+                        &remote_ref.name,
+                    ),
                     style: SuccessStyle::ToastWithLog { output },
                 }
             }
@@ -119,17 +204,39 @@ pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> Succ
         RemoteAction::Push(branch_name, remote_ref) => {
             if output.stderr.ends_with("Everything up-to-date\n") {
                 SuccessMessage {
-                    message: "Push: Everything is up-to-date".to_owned(),
+                    message: translate(
+                        "git_ui.remote_output.push_everything_up_to_date",
+                        "Push: Everything is up-to-date",
+                    ),
                     style: SuccessStyle::Toast,
                 }
             } else {
                 SuccessMessage {
-                    message: format!("Pushed {} to {}", branch_name, remote_ref.name),
+                    message: tr_args_with(
+                        translate,
+                        "git_ui.remote_output.pushed_to",
+                        "Pushed {} to {}",
+                        branch_name,
+                        &remote_ref.name,
+                    ),
                     style: SuccessStyle::ToastWithLog { output },
                 }
             }
         }
     }
+}
+
+#[cfg(test)]
+pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> SuccessMessage {
+    format_output_impl(action, output, |_, fallback| fallback.to_owned())
+}
+
+pub fn format_output_localized(
+    action: &RemoteAction,
+    output: RemoteCommandOutput,
+    cx: &App,
+) -> SuccessMessage {
+    format_output_impl(action, output, |key, fallback| tr(cx, key, fallback))
 }
 
 #[cfg(test)]

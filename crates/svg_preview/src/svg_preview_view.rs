@@ -6,6 +6,7 @@ use gpui::{
     App, Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement, ParentElement, Render,
     RenderImage, Styled, Subscription, Task, WeakEntity, Window, div, img,
 };
+use i18n::tr;
 use language::{Buffer, BufferEvent};
 use multi_buffer::MultiBuffer;
 use ui::prelude::*;
@@ -279,6 +280,17 @@ impl SvgPreviewView {
 
 impl Render for SvgPreviewView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let failed_to_load_svg_image = tr(
+            cx,
+            "svg_preview.failed_to_load_svg_image",
+            "Failed to load SVG image",
+        );
+        let no_svg_file_selected = tr(
+            cx,
+            "svg_preview.no_svg_file_selected",
+            "No SVG file selected",
+        );
+
         v_flex()
             .id("SvgPreview")
             .key_context("SvgPreview")
@@ -290,17 +302,18 @@ impl Render for SvgPreviewView {
             .items_center()
             .map(|this| match self.current_svg.clone() {
                 Some(Ok(image)) => {
-                    this.child(img(image).max_w_full().max_h_full().with_fallback(|| {
+                    let failed_to_load_svg_image = failed_to_load_svg_image.clone();
+                    this.child(img(image).max_w_full().max_h_full().with_fallback(move || {
                         h_flex()
                             .p_4()
                             .gap_2()
                             .child(Icon::new(IconName::Warning))
-                            .child("Failed to load SVG image")
+                            .child(failed_to_load_svg_image.clone())
                             .into_any_element()
                     }))
                 }
                 Some(Err(e)) => this.child(div().p_4().child(e).into_any_element()),
-                None => this.child(div().p_4().child("No SVG file selected")),
+                None => this.child(div().p_4().child(no_svg_file_selected.clone())),
             })
     }
 }
@@ -329,8 +342,12 @@ impl Item for SvgPreviewView {
         self.buffer
             .as_ref()
             .and_then(|svg_path| svg_path.read(cx).file())
-            .map(|name| format!("Preview {}", name.file_name(cx)).into())
-            .unwrap_or_else(|| "SVG Preview".into())
+            .map(|name| {
+                tr(cx, "svg_preview.preview_title", "Preview {}")
+                    .replacen("{}", name.file_name(cx).as_ref(), 1)
+                    .into()
+            })
+            .unwrap_or_else(|| tr(cx, "svg_preview.tab_title", "SVG Preview").into())
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {

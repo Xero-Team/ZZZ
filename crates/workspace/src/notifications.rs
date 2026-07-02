@@ -164,7 +164,13 @@ impl Workspace {
         E: std::fmt::Debug + std::fmt::Display,
     {
         self.show_notification(workspace_error_notification_id(), cx, |cx| {
-            cx.new(|cx| ErrorMessagePrompt::new(format!("Error: {err}"), cx))
+            cx.new(|cx| {
+                ErrorMessagePrompt::new(
+                    tr(cx, "workspace.notifications.error", "Error: {}")
+                        .replace("{}", &err.to_string()),
+                    cx,
+                )
+            })
         });
     }
 
@@ -174,8 +180,8 @@ impl Workspace {
         self.show_notification(NotificationId::unique::<PortalError>(), cx, |cx| {
             cx.new(|cx| {
                 ErrorMessagePrompt::new(err.to_string(), cx).with_link_button(
-                    "See docs",
-                    "https://zed.dev/docs/linux#i-cant-open-any-files",
+                    tr(cx, "workspace.notifications.see_docs", "See docs"),
+                    "https://zed.dev/docs/linux#i-cant-open-any-files".to_owned(),
                 )
             })
         });
@@ -365,7 +371,11 @@ impl Render for LanguageServerPrompt {
                                             "copy-description",
                                             request.message.clone(),
                                         )
-                                        .tooltip_label("Copy Description"),
+                                        .tooltip_label(tr(
+                                            cx,
+                                            "workspace.notifications.copy_description",
+                                            "Copy Description",
+                                        )),
                                     )
                                     .child(
                                         div().flex_none().child(
@@ -373,16 +383,32 @@ impl Render for LanguageServerPrompt {
                                                 .tooltip(move |_window, cx| {
                                                     if suppress {
                                                         Tooltip::with_meta(
-                                                            "Suppress",
+                                                            tr(
+                                                                cx,
+                                                                "workspace.notifications.suppress",
+                                                                "Suppress",
+                                                            ),
                                                             Some(&SuppressNotification),
-                                                            "Click to close",
+                                                            tr(
+                                                                cx,
+                                                                "workspace.notifications.click_to_close",
+                                                                "Click to close",
+                                                            ),
                                                             cx,
                                                         )
                                                     } else {
                                                         Tooltip::with_meta(
-                                                            "Close",
+                                                            tr(
+                                                                cx,
+                                                                "workspace.pane.close",
+                                                                "Close",
+                                                            ),
                                                             Some(&menu::Cancel),
-                                                            "Suppress with shift-click",
+                                                            tr(
+                                                                cx,
+                                                                "workspace.notifications.suppress_with_shift_click",
+                                                                "Suppress with shift-click",
+                                                            ),
                                                             cx,
                                                         )
                                                     }
@@ -534,7 +560,11 @@ impl Render for ErrorMessagePrompt {
                                     .gap_1()
                                     .child(
                                         CopyButton::new("copy-error-message", self.message.clone())
-                                            .tooltip_label("Copy Error Message"),
+                                            .tooltip_label(tr(
+                                                cx,
+                                                "workspace.notifications.copy_error_message",
+                                                "Copy Error Message",
+                                            )),
                                     )
                                     .child(
                                         ui::IconButton::new("close", ui::IconName::Close).on_click(
@@ -672,20 +702,44 @@ impl RenderOnce for NotificationFrame {
                                         .tooltip(move |_window, cx| {
                                             if suppress {
                                                 Tooltip::with_meta(
-                                                    "Suppress",
+                                                    tr(
+                                                        cx,
+                                                        "workspace.notifications.suppress",
+                                                        "Suppress",
+                                                    ),
                                                     Some(&SuppressNotification),
-                                                    "Click to Close",
+                                                    tr(
+                                                        cx,
+                                                        "workspace.notifications.click_to_close",
+                                                        "Click to Close",
+                                                    ),
                                                     cx,
                                                 )
                                             } else if show_suppress_button {
                                                 Tooltip::with_meta(
-                                                    "Close",
+                                                    tr(
+                                                        cx,
+                                                        "workspace.pane.close",
+                                                        "Close",
+                                                    ),
                                                     Some(&menu::Cancel),
-                                                    "Shift-click to Suppress",
+                                                    tr(
+                                                        cx,
+                                                        "workspace.notifications.shift_click_to_suppress",
+                                                        "Shift-click to Suppress",
+                                                    ),
                                                     cx,
                                                 )
                                             } else {
-                                                Tooltip::for_action("Close", &menu::Cancel, cx)
+                                                Tooltip::for_action(
+                                                    tr(
+                                                        cx,
+                                                        "workspace.pane.close",
+                                                        "Close",
+                                                    ),
+                                                    &menu::Cancel,
+                                                    cx,
+                                                )
                                             }
                                         })
                                         .on_click({
@@ -1151,7 +1205,9 @@ where
         match self {
             Ok(value) => Some(value),
             Err(err) => {
-                let message: SharedString = format!("Error: {err}").into();
+                let message: SharedString = tr(cx, "workspace.notifications.error", "Error: {}")
+                    .replace("{}", &err.to_string())
+                    .into();
                 log::error!("Showing error notification in app: {message}");
                 show_app_notification(workspace_error_notification_id(), cx, {
                     move |cx| {

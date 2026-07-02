@@ -11,6 +11,7 @@ use gpui::{
     Focusable, Modifiers, ModifiersChangedEvent, MouseButton, MouseUpEvent, ParentElement, Point,
     Render, Styled, Task, WeakEntity, Window, actions, rems,
 };
+use i18n::tr;
 use picker::{Picker, PickerDelegate};
 use project::Project;
 use schemars::JsonSchema;
@@ -717,8 +718,13 @@ impl TabSwitcherDelegate {
 impl PickerDelegate for TabSwitcherDelegate {
     type ListItem = ListItem;
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Search all tabs...".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(
+            cx,
+            "tab_switcher.placeholder.search_all_tabs",
+            "Search all tabs...",
+        )
+        .into()
     }
 
     fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
@@ -863,7 +869,10 @@ impl PickerDelegate for TabSwitcherDelegate {
                 IconButton::new("close_tab", IconName::Close)
                     .icon_size(IconSize::Small)
                     .icon_color(indicator_color)
-                    .tooltip(Tooltip::for_action_title("Close", &CloseSelectedItem))
+                    .tooltip(Tooltip::for_action_title(
+                        tr(cx, "workspace.pane.close", "Close"),
+                        &CloseSelectedItem,
+                    ))
                     .on_click(cx.listener(move |picker, _, window, cx| {
                         cx.stop_propagation();
                         picker.delegate.close_item_at(ix, window, cx);

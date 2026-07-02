@@ -14,6 +14,7 @@ use gpui::{
     Action, AnyElement, App, AppContext, AsyncApp, DismissEvent, Entity, EntityId, FocusHandle,
     HighlightStyle, StyledText, Task, TextStyle, prelude::*,
 };
+use i18n::tr;
 use language::{Buffer, LanguageAwareStyling};
 use picker::{Picker, PickerDelegate};
 use project::{Project, ProjectPath, SearchResults, search::SearchQuery, search::SearchResult};
@@ -567,8 +568,13 @@ impl PickerDelegate for Delegate {
         "text finder"
     }
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Search all files...".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(
+            cx,
+            "search.project.placeholder.search_all",
+            "Search all files...",
+        )
+        .into()
     }
 
     fn searchbar_trailer(

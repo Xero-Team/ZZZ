@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use gpui::{Action, FocusHandle, Focusable};
+use i18n::tr;
 use ui::{ContextMenu, Divider, KeyBinding, PopoverMenu, Tooltip, prelude::*};
 
 use crate::preview::Layout;
@@ -126,25 +127,28 @@ impl<D: PickerDelegate> Picker<D> {
         h_flex()
             .gap_1()
             .child(
-                Button::new("picker-preview-toggle", "Preview")
-                    .when(preview_visible, |this| {
-                        this.selected_style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
-                    })
-                    .key_binding(
-                        KeyBinding::for_action_in(&TogglePreview, &focus_handle, cx)
-                            .size(rems_from_px(12.)),
+                Button::new(
+                    "picker-preview-toggle",
+                    tr(cx, "picker.footer.preview", "Preview"),
+                )
+                .when(preview_visible, |this| {
+                    this.selected_style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
+                })
+                .key_binding(
+                    KeyBinding::for_action_in(&TogglePreview, &focus_handle, cx)
+                        .size(rems_from_px(12.)),
+                )
+                .tooltip(move |_window, cx| {
+                    Tooltip::for_action_in(
+                        tr(cx, "picker.footer.toggle_preview", "Toggle Preview"),
+                        &TogglePreview,
+                        &toggle_focus_handle,
+                        cx,
                     )
-                    .tooltip(move |_window, cx| {
-                        Tooltip::for_action_in(
-                            "Toggle Preview",
-                            &TogglePreview,
-                            &toggle_focus_handle,
-                            cx,
-                        )
-                    })
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.toggle_preview_visible(window, cx);
-                    })),
+                })
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.toggle_preview_visible(window, cx);
+                })),
             )
             .when(preview_visible, |this| {
                 this.child(div().child(Divider::vertical().color(ui::DividerColor::Border)))
@@ -154,7 +158,7 @@ impl<D: PickerDelegate> Picker<D> {
                             .toggle_state(current == Layout::Right)
                             .tooltip(move |_window, cx| {
                                 Tooltip::for_action_in(
-                                    "Preview to the Right",
+                                    tr(cx, "picker.footer.preview_right", "Preview to the Right"),
                                     &SetPreviewRight,
                                     &right_focus_handle,
                                     cx,
@@ -170,7 +174,7 @@ impl<D: PickerDelegate> Picker<D> {
                             .toggle_state(current == Layout::Below)
                             .tooltip(move |_window, cx| {
                                 Tooltip::for_action_in(
-                                    "Preview Below",
+                                    tr(cx, "picker.footer.preview_below", "Preview Below"),
                                     &SetPreviewBelow,
                                     &below_focus_handle,
                                     cx,
@@ -195,17 +199,20 @@ impl<D: PickerDelegate> Picker<D> {
             .attach(gpui::Anchor::TopRight)
             .anchor(gpui::Anchor::BottomRight)
             .trigger_with_tooltip(
-                Button::new("picker-actions-trigger", "Actions...")
-                    .key_binding(
-                        KeyBinding::for_action_in(&ToggleActionsMenu, &focus_handle, cx)
-                            .size(rems_from_px(12.)),
-                    )
-                    .selected_style(ui::ButtonStyle::Tinted(ui::TintColor::Accent)),
+                Button::new(
+                    "picker-actions-trigger",
+                    tr(cx, "picker.footer.actions", "Actions..."),
+                )
+                .key_binding(
+                    KeyBinding::for_action_in(&ToggleActionsMenu, &focus_handle, cx)
+                        .size(rems_from_px(12.)),
+                )
+                .selected_style(ui::ButtonStyle::Tinted(ui::TintColor::Accent)),
                 {
                     let tooltip_focus_handle = focus_handle.clone();
                     move |_window, cx| {
                         Tooltip::for_action_in(
-                            "Actions",
+                            tr(cx, "picker.footer.actions_tooltip", "Actions"),
                             &ToggleActionsMenu,
                             &tooltip_focus_handle,
                             cx,

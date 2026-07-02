@@ -4,6 +4,7 @@ use gpui::{
     App, Context, DismissEvent, Entity, EventEmitter, Focusable, ParentElement, Render, Styled,
     WeakEntity, Window, actions,
 };
+use i18n::tr;
 use language::{LanguageMatcher, LanguageName, LanguageRegistry};
 use open_path_prompt::file_finder_settings::FileFinderSettings;
 use paths::snippets_dir;
@@ -199,8 +200,13 @@ impl ScopeSelectorDelegate {
 impl PickerDelegate for ScopeSelectorDelegate {
     type ListItem = ListItem;
 
-    fn placeholder_text(&self, _window: &mut Window, _: &mut App) -> Arc<str> {
-        "Select snippet scope...".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(
+            cx,
+            "snippets_ui.placeholder.select_snippet_scope",
+            "Select snippet scope...",
+        )
+        .into()
     }
 
     fn match_count(&self) -> usize {

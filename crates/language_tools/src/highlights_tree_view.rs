@@ -8,6 +8,7 @@ use gpui::{
     MouseMoveEvent, ParentElement, Render, ScrollStrategy, SharedString, Styled, Task,
     UniformListScrollHandle, WeakEntity, Window, actions, div, rems, uniform_list,
 };
+use i18n::tr;
 use language::{BufferId, Point, ToOffset};
 use menu::{SelectNext, SelectPrevious};
 use std::{mem, ops::Range, sync::Arc, time::Duration};
@@ -847,24 +848,46 @@ impl Render for HighlightsTreeView {
                             if self.editor.is_some() {
                                 let has_any = !self.cached_entries.is_empty();
                                 if has_any {
-                                    this.child(Label::new("All highlights are filtered out"))
+                                    this.child(Label::new(tr(
+                                        cx,
+                                        "language_tools.highlights.empty_filtered_title",
+                                        "All highlights are filtered out",
+                                    )))
                                         .child(
-                                            Label::new(
+                                            Label::new(tr(
+                                                cx,
+                                                "language_tools.highlights.empty_filtered_body",
                                                 "Enable text, syntax, or semantic highlights in the toolbar",
-                                            )
+                                            ))
                                             .size(LabelSize::Small),
                                         )
                                 } else {
-                                    this.child(Label::new("No highlights found")).child(
-                                        Label::new(
+                                    this.child(Label::new(tr(
+                                        cx,
+                                        "language_tools.highlights.empty_none_title",
+                                        "No highlights found",
+                                    )))
+                                    .child(
+                                        Label::new(tr(
+                                            cx,
+                                            "language_tools.highlights.empty_none_body",
                                             "The editor has no text, syntax, or semantic token highlights",
-                                        )
+                                        ))
                                         .size(LabelSize::Small),
                                     )
                                 }
                             } else {
-                                this.child(Label::new("Not attached to an editor")).child(
-                                    Label::new("Focus an editor to show highlights")
+                                this.child(Label::new(tr(
+                                    cx,
+                                    "language_tools.highlights.empty_no_editor_title",
+                                    "Not attached to an editor",
+                                )))
+                                .child(
+                                    Label::new(tr(
+                                        cx,
+                                        "language_tools.highlights.empty_no_editor_body",
+                                        "Focus an editor to show highlights",
+                                    ))
                                         .size(LabelSize::Small),
                                 )
                             }
@@ -987,7 +1010,11 @@ impl HighlightsTreeToolbarItemView {
                     .icon_size(IconSize::Small)
                     .style(ButtonStyle::Subtle)
                     .toggle_state(self.toggle_settings_handle.is_deployed()),
-                Tooltip::text("Highlights Settings"),
+                Tooltip::text(tr(
+                    cx,
+                    "language_tools.highlights.settings",
+                    "Highlights Settings",
+                )),
             )
             .anchor(gpui::Anchor::TopRight)
             .with_handle(self.toggle_settings_handle.clone())

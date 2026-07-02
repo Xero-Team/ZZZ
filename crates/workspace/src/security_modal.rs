@@ -38,6 +38,38 @@ pub struct SecurityModal {
     trust_path_error: Option<SharedString>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TrustScopeValidationError {
+    Empty,
+    NotAbsolute,
+    NotAncestor,
+}
+
+impl TrustScopeValidationError {
+    fn message(self, cx: &App) -> SharedString {
+        match self {
+            Self::Empty => tr(
+                cx,
+                "workspace.security_modal.error.enter_folder_to_trust",
+                "Enter a folder to trust",
+            )
+            .into(),
+            Self::NotAbsolute => tr(
+                cx,
+                "workspace.security_modal.error.enter_absolute_folder_path",
+                "Enter an absolute folder path",
+            )
+            .into(),
+            Self::NotAncestor => tr(
+                cx,
+                "workspace.security_modal.error.must_be_parent_folder",
+                "Must be a parent folder of the project",
+            )
+            .into(),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct RestrictedPath {
     abs_path: Arc<Path>,
@@ -248,7 +280,11 @@ impl Render for SecurityModal {
                                                             "trust-parents",
                                                             ToggleState::from(self.trust_parents),
                                                         )
-                                                        .label("Trust all projects in")
+                                                        .label(tr(
+                                                            cx,
+                                                            "workspace.security_modal.trust_all_projects_in",
+                                                            "Trust all projects in",
+                                                        ))
                                                         .on_click(cx.listener(
                                                             |security_modal,
                                                              state: &ToggleState,
@@ -350,7 +386,14 @@ impl SecurityModal {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let trust_path_input = cx.new(|cx| InputField::new(window, cx, "Folder to trust"));
+        let trust_path_input = cx.new(|cx| {
+            let placeholder = tr(
+                cx,
+                "workspace.security_modal.folder_to_trust",
+                "Folder to trust",
+            );
+            InputField::new(window, cx, &placeholder)
+        });
         let mut this = Self {
             worktree_store,
             remote_host: remote_host.map(|host| host.into()),
@@ -442,7 +485,9 @@ impl SecurityModal {
         };
 
         let typed = self.trust_path_input.read(cx).text(cx);
-        validate_trust_scope(&typed, &project, self.home_dir.as_deref()).map(Some)
+        validate_trust_scope(&typed, &project, self.home_dir.as_deref())
+            .map(Some)
+            .map_err(|error| error.message(cx))
     }
 
     fn trust_and_dismiss(&mut self, cx: &mut Context<Self>) {
@@ -550,10 +595,10 @@ fn validate_trust_scope(
     typed: &str,
     project: &Path,
     home_dir: Option<&Path>,
-) -> Result<PathBuf, SharedString> {
+) -> Result<PathBuf, TrustScopeValidationError> {
     let trimmed = typed.trim();
     if trimmed.is_empty() {
-        return Err("Enter a folder to trust".into());
+        return Err(TrustScopeValidationError::Empty);
     }
 
     let expanded = match (trimmed.strip_prefix('~'), home_dir) {
@@ -564,11 +609,11 @@ fn validate_trust_scope(
     };
 
     if !expanded.is_absolute() {
-        return Err("Enter an absolute folder path".into());
+        return Err(TrustScopeValidationError::NotAbsolute);
     }
 
     if !project.starts_with(&expanded) {
-        return Err("Must be a parent folder of the project".into());
+        return Err(TrustScopeValidationError::NotAncestor);
     }
 
     Ok(expanded)
@@ -576,8 +621,7 @@ fn validate_trust_scope(
 
 #[cfg(test)]
 mod tests {
-    use super::validate_trust_scope;
-    use gpui::SharedString;
+    use super::{TrustScopeValidationError, validate_trust_scope};
     use std::path::PathBuf;
 
     fn sample_home_dir() -> PathBuf {
@@ -619,9 +663,6 @@ mod tests {
             &project_dir,
             Some(&home_dir),
         );
-        assert_eq!(
-            err,
-            Err(SharedString::from("Must be a parent folder of the project"))
-        );
+        assert_eq!(err, Err(TrustScopeValidationError::NotAncestor));
     }
 }

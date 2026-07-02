@@ -8,6 +8,7 @@ use gpui::{
     App, AppContext, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
     InteractiveElement, ParentElement, Render, Styled, Task, WeakEntity, Window, actions,
 };
+use i18n::tr;
 use language::Buffer;
 use picker::{Picker, PickerDelegate};
 use std::sync::Arc;
@@ -60,7 +61,11 @@ impl EncodingSelector {
             workspace.show_toast(
                 Toast::new(
                     NotificationId::unique::<EncodingSelector>(),
-                    "Save file to change encoding",
+                    tr(
+                        cx,
+                        "encoding_selector.save_file_to_change_encoding",
+                        "Save file to change encoding",
+                    ),
                 ),
                 cx,
             );
@@ -70,7 +75,11 @@ impl EncodingSelector {
             workspace.show_toast(
                 Toast::new(
                     NotificationId::unique::<EncodingSelector>(),
-                    "Cannot change encoding during collaboration",
+                    tr(
+                        cx,
+                        "encoding_selector.cannot_change_during_collaboration",
+                        "Cannot change encoding during collaboration",
+                    ),
                 ),
                 cx,
             );
@@ -80,7 +89,11 @@ impl EncodingSelector {
             workspace.show_toast(
                 Toast::new(
                     NotificationId::unique::<EncodingSelector>(),
-                    "Cannot change encoding of remote server file",
+                    tr(
+                        cx,
+                        "encoding_selector.cannot_change_remote_server_file",
+                        "Cannot change encoding of remote server file",
+                    ),
                 ),
                 cx,
             );
@@ -221,8 +234,13 @@ fn available_encodings() -> Vec<&'static Encoding> {
 impl PickerDelegate for EncodingSelectorDelegate {
     type ListItem = ListItem;
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Reopen with encoding...".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(
+            cx,
+            "encoding_selector.reopen_with_encoding",
+            "Reopen with encoding...",
+        )
+        .into()
     }
 
     fn match_count(&self) -> usize {

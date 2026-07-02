@@ -4,6 +4,7 @@ use gpui::{
     App, Context, DismissEvent, Entity, EventEmitter, Focusable, Render, UpdateGlobal, WeakEntity,
     Window,
 };
+use i18n::tr;
 use picker::{Picker, PickerDelegate};
 use settings::{Settings as _, SettingsStore, update_settings_file};
 use std::sync::Arc;
@@ -162,8 +163,13 @@ impl IconThemeSelectorDelegate {
 impl PickerDelegate for IconThemeSelectorDelegate {
     type ListItem = ui::ListItem;
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Select Icon Theme...".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(
+            cx,
+            "theme_selector.icon.placeholder",
+            "Select Icon Theme...",
+        )
+        .into()
     }
 
     fn match_count(&self) -> usize {
@@ -324,28 +330,37 @@ impl PickerDelegate for IconThemeSelectorDelegate {
                 .border_t_1()
                 .border_color(cx.theme().colors().border_variant)
                 .child(
-                    Button::new("docs", "View Icon Theme Docs")
-                        .end_icon(
-                            Icon::new(IconName::ArrowUpRight)
-                                .size(IconSize::Small)
-                                .color(Color::Muted),
-                        )
-                        .on_click(|_event, _window, cx| {
-                            cx.open_url("https://zed.dev/docs/icon-themes");
-                        }),
+                    Button::new(
+                        "docs",
+                        tr(cx, "theme_selector.icon.view_docs", "View Icon Theme Docs"),
+                    )
+                    .end_icon(
+                        Icon::new(IconName::ArrowUpRight)
+                            .size(IconSize::Small)
+                            .color(Color::Muted),
+                    )
+                    .on_click(|_event, _window, cx| {
+                        cx.open_url("https://zed.dev/docs/icon-themes");
+                    }),
                 )
                 .child(
-                    Button::new("more-icon-themes", "Install Icon Themes").on_click(
-                        move |_event, window, cx| {
-                            window.dispatch_action(
-                                Box::new(Extensions {
-                                    category_filter: Some(ExtensionCategoryFilter::IconThemes),
-                                    id: None,
-                                }),
-                                cx,
-                            );
-                        },
-                    ),
+                    Button::new(
+                        "more-icon-themes",
+                        tr(
+                            cx,
+                            "theme_selector.icon.install_themes",
+                            "Install Icon Themes",
+                        ),
+                    )
+                    .on_click(move |_event, window, cx| {
+                        window.dispatch_action(
+                            Box::new(Extensions {
+                                category_filter: Some(ExtensionCategoryFilter::IconThemes),
+                                id: None,
+                            }),
+                            cx,
+                        );
+                    }),
                 )
                 .into_any_element(),
         )

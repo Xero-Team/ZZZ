@@ -13,6 +13,7 @@ use gpui::{
     ParentElement, PinchEvent, Pixels, Point, Render, ScrollDelta, ScrollWheelEvent, Style, Styled,
     Task, WeakEntity, Window, actions, checkerboard, div, img, point, px, size,
 };
+use i18n::tr;
 use language::File as _;
 use persistence::ImageViewerDb;
 use project::{ImageItem, Project, ProjectPath, image_store::ImageItemEvent};
@@ -776,7 +777,9 @@ impl Render for ImageViewToolbarControls {
             .child(
                 IconButton::new("zoom-out", IconName::Dash)
                     .icon_size(IconSize::Small)
-                    .tooltip(|_window, cx| Tooltip::for_action("Zoom Out", &ZoomOut, cx))
+                    .tooltip(|_window, cx| {
+                        Tooltip::for_action(tr(cx, "menu.view.zoom_out", "Zoom Out"), &ZoomOut, cx)
+                    })
                     .on_click({
                         let image_view = image_view.downgrade();
                         move |_, window, cx| {
@@ -791,7 +794,13 @@ impl Render for ImageViewToolbarControls {
             .child(
                 Button::new("zoom-level", zoom_percentage)
                     .label_size(LabelSize::Small)
-                    .tooltip(|_window, cx| Tooltip::for_action("Reset Zoom", &ResetZoom, cx))
+                    .tooltip(|_window, cx| {
+                        Tooltip::for_action(
+                            tr(cx, "menu.view.reset_zoom", "Reset Zoom"),
+                            &ResetZoom,
+                            cx,
+                        )
+                    })
                     .on_click({
                         let image_view = image_view.downgrade();
                         move |_, window, cx| {
@@ -806,7 +815,9 @@ impl Render for ImageViewToolbarControls {
             .child(
                 IconButton::new("zoom-in", IconName::Plus)
                     .icon_size(IconSize::Small)
-                    .tooltip(|_window, cx| Tooltip::for_action("Zoom In", &ZoomIn, cx))
+                    .tooltip(|_window, cx| {
+                        Tooltip::for_action(tr(cx, "menu.view.zoom_in", "Zoom In"), &ZoomIn, cx)
+                    })
                     .on_click({
                         let image_view = image_view.downgrade();
                         move |_, window, cx| {
@@ -821,7 +832,13 @@ impl Render for ImageViewToolbarControls {
             .child(
                 IconButton::new("fit-to-view", IconName::Maximize)
                     .icon_size(IconSize::Small)
-                    .tooltip(|_window, cx| Tooltip::for_action("Fit to View", &FitToView, cx))
+                    .tooltip(|_window, cx| {
+                        Tooltip::for_action(
+                            tr(cx, "image_viewer.toolbar.fit_to_view", "Fit to View"),
+                            &FitToView,
+                            cx,
+                        )
+                    })
                     .on_click({
                         let image_view = image_view.downgrade();
                         move |_, window, cx| {

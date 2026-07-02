@@ -1,8 +1,9 @@
 use collections::HashMap;
 use gpui::{
-    Animation, AnimationExt, AnyElement, Context, Hsla, ImageSource, RenderImage, Rgba, StyledText,
-    Task, img, pulsating_between,
+    Animation, AnimationExt, AnyElement, App, Context, Hsla, ImageSource, RenderImage, Rgba,
+    StyledText, Task, img, pulsating_between,
 };
+use i18n::tr;
 use settings::Settings;
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -327,10 +328,21 @@ pub(crate) fn render_mermaid_diagram(
     parsed: &ParsedMarkdownMermaidDiagram,
     mermaid_state: &MermaidState,
     style: &MarkdownStyle,
+    cx: &App,
 ) -> AnyElement {
     let cached = mermaid_state.cache.get(&parsed.contents);
     let mut container = div().w_full();
     container.style().refine(&style.code_block);
+    let failed_to_load = tr(
+        cx,
+        "markdown.mermaid.failed_to_load",
+        "Failed to load mermaid diagram",
+    );
+    let rendering = tr(
+        cx,
+        "markdown.mermaid.rendering",
+        "Rendering mermaid diagram...",
+    );
 
     if let Some(result) = cached.and_then(|cached| cached.render_image.get()) {
         match result {
@@ -339,10 +351,12 @@ pub(crate) fn render_mermaid_diagram(
                     div().w_full().child(
                         img(ImageSource::Render(render_image.clone()))
                             .max_w_full()
-                            .with_fallback(|| {
-                                div()
-                                    .child(Label::new("Failed to load mermaid diagram"))
-                                    .into_any_element()
+                            .with_fallback({
+                                move || {
+                                    div()
+                                        .child(Label::new(failed_to_load.clone()))
+                                        .into_any_element()
+                                }
                             }),
                     ),
                 )
@@ -359,10 +373,12 @@ pub(crate) fn render_mermaid_diagram(
                     .child(
                         img(ImageSource::Render(fallback.clone()))
                             .max_w_full()
-                            .with_fallback(|| {
-                                div()
-                                    .child(Label::new("Failed to load mermaid diagram"))
-                                    .into_any_element()
+                            .with_fallback({
+                                move || {
+                                    div()
+                                        .child(Label::new(failed_to_load.clone()))
+                                        .into_any_element()
+                                }
                             }),
                     )
                     .with_animation(
@@ -377,15 +393,13 @@ pub(crate) fn render_mermaid_diagram(
     } else {
         container
             .child(
-                Label::new("Rendering mermaid diagram...")
-                    .color(Color::Muted)
-                    .with_animation(
-                        "mermaid-loading-pulse",
-                        Animation::new(Duration::from_secs(2))
-                            .repeat()
-                            .with_easing(pulsating_between(0.4, 0.8)),
-                        |label, delta| label.alpha(delta),
-                    ),
+                Label::new(rendering).color(Color::Muted).with_animation(
+                    "mermaid-loading-pulse",
+                    Animation::new(Duration::from_secs(2))
+                        .repeat()
+                        .with_easing(pulsating_between(0.4, 0.8)),
+                    |label, delta| label.alpha(delta),
+                ),
             )
             .into_any_element()
     }

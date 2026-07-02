@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use i18n::tr;
 use ui::{div, prelude::*};
 
 use crate::CsvPreviewView;
@@ -25,7 +26,11 @@ impl Render for CsvPreviewView {
                         .text_ui(cx)
                         .font_buffer(cx)
                         .text_color(cx.theme().colors().text_muted)
-                        .child("No CSV content to display")
+                        .child(tr(
+                            cx,
+                            "csv_preview.no_content_to_display",
+                            "No CSV content to display",
+                        ))
                         .into_any_element()
                 } else {
                     self.create_table(&self.column_widths.widths, cx)

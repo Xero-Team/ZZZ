@@ -2,6 +2,7 @@ use fuzzy::{StringMatch, StringMatchCandidate, match_strings};
 use gpui::{
     App, Context, DismissEvent, Entity, EventEmitter, Focusable, Render, Task, WeakEntity, Window,
 };
+use i18n::tr;
 use picker::{Picker, PickerDelegate};
 use settings::{ActiveSettingsProfileName, SettingsStore};
 use ui::{HighlightedLabel, ListItem, ListItemSpacing, prelude::*};
@@ -149,8 +150,13 @@ impl SettingsProfileSelectorDelegate {
 impl PickerDelegate for SettingsProfileSelectorDelegate {
     type ListItem = ListItem;
 
-    fn placeholder_text(&self, _: &mut Window, _: &mut App) -> std::sync::Arc<str> {
-        "Select a settings profile...".into()
+    fn placeholder_text(&self, _: &mut Window, cx: &mut App) -> std::sync::Arc<str> {
+        tr(
+            cx,
+            "settings_profile_selector.placeholder.select_settings_profile",
+            "Select a settings profile...",
+        )
+        .into()
     }
 
     fn match_count(&self) -> usize {

@@ -431,7 +431,15 @@ impl Editor {
         // Create the prompt editor for the review input
         let prompt_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Add a review comment...", window, cx);
+            editor.set_placeholder_text(
+                &tr(
+                    cx,
+                    "editor.git.review_comment.placeholder",
+                    "Add a review comment...",
+                ),
+                window,
+                cx,
+            );
             editor
         });
 
@@ -818,7 +826,11 @@ impl Editor {
                     .border_color(icon_color.opacity(0.5))
             })
             .child(Icon::new(IconName::Plus).size(IconSize::Small))
-            .tooltip(Tooltip::text("Add Review (drag to select multiple lines)"))
+            .tooltip(Tooltip::text(tr(
+                cx,
+                "editor.git.add_review_tooltip",
+                "Add Review (drag to select multiple lines)",
+            )))
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(move |editor, _event: &gpui::MouseDownEvent, window, cx| {
@@ -2231,7 +2243,11 @@ impl Editor {
                                 IconButton::new("diff-review-close", IconName::Close)
                                     .icon_color(ui::Color::Muted)
                                     .icon_size(action_icon_size)
-                                    .tooltip(Tooltip::text("Close"))
+                                    .tooltip(Tooltip::text(tr(
+                                        cx,
+                                        "workspace.pane.close",
+                                        "Close",
+                                    )))
                                     .on_click(|_, window, cx| {
                                         window
                                             .dispatch_action(Box::new(crate::actions::Cancel), cx);
@@ -2241,7 +2257,11 @@ impl Editor {
                                 IconButton::new("diff-review-add", IconName::Return)
                                     .icon_color(ui::Color::Muted)
                                     .icon_size(action_icon_size)
-                                    .tooltip(Tooltip::text("Add comment"))
+                                    .tooltip(Tooltip::text(tr(
+                                        cx,
+                                        "editor.git.review_comment.add",
+                                        "Add comment",
+                                    )))
                                     .on_click(|_, window, cx| {
                                         window.dispatch_action(
                                             Box::new(crate::actions::SubmitDiffReviewComment),
@@ -2261,6 +2281,7 @@ impl Editor {
                     avatar_size,
                     action_icon_size,
                     colors,
+                    cx,
                 ))
             })
             .into_any_element()
@@ -2274,6 +2295,7 @@ impl Editor {
         avatar_size: Pixels,
         action_icon_size: IconSize,
         colors: &theme::ThemeColors,
+        cx: &mut App,
     ) -> impl IntoElement {
         let comment_count = comments.len();
 
@@ -2308,11 +2330,21 @@ impl Editor {
                         .color(ui::Color::Muted),
                     )
                     .child(
-                        Label::new(format!(
-                            "{} Comment{}",
-                            comment_count,
-                            if comment_count == 1 { "" } else { "s" }
-                        ))
+                        Label::new(if comment_count == 1 {
+                            tr(
+                                cx,
+                                "editor.git.review_comment.count_one",
+                                "{} Comment",
+                            )
+                            .replace("{}", &comment_count.to_string())
+                        } else {
+                            tr(
+                                cx,
+                                "editor.git.review_comment.count_many",
+                                "{} Comments",
+                            )
+                            .replace("{}", &comment_count.to_string())
+                        })
                         .size(LabelSize::Small)
                         .color(Color::Muted),
                     ),
@@ -2328,6 +2360,7 @@ impl Editor {
                         avatar_size,
                         action_icon_size,
                         colors,
+                        cx,
                     )
                 }))
             })
@@ -2340,6 +2373,7 @@ impl Editor {
         avatar_size: Pixels,
         action_icon_size: IconSize,
         colors: &theme::ThemeColors,
+        cx: &mut App,
     ) -> impl IntoElement {
         let comment_id = comment.id;
         let is_editing = inline_editor.is_some();
@@ -2401,7 +2435,7 @@ impl Editor {
                         )
                         .icon_color(ui::Color::Muted)
                         .icon_size(action_icon_size)
-                        .tooltip(Tooltip::text("Cancel"))
+                        .tooltip(Tooltip::text(tr(cx, "prompt.common.cancel", "Cancel")))
                         .on_click(move |_, window, cx| {
                             window.dispatch_action(
                                 Box::new(crate::actions::CancelEditReviewComment {
@@ -2418,7 +2452,11 @@ impl Editor {
                         )
                         .icon_color(ui::Color::Muted)
                         .icon_size(action_icon_size)
-                        .tooltip(Tooltip::text("Confirm"))
+                        .tooltip(Tooltip::text(tr(
+                            cx,
+                            "git_ui.branch_picker.confirm",
+                            "Confirm",
+                        )))
                         .on_click(move |_, window, cx| {
                             window.dispatch_action(
                                 Box::new(crate::actions::ConfirmEditReviewComment {
@@ -2647,84 +2685,105 @@ pub(super) fn render_diff_hunk_controls(
         .shadow_md()
         .when(show_stage_restore, |el| {
             el.child(if status.has_secondary_hunk() {
-                Button::new(("stage", row as u64), "Stage")
-                    .alpha(if status.is_pending() { 0.66 } else { 1.0 })
-                    .tooltip({
-                        let focus_handle = editor.focus_handle(cx);
-                        move |_window, cx| {
-                            Tooltip::for_action_in(
-                                "Stage Hunk",
-                                &::git::ToggleStaged,
-                                &focus_handle,
+                Button::new(
+                    ("stage", row as u64),
+                    tr(cx, "git_ui.project_diff.stage", "Stage"),
+                )
+                .alpha(if status.is_pending() { 0.66 } else { 1.0 })
+                .tooltip({
+                    let focus_handle = editor.focus_handle(cx);
+                    move |_window, cx| {
+                        Tooltip::for_action_in(
+                            &tr(
                                 cx,
-                            )
-                        }
-                    })
-                    .on_click({
-                        let editor = editor.clone();
-                        move |_event, _window, cx| {
-                            editor.update(cx, |editor, cx| {
-                                editor.stage_or_unstage_diff_hunks(
-                                    true,
-                                    vec![hunk_range.start..hunk_range.start],
-                                    cx,
-                                );
-                            });
-                        }
-                    })
+                                "git_ui.project_diff.stage_and_go_to_next_hunk",
+                                "Stage and go to next hunk",
+                            ),
+                            &::git::ToggleStaged,
+                            &focus_handle,
+                            cx,
+                        )
+                    }
+                })
+                .on_click({
+                    let editor = editor.clone();
+                    move |_event, _window, cx| {
+                        editor.update(cx, |editor, cx| {
+                            editor.stage_or_unstage_diff_hunks(
+                                true,
+                                vec![hunk_range.start..hunk_range.start],
+                                cx,
+                            );
+                        });
+                    }
+                })
             } else {
-                Button::new(("unstage", row as u64), "Unstage")
-                    .alpha(if status.is_pending() { 0.66 } else { 1.0 })
-                    .tooltip({
-                        let focus_handle = editor.focus_handle(cx);
-                        move |_window, cx| {
-                            Tooltip::for_action_in(
-                                "Unstage Hunk",
-                                &::git::ToggleStaged,
-                                &focus_handle,
+                Button::new(
+                    ("unstage", row as u64),
+                    tr(cx, "git_ui.project_diff.unstage", "Unstage"),
+                )
+                .alpha(if status.is_pending() { 0.66 } else { 1.0 })
+                .tooltip({
+                    let focus_handle = editor.focus_handle(cx);
+                    move |_window, cx| {
+                        Tooltip::for_action_in(
+                            &tr(
                                 cx,
-                            )
-                        }
-                    })
-                    .on_click({
-                        let editor = editor.clone();
-                        move |_event, _window, cx| {
-                            editor.update(cx, |editor, cx| {
-                                editor.stage_or_unstage_diff_hunks(
-                                    false,
-                                    vec![hunk_range.start..hunk_range.start],
-                                    cx,
-                                );
-                            });
-                        }
-                    })
+                                "git_ui.project_diff.unstage_and_go_to_next_hunk",
+                                "Unstage and go to next hunk",
+                            ),
+                            &::git::ToggleStaged,
+                            &focus_handle,
+                            cx,
+                        )
+                    }
+                })
+                .on_click({
+                    let editor = editor.clone();
+                    move |_event, _window, cx| {
+                        editor.update(cx, |editor, cx| {
+                            editor.stage_or_unstage_diff_hunks(
+                                false,
+                                vec![hunk_range.start..hunk_range.start],
+                                cx,
+                            );
+                        });
+                    }
+                })
             })
         })
         .when(show_stage_restore, |el| {
             el.child(
-                Button::new(("restore", row as u64), "Restore")
-                    .tooltip({
-                        let focus_handle = editor.focus_handle(cx);
-                        move |_window, cx| {
-                            Tooltip::for_action_in(
-                                "Restore Hunk",
-                                &::git::Restore,
-                                &focus_handle,
+                Button::new(
+                    ("restore", row as u64),
+                    tr(cx, "git_ui.solo_diff_view.restore", "Restore"),
+                )
+                .tooltip({
+                    let focus_handle = editor.focus_handle(cx);
+                    move |_window, cx| {
+                        Tooltip::for_action_in(
+                            &tr(
                                 cx,
-                            )
-                        }
-                    })
-                    .on_click({
-                        let editor = editor.clone();
-                        move |_event, window, cx| {
-                            editor.update(cx, |editor, cx| {
-                                let snapshot = editor.snapshot(window, cx);
-                                let point = hunk_range.start.to_point(&snapshot.buffer_snapshot());
-                                editor.restore_hunks_in_ranges(vec![point..point], window, cx);
-                            });
-                        }
-                    })
-                    .disabled(is_created_file),
+                                "git_ui.solo_diff_view.restore_selected_hunk",
+                                "Restore selected hunk",
+                            ),
+                            &::git::Restore,
+                            &focus_handle,
+                            cx,
+                        )
+                    }
+                })
+                .on_click({
+                    let editor = editor.clone();
+                    move |_event, window, cx| {
+                        editor.update(cx, |editor, cx| {
+                            let snapshot = editor.snapshot(window, cx);
+                            let point = hunk_range.start.to_point(&snapshot.buffer_snapshot());
+                            editor.restore_hunks_in_ranges(vec![point..point], window, cx);
+                        });
+                    }
+                })
+                .disabled(is_created_file),
             )
         })
         .when(
@@ -2738,7 +2797,16 @@ pub(super) fn render_diff_hunk_controls(
                         .tooltip({
                             let focus_handle = editor.focus_handle(cx);
                             move |_window, cx| {
-                                Tooltip::for_action_in("Next Hunk", &GoToHunk, &focus_handle, cx)
+                                Tooltip::for_action_in(
+                                    &tr(
+                                        cx,
+                                        "zed.quick_action_bar.next_hunk",
+                                        "Next Hunk",
+                                    ),
+                                    &GoToHunk,
+                                    &focus_handle,
+                                    cx,
+                                )
                             }
                         })
                         .on_click({
@@ -2770,7 +2838,11 @@ pub(super) fn render_diff_hunk_controls(
                             let focus_handle = editor.focus_handle(cx);
                             move |_window, cx| {
                                 Tooltip::for_action_in(
-                                    "Previous Hunk",
+                                    &tr(
+                                        cx,
+                                        "zed.quick_action_bar.previous_hunk",
+                                        "Previous Hunk",
+                                    ),
                                     &GoToPreviousHunk,
                                     &focus_handle,
                                     cx,

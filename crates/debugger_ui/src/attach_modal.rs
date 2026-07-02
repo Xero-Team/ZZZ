@@ -1,8 +1,9 @@
 use dap::{DapRegistry, DebugRequest};
 use futures::channel::oneshot;
 use fuzzy::{StringMatch, StringMatchCandidate};
-use gpui::{AppContext, DismissEvent, Entity, EventEmitter, Focusable, Render, Task};
+use gpui::{App, AppContext, DismissEvent, Entity, EventEmitter, Focusable, Render, Task};
 use gpui::{Subscription, WeakEntity};
+use i18n::tr;
 use picker::{Picker, PickerDelegate};
 use project::Project;
 use rpc::proto;
@@ -44,6 +45,7 @@ impl AttachModalDelegate {
         workspace: WeakEntity<Workspace>,
         intent: ModalIntent,
         candidates: Arc<[Candidate]>,
+        cx: &App,
     ) -> Self {
         Self {
             workspace,
@@ -51,7 +53,11 @@ impl AttachModalDelegate {
             intent,
             selected_index: 0,
             matches: Vec::default(),
-            placeholder_text: Arc::from("Select the process you want to attach the debugger to"),
+            placeholder_text: Arc::from(tr(
+                cx,
+                "debugger_ui.attach_modal.placeholder",
+                "Select the process you want to attach the debugger to",
+            )),
         }
     }
 }
@@ -99,7 +105,7 @@ impl AttachModal {
     ) -> Self {
         let picker = cx.new(|cx| {
             Picker::uniform_list(
-                AttachModalDelegate::new(workspace, intent, processes),
+                AttachModalDelegate::new(workspace, intent, processes, cx),
                 window,
                 cx,
             )

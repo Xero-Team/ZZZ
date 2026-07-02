@@ -142,6 +142,7 @@ use gpui::{
 };
 use hover_links::{HoverLink, HoveredLinkState, find_file};
 use hover_popover::{HoverState, hide_hover};
+use i18n::tr;
 use indent_guides::ActiveIndentGuidesState;
 use inlays::{InlaySplice, inlay_hints::InlayHintRefreshReason};
 use itertools::{Either, Itertools};
@@ -3222,6 +3223,16 @@ impl Editor {
     ) {
         let project = workspace.project().clone();
         let create = project.update(cx, |project, cx| project.create_buffer(None, true, cx));
+        let failed_to_create_buffer = tr(
+            cx,
+            "editor.error.failed_to_create_buffer",
+            "Failed to create buffer",
+        );
+        let remote_upgrade_required = tr(
+            cx,
+            "editor.error.remote_upgrade_required_for_buffer_creation",
+            "The remote instance of Zed does not support this yet. It must be upgraded to {}",
+        );
 
         cx.spawn_in(window, async move |workspace, cx| {
             let buffer = create.await?;
@@ -3237,14 +3248,15 @@ impl Editor {
             })?;
             anyhow::Ok(())
         })
-        .detach_and_prompt_err("Failed to create buffer", window, cx, |e, _, _| {
-            match e.error_code() {
-                ErrorCode::RemoteUpgradeRequired => Some(format!(
-                "The remote instance of Zed does not support this yet. It must be upgraded to {}",
-                e.error_tag("required").unwrap_or("the latest version")
+        .detach_and_prompt_err(&failed_to_create_buffer, window, cx, move |e, _, _| match e
+            .error_code()
+        {
+            ErrorCode::RemoteUpgradeRequired => Some(remote_upgrade_required.replacen(
+                "{}",
+                e.error_tag("required").unwrap_or("the latest version"),
+                1,
             )),
-                _ => None,
-            }
+            _ => None,
         });
     }
 
@@ -8205,9 +8217,13 @@ impl Editor {
             }))
             .tooltip(move |_window, cx| {
                 Tooltip::with_meta_in(
-                    "Remove Bookmark",
+                    tr(cx, "editor.bookmark.remove", "Remove Bookmark"),
                     Some(&ToggleBookmark),
-                    SharedString::from("Right-click for more options"),
+                    tr(
+                        cx,
+                        "editor.gutter.right_click_for_more_options",
+                        "Right-click for more options",
+                    ),
                     &focus_handle,
                     cx,
                 )
@@ -8294,59 +8310,86 @@ impl Editor {
             .map(|(anchor, bp)| (anchor, Arc::from(bp)));
 
         let log_breakpoint_msg = if breakpoint.as_ref().is_some_and(|bp| bp.1.message.is_some()) {
-            "Edit Log Breakpoint"
+            tr(
+                cx,
+                "editor.breakpoint.edit_log_breakpoint",
+                "Edit Log Breakpoint",
+            )
         } else {
-            "Set Log Breakpoint"
+            tr(
+                cx,
+                "editor.breakpoint.set_log_breakpoint",
+                "Set Log Breakpoint",
+            )
         };
 
         let condition_breakpoint_msg = if breakpoint
             .as_ref()
             .is_some_and(|bp| bp.1.condition.is_some())
         {
-            "Edit Condition Breakpoint"
+            tr(
+                cx,
+                "editor.breakpoint.edit_condition_breakpoint",
+                "Edit Condition Breakpoint",
+            )
         } else {
-            "Set Condition Breakpoint"
+            tr(
+                cx,
+                "editor.breakpoint.set_condition_breakpoint",
+                "Set Condition Breakpoint",
+            )
         };
 
         let hit_condition_breakpoint_msg = if breakpoint
             .as_ref()
             .is_some_and(|bp| bp.1.hit_condition.is_some())
         {
-            "Edit Hit Condition Breakpoint"
+            tr(
+                cx,
+                "editor.breakpoint.edit_hit_condition_breakpoint",
+                "Edit Hit Condition Breakpoint",
+            )
         } else {
-            "Set Hit Condition Breakpoint"
+            tr(
+                cx,
+                "editor.breakpoint.set_hit_condition_breakpoint",
+                "Set Hit Condition Breakpoint",
+            )
         };
 
         let set_breakpoint_msg = if breakpoint.as_ref().is_some() {
-            "Unset Breakpoint"
+            tr(cx, "editor.breakpoint.unset", "Unset Breakpoint")
         } else {
-            "Set Breakpoint"
+            tr(cx, "editor.breakpoint.set", "Set Breakpoint")
         };
 
         let git_blame_msg = if self.show_git_blame_gutter {
-            "Close Git Blame"
+            tr(cx, "editor.git_blame.close", "Close Git Blame")
         } else {
-            "Open Git Blame"
+            tr(cx, "editor.git_blame.open", "Open Git Blame")
         };
 
         let bookmark = self.bookmark_at_row(row, window, cx);
 
         let set_bookmark_msg = if bookmark.as_ref().is_some() {
-            "Remove Bookmark"
+            tr(cx, "editor.bookmark.remove", "Remove Bookmark")
         } else {
-            "Add Bookmark"
+            tr(cx, "editor.bookmark.add", "Add Bookmark")
         };
 
         let run_to_cursor = window.is_action_available(&RunToCursor, cx);
+        let run_to_cursor_label = tr(cx, "editor.context_menu.run_to_cursor", "Run to Cursor");
 
-        let toggle_state_entry: Option<(&str, Box<dyn Action>)> =
+        let toggle_state_entry: Option<(String, Box<dyn Action>)> =
             breakpoint.as_ref().map(|bp| match bp.1.state {
-                BreakpointState::Enabled => {
-                    ("Disable", crate::actions::DisableBreakpoint.boxed_clone())
-                }
-                BreakpointState::Disabled => {
-                    ("Enable", crate::actions::EnableBreakpoint.boxed_clone())
-                }
+                BreakpointState::Enabled => (
+                    tr(cx, "editor.breakpoint.disable", "Disable"),
+                    crate::actions::DisableBreakpoint.boxed_clone(),
+                ),
+                BreakpointState::Disabled => (
+                    tr(cx, "editor.breakpoint.enable", "Enable"),
+                    crate::actions::EnableBreakpoint.boxed_clone(),
+                ),
             });
 
         let (anchor, breakpoint) =
@@ -8358,7 +8401,7 @@ impl Editor {
                 .when(run_to_cursor, |this| {
                     let weak_editor = weak_editor.clone();
                     this.entry(
-                        "Run to Cursor",
+                        run_to_cursor_label.clone(),
                         Some(RunToCursor.boxed_clone()),
                         move |window, cx| {
                             weak_editor
@@ -8528,19 +8571,34 @@ impl Editor {
         let alt_as_text = gpui::Keystroke {
             modifiers: Modifiers::secondary_key(),
             ..Default::default()
-        };
-        let primary_action_text = "Unset breakpoint";
+        }
+        .to_string();
+        let primary_action_text = tr(cx, "editor.breakpoint.unset", "Unset Breakpoint");
         let focus_handle = self.focus_handle.clone();
         let has_context_menu = self.has_mouse_context_menu();
 
-        let meta = if is_rejected {
-            SharedString::from("No executable code is associated with this line.")
+        let meta: SharedString = if is_rejected {
+            tr(
+                cx,
+                "editor.breakpoint.no_executable_code",
+                "No executable code is associated with this line.",
+            )
+            .into()
         } else if !breakpoint.is_disabled() {
-            SharedString::from(format!(
-                "{alt_as_text}-click to disable\nright-click for more options"
-            ))
+            tr(
+                cx,
+                "editor.breakpoint.alt_click_disable_with_options",
+                "{}-click to disable\nRight-click for more options",
+            )
+            .replace("{}", &alt_as_text)
+            .into()
         } else {
-            SharedString::from("Right-click for more options")
+            tr(
+                cx,
+                "editor.gutter.right_click_for_more_options",
+                "Right-click for more options",
+            )
+            .into()
         };
         IconButton::new(("breakpoint_indicator", row.0 as usize), icon)
             .icon_size(IconSize::XSmall)
@@ -8573,7 +8631,7 @@ impl Editor {
             .when(!has_context_menu, |button| {
                 button.tooltip(move |_window, cx| {
                     Tooltip::with_meta_in(
-                        primary_action_text,
+                        primary_action_text.clone(),
                         Some(&ToggleBreakpoint),
                         meta.clone(),
                         &focus_handle,
@@ -8597,10 +8655,14 @@ impl Editor {
         }
 
         impl Intent {
-            fn as_str(&self) -> &'static str {
+            fn as_str(&self, cx: &App) -> SharedString {
                 match self {
-                    Intent::SetBookmark => "Set bookmark",
-                    Intent::SetBreakpoint => "Set breakpoint",
+                    Intent::SetBookmark => {
+                        tr(cx, "editor.gutter.set_bookmark", "Set bookmark").into()
+                    }
+                    Intent::SetBreakpoint => {
+                        tr(cx, "editor.gutter.set_breakpoint", "Set breakpoint").into()
+                    }
                 }
             }
 
@@ -8618,18 +8680,25 @@ impl Editor {
                 }
             }
 
-            fn secondary_and_options(&self) -> String {
+            fn secondary_and_options(&self, cx: &App) -> String {
                 let alt_as_text = gpui::Keystroke {
                     modifiers: Modifiers::secondary_key(),
                     ..Default::default()
-                };
+                }
+                .to_string();
                 match self {
-                    Intent::SetBookmark => format!(
-                        "{alt_as_text}-click to add a breakpoint\nright-click for more options"
-                    ),
-                    Intent::SetBreakpoint => format!(
-                        "{alt_as_text}-click to add a bookmark\nright-click for more options"
-                    ),
+                    Intent::SetBookmark => tr(
+                        cx,
+                        "editor.gutter.alt_click_add_breakpoint_with_options",
+                        "{}-click to add a breakpoint\nRight-click for more options",
+                    )
+                    .replace("{}", &alt_as_text),
+                    Intent::SetBreakpoint => tr(
+                        cx,
+                        "editor.gutter.alt_click_add_bookmark_with_options",
+                        "{}-click to add a bookmark\nRight-click for more options",
+                    )
+                    .replace("{}", &alt_as_text),
                 }
             }
         }
@@ -8687,9 +8756,9 @@ impl Editor {
             .when(!has_context_menu, |button| {
                 button.tooltip(move |_window, cx| {
                     Tooltip::with_meta_in(
-                        intent.as_str(),
+                        intent.as_str(cx),
                         Some(&ToggleBreakpoint),
-                        intent.secondary_and_options(),
+                        intent.secondary_and_options(cx),
                         &focus_handle,
                         cx,
                     )
@@ -8827,7 +8896,7 @@ impl Editor {
                 let target_display_point = range.end.to_display_point(editor_snapshot);
 
                 self.render_edit_prediction_end_of_line_popover(
-                    "Accept",
+                    tr(cx, "editor.edit_prediction.accept", "Accept"),
                     editor_snapshot,
                     visible_row_range,
                     target_display_point,
@@ -9019,10 +9088,11 @@ impl Editor {
         window: &mut Window,
         cx: &mut App,
     ) -> Option<(AnyElement, gpui::Point<Pixels>)> {
+        let jump_to_edit = tr(cx, "editor.edit_prediction.jump_to_edit", "Jump to Edit");
         if target_display_point.row().as_f64() < scroll_top {
             let mut element = self
                 .render_edit_prediction_line_popover(
-                    "Jump to Edit",
+                    jump_to_edit,
                     Some(IconName::ArrowUp),
                     window,
                     cx,
@@ -9041,7 +9111,7 @@ impl Editor {
         } else if (target_display_point.row().as_f64() + 1.) > scroll_bottom {
             let mut element = self
                 .render_edit_prediction_line_popover(
-                    "Jump to Edit",
+                    jump_to_edit,
                     Some(IconName::ArrowDown),
                     window,
                     cx,
@@ -9059,7 +9129,7 @@ impl Editor {
             Some((element, origin))
         } else {
             self.render_edit_prediction_end_of_line_popover(
-                "Jump to Edit",
+                jump_to_edit,
                 editor_snapshot,
                 visible_row_range,
                 target_display_point,
@@ -9075,7 +9145,7 @@ impl Editor {
 
     fn render_edit_prediction_end_of_line_popover(
         self: &mut Editor,
-        label: &'static str,
+        label: impl Into<SharedString>,
         editor_snapshot: &EditorSnapshot,
         visible_row_range: Range<DisplayRow>,
         target_display_point: DisplayPoint,
@@ -9090,9 +9160,10 @@ impl Editor {
             target_display_point.row(),
             editor_snapshot.line_len(target_display_point.row()),
         );
+        let label = label.into();
 
         let mut element = self
-            .render_edit_prediction_line_popover(label, None, window, cx)
+            .render_edit_prediction_line_popover(label.clone(), None, window, cx)
             .into_any();
 
         let size = element.layout_as_root(AvailableSpace::min_size(), window, cx);
@@ -9644,13 +9715,16 @@ impl Editor {
                                     .bg(Self::edit_prediction_line_popover_bg_color(cx))
                                     .when(keybind_display.show_hold_label, |el| {
                                         el.child(
-                                            Label::new("Hold")
-                                                .size(LabelSize::Small)
-                                                .when(
-                                                    keybind_display.missing_accept_keystroke,
-                                                    |el| el.strikethrough(),
-                                                )
-                                                .line_height_style(LineHeightStyle::UiLabel),
+                                            Label::new(tr(
+                                                cx,
+                                                "agent_ui.hold_for_default.hold",
+                                                "Hold",
+                                            ))
+                                            .size(LabelSize::Small)
+                                            .when(keybind_display.missing_accept_keystroke, |el| {
+                                                el.strikethrough()
+                                            })
+                                            .line_height_style(LineHeightStyle::UiLabel),
                                         )
                                     })
                                     .id("edit_prediction_cursor_popover_keybind")
@@ -9764,7 +9838,14 @@ impl Editor {
                                     .child(self.render_edit_prediction_popover_keystroke(
                                         keystroke, key_color, cx,
                                     ))
-                                    .child(Label::new("Preview").into_any_element())
+                                    .child(
+                                        Label::new(tr(
+                                            cx,
+                                            "edit_prediction_ui.rate_prediction.preview",
+                                            "Preview",
+                                        ))
+                                        .into_any_element(),
+                                    )
                                     .opacity(if has_completion { 1.0 } else { 0.4 }),
                             )
                         } else {
@@ -9846,7 +9927,11 @@ impl Editor {
                         } else {
                             Icon::new(icons.up)
                         })
-                        .child(Label::new("Jump to Edit")),
+                        .child(Label::new(tr(
+                            cx,
+                            "editor.edit_prediction.jump_to_edit",
+                            "Jump to Edit",
+                        ))),
                 )
             }
             EditPrediction::MoveOutside { snapshot, .. } => {
@@ -9860,7 +9945,10 @@ impl Editor {
                         .gap_2()
                         .flex_1()
                         .child(Icon::new(icons.base))
-                        .child(Label::new(format!("Jump to {file_name}"))),
+                        .child(Label::new(
+                            tr(cx, "editor.edit_prediction.jump_to_file", "Jump to {}")
+                                .replacen("{}", file_name, 1),
+                        )),
                 )
             }
             EditPrediction::Edit {
@@ -19585,7 +19673,11 @@ impl Editor {
                     .border_color(icon_color.opacity(0.5))
             })
             .child(Icon::new(IconName::Plus).size(IconSize::Small))
-            .tooltip(Tooltip::text("Add Review (drag to select multiple lines)"))
+            .tooltip(Tooltip::text(tr(
+                cx,
+                "editor.git.add_review_tooltip",
+                "Add Review (drag to select multiple lines)",
+            )))
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(move |editor, _event: &gpui::MouseDownEvent, window, cx| {
@@ -19741,7 +19833,15 @@ impl Editor {
         // Create the prompt editor for the review input
         let prompt_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Add a review comment...", window, cx);
+            editor.set_placeholder_text(
+                &i18n::tr(
+                    cx,
+                    "editor.git.review_comment.placeholder",
+                    "Add a review comment...",
+                ),
+                window,
+                cx,
+            );
             editor
         });
 
@@ -20565,7 +20665,11 @@ impl Editor {
                                 IconButton::new("diff-review-close", IconName::Close)
                                     .icon_color(ui::Color::Muted)
                                     .icon_size(action_icon_size)
-                                    .tooltip(Tooltip::text("Close"))
+                                    .tooltip(Tooltip::text(tr(
+                                        cx,
+                                        "editor.common.close",
+                                        "Close",
+                                    )))
                                     .on_click(|_, window, cx| {
                                         window
                                             .dispatch_action(Box::new(crate::actions::Cancel), cx);
@@ -20575,7 +20679,11 @@ impl Editor {
                                 IconButton::new("diff-review-add", IconName::Return)
                                     .icon_color(ui::Color::Muted)
                                     .icon_size(action_icon_size)
-                                    .tooltip(Tooltip::text("Add comment"))
+                                    .tooltip(Tooltip::text(tr(
+                                        cx,
+                                        "editor.git.review_comment.add",
+                                        "Add comment",
+                                    )))
                                     .on_click(|_, window, cx| {
                                         window.dispatch_action(
                                             Box::new(crate::actions::SubmitDiffReviewComment),
@@ -20595,6 +20703,7 @@ impl Editor {
                     avatar_size,
                     action_icon_size,
                     colors,
+                    cx,
                 ))
             })
             .into_any_element()
@@ -20608,6 +20717,7 @@ impl Editor {
         avatar_size: Pixels,
         action_icon_size: IconSize,
         colors: &theme::ThemeColors,
+        cx: &App,
     ) -> impl IntoElement {
         let comment_count = comments.len();
 
@@ -20662,6 +20772,7 @@ impl Editor {
                         avatar_size,
                         action_icon_size,
                         colors,
+                        cx,
                     )
                 }))
             })
@@ -20674,6 +20785,7 @@ impl Editor {
         avatar_size: Pixels,
         action_icon_size: IconSize,
         colors: &theme::ThemeColors,
+        cx: &App,
     ) -> impl IntoElement {
         let comment_id = comment.id;
         let is_editing = inline_editor.is_some();
@@ -20735,7 +20847,7 @@ impl Editor {
                         )
                         .icon_color(ui::Color::Muted)
                         .icon_size(action_icon_size)
-                        .tooltip(Tooltip::text("Cancel"))
+                        .tooltip(Tooltip::text(tr(cx, "prompt.common.cancel", "Cancel")))
                         .on_click(move |_, window, cx| {
                             window.dispatch_action(
                                 Box::new(crate::actions::CancelEditReviewComment {
@@ -20752,7 +20864,7 @@ impl Editor {
                         )
                         .icon_color(ui::Color::Muted)
                         .icon_size(action_icon_size)
-                        .tooltip(Tooltip::text("Confirm"))
+                        .tooltip(Tooltip::text(tr(cx, "prompt.common.confirm", "Confirm")))
                         .on_click(move |_, window, cx| {
                             window.dispatch_action(
                                 Box::new(crate::actions::ConfirmEditReviewComment {
@@ -26625,7 +26737,12 @@ impl BreakpointPromptEditor {
             .icon_color(Color::Muted)
             .shape(IconButtonShape::Square)
             .tooltip(move |_window, cx| {
-                Tooltip::for_action_in("Cancel", &menu::Cancel, &focus_handle, cx)
+                Tooltip::for_action_in(
+                    tr(cx, "prompt.common.cancel", "Cancel"),
+                    &menu::Cancel,
+                    &focus_handle,
+                    cx,
+                )
             })
             .on_click(cx.listener(|this, _, window, cx| {
                 this.cancel(&menu::Cancel, window, cx);
@@ -26638,7 +26755,12 @@ impl BreakpointPromptEditor {
             .icon_color(Color::Muted)
             .shape(IconButtonShape::Square)
             .tooltip(move |_window, cx| {
-                Tooltip::for_action_in("Confirm", &menu::Confirm, &focus_handle, cx)
+                Tooltip::for_action_in(
+                    tr(cx, "prompt.common.confirm", "Confirm"),
+                    &menu::Confirm,
+                    &focus_handle,
+                    cx,
+                )
             })
             .on_click(cx.listener(|this, _, window, cx| {
                 this.confirm(&menu::Confirm, window, cx);
@@ -26739,8 +26861,16 @@ impl Render for MissingEditPredictionKeybindingTooltip {
                     v_flex()
                         .flex_1()
                         .text_ui_sm(cx)
-                        .child(Label::new("Conflict with Accept Keybinding"))
-                        .child("Your keymap currently overrides the default accept keybinding. To continue, assign one keybinding for the `editor::AcceptEditPrediction` action.")
+                        .child(Label::new(tr(
+                            cx,
+                            "editor.edit_prediction.conflict_title",
+                            "Conflict with Accept Keybinding",
+                        )))
+                        .child(tr(
+                            cx,
+                            "editor.edit_prediction.conflict_body",
+                            "Your keymap currently overrides the default accept keybinding. To continue, assign one keybinding for the `editor::AcceptEditPrediction` action.",
+                        ))
                 )
                 .child(
                     h_flex()
@@ -26748,12 +26878,33 @@ impl Render for MissingEditPredictionKeybindingTooltip {
                         .gap_1()
                         .items_end()
                         .w_full()
-                        .child(Button::new("open-keymap", "Assign Keybinding").size(ButtonSize::Compact).on_click(|_ev, window, cx| {
-                            window.dispatch_action(zed_actions::OpenKeymapFile.boxed_clone(), cx)
-                        }))
-                        .child(Button::new("see-docs", "See Docs").size(ButtonSize::Compact).on_click(|_ev, _window, cx| {
-                            cx.open_url("https://zed.dev/docs/completions#edit-predictions-missing-keybinding");
-                        })),
+                        .child(
+                            Button::new(
+                                "open-keymap",
+                                tr(
+                                    cx,
+                                    "editor.edit_prediction.assign_keybinding",
+                                    "Assign Keybinding",
+                                ),
+                            )
+                            .size(ButtonSize::Compact)
+                            .on_click(|_ev, window, cx| {
+                                window.dispatch_action(
+                                    zed_actions::OpenKeymapFile.boxed_clone(),
+                                    cx,
+                                )
+                            }),
+                        )
+                        .child(
+                            Button::new(
+                                "see-docs",
+                                tr(cx, "editor.edit_prediction.see_docs", "See Docs"),
+                            )
+                            .size(ButtonSize::Compact)
+                            .on_click(|_ev, _window, cx| {
+                                cx.open_url("https://zed.dev/docs/completions#edit-predictions-missing-keybinding");
+                            }),
+                        ),
                 )
         })
     }
@@ -26798,77 +26949,91 @@ fn render_diff_hunk_controls(
         .block_mouse_except_scroll()
         .shadow_md()
         .child(if status.has_secondary_hunk() {
-            Button::new(("stage", row as u64), "Stage")
-                .alpha(if status.is_pending() { 0.66 } else { 1.0 })
-                .tooltip({
-                    let focus_handle = editor.focus_handle(cx);
-                    move |_window, cx| {
-                        Tooltip::for_action_in(
-                            "Stage Hunk",
-                            &::git::ToggleStaged,
-                            &focus_handle,
+            Button::new(
+                ("stage", row as u64),
+                tr(cx, "git_ui.project_diff.stage", "Stage"),
+            )
+            .alpha(if status.is_pending() { 0.66 } else { 1.0 })
+            .tooltip({
+                let focus_handle = editor.focus_handle(cx);
+                move |_window, cx| {
+                    Tooltip::for_action_in(
+                        tr(cx, "editor.git.stage_hunk", "Stage Hunk"),
+                        &::git::ToggleStaged,
+                        &focus_handle,
+                        cx,
+                    )
+                }
+            })
+            .on_click({
+                let editor = editor.clone();
+                move |_event, _window, cx| {
+                    editor.update(cx, |editor, cx| {
+                        editor.stage_or_unstage_diff_hunks(
+                            true,
+                            vec![hunk_range.start..hunk_range.start],
                             cx,
-                        )
-                    }
-                })
-                .on_click({
-                    let editor = editor.clone();
-                    move |_event, _window, cx| {
-                        editor.update(cx, |editor, cx| {
-                            editor.stage_or_unstage_diff_hunks(
-                                true,
-                                vec![hunk_range.start..hunk_range.start],
-                                cx,
-                            );
-                        });
-                    }
-                })
+                        );
+                    });
+                }
+            })
         } else {
-            Button::new(("unstage", row as u64), "Unstage")
-                .alpha(if status.is_pending() { 0.66 } else { 1.0 })
-                .tooltip({
-                    let focus_handle = editor.focus_handle(cx);
-                    move |_window, cx| {
-                        Tooltip::for_action_in(
-                            "Unstage Hunk",
-                            &::git::ToggleStaged,
-                            &focus_handle,
+            Button::new(
+                ("unstage", row as u64),
+                tr(cx, "git_ui.project_diff.unstage", "Unstage"),
+            )
+            .alpha(if status.is_pending() { 0.66 } else { 1.0 })
+            .tooltip({
+                let focus_handle = editor.focus_handle(cx);
+                move |_window, cx| {
+                    Tooltip::for_action_in(
+                        tr(cx, "editor.git.unstage_hunk", "Unstage Hunk"),
+                        &::git::ToggleStaged,
+                        &focus_handle,
+                        cx,
+                    )
+                }
+            })
+            .on_click({
+                let editor = editor.clone();
+                move |_event, _window, cx| {
+                    editor.update(cx, |editor, cx| {
+                        editor.stage_or_unstage_diff_hunks(
+                            false,
+                            vec![hunk_range.start..hunk_range.start],
                             cx,
-                        )
-                    }
-                })
-                .on_click({
-                    let editor = editor.clone();
-                    move |_event, _window, cx| {
-                        editor.update(cx, |editor, cx| {
-                            editor.stage_or_unstage_diff_hunks(
-                                false,
-                                vec![hunk_range.start..hunk_range.start],
-                                cx,
-                            );
-                        });
-                    }
-                })
+                        );
+                    });
+                }
+            })
         })
         .child(
-            Button::new(("restore", row as u64), "Restore")
-                .tooltip({
-                    let focus_handle = editor.focus_handle(cx);
-                    move |_window, cx| {
-                        Tooltip::for_action_in("Restore Hunk", &::git::Restore, &focus_handle, cx)
-                    }
-                })
-                .on_click({
-                    let editor = editor.clone();
-                    move |_event, window, cx| {
-                        editor.update(cx, |editor, cx| {
-                            let snapshot = editor.snapshot(window, cx);
-                            let point = hunk_range.start.to_point(&snapshot.buffer_snapshot());
-                            editor.restore_hunks_in_ranges(vec![point..point], window, cx);
-                        });
-                    }
-                })
-                .disabled(is_created_file),
+            Button::new(
+                ("restore", row as u64),
+                tr(cx, "project_panel.restore_file.restore", "Restore"),
+            )
+            .tooltip({
+                let focus_handle = editor.focus_handle(cx);
+                move |_window, cx| {
+                    Tooltip::for_action_in(
+                        tr(cx, "editor.git.restore_hunk", "Restore Hunk"),
+                        &::git::Restore,
+                        &focus_handle,
+                        cx,
+                    )
+                }
+            })
+            .on_click({
+                let editor = editor.clone();
+                move |_event, window, cx| {
+                    editor.update(cx, |editor, cx| {
+                        let snapshot = editor.snapshot(window, cx);
+                        let point = hunk_range.start.to_point(&snapshot.buffer_snapshot());
+                        editor.restore_hunks_in_ranges(vec![point..point], window, cx);
+                    });
+                }
+            })
+            .disabled(is_created_file),
         )
         .when(
             !editor.read(cx).buffer().read(cx).all_diff_hunks_expanded(),
@@ -26881,7 +27046,12 @@ fn render_diff_hunk_controls(
                         .tooltip({
                             let focus_handle = editor.focus_handle(cx);
                             move |_window, cx| {
-                                Tooltip::for_action_in("Next Hunk", &GoToHunk, &focus_handle, cx)
+                                Tooltip::for_action_in(
+                                    tr(cx, "zed.quick_action_bar.next_hunk", "Next Hunk"),
+                                    &GoToHunk,
+                                    &focus_handle,
+                                    cx,
+                                )
                             }
                         })
                         .on_click({
@@ -26913,7 +27083,11 @@ fn render_diff_hunk_controls(
                             let focus_handle = editor.focus_handle(cx);
                             move |_window, cx| {
                                 Tooltip::for_action_in(
-                                    "Previous Hunk",
+                                    tr(
+                                        cx,
+                                        "zed.quick_action_bar.previous_hunk",
+                                        "Previous Hunk",
+                                    ),
                                     &GoToPreviousHunk,
                                     &focus_handle,
                                     cx,

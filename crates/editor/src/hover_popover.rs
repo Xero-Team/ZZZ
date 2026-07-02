@@ -14,6 +14,7 @@ use gpui::{
     StatefulInteractiveElement, StyleRefinement, Styled, Subscription, Task, TextStyleRefinement,
     Window, canvas, div, px,
 };
+use i18n::tr;
 use itertools::Itertools;
 use language::{DiagnosticEntry, Language, LanguageRegistry};
 use lsp::DiagnosticSeverity;
@@ -1212,7 +1213,11 @@ impl DiagnosticPopover {
                     )
                     .child(div().absolute().top_1().right_1().child({
                         let message = self.local_diagnostic.diagnostic.message.clone();
-                        CopyButton::new("copy-diagnostic", message).tooltip_label("Copy Diagnostic")
+                        CopyButton::new("copy-diagnostic", message).tooltip_label(tr(
+                            cx,
+                            "diagnostics.copy_diagnostic",
+                            "Copy Diagnostic",
+                        ))
                     }))
                     .custom_scrollbars(
                         Scrollbars::for_settings::<EditorSettingsScrollbarProxy>()

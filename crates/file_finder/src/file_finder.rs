@@ -1288,11 +1288,15 @@ impl FileFinderDelegate {
                 } => (
                     channel_name.to_string(),
                     string_match.positions.clone(),
-                    "Channel Notes".to_owned(),
+                    tr(cx, "file_finder.channel_notes", "Channel Notes"),
                     vec![],
                 ),
                 Match::CreateNew(project_path) => (
-                    format!("Create File: {}", project_path.path.display(path_style)),
+                    tr(cx, "file_finder.create_file_title", "Create File: {}").replacen(
+                        "{}",
+                        project_path.path.display(path_style).as_ref(),
+                        1,
+                    ),
                     vec![],
                     String::from(""),
                     vec![],
@@ -1665,8 +1669,13 @@ fn full_path_budget(
 impl PickerDelegate for FileFinderDelegate {
     type ListItem = ListItem;
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Search project files...".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(
+            cx,
+            "file_finder.placeholder.search_project_files",
+            "Search project files...",
+        )
+        .into()
     }
 
     fn match_count(&self) -> usize {
@@ -1820,7 +1829,9 @@ impl PickerDelegate for FileFinderDelegate {
             Match::CreateNew(project_path) => {
                 let path_style = self.project.read(cx).path_style(cx);
                 Some(picker::PreviewUpdate::message(HighlightedText {
-                    text: format!("Create file {}?", project_path.path.display(path_style)).into(),
+                    text: tr(cx, "file_finder.create_file_prompt", "Create file {}?")
+                        .replacen("{}", project_path.path.display(path_style).as_ref(), 1)
+                        .into(),
                     highlights: Vec::new(),
                 }))
             }

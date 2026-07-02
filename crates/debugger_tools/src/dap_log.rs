@@ -13,6 +13,7 @@ use gpui::{
     App, AppContext, Context, Empty, Entity, EventEmitter, FocusHandle, Focusable, IntoElement,
     ParentElement, Render, SharedString, Styled, Subscription, WeakEntity, Window, actions, div,
 };
+use i18n::tr;
 use project::{
     Project,
     debugger::{dap_store, session::Session},
@@ -632,19 +633,21 @@ impl Render for DapLogToolbarItemView {
             .child(
                 div()
                     .child(
-                        Button::new("clear_log_button", "Clear").on_click(cx.listener(
-                            |this, _, window, cx| {
-                                if let Some(log_view) = this.log_view.as_ref() {
-                                    log_view.update(cx, |log_view, cx| {
-                                        log_view.editor.update(cx, |editor, cx| {
-                                            editor.set_read_only(false);
-                                            editor.clear(window, cx);
-                                            editor.set_read_only(true);
-                                        });
-                                    })
-                                }
-                            },
-                        )),
+                        Button::new(
+                            "clear_log_button",
+                            tr(cx, "debugger_tools.dap_log.clear", "Clear"),
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            if let Some(log_view) = this.log_view.as_ref() {
+                                log_view.update(cx, |log_view, cx| {
+                                    log_view.editor.update(cx, |editor, cx| {
+                                        editor.set_read_only(false);
+                                        editor.clear(window, cx);
+                                        editor.set_read_only(true);
+                                    });
+                                })
+                            }
+                        })),
                     )
                     .ml_2(),
             )

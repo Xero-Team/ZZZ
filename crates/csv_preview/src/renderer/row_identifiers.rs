@@ -1,3 +1,4 @@
+use i18n::tr;
 use ui::{
     ActiveTheme as _, AnyElement, Button, ButtonCommon as _, ButtonSize, ButtonStyle,
     Clickable as _, Context, ElementId, IntoElement as _, ParentElement as _, SharedString,
@@ -106,8 +107,8 @@ impl CsvPreviewView {
     ) -> AnyElement {
         // First column: row identifier (clickable to toggle between Lines and Rows)
         let row_identifier_text = match self.settings.numbering_type {
-            RowIdentifiers::SrcLines => "Lines",
-            RowIdentifiers::RowNum => "Rows",
+            RowIdentifiers::SrcLines => tr(cx, "csv_preview.row_identifiers.lines", "Lines"),
+            RowIdentifiers::RowNum => tr(cx, "csv_preview.row_identifiers.rows", "Rows"),
         };
 
         let view = cx.entity();
@@ -120,9 +121,11 @@ impl CsvPreviewView {
                 )
                 .style(ButtonStyle::Subtle)
                 .size(ButtonSize::Compact)
-                .tooltip(Tooltip::text(
+                .tooltip(Tooltip::text(tr(
+                    cx,
+                    "csv_preview.row_identifiers.toggle_tooltip",
                     "Toggle between: CSV row numbers or sequential preview row numbers",
-                ))
+                )))
                 .on_click(move |_event, _window, cx| {
                     view.update(cx, |this, cx| {
                         this.settings.numbering_type = match this.settings.numbering_type {

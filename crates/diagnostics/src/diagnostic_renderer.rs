@@ -6,6 +6,7 @@ use editor::{
     hover_popover::diagnostics_markdown_style,
 };
 use gpui::{AppContext, Entity, Focusable, WeakEntity};
+use i18n::tr;
 use language::{BufferId, Diagnostic, DiagnosticEntryRef, LanguageRegistry};
 use lsp::DiagnosticSeverity;
 use markdown::{CopyButtonVisibility, Markdown, MarkdownElement};
@@ -260,8 +261,11 @@ impl DiagnosticBlock {
                 ),
             )
             .child(
-                CopyButton::new(copy_button_id, self.copy_message.clone())
-                    .tooltip_label("Copy Diagnostic"),
+                CopyButton::new(copy_button_id, self.copy_message.clone()).tooltip_label(tr(
+                    cx,
+                    "diagnostics.copy_diagnostic",
+                    "Copy Diagnostic",
+                )),
             )
             .into_any_element()
     }

@@ -1,7 +1,8 @@
 use std::rc::Rc;
 
 use collections::HashMap;
-use gpui::{Anchor, Entity, WeakEntity};
+use gpui::{Anchor, App, Entity, WeakEntity};
+use i18n::tr;
 use project::debugger::session::{ThreadId, ThreadStatus};
 use ui::{CommonAnimationExt, ContextMenu, DropdownMenu, DropdownStyle, Indicator, prelude::*};
 use util::{maybe, truncate_and_trailoff};
@@ -16,6 +17,18 @@ struct SessionListEntry {
     leaf: Entity<DebugSession>,
 }
 
+fn child_session_label(cx: &App) -> SharedString {
+    tr(cx, "debugger_ui.dropdown_menus.child_session", "(child)").into()
+}
+
+fn thread_id_label(thread_id: impl std::fmt::Display, cx: &App) -> String {
+    tr(cx, "debugger_ui.dropdown_menus.thread_id", "Tid: {}").replacen(
+        "{}",
+        &thread_id.to_string(),
+        1,
+    )
+}
+
 impl SessionListEntry {
     pub(crate) fn label_element(&self, depth: usize, cx: &mut App) -> AnyElement {
         const MAX_LABEL_CHARS: usize = 150;
@@ -23,15 +36,15 @@ impl SessionListEntry {
         let mut label = String::new();
         for ancestor in &self.ancestors {
             label.push_str(&ancestor.update(cx, |ancestor, cx| {
-                ancestor.label(cx).unwrap_or("(child)".into())
+                ancestor
+                    .label(cx)
+                    .unwrap_or_else(|| child_session_label(cx))
             }));
             label.push_str(" » ");
         }
-        label.push_str(
-            &self
-                .leaf
-                .update(cx, |leaf, cx| leaf.label(cx).unwrap_or("(child)".into())),
-        );
+        label.push_str(&self.leaf.update(cx, |leaf, cx| {
+            leaf.label(cx).unwrap_or_else(|| child_session_label(cx))
+        }));
         let label = truncate_and_trailoff(&label, MAX_LABEL_CHARS);
 
         let is_terminated = self
@@ -118,10 +131,17 @@ impl DebugPanel {
         let weak = cx.weak_entity();
         let trigger_label = if let Some(active_session) = active_session.clone() {
             active_session.update(cx, |active_session, cx| {
-                active_session.label(cx).unwrap_or("(child)".into())
+                active_session
+                    .label(cx)
+                    .unwrap_or_else(|| child_session_label(cx))
             })
         } else {
-            SharedString::new_static("Unknown Session")
+            tr(
+                cx,
+                "debugger_ui.dropdown_menus.unknown_session",
+                "Unknown Session",
+            )
+            .into()
         };
         let running_state = running_state.read(cx);
 
@@ -293,7 +313,7 @@ impl DebugPanel {
                 thread
                     .name
                     .is_empty()
-                    .then(|| format!("Tid: {}", thread.id))
+                    .then(|| thread_id_label(thread.id, cx))
                     .unwrap_or_else(|| thread.name.clone())
             });
 
@@ -303,14 +323,14 @@ impl DebugPanel {
                 DropdownMenu::new_with_element(
                     ("thread-list", session_id.0),
                     trigger,
-                    ContextMenu::build(window, cx, move |mut this, _, _| {
+                    ContextMenu::build(window, cx, move |mut this, _, cx| {
                         for (thread, _) in threads {
                             let running_state = running_state.clone();
                             let thread_id = thread.id;
                             let entry_name = thread
                                 .name
                                 .is_empty()
-                                .then(|| format!("Tid: {}", thread.id))
+                                .then(|| thread_id_label(thread.id, cx))
                                 .unwrap_or_else(|| thread.name);
                             let entry_name = truncate_and_trailoff(&entry_name, MAX_LABEL_CHARS);
 

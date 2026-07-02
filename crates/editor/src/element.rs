@@ -50,6 +50,7 @@ use gpui::{
     WindowBackgroundAppearance, anchored, deferred, div, fill, linear_color_stop, linear_gradient,
     outline, pattern_slash, point, px, quad, relative, size, solid_background, transparent_black,
 };
+use i18n::tr;
 use itertools::Itertools;
 use language::{
     HighlightedText, IndentGuideSettings, LanguageAwareStyling,
@@ -3508,7 +3509,7 @@ impl EditorElement {
                         });
                     })
                     .tooltip(Tooltip::for_action_title(
-                        "Expand Excerpt",
+                        tr(cx, "editor.element.expand_excerpt", "Expand Excerpt"),
                         &crate::actions::ExpandExcerpts::default(),
                     ))
                     .into_any_element();
@@ -8271,7 +8272,11 @@ pub fn render_breadcrumb_text(
                                     h_flex()
                                         .gap_1()
                                         .justify_between()
-                                        .child(Label::new("Show Symbol Outline"))
+                                        .child(Label::new(tr(
+                                            cx,
+                                            "editor.element.show_symbol_outline",
+                                            "Show Symbol Outline",
+                                        )))
                                         .child(ui::KeyBinding::for_action_in(
                                             &zed_actions::outline::ToggleOutline,
                                             &focus_handle,
@@ -8286,7 +8291,11 @@ pub fn render_breadcrumb_text(
                                             .pt_1()
                                             .border_t_1()
                                             .border_color(cx.theme().colors().border_variant)
-                                            .child(Label::new("Right-Click to Copy Path")),
+                                            .child(Label::new(tr(
+                                                cx,
+                                                "editor.element.right_click_to_copy_path",
+                                                "Right-Click to Copy Path",
+                                            ))),
                                     )
                                 })
                                 .into_any_element()
@@ -8557,21 +8566,33 @@ pub(crate) fn render_buffer_header(
                                         let focus_handle = focus_handle.clone();
                                         let is_folded_for_tooltip = is_folded;
                                         move |_window, cx| {
+                                            let label = if is_folded_for_tooltip {
+                                                tr(
+                                                    cx,
+                                                    "editor.element.unfold_excerpt",
+                                                    "Unfold Excerpt",
+                                                )
+                                            } else {
+                                                tr(
+                                                    cx,
+                                                    "editor.element.fold_excerpt",
+                                                    "Fold Excerpt",
+                                                )
+                                            };
+                                            let toggle_all = tr(
+                                                cx,
+                                                "editor.element.toggle_all",
+                                                "{} to toggle all",
+                                            )
+                                            .replacen(
+                                                "{}",
+                                                &text_for_keystroke(&Modifiers::alt(), "click", cx),
+                                                1,
+                                            );
                                             Tooltip::with_meta_in(
-                                                if is_folded_for_tooltip {
-                                                    "Unfold Excerpt"
-                                                } else {
-                                                    "Fold Excerpt"
-                                                },
+                                                label,
                                                 Some(&ToggleFold),
-                                                format!(
-                                                    "{} to toggle all",
-                                                    text_for_keystroke(
-                                                        &Modifiers::alt(),
-                                                        "click",
-                                                        cx
-                                                    )
-                                                ),
+                                                toggle_all,
                                                 &focus_handle,
                                                 cx,
                                             )
@@ -8661,7 +8682,7 @@ pub(crate) fn render_buffer_header(
                                             )
                                             .tooltip(move |_, cx| {
                                                 Tooltip::with_meta(
-                                                    "Open File",
+                                                    tr(cx, "workspace.pane.open_file", "Open File"),
                                                     None,
                                                     full_path.clone(),
                                                     cx,
@@ -8721,16 +8742,20 @@ pub(crate) fn render_buffer_header(
                                         this.visible_on_hover("buffer-header-group")
                                     })
                                     .child(
-                                        Button::new("open-file-button", "Open File")
-                                            .style(ButtonStyle::OutlinedGhost)
-                                            .when(is_selected, |this| {
-                                                this.key_binding(KeyBinding::for_action_in(
-                                                    &OpenExcerpts,
-                                                    &focus_handle,
-                                                    cx,
-                                                ))
-                                            })
-                                            .on_click(window.listener_for(editor, {
+                                        Button::new(
+                                            "open-file-button",
+                                            tr(cx, "workspace.pane.open_file", "Open File"),
+                                        )
+                                        .style(ButtonStyle::OutlinedGhost)
+                                        .when(is_selected, |this| {
+                                            this.key_binding(KeyBinding::for_action_in(
+                                                &OpenExcerpts,
+                                                &focus_handle,
+                                                cx,
+                                            ))
+                                        })
+                                        .on_click(
+                                            window.listener_for(editor, {
                                                 let jump_data = jump_data.clone();
                                                 move |editor, e: &ClickEvent, window, cx| {
                                                     editor.open_excerpts_common(
@@ -8740,7 +8765,8 @@ pub(crate) fn render_buffer_header(
                                                         cx,
                                                     );
                                                 }
-                                            })),
+                                            }),
+                                        ),
                                     ),
                             )
                         })
@@ -8810,7 +8836,7 @@ pub(crate) fn render_buffer_header(
                     menu = menu
                         .when_some(abs_path, |menu, abs_path| {
                             menu.entry(
-                                "Copy Path",
+                                tr(cx, "project_panel.menu.copy_path", "Copy Path"),
                                 Some(Box::new(zed_actions::workspace::CopyPath)),
                                 window.handler_for(&editor, move |_, _, cx| {
                                     cx.write_to_clipboard(ClipboardItem::new_string(
@@ -8821,7 +8847,11 @@ pub(crate) fn render_buffer_header(
                         })
                         .when_some(relative_path, |menu, relative_path| {
                             menu.entry(
-                                "Copy Relative Path",
+                                tr(
+                                    cx,
+                                    "project_panel.menu.copy_relative_path",
+                                    "Copy Relative Path",
+                                ),
                                 Some(Box::new(zed_actions::workspace::CopyRelativePath)),
                                 window.handler_for(&editor, move |_, _, cx| {
                                     cx.write_to_clipboard(ClipboardItem::new_string(
@@ -8836,7 +8866,11 @@ pub(crate) fn render_buffer_header(
                         )
                         .when_some(reveal_in_project_panel, |menu, entry_id| {
                             menu.entry(
-                                "Reveal In Project Panel",
+                                tr(
+                                    cx,
+                                    "workspace.pane.reveal_in_project_panel",
+                                    "Reveal In Project Panel",
+                                ),
                                 Some(Box::new(RevealInProjectPanel::default())),
                                 window.handler_for(&editor, move |editor, _, cx| {
                                     if let Some(project) = &mut editor.project {
@@ -8849,7 +8883,7 @@ pub(crate) fn render_buffer_header(
                         })
                         .when_some(parent_abs_path, |menu, parent_abs_path| {
                             menu.entry(
-                                "Open in Terminal",
+                                tr(cx, "workspace.pane.open_in_terminal", "Open in Terminal"),
                                 Some(Box::new(OpenInTerminal)),
                                 window.handler_for(&editor, move |_, window, cx| {
                                     window.dispatch_action(

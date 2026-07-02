@@ -4204,7 +4204,8 @@ impl GitPanel {
 
         let repo_path = repo.read(cx).work_directory_abs_path.display().to_string();
         let queue_value = repo.read(cx).job_debug_queue().to_debug_value();
-        let title = format!("Git Job Queue: {repo_path}");
+        let title = tr(cx, "git_ui.git_panel.job_queue_title", "Git Job Queue: {}")
+            .replacen("{}", &repo_path, 1);
 
         let json_language = self.project.read(cx).languages().language_for_name("JSON");
         let project = self.project.clone();
@@ -4281,7 +4282,12 @@ impl GitPanel {
                 workspace.show_notification(notification_id, cx, |cx| {
                     cx.new(|cx| {
                         ErrorMessagePrompt::new(
-                            format!("Failed to generate commit message: {err}"),
+                            tr(
+                                cx,
+                                "git_ui.git_panel.failed_to_generate_commit_message",
+                                "Failed to generate commit message: {}",
+                            )
+                            .replacen("{}", &err.to_string(), 1),
                             cx,
                         )
                     })
@@ -4303,10 +4309,16 @@ impl GitPanel {
         let is_push = matches!(action, RemoteAction::Push(_, _));
 
         workspace.update(cx, |workspace, cx| {
-            let SuccessMessage { message, style } = remote_output::format_output(&action, info);
+            let SuccessMessage { message, style } =
+                remote_output::format_output_localized(&action, info, cx);
             let workspace_weak = cx.weak_entity();
             let operation = action.name();
             let view_log = tr(cx, "git_ui.git_panel.view_log", "View Log");
+            let create_pull_request = tr(
+                cx,
+                "git_ui.git_panel.create_pull_request",
+                "Create Pull Request",
+            );
 
             let status_toast = StatusToast::new(message, cx, move |this, _cx| {
                 use remote_output::SuccessStyle::*;
@@ -4317,7 +4329,7 @@ impl GitPanel {
                 );
                 match (style, is_push) {
                     (Toast | ToastWithLog { .. }, true) => {
-                        this.action("Create Pull Request", move |window, cx| {
+                        this.action(create_pull_request, move |window, cx| {
                             window
                                 .dispatch_action(Box::new(zed_actions::git::CreatePullRequest), cx);
                         })
@@ -5427,6 +5439,12 @@ impl GitPanel {
                 .as_ref()
                 .map_or(false, |shas| !shas.is_empty());
             let is_loading = self.commit_history_shas.is_none() && has_repo;
+            let no_commits_yet = tr(cx, "git_ui.git_panel.no_commits_yet", "No commits yet");
+            let failed_to_load_commits = tr(
+                cx,
+                "git_ui.git_panel.failed_to_load_commits",
+                "Failed to load commits",
+            );
             if is_loading {
                 this.child(
                     h_flex().flex_1().justify_center().child(
@@ -5443,7 +5461,7 @@ impl GitPanel {
                     h_flex()
                         .flex_1()
                         .justify_center()
-                        .child(Label::new("No commits yet").color(Color::Muted)),
+                        .child(Label::new(no_commits_yet).color(Color::Muted)),
                 )
             } else {
                 match self.render_commit_history(window, cx) {
@@ -5452,7 +5470,7 @@ impl GitPanel {
                         h_flex()
                             .flex_1()
                             .justify_center()
-                            .child(Label::new("Failed to load commits").color(Color::Muted)),
+                            .child(Label::new(failed_to_load_commits).color(Color::Muted)),
                     ),
                 }
             }
@@ -6319,6 +6337,7 @@ impl GitPanel {
         let add_to_gitignore = tr(cx, "git_ui.git_panel.add_to_gitignore", "Add to .gitignore");
         let open_diff = tr(cx, "git_ui.git_panel.open_diff", "Open Diff");
         let open_diff_file = tr(cx, "git_ui.git_panel.open_diff_file", "Open Diff (File)");
+        let view_file = tr(cx, "git_ui.git_panel.view_file", "View File");
         let view_file_history = tr(
             cx,
             "git_ui.git_panel.view_file_history",
@@ -6347,7 +6366,7 @@ impl GitPanel {
                 .separator()
                 .action(open_diff.clone(), menu::Confirm.boxed_clone())
                 .action(open_diff_file.clone(), menu::SecondaryConfirm.boxed_clone())
-                .action("View File", ViewFile.boxed_clone())
+                .action(view_file.clone(), ViewFile.boxed_clone())
                 .when(!is_created, |context_menu| {
                     context_menu
                         .separator()
@@ -7787,7 +7806,7 @@ pub(crate) fn open_output(
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) {
-    let operation = operation.into();
+    let operation = localize_git_operation(cx, operation.into().as_ref());
 
     let mut handler = GitOutputHandler::default();
     let mut processor = ansi::Processor::<ansi::StdSyncHandler>::default();
@@ -7801,13 +7820,55 @@ pub(crate) fn open_output(
     let editor = cx.new(|cx| {
         let mut editor = Editor::for_buffer(buffer, None, window, cx);
         editor.buffer().update(cx, |buffer, cx| {
-            buffer.set_title(format!("Output from git {operation}"), cx);
+            buffer.set_title(
+                tr(cx, "git_ui.git_panel.output_from_git", "Output from git {}").replacen(
+                    "{}",
+                    operation.as_ref(),
+                    1,
+                ),
+                cx,
+            );
         });
         editor.set_read_only(true);
         editor
     });
 
     workspace.add_item_to_center(Box::new(editor), window, cx);
+}
+
+fn localize_git_operation(cx: &App, operation: &str) -> SharedString {
+    match operation {
+        "add" => tr(cx, "git_ui.git_panel.operation.add", "add").into(),
+        "add to .gitignore" => tr(
+            cx,
+            "git_ui.git_panel.operation.add_to_gitignore",
+            "add to .gitignore",
+        )
+        .into(),
+        "add to .git/info/exclude" => tr(
+            cx,
+            "git_ui.git_panel.operation.add_to_git_info_exclude",
+            "add to .git/info/exclude",
+        )
+        .into(),
+        "checkout" => tr(cx, "git_ui.git_panel.operation.checkout", "checkout").into(),
+        "commit" => tr(cx, "git_ui.git_panel.operation.commit", "commit").into(),
+        "create pull request" => tr(
+            cx,
+            "git_ui.git_panel.operation.create_pull_request",
+            "create pull request",
+        )
+        .into(),
+        "fetch" => tr(cx, "git_ui.git_panel.operation.fetch", "fetch").into(),
+        "init" => tr(cx, "git_ui.git_panel.operation.init", "init").into(),
+        "pull" => tr(cx, "git_ui.git_panel.operation.pull", "pull").into(),
+        "push" => tr(cx, "git_ui.git_panel.operation.push", "push").into(),
+        "reset" => tr(cx, "git_ui.git_panel.operation.reset", "reset").into(),
+        "stash" => tr(cx, "git_ui.git_panel.operation.stash", "stash").into(),
+        "stash apply" => tr(cx, "git_ui.git_panel.operation.stash_apply", "stash apply").into(),
+        "stash pop" => tr(cx, "git_ui.git_panel.operation.stash_pop", "stash pop").into(),
+        _ => operation.into(),
+    }
 }
 
 #[derive(Default)]
@@ -7842,7 +7903,7 @@ pub(crate) fn show_error_toast(
     e: anyhow::Error,
     cx: &mut App,
 ) {
-    let action = action.into();
+    let action = localize_git_operation(cx, action.into().as_ref());
     let message = format_git_error_toast_message(&e);
     if message
         .matches(git::repository::REMOTE_CANCELLED_BY_USER)

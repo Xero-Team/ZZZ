@@ -21,6 +21,7 @@ use gpui::{
     Focusable, Global, InteractiveElement, IntoElement, ParentElement, Render, SharedString,
     Styled, Subscription, Task, WeakEntity, Window, actions, div,
 };
+use i18n::tr;
 use itertools::Itertools as _;
 use language::{
     Bias, Buffer, BufferRow, BufferSnapshot, DiagnosticEntry, DiagnosticEntryRef, Point,
@@ -103,10 +104,20 @@ impl Render for ProjectDiagnosticsEditor {
 
         let child =
             if warning_count + self.summary.error_count == 0 && self.editor.read(cx).is_empty(cx) {
-                let label = if self.summary.warning_count == 0 {
-                    SharedString::new_static("No problems in workspace")
+                let label: SharedString = if self.summary.warning_count == 0 {
+                    tr(
+                        cx,
+                        "diagnostics.no_problems_in_workspace",
+                        "No problems in workspace",
+                    )
+                    .into()
                 } else {
-                    SharedString::new_static("No errors in workspace")
+                    tr(
+                        cx,
+                        "diagnostics.no_errors_in_workspace",
+                        "No errors in workspace",
+                    )
+                    .into()
                 };
                 v_flex()
                     .key_context("EmptyPane")
@@ -118,15 +129,19 @@ impl Render for ProjectDiagnosticsEditor {
                     .bg(cx.theme().colors().editor_background)
                     .child(Label::new(label).color(Color::Muted))
                     .when(self.summary.warning_count > 0, |this| {
-                        let plural_suffix = if self.summary.warning_count > 1 {
-                            "s"
+                        let label = if self.summary.warning_count == 1 {
+                            tr(cx, "diagnostics.show_warning", "Show {} warning").replacen(
+                                "{}",
+                                &self.summary.warning_count.to_string(),
+                                1,
+                            )
                         } else {
-                            ""
+                            tr(cx, "diagnostics.show_warnings", "Show {} warnings").replacen(
+                                "{}",
+                                &self.summary.warning_count.to_string(),
+                                1,
+                            )
                         };
-                        let label = format!(
-                            "Show {} warning{}",
-                            self.summary.warning_count, plural_suffix
-                        );
                         this.child(
                             Button::new("diagnostics-show-warning-label", label).on_click(
                                 cx.listener(|this, _, window, cx| {
@@ -748,15 +763,15 @@ impl Item for ProjectDiagnosticsEditor {
             .update(cx, |editor, cx| editor.navigate(data, window, cx))
     }
 
-    fn tab_tooltip_text(&self, _: &App) -> Option<SharedString> {
-        Some("Project Diagnostics".into())
+    fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString> {
+        Some(tr(cx, "diagnostics.project_diagnostics", "Project Diagnostics").into())
     }
 
-    fn tab_content_text(&self, _detail: usize, _: &App) -> SharedString {
-        "Diagnostics".into()
+    fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
+        tr(cx, "menu.view.diagnostics", "Diagnostics").into()
     }
 
-    fn tab_content(&self, params: TabContentParams, _window: &Window, _: &App) -> AnyElement {
+    fn tab_content(&self, params: TabContentParams, _window: &Window, cx: &App) -> AnyElement {
         h_flex()
             .gap_1()
             .when(
@@ -766,7 +781,10 @@ impl Item for ProjectDiagnosticsEditor {
                         h_flex()
                             .gap_1()
                             .child(Icon::new(IconName::Check).color(Color::Success))
-                            .child(Label::new("No problems").color(params.text_color())),
+                            .child(
+                                Label::new(tr(cx, "diagnostics.no_problems", "No problems"))
+                                    .color(params.text_color()),
+                            ),
                     )
                 },
             )

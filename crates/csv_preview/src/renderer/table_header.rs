@@ -1,4 +1,5 @@
 use gpui::ElementId;
+use i18n::tr;
 use ui::{Tooltip, prelude::*};
 
 use crate::{
@@ -55,10 +56,22 @@ impl CsvPreviewView {
         )
         .tooltip(Tooltip::text(match self.engine.applied_sorting {
             Some(ordering) if ordering.col_idx == col_idx => match ordering.direction {
-                SortDirection::Asc => "Sorted A-Z. Click to sort Z-A",
-                SortDirection::Desc => "Sorted Z-A. Click to disable sorting",
+                SortDirection::Asc => tr(
+                    cx,
+                    "csv_preview.sort.sorted_asc_click_desc",
+                    "Sorted A-Z. Click to sort Z-A",
+                ),
+                SortDirection::Desc => tr(
+                    cx,
+                    "csv_preview.sort.sorted_desc_click_disable",
+                    "Sorted Z-A. Click to disable sorting",
+                ),
             },
-            _ => "Not sorted. Click to sort A-Z",
+            _ => tr(
+                cx,
+                "csv_preview.sort.not_sorted_click_asc",
+                "Not sorted. Click to sort A-Z",
+            ),
         }))
         .on_click(cx.listener(move |this, _event, _window, cx| {
             let new_sorting = match this.engine.applied_sorting {

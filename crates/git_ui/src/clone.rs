@@ -1,4 +1,5 @@
 use gpui::{App, Context, WeakEntity, Window};
+use i18n::tr;
 use notifications::status_toast::StatusToast;
 use std::sync::Arc;
 use ui::{Color, Icon, IconName, IconSize, SharedString};
@@ -18,7 +19,14 @@ pub fn clone_and_open(
         files: false,
         directories: true,
         multiple: false,
-        prompt: Some("Select as Repository Destination".into()),
+        prompt: Some(
+            tr(
+                cx,
+                "git_ui.clone.select_repository_destination",
+                "Select as Repository Destination",
+            )
+            .into(),
+        ),
     });
 
     window
@@ -69,11 +77,26 @@ pub fn clone_and_open(
 
             let prompt_answer = if has_worktrees {
                 cx.update(|window, cx| {
+                    let prompt_title = tr(cx, "git_ui.clone.prompt_title", "Git Clone: {}")
+                        .replacen("{}", &repo_name, 1);
+                    let add_repo_to_project = tr(
+                        cx,
+                        "git_ui.clone.add_repo_to_project",
+                        "Add repo to project",
+                    );
+                    let open_repo_in_new_project = tr(
+                        cx,
+                        "git_ui.clone.open_repo_in_new_project",
+                        "Open repo in new project",
+                    );
                     window.prompt(
                         gpui::PromptLevel::Info,
-                        &format!("Git Clone: {}", repo_name),
+                        &prompt_title,
                         None,
-                        &["Add repo to project", "Open repo in new project"],
+                        &[
+                            add_repo_to_project.as_str(),
+                            open_repo_in_new_project.as_str(),
+                        ],
                         cx,
                     )
                 })

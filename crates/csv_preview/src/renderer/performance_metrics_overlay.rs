@@ -3,6 +3,7 @@
 //! Provides a semi-transparent overlay in the bottom-right corner showing
 //! CSV parsing performance metrics for developer experience.
 
+use i18n::tr;
 use ui::{ActiveTheme, Context, IntoElement, ParentElement, Styled, StyledTypography, div};
 
 use crate::{CsvPreviewView, PerformanceMetrics};
@@ -17,6 +18,26 @@ impl CsvPreviewView {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = cx.theme();
+        let performance_metrics = tr(
+            cx,
+            "csv_preview.performance_metrics.title",
+            "Performance metrics:",
+        );
+        let no_timing_data_yet = tr(
+            cx,
+            "csv_preview.performance_metrics.no_timing_data",
+            "- No timing data yet",
+        );
+        let rendered_none = tr(
+            cx,
+            "csv_preview.performance_metrics.rendered_none",
+            "- Rendered: none",
+        );
+        let rendered_rows = tr(
+            cx,
+            "csv_preview.performance_metrics.rendered_rows",
+            "- Rendered: {} rows",
+        );
 
         let children = div()
             .absolute()
@@ -35,11 +56,16 @@ impl CsvPreviewView {
             .flex()
             .flex_col()
             .gap_1()
-            .child("Performance metrics:")
+            .child(performance_metrics)
             .children(
-                format_performance_metrics(&self.performance_metrics)
-                    .into_iter()
-                    .map(|line| div().child(line)),
+                format_performance_metrics(
+                    &self.performance_metrics,
+                    &no_timing_data_yet,
+                    &rendered_none,
+                    &rendered_rows,
+                )
+                .into_iter()
+                .map(|line| div().child(line)),
             );
 
         // Clear rendered indices to prepare for next frame
@@ -48,7 +74,12 @@ impl CsvPreviewView {
     }
 }
 
-fn format_performance_metrics(metrics: &PerformanceMetrics) -> Vec<String> {
+fn format_performance_metrics(
+    metrics: &PerformanceMetrics,
+    no_timing_data_yet: &str,
+    rendered_none: &str,
+    rendered_rows: &str,
+) -> Vec<String> {
     let mut lines = Vec::new();
 
     // Add timing metrics using the display method
@@ -56,17 +87,14 @@ fn format_performance_metrics(metrics: &PerformanceMetrics) -> Vec<String> {
     if !timing_display.is_empty() {
         lines.extend(timing_display.lines().map(|line| format!("- {}", line)));
     } else {
-        lines.push("- No timing data yet".to_owned());
+        lines.push(no_timing_data_yet.to_owned());
     }
 
     // Add rendered indices information
     if metrics.rendered_indices.is_empty() {
-        lines.push("- Rendered: none".to_owned());
+        lines.push(rendered_none.to_owned());
     } else {
-        lines.push(format!(
-            "- Rendered: {} rows",
-            metrics.rendered_indices.len()
-        ));
+        lines.push(rendered_rows.replacen("{}", &metrics.rendered_indices.len().to_string(), 1));
         if metrics.rendered_indices.len() <= 20 {
             // Show indices if not too many
             lines.push(format!("  {:?}", metrics.rendered_indices));

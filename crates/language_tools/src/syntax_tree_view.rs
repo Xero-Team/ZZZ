@@ -8,6 +8,7 @@ use gpui::{
     ParentElement, Render, ScrollStrategy, SharedString, Styled, Task, UniformListScrollHandle,
     WeakEntity, Window, actions, div, rems, uniform_list,
 };
+use i18n::tr;
 use language::{Buffer, OwnedSyntaxLayer};
 use std::{any::TypeId, mem, ops::Range};
 use theme::ActiveTheme;
@@ -531,17 +532,31 @@ impl Render for SyntaxTreeView {
                         .max_w_3_5()
                         .map(|this| {
                             if editor_state.is_some_and(|state| !state.has_language()) {
-                                this.child(Label::new("Current editor has no associated language"))
+                                this.child(Label::new(tr(
+                                    cx,
+                                    "language_tools.syntax.no_language_title",
+                                    "Current editor has no associated language",
+                                )))
                                     .child(
-                                        Label::new(concat!(
-                                            "Try assigning a language or",
-                                            "switching to a different buffer"
+                                        Label::new(tr(
+                                            cx,
+                                            "language_tools.syntax.no_language_body",
+                                            "Try assigning a language or switching to a different buffer",
                                         ))
                                         .size(LabelSize::Small),
                                     )
                             } else {
-                                this.child(Label::new("Not attached to an editor")).child(
-                                    Label::new("Focus an editor to show a new tree view")
+                                this.child(Label::new(tr(
+                                    cx,
+                                    "language_tools.syntax.no_editor_title",
+                                    "Not attached to an editor",
+                                )))
+                                .child(
+                                    Label::new(tr(
+                                        cx,
+                                        "language_tools.syntax.no_editor_body",
+                                        "Focus an editor to show a new tree view",
+                                    ))
                                         .size(LabelSize::Small),
                                 )
                             }
@@ -696,7 +711,14 @@ impl SyntaxTreeToolbarItemView {
                                 editor.tab_content_text(Default::default(), cx)
                             });
 
-                            Tooltip::text(format!("Update view to '{active_tab_name}'"))
+                            Tooltip::text(
+                                tr(
+                                    cx,
+                                    "language_tools.syntax.update_view_to",
+                                    "Update view to '{}'",
+                                )
+                                .replace("{}", active_tab_name.as_ref()),
+                            )
                         })
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.update_active_editor(&Default::default(), window, cx);

@@ -191,7 +191,7 @@ impl SubView {
         this.update(cx, |this, _| {
             this.with_actions(Box::new(move |_, cx| {
                 weak_list
-                    .update(cx, |this, _| this.render_control_strip())
+                    .update(cx, |this, cx| this.render_control_strip(cx))
                     .unwrap_or_else(|_| div().into_any_element())
             }));
         });
@@ -244,7 +244,7 @@ impl SubView {
         this.update(cx, |this, _| {
             this.with_actions(Box::new(move |_, cx| {
                 weak_list
-                    .update(cx, |this, _| this.render_control_strip())
+                    .update(cx, |this, cx| this.render_control_strip(cx))
                     .unwrap_or_else(|_| div().into_any_element())
             }));
         });
@@ -279,12 +279,12 @@ impl Item for SubView {
 
     /// This is used to serialize debugger pane layouts
     /// A SharedString gets converted to a enum and back during serialization/deserialization.
-    fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        self.kind.to_shared_string()
+    fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
+        self.kind.localized_title(cx)
     }
 
-    fn tab_tooltip_text(&self, _: &App) -> Option<SharedString> {
-        Some(self.kind.tab_tooltip())
+    fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString> {
+        Some(self.kind.localized_tooltip(cx))
     }
 
     fn tab_content(
@@ -293,7 +293,7 @@ impl Item for SubView {
         _: &Window,
         cx: &App,
     ) -> AnyElement {
-        let label = Label::new(self.kind.to_shared_string())
+        let label = Label::new(self.kind.localized_title(cx))
             .size(ui::LabelSize::Small)
             .color(params.text_color())
             .line_height_style(ui::LineHeightStyle::UiLabel);

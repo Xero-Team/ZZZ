@@ -3,6 +3,7 @@ use gpui::{
     KeyBindingContextPredicate, KeyContext, Keystroke, MouseButton, Render, Subscription, Task,
     actions,
 };
+use i18n::tr;
 use itertools::Itertools;
 use serde_json::json;
 use ui::{Button, ButtonStyle};
@@ -145,8 +146,13 @@ impl Item for KeyContextView {
 
     fn to_item_events(_: &Self::Event, _: &mut dyn FnMut(workspace::item::ItemEvent)) {}
 
-    fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        "Keyboard Context".into()
+    fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
+        tr(
+            cx,
+            "language_tools.key_context.tab_title",
+            "Keyboard Context",
+        )
+        .into()
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
@@ -200,19 +206,40 @@ impl Render for KeyContextView {
                     });
                 }),
             )
-            .child(Label::new("Keyboard Context").size(LabelSize::Large))
-            .child(Label::new("This view lets you determine the current context stack for creating custom key bindings in Zed. When a keyboard shortcut is triggered, it also shows all the possible contexts it could have triggered in, and which one matched."))
+            .child(
+                Label::new(tr(cx, "language_tools.key_context.title", "Keyboard Context"))
+                    .size(LabelSize::Large),
+            )
+            .child(Label::new(tr(
+                cx,
+                "language_tools.key_context.description",
+                "This view lets you determine the current context stack for creating custom key bindings in Zed. When a keyboard shortcut is triggered, it also shows all the possible contexts it could have triggered in, and which one matched.",
+            )))
             .child(
                 h_flex()
                     .mt_4()
                     .gap_4()
                     .child(
-                        Button::new("open_documentation", "Open Documentation")
+                        Button::new(
+                            "open_documentation",
+                            tr(
+                                cx,
+                                "language_tools.key_context.open_documentation",
+                                "Open Documentation",
+                            ),
+                        )
                             .style(ButtonStyle::Filled)
                             .on_click(|_, _, cx| cx.open_url("https://zed.dev/docs/key-bindings")),
                     )
                     .child(
-                        Button::new("view_default_keymap", "View Default Keymap")
+                        Button::new(
+                            "view_default_keymap",
+                            tr(
+                                cx,
+                                "language_tools.key_context.view_default_keymap",
+                                "View Default Keymap",
+                            ),
+                        )
                             .style(ButtonStyle::Filled)
                             .key_binding(ui::KeyBinding::for_action(
                                 &zed_actions::OpenDefaultKeymap,
@@ -223,7 +250,14 @@ impl Render for KeyContextView {
                             }),
                     )
                     .child(
-                        Button::new("edit_your_keymap", "Edit Keymap File")
+                        Button::new(
+                            "edit_your_keymap",
+                            tr(
+                                cx,
+                                "language_tools.key_context.edit_keymap_file",
+                                "Edit Keymap File",
+                            ),
+                        )
                             .style(ButtonStyle::Filled)
                             .key_binding(ui::KeyBinding::for_action(&zed_actions::OpenKeymapFile, cx))
                             .on_click(|_, window, cx| {
@@ -232,7 +266,11 @@ impl Render for KeyContextView {
                     ),
             )
             .child(
-                Label::new("Current Context Stack")
+                Label::new(tr(
+                    cx,
+                    "language_tools.key_context.current_stack",
+                    "Current Context Stack",
+                ))
                     .size(LabelSize::Large)
                     .mt_8(),
             )
@@ -252,18 +290,40 @@ impl Render for KeyContextView {
                     Label::new(format!("{} {}", primary, secondary)).ml(px(12. * (i + 1) as f32))
                 })
             })
-            .child(Label::new("Last Keystroke").mt_4().size(LabelSize::Large))
+            .child(
+                Label::new(tr(
+                    cx,
+                    "language_tools.key_context.last_keystroke",
+                    "Last Keystroke",
+                ))
+                .mt_4()
+                .size(LabelSize::Large),
+            )
             .when_some(self.pending_keystrokes.as_ref(), |el, keystrokes| {
                 el.child(
-                    Label::new(format!(
-                        "Waiting for more input: {}",
-                        keystrokes.iter().map(|k| k.unparse()).join(" ")
-                    ))
+                    Label::new(
+                        tr(
+                            cx,
+                            "language_tools.key_context.waiting_for_more_input",
+                            "Waiting for more input: {}",
+                        )
+                        .replacen(
+                            "{}",
+                            &keystrokes.iter().map(|k| k.unparse()).join(" "),
+                            1,
+                        ),
+                    )
                     .ml(px(12.)),
                 )
             })
             .when_some(self.last_keystrokes.as_ref(), |el, keystrokes| {
-                el.child(Label::new(format!("Typed: {}", keystrokes)).ml_4())
+                el.child(
+                    Label::new(
+                        tr(cx, "language_tools.key_context.typed", "Typed: {}")
+                            .replacen("{}", keystrokes.as_ref(), 1),
+                    )
+                    .ml_4(),
+                )
                     .children(
                         self.last_possibilities
                             .iter()
@@ -283,14 +343,37 @@ impl Render for KeyContextView {
                     )
             })
             .when_some(key_equivalents, |el, key_equivalents| {
-                el.child(Label::new("Key Equivalents").mt_4().size(LabelSize::Large))
-                    .child(Label::new("Shortcuts defined using some characters have been remapped so that shortcuts can be typed without holding option."))
+                el.child(
+                    Label::new(tr(
+                        cx,
+                        "language_tools.key_context.key_equivalents",
+                        "Key Equivalents",
+                    ))
+                    .mt_4()
+                    .size(LabelSize::Large),
+                )
+                    .child(Label::new(tr(
+                        cx,
+                        "language_tools.key_context.key_equivalents_description",
+                        "Shortcuts defined using some characters have been remapped so that shortcuts can be typed without holding option.",
+                    )))
                     .children(
                         key_equivalents
                             .iter()
                             .sorted()
                             .map(|(key, equivalent)| {
-                                Label::new(format!("cmd-{} => cmd-{}", key, equivalent)).ml_8()
+                                let key = key.to_string();
+                                let equivalent = equivalent.to_string();
+                                Label::new(
+                                    tr(
+                                        cx,
+                                        "language_tools.key_context.key_equivalent_entry",
+                                        "cmd-{} => cmd-{}",
+                                    )
+                                    .replacen("{}", &key, 1)
+                                    .replacen("{}", &equivalent, 1),
+                                )
+                                .ml_8()
                             }),
                     )
             })

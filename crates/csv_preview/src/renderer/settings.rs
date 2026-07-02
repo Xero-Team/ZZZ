@@ -1,3 +1,4 @@
+use i18n::tr;
 use ui::{
     ActiveTheme as _, AnyElement, ButtonSize, Context, ContextMenu, DropdownMenu, ElementId,
     IntoElement as _, ParentElement as _, Styled as _, Tooltip, Window, div, h_flex,
@@ -14,13 +15,15 @@ impl CsvPreviewView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let current_alignment_text = match self.settings.vertical_alignment {
-            VerticalAlignment::Top => "Top",
-            VerticalAlignment::Center => "Center",
+            VerticalAlignment::Top => tr(cx, "csv_preview.settings.alignment.top", "Top"),
+            VerticalAlignment::Center => tr(cx, "csv_preview.settings.alignment.center", "Center"),
         };
+        let top_label = tr(cx, "csv_preview.settings.alignment.top", "Top");
+        let center_label = tr(cx, "csv_preview.settings.alignment.center", "Center");
 
         let view = cx.entity();
-        let alignment_dropdown_menu = ContextMenu::build(window, cx, |menu, _window, _cx| {
-            menu.entry("Top", None, {
+        let alignment_dropdown_menu = ContextMenu::build(window, cx, move |menu, _window, _cx| {
+            menu.entry(top_label.clone(), None, {
                 let view = view.clone();
                 move |_window, cx| {
                     view.update(cx, |this, cx| {
@@ -29,8 +32,8 @@ impl CsvPreviewView {
                     });
                 }
             })
-            .entry("Center", None, {
-                let view = view.clone();
+            .entry(center_label.clone(), None, {
+                let view = view;
                 move |_window, cx| {
                     view.update(cx, |this, cx| {
                         this.settings.vertical_alignment = VerticalAlignment::Center;
@@ -55,7 +58,11 @@ impl CsvPreviewView {
                         div()
                             .text_sm()
                             .text_color(cx.theme().colors().text_muted)
-                            .child("Text Alignment:"),
+                            .child(tr(
+                                cx,
+                                "csv_preview.settings.text_alignment",
+                                "Text Alignment:",
+                            )),
                     )
                     .child(
                         DropdownMenu::new(
@@ -64,9 +71,11 @@ impl CsvPreviewView {
                             alignment_dropdown_menu,
                         )
                         .trigger_size(ButtonSize::Compact)
-                        .trigger_tooltip(Tooltip::text(
+                        .trigger_tooltip(Tooltip::text(tr(
+                            cx,
+                            "csv_preview.settings.choose_vertical_text_alignment",
                             "Choose vertical text alignment within cells",
-                        )),
+                        ))),
                     ),
             );
 
@@ -79,7 +88,7 @@ impl CsvPreviewView {
                     div()
                         .text_sm()
                         .text_color(cx.theme().colors().text_muted)
-                        .child("Dev-only:"),
+                        .child(tr(cx, "csv_preview.settings.dev_only", "Dev-only:")),
                 )
                 .child(create_dev_only_popover_menu(cx)),
         );
@@ -98,19 +107,29 @@ fn create_dev_only_popover_menu(
     PopoverMenu::new("debug-options-menu")
         .trigger_with_tooltip(
             IconButton::new("debug-options-trigger", IconName::Settings).icon_size(IconSize::Small),
-            Tooltip::text(
-                "Dev-only section used for debugging purposes.\nWill be removed on public release of CSV feature"
-            ),
+            Tooltip::text(tr(
+                cx,
+                "csv_preview.settings.dev_tools_tooltip",
+                "Dev-only section used for debugging purposes.\nWill be removed on public release of CSV feature",
+            )),
         )
         .menu({
             let view_entity = cx.entity();
             move |window, cx| {
                 let view = view_entity.read(cx);
                 let settings = view.settings.clone();
-                Some(ContextMenu::build(window, cx, |menu, _, _| {
-                    menu.header("Rendering Mode")
+                Some(ContextMenu::build(window, cx, |menu, _, cx| {
+                    menu.header(tr(
+                        cx,
+                        "csv_preview.settings.rendering_mode",
+                        "Rendering Mode",
+                    ))
                         .toggleable_entry(
-                            "Variable Height",
+                            tr(
+                                cx,
+                                "csv_preview.settings.variable_height",
+                                "Variable Height",
+                            ),
                             settings.rendering_with == RowRenderMechanism::VariableList,
                             IconPosition::Start,
                             None,
@@ -127,7 +146,11 @@ fn create_dev_only_popover_menu(
                             },
                         )
                         .toggleable_entry(
-                            "Uniform Height",
+                            tr(
+                                cx,
+                                "csv_preview.settings.uniform_height",
+                                "Uniform Height",
+                            ),
                             settings.rendering_with == RowRenderMechanism::UniformList,
                             IconPosition::Start,
                             None,
@@ -145,7 +168,11 @@ fn create_dev_only_popover_menu(
                         )
                         .separator()
                         .toggleable_entry(
-                            "Show perf metrics",
+                            tr(
+                                cx,
+                                "csv_preview.settings.show_perf_metrics",
+                                "Show perf metrics",
+                            ),
                             settings.show_perf_metrics_overlay,
                             IconPosition::Start,
                             None,
@@ -161,7 +188,11 @@ fn create_dev_only_popover_menu(
                             },
                         )
                         .toggleable_entry(
-                            "Show cell positions",
+                            tr(
+                                cx,
+                                "csv_preview.settings.show_cell_positions",
+                                "Show cell positions",
+                            ),
                             settings.show_debug_info,
                             IconPosition::Start,
                             None,

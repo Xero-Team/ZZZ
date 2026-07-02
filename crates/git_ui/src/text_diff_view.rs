@@ -11,6 +11,7 @@ use gpui::{
     AnyElement, App, AppContext as _, AsyncApp, Context, Entity, EventEmitter, FocusHandle,
     Focusable, IntoElement, Render, Task, Window,
 };
+use i18n::tr;
 use language::{self, Buffer, OffsetRangeExt, Point};
 use project::Project;
 use settings::Settings;
@@ -222,8 +223,22 @@ impl TextDiffView {
 
         Self {
             diff_editor,
-            title: format!("Clipboard ↔ {selection_location_title}").into(),
-            path: Some(format!("Clipboard ↔ {selection_location_path}").into()),
+            title: tr(
+                cx,
+                "git_ui.text_diff_view.clipboard_diff_title",
+                "Clipboard ↔ {}",
+            )
+            .replacen("{}", &selection_location_title, 1)
+            .into(),
+            path: Some(
+                tr(
+                    cx,
+                    "git_ui.text_diff_view.clipboard_diff_title",
+                    "Clipboard ↔ {}",
+                )
+                .replacen("{}", &selection_location_path, 1)
+                .into(),
+            ),
             buffer_changes_tx,
             _recalculate_diff_task: cx.spawn(async move |_, cx| {
                 while buffer_changes_rx.recv().await.is_ok() {

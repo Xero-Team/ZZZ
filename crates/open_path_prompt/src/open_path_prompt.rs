@@ -8,6 +8,7 @@ use file_icons::FileIcons;
 use futures::channel::oneshot;
 use fuzzy::{CharBag, StringMatch, StringMatchCandidate};
 use gpui::{HighlightStyle, StyledText, Task};
+use i18n::tr;
 use picker::{Picker, PickerDelegate};
 use project::{DirectoryItem, DirectoryLister};
 use project_panel::project_panel_settings::ProjectPanelSettings;
@@ -654,14 +655,25 @@ impl PickerDelegate for OpenPathDelegate {
                         };
                     if user_input.exists {
                         self.should_dismiss = false;
+                        let prompt_message = tr(
+                            cx,
+                            "prompt.common.replace_existing",
+                            "{} already exists. Do you want to replace it?",
+                        )
+                        .replacen("{}", &format!("{prompted_path:?}"), 1);
+                        let prompt_detail = tr(
+                            cx,
+                            "prompt.common.replace_existing_detail",
+                            "A file or folder with the same name already exists. Replacing it will overwrite its current contents.",
+                        );
+                        let replace = tr(cx, "prompt.common.replace", "Replace");
+                        let cancel = tr(cx, "prompt.common.cancel", "Cancel");
                         let answer = window.prompt(
                             gpui::PromptLevel::Critical,
-                            &format!("{prompted_path:?} already exists. Do you want to replace it?"),
-                            Some(
-                                "A file or folder with the same name already exists. Replacing it will overwrite its current contents.",
-                            ),
-                            &["Replace", "Cancel"],
-                            cx
+                            &prompt_message,
+                            Some(prompt_detail.as_str()),
+                            &[replace.as_str(), cancel.as_str()],
+                            cx,
                         );
                         self.replace_prompt = cx.spawn_in(window, async move |picker, cx| {
                             let answer = answer.await.ok();
@@ -763,7 +775,14 @@ impl PickerDelegate for OpenPathDelegate {
         match &self.directory_state {
             DirectoryState::List { parent_path, .. } => {
                 let (label, indices) = if is_current_dir_candidate {
-                    ("open this directory".to_owned(), vec![])
+                    (
+                        tr(
+                            cx,
+                            "open_path_prompt.open_current_directory",
+                            "Open this directory",
+                        ),
+                        vec![],
+                    )
                 } else if *parent_path == self.prompt_root {
                     match_positions.iter_mut().for_each(|position| {
                         *position += self.prompt_root.len();
@@ -809,7 +828,8 @@ impl PickerDelegate for OpenPathDelegate {
                                 let label = if user_input.is_dir {
                                     label
                                 } else {
-                                    format!("{label} (replace)")
+                                    tr(cx, "open_path_prompt.entry.replace", "{} (replace)")
+                                        .replace("{}", &label)
                                 };
                                 StyledText::new(label)
                                     .with_default_highlights(
@@ -821,15 +841,18 @@ impl PickerDelegate for OpenPathDelegate {
                                     )
                                     .into_any_element()
                             } else {
-                                StyledText::new(format!("{label} (create)"))
-                                    .with_default_highlights(
-                                        &window.text_style(),
-                                        vec![(
-                                            delta..label_len,
-                                            HighlightStyle::color(Color::Created.color(cx)),
-                                        )],
-                                    )
-                                    .into_any_element()
+                                StyledText::new(
+                                    tr(cx, "open_path_prompt.entry.create", "{} (create)")
+                                        .replace("{}", &label),
+                                )
+                                .with_default_highlights(
+                                    &window.text_style(),
+                                    vec![(
+                                        delta..label_len,
+                                        HighlightStyle::color(Color::Created.color(cx)),
+                                    )],
+                                )
+                                .into_any_element()
                             }
                         } else {
                             HighlightedLabel::new(label, match_positions).into_any_element()
@@ -859,26 +882,34 @@ impl PickerDelegate for OpenPathDelegate {
         (self.render_footer)(window, cx)
     }
 
-    fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
+    fn no_matches_text(&self, _window: &mut Window, cx: &mut App) -> Option<SharedString> {
         Some(match &self.directory_state {
-            DirectoryState::Create { .. } => SharedString::from("Type a path..."),
+            DirectoryState::Create { .. } => tr(
+                cx,
+                "open_path_prompt.no_matches.type_a_path",
+                "Type a path...",
+            )
+            .into(),
             DirectoryState::List {
                 error: Some(error), ..
             } => error.clone(),
-            DirectoryState::List { .. } | DirectoryState::None { .. } => {
-                SharedString::from("No such file or directory")
-            }
+            DirectoryState::List { .. } | DirectoryState::None { .. } => tr(
+                cx,
+                "open_path_prompt.no_matches.no_such_file_or_directory",
+                "No such file or directory",
+            )
+            .into(),
         })
     }
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        Arc::from(
-            format!(
-                "[directory{}]filename.ext",
-                self.path_style.primary_separator()
-            )
-            .as_str(),
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(
+            cx,
+            "open_path_prompt.placeholder.path_pattern",
+            "[directory{}]filename.ext",
         )
+        .replace("{}", self.path_style.primary_separator())
+        .into()
     }
 
     fn separators_after_indices(&self) -> Vec<usize> {

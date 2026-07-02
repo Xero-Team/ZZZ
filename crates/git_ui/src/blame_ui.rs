@@ -366,7 +366,11 @@ impl BlameRenderer for GitBlameRenderer {
                                             .child(Divider::vertical())
                                             .child(
                                                 CopyButton::new("copy-blame-sha", sha.to_string())
-                                                    .tooltip_label("Copy SHA"),
+                                                    .tooltip_label(tr(
+                                                        cx,
+                                                        "git_ui.blame_ui.copy_commit_sha",
+                                                        "Copy Commit SHA",
+                                                    )),
                                             ),
                                     ),
                             ),

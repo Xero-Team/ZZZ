@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use editor::{Editor, HighlightKey, MultiBuffer, RowHighlightOptions};
 use gpui::{App, AppContext, Context, Entity, Task, Window};
+use i18n::tr;
 use language::{Buffer, HighlightedText, ToPoint};
 use project::Project;
 use rope::Point;
@@ -41,7 +42,7 @@ impl Preview {
     }
 
     pub(crate) fn clear(&self, cx: &mut App) {
-        self.content.update(cx, |content, _| content.clear());
+        self.content.update(cx, |content, cx| content.clear(cx));
     }
 }
 
@@ -126,13 +127,13 @@ impl EditorPreview {
             message: None,
             preview_editor,
         };
-        this.clear();
+        this.clear(cx);
         this
     }
 
-    fn clear(&mut self) {
+    fn clear(&mut self, cx: &App) {
         self.message = Some(HighlightedText {
-            text: "No results to preview".into(),
+            text: tr(cx, "picker.preview.no_results", "No results to preview").into(),
             highlights: Vec::new(),
         });
     }

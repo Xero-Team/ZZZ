@@ -2484,7 +2484,12 @@ impl ProjectPanel {
                 if let Err(e) = receiver.await? {
                     if let Some(workspace) = workspace.upgrade() {
                         cx.update(|cx| {
-                            let message = format!("Failed to add to .git/info/exclude: {}", e);
+                            let message = tr(
+                                cx,
+                                "project_panel.git_info_exclude.failed",
+                                "Failed to add to .git/info/exclude: {}",
+                            )
+                            .replacen("{}", &e.to_string(), 1);
                             let toast = StatusToast::new(message, cx, |this, _| {
                                 this.icon(Icon::new(IconName::XCircle).color(Color::Error))
                                     .dismiss_button(true)

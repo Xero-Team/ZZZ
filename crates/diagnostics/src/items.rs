@@ -5,6 +5,7 @@ use gpui::{
     Context, Entity, EventEmitter, IntoElement, ParentElement, Render, Styled, Subscription, Task,
     WeakEntity, Window,
 };
+use i18n::tr;
 use language::Diagnostic;
 use project::project_settings::{GoToDiagnosticSeverityFilter, ProjectSettings};
 use settings::Settings;
@@ -66,9 +67,9 @@ impl Render for DiagnosticIndicator {
                 .map_or(&*diagnostic.message, |(first, _)| first);
             let diagnostics_already_active = self.any_active_diagnostics(cx);
             let tooltip = if !diagnostics_already_active {
-                "Expand Diagnostics"
+                tr(cx, "diagnostics.expand_diagnostics", "Expand Diagnostics")
             } else {
-                "Next Diagnostic"
+                tr(cx, "diagnostics.next_diagnostic", "Next Diagnostic")
             };
             Some(
                 Button::new("diagnostic_message", SharedString::new(message))
@@ -76,7 +77,7 @@ impl Render for DiagnosticIndicator {
                     .truncate(true)
                     .tooltip(move |_window, cx| {
                         Tooltip::for_action(
-                            tooltip,
+                            tooltip.clone(),
                             &editor::actions::GoToDiagnostic::default(),
                             cx,
                         )
@@ -94,7 +95,11 @@ impl Render for DiagnosticIndicator {
                 ButtonLike::new("diagnostic-indicator")
                     .child(diagnostic_indicator)
                     .tooltip(move |_window, cx| {
-                        Tooltip::for_action("Project Diagnostics", &Deploy, cx)
+                        Tooltip::for_action(
+                            tr(cx, "diagnostics.project_diagnostics", "Project Diagnostics"),
+                            &Deploy,
+                            cx,
+                        )
                     })
                     .on_click(cx.listener(|this, _, window, cx| {
                         if let Some(workspace) = this.workspace.upgrade() {

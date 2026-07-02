@@ -6,6 +6,7 @@ use gpui::{
     App, Context, DismissEvent, Entity, EventEmitter, Focusable, Render, UpdateGlobal, WeakEntity,
     Window, actions,
 };
+use i18n::tr;
 use picker::{Picker, PickerDelegate};
 use settings::{Settings, SettingsStore, update_settings_file};
 use std::sync::Arc;
@@ -372,8 +373,8 @@ fn retain_original_opposing_theme(
 impl PickerDelegate for ThemeSelectorDelegate {
     type ListItem = ui::ListItem;
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Select Theme...".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(cx, "theme_selector.placeholder", "Select Theme...").into()
     }
 
     fn match_count(&self) -> usize {
@@ -531,18 +532,25 @@ impl PickerDelegate for ThemeSelectorDelegate {
                 .border_t_1()
                 .border_color(cx.theme().colors().border_variant)
                 .child(
-                    Button::new("docs", "View Theme Docs")
-                        .end_icon(
-                            Icon::new(IconName::ArrowUpRight)
-                                .size(IconSize::Small)
-                                .color(Color::Muted),
-                        )
-                        .on_click(cx.listener(|_, _, _, cx| {
-                            cx.open_url("https://zed.dev/docs/themes");
-                        })),
+                    Button::new(
+                        "docs",
+                        tr(cx, "theme_selector.view_theme_docs", "View Theme Docs"),
+                    )
+                    .end_icon(
+                        Icon::new(IconName::ArrowUpRight)
+                            .size(IconSize::Small)
+                            .color(Color::Muted),
+                    )
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        cx.open_url("https://zed.dev/docs/themes");
+                    })),
                 )
                 .child(
-                    Button::new("more-themes", "Install Themes").on_click(cx.listener({
+                    Button::new(
+                        "more-themes",
+                        tr(cx, "theme_selector.install_themes", "Install Themes"),
+                    )
+                    .on_click(cx.listener({
                         move |_, _, window, cx| {
                             window.dispatch_action(
                                 Box::new(Extensions {

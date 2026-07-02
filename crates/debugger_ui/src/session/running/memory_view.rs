@@ -1,5 +1,5 @@
 use std::{
-    cell::{LazyCell, RefCell, RefMut},
+    cell::{RefCell, RefMut},
     fmt::Write,
     ops::RangeInclusive,
     rc::Rc,
@@ -14,6 +14,7 @@ use gpui::{
     Subscription, Task, TextStyle, UniformList, UniformListScrollHandle, WeakEntity, actions,
     anchored, deferred, uniform_list,
 };
+use i18n::tr;
 use notifications::status_toast::StatusToast;
 use project::debugger::{MemoryCell, dap_command::DataBreakpointContext, session::Session};
 use settings::Settings;
@@ -400,14 +401,30 @@ impl MemoryView {
         if !self.is_writing_memory {
             self.query_editor.update(cx, |this, cx| {
                 this.clear(window, cx);
-                this.set_placeholder_text("Write to Selected Memory Range", window, cx);
+                this.set_placeholder_text(
+                    &tr(
+                        cx,
+                        "debugger_ui.memory_view.write_selected_memory_range",
+                        "Write to Selected Memory Range",
+                    ),
+                    window,
+                    cx,
+                );
             });
             self.is_writing_memory = true;
             self.query_editor.focus_handle(cx).focus(window, cx);
         } else {
             self.query_editor.update(cx, |this, cx| {
                 this.clear(window, cx);
-                this.set_placeholder_text("Go to Memory Address / Expression", window, cx);
+                this.set_placeholder_text(
+                    &tr(
+                        cx,
+                        "debugger_ui.memory_view.goto_memory_address_or_expression",
+                        "Go to Memory Address / Expression",
+                    ),
+                    window,
+                    cx,
+                );
             });
             self.is_writing_memory = false;
         }
@@ -470,17 +487,26 @@ impl MemoryView {
                         let adapter_name = session.adapter();
                         // We cannot write memory with this adapter.
                         _ = self.workspace.update(cx, |this, cx| {
+                            let message = tr(
+                                cx,
+                                "debugger_ui.memory_view.write_memory_not_supported",
+                                "Debug Adapter `{}` does not support writing to memory",
+                            )
+                            .replacen("{}", &adapter_name, 1);
                             this.toggle_status_toast(
-                                StatusToast::new(format!(
-                                    "Debug Adapter `{adapter_name}` does not support writing to memory"
-                                ), cx, |this, cx| {
+                                StatusToast::new(message, cx, |this, cx| {
                                     cx.spawn(async move |this, cx| {
-                                        cx.background_executor().timer(Duration::from_secs(2)).await;
-                                        _ = this.update(cx, |_, cx| {
-                                            cx.emit(DismissEvent)
-                                        });
-                                    }).detach();
-                                    this.icon(Icon::new(IconName::XCircle).size(IconSize::Small).color(Color::Error))
+                                        cx.background_executor()
+                                            .timer(Duration::from_secs(2))
+                                            .await;
+                                        _ = this.update(cx, |_, cx| cx.emit(DismissEvent));
+                                    })
+                                    .detach();
+                                    this.icon(
+                                        Icon::new(IconName::XCircle)
+                                            .size(IconSize::Small)
+                                            .color(Color::Error),
+                                    )
                                 }),
                                 cx,
                             );
@@ -621,23 +647,29 @@ impl MemoryView {
             let caps = session.read(cx).capabilities();
             let supports_data_breakpoints = caps.supports_data_breakpoints.unwrap_or_default()
                 && caps.supports_data_breakpoint_bytes.unwrap_or_default();
-            let memory_unreadable = LazyCell::new(|| {
-                session.update(cx, |this, cx| {
-                    this.read_memory(range.clone(), cx)
-                        .any(|cell| cell.0.is_none())
-                })
+            let memory_unreadable = session.update(cx, |this, cx| {
+                this.read_memory(range.clone(), cx)
+                    .any(|cell| cell.0.is_none())
             });
 
             let mut menu = menu.action_disabled_when(
-                range_too_large || *memory_unreadable,
-                "Go To Selected Address",
+                range_too_large || memory_unreadable,
+                tr(
+                    cx,
+                    "debugger_ui.memory_view.go_to_selected_address",
+                    "Go To Selected Address",
+                ),
                 GoToSelectedAddress.boxed_clone(),
             );
 
             if supports_data_breakpoints {
                 menu = menu.action_disabled_when(
-                    *memory_unreadable,
-                    "Set Data Breakpoint",
+                    memory_unreadable,
+                    tr(
+                        cx,
+                        "debugger_ui.memory_view.set_data_breakpoint",
+                        "Set Data Breakpoint",
+                    ),
                     ToggleDataBreakpoint { access_type: None }.boxed_clone(),
                 );
             }
@@ -852,11 +884,22 @@ impl Render for MemoryView {
         cx: &mut ui::Context<Self>,
     ) -> impl ui::IntoElement {
         let (icon, tooltip_text) = if self.is_writing_memory {
-            (IconName::Pencil, "Edit memory at a selected address")
+            (
+                IconName::Pencil,
+                tr(
+                    cx,
+                    "debugger_ui.memory_view.edit_memory_at_selected_address",
+                    "Edit memory at a selected address",
+                ),
+            )
         } else {
             (
                 IconName::LocationEdit,
-                "Change address of currently viewed memory",
+                tr(
+                    cx,
+                    "debugger_ui.memory_view.change_viewed_memory_address",
+                    "Change address of currently viewed memory",
+                ),
             )
         };
         v_flex()
