@@ -461,6 +461,7 @@ impl MarkdownElement {
         self.push_markdown_image(
             builder,
             &image.source_range,
+            image.dest_url.clone(),
             source,
             image.width,
             image.height,
