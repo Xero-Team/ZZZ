@@ -105,6 +105,7 @@ dependencies = [
  "fs",
  "futures 0.3.32",
  "gpui",
+ "i18n",
  "language",
  "project",
  "proto",
@@ -3608,6 +3609,7 @@ dependencies = [
  "anyhow",
  "copilot",
  "gpui",
+ "i18n",
  "language",
  "log",
  "lsp",
@@ -4348,6 +4350,7 @@ dependencies = [
  "editor",
  "feature_flags",
  "gpui",
+ "i18n",
  "log",
  "text",
  "ui",
@@ -4763,6 +4766,7 @@ dependencies = [
  "editor",
  "futures 0.3.32",
  "gpui",
+ "i18n",
  "project",
  "serde_json",
  "settings",
@@ -4967,6 +4971,7 @@ dependencies = [
  "gpui",
  "http 1.4.0",
  "http_client",
+ "i18n",
  "indoc",
  "log",
  "menu",
@@ -5763,6 +5768,7 @@ dependencies = [
  "encoding_rs",
  "fuzzy",
  "gpui",
+ "i18n",
  "language",
  "picker",
  "project",
@@ -6214,6 +6220,7 @@ dependencies = [
  "fs",
  "fuzzy",
  "gpui",
+ "i18n",
  "language",
  "log",
  "num-format",
@@ -8690,6 +8697,7 @@ dependencies = [
  "editor",
  "file_icons",
  "gpui",
+ "i18n",
  "language",
  "log",
  "project",
@@ -8821,6 +8829,7 @@ dependencies = [
  "editor",
  "fuzzy",
  "gpui",
+ "i18n",
  "language",
  "project",
  "serde_json",
@@ -8840,6 +8849,7 @@ dependencies = [
  "anyhow",
  "client",
  "gpui",
+ "i18n",
  "release_channel",
  "smol",
  "util",
@@ -9618,6 +9628,7 @@ dependencies = [
  "gpui",
  "gpui_tokio",
  "http_client",
+ "i18n",
  "language",
  "language_model",
  "language_models_cloud",
@@ -9670,6 +9681,7 @@ dependencies = [
  "db",
  "editor",
  "gpui",
+ "i18n",
  "project",
  "ui",
  "workspace",
@@ -9961,6 +9973,7 @@ version = "0.1.0"
 dependencies = [
  "editor",
  "gpui",
+ "i18n",
  "language",
  "picker",
  "project",
@@ -10446,6 +10459,7 @@ dependencies = [
  "futures 0.3.32",
  "gpui",
  "gpui_platform",
+ "i18n",
  "language",
  "languages",
  "linkify",
@@ -10799,6 +10813,7 @@ version = "0.1.0"
 dependencies = [
  "command_palette_hooks",
  "gpui",
+ "i18n",
  "rpc",
  "serde_json",
  "settings",
@@ -11181,6 +11196,7 @@ dependencies = [
  "component",
  "futures-lite 2.6.1",
  "gpui",
+ "i18n",
  "rpc",
  "sum_tree",
  "time",
@@ -11839,6 +11855,7 @@ dependencies = [
  "fs",
  "fuzzy",
  "gpui",
+ "i18n",
  "menu",
  "notifications",
  "picker",
@@ -11948,6 +11965,7 @@ dependencies = [
  "futures 0.3.32",
  "fuzzy",
  "gpui",
+ "i18n",
  "picker",
  "project",
  "project_panel",
@@ -12460,12 +12478,14 @@ dependencies = [
  "image",
  "language",
  "log",
+ "menu",
  "project",
  "serde",
  "settings",
  "smallvec",
  "theme_settings",
  "ui",
+ "ui_input",
  "util",
  "workspace",
  "zpdf",
@@ -13145,6 +13165,7 @@ dependencies = [
  "anyhow",
  "editor",
  "gpui",
+ "i18n",
  "language",
  "menu",
  "multi_buffer",
@@ -13259,6 +13280,7 @@ name = "platform_title_bar"
 version = "0.1.0"
 dependencies = [
  "gpui",
+ "i18n",
  "project",
  "settings",
  "smallvec",
@@ -13774,6 +13796,7 @@ dependencies = [
  "futures 0.3.32",
  "fuzzy",
  "gpui",
+ "i18n",
  "language",
  "lsp",
  "ordered-float 5.3.0",
@@ -14796,6 +14819,7 @@ dependencies = [
  "futures 0.3.32",
  "gpui",
  "http_client",
+ "i18n",
  "log",
  "markdown",
  "menu",
@@ -14922,6 +14946,7 @@ dependencies = [
  "gpui",
  "html_to_markdown",
  "http_client",
+ "i18n",
  "image",
  "indoc",
  "jupyter-protocol",
@@ -15328,6 +15353,7 @@ dependencies = [
  "collections",
  "editor",
  "gpui",
+ "i18n",
  "language",
  "language_model",
  "log",
@@ -16346,6 +16372,7 @@ dependencies = [
  "editor",
  "fuzzy",
  "gpui",
+ "i18n",
  "menu",
  "picker",
  "project",
@@ -16818,6 +16845,7 @@ dependencies = [
  "file_icons",
  "fuzzy",
  "gpui",
+ "i18n",
  "language",
  "open_path_prompt",
  "paths",
@@ -17464,6 +17492,7 @@ version = "0.1.0"
 dependencies = [
  "file_icons",
  "gpui",
+ "i18n",
  "language",
  "multi_buffer",
  "ui",
@@ -17821,6 +17850,7 @@ dependencies = [
  "editor",
  "fuzzy_nucleo",
  "gpui",
+ "i18n",
  "menu",
  "picker",
  "project",
@@ -17923,6 +17953,7 @@ dependencies = [
  "file_icons",
  "fuzzy",
  "gpui",
+ "i18n",
  "itertools 0.14.0",
  "language",
  "menu",
@@ -18148,6 +18179,7 @@ dependencies = [
  "fs",
  "fuzzy",
  "gpui",
+ "i18n",
  "log",
  "picker",
  "project",
@@ -18702,6 +18734,7 @@ dependencies = [
  "futures 0.3.32",
  "fuzzy",
  "gpui",
+ "i18n",
  "language",
  "menu",
  "open_path_prompt",
@@ -19355,6 +19388,7 @@ version = "0.1.0"
 dependencies = [
  "component",
  "gpui",
+ "i18n",
  "ui",
 ]
 
@@ -23081,9 +23115,9 @@ checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
 name = "zpdf"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4a302dfc8f2573a27bb91779e5b514618af8e853eaf9c13b47fe157cddb7b34"
+checksum = "ead52db5e5b877d624189f751c316d79260331e383b2a9204ed9eeebe9ac63b6"
 dependencies = [
  "zpdf-color",
  "zpdf-content",
@@ -23099,9 +23133,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-color"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb1cd0292098d93458678922c468b5773c66fad6428eb35cb7e17cb78f990738"
+checksum = "5e1a38130e9194209d178f19606dec5e6e8a3b357745fd83e361a68a038c149d"
 dependencies = [
  "moxcms",
  "tracing",
@@ -23110,9 +23144,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-content"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe23d3640efa67651134310b52eb0e444c5348089ef004ccb16384c373eff8b2"
+checksum = "30c28523c1d7685a2d3ede7f2322356f1628bc8ed1fb2c250094a0384c141ad5"
 dependencies = [
  "tracing",
  "zpdf-color",
@@ -23126,9 +23160,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-core"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c93f0c4f56047e2cb6a847921818136ab891fc5cc421f958e1e3d9ecb39c8c0f"
+checksum = "686fd9d1b0eab1b7e60a2adab58f52e415c2470a4a6221196a5fb594294fb4b7"
 dependencies = [
  "smallvec",
  "thiserror 2.0.18",
@@ -23136,9 +23170,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-display-list"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95932f068f48f84d01fc4e22e0bce9b219686c169039c942b6d6b936d98c84ec"
+checksum = "e450ad0acba7580c4840a99f287ed9a25ab936e27fd974fd8e8c4f9c64673fbe"
 dependencies = [
  "smallvec",
  "zpdf-core",
@@ -23146,9 +23180,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-document"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab092f54793fd39015d08079a1f8b0d28c4d18343cfbcbf9c82f458c1779f01a"
+checksum = "5c58fb834df504c136ae37e98c486df466f5de604ee7afb0b375254a6a4030ed"
 dependencies = [
  "tracing",
  "zpdf-core",
@@ -23158,9 +23192,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-font"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58dfb66eb153cc9e032ddad6f0794b5b9fd560e034a62f04c958760e68fde381"
+checksum = "32dd99e5db002f5dab6592bcc60bea831d8d4b92530cf10a1be5ef5426ad25a3"
 dependencies = [
  "tracing",
  "ttf-parser",
@@ -23169,9 +23203,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-image"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bbb4fabb19292c65384428c1c010e1cb798b13762fa34f1f8029fa5eba46955"
+checksum = "2650bded80737c952c6dd96649063c3604ddbaad7cadd01b5a6278ae0a75c2d2"
 dependencies = [
  "hayro-jpeg2000",
  "tracing",
@@ -23182,9 +23216,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-parser"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa179c77547b2a1018f6689ef6375e14c94c61fe51ddc7ab15893075cb77a9d2"
+checksum = "4e513b1484d05b5c1d28669f518797365d3df574ba40840152750ff0b0ff557f"
 dependencies = [
  "aes",
  "cbc",
@@ -23192,15 +23226,16 @@ dependencies = [
  "sha2 0.10.9",
  "tracing",
  "winnow 0.7.15",
+ "zpdf-color",
  "zpdf-core",
  "zune-jpeg",
 ]
 
 [[package]]
 name = "zpdf-render"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9de6be2d1a288f77dfec93c2111abc6fbe1aa3f6921162d0a28524b88be9031f"
+checksum = "cb5b4585acb3c940d8837e44edfe4cff27b9f1697e3df58e3777e06451450426"
 dependencies = [
  "zpdf-core",
  "zpdf-display-list",
@@ -23208,9 +23243,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-render-cpu"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8f423ca8fb247cb7ea1583d4ef6f1b5f6823aa982322b64011b70fa0c99457d"
+checksum = "da342456ae7338951e33b9450bc1d2af96484314b129f0887cbfa1509a88b0ae"
 dependencies = [
  "image",
  "thiserror 2.0.18",

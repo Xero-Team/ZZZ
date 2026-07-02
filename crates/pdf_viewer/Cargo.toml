@@ -26,15 +26,17 @@ i18n.workspace = true
 image.workspace = true
 language.workspace = true
 log.workspace = true
+menu.workspace = true
 project.workspace = true
 serde.workspace = true
 settings.workspace = true
 smallvec.workspace = true
 theme_settings.workspace = true
 ui.workspace = true
+ui_input.workspace = true
 util.workspace = true
 workspace.workspace = true
-zpdf = { version = "0.5", default-features = true }
+zpdf = { version = "0.6", default-features = true }
 
 [dev-dependencies]
 editor = { workspace = true, features = ["test-support"] }
