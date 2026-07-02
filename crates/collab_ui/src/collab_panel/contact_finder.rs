@@ -96,8 +96,13 @@ impl PickerDelegate for ContactFinderDelegate {
         self.selected_index = ix;
     }
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Search collaborator by username...".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        i18n::tr(
+            cx,
+            "collab_ui.channel_modal.search_collaborator_by_username",
+            "Search collaborator by username...",
+        )
+        .into()
     }
 
     fn update_matches(

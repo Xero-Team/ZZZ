@@ -8,6 +8,7 @@ use gpui::{
     App, ClipboardItem, Context, DismissEvent, Entity, EventEmitter, Focusable, ParentElement,
     Render, Styled, Subscription, Task, WeakEntity, Window, actions, anchored, deferred, div,
 };
+use i18n::tr;
 use picker::{Picker, PickerDelegate};
 use std::sync::Arc;
 use ui::{Avatar, Checkbox, ContextMenu, ListItem, ListItemSpacing, prelude::*};
@@ -174,14 +175,18 @@ impl Render for ChannelModal {
                                         ui::ToggleState::Unselected
                                     },
                                 )
-                                .label("Public")
+                                .label(tr(cx, "collab_ui.channel_modal.public", "Public"))
                                 .on_click(cx.listener(Self::set_channel_visibility)),
                             )
                             .children(
                                 Some(
-                                    Button::new("copy-link", "Copy Link")
-                                        .label_size(LabelSize::Small)
-                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                    Button::new(
+                                        "copy-link",
+                                        tr(cx, "settings_ui.common.tooltip.copy_link", "Copy Link"),
+                                    )
+                                    .label_size(LabelSize::Small)
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
                                             if let Some(channel) = this
                                                 .channel_store
                                                 .read(cx)
@@ -191,7 +196,8 @@ impl Render for ChannelModal {
                                                     ClipboardItem::new_string(channel.link(cx));
                                                 cx.write_to_clipboard(item);
                                             }
-                                        })),
+                                        },
+                                    )),
                                 )
                                 .filter(|_| visibility == ChannelVisibility::Public),
                             ),
@@ -208,7 +214,11 @@ impl Render for ChannelModal {
                                     .when(mode == Mode::ManageMembers, |this| {
                                         this.border_color(cx.theme().colors().border)
                                     })
-                                    .child(Label::new("Manage Members"))
+                                    .child(Label::new(tr(
+                                        cx,
+                                        "collab_ui.channel_modal.manage_members",
+                                        "Manage Members",
+                                    )))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.set_mode(Mode::ManageMembers, window, cx);
                                     })),
@@ -223,7 +233,11 @@ impl Render for ChannelModal {
                                     .when(mode == Mode::InviteMembers, |this| {
                                         this.border_color(cx.theme().colors().border)
                                     })
-                                    .child(Label::new("Invite Members"))
+                                    .child(Label::new(tr(
+                                        cx,
+                                        "collab_ui.channel_modal.invite_members",
+                                        "Invite Members",
+                                    )))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.set_mode(Mode::InviteMembers, window, cx);
                                     })),
@@ -258,8 +272,13 @@ pub struct ChannelModalDelegate {
 impl PickerDelegate for ChannelModalDelegate {
     type ListItem = ListItem;
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Search collaborator by username...".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(
+            cx,
+            "collab_ui.channel_modal.search_collaborator_by_username",
+            "Search collaborator by username...",
+        )
+        .into()
     }
 
     fn match_count(&self) -> usize {
@@ -414,20 +433,37 @@ impl PickerDelegate for ChannelModalDelegate {
                         Mode::ManageMembers => slot
                             .children(
                                 if request_status == Some(proto::channel_member::Kind::Invitee) {
-                                    Some(Label::new("Invited"))
+                                    Some(Label::new(tr(
+                                        cx,
+                                        "collab_ui.channel_modal.invited",
+                                        "Invited",
+                                    )))
                                 } else {
                                     None
                                 },
                             )
                             .children(match membership.map(|m| m.role) {
-                                Some(ChannelRole::Admin) => Some(Label::new("Admin")),
-                                Some(ChannelRole::Guest) => Some(Label::new("Guest")),
+                                Some(ChannelRole::Admin) => Some(Label::new(tr(
+                                    cx,
+                                    "collab_ui.channel_modal.admin",
+                                    "Admin",
+                                ))),
+                                Some(ChannelRole::Guest) => Some(Label::new(tr(
+                                    cx,
+                                    "auto.collab_ui.collab_panel.label.guest",
+                                    "Guest",
+                                ))),
                                 _ => None,
                             })
                             .when(!is_me, |el| {
                                 el.child(IconButton::new("ellipsis", IconName::Ellipsis))
                             })
-                            .when(is_me, |el| el.child(Label::new("You").color(Color::Muted)))
+                            .when(is_me, |el| {
+                                el.child(
+                                    Label::new(tr(cx, "collab_ui.channel_modal.you", "You"))
+                                        .color(Color::Muted),
+                                )
+                            })
                             .children(
                                 if let (Some((menu, _)), true) = (&self.context_menu, selected) {
                                     Some(
@@ -443,12 +479,12 @@ impl PickerDelegate for ChannelModalDelegate {
                                 },
                             ),
                         Mode::InviteMembers => match request_status {
-                            Some(proto::channel_member::Kind::Invitee) => {
-                                slot.children(Some(Label::new("Invited")))
-                            }
-                            Some(proto::channel_member::Kind::Member) => {
-                                slot.children(Some(Label::new("Member")))
-                            }
+                            Some(proto::channel_member::Kind::Invitee) => slot.children(Some(
+                                Label::new(tr(cx, "collab_ui.channel_modal.invited", "Invited")),
+                            )),
+                            Some(proto::channel_member::Kind::Member) => slot.children(Some(
+                                Label::new(tr(cx, "collab_ui.channel_modal.member", "Member")),
+                            )),
                             _ => slot,
                         },
                     }
@@ -507,7 +543,16 @@ impl ChannelModalDelegate {
                 cx.notify();
             })
         })
-        .detach_and_prompt_err("Failed to update role", window, cx, |_, _, _| None);
+        .detach_and_prompt_err(
+            &tr(
+                cx,
+                "collab_ui.channel_modal.failed_to_update_role",
+                "Failed to update role",
+            ),
+            window,
+            cx,
+            |_, _, _| None,
+        );
         Some(())
     }
 
@@ -544,7 +589,16 @@ impl ChannelModalDelegate {
                 cx.notify();
             })
         })
-        .detach_and_prompt_err("Failed to remove member", window, cx, |_, _, _| None);
+        .detach_and_prompt_err(
+            &tr(
+                cx,
+                "collab_ui.channel_modal.failed_to_remove_member",
+                "Failed to remove member",
+            ),
+            window,
+            cx,
+            |_, _, _| None,
+        );
         Some(())
     }
 
@@ -575,7 +629,16 @@ impl ChannelModalDelegate {
                 cx.notify();
             })
         })
-        .detach_and_prompt_err("Failed to invite member", window, cx, |_, _, _| None);
+        .detach_and_prompt_err(
+            &tr(
+                cx,
+                "collab_ui.channel_modal.failed_to_invite_member",
+                "Failed to invite member",
+            ),
+            window,
+            cx,
+            |_, _, _| None,
+        );
     }
 
     fn show_context_menu(
@@ -589,26 +652,42 @@ impl ChannelModalDelegate {
         };
         let user_id = membership.user.id;
         let picker = cx.entity();
-        let context_menu = ContextMenu::build(window, cx, |mut menu, _window, _cx| {
+        let context_menu = ContextMenu::build(window, cx, |mut menu, _window, cx| {
             let role = membership.role;
 
             if role == ChannelRole::Admin || role == ChannelRole::Member {
                 let picker = picker.clone();
-                menu = menu.entry("Demote to Guest", None, move |window, cx| {
-                    picker.update(cx, |picker, cx| {
-                        picker
-                            .delegate
-                            .set_user_role(user_id, ChannelRole::Guest, window, cx);
-                    })
-                });
+                menu = menu.entry(
+                    tr(
+                        cx,
+                        "collab_ui.channel_modal.demote_to_guest",
+                        "Demote to Guest",
+                    ),
+                    None,
+                    move |window, cx| {
+                        picker.update(cx, |picker, cx| {
+                            picker
+                                .delegate
+                                .set_user_role(user_id, ChannelRole::Guest, window, cx);
+                        })
+                    },
+                );
             }
 
             if role == ChannelRole::Admin || role == ChannelRole::Guest {
                 let picker = picker.clone();
                 let label = if role == ChannelRole::Guest {
-                    "Promote to Member"
+                    tr(
+                        cx,
+                        "collab_ui.channel_modal.promote_to_member",
+                        "Promote to Member",
+                    )
                 } else {
-                    "Demote to Member"
+                    tr(
+                        cx,
+                        "collab_ui.channel_modal.demote_to_member",
+                        "Demote to Member",
+                    )
                 };
 
                 menu = menu.entry(label, None, move |window, cx| {
@@ -622,24 +701,40 @@ impl ChannelModalDelegate {
 
             if role == ChannelRole::Member || role == ChannelRole::Guest {
                 let picker = picker.clone();
-                menu = menu.entry("Promote to Admin", None, move |window, cx| {
-                    picker.update(cx, |picker, cx| {
-                        picker
-                            .delegate
-                            .set_user_role(user_id, ChannelRole::Admin, window, cx);
-                    })
-                });
+                menu = menu.entry(
+                    tr(
+                        cx,
+                        "collab_ui.channel_modal.promote_to_admin",
+                        "Promote to Admin",
+                    ),
+                    None,
+                    move |window, cx| {
+                        picker.update(cx, |picker, cx| {
+                            picker
+                                .delegate
+                                .set_user_role(user_id, ChannelRole::Admin, window, cx);
+                        })
+                    },
+                );
             };
 
             menu = menu.separator();
-            menu = menu.entry("Remove from Channel", None, {
-                let picker = picker.clone();
-                move |window, cx| {
-                    picker.update(cx, |picker, cx| {
-                        picker.delegate.remove_member(user_id, window, cx);
-                    })
-                }
-            });
+            menu = menu.entry(
+                tr(
+                    cx,
+                    "collab_ui.channel_modal.remove_from_channel",
+                    "Remove from Channel",
+                ),
+                None,
+                {
+                    let picker = picker.clone();
+                    move |window, cx| {
+                        picker.update(cx, |picker, cx| {
+                            picker.delegate.remove_member(user_id, window, cx);
+                        })
+                    }
+                },
+            );
             menu
         });
         window.focus(&context_menu.focus_handle(cx), cx);

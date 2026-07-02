@@ -3,6 +3,7 @@ use gpui::{
     DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, Render, Subscription,
     Window,
 };
+use i18n::tr;
 use livekit_client::ConnectionQuality;
 use ui::prelude::*;
 use workspace::{ModalView, Workspace};
@@ -77,57 +78,123 @@ fn active_room(cx: &App) -> Option<Entity<Room>> {
     ActiveCall::try_global(cx)?.read(cx).room().cloned()
 }
 
-fn quality_label(quality: Option<ConnectionQuality>) -> (&'static str, Color) {
+fn quality_label(quality: Option<ConnectionQuality>, cx: &App) -> (String, Color) {
     match quality {
-        Some(ConnectionQuality::Excellent) => ("Excellent", Color::Success),
-        Some(ConnectionQuality::Good) => ("Good", Color::Success),
-        Some(ConnectionQuality::Poor) => ("Poor", Color::Warning),
-        Some(ConnectionQuality::Lost) => ("Lost", Color::Error),
-        None => ("—", Color::Muted),
+        Some(ConnectionQuality::Excellent) => (
+            tr(cx, "collab_ui.call_stats.quality.excellent", "Excellent"),
+            Color::Success,
+        ),
+        Some(ConnectionQuality::Good) => (
+            tr(cx, "collab_ui.call_stats.quality.good", "Good"),
+            Color::Success,
+        ),
+        Some(ConnectionQuality::Poor) => (
+            tr(cx, "collab_ui.call_stats.quality.poor", "Poor"),
+            Color::Warning,
+        ),
+        Some(ConnectionQuality::Lost) => (
+            tr(cx, "collab_ui.call_stats.quality.lost", "Lost"),
+            Color::Error,
+        ),
+        None => ("—".to_owned(), Color::Muted),
     }
 }
 
-fn metric_rating(label: &str, value_ms: f64) -> (&'static str, Color) {
+fn rating_label(
+    cx: &App,
+    key: &'static str,
+    fallback: &'static str,
+    color: Color,
+) -> (String, Color) {
+    (tr(cx, key, fallback), color)
+}
+
+fn metric_rating(label: &str, value_ms: f64, cx: &App) -> (String, Color) {
     match label {
         "Latency" => {
             if value_ms < 100.0 {
-                ("Normal", Color::Success)
+                rating_label(
+                    cx,
+                    "collab_ui.call_stats.rating.normal",
+                    "Normal",
+                    Color::Success,
+                )
             } else if value_ms < 300.0 {
-                ("High", Color::Warning)
+                rating_label(
+                    cx,
+                    "collab_ui.call_stats.rating.high",
+                    "High",
+                    Color::Warning,
+                )
             } else {
-                ("Poor", Color::Error)
+                rating_label(cx, "collab_ui.call_stats.rating.poor", "Poor", Color::Error)
             }
         }
         "Jitter" => {
             if value_ms < 30.0 {
-                ("Normal", Color::Success)
+                rating_label(
+                    cx,
+                    "collab_ui.call_stats.rating.normal",
+                    "Normal",
+                    Color::Success,
+                )
             } else if value_ms < 75.0 {
-                ("High", Color::Warning)
+                rating_label(
+                    cx,
+                    "collab_ui.call_stats.rating.high",
+                    "High",
+                    Color::Warning,
+                )
             } else {
-                ("Poor", Color::Error)
+                rating_label(cx, "collab_ui.call_stats.rating.poor", "Poor", Color::Error)
             }
         }
-        _ => ("Normal", Color::Success),
+        _ => rating_label(
+            cx,
+            "collab_ui.call_stats.rating.normal",
+            "Normal",
+            Color::Success,
+        ),
     }
 }
 
-fn input_lag_rating(value_ms: f64) -> (&'static str, Color) {
+fn input_lag_rating(value_ms: f64, cx: &App) -> (String, Color) {
     if value_ms < 20.0 {
-        ("Normal", Color::Success)
+        rating_label(
+            cx,
+            "collab_ui.call_stats.rating.normal",
+            "Normal",
+            Color::Success,
+        )
     } else if value_ms < 50.0 {
-        ("High", Color::Warning)
+        rating_label(
+            cx,
+            "collab_ui.call_stats.rating.high",
+            "High",
+            Color::Warning,
+        )
     } else {
-        ("Poor", Color::Error)
+        rating_label(cx, "collab_ui.call_stats.rating.poor", "Poor", Color::Error)
     }
 }
 
-fn packet_loss_rating(loss_pct: f64) -> (&'static str, Color) {
+fn packet_loss_rating(loss_pct: f64, cx: &App) -> (String, Color) {
     if loss_pct < 1.0 {
-        ("Normal", Color::Success)
+        rating_label(
+            cx,
+            "collab_ui.call_stats.rating.normal",
+            "Normal",
+            Color::Success,
+        )
     } else if loss_pct < 5.0 {
-        ("High", Color::Warning)
+        rating_label(
+            cx,
+            "collab_ui.call_stats.rating.high",
+            "High",
+            Color::Warning,
+        )
     } else {
-        ("Poor", Color::Error)
+        rating_label(cx, "collab_ui.call_stats.rating.poor", "Poor", Color::Error)
     }
 }
 
@@ -151,7 +218,7 @@ impl Render for CallStatsModal {
             })
             .unwrap_or_default();
 
-        let (quality_text, quality_color) = quality_label(stats.connection_quality);
+        let (quality_text, quality_color) = quality_label(stats.connection_quality, cx);
 
         v_flex()
             .key_context("CallStatsModal")
@@ -164,7 +231,10 @@ impl Render for CallStatsModal {
             .child(
                 h_flex()
                     .justify_between()
-                    .child(Label::new("Call Diagnostics").size(LabelSize::Large))
+                    .child(
+                        Label::new(tr(cx, "collab_ui.call_stats.title", "Call Diagnostics"))
+                            .size(LabelSize::Large),
+                    )
                     .child(
                         Label::new(quality_text)
                             .size(LabelSize::Large)
@@ -173,10 +243,10 @@ impl Render for CallStatsModal {
             )
             .when(!is_connected, |this| {
                 this.child(
-                    h_flex()
-                        .justify_center()
-                        .py_4()
-                        .child(Label::new("Not in a call").color(Color::Muted)),
+                    h_flex().justify_center().py_4().child(
+                        Label::new(tr(cx, "collab_ui.call_stats.not_in_call", "Not in a call"))
+                            .color(Color::Muted),
+                    ),
                 )
             })
             .when(is_connected, |this| {
@@ -184,38 +254,68 @@ impl Render for CallStatsModal {
                     v_flex()
                         .gap_1()
                         .child(
-                            h_flex()
-                                .gap_2()
-                                .child(Label::new("Network").weight(FontWeight::SEMIBOLD)),
+                            h_flex().gap_2().child(
+                                Label::new(tr(cx, "collab_ui.call_stats.network", "Network"))
+                                    .weight(FontWeight::SEMIBOLD),
+                            ),
                         )
-                        .child(self.render_metric_row(
-                            "Latency",
-                            "Time for data to travel to the server",
-                            stats.latency_ms,
-                            |v| format!("{:.0}ms", v),
-                            |v| metric_rating("Latency", v),
-                        ))
-                        .child(self.render_metric_row(
-                            "Jitter",
-                            "Variance or fluctuation in latency",
-                            stats.jitter_ms,
-                            |v| format!("{:.0}ms", v),
-                            |v| metric_rating("Jitter", v),
-                        ))
-                        .child(self.render_metric_row(
-                            "Packet loss",
-                            "Amount of data lost during transfer",
-                            stats.packet_loss_pct,
-                            |v| format!("{:.1}%", v),
-                            |v| packet_loss_rating(v),
-                        ))
-                        .child(self.render_metric_row(
-                            "Input lag",
-                            "Delay from audio capture to WebRTC",
-                            stats.input_lag.map(|d| d.as_secs_f64() * 1000.0),
-                            |v| format!("{:.1}ms", v),
-                            |v| input_lag_rating(v),
-                        )),
+                        .child(
+                            self.render_metric_row(
+                                tr(cx, "collab_ui.call_stats.metric.latency", "Latency").into(),
+                                tr(
+                                    cx,
+                                    "collab_ui.call_stats.description.latency",
+                                    "Time for data to travel to the server",
+                                )
+                                .into(),
+                                stats.latency_ms,
+                                |v| format!("{:.0}ms", v),
+                                |v| metric_rating("Latency", v, cx),
+                            ),
+                        )
+                        .child(
+                            self.render_metric_row(
+                                tr(cx, "collab_ui.call_stats.metric.jitter", "Jitter").into(),
+                                tr(
+                                    cx,
+                                    "collab_ui.call_stats.description.jitter",
+                                    "Variance or fluctuation in latency",
+                                )
+                                .into(),
+                                stats.jitter_ms,
+                                |v| format!("{:.0}ms", v),
+                                |v| metric_rating("Jitter", v, cx),
+                            ),
+                        )
+                        .child(
+                            self.render_metric_row(
+                                tr(cx, "collab_ui.call_stats.metric.packet_loss", "Packet loss")
+                                    .into(),
+                                tr(
+                                    cx,
+                                    "collab_ui.call_stats.description.packet_loss",
+                                    "Amount of data lost during transfer",
+                                )
+                                .into(),
+                                stats.packet_loss_pct,
+                                |v| format!("{:.1}%", v),
+                                |v| packet_loss_rating(v, cx),
+                            ),
+                        )
+                        .child(
+                            self.render_metric_row(
+                                tr(cx, "collab_ui.call_stats.metric.input_lag", "Input lag").into(),
+                                tr(
+                                    cx,
+                                    "collab_ui.call_stats.description.input_lag",
+                                    "Delay from audio capture to WebRTC",
+                                )
+                                .into(),
+                                stats.input_lag.map(|d| d.as_secs_f64() * 1000.0),
+                                |v| format!("{:.1}ms", v),
+                                |v| input_lag_rating(v, cx),
+                            ),
+                        ),
                 )
             })
     }
@@ -224,18 +324,18 @@ impl Render for CallStatsModal {
 impl CallStatsModal {
     fn render_metric_row(
         &self,
-        title: &str,
-        description: &str,
+        title: SharedString,
+        description: SharedString,
         value: Option<f64>,
         format_value: impl Fn(f64) -> String,
-        rate: impl Fn(f64) -> (&'static str, Color),
+        rate: impl Fn(f64) -> (String, Color),
     ) -> impl IntoElement {
         let (rating_text, rating_color, value_text) = match value {
             Some(v) => {
                 let (rt, rc) = rate(v);
                 (rt, rc, format_value(v))
             }
-            None => ("—", Color::Muted, "—".to_owned()),
+            None => ("—".to_owned(), Color::Muted, "—".to_owned()),
         };
 
         h_flex()
@@ -245,9 +345,9 @@ impl CallStatsModal {
             .justify_between()
             .child(
                 v_flex()
-                    .child(Label::new(title.to_owned()).size(LabelSize::Default))
+                    .child(Label::new(title).size(LabelSize::Default))
                     .child(
-                        Label::new(description.to_owned())
+                        Label::new(description)
                             .size(LabelSize::Small)
                             .color(Color::Muted),
                     ),

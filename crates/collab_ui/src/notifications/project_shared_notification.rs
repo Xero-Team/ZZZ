@@ -124,11 +124,13 @@ impl Render for ProjectSharedNotification {
         let no_worktree_root_names = self.worktree_root_names.is_empty();
 
         let punctuation = if no_worktree_root_names { "" } else { ":" };
-        let main_label = format!(
+        let main_label = i18n::tr(
+            cx,
+            "auto.collab_ui.notifications.project_shared_notification.label.sharing_project_with_you",
             "{} is sharing a project with you{}",
-            self.owner.github_login.clone(),
-            punctuation
-        );
+        )
+        .replacen("{}", &self.owner.github_login, 1)
+        .replacen("{}", punctuation, 1);
 
         div().size_full().font(ui_font).child(
             CollabNotification::new(

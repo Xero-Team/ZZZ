@@ -141,10 +141,14 @@ impl Render for IncomingCallNotification {
                     move |_, _, cx| state.respond(false, cx)
                 }),
             )
-            .child(Label::new(format!(
-                "{} is sharing a project in ZZZ",
-                self.state.call.calling_user.github_login
-            ))),
+            .child(Label::new(
+                i18n::tr(
+                    cx,
+                    "auto.collab_ui.notifications.incoming_call_notification.label.sharing_project_in_zzz",
+                    "{} is sharing a project in ZZZ",
+                )
+                .replacen("{}", &self.state.call.calling_user.github_login, 1),
+            )),
         )
     }
 }

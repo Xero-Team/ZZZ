@@ -9,6 +9,7 @@ use gpui::{
     ParentElement as _, Render, SharedString, Task, TextStyleRefinement, WeakEntity,
 };
 use http_client::{HttpClient, HttpClientWithUrl};
+use i18n::tr;
 use markdown::{Markdown, MarkdownElement, MarkdownStyle};
 use paths::remote_servers_dir;
 use release_channel::ReleaseChannel;
@@ -214,9 +215,13 @@ impl Render for RemoteConnectionPrompt {
                                     .color(Color::Muted),
                             )
                             .child(
-                                Label::new("Caps lock is on.")
-                                    .size(LabelSize::Small)
-                                    .color(Color::Muted),
+                                Label::new(tr(
+                                    cx,
+                                    "remote_connection.caps_lock_on",
+                                    "Caps lock is on.",
+                                ))
+                                .size(LabelSize::Small)
+                                .color(Color::Muted),
                             ),
                     )
                 })
@@ -411,7 +416,7 @@ impl Render for RemoteConnectionModal {
                         .inset(true)
                         .spacing(ui::ListItemSpacing::Sparse)
                         .start_slot(Icon::new(IconName::Close).color(Color::Muted))
-                        .child(Label::new("Cancel"))
+                        .child(Label::new(tr(cx, "remote_connection.cancel", "Cancel")))
                         .end_slot(
                             KeyBinding::for_action_in(&menu::Cancel, &self.focus_handle(cx), cx)
                                 .size(rems_from_px(12.)),

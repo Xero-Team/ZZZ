@@ -1,4 +1,5 @@
 use gpui::{AnyElement, ClickEvent, prelude::*};
+use i18n::tr;
 
 use crate::{ButtonLike, CommonAnimationExt, Tooltip, prelude::*};
 
@@ -139,7 +140,7 @@ impl RenderOnce for UpdateButton {
                         IconButton::new("dismiss-update-button", IconName::Close)
                             .icon_size(IconSize::Indicator)
                             .when_some(self.on_dismiss, |this, handler| this.on_click(handler))
-                            .tooltip(Tooltip::text("Dismiss")),
+                            .tooltip(Tooltip::text(tr(cx, "ui.update_button.dismiss", "Dismiss"))),
                     ),
                 )
             })
