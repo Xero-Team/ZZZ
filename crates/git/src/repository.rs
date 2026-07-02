@@ -2109,10 +2109,22 @@ impl GitRepository for RealGitRepository {
             let branch = if let Ok(branch) = repo.find_branch(&name, BranchType::Local) {
                 branch
             } else if let Ok(revision) = repo.find_branch(&name, BranchType::Remote) {
-                let (_, branch_name) = name.split_once("/").context("Unexpected branch format")?;
-
                 let revision = revision.get();
-                let branch_commit = revision.peel_to_commit()?;
+                let (resolved_name, branch_commit) =
+                    if let Ok(Some(target)) = revision.symbolic_target() {
+                        (
+                            target
+                                .strip_prefix("refs/remotes/")
+                                .map(str::to_owned)
+                                .unwrap_or(name),
+                            repo.find_reference(target)?.peel_to_commit()?,
+                        )
+                    } else {
+                        (name, revision.peel_to_commit()?)
+                    };
+                let (_, branch_name) = resolved_name
+                    .split_once("/")
+                    .context("Unexpected branch format")?;
                 let mut branch = match repo.branch(&branch_name, &branch_commit, false) {
                     Ok(branch) => branch,
                     Err(err) if err.code() == ErrorCode::Exists => {
@@ -2123,7 +2135,7 @@ impl GitRepository for RealGitRepository {
                     }
                 };
 
-                branch.set_upstream(Some(&name))?;
+                branch.set_upstream(Some(&resolved_name))?;
                 branch
             } else {
                 anyhow::bail!("Branch '{}' not found", name);
@@ -3844,6 +3856,52 @@ mod tests {
         git_command(path, ["init", "-b", "main"]);
     }
 
+    fn clone_remote_repository_with_main_and_feature(temp_dir: &Path) -> (PathBuf, PathBuf) {
+        let remote_dir = temp_dir.join("remote.git");
+        let seed_dir = temp_dir.join("seed");
+        let clone_dir = temp_dir.join("clone");
+
+        git_command(
+            temp_dir,
+            [
+                OsString::from("init"),
+                OsString::from("--bare"),
+                OsString::from("-b"),
+                OsString::from("main"),
+                remote_dir.as_os_str().into(),
+            ],
+        );
+        git_init_repo(&seed_dir);
+        fs::write(seed_dir.join("file.txt"), "main").unwrap();
+        git_command(&seed_dir, ["add", "file.txt"]);
+        git_command(&seed_dir, ["commit", "-m", "initial"]);
+        git_command(&seed_dir, ["switch", "-c", "feature"]);
+        fs::write(seed_dir.join("feature.txt"), "feature").unwrap();
+        git_command(&seed_dir, ["add", "feature.txt"]);
+        git_command(&seed_dir, ["commit", "-m", "feature"]);
+        git_command(
+            &seed_dir,
+            [
+                OsString::from("remote"),
+                OsString::from("add"),
+                OsString::from("origin"),
+                remote_dir.as_os_str().into(),
+            ],
+        );
+        git_command(&seed_dir, ["push", "-u", "origin", "main"]);
+        git_command(&seed_dir, ["push", "-u", "origin", "feature"]);
+        git_command(
+            temp_dir,
+            [
+                OsString::from("clone"),
+                remote_dir.as_os_str().into(),
+                clone_dir.as_os_str().into(),
+            ],
+        );
+
+        (remote_dir, clone_dir)
+    }
+
     #[track_caller]
     fn assert_same_path(left: impl AsRef<Path>, right: impl AsRef<Path>) {
         assert_eq!(
@@ -3979,47 +4037,8 @@ mod tests {
         cx.executor().allow_parking();
 
         let temp_dir = tempfile::tempdir().unwrap();
-        let remote_dir = temp_dir.path().join("remote.git");
-        let seed_dir = temp_dir.path().join("seed");
-        let clone_dir = temp_dir.path().join("clone");
-
-        git_command(
-            temp_dir.path(),
-            [
-                OsString::from("init"),
-                OsString::from("--bare"),
-                OsString::from("-b"),
-                OsString::from("main"),
-                remote_dir.as_os_str().into(),
-            ],
-        );
-        git_init_repo(&seed_dir);
-        fs::write(seed_dir.join("file.txt"), "main").unwrap();
-        git_command(&seed_dir, ["add", "file.txt"]);
-        git_command(&seed_dir, ["commit", "-m", "initial"]);
-        git_command(&seed_dir, ["switch", "-c", "feature"]);
-        fs::write(seed_dir.join("feature.txt"), "feature").unwrap();
-        git_command(&seed_dir, ["add", "feature.txt"]);
-        git_command(&seed_dir, ["commit", "-m", "feature"]);
-        git_command(
-            &seed_dir,
-            [
-                OsString::from("remote"),
-                OsString::from("add"),
-                OsString::from("origin"),
-                remote_dir.as_os_str().into(),
-            ],
-        );
-        git_command(&seed_dir, ["push", "-u", "origin", "main"]);
-        git_command(&seed_dir, ["push", "-u", "origin", "feature"]);
-        git_command(
-            temp_dir.path(),
-            [
-                OsString::from("clone"),
-                remote_dir.as_os_str().into(),
-                clone_dir.as_os_str().into(),
-            ],
-        );
+        let (_remote_dir, clone_dir) =
+            clone_remote_repository_with_main_and_feature(temp_dir.path());
 
         let repository = RealGitRepository::new(
             &clone_dir.join(".git"),
@@ -4082,6 +4101,107 @@ mod tests {
                 .await
                 .unwrap(),
             "origin/feature"
+        );
+    }
+
+    #[gpui::test]
+    async fn test_change_branch_resolves_remote_head_to_tracking_branch(
+        cx: &mut TestAppContext,
+    ) {
+        disable_git_global_config();
+        cx.executor().allow_parking();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let (_remote_dir, clone_dir) =
+            clone_remote_repository_with_main_and_feature(temp_dir.path());
+
+        let repository = RealGitRepository::new(
+            &clone_dir.join(".git"),
+            None,
+            Some("git".into()),
+            cx.executor(),
+        )
+        .unwrap();
+        let git = repository.git_binary_in_worktree().unwrap();
+        git.run(&[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/feature",
+        ])
+        .await
+        .unwrap();
+        assert!(
+            git.run(&["show-ref", "--verify", "--quiet", "refs/heads/feature"])
+                .await
+                .is_err()
+        );
+
+        repository
+            .change_branch("origin/HEAD".to_string())
+            .await
+            .unwrap();
+
+        let git = repository.git_binary_in_worktree().unwrap();
+        assert_eq!(
+            git.run(&["branch", "--show-current"]).await.unwrap(),
+            "feature"
+        );
+        assert_eq!(
+            git.run(&["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}",])
+                .await
+                .unwrap(),
+            "origin/feature"
+        );
+    }
+
+    #[gpui::test]
+    async fn test_change_branch_resolves_non_origin_remote_head(cx: &mut TestAppContext) {
+        disable_git_global_config();
+        cx.executor().allow_parking();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let (remote_dir, clone_dir) = clone_remote_repository_with_main_and_feature(temp_dir.path());
+
+        git_command(
+            &clone_dir,
+            [
+                OsString::from("remote"),
+                OsString::from("add"),
+                OsString::from("upstream"),
+                remote_dir.as_os_str().into(),
+            ],
+        );
+        git_command(&clone_dir, ["fetch", "upstream"]);
+
+        let repository = RealGitRepository::new(
+            &clone_dir.join(".git"),
+            None,
+            Some("git".into()),
+            cx.executor(),
+        )
+        .unwrap();
+        let git = repository.git_binary_in_worktree().unwrap();
+        git.run(&[
+            "symbolic-ref",
+            "refs/remotes/upstream/HEAD",
+            "refs/remotes/upstream/main",
+        ])
+        .await
+        .unwrap();
+        git.run(&["checkout", "-b", "scratch"]).await.unwrap();
+
+        repository
+            .change_branch("upstream/HEAD".to_string())
+            .await
+            .unwrap();
+
+        let git = repository.git_binary_in_worktree().unwrap();
+        assert_eq!(git.run(&["branch", "--show-current"]).await.unwrap(), "main");
+        assert_eq!(
+            git.run(&["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}",])
+                .await
+                .unwrap(),
+            "upstream/main"
         );
     }
 
