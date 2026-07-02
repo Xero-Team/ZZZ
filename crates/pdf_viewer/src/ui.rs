@@ -19,6 +19,7 @@ impl PdfView {
             LoadState::Loading => centered(
                 Label::new(tr(cx, "pdf_viewer.loading", "Loading PDF...")).color(Color::Muted),
             ),
+            LoadState::PasswordRequired(state) => self.render_password_prompt(state, window, cx),
             LoadState::Error(message) => centered(
                 h_flex()
                     .gap_2()
@@ -43,6 +44,60 @@ impl PdfView {
                 .child(self.render_pages(window, cx))
                 .into_any_element(),
         }
+    }
+
+    fn render_password_prompt(
+        &self,
+        state: &crate::view::PasswordRequiredState,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        centered(
+            v_flex()
+                .w(px(420.0))
+                .gap_3()
+                .p_4()
+                .bg(cx.theme().colors().elevated_surface_background)
+                .border_1()
+                .border_color(cx.theme().colors().border_variant)
+                .rounded_lg()
+                .shadow_lg()
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(Icon::new(IconName::FileLock).color(Color::Warning))
+                        .child(
+                            Headline::new(tr(cx, "pdf_viewer.password.title", "Unlock PDF"))
+                                .size(HeadlineSize::Small),
+                        ),
+                )
+                .child(Label::new(tr(
+                    cx,
+                    "pdf_viewer.password.description",
+                    "This PDF is password-protected. Enter the password to open and search it.",
+                )))
+                .child(state.input.clone())
+                .when_some(state.error.clone(), |this, error| {
+                    this.child(Label::new(error).color(Color::Error).size(LabelSize::Small))
+                })
+                .child(
+                    h_flex().justify_end().gap_2().child(
+                        Button::new(
+                            "pdf-unlock",
+                            if state.opening {
+                                tr(cx, "pdf_viewer.password.unlocking", "Unlocking...")
+                            } else {
+                                tr(cx, "pdf_viewer.password.unlock", "Unlock")
+                            },
+                        )
+                        .disabled(state.opening)
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.submit_password(&menu::Confirm, window, cx);
+                        })),
+                    ),
+                ),
+        )
     }
 
     fn render_pages(&self, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
@@ -328,6 +383,7 @@ impl Render for PdfView {
             .on_action(cx.listener(Self::toggle_search))
             .on_action(cx.listener(Self::next_match))
             .on_action(cx.listener(Self::previous_match))
+            .on_action(cx.listener(Self::submit_password))
             .size_full()
             .flex()
             .bg(cx.theme().colors().editor_background)

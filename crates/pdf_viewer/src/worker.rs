@@ -108,7 +108,7 @@ impl PdfWorker {
     /// Spawn the pool, open the document on the first thread to obtain the
     /// summary, then bring the remaining threads online. Resolves once the
     /// summary (page count, dimensions, outline, metadata) is available.
-    pub async fn open(path: PathBuf, data: Arc<[u8]>) -> anyhow::Result<Self> {
+    pub async fn open(path: PathBuf, data: Arc<[u8]>, password: Vec<u8>) -> anyhow::Result<Self> {
         let thread_count = thread::available_parallelism()
             .map(|count| count.get().saturating_sub(1))
             .unwrap_or(1)
@@ -126,22 +126,30 @@ impl PdfWorker {
             let shared = shared.clone();
             let path = path.clone();
             let data = data.clone();
+            let mut password = password.clone();
             // Only the first thread reports the summary back to the opener.
             let init_tx = init_tx.take();
             thread::Builder::new()
                 .name(format!("pdf-worker-{thread_index}"))
                 .spawn(move || {
-                    let document = match LoadedPdfDocument::open(path, data) {
+                    let document = match if password.is_empty() {
+                        LoadedPdfDocument::open(path, data)
+                    } else {
+                        LoadedPdfDocument::open_with_password(path, data, &password)
+                    } {
                         Ok(document) => {
                             if let Some(init_tx) = init_tx {
                                 let summary = Arc::new(document.summary.clone());
                                 if init_tx.send(Ok(summary)).is_err() {
+                                    password.fill(0);
                                     return;
                                 }
                             }
+                            password.fill(0);
                             document
                         }
                         Err(error) => {
+                            password.fill(0);
                             if let Some(init_tx) = init_tx {
                                 init_tx.send(Err(error)).ok();
                             }
@@ -151,6 +159,9 @@ impl PdfWorker {
                     worker_loop(document, shared);
                 })?;
         }
+
+        let mut password = password;
+        password.fill(0);
 
         let summary = init_rx.await??;
         Ok(Self {

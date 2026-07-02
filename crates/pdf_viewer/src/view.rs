@@ -7,6 +7,7 @@ use gpui::{
 };
 use i18n::tr;
 use project::{Project, ProjectPath};
+use ui_input::InputField;
 use util::rel_path::RelPath;
 
 use crate::{
@@ -25,8 +26,48 @@ pub enum ZoomMode {
 
 pub(crate) enum LoadState {
     Loading,
+    PasswordRequired(Box<PasswordRequiredState>),
     Loaded(Box<LoadedState>),
     Error(gpui::SharedString),
+}
+
+pub(crate) struct PasswordRequiredState {
+    pub path: PathBuf,
+    pub data: Arc<[u8]>,
+    pub input: Entity<InputField>,
+    pub error: Option<gpui::SharedString>,
+    pub retry_task: Option<Task<()>>,
+    pub opening: bool,
+}
+
+impl PasswordRequiredState {
+    fn new(
+        path: PathBuf,
+        data: Arc<[u8]>,
+        error: Option<gpui::SharedString>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self {
+        let input = cx.new(|cx| {
+            let placeholder = tr(
+                cx,
+                "pdf_viewer.password.placeholder",
+                "Enter the document password",
+            );
+            InputField::new(window, cx, &placeholder)
+                .label(tr(cx, "pdf_viewer.password.label", "Password"))
+                .masked(true)
+        });
+
+        Self {
+            path,
+            data,
+            input,
+            error,
+            retry_task: None,
+            opening: false,
+        }
+    }
 }
 
 pub(crate) struct LoadedState {
@@ -228,6 +269,15 @@ impl Focusable for PdfView {
     }
 }
 
+fn is_wrong_password(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        matches!(
+            cause.downcast_ref::<zpdf::Error>(),
+            Some(zpdf::Error::WrongPassword)
+        )
+    })
+}
+
 impl PdfView {
     pub fn new(
         pdf_item: Entity<PdfItem>,
@@ -314,28 +364,15 @@ impl PdfView {
                 }
             };
 
-            match PdfWorker::open(abs_path, data).await {
+            match PdfWorker::open(abs_path.clone(), data.clone(), Vec::new()).await {
                 Ok(worker) => {
-                    let worker = Arc::new(worker);
-                    let summary = worker.summary().clone();
                     this.update_in(cx, |view, window, cx| {
-                        view.load_state = LoadState::Loaded(Box::new(LoadedState {
-                            worker,
-                            summary,
-                            page_cache: HashMap::default(),
-                            rendering: HashMap::default(),
-                            search: SearchState::default(),
-                            encryption_warning: false,
-                            idle_prefetch: None,
-                        }));
-                        view.current_page =
-                            view.current_page.min(view.page_count().saturating_sub(1));
-                        view.update_page_layouts();
-                        view.ensure_pages_rendered(window, cx);
-                        cx.emit(PdfViewEvent::TitleChanged);
-                        cx.notify();
+                        view.set_loaded(Arc::new(worker), window, cx);
                     })
                     .ok();
+                }
+                Err(error) if is_wrong_password(&error) => {
+                    Self::set_password_required(&this, abs_path, data, None, cx);
                 }
                 Err(error) => Self::set_error(&this, error.to_string(), cx),
             }
@@ -353,6 +390,122 @@ impl PdfView {
             cx.notify();
         })
         .ok();
+    }
+
+    fn set_password_required(
+        this: &gpui::WeakEntity<Self>,
+        path: PathBuf,
+        data: Arc<[u8]>,
+        error: Option<gpui::SharedString>,
+        cx: &mut gpui::AsyncWindowContext,
+    ) {
+        this.update_in(cx, |view, window, cx| {
+            view.load_state = LoadState::PasswordRequired(Box::new(PasswordRequiredState::new(
+                path, data, error, window, cx,
+            )));
+            view.focus_password_input(window, cx);
+            cx.notify();
+        })
+        .ok();
+    }
+
+    fn set_loaded(&mut self, worker: Arc<PdfWorker>, window: &mut Window, cx: &mut Context<Self>) {
+        let summary = worker.summary().clone();
+        self.load_state = LoadState::Loaded(Box::new(LoadedState {
+            worker,
+            summary,
+            page_cache: HashMap::default(),
+            rendering: HashMap::default(),
+            search: SearchState::default(),
+            encryption_warning: false,
+            idle_prefetch: None,
+        }));
+        self.current_page = self.current_page.min(self.page_count().saturating_sub(1));
+        self.update_page_layouts();
+        self.ensure_pages_rendered(window, cx);
+        cx.emit(PdfViewEvent::TitleChanged);
+        cx.notify();
+    }
+
+    fn focus_password_input(&self, window: &mut Window, cx: &mut App) {
+        if let LoadState::PasswordRequired(state) = &self.load_state {
+            let focus_handle = state.input.focus_handle(cx);
+            window.focus(&focus_handle, cx);
+        }
+    }
+
+    pub(crate) fn submit_password(
+        &mut self,
+        _: &menu::Confirm,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let LoadState::PasswordRequired(state) = &mut self.load_state else {
+            return;
+        };
+        if state.opening {
+            return;
+        }
+
+        let input = state.input.clone();
+        let password = input.read(cx).text(cx);
+        let empty_password_error = tr(
+            cx,
+            "pdf_viewer.password.empty_error",
+            "Enter a password to unlock this PDF.",
+        );
+        let prepared_password = if password.is_empty() {
+            state.error = Some(empty_password_error.into());
+            None
+        } else {
+            input.update(cx, |input, cx| input.clear(window, cx));
+            state.error = None;
+            state.opening = true;
+            Some((
+                state.path.clone(),
+                state.data.clone(),
+                password.into_bytes(),
+            ))
+        };
+        let Some((path, data, mut password)) = prepared_password else {
+            self.focus_password_input(window, cx);
+            cx.notify();
+            return;
+        };
+
+        let task = cx.spawn_in(window, async move |this, cx| {
+            let result = PdfWorker::open(path, data, password.clone()).await;
+            password.fill(0);
+
+            this.update_in(cx, |view, window, cx| match result {
+                Ok(worker) => {
+                    view.set_loaded(Arc::new(worker), window, cx);
+                }
+                Err(error) if is_wrong_password(&error) => {
+                    if let LoadState::PasswordRequired(state) = &mut view.load_state {
+                        state.opening = false;
+                        state.retry_task = None;
+                        state.error = Some(
+                            tr(
+                                cx,
+                                "pdf_viewer.password.invalid_error",
+                                "Incorrect password. Try again.",
+                            )
+                            .into(),
+                        );
+                    }
+                    view.focus_password_input(window, cx);
+                    cx.notify();
+                }
+                Err(error) => {
+                    view.load_state = LoadState::Error(error.to_string().into());
+                    cx.notify();
+                }
+            })
+            .ok();
+        });
+        state.retry_task = Some(task);
+        cx.notify();
     }
 
     pub(crate) fn loaded(&self) -> Option<&LoadedState> {
@@ -577,8 +730,8 @@ impl PdfView {
 #[cfg(test)]
 mod tests {
     use super::{
-        compute_visible_pages, estimate_page_bytes, idle_prefetch_order, page_spans,
-        pages_to_keep_within_budget, prefetch_admits,
+        compute_visible_pages, estimate_page_bytes, idle_prefetch_order, is_wrong_password,
+        page_spans, pages_to_keep_within_budget, prefetch_admits,
     };
     use crate::{PAGE_GAP, PAGE_VERTICAL_MARGIN};
 
@@ -604,6 +757,14 @@ mod tests {
         // Each later page starts a gap below the previous page's bottom.
         assert_eq!(spans[1].0, spans[0].1 + PAGE_GAP);
         assert_eq!(spans[2].0, spans[1].1 + PAGE_GAP);
+    }
+
+    #[test]
+    fn wrong_password_detection_survives_anyhow_context() {
+        let error = anyhow::Error::new(zpdf::Error::WrongPassword)
+            .context("opening password-protected PDF");
+        assert!(is_wrong_password(&error));
+        assert!(!is_wrong_password(&anyhow::anyhow!("some other failure")));
     }
 
     #[test]

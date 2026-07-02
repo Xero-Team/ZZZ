@@ -81,8 +81,17 @@ impl LoadedPdfDocument {
     /// zpdf, so reopening the same buffer on several worker threads shares the
     /// underlying bytes and only duplicates the per-thread parse caches.
     pub fn open(path: PathBuf, data: Arc<[u8]>) -> anyhow::Result<Self> {
-        let pdf =
-            PdfDocument::open(data).with_context(|| format!("opening PDF {}", path.display()))?;
+        Self::open_with_password(path, data, &[])
+    }
+
+    /// Open a document with an optional password.
+    pub fn open_with_password(
+        path: PathBuf,
+        data: Arc<[u8]>,
+        password: &[u8],
+    ) -> anyhow::Result<Self> {
+        let pdf = PdfDocument::open_with_password(data, password)
+            .with_context(|| format!("opening PDF {}", path.display()))?;
         let page_count = pdf.page_count();
         let mut pages = Vec::with_capacity(page_count);
         let mut page_id_to_index = HashMap::with_capacity(page_count);
@@ -106,7 +115,7 @@ impl LoadedPdfDocument {
         let (title, author) = document_info(&pdf);
         let named_destinations = parse_named_destinations(&pdf, &page_id_to_index);
         let outline = parse_outline(&pdf, &page_id_to_index, &named_destinations);
-        let security = if pdf.file().trailer.get("Encrypt").is_some() {
+        let security = if pdf.is_encrypted() {
             PdfSecurity::Encrypted
         } else {
             PdfSecurity::Unencrypted
