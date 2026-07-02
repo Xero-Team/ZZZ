@@ -182,9 +182,13 @@ impl MarkdownStyle {
                 theme_settings.agent_buffer_font_size(cx),
                 theme_settings.agent_ui_font_size(cx),
             ),
-            MarkdownFont::Editor | MarkdownFont::Preview => (
+            MarkdownFont::Editor => (
                 theme_settings.buffer_font_size(cx),
                 theme_settings.ui_font_size(cx),
+            ),
+            MarkdownFont::Preview => (
+                theme_settings.buffer_font_size(cx),
+                theme_settings.markdown_preview_font_size(cx),
             ),
         };
 
@@ -5572,5 +5576,68 @@ mod tests {
             h3_line_height > body_line_height,
             "H3 line height ({h3_line_height:?}) should be greater than body text ({body_line_height:?})"
         );
+    }
+    #[gpui::test]
+    fn test_ui_zoom_does_not_affect_markdown_preview(cx: &mut TestAppContext) {
+        ensure_theme_initialized(cx);
+
+        cx.update(|cx| {
+            settings::SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.theme.ui_font_size = Some(16.0.into());
+                    settings.theme.markdown_preview_font_size = None;
+                });
+            });
+        });
+        cx.run_until_parked();
+
+        cx.update(|cx| {
+            let before = ThemeSettings::get_global(cx).markdown_preview_font_size(cx);
+            assert_eq!(before, px(16.0));
+
+            theme_settings::adjust_ui_font_size(cx, |size| size + px(3.0));
+
+            assert_eq!(ThemeSettings::get_global(cx).ui_font_size(cx), px(19.0));
+            assert_eq!(
+                ThemeSettings::get_global(cx).markdown_preview_font_size(cx),
+                before
+            );
+        });
+    }
+
+    #[gpui::test]
+    fn test_markdown_preview_follows_ui_font_size_setting_when_unset(cx: &mut TestAppContext) {
+        ensure_theme_initialized(cx);
+
+        cx.update(|cx| {
+            settings::SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.theme.ui_font_size = Some(20.0.into());
+                    settings.theme.markdown_preview_font_size = None;
+                });
+            });
+        });
+        cx.run_until_parked();
+        cx.update(|cx| {
+            assert_eq!(
+                ThemeSettings::get_global(cx).markdown_preview_font_size(cx),
+                px(20.0)
+            );
+        });
+
+        cx.update(|cx| {
+            settings::SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.theme.ui_font_size = Some(24.0.into());
+                });
+            });
+        });
+        cx.run_until_parked();
+        cx.update(|cx| {
+            assert_eq!(
+                ThemeSettings::get_global(cx).markdown_preview_font_size(cx),
+                px(24.0)
+            );
+        });
     }
 }
