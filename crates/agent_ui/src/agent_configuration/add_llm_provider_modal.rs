@@ -135,10 +135,15 @@ struct ModelInput {
 impl ModelInput {
     fn new(model_index: usize, window: &mut Window, cx: &mut App) -> Self {
         let base_tab_index = (3 + (model_index * 4)) as isize;
+        let model_name_placeholder = app_i18n::tr(
+            cx,
+            "agent_ui.add_provider.model_name_placeholder",
+            "e.g. gpt-5, claude-opus-4, gemini-2.5-pro",
+        );
 
         let model_name = single_line_input(
             tr(cx, "agent_ui.add_provider.model_name", "Model Name"),
-            "e.g. gpt-5, claude-opus-4, gemini-2.5-pro",
+            model_name_placeholder.as_ref(),
             None,
             base_tab_index + 1,
             window,

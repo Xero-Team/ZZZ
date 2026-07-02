@@ -4,6 +4,7 @@ use gpui::{
     Animation, AnimationExt, ClickEvent, Hsla, MouseButton, SharedString,
     WindowBackgroundAppearance, pulsating_between,
 };
+use i18n::tr;
 use itertools::Itertools as _;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
@@ -589,7 +590,7 @@ impl RenderOnce for ThreadItem {
             })
             .when(show_tooltip, |this| {
                 let status = self.status;
-                this.tooltip(Tooltip::element(move |_, _| match status {
+                this.tooltip(Tooltip::element(move |_, cx| match status {
                     AgentThreadStatus::Error => h_flex()
                         .gap_1()
                         .child(
@@ -597,7 +598,11 @@ impl RenderOnce for ThreadItem {
                                 .size(IconSize::Small)
                                 .color(Color::Error),
                         )
-                        .child(Label::new("Thread has an Error"))
+                        .child(Label::new(tr(
+                            cx,
+                            "ui.thread_item.thread_has_error",
+                            "Thread has an Error",
+                        )))
                         .into_any_element(),
                     AgentThreadStatus::WaitingForConfirmation => h_flex()
                         .gap_1()
@@ -606,7 +611,11 @@ impl RenderOnce for ThreadItem {
                                 .size(IconSize::Small)
                                 .color(Color::Warning),
                         )
-                        .child(Label::new("Waiting for Confirmation"))
+                        .child(Label::new(tr(
+                            cx,
+                            "ui.thread_item.waiting_for_confirmation",
+                            "Waiting for Confirmation",
+                        )))
                         .into_any_element(),
                     _ => gpui::Empty.into_any_element(),
                 }))

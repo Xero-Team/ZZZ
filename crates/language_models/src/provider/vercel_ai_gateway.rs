@@ -6,6 +6,7 @@ use gpui::{AnyView, App, AsyncApp, Context, Entity, SharedString, Task, Window};
 use http_client::{
     AsyncBody, CustomHeaders, HttpClient, Method, Request as HttpRequest, RequestBuilderExt, http,
 };
+use i18n::tr;
 use language_model::{
     ApiKeyState, AuthenticateError, EnvVar, IconOrSvg, LanguageModel, LanguageModelCompletionError,
     LanguageModelCompletionEvent, LanguageModelId, LanguageModelName, LanguageModelProvider,
@@ -685,33 +686,52 @@ impl Render for ConfigurationView {
         };
 
         if self.load_credentials_task.is_some() {
-            div().child(Label::new("Loading credentials...")).into_any()
+            div()
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.common.loading_credentials",
+                    "Loading credentials...",
+                )))
+                .into_any()
         } else if self.should_render_editor(cx) {
             v_flex()
                 .size_full()
                 .on_action(cx.listener(Self::save_api_key))
-                .child(Label::new(
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.vercel_ai_gateway.setup_intro",
                     "To use ZZZ's agent with Vercel AI Gateway, you need to add an API key. Follow these steps:",
-                ))
+                )))
                 .child(
                     List::new()
                         .child(
                             ListBulletItem::new("")
-                                .child(Label::new("Create an API key in"))
+                                .child(Label::new(tr(
+                                    cx,
+                                    "language_models.vercel_ai_gateway.create_api_key_in",
+                                    "Create an API key in",
+                                )))
                                 .child(ButtonLink::new(
                                     "Vercel AI Gateway's console",
                                     "https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%2Fapi-keys&title=Go+to+AI+Gateway",
                                 )),
                         )
-                        .child(ListBulletItem::new(
+                        .child(ListBulletItem::new(tr(
+                            cx,
+                            "language_models.common.paste_api_key_start_assistant",
                             "Paste your API key below and hit enter to start using the assistant",
-                        )),
+                        ))),
                 )
                 .child(self.api_key_editor.clone())
                 .child(
-                    Label::new(format!(
-                        "You can also set the {API_KEY_ENV_VAR_NAME} environment variable and restart ZZZ.",
-                    ))
+                    Label::new(
+                        tr(
+                            cx,
+                            "language_models.common.set_env_var_and_restart",
+                            "You can also set the {} environment variable and restart ZZZ.",
+                        )
+                        .replace("{}", API_KEY_ENV_VAR_NAME),
+                    )
                     .size(LabelSize::Small)
                     .color(Color::Muted),
                 )
@@ -720,7 +740,14 @@ impl Render for ConfigurationView {
             ConfiguredApiCard::new(configured_card_label)
                 .disabled(env_var_set)
                 .when(env_var_set, |this| {
-                    this.tooltip_label(format!("To reset your API key, unset the {API_KEY_ENV_VAR_NAME} environment variable."))
+                    this.tooltip_label(
+                        tr(
+                            cx,
+                            "language_models.common.unset_env_var_to_reset_api_key",
+                            "To reset your API key, unset the {} environment variable.",
+                        )
+                        .replace("{}", API_KEY_ENV_VAR_NAME),
+                    )
                 })
                 .on_click(cx.listener(|this, _, window, cx| this.reset_api_key(window, cx)))
                 .into_any_element()

@@ -5,6 +5,7 @@ use gpui::{
     App, Context, Entity, EventEmitter, InteractiveElement as _, ParentElement as _, Render,
     SharedString, Styled, Window, actions,
 };
+use i18n::tr;
 use language::{
     BinaryStatus, LanguageRegistry, LanguageServerId, LanguageServerName,
     LanguageServerStatusUpdate, ServerHealth,
@@ -60,6 +61,22 @@ struct PendingWork<'a> {
     language_server_id: LanguageServerId,
     progress_token: &'a ProgressToken,
     progress: &'a LanguageServerProgress,
+}
+
+fn tr_arg(cx: &App, key: &'static str, fallback: &'static str, value: &str) -> String {
+    tr(cx, key, fallback).replacen("{}", value, 1)
+}
+
+fn tr_args(
+    cx: &App,
+    key: &'static str,
+    fallback: &'static str,
+    first: &str,
+    second: &str,
+) -> String {
+    tr(cx, key, fallback)
+        .replacen("{}", first, 1)
+        .replacen("{}", second, 1)
 }
 
 struct Content {
@@ -232,14 +249,17 @@ impl ActivityIndicator {
                     project.update(cx, |project, cx| project.create_buffer(None, false, cx));
                 let status = status.clone();
                 let server_name = server_name.clone();
+                let status_message = tr_args(
+                    cx,
+                    "activity_indicator.language_server.status_buffer",
+                    "Language server {}:\n\n{}",
+                    server_name.as_ref(),
+                    status.as_ref(),
+                );
                 cx.spawn_in(window, async move |workspace, cx| {
                     let buffer = create_buffer.await?;
                     buffer.update(cx, |buffer, cx| {
-                        buffer.edit(
-                            [(0..0, format!("Language server {server_name}:\n\n{status}"))],
-                            None,
-                            cx,
-                        );
+                        buffer.edit([(0..0, status_message)], None, cx);
                         buffer.set_capability(language::Capability::ReadOnly, cx);
                     });
                     workspace.update_in(cx, |workspace, window, cx| {
@@ -380,7 +400,12 @@ impl ActivityIndicator {
 
                 let additional_work_count = pending_work.count();
                 if additional_work_count > 0 {
-                    write!(&mut message, " + {} more", additional_work_count).unwrap();
+                    message.push_str(&tr_arg(
+                        cx,
+                        "activity_indicator.language_server.additional_more",
+                        " + {} more",
+                        &additional_work_count.to_string(),
+                    ));
                 }
 
                 return Some(Content {
@@ -412,7 +437,12 @@ impl ActivityIndicator {
                         .with_rotate_animation(2)
                         .into_any_element(),
                 ),
-                message: format!("Debug: {}", session.read(cx).adapter()),
+                message: tr_arg(
+                    cx,
+                    "activity_indicator.debug_session",
+                    "Debug: {}",
+                    session.read(cx).adapter().as_ref(),
+                ),
                 tooltip_message: session.read(cx).label().map(|label| label.to_string()),
                 interaction: ContentInteraction::Passive,
             });
@@ -502,24 +532,28 @@ impl ActivityIndicator {
         });
 
         if !downloading.is_empty() {
+            let downloading_list =
+                downloading
+                    .iter()
+                    .map(|name| name.as_ref())
+                    .fold(String::new(), |mut acc, s| {
+                        if !acc.is_empty() {
+                            acc.push_str(", ");
+                        }
+                        acc.push_str(s);
+                        acc
+                    });
             return Some(Content {
                 icon: Some(
                     Icon::new(IconName::Download)
                         .size(IconSize::Small)
                         .into_any_element(),
                 ),
-                message: format!(
+                message: tr_arg(
+                    cx,
+                    "activity_indicator.language_server.downloading",
                     "Downloading {}...",
-                    downloading.iter().map(|name| name.as_ref()).fold(
-                        String::new(),
-                        |mut acc, s| {
-                            if !acc.is_empty() {
-                                acc.push_str(", ");
-                            }
-                            acc.push_str(s);
-                            acc
-                        }
-                    )
+                    &downloading_list,
                 ),
                 interaction: ContentInteraction::Action(Arc::new(move |this, window, cx| {
                     this.statuses
@@ -531,24 +565,27 @@ impl ActivityIndicator {
         }
 
         if !checking_for_update.is_empty() {
+            let checking_for_update_list = checking_for_update
+                .iter()
+                .map(|name| name.as_ref())
+                .fold(String::new(), |mut acc, s| {
+                    if !acc.is_empty() {
+                        acc.push_str(", ");
+                    }
+                    acc.push_str(s);
+                    acc
+                });
             return Some(Content {
                 icon: Some(
                     Icon::new(IconName::Download)
                         .size(IconSize::Small)
                         .into_any_element(),
                 ),
-                message: format!(
+                message: tr_arg(
+                    cx,
+                    "activity_indicator.language_server.checking_for_updates",
                     "Checking for updates to {}...",
-                    checking_for_update.iter().map(|name| name.as_ref()).fold(
-                        String::new(),
-                        |mut acc, s| {
-                            if !acc.is_empty() {
-                                acc.push_str(", ");
-                            }
-                            acc.push_str(s);
-                            acc
-                        }
-                    ),
+                    &checking_for_update_list,
                 ),
                 interaction: ContentInteraction::Action(Arc::new(move |this, window, cx| {
                     this.statuses
@@ -560,24 +597,28 @@ impl ActivityIndicator {
         }
 
         if !failed.is_empty() {
+            let failed_list =
+                failed
+                    .iter()
+                    .map(|name| name.as_ref())
+                    .fold(String::new(), |mut acc, s| {
+                        if !acc.is_empty() {
+                            acc.push_str(", ");
+                        }
+                        acc.push_str(s);
+                        acc
+                    });
             return Some(Content {
                 icon: Some(
                     Icon::new(IconName::Warning)
                         .size(IconSize::Small)
                         .into_any_element(),
                 ),
-                message: format!(
+                message: tr_arg(
+                    cx,
+                    "activity_indicator.language_server.failed_to_run",
                     "Failed to run {}. Click to show error.",
-                    failed
-                        .iter()
-                        .map(|name| name.as_ref())
-                        .fold(String::new(), |mut acc, s| {
-                            if !acc.is_empty() {
-                                acc.push_str(", ");
-                            }
-                            acc.push_str(s);
-                            acc
-                        }),
+                    &failed_list,
                 ),
                 interaction: ContentInteraction::Action(Arc::new(|this, window, cx| {
                     this.show_error_message(&ShowErrorMessage, window, cx)
@@ -594,7 +635,12 @@ impl ActivityIndicator {
                         .size(IconSize::Small)
                         .into_any_element(),
                 ),
-                message: format!("Formatting failed: {failure}. Click to see logs."),
+                message: tr_arg(
+                    cx,
+                    "activity_indicator.formatting_failed",
+                    "Formatting failed: {}. Click to see logs.",
+                    failure,
+                ),
                 interaction: ContentInteraction::Action(Arc::new(|indicator, window, cx| {
                     indicator.project.update(cx, |project, cx| {
                         project.reset_last_formatting_failure(cx);
@@ -608,9 +654,24 @@ impl ActivityIndicator {
         // Show any health messages for the language servers
         if let Some((server_name, health, message)) = health_messages.pop() {
             let health_str = match health {
-                ServerHealth::Ok => format!("({server_name}) "),
-                ServerHealth::Warning => format!("({server_name}) Warning: "),
-                ServerHealth::Error => format!("({server_name}) Error: "),
+                ServerHealth::Ok => tr_arg(
+                    cx,
+                    "activity_indicator.language_server.health.ok",
+                    "({}) ",
+                    server_name.as_ref(),
+                ),
+                ServerHealth::Warning => tr_arg(
+                    cx,
+                    "activity_indicator.language_server.health.warning",
+                    "({}) Warning: ",
+                    server_name.as_ref(),
+                ),
+                ServerHealth::Error => tr_arg(
+                    cx,
+                    "activity_indicator.language_server.health.error",
+                    "({}) Error: ",
+                    server_name.as_ref(),
+                ),
             };
             let single_line_message = message
                 .lines()
@@ -665,17 +726,32 @@ impl ActivityIndicator {
         {
             let (message, icon, rotate) = match operation {
                 ExtensionOperation::Install => (
-                    format!("Installing {extension_id} extension..."),
+                    tr_arg(
+                        cx,
+                        "activity_indicator.extension.installing",
+                        "Installing {} extension...",
+                        extension_id,
+                    ),
                     IconName::LoadCircle,
                     true,
                 ),
                 ExtensionOperation::Upgrade => (
-                    format!("Updating {extension_id} extension..."),
+                    tr_arg(
+                        cx,
+                        "activity_indicator.extension.updating",
+                        "Updating {} extension...",
+                        extension_id,
+                    ),
                     IconName::Download,
                     false,
                 ),
                 ExtensionOperation::Remove => (
-                    format!("Removing {extension_id} extension..."),
+                    tr_arg(
+                        cx,
+                        "activity_indicator.extension.removing",
+                        "Removing {} extension...",
+                        extension_id,
+                    ),
                     IconName::LoadCircle,
                     true,
                 ),
@@ -775,7 +851,13 @@ impl Render for ActivityIndicator {
                                             has_cancellable_work = true;
                                             let language_server_id = work.language_server_id;
                                             let token = work.progress_token.clone();
-                                            let title = SharedString::from(format!("Cancel {title}"));
+                                            let title: SharedString = tr(
+                                                cx,
+                                                "activity_indicator.cancel_title",
+                                                "Cancel {}",
+                                            )
+                                            .replacen("{}", &title, 1)
+                                            .into();
                                             menu = menu.custom_entry(
                                                 move |_, _| {
                                                     h_flex()

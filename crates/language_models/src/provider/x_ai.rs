@@ -4,6 +4,7 @@ use credentials_provider::CredentialsProvider;
 use futures::{FutureExt, StreamExt, future::BoxFuture};
 use gpui::{AnyView, App, AsyncApp, Context, Entity, Task, Window};
 use http_client::{CustomHeaders, HttpClient};
+use i18n::tr;
 use language_model::{
     ApiKeyState, AuthenticateError, EnvVar, IconOrSvg, LanguageModel, LanguageModelCompletionError,
     LanguageModelCompletionEvent, LanguageModelEffortLevel, LanguageModelId, LanguageModelName,
@@ -445,7 +446,7 @@ impl ConfigurationView {
                 cx,
                 "xai-0000000000000000000000000000000000000000000000000",
             )
-            .label("API key")
+            .label(tr(cx, "language_models.common.api_key", "API key"))
         });
 
         cx.observe(&state, |_, _, cx| {
@@ -529,44 +530,79 @@ impl Render for ConfigurationView {
         let api_key_section = if self.should_render_editor(cx) {
             v_flex()
                 .on_action(cx.listener(Self::save_api_key))
-                .child(Label::new("To use ZZZ's agent with xAI, you need to add an API key. Follow these steps:"))
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.x_ai.setup_intro",
+                    "To use ZZZ's agent with xAI, you need to add an API key. Follow these steps:",
+                )))
                 .child(
                     List::new()
                         .child(
                             ListBulletItem::new("")
-                                .child(Label::new("Create one by visiting"))
-                                .child(ButtonLink::new("xAI console", "https://console.x.ai/team/default/api-keys"))
+                                .child(Label::new(tr(
+                                    cx,
+                                    "language_models.common.create_one_by_visiting",
+                                    "Create one by visiting",
+                                )))
+                                .child(ButtonLink::new(
+                                    "xAI console",
+                                    "https://console.x.ai/team/default/api-keys",
+                                )),
                         )
-                        .child(
-                            ListBulletItem::new("Paste your API key below and hit enter to start using the agent")
-                        ),
+                        .child(ListBulletItem::new(tr(
+                            cx,
+                            "language_models.common.paste_api_key_start_agent",
+                            "Paste your API key below and hit enter to start using the agent",
+                        ))),
                 )
                 .child(self.api_key_editor.clone())
                 .child(
-                    Label::new(format!(
-                        "You can also set the {API_KEY_ENV_VAR_NAME} environment variable and restart ZZZ."
-                    ))
+                    Label::new(
+                        tr(
+                            cx,
+                            "language_models.common.set_env_var_and_restart",
+                            "You can also set the {} environment variable and restart ZZZ.",
+                        )
+                        .replace("{}", API_KEY_ENV_VAR_NAME),
+                    )
                     .size(LabelSize::Small)
                     .color(Color::Muted),
                 )
                 .child(
-                    Label::new("Note that xAI is a custom OpenAI-compatible provider.")
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
+                    Label::new(tr(
+                        cx,
+                        "language_models.x_ai.custom_openai_compatible_note",
+                        "Note that xAI is a custom OpenAI-compatible provider.",
+                    ))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
                 )
                 .into_any_element()
         } else {
             ConfiguredApiCard::new(configured_card_label)
                 .disabled(env_var_set)
                 .when(env_var_set, |this| {
-                    this.tooltip_label(format!("To reset your API key, unset the {API_KEY_ENV_VAR_NAME} environment variable."))
+                    this.tooltip_label(
+                        tr(
+                            cx,
+                            "language_models.common.unset_env_var_to_reset_api_key",
+                            "To reset your API key, unset the {} environment variable.",
+                        )
+                        .replace("{}", API_KEY_ENV_VAR_NAME),
+                    )
                 })
                 .on_click(cx.listener(|this, _, window, cx| this.reset_api_key(window, cx)))
                 .into_any_element()
         };
 
         if self.load_credentials_task.is_some() {
-            div().child(Label::new("Loading credentials...")).into_any()
+            div()
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.common.loading_credentials",
+                    "Loading credentials...",
+                )))
+                .into_any()
         } else {
             v_flex().size_full().child(api_key_section).into_any()
         }

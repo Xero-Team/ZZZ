@@ -5,6 +5,7 @@ use credentials_provider::CredentialsProvider;
 use futures::{FutureExt, Stream, StreamExt, future::BoxFuture, stream::BoxStream};
 use gpui::{AnyView, App, AsyncApp, Context, Entity, Global, SharedString, Task, Window};
 use http_client::{CustomHeaders, HttpClient};
+use i18n::tr;
 use language_model::{
     ApiKeyState, AuthenticateError, EnvVar, IconOrSvg, LanguageModel, LanguageModelCompletionError,
     LanguageModelCompletionEvent, LanguageModelId, LanguageModelName, LanguageModelProvider,
@@ -840,30 +841,57 @@ impl Render for ConfigurationView {
         };
 
         if self.load_credentials_task.is_some() {
-            div().child(Label::new("Loading credentials...")).into_any()
+            div()
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.common.loading_credentials",
+                    "Loading credentials...",
+                )))
+                .into_any()
         } else if self.should_render_api_key_editor(cx) {
             v_flex()
                 .size_full()
                 .on_action(cx.listener(Self::save_api_key))
-                .child(Label::new("To use ZZZ's agent with Mistral, you need to add an API key. Follow these steps:"))
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.mistral.setup_intro",
+                    "To use ZZZ's agent with Mistral, you need to add an API key. Follow these steps:",
+                )))
                 .child(
                     List::new()
                         .child(
                             ListBulletItem::new("")
-                                .child(Label::new("Create one by visiting"))
+                                .child(Label::new(tr(
+                                    cx,
+                                    "language_models.common.create_one_by_visiting",
+                                    "Create one by visiting",
+                                )))
                                 .child(ButtonLink::new("Mistral's console", "https://console.mistral.ai/api-keys"))
                         )
                         .child(
-                            ListBulletItem::new("Ensure your Mistral account has credits")
+                            ListBulletItem::new(tr(
+                                cx,
+                                "language_models.mistral.ensure_credits",
+                                "Ensure your Mistral account has credits",
+                            ))
                         )
                         .child(
-                            ListBulletItem::new("Paste your API key below and hit enter to start using the assistant")
+                            ListBulletItem::new(tr(
+                                cx,
+                                "language_models.common.paste_api_key_start_assistant",
+                                "Paste your API key below and hit enter to start using the assistant",
+                            ))
                         ),
                 )
                 .child(self.api_key_editor.clone())
                 .child(
                     Label::new(
-                        format!("You can also set the {API_KEY_ENV_VAR_NAME} environment variable and restart ZZZ."),
+                        tr(
+                            cx,
+                            "language_models.common.set_env_var_and_restart",
+                            "You can also set the {} environment variable and restart ZZZ.",
+                        )
+                        .replace("{}", API_KEY_ENV_VAR_NAME),
                     )
                     .size(LabelSize::Small).color(Color::Muted),
                 )
@@ -877,10 +905,14 @@ impl Render for ConfigurationView {
                         .disabled(env_var_set)
                         .on_click(cx.listener(|this, _, window, cx| this.reset_api_key(window, cx)))
                         .when(env_var_set, |this| {
-                            this.tooltip_label(format!(
-                                "To reset your API key, \
-                                unset the {API_KEY_ENV_VAR_NAME} environment variable."
-                            ))
+                            this.tooltip_label(
+                                tr(
+                                    cx,
+                                    "language_models.common.unset_env_var_to_reset_api_key",
+                                    "To reset your API key, unset the {} environment variable.",
+                                )
+                                .replace("{}", API_KEY_ENV_VAR_NAME),
+                            )
                         }),
                 )
                 .into_any()

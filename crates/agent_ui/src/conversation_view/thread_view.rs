@@ -27,6 +27,65 @@ fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()
 }
 
+fn localize_permission_label(cx: &App, label: &str) -> SharedString {
+    match label {
+        "Only this time" => tr(cx, "agent_ui.thread_view.only_this_time", "Only this time"),
+        "Allow once" => tr(cx, "agent_ui.thread_view.allow_once", "Allow once"),
+        "Allow for this thread" => tr(
+            cx,
+            "agent_ui.thread_view.allow_for_this_thread",
+            "Allow for this thread",
+        ),
+        "Allow always" => tr(cx, "agent_ui.thread_view.allow_always", "Allow always"),
+        _ => {
+            if let Some(display) = label.strip_prefix("Always for ") {
+                if let Some(display) = display.strip_suffix(" MCP tool") {
+                    return tr(
+                        cx,
+                        "agent_ui.thread_view.always_for_mcp_tool",
+                        "Always for {} MCP tool",
+                    )
+                    .replacen("{}", display, 1)
+                    .into();
+                }
+
+                if let Some(display) = display.strip_suffix(" commands") {
+                    let display = display
+                        .strip_prefix('`')
+                        .and_then(|display| display.strip_suffix('`'))
+                        .unwrap_or(display);
+                    return tr(
+                        cx,
+                        "agent_ui.thread_view.always_for_commands",
+                        "Always for `{}` commands",
+                    )
+                    .replacen("{}", display, 1)
+                    .into();
+                }
+
+                if let Some(display) = display
+                    .strip_prefix('`')
+                    .and_then(|display| display.strip_suffix('`'))
+                {
+                    return tr(
+                        cx,
+                        "agent_ui.thread_view.always_for_pattern",
+                        "Always for `{}`",
+                    )
+                    .replacen("{}", display, 1)
+                    .into();
+                }
+
+                return tr(cx, "agent_ui.thread_view.always_for", "Always for {}")
+                    .replacen("{}", display, 1)
+                    .into();
+            }
+
+            label.into()
+        }
+    }
+}
+
 #[derive(Default)]
 struct ThreadFeedbackState {
     feedback: Option<ThreadFeedback>,
@@ -2206,7 +2265,12 @@ impl ThreadView {
                 workspace.show_toast(
                     Toast::new(
                         NotificationId::unique::<ThreadShareUnavailableToast>(),
-                        "Thread sharing is not available for external agents.",
+                        tr(
+                            cx,
+                            "agent_ui.thread_view.thread_sharing_unavailable",
+                            "Thread sharing is not available for external agents.",
+                        )
+                        .to_string(),
                     )
                     .autohide(),
                     cx,
@@ -3246,15 +3310,29 @@ impl ThreadView {
                             )
                             .child(dot_divider())
                             .child(
-                                Label::new(format!(
-                                    "{} {}",
-                                    changed_buffers.len(),
-                                    if changed_buffers.len() == 1 {
-                                        "file"
-                                    } else {
-                                        "files"
-                                    }
-                                ))
+                                Label::new(if changed_buffers.len() == 1 {
+                                    app_i18n::tr(
+                                        cx,
+                                        "agent_ui.thread_view.edits.file_count_one",
+                                        "{} file",
+                                    )
+                                    .replacen(
+                                        "{}",
+                                        &changed_buffers.len().to_string(),
+                                        1,
+                                    )
+                                } else {
+                                    app_i18n::tr(
+                                        cx,
+                                        "agent_ui.thread_view.edits.file_count_many",
+                                        "{} files",
+                                    )
+                                    .replacen(
+                                        "{}",
+                                        &changed_buffers.len().to_string(),
+                                        1,
+                                    )
+                                })
                                 .size(LabelSize::Small)
                                 .color(Color::Muted),
                             )
@@ -5177,9 +5255,12 @@ impl ThreadView {
                     .last_turn_tokens
                     .filter(|&tokens| tokens > TOKEN_THRESHOLD)
                     .map(|tokens| {
-                        Label::new(format!("{} tokens", crate::humanize_token_count(tokens)))
-                            .size(LabelSize::Small)
-                            .color(Color::Muted)
+                        Label::new(
+                            app_i18n::tr(cx, "agent_ui.thread_view.tokens_count", "{} tokens")
+                                .replacen("{}", &crate::humanize_token_count(tokens), 1),
+                        )
+                        .size(LabelSize::Small)
+                        .color(Color::Muted)
                     })
             })
             .flatten();
@@ -6287,7 +6368,14 @@ impl ThreadView {
         let working_dir = working_dir
             .as_ref()
             .map(|path| path.display().to_string())
-            .unwrap_or_else(|| "current directory".to_owned());
+            .unwrap_or_else(|| {
+                tr(
+                    cx,
+                    "agent_ui.thread_view.current_directory",
+                    "current directory",
+                )
+                .to_string()
+            });
 
         let command_element = self.render_collapsible_command(
             header_group.clone(),
@@ -7224,7 +7312,7 @@ impl ThreadView {
                 choices
                     .get(selected_index)
                     .or(choices.last())
-                    .map(|choice| choice.label())
+                    .map(|choice| localize_permission_label(cx, choice.label().as_ref()))
                     .unwrap_or_else(|| {
                         tr(cx, "agent_ui.thread_view.only_this_time", "Only this time")
                     })
@@ -7348,7 +7436,7 @@ impl ThreadView {
         let menu_options: Vec<(usize, SharedString)> = choices
             .iter()
             .enumerate()
-            .map(|(i, choice)| (i, choice.label()))
+            .map(|(i, choice)| (i, localize_permission_label(cx, choice.label().as_ref())))
             .collect();
 
         let permission_dropdown_handle = self.permission_dropdown_handle.clone();
@@ -7423,7 +7511,7 @@ impl ThreadView {
         let menu_options: Vec<(usize, SharedString)> = choices
             .iter()
             .enumerate()
-            .map(|(i, choice)| (i, choice.label()))
+            .map(|(i, choice)| (i, localize_permission_label(cx, choice.label().as_ref())))
             .collect();
 
         let pattern_options: Vec<(usize, SharedString)> = patterns
@@ -7432,7 +7520,13 @@ impl ThreadView {
             .map(|(i, cp)| {
                 (
                     i,
-                    SharedString::from(format!("Always for `{}` commands", cp.display_name)),
+                    tr(
+                        cx,
+                        "agent_ui.thread_view.always_for_commands",
+                        "Always for `{}` commands",
+                    )
+                    .replacen("{}", cp.display_name.as_ref(), 1)
+                    .into(),
                 )
             })
             .collect();
@@ -7621,74 +7715,77 @@ impl ThreadView {
             .gap_0p5()
             .children(options.iter().map(move |option| {
                 let option_id = SharedString::from(option.option_id.0.clone());
-                Button::new((option_id, entry_ix), option.name.clone())
-                    .map(|this| {
-                        let (icon, action) = match option.kind {
-                            acp::PermissionOptionKind::AllowOnce => (
-                                Icon::new(IconName::Check)
-                                    .size(IconSize::XSmall)
-                                    .color(Color::Success),
-                                Some(&AllowOnce as &dyn Action),
-                            ),
-                            acp::PermissionOptionKind::AllowAlways => (
-                                Icon::new(IconName::CheckDouble)
-                                    .size(IconSize::XSmall)
-                                    .color(Color::Success),
-                                if option.option_id.0.as_ref()
-                                    == acp_thread::SandboxPermission::AllowThread.as_id()
-                                {
-                                    None
-                                } else {
-                                    Some(&AllowAlways as &dyn Action)
-                                },
-                            ),
-                            acp::PermissionOptionKind::RejectOnce => (
-                                Icon::new(IconName::Close)
-                                    .size(IconSize::XSmall)
-                                    .color(Color::Error),
-                                Some(&RejectOnce as &dyn Action),
-                            ),
-                            acp::PermissionOptionKind::RejectAlways | _ => (
-                                Icon::new(IconName::Close)
-                                    .size(IconSize::XSmall)
-                                    .color(Color::Error),
-                                None,
-                            ),
-                        };
+                Button::new(
+                    (option_id, entry_ix),
+                    localize_permission_label(cx, option.name.as_ref()),
+                )
+                .map(|this| {
+                    let (icon, action) = match option.kind {
+                        acp::PermissionOptionKind::AllowOnce => (
+                            Icon::new(IconName::Check)
+                                .size(IconSize::XSmall)
+                                .color(Color::Success),
+                            Some(&AllowOnce as &dyn Action),
+                        ),
+                        acp::PermissionOptionKind::AllowAlways => (
+                            Icon::new(IconName::CheckDouble)
+                                .size(IconSize::XSmall)
+                                .color(Color::Success),
+                            if option.option_id.0.as_ref()
+                                == acp_thread::SandboxPermission::AllowThread.as_id()
+                            {
+                                None
+                            } else {
+                                Some(&AllowAlways as &dyn Action)
+                            },
+                        ),
+                        acp::PermissionOptionKind::RejectOnce => (
+                            Icon::new(IconName::Close)
+                                .size(IconSize::XSmall)
+                                .color(Color::Error),
+                            Some(&RejectOnce as &dyn Action),
+                        ),
+                        acp::PermissionOptionKind::RejectAlways | _ => (
+                            Icon::new(IconName::Close)
+                                .size(IconSize::XSmall)
+                                .color(Color::Error),
+                            None,
+                        ),
+                    };
 
-                        let this = this.start_icon(icon);
+                    let this = this.start_icon(icon);
 
-                        let Some(action) = action else {
-                            return this;
-                        };
+                    let Some(action) = action else {
+                        return this;
+                    };
 
-                        if !is_first || seen_kinds.contains(&option.kind) {
-                            return this;
-                        }
+                    if !is_first || seen_kinds.contains(&option.kind) {
+                        return this;
+                    }
 
-                        seen_kinds.push(option.kind).unwrap();
+                    seen_kinds.push(option.kind).unwrap();
 
-                        this.key_binding(
-                            KeyBinding::for_action_in(action, focus_handle, cx)
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                        )
-                    })
-                    .label_size(LabelSize::Small)
-                    .on_click(cx.listener({
-                        let tool_call_id = tool_call_id.clone();
-                        let option_id = option.option_id.clone();
-                        let option_kind = option.kind;
-                        let session_id = session_id.clone();
-                        move |this, _, window, cx| {
-                            this.authorize_tool_call(
-                                session_id.clone(),
-                                tool_call_id.clone(),
-                                SelectedPermissionOutcome::new(option_id.clone(), option_kind),
-                                window,
-                                cx,
-                            );
-                        }
-                    }))
+                    this.key_binding(
+                        KeyBinding::for_action_in(action, focus_handle, cx)
+                            .map(|kb| kb.size(rems_from_px(12.))),
+                    )
+                })
+                .label_size(LabelSize::Small)
+                .on_click(cx.listener({
+                    let tool_call_id = tool_call_id.clone();
+                    let option_id = option.option_id.clone();
+                    let option_kind = option.kind;
+                    let session_id = session_id.clone();
+                    move |this, _, window, cx| {
+                        this.authorize_tool_call(
+                            session_id.clone(),
+                            tool_call_id.clone(),
+                            SelectedPermissionOutcome::new(option_id.clone(), option_kind),
+                            window,
+                            cx,
+                        );
+                    }
+                }))
             }))
     }
 
@@ -8864,7 +8961,15 @@ impl ThreadView {
             ThreadError::NoApiKey { provider } => {
                 let message = Self::provider_by_name(provider, cx)
                     .map(|provider| provider.missing_credentials_error_message())
-                    .unwrap_or_else(|| format!("No credentials are configured for {provider}.").into());
+                    .unwrap_or_else(|| {
+                        app_i18n::tr(
+                            cx,
+                            "agent_ui.thread_view.api_key_missing_message",
+                            "No API key is configured for {}. Add your key via the Agent Panel settings to continue.",
+                        )
+                        .replacen("{}", provider, 1)
+                        .into()
+                    });
                 self.render_error_callout(
                     tr(
                         cx,
@@ -8897,12 +9002,20 @@ impl ThreadView {
             ThreadError::InvalidApiKey { provider } => {
                 let message = Self::provider_by_name(provider, cx)
                     .map(|provider| provider.authentication_error_message())
-                    .unwrap_or_else(|| format!("Could not authenticate with {provider}.").into());
+                    .unwrap_or_else(|| {
+                        app_i18n::tr(
+                            cx,
+                            "agent_ui.thread_view.invalid_api_key_message",
+                            "The API key for {} is invalid or has expired. Update your key via the Agent Panel settings to continue.",
+                        )
+                        .replacen("{}", provider, 1)
+                        .into()
+                    });
                 self.render_error_callout(
                     tr(
                         cx,
                         "agent_ui.thread_view.invalid_api_key",
-                        "Authentication Failed",
+                        "Invalid API Key",
                     ),
                     message,
                     false,
@@ -8917,8 +9030,13 @@ impl ThreadView {
                     "Permission Denied",
                 ),
                 message.clone().unwrap_or_else(|| {
-                    format!("{provider} rejected the request due to insufficient permissions.")
-                        .into()
+                    app_i18n::tr(
+                        cx,
+                        "agent_ui.thread_view.permission_denied_message",
+                        "{}'s API rejected the request due to insufficient permissions. Check that your API key has access to this model.",
+                    )
+                    .replacen("{}", provider, 1)
+                    .into()
                 }),
                 false,
                 false,
@@ -9402,7 +9520,7 @@ impl ThreadView {
             .next()
             .and_then(|p| p.file_name())
             .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| "one folder".to_owned());
+            .unwrap_or_else(|| tr(cx, "agent_ui.thread_view.one_folder", "one folder").to_string());
 
         let description = app_i18n::tr(
             cx,

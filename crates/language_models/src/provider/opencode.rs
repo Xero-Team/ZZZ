@@ -5,6 +5,7 @@ use fs::Fs;
 use futures::{FutureExt, StreamExt, future::BoxFuture};
 use gpui::{AnyView, App, AsyncApp, Context, Entity, SharedString, Task, Window};
 use http_client::{AsyncBody, CustomHeaders, HttpClient, http};
+use i18n::tr;
 use language_model::{
     ApiKeyState, AuthenticateError, EnvVar, IconOrSvg, LanguageModel, LanguageModelCompletionError,
     LanguageModelCompletionEvent, LanguageModelEffortLevel, LanguageModelId, LanguageModelName,
@@ -749,7 +750,11 @@ struct ConfigurationView {
 impl ConfigurationView {
     fn new(state: Entity<State>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let api_key_editor = cx.new(|cx| {
-            InputField::new(window, cx, "sk-00000000000000000000000000000000").label("API key")
+            InputField::new(window, cx, "sk-00000000000000000000000000000000").label(tr(
+                cx,
+                "language_models.common.api_key",
+                "API key",
+            ))
         });
 
         cx.observe(&state, |_, _, cx| {
@@ -855,26 +860,41 @@ impl Render for ConfigurationView {
         let api_key_section = if self.should_render_editor(cx) {
             v_flex()
                 .on_action(cx.listener(Self::save_api_key))
-                .child(Label::new("Add an OpenCode API key to enable this provider:"))
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.opencode.add_api_key_to_enable",
+                    "Add an OpenCode API key to enable this provider:",
+                )))
                 .child(
                     List::new()
                         .child(
                             ListBulletItem::new("")
-                                .child(Label::new("Get or manage your key at"))
+                                .child(Label::new(tr(
+                                    cx,
+                                    "language_models.opencode.get_or_manage_key_at",
+                                    "Get or manage your key at",
+                                )))
                                 .child(ButtonLink::new(
                                     "OpenCode Console",
                                     "https://opencode.ai/auth",
                                 )),
                         )
-                        .child(ListBulletItem::new(
+                        .child(ListBulletItem::new(tr(
+                            cx,
+                            "language_models.opencode.paste_api_key_press_enter",
                             "Paste your API key below and press Enter",
-                        )),
+                        ))),
                 )
                 .child(self.api_key_editor.clone())
                 .child(
-                    Label::new(format!(
-                        "You can also set the {API_KEY_ENV_VAR_NAME} environment variable and restart ZZZ."
-                    ))
+                    Label::new(
+                        tr(
+                            cx,
+                            "language_models.common.set_env_var_and_restart",
+                            "You can also set the {} environment variable and restart ZZZ.",
+                        )
+                        .replace("{}", API_KEY_ENV_VAR_NAME),
+                    )
                     .size(LabelSize::Small)
                     .color(Color::Muted),
                 )
@@ -883,16 +903,27 @@ impl Render for ConfigurationView {
             ConfiguredApiCard::new(configured_card_label)
                 .disabled(env_var_set)
                 .when(env_var_set, |this| {
-                    this.tooltip_label(format!(
-                        "To reset your API key, unset the {API_KEY_ENV_VAR_NAME} environment variable."
-                    ))
+                    this.tooltip_label(
+                        tr(
+                            cx,
+                            "language_models.common.unset_env_var_to_reset_api_key",
+                            "To reset your API key, unset the {} environment variable.",
+                        )
+                        .replace("{}", API_KEY_ENV_VAR_NAME),
+                    )
                 })
                 .on_click(cx.listener(|this, _, window, cx| this.reset_api_key(window, cx)))
                 .into_any_element()
         };
 
         if self.load_credentials_task.is_some() {
-            div().child(Label::new("Loading credentials...")).into_any()
+            div()
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.common.loading_credentials",
+                    "Loading credentials...",
+                )))
+                .into_any()
         } else {
             let settings = OpenCodeLanguageModelProvider::settings(cx);
             let show_zen = settings.show_zen_models;
@@ -901,10 +932,21 @@ impl Render for ConfigurationView {
 
             let subscription_toggles = v_flex()
                 .gap_1()
-                .child(Label::new("Model groups:").color(Color::Muted))
+                .child(
+                    Label::new(tr(
+                        cx,
+                        "language_models.opencode.model_groups",
+                        "Model groups:",
+                    ))
+                    .color(Color::Muted),
+                )
                 .child(
                     Switch::new("opencode-show-zen-models", show_zen.into())
-                        .label("Show Zen models")
+                        .label(tr(
+                            cx,
+                            "language_models.opencode.show_zen_models",
+                            "Show Zen models",
+                        ))
                         .label_position(SwitchLabelPosition::End)
                         .on_click(cx.listener(|this, state, window, cx| {
                             this.set_subscription_enabled(
@@ -917,7 +959,11 @@ impl Render for ConfigurationView {
                 )
                 .child(
                     Switch::new("opencode-show-go-models", show_go.into())
-                        .label("Show Go models")
+                        .label(tr(
+                            cx,
+                            "language_models.opencode.show_go_models",
+                            "Show Go models",
+                        ))
                         .label_position(SwitchLabelPosition::End)
                         .on_click(cx.listener(|this, state, window, cx| {
                             this.set_subscription_enabled(
@@ -930,7 +976,11 @@ impl Render for ConfigurationView {
                 )
                 .child(
                     Switch::new("opencode-show-free-models", show_free.into())
-                        .label("Show Free models")
+                        .label(tr(
+                            cx,
+                            "language_models.opencode.show_free_models",
+                            "Show Free models",
+                        ))
                         .label_position(SwitchLabelPosition::End)
                         .on_click(cx.listener(|this, state, window, cx| {
                             this.set_subscription_enabled(

@@ -253,7 +253,9 @@ async fn resolve_pasted_context_items(
 ) -> (Vec<ResolvedPastedContextItem>, Vec<Entity<Worktree>>) {
     let mut items = Vec::new();
     let mut added_worktrees = Vec::new();
-    let default_image_name: SharedString = "Image".into();
+    let default_image_name: SharedString = cx
+        .update(|_, cx| app_i18n::tr(cx, "agent_ui.mention_set.default_image_name", "Image").into())
+        .unwrap_or_else(|_| SharedString::from("Image"));
 
     for entry in entries {
         match entry {
@@ -1431,7 +1433,9 @@ impl MessageEditor {
             files: true,
             directories: false,
             multiple: true,
-            prompt: Some("Select Images".into()),
+            prompt: Some(
+                app_i18n::tr(cx, "agent_ui.message_editor.select_images", "Select Images").into(),
+            ),
         });
 
         window
@@ -1441,7 +1445,11 @@ impl MessageEditor {
                     _ => return Ok::<(), anyhow::Error>(()),
                 };
 
-                let default_image_name: SharedString = "Image".into();
+                let default_image_name: SharedString = cx
+                    .update(|_, cx| {
+                        app_i18n::tr(cx, "agent_ui.mention_set.default_image_name", "Image").into()
+                    })
+                    .unwrap_or_else(|_| SharedString::from("Image"));
                 let images = cx
                     .background_spawn(async move {
                         paths
@@ -1578,7 +1586,12 @@ impl MessageEditor {
                         MentionUri::parse(&uri, path_style)
                     } else {
                         Ok(MentionUri::PastedImage {
-                            name: "Image".to_owned(),
+                            name: app_i18n::tr(
+                                cx,
+                                "agent_ui.mention_set.default_image_name",
+                                "Image",
+                            )
+                            .to_string(),
                         })
                     };
                     let Some(mention_uri) = mention_uri.log_err() else {

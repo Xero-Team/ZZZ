@@ -452,6 +452,7 @@ impl AgentConfiguration {
             "agent_ui.agent_configuration.compatible_apis",
             "Compatible APIs",
         );
+        let openai_label = tr(cx, "agent_ui.agent_configuration.provider.openai", "OpenAI");
 
         let popover_menu = PopoverMenu::new("add-provider-popover")
             .trigger(
@@ -475,8 +476,10 @@ impl AgentConfiguration {
                 let workspace = self.workspace.clone();
                 move |window, cx| {
                     Some(ContextMenu::build(window, cx, |menu, _window, _cx| {
-                        menu.header(compatible_apis_label.clone())
-                            .entry("OpenAI", None, {
+                        menu.header(compatible_apis_label.clone()).entry(
+                            openai_label.clone(),
+                            None,
+                            {
                                 let workspace = workspace.clone();
                                 move |window, cx| {
                                     workspace
@@ -490,7 +493,8 @@ impl AgentConfiguration {
                                         })
                                         .log_err();
                                 }
-                            })
+                            },
+                        )
                     }))
                 }
             })

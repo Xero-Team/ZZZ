@@ -4,6 +4,7 @@ use credentials_provider::CredentialsProvider;
 use futures::{FutureExt, StreamExt, future::BoxFuture};
 use gpui::{AnyView, App, AsyncApp, Context, Entity, SharedString, Task, Window};
 use http_client::{CustomHeaders, HttpClient};
+use i18n::tr;
 use language_model::{
     ApiKeyState, AuthenticateError, EnvVar, IconOrSvg, LanguageModel, LanguageModelCompletionError,
     LanguageModelCompletionEvent, LanguageModelEffortLevel, LanguageModelId, LanguageModelName,
@@ -625,46 +626,83 @@ impl Render for ConfigurationView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let env_var_set = self.state.read(cx).api_key_state.is_from_env_var();
         let configured_card_label = if env_var_set {
-            format!("API key set in {API_KEY_ENV_VAR_NAME} environment variable")
+            tr(
+                cx,
+                "language_models.open_ai.api_key_set_in_env",
+                "API key set in {} environment variable",
+            )
+            .replace("{}", API_KEY_ENV_VAR_NAME)
         } else {
             let api_url = OpenAiLanguageModelProvider::api_url(cx);
             if api_url == OPEN_AI_API_URL {
-                "API key configured".to_owned()
+                tr(
+                    cx,
+                    "language_models.open_ai.api_key_configured",
+                    "API key configured",
+                )
             } else {
-                format!("API key configured for {}", api_url)
+                tr(
+                    cx,
+                    "language_models.open_ai.api_key_configured_for",
+                    "API key configured for {}",
+                )
+                .replace("{}", &api_url)
             }
         };
 
         let api_key_section = if self.should_render_editor(cx) {
             v_flex()
                 .on_action(cx.listener(Self::save_api_key))
-                .child(Label::new("To use ZZZ's agent with OpenAI, you need to add an API key. Follow these steps:"))
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.open_ai.setup_intro",
+                    "To use ZZZ's agent with OpenAI, you need to add an API key. Follow these steps:",
+                )))
                 .child(
                     List::new()
                         .child(
                             ListBulletItem::new("")
-                                .child(Label::new("Create one by visiting"))
+                                .child(Label::new(tr(
+                                    cx,
+                                    "language_models.common.create_one_by_visiting",
+                                    "Create one by visiting",
+                                )))
                                 .child(ButtonLink::new("OpenAI's console", "https://platform.openai.com/api-keys"))
                         )
                         .child(
-                            ListBulletItem::new("Ensure your OpenAI account has credits")
+                            ListBulletItem::new(tr(
+                                cx,
+                                "language_models.open_ai.ensure_credits",
+                                "Ensure your OpenAI account has credits",
+                            ))
                         )
                         .child(
-                            ListBulletItem::new("Paste your API key below and hit enter to start using the agent")
+                            ListBulletItem::new(tr(
+                                cx,
+                                "language_models.common.paste_api_key_start_agent",
+                                "Paste your API key below and hit enter to start using the agent",
+                            ))
                         ),
                 )
                 .child(self.api_key_editor.clone())
                 .child(
-                    Label::new(format!(
-                        "You can also set the {API_KEY_ENV_VAR_NAME} environment variable and restart ZZZ."
-                    ))
+                    Label::new(
+                        tr(
+                            cx,
+                            "language_models.common.set_env_var_and_restart",
+                            "You can also set the {} environment variable and restart ZZZ.",
+                        )
+                        .replace("{}", API_KEY_ENV_VAR_NAME),
+                    )
                     .size(LabelSize::Small)
                     .color(Color::Muted),
                 )
                 .child(
-                    Label::new(
+                    Label::new(tr(
+                        cx,
+                        "language_models.open_ai.note_other_subscription_not_enough",
                         "Note that having a subscription for another service like GitHub Copilot won't work.",
-                    )
+                    ))
                     .size(LabelSize::Small).color(Color::Muted),
                 )
                 .into_any_element()
@@ -673,7 +711,14 @@ impl Render for ConfigurationView {
                 .disabled(env_var_set)
                 .on_click(cx.listener(|this, _, window, cx| this.reset_api_key(window, cx)))
                 .when(env_var_set, |this| {
-                    this.tooltip_label(format!("To reset your API key, unset the {API_KEY_ENV_VAR_NAME} environment variable."))
+                    this.tooltip_label(
+                        tr(
+                            cx,
+                            "language_models.common.unset_env_var_to_reset_api_key",
+                            "To reset your API key, unset the {} environment variable.",
+                        )
+                        .replace("{}", API_KEY_ENV_VAR_NAME),
+                    )
                 })
                 .into_any_element()
         };
@@ -695,22 +740,35 @@ impl Render for ConfigurationView {
                             .size(IconSize::XSmall)
                             .color(Color::Muted),
                     )
-                    .child(Label::new("Zed also supports OpenAI-compatible models.")),
+                    .child(Label::new(tr(
+                        cx,
+                        "language_models.open_ai.compatible_models_supported",
+                        "Zed also supports OpenAI-compatible models.",
+                    ))),
             )
             .child(
-                Button::new("docs", "Learn More")
-                    .end_icon(
-                        Icon::new(IconName::ArrowUpRight)
-                            .size(IconSize::Small)
-                            .color(Color::Muted),
-                    )
-                    .on_click(move |_, _window, cx| {
-                        cx.open_url("https://zed.dev/docs/ai/llm-providers#openai-api-compatible")
-                    }),
+                Button::new(
+                    "docs",
+                    tr(cx, "language_models.common.learn_more", "Learn More"),
+                )
+                .end_icon(
+                    Icon::new(IconName::ArrowUpRight)
+                        .size(IconSize::Small)
+                        .color(Color::Muted),
+                )
+                .on_click(move |_, _window, cx| {
+                    cx.open_url("https://zed.dev/docs/ai/llm-providers#openai-api-compatible")
+                }),
             );
 
         if self.load_credentials_task.is_some() {
-            div().child(Label::new("Loading credentials...")).into_any()
+            div()
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.common.loading_credentials",
+                    "Loading credentials...",
+                )))
+                .into_any()
         } else {
             v_flex()
                 .size_full()

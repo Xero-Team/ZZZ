@@ -8,6 +8,7 @@ use futures::FutureExt;
 use futures::StreamExt;
 use futures::future::BoxFuture;
 use gpui::{AnyElement, AnyView, App, AppContext, Context, Entity, Subscription, Task};
+use i18n::tr;
 use language_model::{
     AuthenticateError, IconOrSvg, LanguageModel, LanguageModelProvider, LanguageModelProviderId,
     LanguageModelProviderName, LanguageModelProviderState, ZED_CLOUD_PROVIDER_ID,
@@ -319,65 +320,121 @@ struct ZedAiConfiguration {
 }
 
 impl RenderOnce for ZedAiConfiguration {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let (subscription_text, has_paid_plan) = match self.plan {
             Some(Plan::ZedPro) => (
-                "You have access to Zed's hosted models through your Pro subscription.",
+                tr(
+                    cx,
+                    "language_models.cloud.subscription.pro",
+                    "You have access to Zed's hosted models through your Pro subscription.",
+                ),
                 true,
             ),
             Some(Plan::ZedProTrial) => (
-                "You have access to Zed's hosted models through your Pro trial.",
+                tr(
+                    cx,
+                    "language_models.cloud.subscription.pro_trial",
+                    "You have access to Zed's hosted models through your Pro trial.",
+                ),
                 false,
             ),
             Some(Plan::ZedStudent) => (
-                "You have access to Zed's hosted models through your Student subscription.",
+                tr(
+                    cx,
+                    "language_models.cloud.subscription.student",
+                    "You have access to Zed's hosted models through your Student subscription.",
+                ),
                 true,
             ),
             Some(Plan::ZedBusiness) => (
                 if self.is_zed_model_provider_enabled {
-                    "You have access to Zed's hosted models through your organization."
+                    tr(
+                        cx,
+                        "language_models.cloud.subscription.organization_enabled",
+                        "You have access to Zed's hosted models through your organization.",
+                    )
                 } else {
-                    "Zed's hosted models are disabled by your organization's configuration."
+                    tr(
+                        cx,
+                        "language_models.cloud.subscription.organization_disabled",
+                        "Zed's hosted models are disabled by your organization's configuration.",
+                    )
                 },
                 true,
             ),
             Some(Plan::ZedFree) | None => (
                 if self.eligible_for_trial {
-                    "Subscribe for access to Zed's hosted models. Start with a 14 day free trial."
+                    tr(
+                        cx,
+                        "language_models.cloud.subscription.free_trial",
+                        "Subscribe for access to Zed's hosted models. Start with a 14 day free trial.",
+                    )
                 } else {
-                    "Subscribe for access to Zed's hosted models."
+                    tr(
+                        cx,
+                        "language_models.cloud.subscription.free",
+                        "Subscribe for access to Zed's hosted models.",
+                    )
                 },
                 false,
             ),
         };
 
         let manage_subscription_buttons = if has_paid_plan {
-            Button::new("manage_settings", "Manage Subscription")
-                .full_width()
-                .label_size(LabelSize::Small)
-                .style(ButtonStyle::Tinted(TintColor::Accent))
-                .on_click(|_, _, cx| cx.open_url(&zed_urls::account_url(cx)))
-                .into_any_element()
+            Button::new(
+                "manage_settings",
+                tr(
+                    cx,
+                    "language_models.cloud.button.manage_subscription",
+                    "Manage Subscription",
+                ),
+            )
+            .full_width()
+            .label_size(LabelSize::Small)
+            .style(ButtonStyle::Tinted(TintColor::Accent))
+            .on_click(|_, _, cx| cx.open_url(&zed_urls::account_url(cx)))
+            .into_any_element()
         } else if self.plan.is_none() || self.eligible_for_trial {
-            Button::new("start_trial", "Start 14-day Free Pro Trial")
-                .full_width()
-                .style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
-                .on_click(|_, _, cx| cx.open_url(&zed_urls::start_trial_url(cx)))
-                .into_any_element()
+            Button::new(
+                "start_trial",
+                tr(
+                    cx,
+                    "language_models.cloud.button.start_trial",
+                    "Start 14-day Free Pro Trial",
+                ),
+            )
+            .full_width()
+            .style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
+            .on_click(|_, _, cx| cx.open_url(&zed_urls::start_trial_url(cx)))
+            .into_any_element()
         } else {
-            Button::new("upgrade", "Upgrade to Pro")
-                .full_width()
-                .style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
-                .on_click(|_, _, cx| cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx)))
-                .into_any_element()
+            Button::new(
+                "upgrade",
+                tr(cx, "language_models.cloud.button.upgrade", "Upgrade to Pro"),
+            )
+            .full_width()
+            .style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
+            .on_click(|_, _, cx| cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx)))
+            .into_any_element()
         };
 
         if !self.is_connected {
             return v_flex()
                 .gap_2()
-                .child(Label::new("Sign in to have access to Zed's complete agentic experience with hosted models."))
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.cloud.sign_in_message",
+                    "Sign in to have access to Zed's complete agentic experience with hosted models.",
+                )))
                 .child(
-                    Button::new("sign_in", "Sign In to use Zed AI")
+                    Button::new(
+                        "sign_in",
+                        tr(
+                            cx,
+                            "language_models.cloud.button.sign_in",
+                            "Sign In to use Zed AI",
+                        ),
+                    )
                         .start_icon(Icon::new(IconName::Github).size(IconSize::Small).color(Color::Muted))
                         .full_width()
                         .on_click({
@@ -390,10 +447,13 @@ impl RenderOnce for ZedAiConfiguration {
         v_flex().gap_2().w_full().map(|this| {
             if self.account_too_young {
                 this.child(YoungAccountBanner).child(
-                    Button::new("upgrade", "Upgrade to Pro")
-                        .style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
-                        .full_width()
-                        .on_click(|_, _, cx| cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx))),
+                    Button::new(
+                        "upgrade",
+                        tr(cx, "language_models.cloud.button.upgrade", "Upgrade to Pro"),
+                    )
+                    .style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
+                    .full_width()
+                    .on_click(|_, _, cx| cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx))),
                 )
             } else {
                 this.text_sm()

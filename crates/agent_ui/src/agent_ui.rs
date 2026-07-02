@@ -344,12 +344,13 @@ impl agent_servers::AgentServer for RemovedNativeAgentServer {
         &self,
         _delegate: agent_servers::AgentServerDelegate,
         _project: gpui::Entity<project::Project>,
-        _cx: &mut gpui::App,
+        cx: &mut gpui::App,
     ) -> gpui::Task<anyhow::Result<std::rc::Rc<dyn acp_thread::AgentConnection>>> {
-        gpui::Task::ready(Err(anyhow::anyhow!(
-            "The built-in Zed Agent has been removed. \
-             Please configure an external agent in the agent settings."
-        )))
+        gpui::Task::ready(Err(anyhow::anyhow!(app_i18n::tr(
+            cx,
+            "agent_ui.agent.removed_native_agent_error",
+            "The built-in Zed Agent has been removed. Please configure an external agent in the agent settings.",
+        ))))
     }
 
     fn into_any(self: std::rc::Rc<Self>) -> std::rc::Rc<dyn std::any::Any> {
@@ -407,6 +408,15 @@ impl Agent {
             Self::Custom { id, .. } => id.0.clone(),
             #[cfg(any(test, feature = "test-support"))]
             Self::Stub => "Stub Agent".into(),
+        }
+    }
+
+    pub fn localized_label(&self, cx: &App) -> SharedString {
+        match self {
+            Self::NativeAgent => app_i18n::tr(cx, "agent_ui.agent.zed", "Zed Agent").into(),
+            Self::Custom { id, .. } => id.0.clone(),
+            #[cfg(any(test, feature = "test-support"))]
+            Self::Stub => app_i18n::tr(cx, "agent_ui.agent.stub", "Stub Agent").into(),
         }
     }
 

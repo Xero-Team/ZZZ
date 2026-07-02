@@ -1,5 +1,6 @@
 use anyhow::Result;
 use gpui::{App, AppContext as _, Entity, Task};
+use i18n as app_i18n;
 use language::{Anchor, BufferSnapshot, DiagnosticEntryRef, DiagnosticSeverity, ToOffset};
 use project::{DiagnosticSummary, Project};
 use rope::Point;
@@ -7,6 +8,10 @@ use std::{fmt::Write, ops::RangeInclusive, path::Path};
 use text::OffsetRangeExt;
 use util::ResultExt;
 use util::paths::PathMatcher;
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> String {
+    app_i18n::tr(cx, key, fallback)
+}
 
 pub fn codeblock_fence_for_path(
     path: Option<&str>,
@@ -71,6 +76,12 @@ pub fn collect_diagnostics(
             Some((path, full_path, summary))
         })
         .collect();
+    let diagnostics_label = tr(cx, "agent_ui.diagnostics.section", "diagnostics");
+    let diagnostics_title = tr(cx, "agent_ui.diagnostics.title", "Diagnostics");
+    let warning_label = tr(cx, "agent_ui.diagnostics.warning", "warning");
+    let error_label = tr(cx, "agent_ui.diagnostics.error", "error");
+    let errors_count_template = tr(cx, "agent_ui.diagnostics.errors_count", "{} errors");
+    let warnings_count_template = tr(cx, "agent_ui.diagnostics.warnings_count", "{} warnings");
 
     cx.spawn(async move |cx| {
         let error_source = if let Some(path_matcher) = &options.path_matcher {
@@ -82,9 +93,9 @@ pub fn collect_diagnostics(
 
         let mut text = String::new();
         if let Some(error_source) = error_source.as_ref() {
-            writeln!(text, "diagnostics: {}", error_source).unwrap();
+            writeln!(text, "{}: {}", diagnostics_label, error_source).unwrap();
         } else {
-            writeln!(text, "diagnostics").unwrap();
+            writeln!(text, "{}", diagnostics_label).unwrap();
         }
 
         let mut found_any_diagnostics = false;
@@ -125,6 +136,8 @@ pub fn collect_diagnostics(
                     &snapshot,
                     options.include_warnings,
                     options.include_errors,
+                    &warning_label,
+                    &error_label,
                 ) {
                     found_any_diagnostics = true;
                 }
@@ -135,8 +148,7 @@ pub fn collect_diagnostics(
             return Ok(None);
         }
 
-        let mut label = String::new();
-        label.push_str("Diagnostics");
+        let mut label = diagnostics_title;
         if let Some(source) = error_source {
             write!(label, " ({})", source).unwrap();
         }
@@ -145,14 +157,32 @@ pub fn collect_diagnostics(
             label.push(':');
 
             if project_summary.error_count > 0 {
-                write!(label, " {} errors", project_summary.error_count).unwrap();
+                write!(
+                    label,
+                    " {}",
+                    errors_count_template.replacen(
+                        "{}",
+                        &project_summary.error_count.to_string(),
+                        1
+                    )
+                )
+                .unwrap();
                 if project_summary.warning_count > 0 {
                     label.push(',');
                 }
             }
 
             if project_summary.warning_count > 0 {
-                write!(label, " {} warnings", project_summary.warning_count).unwrap();
+                write!(
+                    label,
+                    " {}",
+                    warnings_count_template.replacen(
+                        "{}",
+                        &project_summary.warning_count.to_string(),
+                        1
+                    )
+                )
+                .unwrap();
             }
         }
 
@@ -171,11 +201,21 @@ fn collect_buffer_diagnostics(
     snapshot: &BufferSnapshot,
     include_warnings: bool,
     include_errors: bool,
+    warning_label: &str,
+    error_label: &str,
 ) -> bool {
     let mut found_any = false;
     for (_, group) in snapshot.diagnostic_groups(None) {
         let entry = &group.entries[group.primary_ix];
-        if collect_diagnostic(text, entry, snapshot, include_warnings, include_errors) {
+        if collect_diagnostic(
+            text,
+            entry,
+            snapshot,
+            include_warnings,
+            include_errors,
+            warning_label,
+            error_label,
+        ) {
             found_any = true;
         }
     }
@@ -191,6 +231,8 @@ fn collect_diagnostic(
     snapshot: &BufferSnapshot,
     include_warnings: bool,
     include_errors: bool,
+    warning_label: &str,
+    error_label: &str,
 ) -> bool {
     const EXCERPT_EXPANSION_SIZE: u32 = 2;
     const MAX_MESSAGE_LENGTH: usize = 2000;
@@ -200,13 +242,13 @@ fn collect_diagnostic(
             if !include_warnings {
                 return false;
             }
-            "warning"
+            warning_label
         }
         DiagnosticSeverity::ERROR => {
             if !include_errors {
                 return false;
             }
-            "error"
+            error_label
         }
         _ => return false,
     };

@@ -82,6 +82,11 @@ fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()
 }
 
+fn tr_optional(cx: Option<&App>, key: &'static str, fallback: &'static str) -> String {
+    cx.map(|cx| app_i18n::tr(cx, key, fallback))
+        .unwrap_or_else(|| fallback.to_owned())
+}
+
 /// Maximum number of idle threads kept in the agent panel's retained list.
 /// Set as a GPUI global to override; otherwise defaults to 5.
 pub struct MaxIdleRetainedThreads(pub usize);
@@ -305,11 +310,12 @@ pub fn init(cx: &mut App) {
                     let diff_uri = mention_uri.to_uri().to_string();
 
                     let content_blocks = vec![
-                        acp::ContentBlock::Text(acp::TextContent::new(
+                        acp::ContentBlock::Text(acp::TextContent::new(tr_optional(
+                            Some(cx),
+                            "agent_ui.panel.review_branch_diff_prompt",
                             "Please review this branch diff carefully. Point out any issues, \
-                             potential bugs, or improvement opportunities you find.\n\n"
-                                .to_owned(),
-                        )),
+                                 potential bugs, or improvement opportunities you find.\n\n",
+                        ))),
                         acp::ContentBlock::Resource(acp::EmbeddedResource::new(
                             acp::EmbeddedResourceResource::TextResourceContents(
                                 acp::TextResourceContents::new(
@@ -345,7 +351,8 @@ pub fn init(cx: &mut App) {
                             return;
                         };
 
-                        let content_blocks = build_conflict_resolution_prompt(&action.conflicts);
+                        let content_blocks =
+                            build_conflict_resolution_prompt(Some(cx), &action.conflicts);
 
                         workspace.focus_panel::<AgentPanel>(window, cx);
 
@@ -373,8 +380,10 @@ pub fn init(cx: &mut App) {
                             return;
                         };
 
-                        let content_blocks =
-                            build_conflicted_files_resolution_prompt(&action.conflicted_file_paths);
+                        let content_blocks = build_conflicted_files_resolution_prompt(
+                            Some(cx),
+                            &action.conflicted_file_paths,
+                        );
 
                         workspace.focus_panel::<AgentPanel>(window, cx);
 
@@ -451,7 +460,10 @@ fn conflict_resource_block(conflict: &ConflictContent) -> acp::ContentBlock {
     ))
 }
 
-fn build_conflict_resolution_prompt(conflicts: &[ConflictContent]) -> Vec<acp::ContentBlock> {
+fn build_conflict_resolution_prompt(
+    cx: Option<&App>,
+    conflicts: &[ConflictContent],
+) -> Vec<acp::ContentBlock> {
     if conflicts.is_empty() {
         return Vec::new();
     }
@@ -461,9 +473,11 @@ fn build_conflict_resolution_prompt(conflicts: &[ConflictContent]) -> Vec<acp::C
     if conflicts.len() == 1 {
         let conflict = &conflicts[0];
 
-        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(tr_optional(
+            cx,
+            "agent_ui.panel.conflict_prompt.single_intro",
             "Please resolve the following merge conflict in ",
-        )));
+        ))));
         let mention = MentionUri::File {
             abs_path: PathBuf::from(conflict.file_path.clone()),
         };
@@ -473,17 +487,21 @@ fn build_conflict_resolution_prompt(conflicts: &[ConflictContent]) -> Vec<acp::C
         )));
 
         blocks.push(acp::ContentBlock::Text(acp::TextContent::new(
-            indoc::formatdoc!(
-                "\nThe conflict is between branch `{ours}` (ours) and `{theirs}` (theirs).
+            tr_optional(
+                cx,
+                "agent_ui.panel.conflict_prompt.single_body",
+                indoc::indoc!(
+                    "\nThe conflict is between branch `{}` (ours) and `{}` (theirs).
 
-                Analyze both versions carefully and resolve the conflict by editing \
-                the file directly. Choose the resolution that best preserves the intent \
-                of both changes, or combine them if appropriate.
+                    Analyze both versions carefully and resolve the conflict by editing \
+                    the file directly. Choose the resolution that best preserves the intent \
+                    of both changes, or combine them if appropriate.
 
-                ",
-                ours = conflict.ours_branch_name,
-                theirs = conflict.theirs_branch_name,
-            ),
+                    "
+                ),
+            )
+            .replacen("{}", &conflict.ours_branch_name, 1)
+            .replacen("{}", &conflict.theirs_branch_name, 1),
         )));
     } else {
         let n = conflicts.len();
@@ -491,18 +509,42 @@ fn build_conflict_resolution_prompt(conflicts: &[ConflictContent]) -> Vec<acp::C
         let ours = &conflicts[0].ours_branch_name;
         let theirs = &conflicts[0].theirs_branch_name;
         blocks.push(acp::ContentBlock::Text(acp::TextContent::new(
-            indoc::formatdoc!(
-                "Please resolve all {n} merge conflicts below.
+            tr_optional(
+                cx,
+                if unique_files.len() > 1 {
+                    "agent_ui.panel.conflict_prompt.multi_body_multiple_files"
+                } else {
+                    "agent_ui.panel.conflict_prompt.multi_body_single_file"
+                },
+                if unique_files.len() > 1 {
+                    indoc::indoc!(
+                        "Please resolve all {} merge conflicts below.
 
-                The conflicts are between branch `{ours}` (ours) and `{theirs}` (theirs).
+                        The conflicts are between branch `{}` (ours) and `{}` (theirs).
 
-                For each conflict, analyze both versions carefully and resolve them \
-                by editing the file{suffix} directly. Choose resolutions that best preserve \
-                the intent of both changes, or combine them if appropriate.
+                        For each conflict, analyze both versions carefully and resolve them \
+                        by editing the files directly. Choose resolutions that best preserve \
+                        the intent of both changes, or combine them if appropriate.
 
-                ",
-                suffix = if unique_files.len() > 1 { "s" } else { "" },
-            ),
+                        "
+                    )
+                } else {
+                    indoc::indoc!(
+                        "Please resolve all {} merge conflicts below.
+
+                        The conflicts are between branch `{}` (ours) and `{}` (theirs).
+
+                        For each conflict, analyze both versions carefully and resolve them \
+                        by editing the file directly. Choose resolutions that best preserve \
+                        the intent of both changes, or combine them if appropriate.
+
+                        "
+                    )
+                },
+            )
+            .replacen("{}", &n.to_string(), 1)
+            .replacen("{}", ours, 1)
+            .replacen("{}", theirs, 1),
         )));
     }
 
@@ -514,22 +556,27 @@ fn build_conflict_resolution_prompt(conflicts: &[ConflictContent]) -> Vec<acp::C
 }
 
 fn build_conflicted_files_resolution_prompt(
+    cx: Option<&App>,
     conflicted_file_paths: &[String],
 ) -> Vec<acp::ContentBlock> {
     if conflicted_file_paths.is_empty() {
         return Vec::new();
     }
 
-    let instruction = indoc::indoc!(
-        "The following files have unresolved merge conflicts. Please open each \
-         file, find the conflict markers (`<<<<<<<` / `=======` / `>>>>>>>`), \
-         and resolve every conflict by editing the files directly.
+    let instruction = tr_optional(
+        cx,
+        "agent_ui.panel.conflict_prompt.files_only_instruction",
+        indoc::indoc!(
+            "The following files have unresolved merge conflicts. Please open each \
+             file, find the conflict markers (`<<<<<<<` / `=======` / `>>>>>>>`), \
+             and resolve every conflict by editing the files directly.
 
-         Choose resolutions that best preserve the intent of both changes, \
-         or combine them if appropriate.
+             Choose resolutions that best preserve the intent of both changes, \
+             or combine them if appropriate.
 
-         Files with conflicts:
-         ",
+             Files with conflicts:
+             "
+        ),
     );
 
     let mut content = vec![acp::ContentBlock::Text(acp::TextContent::new(instruction))];
@@ -546,31 +593,55 @@ fn build_conflicted_files_resolution_prompt(
     content
 }
 
-fn format_timestamp_human(dt: &DateTime<Utc>) -> String {
+fn format_timestamp_human(cx: &App, dt: &DateTime<Utc>) -> String {
     let now = Utc::now();
     let duration = now.signed_duration_since(*dt);
 
     let relative = if duration.num_seconds() < 0 {
-        "in the future".to_owned()
+        app_i18n::tr(cx, "agent_ui.panel.timestamp.in_future", "in the future")
     } else if duration.num_seconds() < 60 {
         let seconds = duration.num_seconds();
-        format!("{seconds} seconds ago")
+        app_i18n::tr(cx, "agent_ui.panel.timestamp.seconds_ago", "{} seconds ago").replacen(
+            "{}",
+            &seconds.to_string(),
+            1,
+        )
     } else if duration.num_minutes() < 60 {
         let minutes = duration.num_minutes();
-        format!("{minutes} minutes ago")
+        app_i18n::tr(cx, "agent_ui.panel.timestamp.minutes_ago", "{} minutes ago").replacen(
+            "{}",
+            &minutes.to_string(),
+            1,
+        )
     } else if duration.num_hours() < 24 {
         let hours = duration.num_hours();
-        format!("{hours} hours ago")
+        app_i18n::tr(cx, "agent_ui.panel.timestamp.hours_ago", "{} hours ago").replacen(
+            "{}",
+            &hours.to_string(),
+            1,
+        )
     } else {
         let days = duration.num_days();
-        format!("{days} days ago")
+        app_i18n::tr(cx, "agent_ui.panel.timestamp.days_ago", "{} days ago").replacen(
+            "{}",
+            &days.to_string(),
+            1,
+        )
     };
 
-    format!("{} ({})", dt.to_rfc3339(), relative)
+    let timestamp = dt.to_rfc3339();
+    app_i18n::tr(
+        cx,
+        "agent_ui.panel.timestamp.absolute_with_relative",
+        "{} ({})",
+    )
+    .replacen("{}", &timestamp, 1)
+    .replacen("{}", &relative, 1)
 }
 
 /// Used for `dev: show thread metadata` action
 fn thread_metadata_to_debug_json(
+    cx: &App,
     metadata: &crate::thread_metadata_store::ThreadMetadata,
 ) -> serde_json::Value {
     serde_json::json!({
@@ -578,9 +649,12 @@ fn thread_metadata_to_debug_json(
         "session_id": metadata.session_id.as_ref().map(|s| s.0.to_string()),
         "agent_id": metadata.agent_id.0.to_string(),
         "title": metadata.title.as_ref().map(|t| t.to_string()),
-        "updated_at": format_timestamp_human(&metadata.updated_at),
-        "created_at": metadata.created_at.as_ref().map(format_timestamp_human),
-        "interacted_at": metadata.interacted_at.as_ref().map(format_timestamp_human),
+        "updated_at": format_timestamp_human(cx, &metadata.updated_at),
+        "created_at": metadata.created_at.as_ref().map(|dt| format_timestamp_human(cx, dt)),
+        "interacted_at": metadata
+            .interacted_at
+            .as_ref()
+            .map(|dt| format_timestamp_human(cx, dt)),
         "worktree_paths": format!("{:?}", metadata.worktree_paths),
         "archived": metadata.archived,
     })
@@ -1707,7 +1781,7 @@ impl AgentPanel {
             return;
         };
 
-        let json = thread_metadata_to_debug_json(&metadata);
+        let json = thread_metadata_to_debug_json(cx, &metadata);
         let text = serde_json::to_string_pretty(&json).unwrap_or_default();
         let title = app_i18n::tr(
             cx,
@@ -1750,7 +1824,7 @@ impl AgentPanel {
             .read(cx)
             .entries()
             .filter(|t| !t.archived)
-            .map(thread_metadata_to_debug_json)
+            .map(|metadata| thread_metadata_to_debug_json(cx, metadata))
             .collect();
 
         let json = serde_json::Value::Array(entries);
@@ -2837,10 +2911,10 @@ impl AgentPanel {
 
                 let label = store
                     .agent_display_name(&id)
-                    .unwrap_or_else(|| self.selected_agent.label());
+                    .unwrap_or_else(|| self.selected_agent.localized_label(cx));
                 (icon, label)
             } else {
-                (None, self.selected_agent.label())
+                (None, self.selected_agent.localized_label(cx))
             };
 
         // active_thread (native-only) is no longer available; new-from-summary was removed with native agent.
@@ -3069,17 +3143,21 @@ impl AgentPanel {
         };
 
         let use_v2_empty_toolbar = is_empty_state && !is_in_history_or_config;
-        let empty_thread_title = use_v2_empty_toolbar.then(|| {
-            self.active_thread_id(cx)
-                .and_then(|thread_id| self.editor_text(thread_id, cx))
-                .map(|text| Label::new(text).truncate().into_any_element())
-                .unwrap_or_else(|| {
-                    Label::new(format!("New {} Thread", selected_agent_label))
+        let empty_thread_title =
+            use_v2_empty_toolbar.then(|| {
+                self.active_thread_id(cx)
+                    .and_then(|thread_id| self.editor_text(thread_id, cx))
+                    .map(|text| Label::new(text).truncate().into_any_element())
+                    .unwrap_or_else(|| {
+                        Label::new(
+                            tr(cx, "agent_ui.panel.new_thread_for_agent", "New {} Thread")
+                                .replacen("{}", selected_agent_label.as_ref(), 1),
+                        )
                         .color(Color::Muted)
                         .truncate()
                         .into_any_element()
-                })
-        });
+                    })
+            });
 
         let max_content_width = AgentSettings::get_global(cx).max_content_width;
 
@@ -4054,7 +4132,7 @@ mod tests {
             theirs_branch_name: "feature".to_string(),
         }];
 
-        let blocks = build_conflict_resolution_prompt(&conflicts);
+        let blocks = build_conflict_resolution_prompt(None, &conflicts);
         // 2 Text blocks + 1 ResourceLink + 1 Resource for the conflict
         assert_eq!(
             blocks.len(),
@@ -4130,7 +4208,7 @@ mod tests {
             },
         ];
 
-        let blocks = build_conflict_resolution_prompt(&conflicts);
+        let blocks = build_conflict_resolution_prompt(None, &conflicts);
         // 1 Text instruction + 2 Resource blocks
         assert_eq!(blocks.len(), 3, "expected 1 text + 2 resource blocks");
 
@@ -4182,7 +4260,7 @@ mod tests {
             },
         ];
 
-        let blocks = build_conflict_resolution_prompt(&conflicts);
+        let blocks = build_conflict_resolution_prompt(None, &conflicts);
         // 1 Text instruction + 2 Resource blocks
         assert_eq!(blocks.len(), 3, "expected 1 text + 2 resource blocks");
 
@@ -4212,7 +4290,7 @@ mod tests {
             "tests/integration.rs".to_string(),
         ];
 
-        let blocks = build_conflicted_files_resolution_prompt(&file_paths);
+        let blocks = build_conflicted_files_resolution_prompt(None, &file_paths);
         // 1 instruction Text block + (ResourceLink + newline Text) per file
         assert_eq!(
             blocks.len(),
@@ -4261,7 +4339,7 @@ mod tests {
 
     #[test]
     fn test_build_conflict_resolution_prompt_empty_conflicts() {
-        let blocks = build_conflict_resolution_prompt(&[]);
+        let blocks = build_conflict_resolution_prompt(None, &[]);
         assert!(
             blocks.is_empty(),
             "empty conflicts should produce no blocks, got {} blocks",
@@ -4271,7 +4349,7 @@ mod tests {
 
     #[test]
     fn test_build_conflicted_files_resolution_prompt_empty_paths() {
-        let blocks = build_conflicted_files_resolution_prompt(&[]);
+        let blocks = build_conflicted_files_resolution_prompt(None, &[]);
         assert!(
             blocks.is_empty(),
             "empty paths should produce no blocks, got {} blocks",

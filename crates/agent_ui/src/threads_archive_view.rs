@@ -642,8 +642,10 @@ impl ThreadsArchiveView {
 
                 let focus_handle = self.focus_handle.clone();
 
-                let timestamp =
-                    format_history_entry_timestamp(thread.created_at.unwrap_or(thread.updated_at));
+                let timestamp = format_history_entry_timestamp(
+                    thread.created_at.unwrap_or(thread.updated_at),
+                    cx,
+                );
 
                 let icon_from_external_svg = self
                     .agent_server_store
@@ -1069,7 +1071,7 @@ impl ThreadsArchiveView {
     }
 }
 
-pub fn format_history_entry_timestamp(entry_time: DateTime<Utc>) -> String {
+pub fn format_history_entry_timestamp(entry_time: DateTime<Utc>, cx: &App) -> String {
     let now = Utc::now();
     let duration = now.signed_duration_since(entry_time);
 
@@ -1078,17 +1080,28 @@ pub fn format_history_entry_timestamp(entry_time: DateTime<Utc>) -> String {
     let days = duration.num_days();
     let weeks = days / 7;
     let months = days / 30;
+    let format_short = |key, fallback: &'static str, value: i64| {
+        tr(cx, key, fallback).replacen("{}", &value.to_string(), 1)
+    };
 
     if minutes < 60 {
-        format!("{}m", minutes.max(1))
+        format_short(
+            "agent_ui.threads_archive.minutes_short",
+            "{}m",
+            minutes.max(1),
+        )
     } else if hours < 24 {
-        format!("{}h", hours.max(1))
+        format_short("agent_ui.threads_archive.hours_short", "{}h", hours.max(1))
     } else if days < 7 {
-        format!("{}d", days.max(1))
+        format_short("agent_ui.threads_archive.days_short", "{}d", days.max(1))
     } else if weeks < 4 {
-        format!("{}w", weeks.max(1))
+        format_short("agent_ui.threads_archive.weeks_short", "{}w", weeks.max(1))
     } else {
-        format!("{}mo", months.max(1))
+        format_short(
+            "agent_ui.threads_archive.months_short",
+            "{}mo",
+            months.max(1),
+        )
     }
 }
 

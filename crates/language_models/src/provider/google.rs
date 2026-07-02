@@ -6,6 +6,7 @@ pub use google_ai::completion::{GoogleEventMapper, into_google};
 use google_ai::{GenerateContentResponse, GoogleModelMode};
 use gpui::{AnyView, App, AsyncApp, Context, Entity, SharedString, Task, Window};
 use http_client::{CustomHeaders, HttpClient};
+use i18n::tr;
 use language_model::{
     AuthenticateError, ConfigurationViewTargetAgent, EnvVar, LanguageModelCompletionError,
     LanguageModelCompletionEvent, LanguageModelToolChoice, LanguageModelToolSchemaFormat,
@@ -458,33 +459,62 @@ impl Render for ConfigurationView {
 
         if self.load_credentials_task.is_some() {
             div()
-                .child(Label::new("Loading credentials..."))
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.common.loading_credentials",
+                    "Loading credentials...",
+                )))
                 .into_any_element()
         } else if self.should_render_editor(cx) {
             v_flex()
                 .size_full()
                 .on_action(cx.listener(Self::save_api_key))
-                .child(Label::new(format!("To use {}, you need to add an API key. Follow these steps:", match &self.target_agent {
-                    ConfigurationViewTargetAgent::ZedAgent => "ZZZ's agent with Google AI".into(),
-                    ConfigurationViewTargetAgent::Other(agent) => agent.clone(),
-                })))
+                .child(Label::new(
+                    tr(
+                        cx,
+                        "language_models.common.setup_intro",
+                        "To use {}, you need to add an API key. Follow these steps:",
+                    )
+                    .replace(
+                        "{}",
+                        match &self.target_agent {
+                            ConfigurationViewTargetAgent::ZedAgent => "ZZZ's agent with Google AI",
+                            ConfigurationViewTargetAgent::Other(agent) => agent.as_ref(),
+                        },
+                    ),
+                ))
                 .child(
                     List::new()
                         .child(
                             ListBulletItem::new("")
-                                .child(Label::new("Create one by visiting"))
-                                .child(ButtonLink::new("Google AI's console", "https://aistudio.google.com/app/apikey"))
+                                .child(Label::new(tr(
+                                    cx,
+                                    "language_models.common.create_one_by_visiting",
+                                    "Create one by visiting",
+                                )))
+                                .child(ButtonLink::new(
+                                    "Google AI's console",
+                                    "https://aistudio.google.com/app/apikey",
+                                )),
                         )
-                        .child(
-                            ListBulletItem::new("Paste your API key below and hit enter to start using the agent")
-                        )
+                        .child(ListBulletItem::new(tr(
+                            cx,
+                            "language_models.common.paste_api_key_start_agent",
+                            "Paste your API key below and hit enter to start using the agent",
+                        ))),
                 )
                 .child(self.api_key_editor.clone())
                 .child(
                     Label::new(
-                        format!("You can also set the {GEMINI_API_KEY_VAR_NAME} environment variable and restart ZZZ."),
+                        tr(
+                            cx,
+                            "language_models.common.set_env_var_and_restart",
+                            "You can also set the {} environment variable and restart ZZZ.",
+                        )
+                        .replace("{}", GEMINI_API_KEY_VAR_NAME),
                     )
-                    .size(LabelSize::Small).color(Color::Muted),
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
                 )
                 .into_any_element()
         } else {
@@ -492,7 +522,15 @@ impl Render for ConfigurationView {
                 .disabled(env_var_set)
                 .on_click(cx.listener(|this, _, window, cx| this.reset_api_key(window, cx)))
                 .when(env_var_set, |this| {
-                    this.tooltip_label(format!("To reset your API key, make sure {GEMINI_API_KEY_VAR_NAME} and {GOOGLE_AI_API_KEY_VAR_NAME} environment variables are unset."))
+                    this.tooltip_label(
+                        tr(
+                            cx,
+                            "language_models.google.unset_both_env_vars_to_reset_api_key",
+                            "To reset your API key, make sure {} and {} environment variables are unset.",
+                        )
+                        .replacen("{}", GEMINI_API_KEY_VAR_NAME, 1)
+                        .replacen("{}", GOOGLE_AI_API_KEY_VAR_NAME, 1),
+                    )
                 })
                 .into_any_element()
         }

@@ -7,6 +7,7 @@ use futures::Stream;
 use futures::{FutureExt, StreamExt, future::BoxFuture, stream::BoxStream};
 use gpui::{AnyView, App, AsyncApp, Context, Entity, SharedString, Task, Window};
 use http_client::{CustomHeaders, HttpClient};
+use i18n::tr;
 use language_model::{
     ApiKeyState, AuthenticateError, EnvVar, IconOrSvg, LanguageModel, LanguageModelCompletionError,
     LanguageModelCompletionEvent, LanguageModelEffortLevel, LanguageModelId, LanguageModelName,
@@ -725,32 +726,51 @@ impl Render for ConfigurationView {
 
         if self.load_credentials_task.is_some() {
             div()
-                .child(Label::new("Loading credentials..."))
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.common.loading_credentials",
+                    "Loading credentials...",
+                )))
                 .into_any_element()
         } else if self.should_render_editor(cx) {
             v_flex()
                 .size_full()
                 .on_action(cx.listener(Self::save_api_key))
-                .child(Label::new("To use DeepSeek in ZZZ, you need an API key:"))
+                .child(Label::new(tr(
+                    cx,
+                    "language_models.deepseek.setup_intro",
+                    "To use DeepSeek in ZZZ, you need an API key:",
+                )))
                 .child(
                     List::new()
                         .child(
                             ListBulletItem::new("")
-                                .child(Label::new("Get your API key from the"))
+                                .child(Label::new(tr(
+                                    cx,
+                                    "language_models.deepseek.get_api_key_from",
+                                    "Get your API key from the",
+                                )))
                                 .child(ButtonLink::new(
                                     "DeepSeek console",
                                     "https://platform.deepseek.com/api_keys",
                                 )),
                         )
-                        .child(ListBulletItem::new(
+                        .child(ListBulletItem::new(tr(
+                            cx,
+                            "language_models.common.paste_api_key_start_assistant",
                             "Paste your API key below and hit enter to start using the assistant",
-                        )),
+                        ))),
                 )
                 .child(self.api_key_editor.clone())
                 .child(
-                    Label::new(format!(
-                        "You can also set the {API_KEY_ENV_VAR_NAME} environment variable and restart ZZZ."
-                    ))
+                    Label::new(
+                        tr(
+                            cx,
+                            "language_models.common.set_env_var_and_restart",
+                            "You can also set the {} environment variable and restart ZZZ.",
+                        )
+                        .replace("{}", API_KEY_ENV_VAR_NAME),
+                    )
                     .size(LabelSize::Small)
                     .color(Color::Muted),
                 )
