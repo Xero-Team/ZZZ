@@ -13,7 +13,6 @@ use gpui::{
 use language::Buffer;
 use picker::Picker;
 use project::ProjectPath;
-use settings::SeedQuerySetting;
 use text::Anchor;
 use ui::Window;
 use workspace::{
@@ -333,7 +332,7 @@ impl TextFinder {
         }
 
         if let Some(editor) = item.act_as::<Editor>(cx) {
-            let query = editor.query_suggestion(Some(SeedQuerySetting::SelectionOrCursor), window, cx);
+            let query = editor.query_suggestion(None, window, cx);
             if !query.is_empty() {
                 return Some(query);
             }
