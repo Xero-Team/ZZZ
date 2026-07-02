@@ -49,6 +49,12 @@ pub fn init(cx: &mut App) {
         workspace
             .register_action(|_, _: &CopySystemSpecsIntoClipboard, window, cx| {
                 let specs = SystemSpecs::new(window, cx);
+                let copied_into_clipboard = i18n::tr(
+                    cx,
+                    "auto.feedback.feedback.prompt.title.copied.into.clipboard",
+                    "Copied into clipboard",
+                );
+                let ok = i18n::tr(cx, "auto.feedback.feedback.prompt_button.ok", "OK");
 
                 cx.spawn_in(window, async move |_, cx| {
                     let specs = specs.await.to_string();
@@ -60,9 +66,9 @@ pub fn init(cx: &mut App) {
 
                     cx.prompt(
                         PromptLevel::Info,
-                        "Copied into clipboard",
+                        &copied_into_clipboard,
                         Some(&specs),
-                        &["OK"],
+                        &[ok.as_str()],
                     )
                     .await
                 })

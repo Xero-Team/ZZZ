@@ -6,6 +6,7 @@ use gpui::Entity;
 use gpui::Task;
 use gpui::WeakEntity;
 use http_client::anyhow;
+use i18n::tr;
 use picker::Picker;
 use picker::PickerDelegate;
 use project::ProjectEnvironment;
@@ -425,7 +426,7 @@ impl PickerDelegate for TemplatePickerDelegate {
                 .border_t_1()
                 .border_color(cx.theme().colors().border_variant)
                 .child(
-                    Button::new("run-action", "Continue")
+                    Button::new("run-action", tr(cx, "menu.run.continue", "Continue"))
                         .key_binding(
                             KeyBinding::for_action(&menu::Confirm, cx)
                                 .map(|kb| kb.size(rems_from_px(12.))),
@@ -618,24 +619,30 @@ impl PickerDelegate for FeaturePickerDelegate {
                 .border_t_1()
                 .border_color(cx.theme().colors().border_variant)
                 .child(
-                    Button::new("run-action", "Select Feature")
-                        .key_binding(
-                            KeyBinding::for_action(&menu::Confirm, cx)
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                        )
-                        .on_click(|_, window, cx| {
-                            window.dispatch_action(menu::Confirm.boxed_clone(), cx)
-                        }),
+                    Button::new(
+                        "run-action",
+                        tr(cx, "dev_container.select_feature", "Select Feature"),
+                    )
+                    .key_binding(
+                        KeyBinding::for_action(&menu::Confirm, cx)
+                            .map(|kb| kb.size(rems_from_px(12.))),
+                    )
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(menu::Confirm.boxed_clone(), cx)
+                    }),
                 )
                 .child(
-                    Button::new("run-action-secondary", "Confirm Selections")
-                        .key_binding(
-                            KeyBinding::for_action(&menu::SecondaryConfirm, cx)
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                        )
-                        .on_click(|_, window, cx| {
-                            window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx)
-                        }),
+                    Button::new(
+                        "run-action-secondary",
+                        tr(cx, "dev_container.confirm_selections", "Confirm Selections"),
+                    )
+                    .key_binding(
+                        KeyBinding::for_action(&menu::SecondaryConfirm, cx)
+                            .map(|kb| kb.size(rems_from_px(12.))),
+                    )
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx)
+                    }),
                 )
                 .into_any_element(),
         )
@@ -662,7 +669,12 @@ impl DevContainerModal {
                 .child(
                     div().track_focus(&self.focus_handle).child(
                         ModalHeader::new().child(
-                            Headline::new("Create Dev Container").size(HeadlineSize::XSmall),
+                            Headline::new(tr(
+                                cx,
+                                "dev_container.create_dev_container",
+                                "Create Dev Container",
+                            ))
+                            .size(HeadlineSize::XSmall),
                         ),
                     ),
                 )
@@ -691,7 +703,11 @@ impl DevContainerModal {
                                     );
                                     cx.notify();
                                 }))
-                                .child(Label::new("Search for Dev Container Templates")),
+                                .child(Label::new(tr(
+                                    cx,
+                                    "dev_container.search_for_templates",
+                                    "Search for Dev Container Templates",
+                                ))),
                         ),
                 )
                 .into_any_element(),
@@ -757,7 +773,12 @@ impl DevContainerModal {
                         .child(
                             ModalHeader::new()
                                 .child(
-                                    Headline::new("Template Option: ").size(HeadlineSize::XSmall),
+                                    Headline::new(tr(
+                                        cx,
+                                        "dev_container.template_option",
+                                        "Template Option: ",
+                                    ))
+                                    .size(HeadlineSize::XSmall),
                                 )
                                 .child(
                                     Headline::new(&next_option_entries.option_name)
@@ -837,7 +858,7 @@ impl DevContainerModal {
                                     this.accept_message(DevContainerMessage::GoBack, window, cx);
                                     cx.notify();
                                 }))
-                                .child(Label::new("Go Back")),
+                                .child(Label::new(tr(cx, "workspace.pane.go_back", "Go Back"))),
                         ),
                 )
                 .into_any_element(),
@@ -879,8 +900,12 @@ impl DevContainerModal {
                         ModalHeader::new()
                             .icon(Icon::new(IconName::Warning).color(Color::Warning))
                             .child(
-                                Headline::new("Overwrite Existing Configuration?")
-                                    .size(HeadlineSize::XSmall),
+                                Headline::new(tr(
+                                    cx,
+                                    "dev_container.overwrite_existing_configuration",
+                                    "Overwrite Existing Configuration?",
+                                ))
+                                .size(HeadlineSize::XSmall),
                             ),
                     ),
                 )
@@ -915,7 +940,7 @@ impl DevContainerModal {
                                     );
                                     cx.notify();
                                 }))
-                                .child(Label::new("Overwrite")),
+                                .child(Label::new(tr(cx, "workspace.pane.overwrite", "Overwrite"))),
                         ),
                 )
                 .child(
@@ -936,7 +961,7 @@ impl DevContainerModal {
                                     this.dismiss(&menu::Cancel, window, cx);
                                     cx.notify();
                                 }))
-                                .child(Label::new("Cancel")),
+                                .child(Label::new(tr(cx, "prompt.common.cancel", "Cancel"))),
                         ),
                 )
                 .into_any_element(),
@@ -953,7 +978,12 @@ impl DevContainerModal {
                 .child(
                     div().track_focus(&self.focus_handle).child(
                         ModalHeader::new().child(
-                            Headline::new("Create Dev Container").size(HeadlineSize::XSmall),
+                            Headline::new(tr(
+                                cx,
+                                "dev_container.create_dev_container",
+                                "Create Dev Container",
+                            ))
+                            .size(HeadlineSize::XSmall),
                         ),
                     ),
                 )
@@ -968,7 +998,11 @@ impl DevContainerModal {
                                     .color(Color::Muted)
                                     .with_rotate_animation(2),
                             )
-                            .child(Label::new("Querying template registry...")),
+                            .child(Label::new(tr(
+                                cx,
+                                "dev_container.querying_template_registry",
+                                "Querying template registry...",
+                            ))),
                     ),
                 )
                 .child(ListSeparator)
@@ -990,7 +1024,7 @@ impl DevContainerModal {
                                     this.accept_message(DevContainerMessage::GoBack, window, cx);
                                     cx.notify();
                                 }))
-                                .child(Label::new("Go Back")),
+                                .child(Label::new(tr(cx, "workspace.pane.go_back", "Go Back"))),
                         ),
                 )
                 .into_any_element(),
@@ -1005,7 +1039,12 @@ impl DevContainerModal {
                 .child(
                     div().track_focus(&self.focus_handle).child(
                         ModalHeader::new().child(
-                            Headline::new("Create Dev Container").size(HeadlineSize::XSmall),
+                            Headline::new(tr(
+                                cx,
+                                "dev_container.create_dev_container",
+                                "Create Dev Container",
+                            ))
+                            .size(HeadlineSize::XSmall),
                         ),
                     ),
                 )
@@ -1020,7 +1059,11 @@ impl DevContainerModal {
                                     .color(Color::Muted)
                                     .with_rotate_animation(2),
                             )
-                            .child(Label::new("Querying features...")),
+                            .child(Label::new(tr(
+                                cx,
+                                "dev_container.querying_features",
+                                "Querying features...",
+                            ))),
                     ),
                 )
                 .child(ListSeparator)
@@ -1042,7 +1085,7 @@ impl DevContainerModal {
                                     this.accept_message(DevContainerMessage::GoBack, window, cx);
                                     cx.notify();
                                 }))
-                                .child(Label::new("Go Back")),
+                                .child(Label::new(tr(cx, "workspace.pane.go_back", "Go Back"))),
                         ),
                 )
                 .into_any_element(),
@@ -1084,14 +1127,25 @@ impl StatefulModal for DevContainerModal {
                 self.render_confirming_write_dev_container(template_entry, window, cx)
             }
             DevContainerState::TemplateWriteFailed(dev_container_error) => self.render_error(
-                "Error Creating Dev Container Definition".to_owned(),
+                tr(
+                    cx,
+                    "dev_container.error_creating_definition",
+                    "Error Creating Dev Container Definition",
+                ),
                 dev_container_error,
                 window,
                 cx,
             ),
-            DevContainerState::TemplateQueryReturned(Err(e)) => {
-                self.render_error("Error Retrieving Templates".to_owned(), e, window, cx)
-            }
+            DevContainerState::TemplateQueryReturned(Err(e)) => self.render_error(
+                tr(
+                    cx,
+                    "dev_container.error_retrieving_templates",
+                    "Error Retrieving Templates",
+                ),
+                e,
+                window,
+                cx,
+            ),
         }
     }
 
@@ -1164,7 +1218,7 @@ impl StatefulModal for DevContainerModal {
                     .collect::<Vec<TemplateEntry>>();
                 if self.state == DevContainerState::QueryingTemplates {
                     let delegate = TemplatePickerDelegate::new(
-                        "Select a template".to_owned(),
+                        tr(cx, "dev_container.select_template", "Select a template"),
                         cx.weak_entity(),
                         items.clone(),
                         Box::new(|entry, this, window, cx| {
@@ -1295,7 +1349,11 @@ impl StatefulModal for DevContainerModal {
                         })
                         .collect::<Vec<FeatureEntry>>();
                     let delegate = FeaturePickerDelegate::new(
-                        "Select features to add".to_owned(),
+                        tr(
+                            cx,
+                            "dev_container.select_features_to_add",
+                            "Select features to add",
+                        ),
                         cx.weak_entity(),
                         features,
                         template_entry.clone(),

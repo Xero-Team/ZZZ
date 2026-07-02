@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use futures::{FutureExt, StreamExt};
 use gpui::{AppContext, AsyncWindowContext, Context};
+use i18n::tr;
 use jupyter_protocol::{JupyterKernelspec, JupyterMessageContent};
 use runtimelib::{
     ClientControlConnection, ClientIoPubConnection, ClientShellConnection, ClientStdinConnection,
@@ -105,50 +106,57 @@ pub fn start_kernel_tasks<S: KernelSession + 'static>(
     let (request_tx, mut request_rx) = futures::channel::mpsc::channel::<JupyterMessage>(100);
     let (stdin_tx, mut stdin_rx) = futures::channel::mpsc::channel::<JupyterMessage>(100);
 
-    let recv_task = cx.spawn({
-        let session = session.clone();
-        let mut iopub = iopub_socket;
-        let mut shell = shell_recv;
-        let mut control = control_recv;
-        let mut stdin = stdin_recv;
+    let recv_task =
+        cx.spawn({
+            let session = session.clone();
+            let mut iopub = iopub_socket;
+            let mut shell = shell_recv;
+            let mut control = control_recv;
+            let mut stdin = stdin_recv;
 
-        async move |cx| -> anyhow::Result<()> {
-            loop {
-                let (channel, result) = futures::select! {
-                    msg = iopub.read().fuse() => ("iopub", msg),
-                    msg = shell.read().fuse() => ("shell", msg),
-                    msg = control.read().fuse() => ("control", msg),
-                    msg = stdin.read().fuse() => ("stdin", msg),
-                };
-                match result {
-                    Ok(message) => {
-                        session
-                            .update_in(cx, |session, window, cx| {
-                                session.route(&message, window, cx);
-                            })
-                            .ok();
-                    }
-                    Err(
-                        ref err @ (runtimelib::RuntimeError::ParseError { .. }
-                        | runtimelib::RuntimeError::SerdeError(_)),
-                    ) => {
-                        let error_detail = format!("Kernel issue on {channel} channel\n\n{err}");
-                        log::warn!("kernel: {error_detail}");
-                        session
-                            .update_in(cx, |session, _window, cx| {
-                                session.kernel_errored(error_detail, cx);
-                                cx.notify();
-                            })
-                            .ok();
-                    }
-                    Err(err) => {
-                        log::warn!("kernel: error reading from {channel}: {err:?}");
-                        anyhow::bail!("{channel} recv: {err}");
+            async move |cx| -> anyhow::Result<()> {
+                loop {
+                    let (channel, result) = futures::select! {
+                        msg = iopub.read().fuse() => ("iopub", msg),
+                        msg = shell.read().fuse() => ("shell", msg),
+                        msg = control.read().fuse() => ("control", msg),
+                        msg = stdin.read().fuse() => ("stdin", msg),
+                    };
+                    match result {
+                        Ok(message) => {
+                            session
+                                .update_in(cx, |session, window, cx| {
+                                    session.route(&message, window, cx);
+                                })
+                                .ok();
+                        }
+                        Err(
+                            ref err @ (runtimelib::RuntimeError::ParseError { .. }
+                            | runtimelib::RuntimeError::SerdeError(_)),
+                        ) => {
+                            session
+                                .update_in(cx, |session, _window, cx| {
+                                    let error_detail = tr(
+                                        cx,
+                                        "repl.kernels.kernel_issue_on_channel",
+                                        "Kernel issue on {} channel\n\n{}",
+                                    )
+                                    .replacen("{}", channel, 1)
+                                    .replacen("{}", &err.to_string(), 1);
+                                    log::warn!("kernel: {error_detail}");
+                                    session.kernel_errored(error_detail, cx);
+                                    cx.notify();
+                                })
+                                .ok();
+                        }
+                        Err(err) => {
+                            log::warn!("kernel: error reading from {channel}: {err:?}");
+                            anyhow::bail!("{channel} recv: {err}");
+                        }
                     }
                 }
             }
-        }
-    });
+        });
 
     let routing_task = cx.background_spawn(async move {
         while let Some(message) = request_rx.next().await {
@@ -190,7 +198,16 @@ pub fn start_kernel_tasks<S: KernelSession + 'static>(
             while let Some((name, result)) = tasks.next().await {
                 if let Err(err) = result {
                     session.update(cx, |session, cx| {
-                        session.kernel_errored(format!("handling failed for {name}: {err}"), cx);
+                        session.kernel_errored(
+                            tr(
+                                cx,
+                                "repl.kernels.handling_failed_for",
+                                "handling failed for {}: {}",
+                            )
+                            .replacen("{}", name, 1)
+                            .replacen("{}", &err.to_string(), 1),
+                            cx,
+                        );
                         cx.notify();
                     });
                 }
@@ -213,7 +230,7 @@ pub struct PythonEnvKernelSpecification {
     pub path: PathBuf,
     pub kernelspec: JupyterKernelspec,
     pub has_ipykernel: bool,
-    /// Display label for the environment type: "venv", "Conda", "Pyenv", etc.
+    /// Environment type identifier used to derive the localized display label.
     pub environment_kind: Option<String>,
 }
 
@@ -235,10 +252,7 @@ impl PythonEnvKernelSpecification {
     }
 
     pub fn is_uv(&self) -> bool {
-        matches!(
-            self.environment_kind.as_deref(),
-            Some("uv" | "uv (Workspace)")
-        )
+        matches!(self.environment_kind.as_deref(), Some("Uv" | "UvWorkspace"))
     }
 }
 
@@ -306,17 +320,26 @@ impl KernelSpecification {
         }
     }
 
-    pub fn type_name(&self) -> SharedString {
+    pub fn type_name(&self, cx: &App) -> SharedString {
         match self {
-            Self::Jupyter(_) => "Jupyter".into(),
-            Self::PythonEnv(spec) => SharedString::from(
-                spec.environment_kind
-                    .clone()
-                    .unwrap_or_else(|| "Python Environment".to_owned()),
-            ),
-            Self::JupyterServer(_) => "Jupyter Server".into(),
-            Self::SshRemote(_) => "SSH Remote".into(),
-            Self::WslRemote(_) => "WSL Remote".into(),
+            Self::Jupyter(_) => tr(cx, "repl.kernels.type.jupyter", "Jupyter").into(),
+            Self::PythonEnv(spec) => spec
+                .environment_kind
+                .as_deref()
+                .map(|kind| localized_environment_kind(kind, cx))
+                .unwrap_or_else(|| {
+                    tr(
+                        cx,
+                        "repl.kernels.type.python_environment",
+                        "Python Environment",
+                    )
+                    .into()
+                }),
+            Self::JupyterServer(_) => {
+                tr(cx, "repl.kernels.type.jupyter_server", "Jupyter Server").into()
+            }
+            Self::SshRemote(_) => tr(cx, "repl.kernels.type.ssh_remote", "SSH Remote").into(),
+            Self::WslRemote(_) => tr(cx, "repl.kernels.type.wsl_remote", "WSL Remote").into(),
         }
     }
 
@@ -349,16 +372,18 @@ impl KernelSpecification {
         }
     }
 
-    pub fn environment_kind_label(&self) -> Option<SharedString> {
+    pub fn environment_kind_label(&self, cx: &App) -> Option<SharedString> {
         match self {
             Self::PythonEnv(spec) => spec
                 .environment_kind
                 .as_ref()
-                .map(|kind| SharedString::from(kind.clone())),
-            Self::Jupyter(_) => Some("Jupyter".into()),
-            Self::JupyterServer(_) => Some("Jupyter Server".into()),
-            Self::SshRemote(_) => Some("SSH Remote".into()),
-            Self::WslRemote(_) => Some("WSL Remote".into()),
+                .map(|kind| localized_environment_kind(kind, cx)),
+            Self::Jupyter(_) => Some(tr(cx, "repl.kernels.type.jupyter", "Jupyter").into()),
+            Self::JupyterServer(_) => {
+                Some(tr(cx, "repl.kernels.type.jupyter_server", "Jupyter Server").into())
+            }
+            Self::SshRemote(_) => Some(tr(cx, "repl.kernels.type.ssh_remote", "SSH Remote").into()),
+            Self::WslRemote(_) => Some(tr(cx, "repl.kernels.type.wsl_remote", "WSL Remote").into()),
         }
     }
 
@@ -379,30 +404,72 @@ impl KernelSpecification {
 }
 
 fn extract_environment_kind(toolchain_json: &serde_json::Value) -> Option<String> {
-    let kind_str = toolchain_json.get("kind")?.as_str()?;
-    let label = match kind_str {
-        "Conda" => "Conda",
-        "Pixi" => "pixi",
-        "Homebrew" => "Homebrew",
-        "Pyenv" => "global (Pyenv)",
-        "GlobalPaths" => "global",
-        "PyenvVirtualEnv" => "Pyenv",
-        "Pipenv" => "Pipenv",
-        "Poetry" => "Poetry",
-        "MacPythonOrg" => "global (Python.org)",
-        "MacCommandLineTools" => "global (Command Line Tools for Xcode)",
-        "LinuxGlobal" => "global",
-        "MacXCode" => "global (Xcode)",
-        "Venv" => "venv",
-        "VirtualEnv" => "virtualenv",
-        "VirtualEnvWrapper" => "virtualenvwrapper",
-        "WindowsStore" => "global (Windows Store)",
-        "WindowsRegistry" => "global (Windows Registry)",
-        "Uv" => "uv",
-        "UvWorkspace" => "uv (Workspace)",
-        _ => kind_str,
-    };
-    Some(label.to_owned())
+    toolchain_json.get("kind")?.as_str().map(ToOwned::to_owned)
+}
+
+fn localized_environment_kind(kind: &str, cx: &App) -> SharedString {
+    match kind {
+        "Conda" => tr(cx, "repl.kernels.environment.conda", "Conda").into(),
+        "Pixi" => tr(cx, "repl.kernels.environment.pixi", "pixi").into(),
+        "Homebrew" => tr(cx, "repl.kernels.environment.homebrew", "Homebrew").into(),
+        "Pyenv" => tr(
+            cx,
+            "repl.kernels.environment.global_pyenv",
+            "global (Pyenv)",
+        )
+        .into(),
+        "GlobalPaths" => tr(cx, "repl.kernels.environment.global", "global").into(),
+        "PyenvVirtualEnv" => tr(cx, "repl.kernels.environment.pyenv", "Pyenv").into(),
+        "Pipenv" => tr(cx, "repl.kernels.environment.pipenv", "Pipenv").into(),
+        "Poetry" => tr(cx, "repl.kernels.environment.poetry", "Poetry").into(),
+        "MacPythonOrg" => tr(
+            cx,
+            "repl.kernels.environment.global_python_org",
+            "global (Python.org)",
+        )
+        .into(),
+        "MacCommandLineTools" => tr(
+            cx,
+            "repl.kernels.environment.global_command_line_tools_xcode",
+            "global (Command Line Tools for Xcode)",
+        )
+        .into(),
+        "LinuxGlobal" => tr(cx, "repl.kernels.environment.global", "global").into(),
+        "MacXCode" => tr(
+            cx,
+            "repl.kernels.environment.global_xcode",
+            "global (Xcode)",
+        )
+        .into(),
+        "Venv" => tr(cx, "repl.kernels.environment.venv", "venv").into(),
+        "VirtualEnv" => tr(cx, "repl.kernels.environment.virtualenv", "virtualenv").into(),
+        "VirtualEnvWrapper" => tr(
+            cx,
+            "repl.kernels.environment.virtualenvwrapper",
+            "virtualenvwrapper",
+        )
+        .into(),
+        "WindowsStore" => tr(
+            cx,
+            "repl.kernels.environment.global_windows_store",
+            "global (Windows Store)",
+        )
+        .into(),
+        "WindowsRegistry" => tr(
+            cx,
+            "repl.kernels.environment.global_windows_registry",
+            "global (Windows Registry)",
+        )
+        .into(),
+        "Uv" => tr(cx, "repl.kernels.environment.uv", "uv").into(),
+        "UvWorkspace" => tr(
+            cx,
+            "repl.kernels.environment.uv_workspace",
+            "uv (Workspace)",
+        )
+        .into(),
+        _ => SharedString::from(kind.to_owned()),
+    }
 }
 
 pub fn python_env_kernel_specifications(
@@ -410,6 +477,8 @@ pub fn python_env_kernel_specifications(
     worktree_id: WorktreeId,
     cx: &mut App,
 ) -> impl Future<Output = Result<Vec<KernelSpecification>>> + use<> {
+    let remote_kernel_label = tr(cx, "repl.kernels.remote_kernel", "Remote {}");
+    let wsl_kernel_label = tr(cx, "repl.kernels.wsl_kernel", "WSL: {} {}");
     let python_language = LanguageName::new_static("Python");
     let is_remote = project.read(cx).is_remote();
     let wsl_distro = project
@@ -457,6 +526,7 @@ pub fn python_env_kernel_specifications(
             .chain(toolchains.toolchains)
             .map(|toolchain| {
                 let wsl_distro = wsl_distro.clone();
+                let remote_kernel_label = remote_kernel_label.clone();
                 background_executor.spawn(async move {
                     // For remote projects, we assume python is available assuming toolchain is reported.
                     // We can skip the `ipykernel` check or run it remotely.
@@ -497,7 +567,7 @@ pub fn python_env_kernel_specifications(
                         );
                         return Some(KernelSpecification::SshRemote(
                             SshRemoteKernelSpecification {
-                                name: format!("Remote {}", toolchain.name),
+                                name: remote_kernel_label.replacen("{}", &toolchain.name, 1),
                                 path: toolchain.path.clone(),
                                 kernelspec: default_kernelspec,
                             },
@@ -629,7 +699,11 @@ pub fn python_env_kernel_specifications(
                                 (python_cmd, "(System)".to_owned())
                             };
 
-                            let display_name = format!("WSL: {} {}", distro, display_suffix);
+                            let display_name = wsl_kernel_label.replacen("{}", distro, 1).replacen(
+                                "{}",
+                                &display_suffix,
+                                1,
+                            );
                             let default_kernelspec = JupyterKernelspec {
                                 argv: vec![
                                     python_path,
@@ -701,6 +775,24 @@ impl ToString for KernelStatus {
             KernelStatus::ShuttingDown => "Shutting Down".to_owned(),
             KernelStatus::Shutdown => "Shutdown".to_owned(),
             KernelStatus::Restarting => "Restarting".to_owned(),
+        }
+    }
+}
+
+impl KernelStatus {
+    pub fn label(&self, cx: &App) -> SharedString {
+        match self {
+            KernelStatus::Idle => tr(cx, "repl.kernels.status.idle", "Idle").into(),
+            KernelStatus::Busy => tr(cx, "repl.kernels.status.busy", "Busy").into(),
+            KernelStatus::Starting => tr(cx, "repl.kernels.status.starting", "Starting").into(),
+            KernelStatus::Error => tr(cx, "repl.kernels.status.error", "Error").into(),
+            KernelStatus::ShuttingDown => {
+                tr(cx, "repl.kernels.status.shutting_down", "Shutting Down").into()
+            }
+            KernelStatus::Shutdown => tr(cx, "repl.kernels.status.shutdown", "Shutdown").into(),
+            KernelStatus::Restarting => {
+                tr(cx, "repl.kernels.status.restarting", "Restarting").into()
+            }
         }
     }
 }

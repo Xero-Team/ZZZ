@@ -13,6 +13,7 @@ use gpui::{
     ThreadTimingsDelta, TitlebarOptions, UniformListScrollHandle, WeakEntity, WindowBounds,
     WindowOptions, div, prelude::FluentBuilder, profiler, px, relative, size, uniform_list,
 };
+use i18n::tr;
 use rpc::{AnyProtoClient, proto};
 use settings::{RegisterSetting, Settings, SettingsContent, SettingsStore};
 use std::any::TypeId;
@@ -40,12 +41,28 @@ enum ProfileSource {
 }
 
 impl ProfileSource {
-    fn label(&self) -> &'static str {
+    fn label(&self, cx: &App) -> String {
         match self {
-            ProfileSource::Foreground => "Foreground",
-            ProfileSource::AllThreads => "All threads",
-            ProfileSource::RemoteForeground => "Remote: Foreground",
-            ProfileSource::RemoteAllThreads => "Remote: All threads",
+            ProfileSource::Foreground => tr(
+                cx,
+                "miniprofiler_ui.profile_source.foreground",
+                "Foreground",
+            ),
+            ProfileSource::AllThreads => tr(
+                cx,
+                "miniprofiler_ui.profile_source.all_threads",
+                "All threads",
+            ),
+            ProfileSource::RemoteForeground => tr(
+                cx,
+                "miniprofiler_ui.profile_source.remote_foreground",
+                "Remote: Foreground",
+            ),
+            ProfileSource::RemoteAllThreads => tr(
+                cx,
+                "miniprofiler_ui.profile_source.remote_all_threads",
+                "Remote: All threads",
+            ),
         }
     }
 
@@ -155,7 +172,7 @@ fn open_performance_profiler(
         cx.open_window(
             WindowOptions {
                 titlebar: Some(TitlebarOptions {
-                    title: Some("Profiler Window".into()),
+                    title: Some(tr(cx, "miniprofiler_ui.window_title", "Profiler Window").into()),
                     appears_transparent: false,
                     traffic_light_position: None,
                 }),
@@ -405,12 +422,12 @@ impl ProfilerWindow {
 
         DropdownMenu::new(
             "profile-source",
-            current_source.label(),
+            current_source.label(cx),
             ContextMenu::build(window, cx, move |mut menu, window, cx| {
                 for source in &sources {
                     let source = *source;
                     let weak = weak.clone();
-                    menu = menu.entry(source.label(), None, move |_, cx| {
+                    menu = menu.entry(source.label(cx), None, move |_, cx| {
                         weak.update(cx, |this, cx| {
                             this.set_source(source, cx);
                             cx.notify();
@@ -547,7 +564,11 @@ impl Render for ProfilerWindow {
                             .child(
                                 Button::new(
                                     "switch-mode",
-                                    if self.paused { "Resume" } else { "Pause" },
+                                    if self.paused {
+                                        tr(cx, "miniprofiler_ui.resume", "Resume")
+                                    } else {
+                                        tr(cx, "miniprofiler_ui.pause", "Pause")
+                                    },
                                 )
                                 .style(ButtonStyle::Filled)
                                 .on_click(cx.listener(
@@ -563,7 +584,7 @@ impl Render for ProfilerWindow {
                                 )),
                             )
                             .child(
-                                Button::new("export-data", "Save")
+                                Button::new("export-data", tr(cx, "miniprofiler_ui.save", "Save"))
                                     .style(ButtonStyle::Filled)
                                     .on_click(cx.listener(|this, _, _window, cx| {
                                         let Some(workspace) = this.workspace.as_ref() else {
@@ -620,7 +641,11 @@ impl Render for ProfilerWindow {
                     )
                     .child(
                         Checkbox::new("include-self", self.include_self_timings)
-                            .label("Include profiler timings")
+                            .label(tr(
+                                cx,
+                                "miniprofiler_ui.include_profiler_timings",
+                                "Include profiler timings",
+                            ))
                             .on_click(cx.listener(|this, checked, _window, cx| {
                                 this.include_self_timings = *checked;
                                 cx.notify();

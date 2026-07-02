@@ -4,6 +4,7 @@ use gpui::{
     AnyWindowHandle, Context, Hsla, InteractiveElement, MouseButton, ParentElement, ScrollHandle,
     Styled, SystemWindowTab, SystemWindowTabController, Window, WindowId, actions, canvas, div,
 };
+use i18n::tr;
 
 use theme_settings::ThemeSettings;
 use ui::{
@@ -284,9 +285,21 @@ impl SystemWindowTabs {
                 let other_tabs = tabs.clone();
                 let move_tabs = tabs.clone();
                 let merge_tabs = tabs.clone();
+                let close_tab = tr(cx, "workspace.pane.close_tab", "Close Tab");
+                let close_other_tabs = tr(
+                    cx,
+                    "platform_title_bar.close_other_tabs",
+                    "Close Other Tabs",
+                );
+                let move_tab_to_new_window = tr(
+                    cx,
+                    "platform_title_bar.move_tab_to_new_window",
+                    "Move Tab to New Window",
+                );
+                let show_all_tabs = tr(cx, "platform_title_bar.show_all_tabs", "Show All Tabs");
 
                 ContextMenu::build(window, cx, move |mut menu, _window_, _cx| {
-                    menu = menu.entry("Close Tab", None, move |window, cx| {
+                    menu = menu.entry(close_tab.clone(), None, move |window, cx| {
                         Self::handle_right_click_action(
                             cx,
                             window,
@@ -298,7 +311,7 @@ impl SystemWindowTabs {
                         );
                     });
 
-                    menu = menu.entry("Close Other Tabs", None, move |window, cx| {
+                    menu = menu.entry(close_other_tabs.clone(), None, move |window, cx| {
                         Self::handle_right_click_action(
                             cx,
                             window,
@@ -310,7 +323,7 @@ impl SystemWindowTabs {
                         );
                     });
 
-                    menu = menu.entry("Move Tab to New Window", None, move |window, cx| {
+                    menu = menu.entry(move_tab_to_new_window.clone(), None, move |window, cx| {
                         Self::handle_right_click_action(
                             cx,
                             window,
@@ -326,7 +339,7 @@ impl SystemWindowTabs {
                         );
                     });
 
-                    menu = menu.entry("Show All Tabs", None, move |window, cx| {
+                    menu = menu.entry(show_all_tabs.clone(), None, move |window, cx| {
                         Self::handle_right_click_action(
                             cx,
                             window,

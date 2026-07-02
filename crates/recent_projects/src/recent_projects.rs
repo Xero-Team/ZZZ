@@ -1628,14 +1628,30 @@ impl PickerDelegate for RecentProjectsDelegate {
 
                 let focus_handle = self.focus_handle.clone();
                 let secondary_confirm_tooltip = if self.create_new_window {
-                    "Open Project in This Window"
+                    i18n::tr(
+                        cx,
+                        "recent_projects.open_project_in_this_window",
+                        "Open Project in This Window",
+                    )
                 } else {
-                    "Open Project in New Window"
+                    i18n::tr(
+                        cx,
+                        "recent_projects.open_project_in_new_window",
+                        "Open Project in New Window",
+                    )
                 };
                 let primary_confirm_tooltip = if self.create_new_window {
-                    "Open Project in New Window"
+                    i18n::tr(
+                        cx,
+                        "recent_projects.open_project_in_new_window",
+                        "Open Project in New Window",
+                    )
                 } else {
-                    "Open Project in This Window"
+                    i18n::tr(
+                        cx,
+                        "recent_projects.open_project_in_this_window",
+                        "Open Project in This Window",
+                    )
                 };
                 let secondary_confirm_icon = if self.create_new_window {
                     IconName::ThisWindow
@@ -1685,7 +1701,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                             .tooltip({
                                 move |_, cx| {
                                     Tooltip::for_action_in(
-                                        secondary_confirm_tooltip,
+                                        secondary_confirm_tooltip.clone(),
                                         &menu::SecondaryConfirm,
                                         &focus_handle,
                                         cx,
@@ -1755,7 +1771,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                                 })
                                 .tooltip(move |_, cx| {
                                     Tooltip::with_meta(
-                                        primary_confirm_tooltip,
+                                        primary_confirm_tooltip.clone(),
                                         None,
                                         tooltip_path.clone(),
                                         cx,

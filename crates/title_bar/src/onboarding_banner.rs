@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 use gpui::{Action, Entity, Global, Render, SharedString};
+use i18n::tr;
 use ui::{ButtonLike, Tooltip, prelude::*};
 use util::ResultExt;
 
@@ -45,7 +46,9 @@ impl OnboardingBanner {
                 action,
                 icon_name,
                 label: label.into(),
-                subtitle: subtitle.or(Some(SharedString::from("Introducing:"))),
+                subtitle: subtitle.or(Some(
+                    tr(cx, "title_bar.banner.introducing", "Introducing:").into(),
+                )),
             },
             visible_when: None,
             dismissed: get_dismissed(source, cx),
@@ -159,9 +162,17 @@ impl Render for OnboardingBanner {
                         .on_click(cx.listener(|this, _, _window, cx| this.dismiss(cx)))
                         .tooltip(|_window, cx| {
                             Tooltip::with_meta(
-                                "Close Announcement Banner",
+                                tr(
+                                    cx,
+                                    "title_bar.banner.close_announcement",
+                                    "Close Announcement Banner",
+                                ),
                                 None,
-                                "It won't show again for this feature",
+                                tr(
+                                    cx,
+                                    "title_bar.banner.dismiss_feature",
+                                    "It won't show again for this feature",
+                                ),
                                 cx,
                             )
                         }),

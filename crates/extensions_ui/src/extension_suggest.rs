@@ -5,6 +5,7 @@ use db::kvp::KeyValueStore;
 use editor::Editor;
 use extension_host::ExtensionStore;
 use gpui::{AppContext as _, Context, Entity, SharedString, Window};
+use i18n::tr;
 use language::Buffer;
 use ui::prelude::*;
 use util::ResultExt;
@@ -171,13 +172,20 @@ pub(crate) fn suggest(buffer: Entity<Buffer>, window: &mut Window, cx: &mut Cont
         workspace.show_notification(notification_id, cx, |cx| {
             cx.new(move |cx| {
                 MessageNotification::new(
-                    format!(
+                    tr(
+                        cx,
+                        "extensions_ui.extension_suggest.prompt",
                         "Do you want to install the recommended '{}' extension for '{}' files?",
-                        extension_id, file_name_or_extension
-                    ),
+                    )
+                    .replacen("{}", &extension_id, 1)
+                    .replacen("{}", &file_name_or_extension, 1),
                     cx,
                 )
-                .primary_message("Yes, install extension")
+                .primary_message(tr(
+                    cx,
+                    "extensions_ui.extension_suggest.install",
+                    "Yes, install extension",
+                ))
                 .primary_icon(IconName::Check)
                 .primary_icon_color(Color::Success)
                 .primary_on_click({
@@ -190,7 +198,11 @@ pub(crate) fn suggest(buffer: Entity<Buffer>, window: &mut Window, cx: &mut Cont
                         });
                     }
                 })
-                .secondary_message("No, don't install it")
+                .secondary_message(tr(
+                    cx,
+                    "extensions_ui.extension_suggest.dismiss",
+                    "No, don't install it",
+                ))
                 .secondary_icon(IconName::Close)
                 .secondary_icon_color(Color::Error)
                 .secondary_on_click(move |_window, cx| {

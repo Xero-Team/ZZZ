@@ -6,6 +6,7 @@ use extension_host::ExtensionStore;
 use fs::Fs;
 use fuzzy::{StringMatch, StringMatchCandidate, match_strings};
 use gpui::{App, DismissEvent, Entity, EventEmitter, Focusable, Task, WeakEntity, prelude::*};
+use i18n::tr;
 use picker::{Picker, PickerDelegate};
 use release_channel::ReleaseChannel;
 use semver::Version;
@@ -92,8 +93,13 @@ impl ExtensionVersionSelectorDelegate {
 impl PickerDelegate for ExtensionVersionSelectorDelegate {
     type ListItem = ui::ListItem;
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Select extension version...".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(
+            cx,
+            "extensions_ui.extension_version_selector.placeholder",
+            "Select extension version...",
+        )
+        .into()
     }
 
     fn match_count(&self) -> usize {
@@ -234,7 +240,14 @@ impl PickerDelegate for ExtensionVersionSelectorDelegate {
                     h_flex()
                         .gap_2()
                         .when(!is_version_compatible, |this| {
-                            this.child(Label::new("Incompatible").color(Color::Muted))
+                            this.child(
+                                Label::new(tr(
+                                    cx,
+                                    "extensions_ui.extension_version_selector.incompatible",
+                                    "Incompatible",
+                                ))
+                                .color(Color::Muted),
+                            )
                         })
                         .child(
                             Label::new(

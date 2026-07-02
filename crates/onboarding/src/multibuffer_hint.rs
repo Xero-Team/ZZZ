@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use db::kvp::KeyValueStore;
 use gpui::{App, EntityId, EventEmitter, Subscription};
+use i18n::tr;
 use ui::{IconButtonShape, Tooltip, prelude::*};
 use workspace::item::{ItemBufferKind, ItemEvent, ItemHandle};
 use workspace::{ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView};
@@ -154,20 +155,25 @@ impl Render for MultibufferHint {
                                     .size(IconSize::XSmall)
                                     .color(Color::Muted),
                             )
-                            .child(Label::new(
+                            .child(Label::new(tr(
+                                cx,
+                                "onboarding.multibuffer_hint.message",
                                 "Edit and save files directly in the results multibuffer!",
-                            )),
+                            ))),
                     )
                     .child(
-                        Button::new("open_docs", "Learn More")
-                            .end_icon(
-                                Icon::new(IconName::ArrowUpRight)
-                                    .size(IconSize::Small)
-                                    .color(Color::Muted),
-                            )
-                            .on_click(move |_event, _, cx| {
-                                cx.open_url("https://zed.dev/docs/multibuffers")
-                            }),
+                        Button::new(
+                            "open_docs",
+                            tr(cx, "onboarding.multibuffer_hint.learn_more", "Learn More"),
+                        )
+                        .end_icon(
+                            Icon::new(IconName::ArrowUpRight)
+                                .size(IconSize::Small)
+                                .color(Color::Muted),
+                        )
+                        .on_click(move |_event, _, cx| {
+                            cx.open_url("https://zed.dev/docs/multibuffers")
+                        }),
                     ),
             )
             .child(
@@ -180,7 +186,11 @@ impl Render for MultibufferHint {
                             ToolbarItemLocation::Hidden,
                         ))
                     }))
-                    .tooltip(Tooltip::text("Dismiss Hint")),
+                    .tooltip(Tooltip::text(tr(
+                        cx,
+                        "onboarding.multibuffer_hint.dismiss",
+                        "Dismiss Hint",
+                    ))),
             )
             .into_any_element()
     }

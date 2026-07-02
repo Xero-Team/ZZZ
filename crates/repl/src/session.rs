@@ -31,6 +31,7 @@ use futures::FutureExt as _;
 use gpui::{
     Context, Entity, EventEmitter, Render, Subscription, Task, WeakEntity, Window, div, prelude::*,
 };
+use i18n::tr;
 use language::Point;
 use project::Fs;
 use runtimelib::{
@@ -182,7 +183,11 @@ impl EditorBlock {
                         .icon_color(Color::Muted)
                         .size(ButtonSize::Compact)
                         .shape(IconButtonShape::Square)
-                        .tooltip(Tooltip::text("Close output area"))
+                        .tooltip(Tooltip::text(tr(
+                            cx,
+                            "repl.session.close_output_area",
+                            "Close output area",
+                        )))
                         .on_click(move |_, window, cx| {
                             if let BlockId::Custom(block_id) = block_id {
                                 (on_close)(block_id, window, cx)
@@ -909,18 +914,24 @@ impl Render for Session {
                     .as_ref()
                     .map(|info| info.language_info.name.clone()),
                 Some(
-                    Button::new("interrupt", "Interrupt")
+                    Button::new("interrupt", tr(cx, "repl.session.interrupt", "Interrupt"))
                         .style(ButtonStyle::Subtle)
                         .on_click(cx.listener(move |session, _, _, cx| {
                             session.interrupt(cx);
                         })),
                 ),
             ),
-            Kernel::StartingKernel(_) => (Some("Starting".into()), None),
-            Kernel::ErroredLaunch(err) => (Some(format!("Error: {err}")), None),
-            Kernel::ShuttingDown => (Some("Shutting Down".into()), None),
-            Kernel::Shutdown => (Some("Shutdown".into()), None),
-            Kernel::Restarting => (Some("Restarting".into()), None),
+            Kernel::StartingKernel(_) => (Some(tr(cx, "repl.session.starting", "Starting")), None),
+            Kernel::ErroredLaunch(err) => (
+                Some(tr(cx, "repl.session.error", "Error: {}").replacen("{}", &err.to_string(), 1)),
+                None,
+            ),
+            Kernel::ShuttingDown => (
+                Some(tr(cx, "repl.session.shutting_down", "Shutting Down")),
+                None,
+            ),
+            Kernel::Shutdown => (Some(tr(cx, "repl.session.shutdown", "Shutdown")), None),
+            Kernel::Restarting => (Some(tr(cx, "repl.session.restarting", "Restarting")), None),
         };
 
         KernelListItem::new(self.kernel_specification.clone())
@@ -945,7 +956,7 @@ impl Render for Session {
             .child(Label::new(self.kernel_specification.name()))
             .children(status_text.map(|status_text| Label::new(format!("({status_text})"))))
             .button(
-                Button::new("shutdown", "Shutdown")
+                Button::new("shutdown", tr(cx, "repl.session.shutdown", "Shutdown"))
                     .style(ButtonStyle::Subtle)
                     .disabled(self.kernel.is_shutting_down())
                     .on_click(cx.listener(move |session, _, window, cx| {

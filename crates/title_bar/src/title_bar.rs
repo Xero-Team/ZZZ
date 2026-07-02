@@ -992,7 +992,8 @@ impl TitleBar {
         let settings = TitleBarSettings::get_global(cx);
         let effective_repository = Some(repository);
 
-        let worktree_label: SharedString = linked_worktree_name.unwrap_or_else(|| "main".into());
+        let worktree_label: SharedString =
+            linked_worktree_name.unwrap_or_else(|| tr(cx, "sidebar.worktree.main", "main").into());
 
         let (creation_in_progress, is_switch) = self
             .workspace

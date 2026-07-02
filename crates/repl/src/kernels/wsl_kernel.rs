@@ -9,6 +9,7 @@ use futures::{
     io::BufReader,
 };
 use gpui::{App, BackgroundExecutor, Entity, EntityId, Task, Window};
+use i18n::tr;
 use jupyter_protocol::{
     ExecutionState, JupyterMessage, KernelInfoReply,
     connection_info::{ConnectionInfo, Transport},
@@ -389,10 +390,29 @@ impl WslRunningKernel {
                             return;
                         }
 
-                        format!("WSL kernel: kernel process exited with status: {:?}", status)
+                        cx.update(|_, cx| {
+                            tr(
+                                cx,
+                                "repl.kernels.wsl_process_exited_with_status",
+                                "WSL kernel: kernel process exited with status: {}",
+                            )
+                            .replacen("{}", &format!("{status:?}"), 1)
+                        })
+                        .unwrap_or_else(|_| {
+                            format!("WSL kernel: kernel process exited with status: {:?}", status)
+                        })
                     }
                     Err(err) => {
-                        format!("WSL kernel: kernel process exited with error: {:?}", err)
+                        cx.update(|_, cx| {
+                            tr(
+                                cx,
+                                "repl.kernels.wsl_process_exited_with_error",
+                                "WSL kernel: kernel process exited with error: {}",
+                            )
+                            .replacen("{}", &format!("{err:?}"), 1)
+                        }).unwrap_or_else(|_| {
+                            format!("WSL kernel: kernel process exited with error: {:?}", err)
+                        })
                     }
                 };
 

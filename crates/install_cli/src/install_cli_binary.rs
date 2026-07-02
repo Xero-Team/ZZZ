@@ -62,15 +62,35 @@ async fn install_script(cx: &AsyncApp) -> Result<PathBuf> {
 }
 
 pub fn install_cli_binary(window: &mut Window, cx: &mut Context<Workspace>) {
-    const LINUX_PROMPT_DETAIL: &str = "If you installed ZZZ from our official release add ~/.local/bin to your PATH.\n\nIf you installed ZZZ from a different source like your package manager, then you may need to create an alias/symlink manually.\n\nDepending on your package manager, the CLI might be named zeditor, zedit, zed-editor or something else.";
+    let linux_prompt_title = i18n::tr(
+        cx,
+        "install_cli.linux.prompt_title",
+        "CLI should already be installed",
+    );
+    let linux_prompt_detail = i18n::tr(
+        cx,
+        "install_cli.linux.prompt_detail",
+        "If you installed ZZZ from our official release add ~/.local/bin to your PATH.\n\nIf you installed ZZZ from a different source like your package manager, then you may need to create an alias/symlink manually.\n\nDepending on your package manager, the CLI might be named zeditor, zedit, zed-editor or something else.",
+    );
+    let installed_cli = i18n::tr(
+        cx,
+        "install_cli.installed",
+        "Installed `zzz` to {}. You can launch {} from your terminal.",
+    );
+    let error_installing_cli = i18n::tr(
+        cx,
+        "install_cli.error_installing_cli",
+        "Error installing zzz cli",
+    );
+    let ok = i18n::tr(cx, "zed.common.ok", "Ok");
 
     cx.spawn_in(window, async move |workspace, cx| {
         if cfg!(any(target_os = "linux", target_os = "freebsd")) {
             let prompt = cx.prompt(
                 PromptLevel::Warning,
-                "CLI should already be installed",
-                Some(LINUX_PROMPT_DETAIL),
-                &["Ok"],
+                &linux_prompt_title,
+                Some(&linux_prompt_detail),
+                &[ok.as_str()],
             );
             cx.background_spawn(prompt).detach();
             return Ok(());
@@ -85,11 +105,9 @@ pub fn install_cli_binary(window: &mut Window, cx: &mut Context<Workspace>) {
             workspace.show_toast(
                 Toast::new(
                     NotificationId::unique::<InstalledZedCli>(),
-                    format!(
-                        "Installed `zzz` to {}. You can launch {} from your terminal.",
-                        path.to_string_lossy(),
-                        ReleaseChannel::global(cx).display_name()
-                    ),
+                    installed_cli
+                        .replacen("{}", &path.to_string_lossy(), 1)
+                        .replacen("{}", ReleaseChannel::global(cx).display_name(), 1),
                 ),
                 cx,
             )
@@ -97,5 +115,5 @@ pub fn install_cli_binary(window: &mut Window, cx: &mut Context<Workspace>) {
         register_zed_scheme(cx).await.log_err();
         Ok(())
     })
-    .detach_and_prompt_err("Error installing zzz cli", window, cx, |_, _, _| None);
+    .detach_and_prompt_err(&error_installing_cli, window, cx, |_, _, _| None);
 }

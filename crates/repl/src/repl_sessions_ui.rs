@@ -3,6 +3,7 @@ use gpui::{
     AnyElement, App, Entity, EventEmitter, FocusHandle, Focusable, Subscription, actions,
     prelude::*,
 };
+use i18n::tr;
 use project::ProjectItem as _;
 use ui::{ButtonLike, ElevationIndex, KeyBinding, prelude::*};
 use util::ResultExt as _;
@@ -183,8 +184,8 @@ impl Focusable for ReplSessionsPage {
 impl Item for ReplSessionsPage {
     type Event = ItemEvent;
 
-    fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        "REPL Sessions".into()
+    fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
+        tr(cx, "repl.sessions.tab_title", "REPL Sessions").into()
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
@@ -219,38 +220,58 @@ impl Render for ReplSessionsPage {
         // install kernels. It can be assumed they don't have a running kernel if we have no
         // specifications.
         if kernel_specifications.is_empty() {
-            let instructions = "To start interactively running code in your editor, you need to install and configure Jupyter kernels.";
+            let instructions = tr(
+                cx,
+                "repl.sessions.no_kernels.instructions",
+                "To start interactively running code in your editor, you need to install and configure Jupyter kernels.",
+            );
 
-            return ReplSessionsContainer::new("No Jupyter Kernels Available")
-                .child(Label::new(instructions))
-                .child(
-                    h_flex().w_full().p_4().justify_center().gap_2().child(
-                        ButtonLike::new("install-kernels")
-                            .style(ButtonStyle::Filled)
-                            .size(ButtonSize::Large)
-                            .layer(ElevationIndex::ModalSurface)
-                            .child(Label::new("Install Kernels"))
-                            .on_click(move |_, _, cx| {
-                                cx.open_url(
-                                    "https://zed.dev/docs/repl#language-specific-instructions",
-                                )
-                            }),
-                    ),
-                );
+            return ReplSessionsContainer::new(tr(
+                cx,
+                "repl.sessions.no_kernels.title",
+                "No Jupyter Kernels Available",
+            ))
+            .child(Label::new(instructions))
+            .child(
+                h_flex().w_full().p_4().justify_center().gap_2().child(
+                    ButtonLike::new("install-kernels")
+                        .style(ButtonStyle::Filled)
+                        .size(ButtonSize::Large)
+                        .layer(ElevationIndex::ModalSurface)
+                        .child(Label::new(tr(
+                            cx,
+                            "repl.sessions.install_kernels",
+                            "Install Kernels",
+                        )))
+                        .on_click(move |_, _, cx| {
+                            cx.open_url("https://zed.dev/docs/repl#language-specific-instructions")
+                        }),
+                ),
+            );
         }
 
         // When there are no sessions, show the command to run code in an editor
         if sessions.is_empty() {
-            let instructions = "To run code in a Jupyter kernel, select some code and use the 'repl::Run' command.";
+            let instructions = tr(
+                cx,
+                "repl.sessions.no_sessions.instructions",
+                "To run code in a Jupyter kernel, select some code and use the 'repl::Run' command.",
+            );
 
-            return ReplSessionsContainer::new("No Jupyter Kernel Sessions").child(
+            return ReplSessionsContainer::new(tr(
+                cx,
+                "repl.sessions.no_sessions.title",
+                "No Jupyter Kernel Sessions",
+            ))
+            .child(
                 v_flex()
                     .child(Label::new(instructions))
                     .child(KeyBinding::for_action(&Run, cx)),
             );
         }
 
-        ReplSessionsContainer::new("Jupyter Kernel Sessions").children(sessions)
+        ReplSessionsContainer::new(tr(cx, "repl.sessions.title", "Jupyter Kernel Sessions"))
+            .children(sessions)
     }
 }
 

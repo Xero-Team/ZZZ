@@ -6,6 +6,7 @@ use std::sync::Arc;
 use anyhow::{Context as _, Result};
 use editor::{Editor, MultiBufferOffset};
 use gpui::{App, Entity, WeakEntity, Window, prelude::*};
+use i18n::tr;
 use language::{BufferSnapshot, Language, LanguageName, Point};
 use project::{ProjectItem as _, WorktreeId};
 use workspace::{Workspace, notifications::NotificationId};
@@ -89,9 +90,21 @@ pub fn install_ipykernel_and_assign(
     let env_name = env_spec.name.clone();
     let is_uv = env_spec.is_uv();
     let env_spec = env_spec.clone();
+    let failed_to_run_uv_pip_install_ipykernel = tr(
+        cx,
+        "repl.repl_editor.failed_to_run_uv_pip_install_ipykernel",
+        "failed to run uv pip install ipykernel",
+    );
+    let failed_to_run_pip_install_ipykernel = tr(
+        cx,
+        "repl.repl_editor.failed_to_run_pip_install_ipykernel",
+        "failed to run pip install ipykernel",
+    );
+    let unknown_error = tr(cx, "repl.repl_editor.unknown_error", "unknown error");
 
     struct IpykernelInstall;
     let notification_id = NotificationId::unique::<IpykernelInstall>();
+    let env_name_for_installing = env_name.clone();
 
     let workspace = Workspace::for_window(window, cx);
     if let Some(workspace) = &workspace {
@@ -99,7 +112,12 @@ pub fn install_ipykernel_and_assign(
             workspace.show_toast(
                 workspace::Toast::new(
                     notification_id.clone(),
-                    format!("Installing ipykernel in {}...", env_name),
+                    tr(
+                        cx,
+                        "repl.repl_editor.installing_ipykernel_in",
+                        "Installing ipykernel in {}...",
+                    )
+                    .replace("{}", &env_name_for_installing),
                 ),
                 cx,
             );
@@ -121,20 +139,23 @@ pub fn install_ipykernel_and_assign(
                 ])
                 .output()
                 .await
-                .context("failed to run uv pip install ipykernel")?
+                .with_context(|| failed_to_run_uv_pip_install_ipykernel.clone())?
         } else {
             util::command::new_command(python_path.to_string_lossy().as_ref())
                 .args(&["-m", "pip", "install", "ipykernel"])
                 .output()
                 .await
-                .context("failed to run pip install ipykernel")?
+                .with_context(|| failed_to_run_pip_install_ipykernel.clone())?
         };
 
         if output.status.success() {
             anyhow::Ok(())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("{}", stderr.lines().last().unwrap_or("unknown error"))
+            anyhow::bail!(
+                "{}",
+                stderr.lines().last().unwrap_or(unknown_error.as_ref())
+            )
         }
     });
 
@@ -150,7 +171,12 @@ pub fn install_ipykernel_and_assign(
                             workspace.show_toast(
                                 workspace::Toast::new(
                                     notification_id.clone(),
-                                    format!("ipykernel installed in {}", env_name),
+                                    tr(
+                                        cx,
+                                        "repl.repl_editor.ipykernel_installed_in",
+                                        "ipykernel installed in {}",
+                                    )
+                                    .replace("{}", &env_name),
                                 )
                                 .autohide(),
                                 cx,
@@ -183,9 +209,16 @@ pub fn install_ipykernel_and_assign(
                             workspace.show_toast(
                                 workspace::Toast::new(
                                     notification_id.clone(),
-                                    format!(
+                                    tr(
+                                        cx,
+                                        "repl.repl_editor.failed_to_install_ipykernel_in",
                                         "Failed to install ipykernel in {}: {}",
-                                        env_name, error
+                                    )
+                                    .replacen("{}", &env_name, 1)
+                                    .replacen(
+                                        "{}",
+                                        &error.to_string(),
+                                        1,
                                     ),
                                 ),
                                 cx,

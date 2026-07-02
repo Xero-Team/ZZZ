@@ -3,6 +3,7 @@ use crate::kernels::KernelSpecification;
 use crate::repl_store::ReplStore;
 
 use gpui::{AnyView, DismissEvent, FontWeight, SharedString, Task};
+use i18n::tr;
 use picker::{Picker, PickerDelegate};
 use project::WorktreeId;
 use std::sync::Arc;
@@ -19,7 +20,11 @@ pub enum KernelPickerEntry {
     },
 }
 
-fn build_grouped_entries(store: &ReplStore, worktree_id: WorktreeId) -> Vec<KernelPickerEntry> {
+fn build_grouped_entries(
+    store: &ReplStore,
+    worktree_id: WorktreeId,
+    cx: &App,
+) -> Vec<KernelPickerEntry> {
     let mut entries = Vec::new();
     let mut recommended_entry: Option<KernelPickerEntry> = None;
     let mut found_selected = false;
@@ -92,33 +97,46 @@ fn build_grouped_entries(store: &ReplStore, worktree_id: WorktreeId) -> Vec<Kern
 
     // Recommended section
     if let Some(rec) = recommended_entry {
-        entries.push(KernelPickerEntry::SectionHeader("Recommended".into()));
+        entries.push(KernelPickerEntry::SectionHeader(
+            tr(cx, "repl.kernel_options.recommended", "Recommended").into(),
+        ));
         entries.push(rec);
     }
 
     // Python Environments section
     if !python_envs.is_empty() {
         entries.push(KernelPickerEntry::SectionHeader(
-            "Python Environments".into(),
+            tr(
+                cx,
+                "repl.kernel_options.python_environments",
+                "Python Environments",
+            )
+            .into(),
         ));
         entries.extend(python_envs);
     }
 
     // Jupyter Kernels section
     if !jupyter_kernels.is_empty() {
-        entries.push(KernelPickerEntry::SectionHeader("Jupyter Kernels".into()));
+        entries.push(KernelPickerEntry::SectionHeader(
+            tr(cx, "repl.kernel_options.jupyter_kernels", "Jupyter Kernels").into(),
+        ));
         entries.extend(jupyter_kernels);
     }
 
     // WSL Kernels section
     if !wsl_kernels.is_empty() {
-        entries.push(KernelPickerEntry::SectionHeader("WSL Kernels".into()));
+        entries.push(KernelPickerEntry::SectionHeader(
+            tr(cx, "repl.kernel_options.wsl_kernels", "WSL Kernels").into(),
+        ));
         entries.extend(wsl_kernels);
     }
 
     // Remote section
     if !remote_kernels.is_empty() {
-        entries.push(KernelPickerEntry::SectionHeader("Remote Servers".into()));
+        entries.push(KernelPickerEntry::SectionHeader(
+            tr(cx, "repl.kernel_options.remote_servers", "Remote Servers").into(),
+        ));
         entries.extend(remote_kernels);
     }
 
@@ -237,8 +255,13 @@ impl PickerDelegate for KernelPickerDelegate {
         cx.notify();
     }
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Select a kernel...".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(
+            cx,
+            "repl.kernel_options.placeholder.select_kernel",
+            "Select a kernel...",
+        )
+        .into()
     }
 
     fn update_matches(
@@ -340,7 +363,7 @@ impl PickerDelegate for KernelPickerDelegate {
                     KernelSpecification::PythonEnv(_)
                     | KernelSpecification::JupyterServer(_)
                     | KernelSpecification::SshRemote(_) => {
-                        let env_kind = spec.environment_kind_label();
+                        let env_kind = spec.environment_kind_label(cx);
                         let path = spec.path();
                         match env_kind {
                             Some(kind) => Some(format!("{} \u{2013} {}", kind, path)),
@@ -381,14 +404,22 @@ impl PickerDelegate for KernelPickerDelegate {
                                                 )
                                                 .when(*is_recommended, |flex| {
                                                     flex.child(
-                                                        Label::new("Recommended")
+                                                        Label::new(tr(
+                                                            cx,
+                                                            "repl.kernel_options.recommended",
+                                                            "Recommended",
+                                                        ))
                                                             .size(LabelSize::XSmall)
                                                             .color(Color::Accent),
                                                     )
                                                 })
                                                 .when(!has_ipykernel, |flex| {
                                                     flex.child(
-                                                        Label::new("ipykernel not installed")
+                                                        Label::new(tr(
+                                                            cx,
+                                                            "repl.kernel_options.ipykernel_not_installed",
+                                                            "ipykernel not installed",
+                                                        ))
                                                             .size(LabelSize::XSmall)
                                                             .color(Color::Warning),
                                                     )
@@ -430,13 +461,16 @@ impl PickerDelegate for KernelPickerDelegate {
                 .p_1()
                 .gap_4()
                 .child(
-                    Button::new("kernel-docs", "Kernel Docs")
-                        .end_icon(
-                            Icon::new(IconName::ArrowUpRight)
-                                .size(IconSize::Small)
-                                .color(Color::Muted),
-                        )
-                        .on_click(move |_, _, cx| cx.open_url(KERNEL_DOCS_URL)),
+                    Button::new(
+                        "kernel-docs",
+                        tr(cx, "repl.kernel_options.kernel_docs", "Kernel Docs"),
+                    )
+                    .end_icon(
+                        Icon::new(IconName::ArrowUpRight)
+                            .size(IconSize::Small)
+                            .color(Color::Muted),
+                    )
+                    .on_click(move |_, _, cx| cx.open_url(KERNEL_DOCS_URL)),
                 )
                 .into_any(),
         )
@@ -453,7 +487,7 @@ where
         store.update(cx, |store, cx| store.ensure_kernelspecs(cx));
         let store = store.read(cx);
 
-        let all_entries = build_grouped_entries(store, self.worktree_id);
+        let all_entries = build_grouped_entries(store, self.worktree_id, cx);
         let selected_kernelspec = store.active_kernelspec(self.worktree_id, None, cx);
         let selected_index = all_entries
             .iter()

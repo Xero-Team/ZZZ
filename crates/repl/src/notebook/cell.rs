@@ -7,6 +7,7 @@ use gpui::{
     App, Entity, EventEmitter, Focusable, Hsla, InteractiveElement, RetainAllImageCache,
     StatefulInteractiveElement, Task, prelude::*,
 };
+use i18n::tr;
 use language::{Buffer, Language, LanguageRegistry};
 use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownStyle};
 use nbformat::v4::{CellId, CellMetadata, CellType};
@@ -830,8 +831,12 @@ impl CodeCell {
         cx: &mut Context<Self>,
     ) {
         self.outputs.push(Output::ErrorOutput(ErrorView {
-            ename: "Kernel Error".to_owned(),
-            evalue: "cell could not be executed".to_owned(),
+            ename: tr(cx, "repl.notebook.cell.kernel_error_title", "Kernel Error"),
+            evalue: tr(
+                cx,
+                "repl.notebook.cell.could_not_execute",
+                "Cell could not be executed",
+            ),
             traceback: cx.new(|cx| TerminalOutput::from(error_message, window, cx)),
         }));
         self.execution_start_time = None;
@@ -1177,7 +1182,11 @@ impl Render for CodeCell {
                                                                 .text_color(
                                                                     cx.theme().colors().text_muted,
                                                                 )
-                                                                .child("Running..."),
+                                                                .child(tr(
+                                                                    cx,
+                                                                    "repl.notebook.cell.running",
+                                                                    "Running...",
+                                                                )),
                                                         )
                                                         .into_any_element()
                                                 } else if let Some(duration_text) =

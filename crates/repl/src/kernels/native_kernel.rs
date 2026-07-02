@@ -5,6 +5,7 @@ use futures::{
     io::BufReader,
 };
 use gpui::{App, Entity, EntityId, Task, Window};
+use i18n::tr;
 use jupyter_protocol::{
     ExecutionState, JupyterKernelspec, JupyterMessage, KernelInfoReply,
     connection_info::{ConnectionInfo, Transport},
@@ -225,11 +226,28 @@ impl NativeRunningKernel {
                             return;
                         }
 
-                        format!("kernel process exited with status: {:?}", status)
+                        cx.update(|_, cx| {
+                            tr(
+                                cx,
+                                "repl.kernels.process_exited_with_status",
+                                "kernel process exited with status: {}",
+                            )
+                            .replacen("{}", &format!("{status:?}"), 1)
+                        })
+                        .unwrap_or_else(|_| {
+                            format!("kernel process exited with status: {:?}", status)
+                        })
                     }
-                    Err(err) => {
-                        format!("kernel process exited with error: {:?}", err)
-                    }
+                    Err(err) => cx
+                        .update(|_, cx| {
+                            tr(
+                                cx,
+                                "repl.kernels.process_exited_with_error",
+                                "kernel process exited with error: {}",
+                            )
+                            .replacen("{}", &format!("{err:?}"), 1)
+                        })
+                        .unwrap_or_else(|_| format!("kernel process exited with error: {:?}", err)),
                 };
 
                 log::error!("{}", error_message);
