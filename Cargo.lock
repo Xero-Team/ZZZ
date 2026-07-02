@@ -13802,6 +13802,7 @@ dependencies = [
  "i18n",
  "itertools 0.14.0",
  "language",
+ "log",
  "markdown_preview",
  "menu",
  "notifications",
