@@ -2408,7 +2408,7 @@ impl ProjectPanel {
                     "project_panel.restore_file.prompt",
                     "Discard changes to {}?",
                 )
-                .replacen("{}", &file_name, 1);
+                .replacen("{}", &MarkdownInlineCode(&file_name).to_string(), 1);
                 let restore = tr(cx, "project_panel.restore_file.restore", "Restore");
                 let cancel = tr(cx, "prompt.common.cancel", "Cancel");
                 Some(window.prompt(
@@ -2665,7 +2665,7 @@ impl ProjectPanel {
                                 .iter()
                                 .map(|(_, _, path)| MarkdownInlineCode(path).to_string())
                                 .take(CUTOFF_POINT)
-                                .collect::<Vec<_>>();
+                                .collect::<Vec<String>>();
                             paths.truncate(CUTOFF_POINT);
                             if truncated_path_counts == 1 {
                                 paths.push(tr(
@@ -4730,7 +4730,7 @@ impl ProjectPanel {
                             "project_panel.replace_existing.prompt",
                             "A file or folder with name {} already exists in the destination folder. Do you want to replace it?",
                         )
-                        .replacen("{}", filename, 1)
+                        .replacen("{}", &MarkdownInlineCode(filename).to_string(), 1)
                     })?;
                     let replace = cx.update(|_, cx| {
                         tr(cx, "project_panel.replace_existing.replace", "Replace")

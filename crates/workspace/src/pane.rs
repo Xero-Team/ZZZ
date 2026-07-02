@@ -51,7 +51,8 @@ use ui::{
     Tooltip, prelude::*, right_click_menu,
 };
 use util::{
-    ResultExt, debug_panic, maybe, paths::PathStyle, serde::default_true, truncate_and_remove_front,
+    ResultExt, debug_panic, markdown::MarkdownInlineCode, maybe, paths::PathStyle,
+    serde::default_true, truncate_and_remove_front,
 };
 
 /// A selected entry in e.g. project panel.
@@ -5010,8 +5011,8 @@ fn dirty_message_for(buffer_path: Option<ProjectPath>, path_style: PathStyle, cx
             let path = p.path.display(path_style);
             if path.is_empty() { None } else { Some(path) }
         })
+        .map(|path| MarkdownInlineCode(truncate_and_remove_front(&path, 80)).to_string())
         .unwrap_or(tr(cx, "workspace.pane.this_buffer", "This buffer").into());
-    let path = truncate_and_remove_front(&path, 80);
     tr(
         cx,
         "workspace.pane.unsaved_edits",
@@ -9210,6 +9211,22 @@ mod tests {
                 assert_pane_ids_on_axis(&workspace, expected_ids, expected_axis, cx);
             }
         }
+    }
+
+    #[test]
+    fn test_dirty_message_for_escapes_markdown_in_path() {
+        let project_path = ProjectPath {
+            worktree_id: WorktreeId::from_usize(0),
+            path: util::rel_path::rel_path("dir/__init__.py").into(),
+        };
+        assert_eq!(
+            dirty_message_for(Some(project_path), PathStyle::Posix),
+            "`dir/__init__.py` contains unsaved edits. Do you want to save it?"
+        );
+        assert_eq!(
+            dirty_message_for(None, PathStyle::Posix),
+            "This buffer contains unsaved edits. Do you want to save it?"
+        );
     }
 
     mod property_test {
