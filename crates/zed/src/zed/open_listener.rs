@@ -770,9 +770,9 @@ pub(crate) fn open_options_for_request(
     cx: &App,
 ) -> workspace::OpenOptions {
     let open_behavior = open_behavior.unwrap_or_else(|| {
-        match workspace::WorkspaceSettings::get_global(cx).cli_default_open_behavior {
-            settings::CliDefaultOpenBehavior::ExistingWindow => cli::OpenBehavior::ExistingWindow,
-            settings::CliDefaultOpenBehavior::NewWindow => cli::OpenBehavior::Classic,
+        match workspace::WorkspaceSettings::get_global(cx).default_open_behavior {
+            settings::DefaultOpenBehavior::ExistingWindow => cli::OpenBehavior::ExistingWindow,
+            settings::DefaultOpenBehavior::NewWindow => cli::OpenBehavior::PreferNewWindow,
         }
     });
     open_options_for_behavior(open_behavior, location, cx)
@@ -1388,14 +1388,14 @@ mod tests {
 
         let _app_state = init_test(cx);
 
-        // A `None` behavior (e.g. a Finder or URL open) consults the configured
-        // default open behavior rather than falling back to fixed
+        // A `None` behavior (e.g. a Finder or URL open) consults the UI-level
+        // `default_open_behavior` setting rather than falling back to fixed
         // defaults.
         cx.update(|cx| {
             settings::SettingsStore::update_global(cx, |store, cx| {
                 store.update_user_settings(cx, |settings| {
-                    settings.workspace.cli_default_open_behavior =
-                        Some(settings::CliDefaultOpenBehavior::NewWindow);
+                    settings.workspace.default_open_behavior =
+                        Some(settings::DefaultOpenBehavior::NewWindow);
                 });
             });
         });
@@ -1403,15 +1403,15 @@ mod tests {
             cx.update(|cx| open_options_for_request(None, &SerializedWorkspaceLocation::Local, cx));
         assert_eq!(
             options.workspace_matching,
-            workspace::WorkspaceMatching::MatchExact
+            workspace::WorkspaceMatching::MatchSubpaths
         );
         assert!(!options.add_dirs_to_sidebar);
 
         cx.update(|cx| {
             settings::SettingsStore::update_global(cx, |store, cx| {
                 store.update_user_settings(cx, |settings| {
-                    settings.workspace.cli_default_open_behavior =
-                        Some(settings::CliDefaultOpenBehavior::ExistingWindow);
+                    settings.workspace.default_open_behavior =
+                        Some(settings::DefaultOpenBehavior::ExistingWindow);
                 });
             });
         });
