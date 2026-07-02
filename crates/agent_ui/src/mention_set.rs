@@ -712,7 +712,7 @@ fn disambiguated_labels_for_uris(uris: &[&MentionUri]) -> Vec<SharedString> {
 
     let details =
         util::disambiguate::compute_disambiguation_details(&unique_uris, |uri, detail| {
-            uri.disambiguated_name(detail)
+            mention_disambiguated_name(uri, detail)
         });
 
     let uri_to_detail: HashMap<&MentionUri, usize> = unique_uris.into_iter().zip(details).collect();
@@ -720,9 +720,56 @@ fn disambiguated_labels_for_uris(uris: &[&MentionUri]) -> Vec<SharedString> {
     uris.iter()
         .map(|uri| {
             let detail = uri_to_detail.get(uri).copied().unwrap_or(0);
-            uri.disambiguated_name(detail).into()
+            mention_disambiguated_name(uri, detail).into()
         })
         .collect()
+}
+
+fn mention_disambiguated_name(uri: &MentionUri, detail: usize) -> String {
+    match uri {
+        MentionUri::File { abs_path } | MentionUri::Directory { abs_path } => {
+            path_suffix(abs_path, detail)
+        }
+        MentionUri::Symbol { abs_path, name, .. } => {
+            if detail == 0 {
+                name.clone()
+            } else {
+                format!("{name} ({})", path_suffix(abs_path, detail))
+            }
+        }
+        MentionUri::Selection {
+            abs_path,
+            line_range,
+            ..
+        } => {
+            if detail == 0 {
+                selection_name(abs_path.as_deref(), line_range)
+            } else if let Some(path) = abs_path.as_deref() {
+                format!(
+                    "{} ({})",
+                    selection_name(None, line_range),
+                    path_suffix(path, detail)
+                )
+            } else {
+                selection_name(None, line_range)
+            }
+        }
+        _ => uri.name(),
+    }
+}
+
+fn path_suffix(path: &Path, detail: usize) -> String {
+    let mut components: Vec<_> = path
+        .components()
+        .rev()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(segment) => Some(segment.to_string_lossy()),
+            _ => None,
+        })
+        .take(detail + 1)
+        .collect();
+    components.reverse();
+    components.join("/")
 }
 #[cfg(test)]
 mod tests {

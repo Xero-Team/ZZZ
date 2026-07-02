@@ -3562,7 +3562,7 @@ impl ThreadView {
                     .when(max_content_width.is_none(), |this| this.w_full())
                     .when(fills_container, |this| this.h_full())
                     .px_2()
-                    .flex_shrink_1()
+                    .flex_shrink()
                     .flex_grow_0()
                     .justify_between()
                     .gap_2()
