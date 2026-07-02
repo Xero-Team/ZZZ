@@ -9225,10 +9225,16 @@ mod tests {
         };
         cx.update(|cx| {
             let path_message = dirty_message_for(Some(project_path), PathStyle::Posix, cx);
-            assert!(path_message.contains("`dir/__init__.py`"));
+            assert_eq!(
+                path_message,
+                "`dir/__init__.py` contains unsaved edits. Do you want to save it?"
+            );
 
             let generic_message = dirty_message_for(None, PathStyle::Posix, cx);
-            assert!(!generic_message.contains('`'));
+            assert_eq!(
+                generic_message,
+                "This buffer contains unsaved edits. Do you want to save it?"
+            );
         });
     }
 

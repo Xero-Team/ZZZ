@@ -10478,8 +10478,5 @@ async fn test_restore_file_prompt_escapes_markdown_in_file_name(cx: &mut gpui::T
         .pending_prompt()
         .expect("restore should show a confirmation prompt");
 
-    assert!(
-        message.contains("`__init__.py`"),
-        "restore prompt should render the filename as inline code, got: {message}"
-    );
+    assert_eq!(message, "Discard changes to `__init__.py`?");
 }
