@@ -1406,6 +1406,7 @@ impl MarkdownElement {
         range: &Range<usize>,
         dest_url: SharedString,
         source: ImageSource,
+        alt_text: Option<SharedString>,
         width: Option<DefiniteLength>,
         height: Option<DefiniteLength>,
     ) {
@@ -1466,7 +1467,11 @@ impl MarkdownElement {
                         .when_some(height, |this, height| this.h(height))
                         .when_some(width, |this, width| this.w(width))
                         .with_fallback(move || {
-                            image_fallback_element(dest_url.clone(), fallback_opens_image_url)
+                            image_fallback_element(
+                                dest_url.clone(),
+                                alt_text.clone(),
+                                fallback_opens_image_url,
+                            )
                         }),
                 )
             };
@@ -2172,6 +2177,10 @@ impl Element for MarkdownElement {
                 MarkdownEvent::Start(tag) => {
                     match tag {
                         MarkdownTag::Image { dest_url, .. } => {
+                            let alt_text = collect_image_alt_text(
+                                &parsed_markdown.events[index..],
+                                parsed_markdown.source.as_ref(),
+                            );
                             if let Some(image) = images.get(&range.start) {
                                 current_img_block_range = Some(range.clone());
                                 self.push_markdown_image(
@@ -2179,6 +2188,7 @@ impl Element for MarkdownElement {
                                     range,
                                     dest_url.clone(),
                                     image.clone().into(),
+                                    alt_text.clone(),
                                     None,
                                     None,
                                 );
@@ -2193,6 +2203,7 @@ impl Element for MarkdownElement {
                                     range,
                                     dest_url.clone(),
                                     source,
+                                    alt_text,
                                     None,
                                     None,
                                 );
@@ -2847,6 +2858,52 @@ impl Element for MarkdownElement {
     }
 }
 
+fn collect_image_alt_text(
+    events_from_image_start: &[(Range<usize>, MarkdownEvent)],
+    source: &str,
+) -> Option<SharedString> {
+    let mut alt_text = String::new();
+    for (range, event) in events_from_image_start.iter().skip(1) {
+        match event {
+            MarkdownEvent::End(MarkdownTagEnd::Image) => break,
+            MarkdownEvent::Text => alt_text.push_str(&source[range.clone()]),
+            _ => {}
+        }
+    }
+    if alt_text.is_empty() {
+        None
+    } else {
+        Some(alt_text.into())
+    }
+}
+
+fn image_fallback_element(
+    dest_url: SharedString,
+    alt_text: Option<SharedString>,
+    open_image_url_on_click: bool,
+) -> AnyElement {
+    let link_label = alt_text
+        .filter(|alt| !alt.is_empty())
+        .unwrap_or_else(|| dest_url.clone());
+
+    let label = format!("Failed to Load: {link_label}");
+
+    div()
+        .id("image-fallback")
+        .min_w_0()
+        .child(Label::new(label).color(Color::Warning).underline())
+        .tooltip(Tooltip::text(
+            "Image failed to load. Open `zed: log` for more details.",
+        ))
+        .when(open_image_url_on_click, |this| {
+            this.cursor_pointer()
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    cx.open_url(&dest_url);
+                })
+        })
+        .into_any_element()
+}
 fn apply_heading_style(
     mut heading: Div,
     level: pulldown_cmark::HeadingLevel,
@@ -2894,30 +2951,6 @@ fn apply_heading_style(
     }
 
     heading
-}
-
-fn image_fallback_element(
-    dest_url: SharedString,
-    open_image_url_on_click: bool,
-) -> AnyElement {
-    div()
-        .id("image-fallback")
-        .min_w_0()
-        .child(
-            Label::new(dest_url.clone())
-                .color(Color::Warning)
-                .underline(),
-        )
-        .tooltip(Tooltip::text(
-            "Image failed to load. Open `zed: log` for more details.",
-        ))
-        .when(open_image_url_on_click, |this| {
-            this.cursor_pointer().on_click(move |_, _, cx| {
-                cx.stop_propagation();
-                cx.open_url(&dest_url);
-            })
-        })
-        .into_any_element()
 }
 
 fn render_wrap_code_block_button(

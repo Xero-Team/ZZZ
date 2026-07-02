@@ -463,6 +463,7 @@ impl MarkdownElement {
             &image.source_range,
             image.dest_url.clone(),
             source,
+            image.alt_text.clone(),
             image.width,
             image.height,
         );
