@@ -140,23 +140,30 @@ impl State {
                     let extra_headers = extra_headers.clone();
                     async move {
                         let name = model.name.as_str();
-                        let model = show_model(
+                        match show_model(
                             http_client.as_ref(),
                             &api_url,
                             api_key.as_deref(),
                             name,
                             &extra_headers,
                         )
-                        .await?;
-                        let ollama_model = ollama::Model::new(
-                            name,
-                            None,
-                            model.context_length,
-                            Some(model.supports_tools()),
-                            Some(model.supports_vision()),
-                            Some(model.supports_thinking()),
-                        );
-                        Ok(ollama_model)
+                        .await
+                        {
+                            Ok(model) => Ok(Some(ollama::Model::new(
+                                name,
+                                None,
+                                model.context_length,
+                                Some(model.supports_tools()),
+                                Some(model.supports_vision()),
+                                Some(model.supports_thinking()),
+                            ))),
+                            Err(error) => {
+                                log::warn!(
+                                    "skipping Ollama model {name:?} after capability fetch failed: {error:#}"
+                                );
+                                Ok(None)
+                            }
+                        }
                     }
                 });
 
@@ -164,10 +171,13 @@ impl State {
             // since there is an arbitrary number of models available
             let mut ollama_models: Vec<_> = futures::stream::iter(tasks)
                 .buffer_unordered(5)
-                .collect::<Vec<Result<_>>>()
+                .collect::<Vec<Result<Option<_>>>>()
                 .await
                 .into_iter()
-                .collect::<Result<Vec<_>>>()?;
+                .collect::<Result<Vec<_>>>()?
+                .into_iter()
+                .flatten()
+                .collect();
 
             ollama_models.sort_by(|a, b| a.name.cmp(&b.name));
 
