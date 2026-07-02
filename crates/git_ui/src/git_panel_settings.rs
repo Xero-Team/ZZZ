@@ -26,6 +26,7 @@ pub struct GitPanelSettings {
     pub folder_icons: bool,
     pub scrollbar: ScrollbarSettings,
     pub fallback_branch_name: String,
+    pub sort_by_path: bool,
     pub sort_by: GitPanelSortBy,
     pub group_by: GitPanelGroupBy,
     pub collapse_untracked_diff: bool,
@@ -60,6 +61,8 @@ impl ScrollbarVisibility for GitPanelScrollbarAccessor {
 impl Settings for GitPanelSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let git_panel = content.git_panel.clone().unwrap();
+        let sort_by = git_panel.sort_by.unwrap();
+        let group_by = git_panel.group_by.unwrap();
         Self {
             button: git_panel.button.unwrap(),
             dock: git_panel.dock.unwrap().into(),
@@ -75,8 +78,11 @@ impl Settings for GitPanelSettings {
                     .map(ui_scrollbar_settings_from_raw),
             },
             fallback_branch_name: git_panel.fallback_branch_name.unwrap(),
-            sort_by: git_panel.sort_by.unwrap(),
-            group_by: git_panel.group_by.unwrap(),
+            sort_by_path: git_panel
+                .sort_by_path
+                .unwrap_or(sort_by == GitPanelSortBy::Path && group_by != GitPanelGroupBy::Status),
+            sort_by,
+            group_by,
             collapse_untracked_diff: git_panel.collapse_untracked_diff.unwrap(),
             tree_view: git_panel.tree_view.unwrap(),
             diff_stats: git_panel.diff_stats.unwrap(),

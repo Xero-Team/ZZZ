@@ -28,7 +28,7 @@ impl ProcessIdGetter {
 
 #[cfg(unix)]
 impl ProcessIdGetter {
-    fn new(pty: &Pty) -> ProcessIdGetter {
+    pub(crate) fn new(pty: &Pty) -> ProcessIdGetter {
         ProcessIdGetter {
             handle: pty.file().as_raw_fd(),
             fallback_pid: pty.child().id(),
@@ -54,7 +54,7 @@ impl ProcessIdGetter {
 
 #[cfg(windows)]
 impl ProcessIdGetter {
-    fn new(pty: &Pty) -> ProcessIdGetter {
+    pub(crate) fn new(pty: &Pty) -> ProcessIdGetter {
         let child = pty.child_watcher();
         let handle = child.raw_handle();
         let fallback_pid = child.pid().unwrap_or_else(|| unsafe {

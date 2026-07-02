@@ -658,6 +658,10 @@ pub struct GitPanelSettingsContent {
     /// Default: main
     pub fallback_branch_name: Option<String>,
 
+    /// Legacy compatibility toggle for sorting git panel entries by path
+    /// instead of grouping by status.
+    pub sort_by_path: Option<bool>,
+
     /// How to sort entries in the git panel.
     ///
     /// Default: path

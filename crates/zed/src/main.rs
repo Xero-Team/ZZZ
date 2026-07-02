@@ -28,7 +28,7 @@ use futures::{StreamExt, channel::oneshot};
 use git::GitHostingProviderRegistry;
 use git_ui::clone::clone_and_open;
 use gpui::{
-    App, AppContext, Application, AsyncApp, Focusable as _, QuitMode, Task, UpdateGlobal as _,
+    App, AppContext, Application, AsyncApp, ClipboardItem, QuitMode, Task, UpdateGlobal as _,
 };
 use gpui_platform;
 use i18n as app_i18n;
@@ -920,10 +920,10 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                     let multi_workspace =
                         workspace::get_any_active_multi_workspace(app_state, cx.clone()).await?;
 
-                    multi_workspace.update(cx, |_multi_workspace, _window, cx| {
-                        settings_ui::open_skill_creator(
-                            settings_ui::pages::SkillCreatorOpenMode::Install { content },
-                            Some(multi_workspace),
+                    multi_workspace.update(cx, |_multi_workspace, window, cx| {
+                        cx.write_to_clipboard(ClipboardItem::new_string(content.clone()));
+                        window.dispatch_action(
+                            Box::new(zed_actions::assistant::OpenRulesLibrary::default()),
                             cx,
                         );
                     })

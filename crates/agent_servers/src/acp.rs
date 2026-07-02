@@ -904,7 +904,6 @@ impl AcpConnection {
             }
         });
 
-<<<<<<< HEAD
         let initialize_response = connection
             .send_request(
                 acp::InitializeRequest::new(acp::ProtocolVersion::V1)
@@ -913,8 +912,7 @@ impl AcpConnection {
                         acp::Implementation::new("zed", version)
                             .title(release_channel.map(ToOwned::to_owned)),
                     ),
-            ),
-        );
+            );
         let initialize_response = into_foreground_future(initialize_response).boxed_local();
         let (response, status_fut) =
             match futures::future::select(initialize_response, status_fut).await {

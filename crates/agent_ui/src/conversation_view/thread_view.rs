@@ -14,15 +14,8 @@ use crate::message_editor::SharedSessionCapabilities;
 use gpui::List;
 use heapless::Vec as ArrayVec;
 use i18n as app_i18n;
-use language_model::{
-    FastModeConfirmation, LanguageModel, LanguageModelEffortLevel, LanguageModelId,
-    LanguageModelProvider, LanguageModelProviderId, LanguageModelRegistry, Speed,
-};
-use settings::{update_settings_file, update_settings_file_with_completion};
-use ui::{
-    ButtonLike, CalloutBorderPosition, SpinnerLabel, SpinnerVariant, SplitButton, SplitButtonStyle,
-    Tab,
-};
+use language_model::{LanguageModelProvider, LanguageModelRegistry};
+use ui::{SpinnerLabel, SpinnerVariant, Tab};
 use workspace::{OpenOptions, SERIALIZATION_THROTTLE_TIME};
 
 use super::thread_search_bar::{ThreadSearchBar, ThreadSearchBarEvent};
@@ -9706,6 +9699,27 @@ impl ThreadView {
             }
             cx.notify();
         }
+    }
+
+    /// Hides thread search, clears highlights, and returns focus to the
+    /// message editor. Returns `true` when search was visible.
+    pub(crate) fn close_thread_search(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.thread_search_visible {
+            return false;
+        }
+
+        if let Some(bar) = self.thread_search_bar.clone() {
+            bar.update(cx, |bar, cx| bar.clear_highlights(cx));
+        }
+
+        self.thread_search_visible = false;
+        self.message_editor.focus_handle(cx).focus(window, cx);
+        cx.notify();
+        true
     }
 }
 

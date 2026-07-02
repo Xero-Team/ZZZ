@@ -566,13 +566,8 @@ dirs = "6.0"
 documented = "0.9.2"
 dotenvy = "0.15.7"
 dunce = "1.0"
-<<<<<<< HEAD
 ec4rs = { version = "1.2", features = ["allow-empty-values"] }
 emojis = "0.8.1"
-=======
-ec4rs = { version = "1.2", features = ["allow-empty-values"] }
-emojis = "0.6.1"
->>>>>>> 7582bf7434 (Allow empty values in .editorconfig (#60026))
 env_logger = "0.11"
 encoding_rs = "0.8"
 exec = "0.3.1"

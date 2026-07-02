@@ -1609,7 +1609,7 @@ async fn test_mcp_tool_names_are_sanitized_for_providers(cx: &mut TestAppContext
 
     let events = thread.update(cx, |thread, cx| {
         thread
-            .send(ClientUserMessageId::new(), ["Use the MCP tool"], cx)
+            .send(UserMessageId::new(), ["Use the MCP tool"], cx)
             .unwrap()
     });
     cx.run_until_parked();
@@ -3725,7 +3725,9 @@ async fn setup(cx: &mut TestAppContext, model: TestModel) -> ThreadTest {
         settings::init(cx);
 
         match model {
-            TestModel::Fake => {}
+            TestModel::Fake => {
+                LanguageModelRegistry::test(cx);
+            }
             TestModel::Sonnet4 => {
                 gpui_tokio::init(cx);
                 let http_client = ReqwestClient::user_agent("agent tests").unwrap();

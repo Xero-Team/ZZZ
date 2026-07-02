@@ -250,7 +250,7 @@ fn git_panel_context_menu(
                 zed_actions::git::ViewStash.boxed_clone(),
             )
             .separator()
-            .action(open_diff.clone(), project_diff::Diff.boxed_clone())
+            .action(open_diff.clone(), Diff.boxed_clone())
             .separator()
             .action_disabled_when(
                 !has_tracked_changes,
@@ -3691,8 +3691,14 @@ impl GitPanel {
             let fs = workspace.app_state().fs.clone();
             cx.update_global::<SettingsStore, _>(|store, _cx| {
                 store.update_settings_file(fs, move |settings, _cx| {
-                    settings.git_panel.get_or_insert_default().sort_by_path =
-                        Some(!current_setting);
+                    let git_panel = settings.git_panel.get_or_insert_default();
+                    git_panel.sort_by_path = Some(!current_setting);
+                    git_panel.sort_by = Some(GitPanelSortBy::Path);
+                    git_panel.group_by = Some(if current_setting {
+                        GitPanelGroupBy::Status
+                    } else {
+                        GitPanelGroupBy::None
+                    });
                 });
             });
         }

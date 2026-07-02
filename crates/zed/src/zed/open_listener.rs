@@ -32,6 +32,8 @@ use workspace::PathList;
 use workspace::item::ItemHandle;
 use workspace::{AppState, MultiWorkspace, OpenOptions, OpenResult, SerializedWorkspaceLocation};
 
+const SKILL_URL_PREFIXES: [&str; 2] = ["zzz://skill", "zed://skill"];
+
 #[derive(Default, Debug)]
 pub struct OpenRequest {
     pub kind: Option<OpenRequestKind>,
@@ -171,7 +173,7 @@ impl OpenRequest {
                 this.kind = Some(OpenRequestKind::Extension {
                     extension_id: extension_id.to_owned(),
                 });
-            } else if url.starts_with(agent_skills::SKILL_SHARE_LINK_PREFIX) {
+            } else if SKILL_URL_PREFIXES.iter().any(|prefix| url.starts_with(prefix)) {
                 this.parse_skill_install_url(&url)?
             } else if let Some(agent_path) = url.strip_prefix("zzz://agent") {
                 this.parse_agent_url(agent_path)
@@ -230,6 +232,34 @@ impl OpenRequest {
         self.kind = Some(OpenRequestKind::AgentPanel {
             external_source_prompt,
         });
+    }
+
+    fn parse_skill_install_url(&mut self, url: &str) -> Result<()> {
+        let skill_path = SKILL_URL_PREFIXES
+            .iter()
+            .find_map(|prefix| url.strip_prefix(prefix))
+            .context("invalid skill url: unsupported prefix")?;
+        let skill_path = skill_path.strip_prefix('/').unwrap_or(skill_path);
+
+        let encoded = if let Some(query) = skill_path.strip_prefix('?') {
+            url::form_urlencoded::parse(query.as_bytes())
+                .find_map(|(key, value)| {
+                    matches!(key.as_ref(), "content" | "skill" | "body").then_some(value)
+                })
+                .filter(|value| !value.is_empty())
+                .map(|value| value.into_owned())
+                .context("invalid skill url: missing content query parameter")?
+        } else {
+            anyhow::ensure!(!skill_path.is_empty(), "invalid skill url: missing content");
+            skill_path.to_owned()
+        };
+
+        let decoded = urlencoding::decode(&encoded)
+            .map(|value| value.into_owned())
+            .unwrap_or(encoded.clone());
+
+        self.kind = Some(OpenRequestKind::InstallSkill { content: decoded });
+        Ok(())
     }
 
     fn parse_git_clone_url(&mut self, clone_path: &str) -> Result<()> {

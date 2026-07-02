@@ -86,29 +86,6 @@ pub(crate) fn provider_compatible_tool_name(tool_name: &str) -> String {
     sanitized
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SandboxStatusKey {
-    pub settings_sandbox: ThreadSandbox,
-    pub thread_sandbox: ThreadSandbox,
-    pub baseline_writable_paths: Vec<PathBuf>,
-    pub git_paths: Vec<PathBuf>,
-    pub repository_paths: Vec<(PathBuf, PathBuf, PathBuf, PathBuf)>,
-    pub settings_allow_git_access: bool,
-    pub thread_allow_git_access: bool,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct VerifiedSandboxStatus {
-    pub settings_sandbox: ThreadSandbox,
-    pub thread_sandbox: ThreadSandbox,
-    pub baseline_writable_paths: Vec<PathBuf>,
-}
-
-pub enum SandboxStatusRefresh {
-    Ready(VerifiedSandboxStatus),
-    Pending(Task<VerifiedSandboxStatus>),
-}
-
 /// Auto-compaction is only available for models whose context window is at least
 /// this large. For smaller models there isn't enough headroom for a compaction
 /// pass to be worthwhile, so we leave the thread uncompacted and let the UI warn
@@ -3086,10 +3063,6 @@ impl Thread {
         let Some(profile) = AgentSettings::get_global(cx).profiles.get(&self.profile_id) else {
             return BTreeMap::new();
         };
-        // Terminal variants are configured by users under the canonical
-        // `terminal` name. Expose the one matching the current sandbox state
-        // to the model under that name.
-        let use_sandboxed_terminal = sandboxing_enabled_for_project(self.project.read(cx), cx);
 
         let mut tools = self
             .tools
@@ -3098,21 +3071,15 @@ impl Thread {
                 if tool.supports_provider(&model.provider_id())
                     && profile.is_tool_enabled(tool_name)
                 {
-                    match (tool_name.as_ref(), use_sandboxed_terminal) {
-                        (TerminalTool::NAME, false) | (SandboxedTerminalTool::NAME, true) => {
-                            Some((SharedString::from(TerminalTool::NAME), tool.clone()))
-                        }
-                        (TerminalTool::NAME | SandboxedTerminalTool::NAME, _) => None,
-                        _ => Some((
-                            provider_compatible_tool_name(tool_name.as_ref()).into(),
-                            tool.clone(),
-                        )),
-                    }
+                    Some((
+                        provider_compatible_tool_name(tool_name.as_ref()).into(),
+                        tool.clone(),
+                    ))
                 } else {
                     None
                 }
             })
-            .filter(|(tool_name, _)| {
+            .filter(|(tool_name, _): &(SharedString, Arc<dyn AnyAgentTool>)| {
                 cx.has_flag::<LspToolFeatureFlag>()
                     || !matches!(
                         tool_name.as_ref(),
