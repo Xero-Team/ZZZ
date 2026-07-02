@@ -915,12 +915,12 @@ fn collect_markdowns(
         AgentThreadEntry::AssistantMessage(message) => {
             for (chunk_ix, chunk) in message.chunks.iter().enumerate() {
                 match chunk {
-                    AssistantMessageChunk::Message { block } => {
+                    AssistantMessageChunk::Message { block, .. } => {
                         if let Some(markdown) = block.markdown() {
                             out.push(markdown.clone());
                         }
                     }
-                    AssistantMessageChunk::Thought { block }
+                    AssistantMessageChunk::Thought { block, .. }
                         if thread_view.is_thinking_block_open((entry_ix, chunk_ix), cx) =>
                     {
                         if let Some(markdown) = block.markdown() {
