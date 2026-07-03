@@ -261,7 +261,7 @@ impl Delegate {
             let imported_from_project_search =
                 has_existing_matches || !matches!(in_progress_search, InProgressSearch::None);
 
-            cx.update(move |cx| Self {
+            let this = cx.update(move |cx| Self {
                 project_search_view: project_search,
                 focus_handle: cx.focus_handle(),
                 matches: Vec::new(),
