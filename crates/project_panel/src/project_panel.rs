@@ -31,6 +31,7 @@ use gpui::{
 };
 use i18n::tr;
 use language::DiagnosticSeverity;
+use markdown_preview::markdown_preview_view::MarkdownPreviewView;
 use menu::{Confirm, SelectFirst, SelectLast, SelectNext, SelectPrevious};
 use notifications::status_toast::StatusToast;
 use project::{
@@ -405,6 +406,8 @@ actions!(
         Undo,
         /// Redoes the last undone file operation.
         Redo,
+        /// Opens a markdown preview for the selected file.
+        OpenMarkdownPreview,
     ]
 );
 
@@ -1063,6 +1066,7 @@ impl ProjectPanel {
             let is_remote = project.is_remote();
             let is_collab = project.is_via_collab();
             let is_local = project.is_local() || project.is_via_wsl_with_host_interop(cx);
+            let is_markdown = !is_dir && MarkdownPreviewView::is_markdown_path(&*entry.path);
 
             let settings = ProjectPanelSettings::get_global(cx);
             let visible_worktrees_count = project.visible_worktrees(cx).count();
@@ -1092,7 +1096,17 @@ impl ProjectPanel {
             let context_menu = ContextMenu::build(window, cx, |menu, _, cx| {
                 menu.context(self.focus_handle.clone()).map(|menu| {
                     if is_read_only {
-                        menu.when(is_dir, |menu| {
+                        menu.when(is_markdown, |menu| {
+                            menu.action(
+                                tr(
+                                    cx,
+                                    "project_panel.menu.open_markdown_preview",
+                                    "Open Markdown Preview",
+                                ),
+                                Box::new(OpenMarkdownPreview),
+                            )
+                        })
+                        .when(is_dir, |menu| {
                             menu.action(
                                 tr(cx, "project_panel.menu.search_inside", "Search Inside"),
                                 Box::new(NewSearchInDirectory),
@@ -1132,6 +1146,16 @@ impl ProjectPanel {
                             ),
                             Box::new(OpenInTerminal),
                         )
+                        .when(is_markdown, |menu| {
+                            menu.action(
+                                tr(
+                                    cx,
+                                    "project_panel.menu.open_markdown_preview",
+                                    "Open Markdown Preview",
+                                ),
+                                Box::new(OpenMarkdownPreview),
+                            )
+                        })
                         .when(is_dir, |menu| {
                             menu.separator().action(
                                 tr(cx, "project_panel.menu.find_in_folder", "Find in Folder..."),
@@ -1713,6 +1737,30 @@ impl ProjectPanel {
         let preview_tabs_enabled =
             PreviewTabsSettings::get_global(cx).enable_preview_from_project_panel;
         self.open_internal(true, !preview_tabs_enabled, None, window, cx);
+    }
+
+    fn open_markdown_preview(
+        &mut self,
+        _: &OpenMarkdownPreview,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((worktree, entry)) = self.selected_entry(cx) else {
+            return;
+        };
+        if !entry.is_file() || !MarkdownPreviewView::is_markdown_path(&*entry.path) {
+            return;
+        }
+
+        let project_path = ProjectPath {
+            worktree_id: worktree.id(),
+            path: entry.path.clone(),
+        };
+        self.workspace
+            .update(cx, |workspace, cx| {
+                MarkdownPreviewView::open_for_project_path(project_path, workspace, window, cx);
+            })
+            .ok();
     }
 
     fn open_permanent(&mut self, _: &OpenPermanent, window: &mut Window, cx: &mut Context<Self>) {
@@ -6937,6 +6985,7 @@ impl Render for ProjectPanel {
                 .on_action(cx.listener(Self::open_permanent))
                 .on_action(cx.listener(Self::open_split_vertical))
                 .on_action(cx.listener(Self::open_split_horizontal))
+                .on_action(cx.listener(Self::open_markdown_preview))
                 .on_action(cx.listener(Self::confirm))
                 .on_action(cx.listener(Self::cancel))
                 .on_action(cx.listener(Self::copy_path))

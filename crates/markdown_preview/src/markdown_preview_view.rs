@@ -31,6 +31,7 @@ use ui::{ContextMenu, WithScrollbar, prelude::*, right_click_menu};
 use util::markdown::split_local_url_fragment;
 use util::normalize_path;
 use workspace::item::{Item, ItemBufferKind, ItemHandle, SaveOptions, SerializableItem};
+use workspace::notifications::NotifyResultExt;
 use workspace::searchable::{
     Direction, SearchEvent, SearchOptions, SearchToken, SearchableItem, SearchableItemHandle,
 };
@@ -213,7 +214,7 @@ impl MarkdownPreviewView {
         None
     }
 
-    fn create_markdown_view(
+    pub fn create_markdown_view(
         workspace: &mut Workspace,
         editor: Entity<Editor>,
         window: &mut Window,
@@ -261,6 +262,44 @@ impl MarkdownPreviewView {
             window,
             cx,
         )
+    }
+
+    pub fn is_markdown_path(path: impl AsRef<Path>) -> bool {
+        path.as_ref().extension().is_some_and(|ext| {
+            ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown")
+        })
+    }
+
+    pub fn open_for_project_path(
+        project_path: ProjectPath,
+        workspace: &mut Workspace,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        let open_buffer = workspace
+            .project()
+            .update(cx, |project, cx| project.open_buffer(project_path, cx));
+
+        cx.spawn_in(window, async move |workspace, mut cx| {
+            let Some(buffer) = open_buffer
+                .await
+                .notify_workspace_async_err(workspace.clone(), &mut cx)
+            else {
+                return;
+            };
+
+            workspace
+                .update_in(cx, |workspace, window, cx| {
+                    let project = workspace.project().clone();
+                    let editor = cx.new(|cx| Editor::for_buffer(buffer, Some(project), window, cx));
+                    let preview = Self::create_markdown_view(workspace, editor, window, cx);
+                    workspace.active_pane().update(cx, |pane, cx| {
+                        pane.add_item(Box::new(preview), true, true, None, window, cx);
+                    });
+                })
+                .ok();
+        })
+        .detach();
     }
 
     pub fn new(
