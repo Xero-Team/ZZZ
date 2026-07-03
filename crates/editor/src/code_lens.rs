@@ -653,7 +653,11 @@ mod tests {
     use collections::HashSet;
     use futures::StreamExt;
     use gpui::TestAppContext;
+    use indoc::indoc;
+    use itertools::Itertools;
+    use multi_buffer::{MultiBufferRow, ToPoint};
     use settings::CodeLens;
+    use text::Point;
     use util::path;
 
     use crate::{
@@ -661,6 +665,44 @@ mod tests {
         editor_tests::{init_test, update_test_editor_settings},
         test::editor_lsp_test_context::EditorLspTestContext,
     };
+
+    fn code_lens_assertion_text(editor: &Editor, cx: &gpui::App) -> String {
+        let Some(code_lens) = editor.code_lens.as_ref() else {
+            return "\n".to_string();
+        };
+
+        let snapshot = editor.buffer.read(cx).snapshot(cx);
+        let mut blocks = code_lens
+            .blocks
+            .values()
+            .flat_map(|blocks| blocks.iter())
+            .collect::<Vec<_>>();
+        blocks.sort_by_key(|block| block.anchor.to_point(&snapshot).row);
+
+        if blocks.is_empty() {
+            return "\n".to_string();
+        }
+
+        let mut rendered = String::new();
+        for block in blocks {
+            let row = block.anchor.to_point(&snapshot).row;
+            let line_len = snapshot.line_len(MultiBufferRow(row));
+            let line_text = snapshot
+                .text_for_range(Point::new(row, 0)..Point::new(row, line_len))
+                .collect::<String>();
+            let titles = block
+                .line
+                .items
+                .iter()
+                .map(|item| item.title.as_ref())
+                .join(" | ");
+
+            rendered.push_str(&format!("Lenses: {titles}\n"));
+            rendered.push_str(&format!("Line {}: {line_text}\n", row + 1));
+        }
+
+        rendered
+    }
 
     #[gpui::test]
     async fn test_code_lens_blocks(cx: &mut TestAppContext) {
