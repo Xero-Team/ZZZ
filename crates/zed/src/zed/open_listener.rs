@@ -173,7 +173,10 @@ impl OpenRequest {
                 this.kind = Some(OpenRequestKind::Extension {
                     extension_id: extension_id.to_owned(),
                 });
-            } else if SKILL_URL_PREFIXES.iter().any(|prefix| url.starts_with(prefix)) {
+            } else if SKILL_URL_PREFIXES
+                .iter()
+                .any(|prefix| url.starts_with(prefix))
+            {
                 this.parse_skill_install_url(&url)?
             } else if let Some(agent_path) = url.strip_prefix("zzz://agent") {
                 this.parse_agent_url(agent_path)
@@ -1568,6 +1571,7 @@ mod tests {
         }
     }
 
+    #[gpui::test]
     fn test_parse_git_commit_url(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
 

@@ -2237,7 +2237,8 @@ impl SettingsWindow {
                     SettingsPageItem::SubPageLink(sub_page_link) => {
                         let title = sub_page_link.title.resolve(cx);
                         json_path = sub_page_link.json_path;
-                        let mut parts = vec![page_title.as_ref(), header_text.as_ref(), title.as_ref()];
+                        let mut parts =
+                            vec![page_title.as_ref(), header_text.as_ref(), title.as_ref()];
                         parts.extend(sub_page_link.search_aliases);
                         documents.push(SearchDocument {
                             id: key_index,
@@ -3533,7 +3534,9 @@ impl SettingsWindow {
                         .when(
                             current_sub_page.link.json_path == Some("language_models")
                                 && self.llm_provider_form.is_none(),
-                            |this| this.child(pages::render_add_llm_provider_button(self, window, cx)),
+                            |this| {
+                                this.child(pages::render_add_llm_provider_button(self, window, cx))
+                            },
                         )
                         .when(current_sub_page.link.in_json, |this| {
                             this.child(

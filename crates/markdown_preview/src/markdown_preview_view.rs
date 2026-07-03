@@ -1415,8 +1415,7 @@ impl Render for MarkdownPreviewView {
                             .maybe_menu(move |window, cx| {
                                 let focus = window.focused(cx);
                                 let markdown_state = markdown.read(cx);
-                                let context_menu_link =
-                                    markdown_state.context_menu_link().cloned();
+                                let context_menu_link = markdown_state.context_menu_link().cloned();
                                 let selected_text =
                                     markdown_state.context_menu_selected_text().cloned();
                                 let selected_markdown =
@@ -1432,12 +1431,9 @@ impl Render for MarkdownPreviewView {
                                     menu.when_some(focus, |menu, focus| menu.context(focus))
                                         .when_some(selected_text, |menu, text| {
                                             menu.entry("Copy", Some(Box::new(markdown::Copy)), {
-                                                let text = text.clone();
                                                 move |_, cx| {
                                                     cx.write_to_clipboard(
-                                                        ClipboardItem::new_string(
-                                                            text.to_string(),
-                                                        ),
+                                                        ClipboardItem::new_string(text.to_string()),
                                                     );
                                                 }
                                             })
@@ -1447,7 +1443,6 @@ impl Render for MarkdownPreviewView {
                                                 "Copy as Markdown",
                                                 Some(Box::new(markdown::CopyAsMarkdown)),
                                                 {
-                                                    let text = text.clone();
                                                     move |_, cx| {
                                                         cx.write_to_clipboard(
                                                             ClipboardItem::new_string(

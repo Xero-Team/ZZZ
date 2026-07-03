@@ -687,21 +687,10 @@ impl MentionSet {
     }
 }
 
-/// Computes disambiguated labels for a set of mentions, so that mentions sharing
-/// a base name get extra context (parent path components, skill source) to tell
-/// them apart. Same approach as buffer tab titles and the sidebar.
-fn compute_disambiguated_labels<'a>(
-    mentions: impl Iterator<Item = (CreaseId, &'a MentionUri)>,
-) -> HashMap<CreaseId, SharedString> {
-    let (ids, uris): (Vec<CreaseId>, Vec<&MentionUri>) = mentions.unzip();
-    ids.into_iter()
-        .zip(disambiguated_labels_for_uris(&uris))
-        .collect()
-}
-
 /// Labels for each URI, in input order. Duplicate URIs are collapsed first, so a
 /// mention added twice keeps its base name instead of being escalated to its
 /// full path by the collision-resolution loop.
+#[cfg(test)]
 fn disambiguated_labels_for_uris(uris: &[&MentionUri]) -> Vec<SharedString> {
     let mut seen: HashSet<&MentionUri> = HashSet::default();
     let unique_uris: Vec<&MentionUri> = uris
@@ -725,6 +714,7 @@ fn disambiguated_labels_for_uris(uris: &[&MentionUri]) -> Vec<SharedString> {
         .collect()
 }
 
+#[cfg(test)]
 fn mention_disambiguated_name(uri: &MentionUri, detail: usize) -> String {
     match uri {
         MentionUri::File { abs_path } | MentionUri::Directory { abs_path } => {
@@ -758,6 +748,7 @@ fn mention_disambiguated_name(uri: &MentionUri, detail: usize) -> String {
     }
 }
 
+#[cfg(test)]
 fn path_suffix(path: &Path, detail: usize) -> String {
     let mut components: Vec<_> = path
         .components()

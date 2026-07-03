@@ -2896,11 +2896,10 @@ fn image_fallback_element(
             "Image failed to load. Open `zed: log` for more details.",
         ))
         .when(open_image_url_on_click, |this| {
-            this.cursor_pointer()
-                .on_click(move |_, _, cx| {
-                    cx.stop_propagation();
-                    cx.open_url(&dest_url);
-                })
+            this.cursor_pointer().on_click(move |_, _, cx| {
+                cx.stop_propagation();
+                cx.open_url(&dest_url);
+            })
         })
         .into_any_element()
 }
@@ -5379,9 +5378,7 @@ mod tests {
         cx.update(|_window, cx| {
             let markdown = markdown.read(cx);
             assert_eq!(
-                markdown
-                    .context_menu_link()
-                    .map(SharedString::as_ref),
+                markdown.context_menu_link().map(SharedString::as_ref),
                 Some("https://example.com")
             );
             assert_eq!(
@@ -5391,7 +5388,9 @@ mod tests {
                 Some("text")
             );
             assert_eq!(
-                markdown.context_menu_selected_text().map(SharedString::as_ref),
+                markdown
+                    .context_menu_selected_text()
+                    .map(SharedString::as_ref),
                 Some("text")
             );
         });

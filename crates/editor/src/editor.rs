@@ -1961,7 +1961,7 @@ impl GutterButtonTooltip {
         const RIGHT_CLICK_HINT: &str = "right-click for more options";
 
         if self.primary == self.secondary {
-            return RIGHT_CLICK_HINT.to_string();
+            return RIGHT_CLICK_HINT.to_owned();
         }
         let modifier_as_text = gpui::Keystroke {
             modifiers: Modifiers::secondary_key(),

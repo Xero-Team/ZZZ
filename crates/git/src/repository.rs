@@ -4105,9 +4105,7 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn test_change_branch_resolves_remote_head_to_tracking_branch(
-        cx: &mut TestAppContext,
-    ) {
+    async fn test_change_branch_resolves_remote_head_to_tracking_branch(cx: &mut TestAppContext) {
         disable_git_global_config();
         cx.executor().allow_parking();
 
@@ -4160,7 +4158,8 @@ mod tests {
         cx.executor().allow_parking();
 
         let temp_dir = tempfile::tempdir().unwrap();
-        let (remote_dir, clone_dir) = clone_remote_repository_with_main_and_feature(temp_dir.path());
+        let (remote_dir, clone_dir) =
+            clone_remote_repository_with_main_and_feature(temp_dir.path());
 
         git_command(
             &clone_dir,
@@ -4196,7 +4195,10 @@ mod tests {
             .unwrap();
 
         let git = repository.git_binary_in_worktree().unwrap();
-        assert_eq!(git.run(&["branch", "--show-current"]).await.unwrap(), "main");
+        assert_eq!(
+            git.run(&["branch", "--show-current"]).await.unwrap(),
+            "main"
+        );
         assert_eq!(
             git.run(&["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}",])
                 .await

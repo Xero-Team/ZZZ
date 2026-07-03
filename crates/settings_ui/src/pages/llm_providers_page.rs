@@ -967,13 +967,11 @@ fn validate_llm_provider_form(
 > {
     let provider_name: Arc<str> = values.provider_name.trim().into();
     if provider_name.is_empty() {
-        return Err(
-            tr(
-                cx,
-                "settings_ui.llm_providers_page.provider_name_cannot_be_empty",
-                "Provider Name cannot be empty",
-            ),
-        );
+        return Err(tr(
+            cx,
+            "settings_ui.llm_providers_page.provider_name_cannot_be_empty",
+            "Provider Name cannot be empty",
+        ));
     }
 
     if LanguageModelRegistry::read_global(cx)
@@ -1016,7 +1014,10 @@ fn validate_llm_provider_form(
         .collect::<Result<Vec<_>, _>>()?;
 
     let mut model_names = HashSet::new();
-    if !models.iter().all(|model| model_names.insert(model.name.clone())) {
+    if !models
+        .iter()
+        .all(|model| model_names.insert(model.name.clone()))
+    {
         return Err(tr(
             cx,
             "settings_ui.llm_providers_page.model_names_must_be_unique",
@@ -1064,7 +1065,11 @@ fn parse_open_ai_model(
         )?),
         max_tokens: parse_u64_field(
             &model.max_tokens,
-            tr(cx, "settings_ui.llm_providers_page.max_tokens", "Max Tokens"),
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.max_tokens",
+                "Max Tokens",
+            ),
         )?,
         reasoning_effort: model.supports_thinking.then_some(model.reasoning_effort),
         capabilities: OpenAiCompatibleModelCapabilities {
@@ -1147,13 +1152,11 @@ mod tests {
         init_test_context(cx);
         let mut model = base_values().models.remove(0);
 
-        let parsed = cx
-            .update(|cx| parse_open_ai_model(&model, cx).expect("model should parse"));
+        let parsed = cx.update(|cx| parse_open_ai_model(&model, cx).expect("model should parse"));
         assert_eq!(parsed.reasoning_effort, None);
 
         model.supports_thinking = true;
-        let parsed = cx
-            .update(|cx| parse_open_ai_model(&model, cx).expect("model should parse"));
+        let parsed = cx.update(|cx| parse_open_ai_model(&model, cx).expect("model should parse"));
         assert_eq!(parsed.reasoning_effort, Some(OpenAiReasoningEffort::Medium));
     }
 }

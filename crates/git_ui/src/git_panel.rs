@@ -302,7 +302,7 @@ fn git_panel_context_menu(
             )
             .action_disabled_when(
                 !has_new_changes,
-                trash_untracked_files.clone(),
+                trash_untracked_files,
                 TrashUntrackedFiles.boxed_clone(),
             )
     })

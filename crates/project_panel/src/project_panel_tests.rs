@@ -10448,10 +10448,7 @@ async fn test_delete_prompt_escapes_markdown_in_file_name(cx: &mut gpui::TestApp
         .replacen("{}", "", 1)
     });
 
-    assert_eq!(
-        message,
-        expected
-    );
+    assert_eq!(message, expected);
 }
 
 #[gpui::test]

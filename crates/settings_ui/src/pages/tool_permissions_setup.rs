@@ -109,8 +109,7 @@ const TOOLS: &[ToolInfo] = &[
         description_key: "settings_ui.tool_permissions.tool.skill.description",
         description: "Loading agent skill instructions",
         regex_explanation_key: "settings_ui.tool_permissions.tool.skill.regex_explanation",
-        regex_explanation:
-            "Patterns are matched against the absolute path to the skill's SKILL.md file.",
+        regex_explanation: "Patterns are matched against the absolute path to the skill's SKILL.md file.",
     },
     ToolInfo {
         id: "restore_file_from_disk",

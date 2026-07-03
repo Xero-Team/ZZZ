@@ -566,12 +566,7 @@ impl AddLlmProviderModal {
             .into_any_element()
     }
 
-    fn render_model(
-        &self,
-        ix: usize,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn render_model(&self, ix: usize, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let has_more_than_one_model = self.input.models.len() > 1;
         let model = &self.input.models[ix];
 

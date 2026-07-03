@@ -1118,7 +1118,7 @@ impl ProjectDiff {
             if let Some(buffer) = multibuffer.read(cx).buffer(buffer_id)
                 && let Some(file) = buffer.read(cx).file()
             {
-                result.push(file.path().as_unix_str().to_string());
+                result.push(file.path().as_unix_str().to_owned());
             }
         }
         result

@@ -36,7 +36,7 @@ impl Model {
     ) -> Self {
         Self {
             name: name.to_owned(),
-            display_name: display_name.map(ToString::to_string),
+            display_name: display_name.map(str::to_owned),
             max_tokens: max_tokens.unwrap_or(DEFAULT_CONTEXT_LENGTH),
             supports_tools,
             supports_images,

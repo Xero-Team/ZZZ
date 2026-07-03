@@ -70,8 +70,7 @@ use util::{
 };
 use workspace::PathList;
 use workspace::{
-    CollaboratorId, MultiWorkspace, NewTerminal, Toast, Workspace, notifications::NotificationId,
-    path_link::sanitize_path_text,
+    CollaboratorId, MultiWorkspace, NewTerminal, Workspace, path_link::sanitize_path_text,
 };
 use zed_actions::agent::{Chat, ToggleModelSelector};
 use zed_actions::assistant::OpenRulesLibrary;

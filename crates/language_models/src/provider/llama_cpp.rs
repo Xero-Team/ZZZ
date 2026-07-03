@@ -444,7 +444,7 @@ fn model_from_entry(entry: &ModelEntry, props: Option<&Props>) -> llama_cpp::Mod
 /// Friendly display name from a model id, which is often a `.gguf` file path.
 fn display_name_for(id: &str) -> String {
     let base = id.rsplit(['/', '\\']).next().unwrap_or(id);
-    base.strip_suffix(".gguf").unwrap_or(base).to_string()
+    base.strip_suffix(".gguf").unwrap_or(base).to_owned()
 }
 
 fn telemetry_id_for(id: &str) -> String {
@@ -574,7 +574,7 @@ impl LanguageModelProvider for LlamaCppLanguageModelProvider {
                 Arc::new(LlamaCppLanguageModel {
                     id: LanguageModelId::from(model.name.clone()),
                     name: model.name.clone(),
-                    display_name: model.display_name().to_string(),
+                    display_name: model.display_name().to_owned(),
                     fallback_capabilities: LiveCapabilities::of(&model),
                     supports_images: model.supports_images,
                     capability_cells: self.capability_cells.clone(),
@@ -838,7 +838,7 @@ fn build_llama_cpp_request(
     };
 
     llama_cpp::ChatCompletionRequest {
-        model: model_name.to_string(),
+        model: model_name.to_owned(),
         messages,
         stream: true,
         // Let the server decide the output length (its `n_predict` default).
@@ -1209,7 +1209,7 @@ impl ConfigurationView {
     }
 
     fn save_api_key(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_string();
+        let api_key = self.api_key_editor.read(cx).text(cx).trim().to_owned();
         if api_key.is_empty() {
             return;
         }
@@ -1243,7 +1243,7 @@ impl ConfigurationView {
     }
 
     fn save_api_url(&self, cx: &mut Context<Self>) {
-        let api_url = self.api_url_editor.read(cx).text(cx).trim().to_string();
+        let api_url = self.api_url_editor.read(cx).text(cx).trim().to_owned();
         let current_url = LlamaCppLanguageModelProvider::api_url(cx);
         if !api_url.is_empty() && &api_url != &current_url {
             let fs = <dyn Fs>::global(cx);
@@ -1280,7 +1280,7 @@ impl ConfigurationView {
             .read(cx)
             .text(cx)
             .trim()
-            .to_string();
+            .to_owned();
         let current_context_window = LlamaCppLanguageModelProvider::settings(cx).context_window;
 
         if let Ok(context_window) = context_window_str.parse::<u64>() {
@@ -1360,7 +1360,7 @@ impl ConfigurationView {
         let configured_card_label = if env_var_set {
             format!("API key set in {API_KEY_ENV_VAR_NAME} environment variable.")
         } else {
-            "API key configured".to_string()
+            "API key configured".to_owned()
         };
 
         if !state.api_key_state.has_key() {
@@ -1596,8 +1596,10 @@ mod tests {
     use super::*;
     use gpui::TestAppContext;
     use http_client::FakeHttpClient;
-    use parking_lot::Mutex;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
 
     struct FakeCredentialsProvider {
         api_key: Vec<u8>,
@@ -2025,7 +2027,10 @@ mod tests {
                         .map(str::to_string);
 
                     if path == "/v1/models" {
-                        model_request_authorizations.lock().push(authorization);
+                        model_request_authorizations
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner())
+                            .push(authorization);
                         let request_index = model_request_count.fetch_add(1, Ordering::SeqCst);
                         if request_index == 0 {
                             return Ok(http_client::Response::builder()
@@ -2066,7 +2071,9 @@ mod tests {
             "authenticate should discover models after loading credentials"
         );
         assert_eq!(
-            &*model_request_authorizations.lock(),
+            &*model_request_authorizations
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
             &[None, Some("Bearer loaded-key".to_string())]
         );
     }

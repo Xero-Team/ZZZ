@@ -196,9 +196,8 @@ impl ConfigurationSource {
                 editor,
                 server_type,
             } => match *server_type {
-                ContextServerType::Remote => {
-                    parse_http_input_for_ui(&editor.read(cx).text(cx), cx).map(
-                        |(id, url, auth, oauth)| {
+                ContextServerType::Remote => parse_http_input_for_ui(&editor.read(cx).text(cx), cx)
+                    .map(|(id, url, auth, oauth)| {
                         (
                             id,
                             ContextServerSettings::Http {
@@ -209,9 +208,7 @@ impl ConfigurationSource {
                                 oauth,
                             },
                         )
-                    },
-                    )
-                }
+                    }),
                 ContextServerType::Local => {
                     parse_input_for_ui(&editor.read(cx).text(cx), cx).map(|(id, command)| {
                         (

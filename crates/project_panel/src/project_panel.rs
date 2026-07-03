@@ -1311,29 +1311,29 @@ impl ProjectPanel {
                                     ),
                                     Box::new(RemoveFromProject),
                                 )
-                            })
-                            .when(is_dir && !is_root, |menu| {
-                                menu.separator()
-                                    .action(
-                                        tr(cx, "project_panel.menu.expand_all", "Expand All"),
-                                        Box::new(ExpandSelectedEntryAndChildren),
-                                    )
-                                    .action(
-                                        tr(cx, "project_panel.menu.collapse_all", "Collapse All"),
-                                        Box::new(CollapseSelectedEntryAndChildren),
-                                    )
-                            })
-                            .when(is_dir && is_root, |menu| {
-                                menu.separator()
-                                    .action(
-                                        tr(cx, "project_panel.menu.expand_all", "Expand All"),
-                                        Box::new(ExpandAllEntries),
-                                    )
-                                    .action(
-                                        tr(cx, "project_panel.menu.collapse_all", "Collapse All"),
-                                        Box::new(CollapseAllEntries),
-                                    )
-                            })
+                        })
+                        .when(is_dir && !is_root, |menu| {
+                            menu.separator()
+                                .action(
+                                    tr(cx, "project_panel.menu.expand_all", "Expand All"),
+                                    Box::new(ExpandSelectedEntryAndChildren),
+                                )
+                                .action(
+                                    tr(cx, "project_panel.menu.collapse_all", "Collapse All"),
+                                    Box::new(CollapseSelectedEntryAndChildren),
+                                )
+                        })
+                        .when(is_dir && is_root, |menu| {
+                            menu.separator()
+                                .action(
+                                    tr(cx, "project_panel.menu.expand_all", "Expand All"),
+                                    Box::new(ExpandAllEntries),
+                                )
+                                .action(
+                                    tr(cx, "project_panel.menu.collapse_all", "Collapse All"),
+                                    Box::new(CollapseAllEntries),
+                                )
+                        })
                     }
                 })
             });

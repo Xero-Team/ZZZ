@@ -537,7 +537,7 @@ pub(crate) fn active_buffer_diagnostics(
                     &entry.diagnostic.message,
                     MAX_ACTIVE_BUFFER_DIAGNOSTIC_MESSAGE_TOKENS_TO_COLLECT,
                 )
-                .to_string(),
+                .to_owned(),
                 diagnostic_point_range,
                 snippet_point_range,
             )

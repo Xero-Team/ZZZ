@@ -781,8 +781,8 @@ mod remote_button {
     use ui::{
         App, ButtonCommon, Clickable, Color, CommonAnimationExt as _, ContextMenu, Disableable,
         ElementId, FluentBuilder, Icon, IconName, IconSize, IntoElement, Label, LabelCommon,
-        LabelSize, LineHeightStyle, ParentElement, PopoverMenu, SharedString, SplitButton,
-        Styled, Tooltip, Window, div, h_flex, rems,
+        LabelSize, LineHeightStyle, ParentElement, PopoverMenu, SharedString, SplitButton, Styled,
+        Tooltip, Window, div, h_flex, rems,
     };
 
     pub fn render_fetch_button(

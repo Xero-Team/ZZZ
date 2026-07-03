@@ -3548,6 +3548,21 @@ impl AgentPanel {
         Self::new(workspace, None, window, cx)
     }
 
+    #[cfg(test)]
+    fn initial_content_for_thread_summary(
+        session_id: acp::SessionId,
+        cx: &App,
+    ) -> Option<AgentInitialContent> {
+        let thread_store = ThreadStore::global(cx);
+        thread_store
+            .read(cx)
+            .thread_from_session_id(&session_id)
+            .map(|thread| AgentInitialContent::ThreadSummary {
+                session_id,
+                title: Some(thread.title.clone()),
+            })
+    }
+
     /// Opens an external thread using an arbitrary AgentServer.
     ///
     /// This is a test-only helper that allows visual tests and integration tests
@@ -4873,8 +4888,6 @@ mod tests {
             thinking_effort: None,
             draft_prompt: None,
             ui_scroll_position: None,
-            sandboxed_terminal_temp_dir: None,
-            sandbox_grants: Default::default(),
         };
 
         let thread_store = cx.update(|cx| ThreadStore::global(cx));

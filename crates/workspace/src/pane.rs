@@ -5015,7 +5015,7 @@ fn dirty_message_for(buffer_path: Option<ProjectPath>, path_style: PathStyle, cx
             let path = truncate_and_remove_front(&path, 80);
             MarkdownInlineCode(&path).to_string()
         })
-        .unwrap_or(tr(cx, "workspace.pane.this_buffer", "This buffer").into());
+        .unwrap_or(tr(cx, "workspace.pane.this_buffer", "This buffer"));
     tr(
         cx,
         "workspace.pane.unsaved_edits",
