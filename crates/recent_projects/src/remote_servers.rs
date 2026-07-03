@@ -40,7 +40,7 @@ use std::{
     rc::Rc,
     sync::{
         Arc,
-        atomic::{self, AtomicBool, AtomicUsize},
+        atomic::{self, AtomicBool},
     },
 };
 
