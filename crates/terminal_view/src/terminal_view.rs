@@ -15,7 +15,6 @@ use gpui::{
     anchored, deferred, div,
 };
 use i18n::tr;
-use itertools::Itertools;
 use menu;
 use persistence::TerminalDb;
 use project::{Project, ProjectEntryId, search::SearchQuery};
@@ -2568,6 +2567,7 @@ mod tests {
     ) {
         let params = cx.update(AppState::test);
         cx.update(|cx| {
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
         });
 
