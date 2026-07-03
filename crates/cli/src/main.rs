@@ -536,8 +536,6 @@ fn run() -> Result<()> {
     #[cfg(target_os = "linux")]
     let args = flatpak::set_bin_if_no_escape(args);
 
-    let app = Detect::detect(args.zzz.as_deref()).context("Bundle detection")?;
-
     if let Some(shell) = &args.completions {
         let file_path = std::env::current_exe()?;
         let file_name = file_path
@@ -551,6 +549,8 @@ fn run() -> Result<()> {
         crate::completions::main(&cmd, shell);
         return Ok(());
     }
+
+    let app = Detect::detect(args.zzz.as_deref()).context("Bundle detection")?;
 
     if args.version {
         println!("{}", app.zed_version_string());
