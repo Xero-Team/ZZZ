@@ -23156,9 +23156,9 @@ checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
 name = "zpdf"
-version = "0.6.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ead52db5e5b877d624189f751c316d79260331e383b2a9204ed9eeebe9ac63b6"
+checksum = "01c7106db4785cd47e6b00fc53b64cbca9893c3ec96890a47802f39c61978f5e"
 dependencies = [
  "zpdf-color",
  "zpdf-content",
@@ -23174,9 +23174,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-color"
-version = "0.6.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e1a38130e9194209d178f19606dec5e6e8a3b357745fd83e361a68a038c149d"
+checksum = "a5183aff97835b9183b3141aaf43ddb8e600f41df54663770a2f5b9af9694bc0"
 dependencies = [
  "moxcms",
  "tracing",
@@ -23185,9 +23185,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-content"
-version = "0.6.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30c28523c1d7685a2d3ede7f2322356f1628bc8ed1fb2c250094a0384c141ad5"
+checksum = "934cf7a498ee45a8e114be82aee1dd1700248ff3f2674576648f354e8f64867e"
 dependencies = [
  "tracing",
  "zpdf-color",
@@ -23201,9 +23201,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-core"
-version = "0.6.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "686fd9d1b0eab1b7e60a2adab58f52e415c2470a4a6221196a5fb594294fb4b7"
+checksum = "399ba8a77c2cb0fe85007f645e86178c6de4f557f3a437630c980fd22157f0da"
 dependencies = [
  "smallvec",
  "thiserror 2.0.18",
@@ -23211,9 +23211,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-display-list"
-version = "0.6.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e450ad0acba7580c4840a99f287ed9a25ab936e27fd974fd8e8c4f9c64673fbe"
+checksum = "ee6fcb71c7f839ce936dcb2d393795e2e3869654372ee38443e34a2651ec1957"
 dependencies = [
  "smallvec",
  "zpdf-core",
@@ -23221,9 +23221,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-document"
-version = "0.6.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c58fb834df504c136ae37e98c486df466f5de604ee7afb0b375254a6a4030ed"
+checksum = "59bcc3f834504e5f4cbb694bd218581b34a534e63e7206dd4955df6c29b6cc0d"
 dependencies = [
  "tracing",
  "zpdf-core",
@@ -23233,9 +23233,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-font"
-version = "0.6.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32dd99e5db002f5dab6592bcc60bea831d8d4b92530cf10a1be5ef5426ad25a3"
+checksum = "d382878be79dae60a48bb4615bb0cd1f8b0da74f3d206fb3f979df9931cf1077"
 dependencies = [
  "tracing",
  "ttf-parser",
@@ -23244,9 +23244,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-image"
-version = "0.6.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2650bded80737c952c6dd96649063c3604ddbaad7cadd01b5a6278ae0a75c2d2"
+checksum = "35939972b0f3227f7b720b98a1f3568c9efcf8eeedd8092e81dd1be573103ede"
 dependencies = [
  "hayro-jpeg2000",
  "tracing",
@@ -23257,9 +23257,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-parser"
-version = "0.6.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e513b1484d05b5c1d28669f518797365d3df574ba40840152750ff0b0ff557f"
+checksum = "71c49a08c634c7d541e80ebae6b3b23d022dc4b0b15c028b4d867c21bdcab2d0"
 dependencies = [
  "aes",
  "cbc",
@@ -23274,9 +23274,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-render"
-version = "0.6.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb5b4585acb3c940d8837e44edfe4cff27b9f1697e3df58e3777e06451450426"
+checksum = "e1743564c8478b35afc1def6e5883881683ca5d98c0964afb86faf75ca77f5b2"
 dependencies = [
  "zpdf-core",
  "zpdf-display-list",
@@ -23284,9 +23284,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-render-cpu"
-version = "0.6.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da342456ae7338951e33b9450bc1d2af96484314b129f0887cbfa1509a88b0ae"
+checksum = "642c933a817adb19cc62faa58c3cfef803637332272a1b8cbe3112f12582c2b7"
 dependencies = [
  "image",
  "thiserror 2.0.18",

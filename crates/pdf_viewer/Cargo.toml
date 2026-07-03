@@ -36,7 +36,7 @@ ui.workspace = true
 ui_input.workspace = true
 util.workspace = true
 workspace.workspace = true
-zpdf = { version = "0.6", default-features = true }
+zpdf = { version = "0.9.0", default-features = true }
 
 [dev-dependencies]
 editor = { workspace = true, features = ["test-support"] }
