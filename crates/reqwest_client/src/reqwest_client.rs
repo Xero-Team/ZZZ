@@ -30,6 +30,13 @@ impl ReqwestClient {
         reqwest::Client::builder()
             .use_rustls_tls()
             .connect_timeout(Duration::from_secs(10))
+            // Detect and drop connections that silently go bad on flaky
+            // paths instead of reusing a stale pooled HTTP/2 connection.
+            .tcp_keepalive(Duration::from_secs(30))
+            .pool_idle_timeout(Duration::from_secs(30))
+            .http2_keep_alive_interval(Duration::from_secs(15))
+            .http2_keep_alive_timeout(Duration::from_secs(10))
+            .http2_keep_alive_while_idle(true)
             // Bail out of a request whose body stops producing bytes entirely
             .read_timeout(Duration::from_secs(30))
     }
