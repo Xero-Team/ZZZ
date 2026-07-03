@@ -1,12 +1,13 @@
 use std::error::Error;
+use std::io::Read as _;
 use std::sync::{LazyLock, OnceLock};
-use std::{borrow::Cow, mem, pin::Pin, task::Poll, time::Duration};
+use std::{borrow::Cow, io, mem, pin::Pin, task::Poll, time::Duration};
 
 use gpui_util::defer;
 
 use anyhow::anyhow;
 use bytes::{BufMut, Bytes, BytesMut};
-use futures::{AsyncRead, FutureExt as _, TryStreamExt as _};
+use futures::{AsyncRead, FutureExt as _, SinkExt as _, Stream as _, TryStreamExt as _};
 use http_client::{RedirectPolicy, Url, http};
 use regex::Regex;
 use reqwest::{
@@ -175,6 +176,47 @@ impl futures::Stream for StreamReader {
     }
 }
 
+struct ChannelReader {
+    receiver: futures::channel::mpsc::Receiver<io::Result<Bytes>>,
+    chunk: Option<std::io::Cursor<Bytes>>,
+}
+
+impl ChannelReader {
+    fn new(receiver: futures::channel::mpsc::Receiver<io::Result<Bytes>>) -> Self {
+        Self {
+            receiver,
+            chunk: None,
+        }
+    }
+}
+
+impl AsyncRead for ChannelReader {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
+        loop {
+            if let Some(chunk) = self.chunk.as_mut() {
+                match chunk.read(buf) {
+                    Ok(0) => self.chunk = None,
+                    result => return Poll::Ready(result),
+                }
+            }
+
+            match Pin::new(&mut self.receiver).poll_next(cx) {
+                Poll::Ready(Some(Ok(chunk))) if chunk.is_empty() => continue,
+                Poll::Ready(Some(Ok(chunk))) => {
+                    self.chunk = Some(std::io::Cursor::new(chunk));
+                }
+                Poll::Ready(Some(Err(error))) => return Poll::Ready(Err(error)),
+                Poll::Ready(None) => return Poll::Ready(Ok(0)),
+                Poll::Pending => return Poll::Pending,
+            }
+        }
+    }
+}
+
 /// Implementation from <https://docs.rs/tokio-util/0.7.12/src/tokio_util/util/poll_buf.rs.html>
 /// Specialized for this use case
 pub fn poll_read_buf(
@@ -272,11 +314,26 @@ impl http_client::HttpClient for ReqwestClient {
                 .version(response.version());
             *builder.headers_mut().unwrap() = headers;
 
-            let bytes = response
-                .bytes_stream()
-                .map_err(futures::io::Error::other)
-                .into_async_read();
-            let body = http_client::AsyncBody::from_reader(bytes);
+            let (mut body_tx, body_rx) = futures::channel::mpsc::channel(1);
+            drop(handle.spawn(async move {
+                let mut stream = response.bytes_stream();
+                loop {
+                    match stream.try_next().await {
+                        Ok(Some(chunk)) => {
+                            if body_tx.send(Ok(chunk)).await.is_err() {
+                                return;
+                            }
+                        }
+                        Ok(None) => return,
+                        Err(error) => {
+                            let error = io::Error::other(redact_error(error));
+                            let _ = body_tx.send(Err(error)).await;
+                            return;
+                        }
+                    }
+                }
+            }));
+            let body = http_client::AsyncBody::from_reader(ChannelReader::new(body_rx));
 
             builder.body(body).map_err(|e| anyhow!(e))
         }
