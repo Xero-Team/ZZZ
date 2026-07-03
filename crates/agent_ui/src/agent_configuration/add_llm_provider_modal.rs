@@ -9,10 +9,10 @@ use gpui::{
 use i18n as app_i18n;
 use language_model::LanguageModelRegistry;
 use language_models::provider::open_ai_compatible::{AvailableModel, ModelCapabilities};
-use settings::{OpenAiCompatibleSettingsContent, update_settings_file};
+use settings::{OpenAiCompatibleSettingsContent, OpenAiReasoningEffort, update_settings_file};
 use ui::{
-    Banner, Checkbox, KeyBinding, Modal, ModalFooter, ModalHeader, Section, ToggleState,
-    WithScrollbar, prelude::*,
+    Banner, Checkbox, ContextMenu, ContextMenuEntry, DropdownMenu, DropdownStyle, IconPosition,
+    KeyBinding, Modal, ModalFooter, ModalHeader, Section, ToggleState, WithScrollbar, prelude::*,
 };
 use ui_input::InputField;
 use workspace::{ModalView, Workspace};
@@ -122,6 +122,9 @@ struct ModelCapabilityToggles {
     pub supports_parallel_tool_calls: ToggleState,
     pub supports_prompt_cache_key: ToggleState,
     pub supports_chat_completions: ToggleState,
+    pub supports_thinking: ToggleState,
+    pub interleaved_reasoning: ToggleState,
+    pub max_tokens_parameter: ToggleState,
 }
 
 struct ModelInput {
@@ -129,6 +132,7 @@ struct ModelInput {
     max_completion_tokens: Entity<InputField>,
     max_output_tokens: Entity<InputField>,
     max_tokens: Entity<InputField>,
+    reasoning_effort: OpenAiReasoningEffort,
     capabilities: ModelCapabilityToggles,
 }
 
@@ -192,6 +196,8 @@ impl ModelInput {
             parallel_tool_calls,
             prompt_cache_key,
             chat_completions,
+            interleaved_reasoning,
+            max_tokens_parameter,
             ..
         } = ModelCapabilities::default();
 
@@ -206,7 +212,11 @@ impl ModelInput {
                 supports_parallel_tool_calls: parallel_tool_calls.into(),
                 supports_prompt_cache_key: prompt_cache_key.into(),
                 supports_chat_completions: chat_completions.into(),
+                supports_thinking: ToggleState::Unselected,
+                interleaved_reasoning: interleaved_reasoning.into(),
+                max_tokens_parameter: max_tokens_parameter.into(),
             },
+            reasoning_effort: OpenAiReasoningEffort::Medium,
         }
     }
 
@@ -260,14 +270,22 @@ impl ModelInput {
                         "Max Tokens must be a number",
                     )
                 })?,
-            reasoning_effort: None,
+            reasoning_effort: if self.capabilities.supports_thinking.selected() {
+                Some(self.reasoning_effort)
+            } else {
+                None
+            },
             capabilities: ModelCapabilities {
                 tools: self.capabilities.supports_tools.selected(),
                 images: self.capabilities.supports_images.selected(),
                 parallel_tool_calls: self.capabilities.supports_parallel_tool_calls.selected(),
                 prompt_cache_key: self.capabilities.supports_prompt_cache_key.selected(),
                 chat_completions: self.capabilities.supports_chat_completions.selected(),
-                interleaved_reasoning: false,
+                interleaved_reasoning: self.capabilities.supports_thinking.selected()
+                    && self.capabilities.supports_chat_completions.selected()
+                    && self.capabilities.interleaved_reasoning.selected(),
+                max_tokens_parameter: self.capabilities.supports_chat_completions.selected()
+                    && self.capabilities.max_tokens_parameter.selected(),
             },
         })
     }
@@ -416,7 +434,15 @@ impl AddLlmProviderModal {
         cx.emit(DismissEvent);
     }
 
-    fn render_model_section(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_model_section(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let model_elements = (0..self.input.models.len())
+            .map(|ix| self.render_model(ix, window, cx))
+            .collect::<Vec<_>>();
+
         v_flex()
             .mt_1()
             .gap_2()
@@ -444,16 +470,108 @@ impl AddLlmProviderModal {
                         })),
                     ),
             )
-            .children(
-                self.input
-                    .models
-                    .iter()
-                    .enumerate()
-                    .map(|(ix, _)| self.render_model(ix, cx)),
-            )
+            .children(model_elements)
     }
 
-    fn render_model(&self, ix: usize, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn render_open_ai_reasoning_settings(
+        &self,
+        ix: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let model = &self.input.models[ix];
+        let selected_effort = model.reasoning_effort;
+        let supports_thinking = model.capabilities.supports_thinking;
+        let supports_chat_completions = model.capabilities.supports_chat_completions;
+        let interleaved_reasoning = model.capabilities.interleaved_reasoning;
+        let weak_self = cx.weak_entity();
+
+        let effort_menu = ContextMenu::build(window, cx, move |mut menu, _window, _cx| {
+            for effort in OpenAiReasoningEffort::OPENAI_COMPATIBLE_SELECTABLE {
+                let is_selected = effort == selected_effort;
+                let weak_self = weak_self.clone();
+                menu.push_item(
+                    ContextMenuEntry::new(effort.label())
+                        .toggleable(IconPosition::End, is_selected)
+                        .handler(move |_window, cx| {
+                            weak_self
+                                .update(cx, |this, cx| {
+                                    this.input.models[ix].reasoning_effort = effort;
+                                    cx.notify();
+                                })
+                                .ok();
+                        }),
+                );
+            }
+
+            menu
+        });
+
+        v_flex()
+            .gap_1()
+            .child(
+                Checkbox::new(("supports-thinking", ix), supports_thinking)
+                    .label(tr(
+                        cx,
+                        "agent_ui.add_provider.supports_thinking",
+                        "Supports thinking",
+                    ))
+                    .on_click(cx.listener(move |this, checked, _window, cx| {
+                        this.input.models[ix].capabilities.supports_thinking = *checked;
+                        cx.notify();
+                    })),
+            )
+            .when(supports_thinking.selected(), |parent| {
+                parent
+                    .child(
+                        v_flex()
+                            .gap_1()
+                            .child(
+                                Label::new(tr(
+                                    cx,
+                                    "agent_ui.add_provider.default_reasoning_effort",
+                                    "Default reasoning effort",
+                                ))
+                                .size(LabelSize::Small),
+                            )
+                            .child(
+                                DropdownMenu::new(
+                                    ElementId::Name(
+                                        format!("reasoning-effort-selector-{ix}").into(),
+                                    ),
+                                    selected_effort.label(),
+                                    effort_menu,
+                                )
+                                .style(DropdownStyle::Outlined)
+                                .trigger_size(ButtonSize::Compact)
+                                .full_width(true),
+                            ),
+                    )
+                    .when(supports_chat_completions.selected(), |parent| {
+                        parent.child(
+                            Checkbox::new(("interleaved-reasoning", ix), interleaved_reasoning)
+                                .label(tr(
+                                    cx,
+                                    "agent_ui.add_provider.interleaved_reasoning",
+                                    "Preserves thinking in chat history",
+                                ))
+                                .on_click(cx.listener(move |this, checked, _window, cx| {
+                                    this.input.models[ix].capabilities.interleaved_reasoning =
+                                        *checked;
+                                    cx.notify();
+                                })),
+                        )
+                    })
+            })
+            .into_any_element()
+    }
+
+    fn render_model(
+        &self,
+        ix: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let has_more_than_one_model = self.input.models.len() > 1;
         let model = &self.input.models[ix];
 
@@ -554,7 +672,31 @@ impl AddLlmProviderModal {
                                 cx.notify();
                             },
                         )),
-                    ),
+                    )
+                    .when(
+                        model.capabilities.supports_chat_completions.selected(),
+                        |parent| {
+                            parent.child(
+                                Checkbox::new(
+                                    ("max-tokens-parameter", ix),
+                                    model.capabilities.max_tokens_parameter,
+                                )
+                                .label(tr(
+                                    cx,
+                                    "agent_ui.add_provider.max_tokens_parameter",
+                                    "Uses max_tokens for output limit",
+                                ))
+                                .on_click(cx.listener(
+                                    move |this, checked, _window, cx| {
+                                        this.input.models[ix].capabilities.max_tokens_parameter =
+                                            *checked;
+                                        cx.notify();
+                                    },
+                                )),
+                            )
+                        },
+                    )
+                    .child(self.render_open_ai_reasoning_settings(ix, window, cx)),
             )
             .when(has_more_than_one_model, |this| {
                 this.child(
@@ -576,6 +718,7 @@ impl AddLlmProviderModal {
                     })),
                 )
             })
+            .into_any_element()
     }
 
     fn on_tab(&mut self, _: &menu::SelectNext, window: &mut Window, cx: &mut Context<Self>) {
@@ -672,7 +815,7 @@ impl Render for AddLlmProviderModal {
                                     .child(self.input.provider_name.clone())
                                     .child(self.input.api_url.clone())
                                     .child(self.input.api_key.clone())
-                                    .child(self.render_model_section(cx)),
+                                    .child(self.render_model_section(window, cx)),
                             ),
                     )
                     .footer(
@@ -878,6 +1021,19 @@ mod tests {
                 model_input.capabilities.supports_chat_completions,
                 ToggleState::Selected
             );
+            assert_eq!(
+                model_input.capabilities.supports_thinking,
+                ToggleState::Unselected
+            );
+            assert_eq!(
+                model_input.capabilities.interleaved_reasoning,
+                ToggleState::Unselected
+            );
+            assert_eq!(
+                model_input.capabilities.max_tokens_parameter,
+                ToggleState::Unselected
+            );
+            assert_eq!(model_input.reasoning_effort, OpenAiReasoningEffort::Medium);
 
             let parsed_model = model_input.parse(cx).unwrap();
             assert!(parsed_model.capabilities.tools);
@@ -885,6 +1041,9 @@ mod tests {
             assert!(!parsed_model.capabilities.parallel_tool_calls);
             assert!(!parsed_model.capabilities.prompt_cache_key);
             assert!(parsed_model.capabilities.chat_completions);
+            assert!(!parsed_model.capabilities.interleaved_reasoning);
+            assert!(!parsed_model.capabilities.max_tokens_parameter);
+            assert_eq!(parsed_model.reasoning_effort, None);
         });
     }
 
@@ -903,6 +1062,9 @@ mod tests {
             model_input.capabilities.supports_parallel_tool_calls = ToggleState::Unselected;
             model_input.capabilities.supports_prompt_cache_key = ToggleState::Unselected;
             model_input.capabilities.supports_chat_completions = ToggleState::Unselected;
+            model_input.capabilities.supports_thinking = ToggleState::Unselected;
+            model_input.capabilities.interleaved_reasoning = ToggleState::Selected;
+            model_input.capabilities.max_tokens_parameter = ToggleState::Selected;
 
             let parsed_model = model_input.parse(cx).unwrap();
             assert!(!parsed_model.capabilities.tools);
@@ -910,6 +1072,9 @@ mod tests {
             assert!(!parsed_model.capabilities.parallel_tool_calls);
             assert!(!parsed_model.capabilities.prompt_cache_key);
             assert!(!parsed_model.capabilities.chat_completions);
+            assert!(!parsed_model.capabilities.interleaved_reasoning);
+            assert!(!parsed_model.capabilities.max_tokens_parameter);
+            assert_eq!(parsed_model.reasoning_effort, None);
         });
     }
 
@@ -928,6 +1093,10 @@ mod tests {
             model_input.capabilities.supports_parallel_tool_calls = ToggleState::Selected;
             model_input.capabilities.supports_prompt_cache_key = ToggleState::Unselected;
             model_input.capabilities.supports_chat_completions = ToggleState::Selected;
+            model_input.capabilities.supports_thinking = ToggleState::Selected;
+            model_input.capabilities.interleaved_reasoning = ToggleState::Selected;
+            model_input.capabilities.max_tokens_parameter = ToggleState::Selected;
+            model_input.reasoning_effort = OpenAiReasoningEffort::XHigh;
 
             let parsed_model = model_input.parse(cx).unwrap();
             assert_eq!(parsed_model.name, "somemodel");
@@ -936,6 +1105,12 @@ mod tests {
             assert!(parsed_model.capabilities.parallel_tool_calls);
             assert!(!parsed_model.capabilities.prompt_cache_key);
             assert!(parsed_model.capabilities.chat_completions);
+            assert!(parsed_model.capabilities.interleaved_reasoning);
+            assert!(parsed_model.capabilities.max_tokens_parameter);
+            assert_eq!(
+                parsed_model.reasoning_effort,
+                Some(OpenAiReasoningEffort::XHigh)
+            );
         });
     }
 
