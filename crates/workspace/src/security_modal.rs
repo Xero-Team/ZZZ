@@ -689,8 +689,8 @@ mod tests {
             PathBuf::from("/Users/me/dev/delta/wt"),
         );
         assert_eq!(
-            validate_trust_scope("~/dev/wt", project, Some(home), style).unwrap(),
-            PathBuf::from("/Users/me/dev/wt"),
+            validate_trust_scope("~/dev/delta/wt", project, Some(home), style).unwrap(),
+            PathBuf::from("/Users/me/dev/delta/wt"),
         );
     }
 

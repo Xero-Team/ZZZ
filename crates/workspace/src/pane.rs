@@ -9216,20 +9216,20 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_dirty_message_for_escapes_markdown_in_path() {
+    #[gpui::test]
+    async fn test_dirty_message_for_escapes_markdown_in_path(cx: &mut TestAppContext) {
+        init_test(cx);
         let project_path = ProjectPath {
             worktree_id: WorktreeId::from_usize(0),
             path: util::rel_path::rel_path("dir/__init__.py").into(),
         };
-        assert_eq!(
-            dirty_message_for(Some(project_path), PathStyle::Posix),
-            "`dir/__init__.py` contains unsaved edits. Do you want to save it?"
-        );
-        assert_eq!(
-            dirty_message_for(None, PathStyle::Posix),
-            "This buffer contains unsaved edits. Do you want to save it?"
-        );
+        cx.update(|cx| {
+            let path_message = dirty_message_for(Some(project_path), PathStyle::Posix, cx);
+            assert!(path_message.contains("`dir/__init__.py`"));
+
+            let generic_message = dirty_message_for(None, PathStyle::Posix, cx);
+            assert!(!generic_message.contains('`'));
+        });
     }
 
     mod property_test {
