@@ -772,7 +772,7 @@ pub(crate) fn open_options_for_request(
     let open_behavior = open_behavior.unwrap_or_else(|| {
         match workspace::WorkspaceSettings::get_global(cx).default_open_behavior {
             settings::DefaultOpenBehavior::ExistingWindow => cli::OpenBehavior::ExistingWindow,
-            settings::DefaultOpenBehavior::NewWindow => cli::OpenBehavior::PreferNewWindow,
+            settings::DefaultOpenBehavior::NewWindow => cli::OpenBehavior::AlwaysNew,
         }
     });
     open_options_for_behavior(open_behavior, location, cx)
@@ -1403,7 +1403,7 @@ mod tests {
             cx.update(|cx| open_options_for_request(None, &SerializedWorkspaceLocation::Local, cx));
         assert_eq!(
             options.workspace_matching,
-            workspace::WorkspaceMatching::MatchSubpaths
+            workspace::WorkspaceMatching::None
         );
         assert!(!options.add_dirs_to_sidebar);
 

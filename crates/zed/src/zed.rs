@@ -5536,6 +5536,7 @@ mod tests {
 
             gpui_tokio::init(cx);
             AppState::set_global(app_state.clone(), cx);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             audio::init(cx);
             workspace::init(app_state.clone(), cx);
