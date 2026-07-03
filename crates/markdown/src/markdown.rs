@@ -4046,7 +4046,7 @@ impl RenderedText {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gpui::{RenderImage, TestAppContext, size};
+    use gpui::{RenderImage, TestAppContext, UpdateGlobal, size};
     use language::{Language, LanguageConfig, LanguageMatcher};
     use std::sync::{
         Arc,

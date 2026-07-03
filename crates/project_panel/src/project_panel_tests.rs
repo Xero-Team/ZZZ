@@ -10207,6 +10207,7 @@ pub(crate) fn init_test(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let settings_store = SettingsStore::test(cx);
         cx.set_global(settings_store);
+        i18n::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         crate::init(cx);
 
@@ -10225,6 +10226,7 @@ pub(crate) fn init_test(cx: &mut TestAppContext) {
 fn init_test_with_editor(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let app_state = AppState::test(cx);
+        i18n::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         editor::init(cx);
         crate::init(cx);
@@ -10476,5 +10478,8 @@ async fn test_restore_file_prompt_escapes_markdown_in_file_name(cx: &mut gpui::T
         .pending_prompt()
         .expect("restore should show a confirmation prompt");
 
-    assert_eq!(message, "Discard changes to `__init__.py`?");
+    assert!(
+        message.contains("`__init__.py`"),
+        "restore prompt should render the filename as inline code, got: {message}"
+    );
 }

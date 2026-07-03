@@ -5011,7 +5011,10 @@ fn dirty_message_for(buffer_path: Option<ProjectPath>, path_style: PathStyle, cx
             let path = p.path.display(path_style);
             if path.is_empty() { None } else { Some(path) }
         })
-        .map(|path| MarkdownInlineCode(truncate_and_remove_front(&path, 80)).to_string())
+        .map(|path| {
+            let path = truncate_and_remove_front(&path, 80);
+            MarkdownInlineCode(&path).to_string()
+        })
         .unwrap_or(tr(cx, "workspace.pane.this_buffer", "This buffer").into());
     tr(
         cx,
