@@ -9,7 +9,7 @@ use project::{FakeFs, ProjectPath};
 use serde_json::json;
 use settings::{ProjectPanelAutoOpenSettings, SettingsStore};
 use std::path::{Path, PathBuf};
-use util::{path, paths::PathStyle, rel_path::rel_path};
+use util::{markdown::MarkdownInlineCode, path, paths::PathStyle, rel_path::rel_path};
 use workspace::{
     AppState, ItemHandle, MultiWorkspace, Pane, Workspace,
     item::{Item, ProjectItem, test::TestItem},
@@ -10295,7 +10295,8 @@ fn submit_deletion(panel: &Entity<ProjectPanel>, cx: &mut VisualTestContext) {
         cx.has_pending_prompt(),
         "Should have a prompt after the deletion"
     );
-    cx.simulate_prompt_answer("Delete");
+    let delete = cx.update(|_, cx| tr(cx, "project_panel.delete.delete", "Delete"));
+    cx.simulate_prompt_answer(&delete);
     assert!(
         !cx.has_pending_prompt(),
         "Should have no prompts after prompt was replied to"
@@ -10437,9 +10438,19 @@ async fn test_delete_prompt_escapes_markdown_in_file_name(cx: &mut gpui::TestApp
         .pending_prompt()
         .expect("delete should show a confirmation prompt");
 
+    let expected = cx.update(|_, cx| {
+        tr(
+            cx,
+            "project_panel.delete.delete_single_prompt",
+            "Are you sure you want to permanently delete {}?{}",
+        )
+        .replacen("{}", &MarkdownInlineCode("__somefile__").to_string(), 1)
+        .replacen("{}", "", 1)
+    });
+
     assert_eq!(
         message,
-        "Are you sure you want to permanently delete `__somefile__`?"
+        expected
     );
 }
 
@@ -10478,5 +10489,14 @@ async fn test_restore_file_prompt_escapes_markdown_in_file_name(cx: &mut gpui::T
         .pending_prompt()
         .expect("restore should show a confirmation prompt");
 
-    assert_eq!(message, "Discard changes to `__init__.py`?");
+    let expected = cx.update(|_, cx| {
+        tr(
+            cx,
+            "project_panel.restore_file.prompt",
+            "Discard changes to {}?",
+        )
+        .replacen("{}", &MarkdownInlineCode("__init__.py").to_string(), 1)
+    });
+
+    assert_eq!(message, expected);
 }
