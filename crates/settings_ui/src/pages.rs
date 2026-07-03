@@ -9,7 +9,9 @@ pub(crate) use audio_input_output_setup::{
 };
 pub(crate) use edit_prediction_provider_setup::render_edit_prediction_setup_page;
 pub(crate) use feature_flags::render_feature_flags_page;
-pub(crate) use llm_providers_page::render_llm_providers_page;
+pub(crate) use llm_providers_page::{
+    LlmProviderForm, render_add_llm_provider_button, render_llm_providers_page,
+};
 pub(crate) use tool_permissions_setup::render_tool_permissions_setup_page;
 
 pub use tool_permissions_setup::{

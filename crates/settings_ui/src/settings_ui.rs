@@ -54,7 +54,9 @@ use crate::components::{
     SettingsSectionHeader, font_picker, icon_theme_picker, render_ollama_model_picker,
     theme_picker,
 };
-use crate::pages::{render_input_audio_device_dropdown, render_output_audio_device_dropdown};
+use crate::pages::{
+    LlmProviderForm, render_input_audio_device_dropdown, render_output_audio_device_dropdown,
+};
 
 const NAVBAR_CONTAINER_TAB_INDEX: isize = 0;
 const NAVBAR_GROUP_TAB_INDEX: isize = 1;
@@ -786,6 +788,7 @@ pub struct SettingsWindow {
     pub(crate) regex_validation_error: Option<String>,
     last_copied_link_path: Option<&'static str>,
     provider_configuration_views: HashMap<LanguageModelProviderId, AnyView>,
+    pub(crate) llm_provider_form: Option<LlmProviderForm>,
 }
 
 struct SearchDocument {
@@ -1794,6 +1797,7 @@ impl SettingsWindow {
             list_state,
             last_copied_link_path: None,
             provider_configuration_views: HashMap::default(),
+            llm_provider_form: None,
         };
 
         this.fetch_files(window, cx);
@@ -3523,32 +3527,39 @@ impl SettingsWindow {
                         )
                         .child(self.render_sub_page_breadcrumbs(window, cx)),
                 )
-                .when(current_sub_page.link.in_json, |this| {
-                    this.child(
-                        div().flex_shrink_0().child(
-                            Button::new(
-                                "open-in-settings-file",
-                                app_i18n::tr(
+                .child(
+                    h_flex()
+                        .gap_1()
+                        .when(
+                            current_sub_page.link.json_path == Some("language_models")
+                                && self.llm_provider_form.is_none(),
+                            |this| this.child(pages::render_add_llm_provider_button(self, window, cx)),
+                        )
+                        .when(current_sub_page.link.in_json, |this| {
+                            this.child(
+                                Button::new(
+                                    "open-in-settings-file",
+                                    app_i18n::tr(
+                                        cx,
+                                        "settings_ui.common.button.edit_in_settings_json",
+                                        "Edit in settings.json",
+                                    ),
+                                )
+                                .tab_index(0_isize)
+                                .style(ButtonStyle::OutlinedGhost)
+                                .tooltip(Tooltip::text(app_i18n::tr(
                                     cx,
                                     "settings_ui.common.button.edit_in_settings_json",
                                     "Edit in settings.json",
-                                ),
+                                )))
+                                .on_click(cx.listener(
+                                    |this, _, window, cx| {
+                                        this.open_current_settings_file(window, cx);
+                                    },
+                                )),
                             )
-                            .tab_index(0_isize)
-                            .style(ButtonStyle::OutlinedGhost)
-                            .tooltip(Tooltip::text(app_i18n::tr(
-                                cx,
-                                "settings_ui.common.button.edit_in_settings_json",
-                                "Edit in settings.json",
-                            )))
-                            .on_click(cx.listener(
-                                |this, _, window, cx| {
-                                    this.open_current_settings_file(window, cx);
-                                },
-                            )),
-                        ),
-                    )
-                })
+                        }),
+                )
                 .into_any_element();
 
             let active_page_render_fn = &current_sub_page.link.render;
@@ -4798,6 +4809,7 @@ pub mod test {
                 regex_validation_error: None,
                 last_copied_link_path: None,
                 provider_configuration_views: HashMap::default(),
+                llm_provider_form: None,
             }
         }
     }
@@ -4926,6 +4938,7 @@ pub mod test {
             regex_validation_error: None,
             last_copied_link_path: None,
             provider_configuration_views: HashMap::default(),
+            llm_provider_form: None,
         };
 
         settings_window.build_filter_table();
