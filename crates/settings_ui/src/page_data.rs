@@ -10,7 +10,7 @@ use crate::{
     ActionLink, DynamicItem, PROJECT, SettingField, SettingItem, SettingsFieldMetadata,
     SettingsPage, SettingsPageItem, SubPageLink, USER, UiText, active_language, all_language_names,
     pages::{
-        render_edit_prediction_setup_page, render_llm_providers_page,
+        render_edit_prediction_setup_page, render_llm_providers_page, render_mcp_servers_page,
         render_tool_permissions_setup_page,
     },
 };
@@ -94,6 +94,7 @@ fn developer_page() -> SettingsPage {
                 title: lt("settings_ui.page_data.title.feature.flags", "Feature Flags"),
                 r#type: Default::default(),
                 description: None,
+                search_aliases: &[],
                 json_path: Some("feature_flags"),
                 in_json: true,
                 files: USER,
@@ -3709,6 +3710,7 @@ fn languages_and_tools_page(cx: &App) -> SettingsPage {
                 title: language_name.into(),
                 r#type: crate::SubPageType::Language,
                 description: None,
+                search_aliases: &[],
                 json_path: Some(link.leak()),
                 in_json: true,
                 files: USER | PROJECT,
@@ -6589,7 +6591,7 @@ fn panels_page() -> SettingsPage {
         ]
     }
 
-    fn git_panel_section() -> [SettingsPageItem; 15] {
+    fn git_panel_section() -> [SettingsPageItem; 16] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.git.panel",
@@ -6834,6 +6836,34 @@ fn panels_page() -> SettingsPage {
                             .git_panel
                             .get_or_insert_default()
                             .diff_stats = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.primary.click.behavior",
+                    "Primary Click Behavior",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.default.action.when.clicking.a.changed.file.in.the.git.panel",
+                    "Default action when clicking a changed file in the Git panel.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("git_panel.entry_primary_click_action"),
+                    pick: |settings_content| {
+                        settings_content
+                            .git_panel
+                            .as_ref()?
+                            .entry_primary_click_action
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .git_panel
+                            .get_or_insert_default()
+                            .entry_primary_click_action = value;
                     },
                 }),
                 metadata: None,
@@ -8767,6 +8797,18 @@ fn ai_page(cx: &App) -> SettingsPage {
                     "Configure Providers",
                 ),
                 r#type: Default::default(),
+                search_aliases: &[
+                    "ai",
+                    "anthropic",
+                    "api key",
+                    "llama",
+                    "llm",
+                    "lm studio",
+                    "model provider",
+                    "ollama",
+                    "openai",
+                    "provider",
+                ],
                 json_path: Some("language_models"),
                 description: Some(lt(
                     "settings_ui.page_data.description.configure.local.third.party.language.model.providers.for.agent.workflows",
@@ -8782,6 +8824,16 @@ fn ai_page(cx: &App) -> SettingsPage {
                     "Tool Permissions",
                 ),
                 r#type: Default::default(),
+                search_aliases: &[
+                    "allow",
+                    "auto allow",
+                    "auto deny",
+                    "deny",
+                    "permission",
+                    "permissions",
+                    "regex",
+                    "tool permission",
+                ],
                 json_path: Some("agent.tool_permissions"),
                 description: Some(lt(
                     "settings_ui.page_data.description.set.up.regex.patterns.to.auto.allow.auto.deny.or.always.request.confirmation.for.specific.tool.inputs",
@@ -8790,6 +8842,27 @@ fn ai_page(cx: &App) -> SettingsPage {
                 in_json: true,
                 files: USER,
                 render: render_tool_permissions_setup_page,
+            }),
+            SettingsPageItem::SubPageLink(SubPageLink {
+                title: lt("settings_ui.page_data.title.mcp_servers", "MCP Servers"),
+                r#type: Default::default(),
+                search_aliases: &[
+                    "context server",
+                    "context servers",
+                    "mcp",
+                    "mcp server",
+                    "mcp servers",
+                    "timeout",
+                    "tool timeout",
+                ],
+                json_path: Some("context_server_timeout"),
+                description: Some(lt(
+                    "settings_ui.page_data.description.configure.mcp.server.settings.including.default.tool.timeout",
+                    "Configure MCP server settings, including the default tool timeout.",
+                )),
+                in_json: true,
+                files: USER | PROJECT,
+                render: render_mcp_servers_page,
             }),
         ];
 
@@ -9043,36 +9116,6 @@ fn ai_page(cx: &App) -> SettingsPage {
         items.into_boxed_slice()
     }
 
-    fn context_servers_section() -> [SettingsPageItem; 2] {
-        [
-            SettingsPageItem::SectionHeader(lt(
-                "settings_ui.page_data.section.context.servers",
-                "Context Servers",
-            )),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: lt(
-                    "settings_ui.page_data.title.context.server.timeout",
-                    "Context Server Timeout",
-                ),
-                description: lt(
-                    "settings_ui.page_data.description.default.timeout.in.seconds.for.context.server.tool.calls.can.be.overridden.per.server.in.context.servers.configuration",
-                    "Default timeout in seconds for context server tool calls. Can be overridden per-server in context_servers configuration.",
-                ),
-                field: Box::new(SettingField {
-                    json_path: Some("context_server_timeout"),
-                    pick: |settings_content| {
-                        settings_content.project.context_server_timeout.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.project.context_server_timeout = value;
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-        ]
-    }
-
     fn edit_prediction_display_sub_section() -> [SettingsPageItem; 1] {
         [SettingsPageItem::SettingItem(SettingItem {
             title: lt("settings_ui.page_data.title.display.mode", "Display Mode"),
@@ -9110,7 +9153,6 @@ fn ai_page(cx: &App) -> SettingsPage {
         items: concat_sections![
             general_section(),
             agent_configuration_section(cx),
-            context_servers_section(),
             edit_prediction_language_settings_section(),
             edit_prediction_display_sub_section()
         ],
@@ -10652,7 +10694,7 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn global_only_miscellaneous_sub_section() -> [SettingsPageItem; 4] {
+    fn global_only_miscellaneous_sub_section() -> [SettingsPageItem; 3] {
         [
             SettingsPageItem::SettingItem(SettingItem {
                 title: lt("settings_ui.page_data.title.image.viewer", "Image Viewer"),
@@ -10743,35 +10785,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
                         metadata: None,
                     }],
                 ],
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: lt(
-                    "settings_ui.page_data.title.auto.replace.emoji.shortcode",
-                    "Auto Replace Emoji Shortcode",
-                ),
-                description: lt(
-                    "settings_ui.page_data.description.whether.to.automatically.replace.emoji.shortcodes.with.emoji.characters",
-                    "Whether to automatically replace emoji shortcodes with emoji characters.",
-                ),
-                field: Box::new(SettingField {
-                    json_path: Some("message_editor.auto_replace_emoji_shortcode"),
-                    pick: |settings_content| {
-                        settings_content
-                            .message_editor
-                            .as_ref()
-                            .and_then(|message_editor| {
-                                message_editor.auto_replace_emoji_shortcode.as_ref()
-                            })
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .message_editor
-                            .get_or_insert_default()
-                            .auto_replace_emoji_shortcode = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
             }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: lt(
@@ -11338,6 +11351,7 @@ fn edit_prediction_language_settings_section() -> [SettingsPageItem; 5] {
                 "Configure Providers",
             ),
             r#type: Default::default(),
+            search_aliases: &[],
             json_path: Some("edit_predictions.providers"),
             description: Some(lt(
                 "settings_ui.page_data.description.set.up.different.edit.prediction.providers.in.complement.to.zed.s.built.in.zeta.model",
@@ -11523,5 +11537,31 @@ mod tests {
         write_vim_mode_inner(&mut settings, Some(true));
         assert_eq!(settings.vim_mode, Some(true));
         assert_eq!(settings.helix_mode, Some(false));
+    }
+
+    #[gpui::test]
+    async fn ai_page_includes_mcp_servers_subpage_and_omits_context_servers_section(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        cx.update(|cx| {
+            let ai_page = ai_page(cx);
+
+            let has_mcp_servers_subpage = ai_page.items.iter().any(|item| {
+                matches!(
+                    item,
+                    SettingsPageItem::SubPageLink(SubPageLink { title, .. })
+                        if title.fallback() == "MCP Servers"
+                )
+            });
+            let has_context_servers_section = ai_page.items.iter().any(|item| {
+                matches!(
+                    item,
+                    SettingsPageItem::SectionHeader(title) if title.fallback() == "Context Servers"
+                )
+            });
+
+            assert!(has_mcp_servers_subpage);
+            assert!(!has_context_servers_section);
+        });
     }
 }

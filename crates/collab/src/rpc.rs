@@ -7,8 +7,7 @@ use crate::{
     db::{
         self, BufferId, Capability, Channel, ChannelId, ChannelRole, ChannelsForUser, Database,
         InviteMemberResult, MembershipUpdated, NotificationId, ProjectId, RejoinedProject,
-        RemoveChannelMemberResult, RespondToChannelInvite, RoomId, ServerId, SharedThreadId,
-        UserId,
+        RemoveChannelMemberResult, RespondToChannelInvite, RoomId, ServerId, UserId,
     },
     executor::Executor,
 };
@@ -513,8 +512,6 @@ impl Server {
             .add_request_handler(forward_mutating_project_request::<proto::CheckForPushedCommits>)
             .add_request_handler(forward_mutating_project_request::<proto::ToggleLspLogs>)
             .add_message_handler(broadcast_project_message_from_host::<proto::LanguageServerLog>)
-            .add_request_handler(share_agent_thread)
-            .add_request_handler(get_shared_agent_thread)
             .add_request_handler(forward_project_search_chunk);
 
         Arc::new(server)
@@ -1601,6 +1598,8 @@ fn notify_rejoined_projects(
                 abs_path: worktree.abs_path.clone(),
                 root_name: worktree.root_name,
                 root_repo_common_dir: worktree.root_repo_common_dir,
+                // todo(collab): Get this field from database
+                root_repo_is_linked_worktree: false,
                 updated_entries: worktree.updated_entries,
                 removed_entries: worktree.removed_entries,
                 scan_id: worktree.scan_id,
@@ -2009,6 +2008,8 @@ async fn join_project(
             visible: worktree.visible,
             abs_path: worktree.abs_path.clone(),
             root_repo_common_dir: None,
+            // todo(collab): Get this field from database
+            root_repo_is_linked_worktree: false,
         })
         .collect::<Vec<_>>();
 
@@ -2061,6 +2062,8 @@ async fn join_project(
             abs_path: worktree.abs_path.clone(),
             root_name: worktree.root_name,
             root_repo_common_dir: worktree.root_repo_common_dir,
+            // todo(collab): Get this field from database
+            root_repo_is_linked_worktree: false,
             updated_entries: worktree.entries,
             removed_entries: Default::default(),
             scan_id: worktree.scan_id,
@@ -4153,54 +4156,6 @@ fn project_left(project: &db::LeftProject, session: &Session) {
                 .trace_err();
         }
     }
-}
-
-async fn share_agent_thread(
-    request: proto::ShareAgentThread,
-    response: Response<proto::ShareAgentThread>,
-    session: MessageContext,
-) -> Result<()> {
-    let user_id = session.user_id();
-
-    let share_id = SharedThreadId::from_proto(request.session_id.clone())
-        .ok_or_else(|| anyhow!("Invalid session ID format"))?;
-
-    session
-        .db()
-        .await
-        .upsert_shared_thread(share_id, user_id, &request.title, request.thread_data)
-        .await?;
-
-    response.send(proto::Ack {})?;
-
-    Ok(())
-}
-
-async fn get_shared_agent_thread(
-    request: proto::GetSharedAgentThread,
-    response: Response<proto::GetSharedAgentThread>,
-    session: MessageContext,
-) -> Result<()> {
-    let share_id = SharedThreadId::from_proto(request.session_id)
-        .ok_or_else(|| anyhow!("Invalid session ID format"))?;
-
-    let result = session.db().await.get_shared_thread(share_id).await?;
-
-    match result {
-        Some((thread, username)) => {
-            response.send(proto::GetSharedAgentThreadResponse {
-                title: thread.title,
-                thread_data: thread.data,
-                sharer_username: username,
-                created_at: thread.created_at.and_utc().to_rfc3339(),
-            })?;
-        }
-        None => {
-            return Err(anyhow!("Shared thread not found").into());
-        }
-    }
-
-    Ok(())
 }
 
 pub trait ResultExt {

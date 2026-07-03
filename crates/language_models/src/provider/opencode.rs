@@ -691,6 +691,7 @@ impl LanguageModel for OpenCodeLanguageModel {
                     false,
                     false,
                     self.model.max_output_tokens(),
+                    crate::provider::open_ai::ChatCompletionMaxTokensParameter::MaxCompletionTokens,
                     reasoning_effort,
                     false,
                 );

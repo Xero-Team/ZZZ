@@ -749,6 +749,7 @@
       "cmd-shift-f": "pane::DeploySearch",
       "cmd-shift-h": ["pane::DeploySearch", { "replace_enabled": true }],
       "cmd-shift-t": "pane::ReopenClosedItem",
+      "cmd-k cmd-p": "workspace::ReopenLastPicker",
       "cmd-k cmd-s": "zed::OpenKeymap",
       "cmd-k cmd-t": "theme_selector::Toggle",
       "cmd-k cmd-shift-t": "theme::ToggleMode",
@@ -1025,6 +1026,7 @@
       "left": "project_panel::CollapseSelectedEntry",
       "cmd-left": "project_panel::CollapseAllEntries",
       "right": "project_panel::ExpandSelectedEntry",
+      "cmd-right": "project_panel::ExpandAllEntries",
       "cmd-n": "project_panel::NewFile",
       "cmd-d": "project_panel::Duplicate",
       "alt-cmd-n": "project_panel::NewDirectory",
@@ -1645,4 +1647,3 @@
     },
   },
 ]
-

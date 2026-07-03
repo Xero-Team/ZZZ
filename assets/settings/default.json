@@ -82,6 +82,12 @@
   "agent_buffer_font_size": 12,
   // The default font size for the commit editor in the git panel and commit modal.
   "git_commit_buffer_font_size": 12,
+  // The default font size for the markdown preview. Falls back to the UI font size if unset.
+  "markdown_preview_font_size": null,
+  // The font family for the markdown preview. Falls back to the UI font family if unset.
+  "markdown_preview_font_family": null,
+  // The font family for code blocks in the markdown preview. Falls back to the editor font family if unset.
+  "markdown_preview_code_font_family": null,
   // How much to fade out unused code.
   "unnecessary_code_fade": 0.3,
   // Active pane styling settings.
@@ -989,10 +995,14 @@
     //
     // Default: main
     "fallback_branch_name": "main",
-    // Whether to sort entries in the panel by path or by status (the default).
+    // How to sort entries in the git panel.
     //
-    // Default: false
-    "sort_by_path": false,
+    // Default: path
+    "sort_by": "path",
+    // How to group entries in the git panel.
+    //
+    // Default: status
+    "group_by": "status",
     // Whether to collapse untracked files in the diff panel.
     //
     // Default: false
@@ -1025,6 +1035,11 @@
     //
     // Default: 0
     "commit_title_max_length": 0,
+    // Default action when clicking a changed file in the Git panel.
+    //
+    // Choices: project_diff, file_diff, view_file
+    // Default: project_diff
+    "entry_primary_click_action": "project_diff",
   },
   "message_editor": {
     // Whether to automatically replace emoji shortcodes with emoji characters.
@@ -1445,7 +1460,7 @@
   "line_ending": "detect",
   // Whether or not to perform a buffer format before saving: [on, off]
   // Keep in mind, if the autosave with delay is enabled, format_on_save will be ignored
-  "format_on_save": "on",
+  "format_on_save": "off",
   // How to perform a buffer format. This setting can take multiple values:
   //
   // 1. Default. Format files using ZZZ's Prettier integration (if applicable),
@@ -2133,6 +2148,7 @@
   // Different settings for specific languages.
   "languages": {
     "Astro": {
+      "format_on_save": "on",
       "language_servers": ["astro-language-server", "..."],
       "prettier": {
         "allowed": true,
@@ -2145,14 +2161,12 @@
       },
     },
     "C": {
-      "format_on_save": "off",
       "use_on_type_format": false,
       "prettier": {
         "allowed": false,
       },
     },
     "C++": {
-      "format_on_save": "off",
       "use_on_type_format": false,
       "prettier": {
         "allowed": false,
@@ -2167,6 +2181,7 @@
       },
     },
     "Dart": {
+      "format_on_save": "on",
       "tab_size": 2,
     },
     "Diff": {
@@ -2175,12 +2190,15 @@
       "ensure_final_newline_on_save": false,
     },
     "EEx": {
+      "format_on_save": "on",
       "language_servers": ["elixir-ls", "!expert", "!dexter", "!next-ls", "!lexical", "..."],
     },
     "Elixir": {
+      "format_on_save": "on",
       "language_servers": ["elixir-ls", "!expert", "!dexter", "!next-ls", "!lexical", "!emmet-language-server", "..."],
     },
     "Elm": {
+      "format_on_save": "on",
       "tab_size": 4,
     },
     "Erlang": {
@@ -2192,6 +2210,7 @@
       "preferred_line_length": 72,
     },
     "Go": {
+      "format_on_save": "on",
       "hard_tabs": true,
       "code_actions_on_format": {
         "source.organizeImports": true,
@@ -2199,11 +2218,13 @@
       "debuggers": ["Delve"],
     },
     "GraphQL": {
+      "format_on_save": "on",
       "prettier": {
         "allowed": true,
       },
     },
     "HEEx": {
+      "format_on_save": "on",
       "language_servers": ["elixir-ls", "!expert", "!dexter", "!next-ls", "!lexical", "..."],
     },
     "HTML": {
@@ -2240,6 +2261,7 @@
       "language_servers": ["!ruby-lsp", "..."],
     },
     "Kotlin": {
+      "format_on_save": "on",
       "language_servers": ["!kotlin-language-server", "kotlin-lsp", "..."],
     },
     "LaTeX": {
@@ -2251,7 +2273,6 @@
       },
     },
     "Markdown": {
-      "format_on_save": "off",
       "use_on_type_format": false,
       "remove_trailing_whitespace_on_save": false,
       "allow_rewrap": "anywhere",
@@ -2306,6 +2327,7 @@
       ],
     },
     "Rust": {
+      "format_on_save": "on",
       "debuggers": ["CodeLLDB"],
     },
     "SCSS": {
@@ -2314,6 +2336,7 @@
       },
     },
     "Starlark": {
+      "format_on_save": "on",
       "language_servers": ["starpls", "!buck2-lsp", "!tilt", "..."],
     },
     "Svelte": {
@@ -2341,7 +2364,6 @@
       },
     },
     "SystemVerilog": {
-      "format_on_save": "off",
       "language_servers": ["!slang", "..."],
       "use_on_type_format": false,
     },
@@ -2366,6 +2388,7 @@
       "language_servers": ["!ruby-lsp", "..."],
     },
     "Zig": {
+      "format_on_save": "on",
       "language_servers": ["zls", "..."],
     },
   },
@@ -2380,6 +2403,9 @@
     },
     "ollama": {
       "api_url": "http://localhost:11434",
+    },
+    "llama_cpp": {
+      "api_url": "http://localhost:8080",
     },
     "openai": {
       "api_url": "https://api.openai.com/v1",

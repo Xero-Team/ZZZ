@@ -64,7 +64,3 @@ pub fn acp_registry_blog(cx: &App) -> String {
 pub fn parallel_agents_blog(cx: &App) -> String {
     format!("{server_url}/blog", server_url = server_url(cx))
 }
-
-pub fn shared_agent_thread_url(session_id: &str) -> String {
-    format!("zed://agent/shared/{}", session_id)
-}

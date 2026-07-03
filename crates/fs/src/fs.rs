@@ -804,15 +804,8 @@ impl Fs for RealFs {
         // moves the link itself instead of resolving and trashing its target.
         let path = std::path::absolute(path).context("Could not make the path absolute")?;
 
-        let (tx, rx) = futures::channel::oneshot::channel();
-        std::thread::Builder::new()
-            .name("trash file or dir".to_owned())
-            .spawn(|| tx.send(trash::delete_with_info(path)))
-            .expect("The os can spawn threads");
-
-        Ok(rx
+        Ok(smol::unblock(move || trash::delete_with_info(path))
             .await
-            .context("Tx dropped or fs.restore panicked")?
             .context("Could not trash file or dir")?
             .into())
     }
@@ -1330,6 +1323,7 @@ struct FakeFsState {
     read_dir_call_count: usize,
     path_write_counts: std::collections::HashMap<PathBuf, usize>,
     moves: std::collections::HashMap<u64, PathBuf>,
+    remove_dir_errors: std::collections::HashMap<PathBuf, String>,
     job_event_subscribers: Arc<Mutex<Vec<JobEventSender>>>,
     trash: Vec<(TrashedEntry, FakeFsEntry)>,
     file_to_create_before_watch_add: Option<(PathBuf, PathBuf)>,
@@ -1649,6 +1643,7 @@ impl FakeFs {
                 metadata_call_count: 0,
                 path_write_counts: Default::default(),
                 moves: Default::default(),
+                remove_dir_errors: Default::default(),
                 job_event_subscribers: Arc::new(Mutex::new(Vec::new())),
                 trash: Vec::new(),
                 file_to_create_before_watch_add: None,
@@ -2394,6 +2389,24 @@ impl FakeFs {
         .unwrap();
     }
 
+    /// Makes subsequent `remove_dir` calls for `path` fail with `message`.
+    pub fn set_remove_dir_error(&self, path: impl AsRef<Path>, message: String) {
+        self.state
+            .lock()
+            .remove_dir_errors
+            .insert(Self::remove_dir_error_key(path.as_ref()), message);
+    }
+
+    /// Entry resolution in `try_entry` ignores drive prefixes, so the error
+    /// injection map must too.
+    /// Otherwise, on Windows, a key like `C:\workspace\dir` would never match a
+    /// lookup for `\workspace\dir`.
+    fn remove_dir_error_key(path: &Path) -> PathBuf {
+        normalize_path(path)
+            .components()
+            .skip_while(|component| matches!(component, Component::Prefix(_)))
+            .collect()
+    }
     pub fn paths(&self, include_dot_git: bool) -> Vec<PathBuf> {
         let mut result = Vec::new();
         let mut queue = collections::VecDeque::new();
@@ -2536,6 +2549,14 @@ impl FakeFs {
         self.simulate_random_delay().await;
 
         let path = normalize_path(path);
+        if let Some(message) = self
+            .state
+            .lock()
+            .remove_dir_errors
+            .get(&Self::remove_dir_error_key(&path))
+        {
+            anyhow::bail!("{message}");
+        }
         let parent_path = path.parent().context("cannot remove the root")?;
         let base_name = path.file_name().context("cannot remove the root")?;
 

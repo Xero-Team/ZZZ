@@ -229,6 +229,7 @@ impl TestContext {
 
     async fn new_with_tree(cx: &mut gpui::TestAppContext, tree: Value) -> TestContext {
         project_panel_tests::init_test(cx);
+        cx.update(i18n::init);
 
         let fs = FakeFs::new(cx.executor());
         fs.insert_tree("/workspace", tree).await;
@@ -381,4 +382,26 @@ async fn trash_undo_redo(cx: &mut gpui::TestAppContext) {
 
     cx.redo().await;
     cx.assert_fs_state_is(&[]);
+}
+
+#[gpui::test]
+async fn trash_continues_when_one_entry_fails(cx: &mut gpui::TestAppContext) {
+    let mut cx = TestContext::new_with_tree(
+        cx,
+        json!({
+            "0_dir": {},
+            "a.txt": "",
+            "b.txt": "",
+        }),
+    )
+    .await;
+
+    cx.fs
+        .set_remove_dir_error(path("/workspace/0_dir"), "simulated failure".into());
+
+    cx.trash(&["0_dir", "a.txt", "b.txt"]).await;
+    cx.assert_fs_state_is(&["0_dir/"]);
+
+    cx.undo().await;
+    cx.assert_fs_state_is(&["0_dir/", "a.txt", "b.txt"]);
 }

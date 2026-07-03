@@ -126,6 +126,62 @@ Print ZZZ's version and exit:
 zzz --version
 ```
 
+### `--completions <SHELL>`
+
+Generate shell completions for the `zzz` CLI:
+
+#### Bash
+
+Add to `~/.bashrc`:
+
+```bash
+eval "$(zzz --completions bash)"
+```
+
+#### Elvish
+
+Add to `~/.config/elvish/rc.elv`:
+
+```elvish
+set edit:completion:arg-completer[zzz] = { |@args|
+    eval (zzz --completions elvish | slurp)
+    $edit:completion:arg-completer[zzz] $@args
+}
+```
+
+#### Fish
+
+Add to `~/.config/fish/config.fish`:
+
+```fish
+zzz --completions fish | source
+```
+
+#### Nushell
+
+Add to `~/.config/nushell/config.nu`:
+
+```nu
+mkdir ($nu.data-dir | path join "vendor/autoload")
+^zzz --completions nushell | save --force ($nu.data-dir | path join "vendor/autoload/zzz.nu")
+```
+
+#### Powershell
+
+Add to `$PROFILE`:
+
+```powershell
+(&zzz --completions powershell) | Out-String | Invoke-Expression
+```
+
+#### Zsh
+
+Add to `~/.zshrc`:
+
+```zsh
+eval "$(zzz --completions zsh)"
+```
+
 ### `--uninstall`
 
 Uninstall ZZZ and remove all related files (macOS and Linux only):

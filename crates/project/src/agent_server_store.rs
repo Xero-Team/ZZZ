@@ -17,7 +17,7 @@ use rpc::{AnyProtoClient, TypedEnvelope, proto};
 use schemars::JsonSchema;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use settings::{RegisterSetting, SettingsStore, update_settings_file};
+use settings::{AgentConfigOptionValue, RegisterSetting, SettingsStore, update_settings_file};
 use sha2::{Digest, Sha256};
 use url::Url;
 use util::{ResultExt as _, debug_panic};
@@ -1357,10 +1357,10 @@ pub enum CustomAgentServerSettings {
         favorite_models: Vec<String>,
         /// Default values for session config options.
         ///
-        /// This is a map from config option ID to value ID.
+        /// This is a map from config option ID to the default value for that option.
         ///
         /// Default: {}
-        default_config_options: HashMap<String, String>,
+        default_config_options: HashMap<String, AgentConfigOptionValue>,
         /// Favorited values for session config options.
         ///
         /// This is a map from config option ID to a list of favorited value IDs.
@@ -1391,10 +1391,10 @@ pub enum CustomAgentServerSettings {
         favorite_models: Vec<String>,
         /// Default values for session config options.
         ///
-        /// This is a map from config option ID to value ID.
+        /// This is a map from config option ID to the default value for that option.
         ///
         /// Default: {}
-        default_config_options: HashMap<String, String>,
+        default_config_options: HashMap<String, AgentConfigOptionValue>,
         /// Favorited values for session config options.
         ///
         /// This is a map from config option ID to a list of favorited value IDs.
@@ -1437,7 +1437,7 @@ impl CustomAgentServerSettings {
         }
     }
 
-    pub fn default_config_option(&self, config_id: &str) -> Option<&str> {
+    pub fn default_config_option(&self, config_id: &str) -> Option<&AgentConfigOptionValue> {
         match self {
             CustomAgentServerSettings::Custom {
                 default_config_options,
@@ -1446,7 +1446,7 @@ impl CustomAgentServerSettings {
             | CustomAgentServerSettings::Registry {
                 default_config_options,
                 ..
-            } => default_config_options.get(config_id).map(|s| s.as_str()),
+            } => default_config_options.get(config_id),
         }
     }
 

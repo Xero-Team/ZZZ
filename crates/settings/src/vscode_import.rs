@@ -199,7 +199,6 @@ impl VsCodeSettings {
             language_models: None,
             line_indicator_format: None,
             log: None,
-            message_editor: None,
             node: self.node_binary_settings(),
 
             outline_panel: self.outline_panel_settings_content(),
@@ -963,6 +962,7 @@ impl VsCodeSettings {
             agent_ui_font_size: None,
             agent_buffer_font_size: None,
             git_commit_buffer_font_size: None,
+            markdown_preview_font_size: None,
             markdown_preview_font_family: None,
             markdown_preview_code_font_family: None,
             markdown_preview_theme: None,

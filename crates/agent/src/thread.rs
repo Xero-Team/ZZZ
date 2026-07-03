@@ -65,6 +65,35 @@ const TOOL_CANCELED_MESSAGE: &str = "Tool canceled by user";
 pub const MAX_TOOL_NAME_LENGTH: usize = 64;
 pub const MAX_SUBAGENT_DEPTH: u8 = 1;
 
+pub(crate) fn provider_compatible_tool_name(tool_name: &str) -> String {
+    let mut sanitized = String::new();
+    for character in tool_name.chars() {
+        if sanitized.len() >= MAX_TOOL_NAME_LENGTH {
+            break;
+        }
+
+        if character.is_ascii_alphanumeric() || character == '_' || character == '-' {
+            sanitized.push(character);
+        } else {
+            sanitized.push('_');
+        }
+    }
+
+    if sanitized.is_empty() {
+        sanitized.push_str("tool");
+    }
+
+    sanitized
+}
+
+/// Auto-compaction is only available for models whose context window is at least
+/// this large. For smaller models there isn't enough headroom for a compaction
+/// pass to be worthwhile, so we leave the thread uncompacted and let the UI warn
+/// the user instead.
+pub const MIN_COMPACTION_CONTEXT_WINDOW: u64 = 80_000;
+
+// Using the heuristic that 1 token is about 4 bytes, keep the last 80K bytes of user-message content (~20k tokens).
+const COMPACTION_RETAINED_USER_MESSAGES_BYTE_BUDGET: usize = 80_000;
 /// Returned when a turn is attempted but no language model has been selected.
 #[derive(Debug)]
 pub struct NoModelConfiguredError;
@@ -1027,8 +1056,6 @@ pub struct Thread {
     prompt_capabilities_tx: watch::Sender<acp::PromptCapabilities>,
     pub(crate) project: Entity<Project>,
     pub(crate) action_log: Entity<ActionLog>,
-    /// True if this thread was imported from a shared thread and can be synced.
-    imported: bool,
     /// If this is a subagent thread, contains context about the parent
     subagent_context: Option<SubagentContext>,
     /// The user's unsent prompt text, persisted so it can be restored when reloading the thread.
@@ -1157,7 +1184,6 @@ impl Thread {
             prompt_capabilities_tx,
             project,
             action_log,
-            imported: false,
             subagent_context: None,
             draft_prompt: None,
             ui_scroll_position: None,
@@ -1206,9 +1232,32 @@ impl Thread {
         &self.id
     }
 
-    /// Returns true if this thread was imported from a shared thread.
-    pub fn is_imported(&self) -> bool {
-        self.imported
+    // Only used by Seatbelt-style sandboxes (macOS); Linux relies on bwrap's
+    // tmpfs `/tmp` and Windows on the WSL bwrap tmpfs, so neither needs a
+    // per-thread temp directory.
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    pub(crate) fn sandboxed_terminal_temp_dir(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Result<PathBuf> {
+        if let Some(temp_dir) = &self.sandboxed_terminal_temp_dir {
+            std::fs::create_dir_all(temp_dir).with_context(|| {
+                format!(
+                    "failed to recreate sandboxed terminal temp directory {}",
+                    temp_dir.display()
+                )
+            })?;
+            return Ok(temp_dir.clone());
+        }
+
+        let temp_dir = tempfile::Builder::new()
+            .prefix("zed-agent-terminal-")
+            .tempdir()
+            .context("failed to create sandboxed terminal temp directory")?;
+        let temp_dir = temp_dir.keep();
+        self.sandboxed_terminal_temp_dir = Some(temp_dir.clone());
+        cx.notify();
+        Ok(temp_dir)
     }
 
     pub fn replay(
@@ -1459,7 +1508,6 @@ impl Thread {
             action_log,
             updated_at: db_thread.updated_at,
             prompt_capabilities_tx,
-            imported: db_thread.imported,
             subagent_context: db_thread.subagent_context,
             draft_prompt: db_thread.draft_prompt,
             ui_scroll_position: db_thread.ui_scroll_position.map(|sp| gpui::ListOffset {
@@ -1483,7 +1531,6 @@ impl Thread {
             request_token_usage: self.request_token_usage.clone(),
             model: (&self.model).into(),
             profile: Some(self.profile_id.clone()),
-            imported: self.imported,
             subagent_context: self.subagent_context.clone(),
             speed: self.speed,
             thinking_enabled: self.thinking_enabled,
@@ -3016,15 +3063,6 @@ impl Thread {
         let Some(profile) = AgentSettings::get_global(cx).profiles.get(&self.profile_id) else {
             return BTreeMap::new();
         };
-        fn truncate(tool_name: &SharedString) -> SharedString {
-            if tool_name.len() > MAX_TOOL_NAME_LENGTH {
-                let mut truncated = tool_name.to_string();
-                truncated.truncate(MAX_TOOL_NAME_LENGTH);
-                truncated.into()
-            } else {
-                tool_name.clone()
-            }
-        }
 
         let mut tools = self
             .tools
@@ -3033,12 +3071,15 @@ impl Thread {
                 if tool.supports_provider(&model.provider_id())
                     && profile.is_tool_enabled(tool_name)
                 {
-                    Some((truncate(tool_name), tool.clone()))
+                    Some((
+                        provider_compatible_tool_name(tool_name.as_ref()).into(),
+                        tool.clone(),
+                    ))
                 } else {
                     None
                 }
             })
-            .filter(|(tool_name, _)| {
+            .filter(|(tool_name, _): &(SharedString, Arc<dyn AnyAgentTool>)| {
                 cx.has_flag::<LspToolFeatureFlag>()
                     || !matches!(
                         tool_name.as_ref(),
@@ -3057,7 +3098,8 @@ impl Thread {
         for (server_id, server_tools) in self.context_server_registry.read(cx).servers() {
             for (tool_name, tool) in server_tools {
                 if profile.is_context_server_tool_enabled(&server_id.0, &tool_name) {
-                    let tool_name = truncate(tool_name);
+                    let tool_name: SharedString =
+                        provider_compatible_tool_name(tool_name.as_ref()).into();
                     if !seen_tools.insert(tool_name.clone()) {
                         duplicate_tool_names.insert(tool_name.clone());
                     }
@@ -3074,7 +3116,8 @@ impl Thread {
             if duplicate_tool_names.contains(&tool_name) {
                 let available = MAX_TOOL_NAME_LENGTH.saturating_sub(tool_name.len());
                 if available >= 2 {
-                    let mut disambiguated = server_id.0.to_snake_case();
+                    let mut disambiguated =
+                        provider_compatible_tool_name(&server_id.0.to_snake_case()).to_string();
                     disambiguated.truncate(available - 1);
                     disambiguated.push('_');
                     disambiguated.push_str(&tool_name);
@@ -4610,7 +4653,6 @@ mod tests {
                 model: "custom-model-id".to_string(),
             }),
             profile: None,
-            imported: false,
             subagent_context: None,
             speed: None,
             thinking_enabled: false,

@@ -46,7 +46,7 @@ use futures::StreamExt;
 use pty_info::{ProcessIdGetter, PtyProcessInfo};
 use serde::{Deserialize, Serialize};
 use settings::Settings;
-use task::{HideStrategy, Shell, SpawnInTerminal};
+use task::{HideStrategy, Shell, ShellKind, SpawnInTerminal};
 use terminal_hyperlinks::RegexSearches;
 use terminal_settings::{AlternateScroll, CursorShape, TerminalSettings};
 use theme::{ActiveTheme, Theme};
@@ -62,7 +62,10 @@ use std::{
     ops::{Deref, RangeInclusive},
     path::PathBuf,
     process::ExitStatus,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, Instant},
 };
 use thiserror::Error;
@@ -344,6 +347,40 @@ impl Display for TerminalError {
 // https://github.com/alacritty/alacritty/blob/cb3a79dbf6472740daca8440d5166c1d4af5029e/extra/man/alacritty.5.scd?plain=1#L207-L213
 const DEFAULT_SCROLL_HISTORY_LINES: usize = 10_000;
 pub const MAX_SCROLL_HISTORY_LINES: usize = 100_000;
+const INIT_COMMAND_STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
+const INIT_COMMAND_STARTUP_MARKER_PREFIX: &str = "__zed_init_command_ready_";
+const INIT_COMMAND_STARTUP_MARKER_SUFFIX: &str = "__";
+const INIT_COMMAND_STARTUP_MARKER_SEARCH_LINES: usize = 64;
+static NEXT_INIT_COMMAND_STARTUP_MARKER_ID: AtomicU64 = AtomicU64::new(1);
+
+fn init_command_startup_marker(marker_id: u64) -> String {
+    format!("{INIT_COMMAND_STARTUP_MARKER_PREFIX}{marker_id}{INIT_COMMAND_STARTUP_MARKER_SUFFIX}")
+}
+
+fn init_command_startup_marker_command(shell_kind: ShellKind, marker_id: u64) -> String {
+    // Split the marker across the command so the shell echo cannot satisfy the
+    // handshake; only the command's output contains the contiguous marker.
+    match shell_kind {
+        ShellKind::PowerShell | ShellKind::Pwsh => format!(
+            "Write-Output ('{INIT_COMMAND_STARTUP_MARKER_PREFIX}' + '{marker_id}' + '{INIT_COMMAND_STARTUP_MARKER_SUFFIX}')"
+        ),
+        ShellKind::Cmd => format!(
+            "<nul set /p zed_init_ready={INIT_COMMAND_STARTUP_MARKER_PREFIX}&echo {marker_id}{INIT_COMMAND_STARTUP_MARKER_SUFFIX}"
+        ),
+        ShellKind::Nushell => format!(
+            "print $\"{INIT_COMMAND_STARTUP_MARKER_PREFIX}({marker_id}){INIT_COMMAND_STARTUP_MARKER_SUFFIX}\""
+        ),
+        ShellKind::Posix
+        | ShellKind::Csh
+        | ShellKind::Tcsh
+        | ShellKind::Rc
+        | ShellKind::Fish
+        | ShellKind::Xonsh
+        | ShellKind::Elvish => format!(
+            "printf '%s%s%s\\n' {INIT_COMMAND_STARTUP_MARKER_PREFIX} {marker_id} {INIT_COMMAND_STARTUP_MARKER_SUFFIX}"
+        ),
+    }
+}
 
 pub struct TerminalBuilder {
     terminal: Terminal,
@@ -421,6 +458,8 @@ impl TerminalBuilder {
             },
             child_exited: None,
             keyboard_input_sent: false,
+            init_command_startup_marker: None,
+            pending_init_command_after_startup: None,
             event_loop_task: Task::ready(Ok(())),
             background_executor: background_executor.clone(),
             path_style,
@@ -595,7 +634,7 @@ impl TerminalBuilder {
 
             let term = Arc::new(FairMutex::new(term));
 
-            let pty_info = PtyProcessInfo::new(&pty);
+            let pty_info = PtyProcessInfo::new(ProcessIdGetter::new(&pty));
 
             //And connect them together
             let event_loop = EventLoop::new(
@@ -611,7 +650,7 @@ impl TerminalBuilder {
             let _io_thread = event_loop.spawn(); // DANGER
 
             let no_task = task.is_none();
-            let terminal = Terminal {
+            let mut terminal = Terminal {
                 task,
                 terminal_type: TerminalType::Pty {
                     pty_tx: Notifier(pty_tx),
@@ -655,6 +694,8 @@ impl TerminalBuilder {
                 },
                 child_exited: None,
                 keyboard_input_sent: false,
+                init_command_startup_marker: None,
+                pending_init_command_after_startup: None,
                 event_loop_task: Task::ready(Ok(())),
                 background_executor,
                 path_style,
@@ -678,9 +719,9 @@ impl TerminalBuilder {
                 // and while we have sent the activation script to the pty, it will be executed asynchronously.
                 // Therefore, we somehow need to wait for the activation script to finish executing before we
                 // can proceed with clearing the screen.
-                terminal.write_to_pty(shell_kind.clear_screen_command().as_bytes());
-                // Simulate enter key press
-                terminal.write_to_pty(b"\x0d");
+                let mut input = shell_kind.clear_screen_command().as_bytes().to_vec();
+                input.push(b'\x0d');
+                terminal.start_init_command_startup_handshake(input);
             }
 
             Ok(TerminalBuilder {
@@ -697,6 +738,8 @@ impl TerminalBuilder {
     }
 
     pub fn subscribe(mut self, cx: &Context<Terminal>) -> Terminal {
+        let should_spawn_init_command_timeout =
+            self.terminal.pending_init_command_after_startup.is_some();
         //Event loop
         self.terminal.event_loop_task = cx.spawn(async move |terminal, cx| {
             while let Some(event) = self.events_rx.next().await {
@@ -757,6 +800,22 @@ impl TerminalBuilder {
             }
             anyhow::Ok(())
         });
+        if should_spawn_init_command_timeout {
+            cx.spawn(async move |terminal, cx| {
+                cx.background_executor()
+                    .timer(INIT_COMMAND_STARTUP_TIMEOUT)
+                    .await;
+                terminal.update(cx, |terminal, cx| {
+                    if !terminal.write_init_command_after_startup(cx) {
+                        log::debug!(
+                            "skipping deferred terminal init command because the terminal is no longer eligible"
+                        );
+                    }
+                })?;
+                anyhow::Ok(())
+            })
+            .detach();
+        }
         self.terminal
     }
 
@@ -882,6 +941,8 @@ pub struct Terminal {
     activation_script: Vec<String>,
     child_exited: Option<ExitStatus>,
     keyboard_input_sent: bool,
+    init_command_startup_marker: Option<String>,
+    pending_init_command_after_startup: Option<Vec<u8>>,
     event_loop_task: Task<Result<(), anyhow::Error>>,
     background_executor: BackgroundExecutor,
     path_style: PathStyle,
@@ -990,6 +1051,7 @@ impl Terminal {
                 //NOOP, Handled in render
             }
             AlacTermEvent::Wakeup => {
+                self.detect_init_command_startup_marker(cx);
                 cx.emit(Event::Wakeup);
 
                 if let TerminalType::Pty { info, .. } = &self.terminal_type {
@@ -1328,6 +1390,7 @@ impl Terminal {
             let mut term = self.term.lock();
             processor.advance(&mut *term, &converted);
         }
+        self.detect_init_command_startup_marker(cx);
         cx.emit(Event::Wakeup);
     }
 
@@ -1482,16 +1545,115 @@ impl Terminal {
         }
     }
 
+    pub fn is_pty(&self) -> bool {
+        matches!(self.terminal_type, TerminalType::Pty { .. })
+    }
+
     pub fn input(&mut self, input: impl Into<Cow<'static, [u8]>>) {
         self.events
             .push_back(InternalEvent::Scroll(AlacScroll::Bottom));
         self.events.push_back(InternalEvent::SetSelection(None));
 
         self.keyboard_input_sent = true;
+        self.cancel_init_command_after_startup();
         let input = input.into();
         #[cfg(any(test, feature = "test-support"))]
         self.input_log.push(input.to_vec());
 
+        self.write_to_pty(input);
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn keyboard_input_sent(&self) -> bool {
+        self.keyboard_input_sent
+    }
+
+    fn start_init_command_startup_handshake(&mut self, input: Vec<u8>) {
+        if !self.is_pty() || self.child_exited.is_some() {
+            return;
+        }
+
+        let marker_id = NEXT_INIT_COMMAND_STARTUP_MARKER_ID.fetch_add(1, Ordering::Relaxed);
+        self.init_command_startup_marker = Some(init_command_startup_marker(marker_id));
+        self.pending_init_command_after_startup = Some(input);
+
+        let shell_kind = self.template.shell.shell_kind(self.path_style.is_windows());
+        let mut marker_input =
+            init_command_startup_marker_command(shell_kind, marker_id).into_bytes();
+        marker_input.push(b'\x0d');
+        self.write_to_pty(marker_input);
+    }
+
+    fn detect_init_command_startup_marker(&mut self, cx: &mut Context<Self>) {
+        let Some(marker) = self.init_command_startup_marker.as_deref() else {
+            return;
+        };
+
+        if self
+            .last_n_non_empty_lines(INIT_COMMAND_STARTUP_MARKER_SEARCH_LINES)
+            .iter()
+            .any(|line| line.contains(marker))
+        {
+            let _ = self.write_init_command_after_startup(cx);
+        }
+    }
+
+    fn cancel_init_command_after_startup(&mut self) {
+        self.init_command_startup_marker = None;
+        self.pending_init_command_after_startup = None;
+    }
+
+    fn write_init_command_after_startup(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(input) = self.pending_init_command_after_startup.take() else {
+            self.init_command_startup_marker = None;
+            return false;
+        };
+        self.init_command_startup_marker = None;
+
+        if self.keyboard_input_sent || self.child_exited.is_some() {
+            return false;
+        }
+
+        self.clear_for_init_command(cx);
+        self.write_init_command(input);
+        true
+    }
+
+    fn clear_for_init_command(&mut self, cx: &mut Context<Self>) {
+        let mut term = self.term.lock_unfair();
+        term.clear_screen(ClearMode::Saved);
+        let cursor = term.grid().cursor.point;
+
+        term.grid_mut().reset_region(..cursor.line);
+
+        let line = term.grid()[cursor.line][..Column(term.grid().columns())]
+            .iter()
+            .cloned()
+            .enumerate()
+            .collect::<Vec<(usize, Cell)>>();
+
+        for (index, cell) in line {
+            term.grid_mut()[Line(0)][Column(index)] = cell;
+        }
+
+        term.grid_mut().cursor.point = AlacPoint::new(Line(0), term.grid_mut().cursor.point.column);
+        let new_cursor = term.grid().cursor.point;
+
+        if (new_cursor.line.0 as usize) < term.screen_lines() - 1 {
+            term.grid_mut().reset_region((new_cursor.line + 1)..);
+        }
+
+        self.last_content = Self::make_content(&term, &self.last_content);
+        cx.emit(Event::Wakeup);
+    }
+
+    /// Write a programmatically-generated command to the PTY as if it had been
+    /// typed, without marking the terminal as having received user keyboard
+    /// input.
+    pub fn write_init_command(&mut self, input: impl Into<Cow<'static, [u8]>>) {
+        let input = input.into();
+        #[cfg(any(test, feature = "test-support"))]
+        self.input_log.push(input.to_vec());
         self.write_to_pty(input);
     }
 
@@ -1530,6 +1692,8 @@ impl Terminal {
             "H" => Some(ViMotion::High),
             "M" => Some(ViMotion::Middle),
             "L" => Some(ViMotion::Low),
+            "{" => Some(ViMotion::ParagraphUp),
+            "}" => Some(ViMotion::ParagraphDown),
             _ => None,
         };
 
@@ -2268,6 +2432,7 @@ impl Terminal {
         if let Some(e) = exit_status {
             self.child_exited = Some(e);
         }
+        let _ = self.write_init_command_after_startup(cx);
         let task = match &mut self.task {
             Some(task) => task,
             None => {
@@ -2596,6 +2761,71 @@ mod tests {
     use parking_lot::Mutex;
     use rand::{RngExt, distr, rngs::StdRng};
     use task::{Shell, ShellBuilder};
+
+    #[test]
+    fn test_init_command_startup_marker_commands_do_not_contain_marker() {
+        let marker_id = 42;
+        let marker = init_command_startup_marker(marker_id);
+
+        for shell_kind in [
+            ShellKind::Posix,
+            ShellKind::Csh,
+            ShellKind::Tcsh,
+            ShellKind::Rc,
+            ShellKind::Fish,
+            ShellKind::PowerShell,
+            ShellKind::Pwsh,
+            ShellKind::Nushell,
+            ShellKind::Cmd,
+            ShellKind::Xonsh,
+            ShellKind::Elvish,
+        ] {
+            let command = init_command_startup_marker_command(shell_kind, marker_id);
+            assert!(
+                !command.contains(&marker),
+                "startup marker command for {shell_kind:?} should not contain the full marker, got {command:?}"
+            );
+        }
+    }
+
+    #[gpui::test]
+    async fn test_init_command_startup_marker_ignores_echoed_command(cx: &mut TestAppContext) {
+        let terminal = cx.new(|cx| {
+            TerminalBuilder::new_display_only(
+                CursorShape::default(),
+                AlternateScroll::On,
+                None,
+                0,
+                cx.background_executor(),
+                PathStyle::local(),
+            )
+            .unwrap()
+            .subscribe(cx)
+        });
+        let marker_id = 4242;
+        let marker = init_command_startup_marker(marker_id);
+        let command = init_command_startup_marker_command(ShellKind::Posix, marker_id);
+
+        terminal.update(cx, |terminal, cx| {
+            terminal.init_command_startup_marker = Some(marker.clone());
+            terminal.pending_init_command_after_startup = Some(b"clear\r".to_vec());
+            terminal.write_output(command.as_bytes(), cx);
+        });
+        assert!(
+            terminal
+                .update(cx, |terminal, _| terminal.take_input_log())
+                .is_empty(),
+            "echoed marker command should not satisfy the startup handshake",
+        );
+
+        terminal.update(cx, |terminal, cx| {
+            terminal.write_output(marker.as_bytes(), cx);
+        });
+        assert_eq!(
+            terminal.update(cx, |terminal, _| terminal.take_input_log()),
+            vec![b"clear\r".to_vec()],
+        );
+    }
 
     #[cfg(not(target_os = "windows"))]
     fn init_test(cx: &mut TestAppContext) {
@@ -3097,6 +3327,111 @@ mod tests {
             terminal.events.back(),
             Some(InternalEvent::Resize(_))
         ));
+    }
+
+    #[gpui::test]
+    async fn test_write_init_command_after_startup_clears_without_shell_command(
+        cx: &mut TestAppContext,
+    ) {
+        let terminal = cx.new(|cx| {
+            TerminalBuilder::new_display_only(
+                CursorShape::default(),
+                AlternateScroll::On,
+                None,
+                0,
+                cx.background_executor(),
+                PathStyle::local(),
+            )
+            .unwrap()
+            .subscribe(cx)
+        });
+
+        terminal.update(cx, |terminal, cx| {
+            terminal.write_output(b"startup output\nprompt", cx);
+            terminal.pending_init_command_after_startup = Some(b"clear\r".to_vec());
+        });
+
+        let wrote = terminal.update(cx, |terminal, cx| {
+            terminal.write_init_command_after_startup(cx)
+        });
+        assert!(wrote);
+        let content = terminal.update(cx, |terminal, _| terminal.get_content());
+        assert!(
+            !content.contains("startup output"),
+            "startup output should be cleared internally before writing the init command"
+        );
+        let input_log = terminal.update(cx, |terminal, _| terminal.take_input_log());
+        assert_eq!(input_log, vec![b"clear\r".to_vec()]);
+    }
+
+    #[gpui::test]
+    async fn test_write_init_command_after_startup_skips_after_keyboard_input(
+        cx: &mut TestAppContext,
+    ) {
+        let terminal = cx.new(|cx| {
+            TerminalBuilder::new_display_only(
+                CursorShape::default(),
+                AlternateScroll::On,
+                None,
+                0,
+                cx.background_executor(),
+                PathStyle::local(),
+            )
+            .unwrap()
+            .subscribe(cx)
+        });
+
+        let wrote = terminal.update(cx, |terminal, cx| {
+            terminal.write_output(b"startup output\nprompt", cx);
+            terminal.pending_init_command_after_startup = Some(b"clear\r".to_vec());
+            terminal.input(b"user input".to_vec());
+            terminal.write_init_command_after_startup(cx)
+        });
+        assert!(!wrote);
+        let content = terminal.update(cx, |terminal, _| terminal.get_content());
+        assert!(
+            content.contains("startup output"),
+            "startup output should be left alone when the init command is skipped"
+        );
+        let input_log = terminal.update(cx, |terminal, _| terminal.take_input_log());
+        assert_eq!(input_log, vec![b"user input".to_vec()]);
+    }
+
+    #[gpui::test]
+    async fn test_write_init_command_after_startup_skips_after_child_exit(cx: &mut TestAppContext) {
+        let terminal = cx.new(|cx| {
+            TerminalBuilder::new_display_only(
+                CursorShape::default(),
+                AlternateScroll::On,
+                None,
+                0,
+                cx.background_executor(),
+                PathStyle::local(),
+            )
+            .unwrap()
+            .subscribe(cx)
+        });
+        #[cfg(unix)]
+        let raw_status = Some(1 << 8);
+        #[cfg(windows)]
+        let raw_status = Some(1);
+
+        terminal.update(cx, |terminal, cx| {
+            terminal.write_output(b"shell failed to start\nprompt", cx);
+            terminal.pending_init_command_after_startup = Some(b"clear\r".to_vec());
+            terminal.register_task_finished(raw_status, cx);
+        });
+
+        let content = terminal.update(cx, |terminal, _| terminal.get_content());
+        assert!(
+            content.contains("shell failed to start"),
+            "startup failure output should be preserved when the init command is skipped"
+        );
+        let input_log = terminal.update(cx, |terminal, _| terminal.take_input_log());
+        assert!(
+            input_log.is_empty(),
+            "init command should not be written after the child has exited, got {input_log:?}"
+        );
     }
 
     fn get_cells(size: TerminalBounds, rng: &mut StdRng) -> Vec<Vec<char>> {

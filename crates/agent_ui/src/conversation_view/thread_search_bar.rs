@@ -756,7 +756,7 @@ impl Render for ThreadSearchBar {
                     .border_color(theme.border)
                     .bg(theme.editor_background)
                     .rounded_md()
-                    .child(h_flex().flex_1().min_w_0().child(render_query_input(
+                    .child(div().px_1().flex_1().child(render_query_input(
                         &self.query_editor,
                         in_error_state,
                         cx,
@@ -838,7 +838,7 @@ impl Render for ThreadSearchBar {
 
         v_flex()
             .w_full()
-            .p_2()
+            .p_1p5()
             .bg(theme.panel_background)
             .border_b_1()
             .border_color(theme.border.opacity(0.6))
@@ -915,12 +915,12 @@ fn collect_markdowns(
         AgentThreadEntry::AssistantMessage(message) => {
             for (chunk_ix, chunk) in message.chunks.iter().enumerate() {
                 match chunk {
-                    AssistantMessageChunk::Message { block } => {
+                    AssistantMessageChunk::Message { block, .. } => {
                         if let Some(markdown) = block.markdown() {
                             out.push(markdown.clone());
                         }
                     }
-                    AssistantMessageChunk::Thought { block }
+                    AssistantMessageChunk::Thought { block, .. }
                         if thread_view.is_thinking_block_open((entry_ix, chunk_ix), cx) =>
                     {
                         if let Some(markdown) = block.markdown() {
@@ -942,8 +942,13 @@ fn collect_markdowns(
                             ToolCallContent::ContentBlock(ContentBlock::Markdown { markdown }) => {
                                 Some(markdown.clone())
                             }
+                            ToolCallContent::ContentBlock(ContentBlock::EmbeddedResource {
+                                markdown: Some(markdown),
+                                ..
+                            }) => Some(markdown.clone()),
                             ToolCallContent::ContentBlock(
                                 ContentBlock::Empty
+                                | ContentBlock::EmbeddedResource { markdown: None, .. }
                                 | ContentBlock::ResourceLink { .. }
                                 | ContentBlock::Image { .. },
                             )

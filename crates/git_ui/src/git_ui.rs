@@ -28,7 +28,11 @@ use ui::prelude::*;
 use workspace::{ModalView, OpenMode, Workspace, notifications::DetachAndPromptErr};
 use zed_actions;
 
-use crate::{commit_view::CommitView, git_panel::GitPanel, text_diff_view::TextDiffView};
+use crate::{
+    commit_view::CommitView,
+    git_panel::{GitPanel, RemoteOperationKind},
+    text_diff_view::TextDiffView,
+};
 
 mod askpass_modal;
 pub mod branch_picker;
@@ -719,6 +723,7 @@ fn render_remote_button(
     branch: &Branch,
     keybinding_target: Option<FocusHandle>,
     show_fetch_button: bool,
+    in_progress_operation: Option<RemoteOperationKind>,
     cx: &mut App,
 ) -> Option<impl IntoElement> {
     let id = id.into();
@@ -731,6 +736,7 @@ fn render_remote_button(
             (0, 0) if show_fetch_button => Some(remote_button::render_fetch_button(
                 keybinding_target,
                 id,
+                in_progress_operation,
                 cx,
             )),
             (0, 0) => None,
@@ -738,6 +744,7 @@ fn render_remote_button(
                 keybinding_target,
                 id,
                 ahead,
+                in_progress_operation,
                 cx,
             )),
             (ahead, behind) => Some(remote_button::render_pull_button(
@@ -745,6 +752,7 @@ fn render_remote_button(
                 id,
                 ahead,
                 behind,
+                in_progress_operation,
                 cx,
             )),
         },
@@ -754,28 +762,33 @@ fn render_remote_button(
         }) => Some(remote_button::render_republish_button(
             keybinding_target,
             id,
+            in_progress_operation,
             cx,
         )),
         None => Some(remote_button::render_publish_button(
             keybinding_target,
             id,
+            in_progress_operation,
             cx,
         )),
     }
 }
 
 mod remote_button {
+    use crate::git_panel::RemoteOperationKind;
     use gpui::{Action, Anchor, AnyView, ClickEvent, FocusHandle};
     use i18n::tr;
     use ui::{
-        App, ButtonCommon, Clickable, ContextMenu, ElementId, FluentBuilder, Icon, IconName,
-        IconSize, IntoElement, Label, LabelCommon, LabelSize, LineHeightStyle, ParentElement,
-        PopoverMenu, SharedString, SplitButton, Styled, Tooltip, Window, div, h_flex, rems,
+        App, ButtonCommon, Clickable, Color, CommonAnimationExt as _, ContextMenu, Disableable,
+        ElementId, FluentBuilder, Icon, IconName, IconSize, IntoElement, Label, LabelCommon,
+        LabelSize, LineHeightStyle, ParentElement, PopoverMenu, SharedString, SplitButton,
+        Styled, Tooltip, Window, div, h_flex, rems,
     };
 
     pub fn render_fetch_button(
         keybinding_target: Option<FocusHandle>,
         id: SharedString,
+        in_progress_operation: Option<RemoteOperationKind>,
         cx: &mut App,
     ) -> SplitButton {
         split_button(
@@ -785,6 +798,7 @@ mod remote_button {
             0,
             Some(IconName::ArrowCircle),
             keybinding_target.clone(),
+            in_progress_operation,
             move |_, window, cx| {
                 window.dispatch_action(Box::new(git::Fetch), cx);
             },
@@ -808,6 +822,7 @@ mod remote_button {
         keybinding_target: Option<FocusHandle>,
         id: SharedString,
         ahead: u32,
+        in_progress_operation: Option<RemoteOperationKind>,
         cx: &mut App,
     ) -> SplitButton {
         split_button(
@@ -817,6 +832,7 @@ mod remote_button {
             0,
             None,
             keybinding_target.clone(),
+            in_progress_operation,
             move |_, window, cx| {
                 window.dispatch_action(Box::new(git::Push), cx);
             },
@@ -841,6 +857,7 @@ mod remote_button {
         id: SharedString,
         ahead: u32,
         behind: u32,
+        in_progress_operation: Option<RemoteOperationKind>,
         cx: &mut App,
     ) -> SplitButton {
         split_button(
@@ -850,6 +867,7 @@ mod remote_button {
             behind as usize,
             None,
             keybinding_target.clone(),
+            in_progress_operation,
             move |_, window, cx| {
                 window.dispatch_action(Box::new(git::Pull), cx);
             },
@@ -868,6 +886,7 @@ mod remote_button {
     pub fn render_publish_button(
         keybinding_target: Option<FocusHandle>,
         id: SharedString,
+        in_progress_operation: Option<RemoteOperationKind>,
         cx: &mut App,
     ) -> SplitButton {
         split_button(
@@ -877,6 +896,7 @@ mod remote_button {
             0,
             Some(IconName::ExpandUp),
             keybinding_target.clone(),
+            in_progress_operation,
             move |_, window, cx| {
                 window.dispatch_action(Box::new(git::Push), cx);
             },
@@ -899,6 +919,7 @@ mod remote_button {
     pub fn render_republish_button(
         keybinding_target: Option<FocusHandle>,
         id: SharedString,
+        in_progress_operation: Option<RemoteOperationKind>,
         cx: &mut App,
     ) -> SplitButton {
         split_button(
@@ -908,6 +929,7 @@ mod remote_button {
             0,
             Some(IconName::ExpandUp),
             keybinding_target.clone(),
+            in_progress_operation,
             move |_, window, cx| {
                 window.dispatch_action(Box::new(git::Push), cx);
             },
@@ -925,6 +947,29 @@ mod remote_button {
                 )
             },
         )
+    }
+
+    fn in_progress_tooltip(operation: RemoteOperationKind, cx: &mut App) -> SharedString {
+        match operation {
+            RemoteOperationKind::Fetch => tr(
+                cx,
+                "git_ui.remote_button.fetch_in_progress",
+                "Fetch in Progress...",
+            )
+            .into(),
+            RemoteOperationKind::Pull => tr(
+                cx,
+                "git_ui.remote_button.pull_in_progress",
+                "Pull in Progress...",
+            )
+            .into(),
+            RemoteOperationKind::Push => tr(
+                cx,
+                "git_ui.remote_button.push_in_progress",
+                "Push in Progress...",
+            )
+            .into(),
+        }
     }
 
     fn git_action_tooltip(
@@ -947,12 +992,14 @@ mod remote_button {
     fn render_git_action_menu(
         id: impl Into<ElementId>,
         keybinding_target: Option<FocusHandle>,
+        disabled: bool,
     ) -> impl IntoElement {
         PopoverMenu::new(id.into())
             .trigger(
                 ui::ButtonLike::new_rounded_right("split-button-right")
                     .layer(ui::ElevationIndex::ModalSurface)
                     .size(ui::ButtonSize::None)
+                    .disabled(disabled)
                     .child(
                         div()
                             .px_1()
@@ -993,6 +1040,7 @@ mod remote_button {
         behind_count: usize,
         left_icon: Option<IconName>,
         keybinding_target: Option<FocusHandle>,
+        in_progress_operation: Option<RemoteOperationKind>,
         left_on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
         tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static,
     ) -> SplitButton {
@@ -1011,12 +1059,14 @@ mod remote_button {
         }
 
         let should_render_counts = left_icon.is_none() && (ahead_count > 0 || behind_count > 0);
+        let is_in_progress = in_progress_operation.is_some();
 
         let left = ui::ButtonLike::new_rounded_left(ElementId::Name(
             format!("split-button-left-{}", id).into(),
         ))
         .layer(ui::ElevationIndex::ModalSurface)
         .size(ui::ButtonSize::Compact)
+        .disabled(is_in_progress)
         .when(should_render_counts, |this| {
             this.child(
                 h_flex()
@@ -1032,23 +1082,42 @@ mod remote_button {
             )
         })
         .when_some(left_icon, |this, left_icon| {
-            this.child(
-                h_flex()
-                    .ml_neg_0p5()
-                    .child(Icon::new(left_icon).size(IconSize::XSmall)),
-            )
+            this.map(|this| {
+                if is_in_progress {
+                    this.child(
+                        Icon::new(IconName::LoadCircle)
+                            .size(IconSize::XSmall)
+                            .color(Color::Disabled)
+                            .with_rotate_animation(2),
+                    )
+                } else {
+                    this.child(
+                        h_flex()
+                            .ml_neg_0p5()
+                            .child(Icon::new(left_icon).size(IconSize::XSmall)),
+                    )
+                }
+            })
         })
         .child(
-            div()
-                .child(Label::new(left_label).size(LabelSize::Small))
+            Label::new(left_label)
+                .size(LabelSize::Small)
+                .when(is_in_progress, |this| this.color(Color::Disabled))
                 .mr_0p5(),
         )
         .on_click(left_on_click)
-        .tooltip(tooltip);
+        .tooltip(move |window, cx| {
+            if let Some(operation) = in_progress_operation {
+                Tooltip::simple(in_progress_tooltip(operation, cx), cx)
+            } else {
+                tooltip(window, cx)
+            }
+        });
 
         let right = render_git_action_menu(
             ElementId::Name(format!("split-button-right-{}", id).into()),
             keybinding_target,
+            is_in_progress,
         )
         .into_any_element();
 

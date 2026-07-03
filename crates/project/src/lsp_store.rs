@@ -1139,23 +1139,12 @@ impl LocalLspStore {
 
         language_server
             .on_request::<lsp::request::CodeLensRefresh, _, _>({
-                let this = lsp_store.clone();
+                let lsp_store = lsp_store.clone();
                 move |(), cx| {
-                    let this = this.clone();
-                    let mut cx = cx.clone();
-                    async move {
-                        this.update(&mut cx, |this, cx| {
-                            this.invalidate_code_lens();
-                            cx.emit(LspStoreEvent::RefreshCodeLens);
-                            this.downstream_client.as_ref().map(|(client, project_id)| {
-                                client.send(proto::RefreshCodeLens {
-                                    project_id: *project_id,
-                                })
-                            })
-                        })?
-                        .transpose()?;
-                        Ok(())
-                    }
+                    let result = lsp_store.update(cx, |lsp_store, cx| {
+                        lsp_store.refresh_code_lens(cx);
+                    });
+                    async move { result }
                 }
             })
             .detach();
@@ -1169,26 +1158,11 @@ impl LocalLspStore {
                     let request_id = request_id.clone();
                     let mut cx = cx.clone();
                     async move {
-                        lsp_store
-                            .update(&mut cx, |lsp_store, cx| {
-                                let request_id =
-                                    Some(request_id.fetch_add(1, atomic::Ordering::AcqRel));
-                                cx.emit(LspStoreEvent::RefreshSemanticTokens {
-                                    server_id,
-                                    request_id,
-                                });
-                                lsp_store
-                                    .downstream_client
-                                    .as_ref()
-                                    .map(|(client, project_id)| {
-                                        client.send(proto::RefreshSemanticTokens {
-                                            project_id: *project_id,
-                                            server_id: server_id.to_proto(),
-                                            request_id: request_id.map(|id| id as u64),
-                                        })
-                                    })
-                            })?
-                            .transpose()?;
+                        lsp_store.update(&mut cx, |lsp_store, cx| {
+                            let request_id =
+                                Some(request_id.fetch_add(1, atomic::Ordering::AcqRel));
+                            lsp_store.refresh_semantic_tokens(server_id, request_id, cx);
+                        })?;
                         Ok(())
                     }
                 }
@@ -1666,12 +1640,36 @@ impl LocalLspStore {
             .handle
             .read_with(cx, |buffer, _| buffer.max_point().row > 0);
 
+        // When formatting a selection, only the rows it spans may be touched.
+        let selection_row_ranges = buffer.ranges.as_ref().map(|ranges| {
+            buffer.handle.read_with(cx, |buffer, _cx| {
+                let snapshot = buffer.snapshot();
+                ranges
+                    .iter()
+                    .map(|range| {
+                        let start = range.start.to_point(&snapshot);
+                        let end = range.end.to_point(&snapshot);
+                        // A selection ending at column 0 of a row only includes that row's
+                        // preceding line break, not its content, so it shouldn't be trimmed.
+                        let end_row = if end.column == 0 && end.row > start.row {
+                            end.row
+                        } else {
+                            end.row + 1
+                        };
+                        start.row..end_row
+                    })
+                    .collect::<Vec<_>>()
+            })
+        });
+
         // handle whitespace formatting
         if settings.remove_trailing_whitespace_on_save {
             zlog::trace!(logger => "removing trailing whitespace");
             let diff = buffer
                 .handle
-                .read_with(cx, |buffer, cx| buffer.remove_trailing_whitespace(cx))
+                .read_with(cx, |buffer, cx| {
+                    buffer.remove_trailing_whitespace(selection_row_ranges.as_deref(), cx)
+                })
                 .await;
             extend_formatting_transaction(buffer, formatting_transaction_id, cx, |buffer, cx| {
                 buffer.apply_diff(diff, cx);
@@ -1680,8 +1678,11 @@ impl LocalLspStore {
 
         if settings.ensure_final_newline_on_save {
             zlog::trace!(logger => "ensuring final newline");
+            let diff = buffer.handle.read_with(cx, |buffer, _cx| {
+                buffer.ensure_final_newline(selection_row_ranges.as_deref())
+            });
             extend_formatting_transaction(buffer, formatting_transaction_id, cx, |buffer, cx| {
-                buffer.ensure_final_newline(cx);
+                buffer.apply_diff(diff, cx);
             })?;
         }
 
@@ -1956,6 +1957,7 @@ impl LocalLspStore {
                     )
                     .await
                     .context("Failed to format ranges via language server")?
+                    .unwrap_or_default()
                 } else {
                     zlog::trace!(logger => "formatting full");
                     Self::format_via_lsp(
@@ -2206,12 +2208,8 @@ impl LocalLspStore {
                             formatting_transaction_id,
                             cx,
                             |buffer, cx| {
-                                zlog::info!(
-                                    "Applying edits {edits:?}. Content: {:?}",
-                                    buffer.text()
-                                );
+                                zlog::trace!("Applying {} edits", edits.len());
                                 buffer.edit(edits, None, cx);
-                                zlog::info!("Applied edits. New Content: {:?}", buffer.text());
                             },
                         )?;
                     }
@@ -2353,14 +2351,18 @@ impl LocalLspStore {
         language_server: &Arc<LanguageServer>,
         settings: &LanguageSettings,
         cx: &mut AsyncApp,
-    ) -> Result<Vec<(Range<Anchor>, Arc<str>)>> {
+    ) -> Result<Option<Vec<(Range<Anchor>, Arc<str>)>>> {
         let capabilities = &language_server.capabilities();
         let range_formatting_provider = capabilities.document_range_formatting_provider.as_ref();
-        if range_formatting_provider == Some(&OneOf::Left(false)) {
-            anyhow::bail!(
-                "{} language server does not support range formatting",
+        if !matches!(
+            range_formatting_provider,
+            Some(OneOf::Left(true) | OneOf::Right(_))
+        ) {
+            log::debug!(
+                "Skipping range formatting: language server {} does not support range formatting",
                 language_server.name()
             );
+            return Ok(None);
         }
 
         let uri = file_path_to_lsp_url(abs_path)?;
@@ -2419,8 +2421,9 @@ impl LocalLspStore {
                 )
             })?
             .await
+            .map(Some)
         } else {
-            Ok(Vec::with_capacity(0))
+            Ok(Some(Vec::with_capacity(0)))
         }
     }
 
@@ -13103,6 +13106,7 @@ impl LspStore {
                             capabilities.code_lens_provider = Some(caps);
                         });
                         notify_server_capabilities_updated(&server, cx);
+                        self.refresh_code_lens(cx);
                     }
                 }
                 "textDocument/diagnostic" => {
@@ -13196,6 +13200,23 @@ impl LspStore {
                             capabilities.document_link_provider = Some(caps);
                         });
                         notify_server_capabilities_updated(&server, cx);
+                    }
+                }
+                "textDocument/semanticTokens" => {
+                    if let Some(caps) = reg
+                        .register_options
+                        .map(serde_json::from_value::<lsp::SemanticTokensRegistrationOptions>)
+                        .transpose()?
+                    {
+                        server.update_capabilities(|capabilities| {
+                            capabilities.semantic_tokens_provider = Some(
+                                lsp::SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(caps),
+                            );
+                        });
+                        notify_server_capabilities_updated(&server, cx);
+                        // Re-query already-open buffers, which would otherwise keep
+                        // tree-sitter-only highlighting until edited.
+                        self.refresh_semantic_tokens(server_id, None, cx);
                     }
                 }
                 _ => log::warn!("unhandled capability registration: {reg:?}"),
@@ -13316,6 +13337,12 @@ impl LspStore {
                 "textDocument/signatureHelp" => {
                     server.update_capabilities(|capabilities| {
                         capabilities.signature_help_provider = None;
+                    });
+                    notify_server_capabilities_updated(&server, cx);
+                }
+                "textDocument/semanticTokens" => {
+                    server.update_capabilities(|capabilities| {
+                        capabilities.semantic_tokens_provider = None;
                     });
                     notify_server_capabilities_updated(&server, cx);
                 }

@@ -1,12 +1,21 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
-use gpui::{AnyView, ScrollHandle, prelude::*};
+use anyhow::{Context as _, Result, anyhow};
+use editor::Editor;
+use gpui::{AnyView, Entity, ScrollHandle, prelude::*};
 use i18n as app_i18n;
 use language_model::{
     ConfigurationViewTargetAgent, IconOrSvg, LanguageModelProvider, LanguageModelProviderId,
     LanguageModelRegistry, ZED_CLOUD_PROVIDER_ID,
 };
-use ui::{Divider, DividerColor, prelude::*};
+use settings::{
+    OpenAiCompatibleAvailableModel, OpenAiCompatibleModelCapabilities,
+    OpenAiCompatibleSettingsContent, OpenAiReasoningEffort, update_settings_file_with_completion,
+};
+use ui::{
+    Checkbox, ContextMenu, ContextMenuEntry, Divider, DividerColor, DropdownMenu, DropdownStyle,
+    IconPosition, ToggleState, prelude::*,
+};
 
 use crate::SettingsWindow;
 
@@ -51,6 +60,31 @@ pub(crate) fn render_llm_providers_page(
                 .collect::<Vec<_>>(),
         )
         .into_any_element()
+}
+
+pub(crate) fn render_add_llm_provider_button(
+    _settings_window: &SettingsWindow,
+    _window: &mut Window,
+    cx: &mut Context<SettingsWindow>,
+) -> impl IntoElement {
+    Button::new(
+        "add-openai-compatible-provider",
+        tr(
+            cx,
+            "settings_ui.llm_providers_page.add_provider",
+            "Add Provider",
+        ),
+    )
+    .style(ButtonStyle::Outlined)
+    .start_icon(
+        Icon::new(IconName::Plus)
+            .size(IconSize::Small)
+            .color(Color::Muted),
+    )
+    .on_click(cx.listener(|this, _, window, cx| {
+        open_llm_provider_form(this, window, cx);
+    }))
+    .tab_index(0isize)
 }
 
 fn render_provider_row(
@@ -136,4 +170,990 @@ fn get_or_create_configuration_view(
     });
 
     view
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CompatibleProviderKind {
+    OpenAi,
+}
+
+impl CompatibleProviderKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::OpenAi => "OpenAI-compatible",
+        }
+    }
+
+    fn default_api_url(self) -> &'static str {
+        match self {
+            Self::OpenAi => "https://api.openai.com/v1",
+        }
+    }
+}
+
+pub(crate) struct LlmProviderForm {
+    provider_name: Entity<Editor>,
+    api_url: Entity<Editor>,
+    api_key: Entity<Editor>,
+    models: Vec<ModelInput>,
+    error: Option<SharedString>,
+}
+
+impl LlmProviderForm {
+    fn new(window: &mut Window, cx: &mut Context<SettingsWindow>) -> Self {
+        let kind = CompatibleProviderKind::OpenAi;
+        Self {
+            provider_name: new_input(kind.label(), None, false, window, cx),
+            api_url: new_input(kind.default_api_url(), None, false, window, cx),
+            api_key: new_input(
+                "000000000000000000000000000000000000000000000000",
+                None,
+                true,
+                window,
+                cx,
+            ),
+            models: vec![ModelInput::new(window, cx)],
+            error: None,
+        }
+    }
+}
+
+struct ModelInput {
+    name: Entity<Editor>,
+    max_completion_tokens: Entity<Editor>,
+    max_output_tokens: Entity<Editor>,
+    max_tokens: Entity<Editor>,
+    reasoning_effort: OpenAiReasoningEffort,
+    supports_tools: ToggleState,
+    supports_images: ToggleState,
+    supports_parallel_tool_calls: ToggleState,
+    supports_prompt_cache_key: ToggleState,
+    supports_chat_completions: ToggleState,
+    supports_thinking: ToggleState,
+    interleaved_reasoning: ToggleState,
+    max_tokens_parameter: ToggleState,
+}
+
+impl ModelInput {
+    fn new(window: &mut Window, cx: &mut Context<SettingsWindow>) -> Self {
+        let OpenAiCompatibleModelCapabilities {
+            tools,
+            images,
+            parallel_tool_calls,
+            prompt_cache_key,
+            chat_completions,
+            interleaved_reasoning,
+            max_tokens_parameter,
+        } = OpenAiCompatibleModelCapabilities::default();
+
+        Self {
+            name: new_input(
+                "e.g. gpt-5, claude-opus-4, gemini-2.5-pro",
+                None,
+                false,
+                window,
+                cx,
+            ),
+            max_completion_tokens: new_input("200000", Some("200000"), false, window, cx),
+            max_output_tokens: new_input("Max Output Tokens", Some("32000"), false, window, cx),
+            max_tokens: new_input("Max Tokens", Some("200000"), false, window, cx),
+            reasoning_effort: OpenAiReasoningEffort::Medium,
+            supports_tools: tools.into(),
+            supports_images: images.into(),
+            supports_parallel_tool_calls: parallel_tool_calls.into(),
+            supports_prompt_cache_key: prompt_cache_key.into(),
+            supports_chat_completions: chat_completions.into(),
+            supports_thinking: ToggleState::Unselected,
+            interleaved_reasoning: interleaved_reasoning.into(),
+            max_tokens_parameter: max_tokens_parameter.into(),
+        }
+    }
+}
+
+fn new_input(
+    placeholder: &str,
+    initial: Option<&str>,
+    masked: bool,
+    window: &mut Window,
+    cx: &mut Context<SettingsWindow>,
+) -> Entity<Editor> {
+    let placeholder = placeholder.to_string();
+    let initial = initial.map(str::to_string);
+    cx.new(|cx| {
+        let mut editor = Editor::single_line(window, cx);
+        editor.set_placeholder_text(placeholder.as_str(), window, cx);
+        editor.set_masked(masked, cx);
+        if let Some(text) = initial {
+            editor.set_text(text, window, cx);
+        }
+        editor
+    })
+}
+
+fn open_llm_provider_form(
+    settings_window: &mut SettingsWindow,
+    window: &mut Window,
+    cx: &mut Context<SettingsWindow>,
+) {
+    settings_window.llm_provider_form = Some(LlmProviderForm::new(window, cx));
+    settings_window.push_dynamic_sub_page(
+        tr(
+            cx,
+            "settings_ui.llm_providers_page.openai_compatible_provider",
+            "OpenAI-compatible Provider",
+        ),
+        tr(
+            cx,
+            "settings_ui.page_data.section.agent.configuration",
+            "Agent Configuration",
+        ),
+        Some("language_models.openai_compatible.add_provider"),
+        render_add_llm_provider_page,
+        window,
+        cx,
+    );
+}
+
+fn render_add_llm_provider_page(
+    settings_window: &SettingsWindow,
+    scroll_handle: &ScrollHandle,
+    window: &mut Window,
+    cx: &mut Context<SettingsWindow>,
+) -> AnyElement {
+    let Some(form) = settings_window.llm_provider_form.as_ref() else {
+        return div().into_any_element();
+    };
+
+    v_flex()
+        .id("add-llm-provider-page")
+        .size_full()
+        .pt_2p5()
+        .px_8()
+        .pb_16()
+        .track_scroll(scroll_handle)
+        .overflow_y_scroll()
+        .gap_4()
+        .child(
+            v_flex()
+                .gap_1()
+                .child(
+                    Label::new(tr(
+                        cx,
+                        "settings_ui.llm_providers_page.provider_details",
+                        "Provider Details",
+                    ))
+                    .size(LabelSize::Large),
+                )
+                .child(
+                    Label::new(tr(
+                        cx,
+                        "settings_ui.llm_providers_page.provider_details_description",
+                        "Add a manually configured OpenAI-compatible provider without any cloud dependency.",
+                    ))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+                ),
+        )
+        .child(render_form_field(
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.provider_name",
+                "Provider Name",
+            ),
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.provider_name_description",
+                "Used as the local provider identifier in your settings.",
+            ),
+            &form.provider_name,
+            cx,
+        ))
+        .child(render_form_field(
+            tr(cx, "settings_ui.llm_providers_page.api_url", "API URL"),
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.api_url_description",
+                "Base URL for the provider's OpenAI-compatible API.",
+            ),
+            &form.api_url,
+            cx,
+        ))
+        .child(render_form_field(
+            tr(cx, "settings_ui.llm_providers_page.api_key", "API Key"),
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.api_key_description",
+                "Stored in the system keychain and associated with the configured API URL.",
+            ),
+            &form.api_key,
+            cx,
+        ))
+        .child(render_models_section(form, window, cx))
+        .when_some(form.error.clone(), |this, error| {
+            this.child(render_form_error(error))
+        })
+        .child(render_form_actions(cx))
+        .into_any_element()
+}
+
+fn render_form_field(
+    title: SharedString,
+    description: SharedString,
+    editor: &Entity<Editor>,
+    _cx: &mut Context<SettingsWindow>,
+) -> AnyElement {
+    h_flex()
+        .pt_2p5()
+        .w_full()
+        .min_w_0()
+        .gap_4()
+        .justify_between()
+        .child(
+            v_flex()
+                .w_full()
+                .min_w_0()
+                .max_w_1_2()
+                .gap_0p5()
+                .child(Label::new(title))
+                .child(
+                    Label::new(description)
+                        .size(LabelSize::Small)
+                        .color(Color::Muted),
+                ),
+        )
+        .child(div().w_full().max_w_96().child(editor.clone()))
+        .into_any_element()
+}
+
+fn render_models_section(
+    form: &LlmProviderForm,
+    window: &mut Window,
+    cx: &mut Context<SettingsWindow>,
+) -> AnyElement {
+    v_flex()
+        .gap_2()
+        .child(
+            h_flex()
+                .justify_between()
+                .child(
+                    v_flex()
+                        .gap_0p5()
+                        .child(
+                            Label::new(tr(
+                                cx,
+                                "settings_ui.llm_providers_page.models",
+                                "Models",
+                            ))
+                            .size(LabelSize::Large),
+                        )
+                        .child(
+                            Label::new(tr(
+                                cx,
+                                "settings_ui.llm_providers_page.models_description",
+                                "Describe the model capabilities ZZZ should assume for this provider.",
+                            ))
+                            .size(LabelSize::Small)
+                            .color(Color::Muted),
+                        ),
+                )
+                .child(
+                    Button::new(
+                        "add-openai-compatible-model",
+                        tr(
+                            cx,
+                            "settings_ui.llm_providers_page.add_model",
+                            "Add Model",
+                        ),
+                    )
+                    .style(ButtonStyle::Outlined)
+                    .start_icon(
+                        Icon::new(IconName::Plus)
+                            .size(IconSize::XSmall)
+                            .color(Color::Muted),
+                    )
+                    .label_size(LabelSize::Small)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        if let Some(form) = this.llm_provider_form.as_mut() {
+                            form.models.push(ModelInput::new(window, cx));
+                        }
+                        cx.notify();
+                    })),
+                ),
+        )
+        .children(
+            form.models
+                .iter()
+                .enumerate()
+                .map(|(index, model)| render_model(model, index, form.models.len(), window, cx)),
+        )
+        .into_any_element()
+}
+
+fn render_model(
+    model: &ModelInput,
+    index: usize,
+    model_count: usize,
+    window: &mut Window,
+    cx: &mut Context<SettingsWindow>,
+) -> AnyElement {
+    v_flex()
+        .p_2()
+        .gap_2()
+        .rounded_sm()
+        .border_1()
+        .border_dashed()
+        .border_color(cx.theme().colors().border.opacity(0.6))
+        .bg(cx.theme().colors().element_active.opacity(0.15))
+        .child(render_form_field(
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.model_name",
+                "Model Name",
+            ),
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.model_name_description",
+                "The model name as exposed by the provider API.",
+            ),
+            &model.name,
+            cx,
+        ))
+        .child(render_form_field(
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.max_completion_tokens",
+                "Max Completion Tokens",
+            ),
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.max_completion_tokens_description",
+                "Maximum completion tokens for chat-completions requests.",
+            ),
+            &model.max_completion_tokens,
+            cx,
+        ))
+        .child(render_form_field(
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.max_output_tokens",
+                "Max Output Tokens",
+            ),
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.max_output_tokens_description",
+                "Maximum output tokens supported by the model.",
+            ),
+            &model.max_output_tokens,
+            cx,
+        ))
+        .child(render_form_field(
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.max_tokens",
+                "Max Tokens",
+            ),
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.max_tokens_description",
+                "The total context window size.",
+            ),
+            &model.max_tokens,
+            cx,
+        ))
+        .child(render_model_capabilities(model, index, window, cx))
+        .when(model_count > 1, |this| {
+            this.child(
+                Button::new(
+                    ("remove-openai-compatible-model", index),
+                    tr(
+                        cx,
+                        "settings_ui.llm_providers_page.remove_model",
+                        "Remove Model",
+                    ),
+                )
+                .start_icon(
+                    Icon::new(IconName::Trash)
+                        .size(IconSize::XSmall)
+                        .color(Color::Muted),
+                )
+                .label_size(LabelSize::Small)
+                .style(ButtonStyle::Outlined)
+                .full_width()
+                .on_click(cx.listener(move |this, _, _window, cx| {
+                    if let Some(form) = this.llm_provider_form.as_mut()
+                        && index < form.models.len()
+                    {
+                        form.models.remove(index);
+                    }
+                    cx.notify();
+                })),
+            )
+        })
+        .into_any_element()
+}
+
+fn render_model_capabilities(
+    model: &ModelInput,
+    index: usize,
+    window: &mut Window,
+    cx: &mut Context<SettingsWindow>,
+) -> impl IntoElement {
+    v_flex()
+        .gap_1()
+        .child(render_capability_checkbox(
+            "supports-tools",
+            index,
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.supports_tools",
+                "Supports tools",
+            ),
+            model.supports_tools,
+            |model, state| model.supports_tools = state,
+            cx,
+        ))
+        .child(render_capability_checkbox(
+            "supports-images",
+            index,
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.supports_images",
+                "Supports images",
+            ),
+            model.supports_images,
+            |model, state| model.supports_images = state,
+            cx,
+        ))
+        .child(render_capability_checkbox(
+            "supports-parallel-tool-calls",
+            index,
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.supports_parallel_tool_calls",
+                "Supports parallel_tool_calls",
+            ),
+            model.supports_parallel_tool_calls,
+            |model, state| model.supports_parallel_tool_calls = state,
+            cx,
+        ))
+        .child(render_capability_checkbox(
+            "supports-prompt-cache-key",
+            index,
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.supports_prompt_cache_key",
+                "Supports prompt_cache_key",
+            ),
+            model.supports_prompt_cache_key,
+            |model, state| model.supports_prompt_cache_key = state,
+            cx,
+        ))
+        .child(render_capability_checkbox(
+            "supports-chat-completions",
+            index,
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.supports_chat_completions",
+                "Supports /chat/completions",
+            ),
+            model.supports_chat_completions,
+            |model, state| model.supports_chat_completions = state,
+            cx,
+        ))
+        .when(model.supports_chat_completions.selected(), |this| {
+            this.child(render_capability_checkbox(
+                "max-tokens-parameter",
+                index,
+                tr(
+                    cx,
+                    "settings_ui.llm_providers_page.max_tokens_parameter",
+                    "Uses max_tokens for output limit",
+                ),
+                model.max_tokens_parameter,
+                |model, state| model.max_tokens_parameter = state,
+                cx,
+            ))
+        })
+        .child(render_capability_checkbox(
+            "supports-thinking",
+            index,
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.supports_thinking",
+                "Supports thinking",
+            ),
+            model.supports_thinking,
+            |model, state| model.supports_thinking = state,
+            cx,
+        ))
+        .when(model.supports_thinking.selected(), |this| {
+            this.child(render_reasoning_effort_selector(
+                model.reasoning_effort,
+                index,
+                window,
+                cx,
+            ))
+            .when(model.supports_chat_completions.selected(), |this| {
+                this.child(render_capability_checkbox(
+                    "interleaved-reasoning",
+                    index,
+                    tr(
+                        cx,
+                        "settings_ui.llm_providers_page.interleaved_reasoning",
+                        "Preserves thinking in chat history",
+                    ),
+                    model.interleaved_reasoning,
+                    |model, state| model.interleaved_reasoning = state,
+                    cx,
+                ))
+            })
+        })
+}
+
+fn render_capability_checkbox(
+    id: &'static str,
+    index: usize,
+    label: SharedString,
+    state: ToggleState,
+    update: fn(&mut ModelInput, ToggleState),
+    cx: &mut Context<SettingsWindow>,
+) -> impl IntoElement {
+    Checkbox::new((id, index), state)
+        .label(label)
+        .on_click(cx.listener(move |this, checked, _window, cx| {
+            if let Some(form) = this.llm_provider_form.as_mut()
+                && let Some(model) = form.models.get_mut(index)
+            {
+                update(model, *checked);
+            }
+            cx.notify();
+        }))
+}
+
+fn render_reasoning_effort_selector(
+    selected: OpenAiReasoningEffort,
+    index: usize,
+    window: &mut Window,
+    cx: &mut Context<SettingsWindow>,
+) -> impl IntoElement {
+    let settings_window = cx.weak_entity();
+    let menu = ContextMenu::build(window, cx, move |mut menu, _window, _cx| {
+        for effort in OpenAiReasoningEffort::OPENAI_COMPATIBLE_SELECTABLE {
+            let is_selected = effort == selected;
+            let settings_window = settings_window.clone();
+            menu.push_item(
+                ContextMenuEntry::new(effort.label())
+                    .toggleable(IconPosition::End, is_selected)
+                    .handler(move |_window, cx| {
+                        settings_window
+                            .update(cx, |this, cx| {
+                                if let Some(form) = this.llm_provider_form.as_mut()
+                                    && let Some(model) = form.models.get_mut(index)
+                                {
+                                    model.reasoning_effort = effort;
+                                }
+                                cx.notify();
+                            })
+                            .ok();
+                    }),
+            );
+        }
+        menu
+    });
+
+    v_flex()
+        .gap_1()
+        .child(
+            Label::new(tr(
+                cx,
+                "settings_ui.llm_providers_page.default_reasoning_effort",
+                "Default reasoning effort",
+            ))
+            .size(LabelSize::Small),
+        )
+        .child(
+            DropdownMenu::new(
+                ElementId::Name(format!("reasoning-effort-selector-{index}").into()),
+                selected.label(),
+                menu,
+            )
+            .style(DropdownStyle::Outlined)
+            .trigger_size(ButtonSize::Compact)
+            .full_width(true),
+        )
+}
+
+fn render_form_error(error: SharedString) -> impl IntoElement {
+    h_flex()
+        .w_full()
+        .gap_2()
+        .child(
+            Icon::new(IconName::XCircle)
+                .size(IconSize::Small)
+                .color(Color::Error),
+        )
+        .child(Label::new(error).size(LabelSize::Small).color(Color::Error))
+}
+
+fn render_form_actions(cx: &mut Context<SettingsWindow>) -> impl IntoElement {
+    h_flex()
+        .w_full()
+        .gap_1()
+        .justify_end()
+        .child(
+            Button::new(
+                "llm-provider-form-cancel",
+                tr(cx, "settings_ui.common.button.cancel", "Cancel"),
+            )
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.llm_provider_form = None;
+                this.pop_sub_page(window, cx);
+            })),
+        )
+        .child(
+            Button::new(
+                "llm-provider-form-save",
+                tr(
+                    cx,
+                    "settings_ui.llm_providers_page.save_provider",
+                    "Save Provider",
+                ),
+            )
+            .style(ButtonStyle::Filled)
+            .on_click(cx.listener(|this, _, window, cx| {
+                save_llm_provider_form(this, window, cx);
+            })),
+        )
+}
+
+struct LlmProviderFormValues {
+    provider_name: String,
+    api_url: String,
+    api_key: String,
+    models: Vec<ModelValues>,
+}
+
+struct ModelValues {
+    name: String,
+    max_completion_tokens: String,
+    max_output_tokens: String,
+    max_tokens: String,
+    reasoning_effort: OpenAiReasoningEffort,
+    supports_tools: bool,
+    supports_images: bool,
+    supports_parallel_tool_calls: bool,
+    supports_prompt_cache_key: bool,
+    supports_chat_completions: bool,
+    supports_thinking: bool,
+    interleaved_reasoning: bool,
+    max_tokens_parameter: bool,
+}
+
+fn save_llm_provider_form(
+    settings_window: &mut SettingsWindow,
+    window: &mut Window,
+    cx: &mut Context<SettingsWindow>,
+) {
+    let values = {
+        let Some(form) = settings_window.llm_provider_form.as_ref() else {
+            return;
+        };
+        LlmProviderFormValues {
+            provider_name: form.provider_name.read(cx).text(cx),
+            api_url: form.api_url.read(cx).text(cx),
+            api_key: form.api_key.read(cx).text(cx),
+            models: form
+                .models
+                .iter()
+                .map(|model| ModelValues {
+                    name: model.name.read(cx).text(cx),
+                    max_completion_tokens: model.max_completion_tokens.read(cx).text(cx),
+                    max_output_tokens: model.max_output_tokens.read(cx).text(cx),
+                    max_tokens: model.max_tokens.read(cx).text(cx),
+                    reasoning_effort: model.reasoning_effort,
+                    supports_tools: model.supports_tools.selected(),
+                    supports_images: model.supports_images.selected(),
+                    supports_parallel_tool_calls: model.supports_parallel_tool_calls.selected(),
+                    supports_prompt_cache_key: model.supports_prompt_cache_key.selected(),
+                    supports_chat_completions: model.supports_chat_completions.selected(),
+                    supports_thinking: model.supports_thinking.selected(),
+                    interleaved_reasoning: model.interleaved_reasoning.selected(),
+                    max_tokens_parameter: model.max_tokens_parameter.selected(),
+                })
+                .collect(),
+        }
+    };
+
+    let (provider_name, api_url, api_key, models) = match validate_llm_provider_form(&values, cx) {
+        Ok(values) => values,
+        Err(error) => {
+            if let Some(form) = settings_window.llm_provider_form.as_mut() {
+                form.error = Some(error);
+            }
+            cx.notify();
+            return;
+        }
+    };
+
+    let fs = <dyn fs::Fs>::global(cx);
+    let write_key = cx.write_credentials(&api_url, "Bearer", api_key.as_bytes());
+    cx.spawn_in(window, async move |this, cx| {
+        let result = async {
+            write_key
+                .await
+                .context("Failed to write API key to keychain")?;
+
+            let completion = cx.update(|_window, cx| {
+                let provider_name = provider_name.clone();
+                let api_url = api_url.clone();
+                let models = models.clone();
+                update_settings_file_with_completion(fs, cx, move |settings, _cx| {
+                    settings
+                        .language_models
+                        .get_or_insert_default()
+                        .openai_compatible
+                        .get_or_insert_default()
+                        .insert(
+                            provider_name,
+                            OpenAiCompatibleSettingsContent {
+                                api_url,
+                                available_models: models,
+                                custom_headers: None,
+                            },
+                        );
+                })
+            })?;
+
+            completion
+                .await
+                .map_err(|_| anyhow!("Settings update was canceled"))??;
+
+            cx.update(|window, cx| {
+                this.update(cx, |this, cx| {
+                    this.llm_provider_form = None;
+                    this.pop_sub_page(window, cx);
+                })
+            })??;
+
+            anyhow::Ok(())
+        }
+        .await;
+
+        if let Err(error) = result {
+            this.update(cx, |this, cx| {
+                if let Some(form) = this.llm_provider_form.as_mut() {
+                    form.error = Some(error.to_string().into());
+                }
+                cx.notify();
+            })?;
+        }
+
+        anyhow::Ok(())
+    })
+    .detach_and_log_err(cx);
+}
+
+fn validate_llm_provider_form(
+    values: &LlmProviderFormValues,
+    cx: &App,
+) -> Result<
+    (
+        Arc<str>,
+        String,
+        String,
+        Vec<OpenAiCompatibleAvailableModel>,
+    ),
+    SharedString,
+> {
+    let provider_name: Arc<str> = values.provider_name.trim().into();
+    if provider_name.is_empty() {
+        return Err(
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.provider_name_cannot_be_empty",
+                "Provider Name cannot be empty",
+            ),
+        );
+    }
+
+    if LanguageModelRegistry::read_global(cx)
+        .providers()
+        .iter()
+        .any(|provider| {
+            provider.id().0.as_ref() == provider_name.as_ref()
+                || provider.name().0.as_ref() == provider_name.as_ref()
+        })
+    {
+        return Err(tr(
+            cx,
+            "settings_ui.llm_providers_page.provider_name_taken",
+            "Provider Name is already taken by another provider",
+        ));
+    }
+
+    let api_url = values.api_url.trim().to_string();
+    if api_url.is_empty() {
+        return Err(tr(
+            cx,
+            "settings_ui.llm_providers_page.api_url_cannot_be_empty",
+            "API URL cannot be empty",
+        ));
+    }
+
+    let api_key = values.api_key.trim().to_string();
+    if api_key.is_empty() {
+        return Err(tr(
+            cx,
+            "settings_ui.llm_providers_page.api_key_cannot_be_empty",
+            "API Key cannot be empty",
+        ));
+    }
+
+    let models = values
+        .models
+        .iter()
+        .map(|model| parse_open_ai_model(model, cx))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut model_names = HashSet::new();
+    if !models.iter().all(|model| model_names.insert(model.name.clone())) {
+        return Err(tr(
+            cx,
+            "settings_ui.llm_providers_page.model_names_must_be_unique",
+            "Model Names must be unique",
+        ));
+    }
+
+    Ok((provider_name, api_url, api_key, models))
+}
+
+fn parse_model_name(model: &ModelValues, cx: &App) -> Result<String, SharedString> {
+    let name = model.name.trim();
+    if name.is_empty() {
+        return Err(tr(
+            cx,
+            "settings_ui.llm_providers_page.model_name_cannot_be_empty",
+            "Model Name cannot be empty",
+        ));
+    }
+    Ok(name.to_string())
+}
+
+fn parse_open_ai_model(
+    model: &ModelValues,
+    cx: &App,
+) -> Result<OpenAiCompatibleAvailableModel, SharedString> {
+    Ok(OpenAiCompatibleAvailableModel {
+        name: parse_model_name(model, cx)?,
+        display_name: None,
+        max_completion_tokens: Some(parse_u64_field(
+            &model.max_completion_tokens,
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.max_completion_tokens",
+                "Max Completion Tokens",
+            ),
+        )?),
+        max_output_tokens: Some(parse_u64_field(
+            &model.max_output_tokens,
+            tr(
+                cx,
+                "settings_ui.llm_providers_page.max_output_tokens",
+                "Max Output Tokens",
+            ),
+        )?),
+        max_tokens: parse_u64_field(
+            &model.max_tokens,
+            tr(cx, "settings_ui.llm_providers_page.max_tokens", "Max Tokens"),
+        )?,
+        reasoning_effort: model.supports_thinking.then_some(model.reasoning_effort),
+        capabilities: OpenAiCompatibleModelCapabilities {
+            tools: model.supports_tools,
+            images: model.supports_images,
+            parallel_tool_calls: model.supports_parallel_tool_calls,
+            prompt_cache_key: model.supports_prompt_cache_key,
+            chat_completions: model.supports_chat_completions,
+            interleaved_reasoning: model.supports_thinking
+                && model.supports_chat_completions
+                && model.interleaved_reasoning,
+            max_tokens_parameter: model.supports_chat_completions && model.max_tokens_parameter,
+        },
+    })
+}
+
+fn parse_u64_field(value: &str, name: SharedString) -> Result<u64, SharedString> {
+    value
+        .trim()
+        .parse::<u64>()
+        .map_err(|_| format!("{name} must be a number").into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use gpui::TestAppContext;
+
+    fn base_values() -> LlmProviderFormValues {
+        LlmProviderFormValues {
+            provider_name: "local-openai".to_string(),
+            api_url: "http://localhost:11434/v1".to_string(),
+            api_key: "test-key".to_string(),
+            models: vec![ModelValues {
+                name: "test-model".to_string(),
+                max_completion_tokens: "2048".to_string(),
+                max_output_tokens: "1024".to_string(),
+                max_tokens: "8192".to_string(),
+                reasoning_effort: OpenAiReasoningEffort::Medium,
+                supports_tools: true,
+                supports_images: false,
+                supports_parallel_tool_calls: false,
+                supports_prompt_cache_key: false,
+                supports_chat_completions: true,
+                supports_thinking: false,
+                interleaved_reasoning: false,
+                max_tokens_parameter: false,
+            }],
+        }
+    }
+
+    fn init_test_context(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let store = settings::SettingsStore::test(cx);
+            cx.set_global(store);
+            i18n::init(cx);
+            language_model::init(cx);
+        });
+    }
+
+    #[gpui::test]
+    async fn validate_rejects_duplicate_model_names(cx: &mut TestAppContext) {
+        init_test_context(cx);
+        let mut values = base_values();
+        values.models.push(ModelValues {
+            name: "test-model".to_string(),
+            ..base_values().models.remove(0)
+        });
+
+        let error = cx
+            .update(|cx| validate_llm_provider_form(&values, cx).unwrap_err())
+            .to_string();
+
+        assert_eq!(error, "Model Names must be unique");
+    }
+
+    #[gpui::test]
+    async fn parse_open_ai_model_keeps_reasoning_only_when_enabled(cx: &mut TestAppContext) {
+        init_test_context(cx);
+        let mut model = base_values().models.remove(0);
+
+        let parsed = cx
+            .update(|cx| parse_open_ai_model(&model, cx).expect("model should parse"));
+        assert_eq!(parsed.reasoning_effort, None);
+
+        model.supports_thinking = true;
+        let parsed = cx
+            .update(|cx| parse_open_ai_model(&model, cx).expect("model should parse"));
+        assert_eq!(parsed.reasoning_effort, Some(OpenAiReasoningEffort::Medium));
+    }
 }

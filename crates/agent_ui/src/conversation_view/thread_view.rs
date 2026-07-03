@@ -6,16 +6,15 @@ use crate::{
 use agent_client_protocol::schema as acp;
 use std::cell::RefCell;
 
-use acp_thread::{ContentBlock, PlanEntry, SandboxAuthorizationDetails};
+use crate::message_editor::SharedSessionCapabilities;
+use acp_thread::{PlanEntry, SandboxAuthorizationDetails};
 use cloud_api_types::{SubmitAgentThreadFeedbackBody, SubmitAgentThreadFeedbackCommentsBody};
 use editor::actions::OpenExcerpts;
-use language_model::LanguageModelProvider;
-
-use crate::message_editor::SharedSessionCapabilities;
 
 use gpui::List;
 use heapless::Vec as ArrayVec;
 use i18n as app_i18n;
+use language_model::{LanguageModelProvider, LanguageModelRegistry};
 use ui::{SpinnerLabel, SpinnerVariant, Tab};
 use workspace::{OpenOptions, SERIALIZATION_THROTTLE_TIME};
 
@@ -977,7 +976,11 @@ impl ThreadView {
         match event {
             MessageEditorEvent::Send => self.send(window, cx),
             MessageEditorEvent::SendImmediately => self.interrupt_and_send(window, cx),
-            MessageEditorEvent::Cancel => self.cancel_generation(cx),
+            MessageEditorEvent::Cancel => {
+                if !self.close_thread_search(window, cx) {
+                    self.cancel_generation(cx);
+                }
+            }
             MessageEditorEvent::Focus => {
                 self.cancel_editing(&Default::default(), window, cx);
             }
@@ -1032,11 +1035,6 @@ impl ThreadView {
 
     pub fn has_queued_messages(&self) -> bool {
         !self.local_queued_messages.is_empty()
-    }
-
-    pub fn is_imported_thread(&self, _cx: &App) -> bool {
-        // Imported threads were a native-agent-only feature; always false for external agents.
-        false
     }
 
     // events
@@ -2257,37 +2255,6 @@ impl ThreadView {
     }
 
     // thread stuff
-
-    fn share_thread(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.workspace.upgrade() {
-            workspace.update(cx, |workspace, cx| {
-                struct ThreadShareUnavailableToast;
-                workspace.show_toast(
-                    Toast::new(
-                        NotificationId::unique::<ThreadShareUnavailableToast>(),
-                        tr(
-                            cx,
-                            "agent_ui.thread_view.thread_sharing_unavailable",
-                            "Thread sharing is not available for external agents.",
-                        )
-                        .to_string(),
-                    )
-                    .autohide(),
-                    cx,
-                );
-            });
-        }
-    }
-
-    pub fn sync_thread(
-        &mut self,
-        _project: Entity<Project>,
-        _server_view: Entity<ConversationView>,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-        // sync_thread was a native-agent-only feature (imported threads no longer exist).
-    }
 
     pub fn restore_checkpoint(&mut self, message_id: &UserMessageId, cx: &mut Context<Self>) {
         self.thread
@@ -3575,7 +3542,7 @@ impl ThreadView {
         let fills_container = !has_messages || editor_expanded;
 
         h_flex()
-            .p_2()
+            .py_2()
             .bg(editor_bg_color)
             .justify_center()
             .on_action(cx.listener(Self::handle_message_editor_move_up))
@@ -3594,6 +3561,7 @@ impl ThreadView {
                     .when_some(max_content_width, |this, max_w| this.flex_basis(max_w))
                     .when(max_content_width.is_none(), |this| this.w_full())
                     .when(fills_container, |this| this.h_full())
+                    .px_2()
                     .flex_shrink()
                     .flex_grow_0()
                     .justify_between()
@@ -4938,7 +4906,7 @@ impl ThreadView {
                     .gap_3()
                     .children(chunks.iter().enumerate().filter_map(
                         |(chunk_ix, chunk)| match chunk {
-                            AssistantMessageChunk::Message { block } => {
+                            AssistantMessageChunk::Message { block, .. } => {
                                 block.markdown().and_then(|md| {
                                     let this_is_blank = md.read(cx).source().trim().is_empty();
                                     is_blank = is_blank && this_is_blank;
@@ -4952,7 +4920,7 @@ impl ThreadView {
                                     )
                                 })
                             }
-                            AssistantMessageChunk::Thought { block } => {
+                            AssistantMessageChunk::Thought { block, .. } => {
                                 block.markdown().and_then(|md| {
                                     let this_is_blank = md.read(cx).source().trim().is_empty();
                                     is_blank = is_blank && this_is_blank;
@@ -5380,42 +5348,6 @@ impl ThreadView {
                             this.handle_feedback_click(ThreadFeedback::Negative, window, cx);
                         })),
                 );
-        }
-
-        if let Some(project) = self.project.upgrade()
-            && let Some(server_view) = self.server_view.upgrade()
-            && cx.has_flag::<AgentSharingFeatureFlag>()
-            && project.read(cx).client().status().borrow().is_connected()
-        {
-            let button = if self.is_imported_thread(cx) {
-                IconButton::new("sync-thread", IconName::ArrowCircle)
-                    .shape(ui::IconButtonShape::Square)
-                    .icon_size(IconSize::Small)
-                    .icon_color(Color::Ignored)
-                    .tooltip(Tooltip::text(tr(
-                        cx,
-                        "agent_ui.thread_view.sync_with_source_thread",
-                        "Sync with source thread",
-                    )))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.sync_thread(project.clone(), server_view.clone(), window, cx);
-                    }))
-            } else {
-                IconButton::new("share-thread", IconName::ArrowUpRight)
-                    .shape(ui::IconButtonShape::Square)
-                    .icon_size(IconSize::Small)
-                    .icon_color(Color::Ignored)
-                    .tooltip(Tooltip::text(tr(
-                        cx,
-                        "agent_ui.thread_view.share_thread",
-                        "Share Thread",
-                    )))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.share_thread(window, cx);
-                    }))
-            };
-
-            container = container.child(button);
         }
 
         container
@@ -6046,8 +5978,12 @@ impl ThreadView {
                         .map(|chunks| {
                             chunks.iter().any(|chunk| {
                                 let md = match chunk {
-                                    AssistantMessageChunk::Message { block } => block.markdown(),
-                                    AssistantMessageChunk::Thought { block } => block.markdown(),
+                                    AssistantMessageChunk::Message { block, .. } => {
+                                        block.markdown()
+                                    }
+                                    AssistantMessageChunk::Thought { block, .. } => {
+                                        block.markdown()
+                                    }
                                 };
                                 md.map_or(false, |m| m.read(cx).selected_text().is_some())
                             })
@@ -6057,8 +5993,8 @@ impl ThreadView {
                     let context_menu_link = chunks.and_then(|chunks| {
                         chunks.iter().find_map(|chunk| {
                             let md = match chunk {
-                                AssistantMessageChunk::Message { block } => block.markdown(),
-                                AssistantMessageChunk::Thought { block } => block.markdown(),
+                                AssistantMessageChunk::Message { block, .. } => block.markdown(),
+                                AssistantMessageChunk::Thought { block, .. } => block.markdown(),
                             };
                             md.and_then(|m| m.read(cx).context_menu_link().cloned())
                         })
@@ -6188,7 +6124,7 @@ impl ThreadView {
                         .chunks
                         .iter()
                         .filter_map(|chunk| match chunk {
-                            AssistantMessageChunk::Message { block } => {
+                            AssistantMessageChunk::Message { block, .. } => {
                                 let markdown = block.to_markdown(cx);
                                 if markdown.trim().is_empty() {
                                     None
@@ -8071,7 +8007,18 @@ impl ThreadView {
     ) -> AnyElement {
         match content {
             ToolCallContent::ContentBlock(content) => {
-                if let Some(resource_link) = content.resource_link() {
+                if let Some((resource, markdown)) = content.embedded_resource() {
+                    self.render_embedded_resource_output(
+                        resource,
+                        markdown.cloned(),
+                        entry_ix,
+                        context_ix,
+                        tool_call,
+                        card_layout,
+                        window,
+                        cx,
+                    )
+                } else if let Some(resource_link) = content.resource_link() {
                     self.render_resource_link(resource_link, cx)
                 } else if let Some(markdown) = content.markdown() {
                     self.render_markdown_output(
@@ -8182,6 +8129,60 @@ impl ThreadView {
                         }
                     })),
             )
+            .into_any_element()
+    }
+
+    fn render_embedded_resource_output(
+        &self,
+        resource: &acp::EmbeddedResource,
+        markdown: Option<Entity<Markdown>>,
+        entry_ix: usize,
+        context_ix: usize,
+        tool_call: &ToolCall,
+        card_layout: bool,
+        window: &Window,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        if let Some(markdown) = markdown {
+            return self.render_markdown_output(
+                markdown,
+                entry_ix,
+                context_ix,
+                tool_call,
+                card_layout,
+                window,
+                cx,
+            );
+        }
+
+        let uri = match &resource.resource {
+            acp::EmbeddedResourceResource::BlobResourceContents(blob) => blob.uri.as_str(),
+            acp::EmbeddedResourceResource::TextResourceContents(text) => text.uri.as_str(),
+            _ => "",
+        };
+
+        v_flex()
+            .gap_1()
+            .map(|this| {
+                if card_layout {
+                    this.p_2().when(context_ix > 0, |this| {
+                        this.border_t_1()
+                            .border_color(self.tool_card_border_color(cx))
+                    })
+                } else {
+                    this.ml(rems(0.4))
+                        .px_3p5()
+                        .border_l_1()
+                        .border_color(self.tool_card_border_color(cx))
+                }
+            })
+            .when(!uri.is_empty(), |this| {
+                this.child(
+                    Label::new(uri.to_string())
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted),
+                )
+            })
             .into_any_element()
     }
 
@@ -8452,8 +8453,8 @@ impl ThreadView {
 
         let is_cancelled = matches!(tool_call.status, ToolCallStatus::Canceled)
             || tool_call.content.iter().any(|c| match c {
-                ToolCallContent::ContentBlock(ContentBlock::Markdown { markdown }) => {
-                    markdown.read(cx).source() == "User canceled"
+                ToolCallContent::ContentBlock(block) => {
+                    block.text_content(cx) == Some("User canceled")
                 }
                 _ => false,
             });
@@ -8869,15 +8870,13 @@ impl ThreadView {
         if matches!(status, ToolCallStatus::Failed) {
             tool_call.content.iter().find_map(|content| {
                 if let ToolCallContent::ContentBlock(block) = content {
-                    if let acp_thread::ContentBlock::Markdown { markdown } = block {
-                        let source = markdown.read(cx).source().to_owned();
-                        if !source.is_empty() {
-                            if source == "User canceled" {
-                                return None;
-                            }
-
-                            return Some(SharedString::from(source));
+                    if let Some(source) = block.text_content(cx).filter(|source| !source.is_empty())
+                    {
+                        if source == "User canceled" {
+                            return None;
                         }
+
+                        return Some(SharedString::from(source));
                     }
                 }
                 None
@@ -9740,9 +9739,7 @@ impl ThreadView {
                 window,
                 |this, _bar, event, window, cx| {
                     if matches!(event, ThreadSearchBarEvent::Dismissed) {
-                        this.thread_search_visible = false;
-                        this.message_editor.focus_handle(cx).focus(window, cx);
-                        cx.notify();
+                        this.close_thread_search(window, cx);
                     }
                 },
             ));
@@ -9755,12 +9752,7 @@ impl ThreadView {
             .is_some_and(|bar| bar.focus_handle(cx).contains_focused(window, cx));
 
         if self.thread_search_visible && search_bar_focused {
-            if let Some(bar) = &self.thread_search_bar {
-                bar.update(cx, |bar, cx| bar.clear_highlights(cx));
-            }
-            self.thread_search_visible = false;
-            self.message_editor.focus_handle(cx).focus(window, cx);
-            cx.notify();
+            self.close_thread_search(window, cx);
         } else {
             self.thread_search_visible = true;
             if let Some(bar) = self.thread_search_bar.clone() {
@@ -9768,6 +9760,27 @@ impl ThreadView {
             }
             cx.notify();
         }
+    }
+
+    /// Hides thread search, clears highlights, and returns focus to the
+    /// message editor. Returns `true` when search was visible.
+    pub(crate) fn close_thread_search(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.thread_search_visible {
+            return false;
+        }
+
+        if let Some(bar) = self.thread_search_bar.clone() {
+            bar.update(cx, |bar, cx| bar.clear_highlights(cx));
+        }
+
+        self.thread_search_visible = false;
+        self.message_editor.focus_handle(cx).focus(window, cx);
+        cx.notify();
+        true
     }
 }
 
@@ -9803,26 +9816,14 @@ impl Render for ThreadView {
             .on_action(cx.listener(Self::toggle_search))
             .on_action(cx.listener(
                 |this, _: &super::thread_search_bar::DismissThreadSearch, window, cx| {
-                    if let Some(bar) = this.thread_search_bar.clone() {
-                        bar.update(cx, |bar, cx| bar.clear_highlights(cx));
-                    }
-                    this.thread_search_visible = false;
-                    this.message_editor.focus_handle(cx).focus(window, cx);
-                    cx.notify();
+                    this.close_thread_search(window, cx);
                 },
             ))
             .on_action(
                 cx.listener(|this, _: &editor::actions::Cancel, window, cx| {
-                    if !this.thread_search_visible {
+                    if !this.close_thread_search(window, cx) {
                         cx.propagate();
-                        return;
                     }
-                    if let Some(bar) = this.thread_search_bar.clone() {
-                        bar.update(cx, |bar, cx| bar.clear_highlights(cx));
-                    }
-                    this.thread_search_visible = false;
-                    this.message_editor.focus_handle(cx).focus(window, cx);
-                    cx.notify();
                 }),
             )
             .on_action(cx.listener(

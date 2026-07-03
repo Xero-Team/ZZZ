@@ -21,7 +21,6 @@ use editor::scroll::Autoscroll;
 use editor::{
     Editor, EditorEvent, EditorMode, MultiBuffer, PathKey, SelectionEffects, SizingBehavior,
 };
-use feature_flags::{AgentSharingFeatureFlag, FeatureFlagAppExt as _};
 use file_icons::FileIcons;
 #[cfg(test)]
 use fs::Fs;
@@ -3301,6 +3300,7 @@ pub(crate) mod tests {
     use agent_servers::FakeAcpAgentServer;
     use editor::MultiBufferOffset;
     use editor::actions::Paste;
+    use feature_flags::FeatureFlagAppExt as _;
     use fs::FakeFs;
     use gpui::{ClipboardItem, EventEmitter, TestAppContext, VisualTestContext};
     use parking_lot::Mutex;

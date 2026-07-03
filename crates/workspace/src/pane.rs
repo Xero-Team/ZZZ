@@ -51,7 +51,8 @@ use ui::{
     Tooltip, prelude::*, right_click_menu,
 };
 use util::{
-    ResultExt, debug_panic, maybe, paths::PathStyle, serde::default_true, truncate_and_remove_front,
+    ResultExt, debug_panic, markdown::MarkdownInlineCode, maybe, paths::PathStyle,
+    serde::default_true, truncate_and_remove_front,
 };
 
 /// A selected entry in e.g. project panel.
@@ -5010,8 +5011,11 @@ fn dirty_message_for(buffer_path: Option<ProjectPath>, path_style: PathStyle, cx
             let path = p.path.display(path_style);
             if path.is_empty() { None } else { Some(path) }
         })
+        .map(|path| {
+            let path = truncate_and_remove_front(&path, 80);
+            MarkdownInlineCode(&path).to_string()
+        })
         .unwrap_or(tr(cx, "workspace.pane.this_buffer", "This buffer").into());
-    let path = truncate_and_remove_front(&path, 80);
     tr(
         cx,
         "workspace.pane.unsaved_edits",
@@ -9210,6 +9214,28 @@ mod tests {
                 assert_pane_ids_on_axis(&workspace, expected_ids, expected_axis, cx);
             }
         }
+    }
+
+    #[gpui::test]
+    async fn test_dirty_message_for_escapes_markdown_in_path(cx: &mut TestAppContext) {
+        init_test(cx);
+        let project_path = ProjectPath {
+            worktree_id: WorktreeId::from_usize(0),
+            path: util::rel_path::rel_path("dir/__init__.py").into(),
+        };
+        cx.update(|cx| {
+            let path_message = dirty_message_for(Some(project_path), PathStyle::Posix, cx);
+            assert_eq!(
+                path_message,
+                "`dir/__init__.py` contains unsaved edits. Do you want to save it?"
+            );
+
+            let generic_message = dirty_message_for(None, PathStyle::Posix, cx);
+            assert_eq!(
+                generic_message,
+                "This buffer contains unsaved edits. Do you want to save it?"
+            );
+        });
     }
 
     mod property_test {

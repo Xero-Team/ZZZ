@@ -19,6 +19,7 @@ use project::agent_server_store::{AgentServerCommand, AgentServerStore};
 use project::{AgentId, Project};
 use remote::remote_client::Interactive;
 use serde::Deserialize;
+use settings::AgentConfigOptionValue;
 use std::path::PathBuf;
 use std::process::{ExitStatus, Stdio};
 use std::rc::Rc;
@@ -38,9 +39,10 @@ use acp_thread::{AcpThread, AuthRequired, LoadError, TerminalProviderEvent};
 use terminal::TerminalBuilder;
 use terminal::terminal_settings::{AlternateScroll, CursorShape};
 
-use crate::GEMINI_ID;
+use crate::{CURSOR_ID, GEMINI_ID};
 
 pub const GEMINI_TERMINAL_AUTH_METHOD_ID: &str = "spawn-gemini-cli";
+const PARAMETERIZED_MODEL_PICKER_META_KEY: &str = "parameterizedModelPicker";
 const MAX_DEBUG_BACKLOG_MESSAGES: usize = 2000;
 const ACP_RESPONSE_CHANNEL_CANCELLED: &str =
     "response channel cancelled — connection may have dropped";
@@ -423,7 +425,7 @@ pub struct AcpConnection {
     agent_capabilities: acp::AgentCapabilities,
     default_mode: Option<acp::SessionModeId>,
     default_model: Option<acp::ModelId>,
-    default_config_options: HashMap<String, String>,
+    default_config_options: HashMap<String, AgentConfigOptionValue>,
     child: Option<Child>,
     session_list: Option<Rc<AcpSessionList>>,
     debug_log: AcpDebugLog,
@@ -589,7 +591,7 @@ pub async fn connect(
     agent_server_store: WeakEntity<AgentServerStore>,
     default_mode: Option<acp::SessionModeId>,
     default_model: Option<acp::ModelId>,
-    default_config_options: HashMap<String, String>,
+    default_config_options: HashMap<String, AgentConfigOptionValue>,
     cx: &mut AsyncApp,
 ) -> Result<Rc<dyn AgentConnection>> {
     let conn = AcpConnection::stdio(
@@ -699,6 +701,28 @@ fn connect_client_future(
         )
 }
 
+fn client_capabilities_for_agent(
+    agent_id: &AgentId,
+    _supports_boolean_config_options: bool,
+) -> acp::ClientCapabilities {
+    let mut meta = acp::Meta::from_iter([
+        ("terminal_output".into(), true.into()),
+        ("terminal-auth".into(), true.into()),
+    ]);
+
+    if agent_id.as_ref() == CURSOR_ID {
+        meta.insert(PARAMETERIZED_MODEL_PICKER_META_KEY.into(), true.into());
+    }
+
+    acp::ClientCapabilities::new()
+        .fs(acp::FileSystemCapabilities::new()
+            .read_text_file(true)
+            .write_text_file(true))
+        .terminal(true)
+        .auth(acp::AuthCapabilities::new().terminal(true))
+        .meta(meta)
+}
+
 impl AcpConnection {
     pub fn subscribe_debug_messages(
         &self,
@@ -716,7 +740,7 @@ impl AcpConnection {
         agent_server_store: WeakEntity<AgentServerStore>,
         default_mode: Option<acp::SessionModeId>,
         default_model: Option<acp::ModelId>,
-        default_config_options: HashMap<String, String>,
+        default_config_options: HashMap<String, AgentConfigOptionValue>,
         cx: &mut AsyncApp,
     ) -> Result<Self> {
         let root_dir = project.read_with(cx, |project, cx| {
@@ -884,28 +908,18 @@ impl AcpConnection {
             }
         });
 
-        let initialize_response = into_foreground_future(
-            connection.send_request(
-                acp::InitializeRequest::new(acp::ProtocolVersion::V1)
-                    .client_capabilities(
-                        acp::ClientCapabilities::new()
-                            .fs(acp::FileSystemCapabilities::new()
-                                .read_text_file(true)
-                                .write_text_file(true))
-                            .terminal(true)
-                            .auth(acp::AuthCapabilities::new().terminal(true))
-                            .meta(acp::Meta::from_iter([
-                                ("terminal_output".into(), true.into()),
-                                ("terminal-auth".into(), true.into()),
-                            ])),
-                    )
-                    .client_info(
-                        acp::Implementation::new("zed", version)
-                            .title(release_channel.map(ToOwned::to_owned)),
-                    ),
-            ),
-        )
-        .boxed_local();
+        let initialize_response = connection.send_request(
+            acp::InitializeRequest::new(acp::ProtocolVersion::V1)
+                .client_capabilities(client_capabilities_for_agent(
+                    &agent_id,
+                    cx.update(|cx| cx.has_flag::<AcpBetaFeatureFlag>()),
+                ))
+                .client_info(
+                    acp::Implementation::new("zed", version)
+                        .title(release_channel.map(ToOwned::to_owned)),
+                ),
+        );
+        let initialize_response = into_foreground_future(initialize_response).boxed_local();
         let (response, status_fut) =
             match futures::future::select(initialize_response, status_fut).await {
                 futures::future::Either::Left((Ok(response), status_fut)) => (response, status_fut),
@@ -1210,6 +1224,7 @@ impl AcpConnection {
         config_options: &Rc<RefCell<Vec<acp::SessionConfigOption>>>,
         cx: &mut AsyncApp,
     ) {
+        let apply_boolean_defaults = cx.update(|cx| cx.has_flag::<AcpBetaFeatureFlag>());
         let id = self.id.clone();
         let defaults_to_apply: Vec<_> = {
             let config_opts_ref = config_options.borrow();
@@ -1218,35 +1233,50 @@ impl AcpConnection {
                 .filter_map(|config_option| {
                     let default_value = self.default_config_options.get(&*config_option.id.0)?;
 
-                    let is_valid = match &config_option.kind {
-                        acp::SessionConfigKind::Select(select) => match &select.options {
-                            acp::SessionConfigSelectOptions::Ungrouped(options) => options
-                                .iter()
-                                .any(|opt| &*opt.value.0 == default_value.as_str()),
-                            acp::SessionConfigSelectOptions::Grouped(groups) => {
-                                groups.iter().any(|g| {
-                                    g.options
-                                        .iter()
-                                        .any(|opt| &*opt.value.0 == default_value.as_str())
-                                })
+                    let value_to_apply = match &config_option.kind {
+                        acp::SessionConfigKind::Select(select) => {
+                            let value_id = default_value.as_value_id()?;
+                            match &select.options {
+                                acp::SessionConfigSelectOptions::Ungrouped(options) => options
+                                    .iter()
+                                    .any(|opt| &*opt.value.0 == value_id)
+                                    .then(|| {
+                                        acp::SessionConfigOptionValue::value_id(value_id.to_owned())
+                                    }),
+                                acp::SessionConfigSelectOptions::Grouped(groups) => groups
+                                    .iter()
+                                    .any(|group| {
+                                        group.options.iter().any(|opt| &*opt.value.0 == value_id)
+                                    })
+                                    .then(|| {
+                                        acp::SessionConfigOptionValue::value_id(value_id.to_owned())
+                                    }),
+                                _ => None,
                             }
-                            _ => false,
-                        },
-                        _ => false,
+                        }
+                        acp::SessionConfigKind::Boolean(_) if !apply_boolean_defaults => {
+                            return None;
+                        }
+                        acp::SessionConfigKind::Boolean(_) => default_value
+                            .as_bool()
+                            .map(acp::SessionConfigOptionValue::boolean),
+                        _ => None,
                     };
 
-                    if is_valid {
+                    if let Some(value_to_apply) = value_to_apply {
                         let initial_value = match &config_option.kind {
                             acp::SessionConfigKind::Select(select) => {
-                                Some(select.current_value.clone())
+                                acp::SessionConfigOptionValue::value_id(
+                                    select.current_value.clone(),
+                                )
                             }
-                            _ => None,
+                            acp::SessionConfigKind::Boolean(boolean) => {
+                                acp::SessionConfigOptionValue::boolean(boolean.current_value)
+                            }
+                            _ => return None,
                         };
-                        Some((
-                            config_option.id.clone(),
-                            default_value.clone(),
-                            initial_value,
-                        ))
+
+                        Some((config_option.id.clone(), value_to_apply, initial_value))
                     } else {
                         log::warn!(
                             "`{}` is not a valid value for config option `{}` in {}",
@@ -1262,7 +1292,7 @@ impl AcpConnection {
 
         for (config_id, default_value, initial_value) in defaults_to_apply {
             cx.spawn({
-                let default_value_id = acp::SessionConfigValueId::new(default_value.clone());
+                let default_value_for_request = default_value.clone();
                 let session_id = session_id.clone();
                 let config_id_clone = config_id.clone();
                 let config_opts = config_options.clone();
@@ -1272,19 +1302,29 @@ impl AcpConnection {
                         acp::SetSessionConfigOptionRequest::new(
                             session_id,
                             config_id_clone.clone(),
-                            default_value_id,
+                            default_value_for_request,
                         ),
                     ))
                     .await
                     .log_err();
 
                     if result.is_none() {
-                        if let Some(initial) = initial_value {
-                            let mut opts = config_opts.borrow_mut();
-                            if let Some(opt) = opts.iter_mut().find(|o| o.id == config_id_clone) {
-                                if let acp::SessionConfigKind::Select(select) = &mut opt.kind {
-                                    select.current_value = initial;
+                        let mut opts = config_opts.borrow_mut();
+                        if let Some(opt) = opts.iter_mut().find(|o| o.id == config_id_clone) {
+                            match (&mut opt.kind, &initial_value) {
+                                (
+                                    acp::SessionConfigKind::Select(select),
+                                    acp::SessionConfigOptionValue::ValueId { value },
+                                ) => {
+                                    select.current_value = value.clone();
                                 }
+                                (
+                                    acp::SessionConfigKind::Boolean(boolean),
+                                    acp::SessionConfigOptionValue::Boolean { value },
+                                ) => {
+                                    boolean.current_value = *value;
+                                }
+                                _ => {}
                             }
                         }
                     }
@@ -1294,8 +1334,20 @@ impl AcpConnection {
 
             let mut opts = config_options.borrow_mut();
             if let Some(opt) = opts.iter_mut().find(|o| o.id == config_id) {
-                if let acp::SessionConfigKind::Select(select) = &mut opt.kind {
-                    select.current_value = acp::SessionConfigValueId::new(default_value);
+                match (&mut opt.kind, &default_value) {
+                    (
+                        acp::SessionConfigKind::Select(select),
+                        acp::SessionConfigOptionValue::ValueId { value },
+                    ) => {
+                        select.current_value = value.clone();
+                    }
+                    (
+                        acp::SessionConfigKind::Boolean(boolean),
+                        acp::SessionConfigOptionValue::Boolean { value },
+                    ) => {
+                        boolean.current_value = *value;
+                    }
+                    _ => {}
                 }
             }
         }
@@ -2501,6 +2553,31 @@ mod tests {
     use gpui::UpdateGlobal;
 
     use super::*;
+
+    #[test]
+    fn cursor_client_capabilities_include_parameterized_model_picker_meta() {
+        let capabilities = client_capabilities_for_agent(&AgentId::new(CURSOR_ID), false);
+        let meta = capabilities
+            .meta
+            .expect("expected client capabilities meta");
+
+        assert_eq!(
+            meta.get(PARAMETERIZED_MODEL_PICKER_META_KEY),
+            Some(&serde_json::json!(true))
+        );
+        assert_eq!(meta.get("terminal_output"), Some(&serde_json::json!(true)));
+        assert_eq!(meta.get("terminal-auth"), Some(&serde_json::json!(true)));
+    }
+
+    #[test]
+    fn non_cursor_client_capabilities_do_not_include_parameterized_model_picker_meta() {
+        let capabilities = client_capabilities_for_agent(&AgentId::new("codex-acp"), false);
+        let meta = capabilities
+            .meta
+            .expect("expected client capabilities meta");
+
+        assert!(!meta.contains_key(PARAMETERIZED_MODEL_PICKER_META_KEY));
+    }
 
     #[test]
     fn terminal_auth_task_builds_spawn_from_prebuilt_command() {
@@ -3851,7 +3928,7 @@ impl acp_thread::AgentSessionConfigOptions for AcpSessionConfigOptions {
     fn set_config_option(
         &self,
         config_id: acp::SessionConfigId,
-        value: acp::SessionConfigValueId,
+        value: acp::SessionConfigOptionValue,
         cx: &mut App,
     ) -> Task<Result<Vec<acp::SessionConfigOption>>> {
         let connection = self.connection.clone();

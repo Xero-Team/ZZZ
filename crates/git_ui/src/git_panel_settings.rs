@@ -2,7 +2,9 @@ use editor::{EditorSettings, ui_scrollbar_settings_from_raw};
 use gpui::Pixels;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use settings::{RegisterSetting, Settings, StatusStyle};
+use settings::{
+    GitPanelClickBehavior, GitPanelGroupBy, GitPanelSortBy, RegisterSetting, Settings, StatusStyle,
+};
 use ui::{
     px,
     scrollbars::{ScrollbarVisibility, ShowScrollbar},
@@ -25,12 +27,15 @@ pub struct GitPanelSettings {
     pub scrollbar: ScrollbarSettings,
     pub fallback_branch_name: String,
     pub sort_by_path: bool,
+    pub sort_by: GitPanelSortBy,
+    pub group_by: GitPanelGroupBy,
     pub collapse_untracked_diff: bool,
     pub tree_view: bool,
     pub diff_stats: bool,
     pub show_count_badge: bool,
     pub starts_open: bool,
     pub commit_title_max_length: usize,
+    pub entry_primary_click_action: GitPanelClickBehavior,
 }
 
 #[derive(Default)]
@@ -56,6 +61,8 @@ impl ScrollbarVisibility for GitPanelScrollbarAccessor {
 impl Settings for GitPanelSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let git_panel = content.git_panel.clone().unwrap();
+        let sort_by = git_panel.sort_by.unwrap();
+        let group_by = git_panel.group_by.unwrap();
         Self {
             button: git_panel.button.unwrap(),
             dock: git_panel.dock.unwrap().into(),
@@ -71,13 +78,18 @@ impl Settings for GitPanelSettings {
                     .map(ui_scrollbar_settings_from_raw),
             },
             fallback_branch_name: git_panel.fallback_branch_name.unwrap(),
-            sort_by_path: git_panel.sort_by_path.unwrap(),
+            sort_by_path: git_panel
+                .sort_by_path
+                .unwrap_or(sort_by == GitPanelSortBy::Path && group_by != GitPanelGroupBy::Status),
+            sort_by,
+            group_by,
             collapse_untracked_diff: git_panel.collapse_untracked_diff.unwrap(),
             tree_view: git_panel.tree_view.unwrap(),
             diff_stats: git_panel.diff_stats.unwrap(),
             show_count_badge: git_panel.show_count_badge.unwrap(),
             starts_open: git_panel.starts_open.unwrap(),
             commit_title_max_length: git_panel.commit_title_max_length.unwrap(),
+            entry_primary_click_action: git_panel.entry_primary_click_action.unwrap(),
         }
     }
 }

@@ -11,8 +11,8 @@ use editor::{MultiBufferSnapshot, PathKey, multibuffer_context_lines};
 use file_icons::FileIcons;
 use futures::StreamExt;
 use gpui::{
-    Action, AnyElement, App, AppContext, AsyncApp, DismissEvent, Entity, EntityId, FocusHandle,
-    HighlightStyle, StyledText, Task, TextStyle, prelude::*,
+    Action, AnyElement, App, AppContext, AsyncApp, ClickEvent, DismissEvent, Entity, EntityId,
+    FocusHandle, HighlightStyle, Modifiers, StyledText, Task, TextStyle, prelude::*,
 };
 use i18n::tr;
 use language::{Buffer, LanguageAwareStyling};
@@ -23,15 +23,15 @@ use smol::future::yield_now;
 use text::Anchor;
 use theme_settings::ThemeSettings;
 use ui::{
-    Divider, FluentBuilder, IconButtonShape, ListItem, ListItemSpacing, Toggleable, Tooltip,
-    prelude::*,
+    Disclosure, Divider, FluentBuilder, IconButtonShape, ListItem, ListItemSpacing, Toggleable,
+    Tooltip, prelude::*, text_for_keystroke,
 };
 use util::ResultExt;
 use workspace::SplitDirection;
 use workspace::Workspace;
 use workspace::item::ItemSettings;
 
-use super::SearchMatch;
+use super::{Fold, SearchMatch, Unfold};
 use crate::project_search::{ActiveSettings, ProjectSearch};
 use crate::{ProjectSearchView, SearchOption, SearchOptions};
 
@@ -51,6 +51,7 @@ pub struct Delegate {
     pub(crate) in_progress_search: InProgressSearch,
     pub(crate) unique_files: HashSet<ProjectPath>,
     pub(crate) max_line_number: u32,
+    pub(crate) collapsed_paths: HashSet<ProjectPath>,
 }
 
 pub(crate) enum Entry {
@@ -260,7 +261,7 @@ impl Delegate {
             let imported_from_project_search =
                 has_existing_matches || !matches!(in_progress_search, InProgressSearch::None);
 
-            cx.update(move |cx| Self {
+            let this = cx.update(move |cx| Self {
                 project_search_view: project_search,
                 focus_handle: cx.focus_handle(),
                 matches: Vec::new(),
@@ -276,7 +277,10 @@ impl Delegate {
                 in_progress_search,
                 unique_files: HashSet::default(),
                 max_line_number: 0,
-            })
+                collapsed_paths: HashSet::default(),
+            });
+
+            this
         })
     }
 
@@ -319,7 +323,9 @@ impl Delegate {
                 entries.push(Entry::Header(search_match.path.clone()));
                 last_path = Some(&search_match.path);
             }
-            entries.push(Entry::Match(match_index));
+            if !self.collapsed_paths.contains(&search_match.path) {
+                entries.push(Entry::Match(match_index));
+            }
         }
         self.entries = entries;
         self.max_line_number = self
@@ -345,6 +351,65 @@ impl Delegate {
             .position(|entry| matches!(entry, Entry::Match(_)))
     }
 
+    pub(crate) fn toggle_group_collapsed(&mut self, path: &ProjectPath) {
+        if !self.collapsed_paths.remove(path) {
+            self.collapsed_paths.insert(path.clone());
+        }
+        self.rebuild_entries();
+    }
+
+    pub(crate) fn set_selected_group_collapsed(
+        &mut self,
+        collapsed: bool,
+        cx: &mut Context<Picker<Self>>,
+    ) {
+        let path = match self.entries.get(self.selected_index) {
+            Some(Entry::Match(match_index)) => self
+                .matches
+                .get(*match_index)
+                .map(|search_match| search_match.path.clone()),
+            Some(Entry::Header(path)) => Some(path.clone()),
+            Some(Entry::Separator) | None => None,
+        };
+        let Some(path) = path else {
+            return;
+        };
+        if collapsed == self.collapsed_paths.contains(&path) {
+            return;
+        }
+
+        self.toggle_group_collapsed(&path);
+
+        if let Some(index) = self.entries.iter().position(|entry| match entry {
+            Entry::Header(header_path) => collapsed && *header_path == path,
+            Entry::Match(match_index) => {
+                !collapsed
+                    && self
+                        .matches
+                        .get(*match_index)
+                        .is_some_and(|search_match| search_match.path == path)
+            }
+            Entry::Separator => false,
+        }) {
+            self.selected_index = index;
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_all_collapsed(&mut self, cx: &mut Context<Picker<Self>>) {
+        if self.collapsed_paths.is_empty() {
+            self.collapsed_paths = self
+                .matches
+                .iter()
+                .map(|search_match| search_match.path.clone())
+                .collect();
+        } else {
+            self.collapsed_paths.clear();
+        }
+        self.rebuild_entries();
+        cx.notify();
+    }
+
     fn selected_search_match(&self) -> Option<&SearchMatch> {
         match self.entries.get(self.selected_index)? {
             Entry::Match(match_index) => self.matches.get(*match_index),
@@ -363,6 +428,7 @@ impl Delegate {
         };
         let path = selected_match.path.clone();
         let line_number = selected_match.line_number;
+        let column = selected_match.relative_range.start as u32;
         let Some(workspace) = self.project_search_view.read(cx).workspace.upgrade() else {
             return;
         };
@@ -376,7 +442,11 @@ impl Delegate {
                 active_editor
                     .downgrade()
                     .update_in(cx, |editor, window, cx| {
-                        editor.go_to_singleton_buffer_point(text::Point::new(row, 0), window, cx);
+                        editor.go_to_singleton_buffer_point(
+                            text::Point::new(row, column),
+                            window,
+                            cx,
+                        );
                     })
                     .log_err();
             }
@@ -669,7 +739,11 @@ impl PickerDelegate for Delegate {
     }
 
     fn can_select(&self, ix: usize, _window: &mut Window, _cx: &mut Context<Picker<Self>>) -> bool {
-        matches!(self.entries.get(ix), Some(Entry::Match(_)))
+        match self.entries.get(ix) {
+            Some(Entry::Match(_)) => true,
+            Some(Entry::Header(path)) => self.collapsed_paths.contains(path),
+            Some(Entry::Separator) | None => false,
+        }
     }
 
     fn selected_index(&self) -> usize {
@@ -711,6 +785,7 @@ impl PickerDelegate for Delegate {
             self.matches.clear();
             self.entries.clear();
             self.unique_files.clear();
+            self.collapsed_paths.clear();
             self.selected_index = 0;
             self.active_query = None;
             cx.notify();
@@ -785,6 +860,7 @@ impl PickerDelegate for Delegate {
 
         let path = selected_match.path.clone();
         let line_number = selected_match.line_number;
+        let column = selected_match.relative_range.start as u32;
         let Some(workspace) = self.project_search_view.read(cx).workspace.upgrade() else {
             return;
         };
@@ -800,7 +876,11 @@ impl PickerDelegate for Delegate {
                 active_editor
                     .downgrade()
                     .update_in(cx, |editor, window, cx| {
-                        editor.go_to_singleton_buffer_point(text::Point::new(row, 0), window, cx);
+                        editor.go_to_singleton_buffer_point(
+                            text::Point::new(row, column),
+                            window,
+                            cx,
+                        );
                     })
                     .log_err();
             }
@@ -862,27 +942,83 @@ impl PickerDelegate for Delegate {
                             .color(Color::Muted)
                             .size(IconSize::Small)
                     });
+                let is_collapsed = self.collapsed_paths.contains(path);
+                let toggle_path = path.clone();
+                let tooltip_focus_handle = self.focus_handle.clone();
 
                 Some(
-                    h_flex()
-                        .w_full()
-                        .min_w_0()
-                        .px(DynamicSpacing::Base06.rems(cx))
-                        .py_1()
-                        .gap_1p5()
-                        .children(file_icon)
+                    div()
+                        .px_1()
                         .child(
                             h_flex()
-                                .gap_1()
-                                .child(Label::new(file_name).size(LabelSize::Small))
-                                .when(!directory.is_empty(), |this| {
-                                    this.child(
-                                        Label::new(directory)
-                                            .size(LabelSize::Small)
-                                            .color(Color::Muted)
-                                            .truncate_start(),
-                                    )
-                                }),
+                                .w_full()
+                                .min_w_0()
+                                .p_1()
+                                .gap_1p5()
+                                .rounded_sm()
+                                .when(selected, |this| {
+                                    this.bg(cx.theme().colors().ghost_element_selected)
+                                })
+                                .child(
+                                    h_flex()
+                                        .gap_1()
+                                        .child(
+                                            Disclosure::new(
+                                                ("text-finder-fold", ix),
+                                                !is_collapsed,
+                                            )
+                                            .tooltip(move |_window, cx| {
+                                                let (label, action): (_, &dyn gpui::Action) =
+                                                    if is_collapsed {
+                                                        ("Unfold", &Unfold)
+                                                    } else {
+                                                        ("Fold", &Fold)
+                                                    };
+                                                Tooltip::with_meta_in(
+                                                    label,
+                                                    Some(action),
+                                                    format!(
+                                                        "{} to toggle all",
+                                                        text_for_keystroke(
+                                                            &Modifiers::alt(),
+                                                            "click",
+                                                            cx
+                                                        )
+                                                    ),
+                                                    &tooltip_focus_handle,
+                                                    cx,
+                                                )
+                                            })
+                                            .on_click(
+                                                cx.listener(
+                                                    move |this, event: &ClickEvent, _window, cx| {
+                                                        if event.modifiers().alt {
+                                                            this.delegate.toggle_all_collapsed(cx);
+                                                        } else {
+                                                            this.delegate.toggle_group_collapsed(
+                                                                &toggle_path,
+                                                            );
+                                                            cx.notify();
+                                                        }
+                                                    },
+                                                ),
+                                            ),
+                                        )
+                                        .children(file_icon),
+                                )
+                                .child(
+                                    h_flex()
+                                        .gap_1()
+                                        .child(Label::new(file_name).size(LabelSize::Small))
+                                        .when(!directory.is_empty(), |this| {
+                                            this.child(
+                                                Label::new(directory)
+                                                    .size(LabelSize::Small)
+                                                    .color(Color::Muted)
+                                                    .truncate_start(),
+                                            )
+                                        }),
+                                ),
                         )
                         .into_any_element(),
                 )
@@ -979,6 +1115,7 @@ async fn stream_results_to_picker(
                     delegate.matches.clear();
                     delegate.entries.clear();
                     delegate.unique_files.clear();
+                    delegate.collapsed_paths.clear();
                     delegate.selected_index = 0;
                     clear_existing = false;
                 }

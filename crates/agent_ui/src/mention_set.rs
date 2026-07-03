@@ -687,6 +687,90 @@ impl MentionSet {
     }
 }
 
+/// Computes disambiguated labels for a set of mentions, so that mentions sharing
+/// a base name get extra context (parent path components, skill source) to tell
+/// them apart. Same approach as buffer tab titles and the sidebar.
+fn compute_disambiguated_labels<'a>(
+    mentions: impl Iterator<Item = (CreaseId, &'a MentionUri)>,
+) -> HashMap<CreaseId, SharedString> {
+    let (ids, uris): (Vec<CreaseId>, Vec<&MentionUri>) = mentions.unzip();
+    ids.into_iter()
+        .zip(disambiguated_labels_for_uris(&uris))
+        .collect()
+}
+
+/// Labels for each URI, in input order. Duplicate URIs are collapsed first, so a
+/// mention added twice keeps its base name instead of being escalated to its
+/// full path by the collision-resolution loop.
+fn disambiguated_labels_for_uris(uris: &[&MentionUri]) -> Vec<SharedString> {
+    let mut seen: HashSet<&MentionUri> = HashSet::default();
+    let unique_uris: Vec<&MentionUri> = uris
+        .iter()
+        .copied()
+        .filter(|&uri| seen.insert(uri))
+        .collect();
+
+    let details =
+        util::disambiguate::compute_disambiguation_details(&unique_uris, |uri, detail| {
+            mention_disambiguated_name(uri, detail)
+        });
+
+    let uri_to_detail: HashMap<&MentionUri, usize> = unique_uris.into_iter().zip(details).collect();
+
+    uris.iter()
+        .map(|uri| {
+            let detail = uri_to_detail.get(uri).copied().unwrap_or(0);
+            mention_disambiguated_name(uri, detail).into()
+        })
+        .collect()
+}
+
+fn mention_disambiguated_name(uri: &MentionUri, detail: usize) -> String {
+    match uri {
+        MentionUri::File { abs_path } | MentionUri::Directory { abs_path } => {
+            path_suffix(abs_path, detail)
+        }
+        MentionUri::Symbol { abs_path, name, .. } => {
+            if detail == 0 {
+                name.clone()
+            } else {
+                format!("{name} ({})", path_suffix(abs_path, detail))
+            }
+        }
+        MentionUri::Selection {
+            abs_path,
+            line_range,
+            ..
+        } => {
+            if detail == 0 {
+                selection_name(abs_path.as_deref(), line_range)
+            } else if let Some(path) = abs_path.as_deref() {
+                format!(
+                    "{} ({})",
+                    selection_name(None, line_range),
+                    path_suffix(path, detail)
+                )
+            } else {
+                selection_name(None, line_range)
+            }
+        }
+        _ => uri.name(),
+    }
+}
+
+fn path_suffix(path: &Path, detail: usize) -> String {
+    let mut components: Vec<_> = path
+        .components()
+        .rev()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(segment) => Some(segment.to_string_lossy()),
+            _ => None,
+        })
+        .take(detail + 1)
+        .collect();
+    components.reverse();
+    components.join("/")
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -794,6 +878,27 @@ mod tests {
         // Non-image extensions and paths with no extension.
         assert!(!is_raster_image_path(Path::new("/tmp/notes.txt")));
         assert!(!is_raster_image_path(Path::new("/tmp/README")));
+    }
+
+    #[test]
+    fn test_disambiguated_labels_dedupe_identical_uris() {
+        // Mentioning the same file twice must not escalate the duplicates to
+        // their full path. Distinct files sharing a base name still disambiguate.
+        let foo_a = MentionUri::File {
+            abs_path: path!("/project/a/foo.rs").into(),
+        };
+
+        let foo_b = MentionUri::File {
+            abs_path: path!("/project/b/foo.rs").into(),
+        };
+
+        let uris = vec![&foo_a, &foo_a, &foo_b];
+        let labels = disambiguated_labels_for_uris(&uris);
+
+        assert_eq!(labels[0].as_ref(), "a/foo.rs");
+        assert_eq!(labels[2].as_ref(), "b/foo.rs");
+        // The duplicate keeps the same label rather than escalating to full path.
+        assert_eq!(labels[1].as_ref(), "a/foo.rs");
     }
 }
 

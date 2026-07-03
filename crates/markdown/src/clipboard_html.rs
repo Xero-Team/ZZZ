@@ -148,6 +148,7 @@ enum ClipboardLeafEvent {
     Text,
     SubstitutedText(String),
     Code,
+    SubstitutedCode(String),
     SoftBreak,
     HardBreak,
     TaskListMarker(bool),
@@ -451,6 +452,14 @@ impl<'a> ClipboardHtmlSerializer<'a> {
                 push_escaped_html(html, &self.parsed.source[intersection]);
                 html.push_str("</code>");
             }
+            ClipboardLeafEvent::SubstitutedCode(text) => {
+                if !contains(&self.selection, &leaf.range) {
+                    return Err(ClipboardHtmlError::PartialSubstitutedText);
+                }
+                html.push_str("<code>");
+                push_escaped_html(html, text);
+                html.push_str("</code>");
+            }
             ClipboardLeafEvent::SoftBreak | ClipboardLeafEvent::HardBreak => {
                 html.push_str("<br>");
             }
@@ -499,6 +508,12 @@ impl<'a> ClipboardHtmlSerializer<'a> {
                     plain_text.push_str(&self.parsed.source[intersection]);
                 }
                 ClipboardLeafEvent::SubstitutedText(text) => {
+                    if !contains(&self.selection, &leaf.range) {
+                        return Err(ClipboardHtmlError::PartialSubstitutedText);
+                    }
+                    plain_text.push_str(text);
+                }
+                ClipboardLeafEvent::SubstitutedCode(text) => {
                     if !contains(&self.selection, &leaf.range) {
                         return Err(ClipboardHtmlError::PartialSubstitutedText);
                     }
@@ -948,6 +963,12 @@ impl<'a> PlainTextSerializer<'a> {
                 }
                 self.write_inline(text);
             }
+            ClipboardLeafEvent::SubstitutedCode(text) => {
+                if !contains(&self.selection, &leaf.range) {
+                    return Err(ClipboardHtmlError::PartialSubstitutedText);
+                }
+                self.write_inline(text);
+            }
             ClipboardLeafEvent::SoftBreak => self.write_inline(" "),
             ClipboardLeafEvent::HardBreak => self.ensure_newline(),
             ClipboardLeafEvent::TaskListMarker(checked) => {
@@ -1171,6 +1192,14 @@ fn build_tree(
             MarkdownEvent::Code => push_node(
                 ClipboardNode::Leaf(ClipboardLeaf {
                     event: ClipboardLeafEvent::Code,
+                    range: range.clone(),
+                }),
+                &mut stack,
+                &mut roots,
+            ),
+            MarkdownEvent::SubstitutedCode(text) => push_node(
+                ClipboardNode::Leaf(ClipboardLeaf {
+                    event: ClipboardLeafEvent::SubstitutedCode(text.clone()),
                     range: range.clone(),
                 }),
                 &mut stack,

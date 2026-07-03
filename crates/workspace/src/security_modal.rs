@@ -23,6 +23,8 @@ use ui::{
 };
 use ui_input::InputField;
 
+use util::paths::PathStyle;
+
 use crate::{DismissDecision, ModalView, ToggleWorktreeSecurity};
 
 pub struct SecurityModal {
@@ -485,7 +487,12 @@ impl SecurityModal {
         };
 
         let typed = self.trust_path_input.read(cx).text(cx);
-        validate_trust_scope(&typed, &project, self.home_dir.as_deref())
+        let path_style = self
+            .worktree_store
+            .upgrade()
+            .map(|store| store.read(cx).path_style())
+            .unwrap_or_else(PathStyle::local);
+        validate_trust_scope(&typed, &project, self.home_dir.as_deref(), path_style)
             .map(Some)
             .map_err(|error| error.message(cx))
     }
@@ -595,6 +602,7 @@ fn validate_trust_scope(
     typed: &str,
     project: &Path,
     home_dir: Option<&Path>,
+    path_style: PathStyle,
 ) -> Result<PathBuf, TrustScopeValidationError> {
     let trimmed = typed.trim();
     if trimmed.is_empty() {
@@ -602,13 +610,13 @@ fn validate_trust_scope(
     }
 
     let expanded = match (trimmed.strip_prefix('~'), home_dir) {
-        (Some(rest), Some(home_dir)) => {
-            home_dir.join(rest.strip_prefix(std::path::MAIN_SEPARATOR).unwrap_or(rest))
-        }
+        (Some(rest), Some(home_dir)) => home_dir.join(
+            rest.strip_prefix(path_style.primary_separator())
+                .unwrap_or(rest),
+        ),
         _ => PathBuf::from(trimmed),
     };
-
-    if !expanded.is_absolute() {
+    if !util::paths::is_absolute(&expanded.to_string_lossy(), path_style) {
         return Err(TrustScopeValidationError::NotAbsolute);
     }
 
@@ -621,8 +629,8 @@ fn validate_trust_scope(
 
 #[cfg(test)]
 mod tests {
-    use super::{TrustScopeValidationError, validate_trust_scope};
-    use std::path::PathBuf;
+    use super::{PathStyle, TrustScopeValidationError, validate_trust_scope};
+    use std::path::{Path, PathBuf};
 
     fn sample_home_dir() -> PathBuf {
         if cfg!(windows) {
@@ -641,10 +649,12 @@ mod tests {
         let home_dir = sample_home_dir();
         let project_dir = sample_project_dir();
         let scope = home_dir.join("projects");
+        let style = PathStyle::local();
         let result = validate_trust_scope(
             scope.to_string_lossy().as_ref(),
             &project_dir,
             Some(&home_dir),
+            style,
         );
 
         assert_eq!(result, Ok(scope));
@@ -654,15 +664,70 @@ mod tests {
     fn validate_trust_scope_expands_home_and_rejects_non_ancestor() {
         let home_dir = sample_home_dir();
         let project_dir = sample_project_dir();
-        let home_relative_scope = format!("~{}projects", std::path::MAIN_SEPARATOR);
-        let ok = validate_trust_scope(&home_relative_scope, &project_dir, Some(&home_dir));
+        let style = PathStyle::local();
+        let home_relative_scope = format!("~{}projects", style.primary_separator());
+        let ok = validate_trust_scope(&home_relative_scope, &project_dir, Some(&home_dir), style);
         assert_eq!(ok, Ok(home_dir.join("projects")));
 
         let err = validate_trust_scope(
             home_dir.join("elsewhere").to_string_lossy().as_ref(),
             &project_dir,
             Some(&home_dir),
+            style,
         );
         assert_eq!(err, Err(TrustScopeValidationError::NotAncestor));
+    }
+
+    #[test]
+    fn validate_trust_scope_accepts_remote_posix_paths() {
+        let project = Path::new("/Users/me/dev/delta/wt/t1");
+        let home = Path::new("/Users/me");
+        let style = PathStyle::Posix;
+        assert_eq!(
+            validate_trust_scope("/Users/me/dev/delta/wt", project, None, style).unwrap(),
+            PathBuf::from("/Users/me/dev/delta/wt"),
+        );
+        assert_eq!(
+            validate_trust_scope("~/dev/delta/wt", project, Some(home), style).unwrap(),
+            PathBuf::from("/Users/me/dev/delta/wt"),
+        );
+        assert_eq!(
+            validate_trust_scope("/Users/me/dev/delta/wt/t1", project, None, style).unwrap(),
+            PathBuf::from("/Users/me/dev/delta/wt/t1"),
+        );
+        assert!(validate_trust_scope("/Users/me/dev", project, None, style).is_ok());
+    }
+
+    #[test]
+    fn validate_trust_scope_rejects_remote_non_ancestor_or_relative_paths() {
+        let project = Path::new("/Users/me/dev/delta/wt/t1");
+        let style = PathStyle::Posix;
+        assert_eq!(
+            validate_trust_scope("/Users/other", project, None, style),
+            Err(TrustScopeValidationError::NotAncestor)
+        );
+        assert_eq!(
+            validate_trust_scope("relative/path", project, None, style),
+            Err(TrustScopeValidationError::NotAbsolute)
+        );
+        assert_eq!(
+            validate_trust_scope("   ", project, None, style),
+            Err(TrustScopeValidationError::Empty)
+        );
+        assert_eq!(
+            validate_trust_scope("/Users/me/dev/delta/wt/t1/sub", project, None, style),
+            Err(TrustScopeValidationError::NotAncestor)
+        );
+    }
+
+    #[test]
+    fn validate_trust_scope_expands_posix_home_root() {
+        let home = Path::new("/Users/me");
+        let project = Path::new("/Users/me/dev/wt/t1");
+        let style = PathStyle::Posix;
+        assert_eq!(
+            validate_trust_scope("~", project, Some(home), style).unwrap(),
+            PathBuf::from("/Users/me"),
+        );
     }
 }

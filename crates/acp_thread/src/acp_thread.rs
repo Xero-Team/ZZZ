@@ -161,6 +161,8 @@ pub fn subagent_session_info_from_meta(meta: &Option<acp::Meta>) -> Option<Subag
 #[derive(Debug)]
 pub struct UserMessage {
     pub id: Option<UserMessageId>,
+    pub protocol_id: Option<String>,
+    pub is_optimistic: bool,
     pub content: ContentBlock,
     pub chunks: Vec<acp::ContentBlock>,
     pub checkpoint: Option<Checkpoint>,
@@ -213,8 +215,14 @@ impl AssistantMessage {
 
 #[derive(Debug, PartialEq)]
 pub enum AssistantMessageChunk {
-    Message { block: ContentBlock },
-    Thought { block: ContentBlock },
+    Message {
+        id: Option<String>,
+        block: ContentBlock,
+    },
+    Thought {
+        id: Option<String>,
+        block: ContentBlock,
+    },
 }
 
 impl AssistantMessageChunk {
@@ -225,17 +233,25 @@ impl AssistantMessageChunk {
         cx: &mut App,
     ) -> Self {
         Self::Message {
+            id: None,
             block: ContentBlock::new(chunk.into(), language_registry, path_style, cx),
         }
     }
 
     fn to_markdown(&self, cx: &App) -> String {
         match self {
-            Self::Message { block } => block.to_markdown(cx).to_owned(),
-            Self::Thought { block } => {
+            Self::Message { block, .. } => block.to_markdown(cx).to_owned(),
+            Self::Thought { block, .. } => {
                 format!("<thinking>\n{}\n</thinking>", block.to_markdown(cx))
             }
         }
+    }
+}
+
+fn can_merge_message_chunks(existing: Option<&String>, incoming: Option<&String>) -> bool {
+    match (existing, incoming) {
+        (Some(existing), Some(incoming)) => existing == incoming,
+        _ => true,
     }
 }
 
@@ -760,6 +776,10 @@ pub enum ContentBlock {
     Markdown {
         markdown: Entity<Markdown>,
     },
+    EmbeddedResource {
+        resource: acp::EmbeddedResource,
+        markdown: Option<Entity<Markdown>>,
+    },
     ResourceLink {
         resource_link: acp::ResourceLink,
     },
@@ -794,6 +814,26 @@ impl ContentBlock {
         this
     }
 
+    pub fn new_tool_call_content(
+        block: acp::ContentBlock,
+        language_registry: &Arc<LanguageRegistry>,
+        path_style: PathStyle,
+        cx: &mut App,
+    ) -> Self {
+        match block {
+            acp::ContentBlock::Resource(resource) => {
+                if let Some((image, dimensions)) = Self::decode_embedded_resource_image(&resource) {
+                    Self::Image { image, dimensions }
+                } else {
+                    let markdown =
+                        Self::embedded_resource_markdown(&resource, language_registry, cx);
+                    Self::EmbeddedResource { resource, markdown }
+                }
+            }
+            block => Self::new(block, language_registry, path_style, cx),
+        }
+    }
+
     pub fn append(
         &mut self,
         block: acp::ContentBlock,
@@ -823,6 +863,13 @@ impl ContentBlock {
                 let new_content = Self::block_string_contents(&block, path_style);
                 markdown.update(cx, |markdown, cx| markdown.append(&new_content, cx));
             }
+            (ContentBlock::EmbeddedResource { resource, .. }, _) => {
+                let existing_content =
+                    Self::embedded_resource_string_contents(resource, path_style);
+                let new_content = Self::block_string_contents(&block, path_style);
+                let combined = format!("{}\n{}", existing_content, new_content);
+                *self = Self::create_markdown_block(combined, language_registry, cx);
+            }
             (ContentBlock::ResourceLink { resource_link }, _) => {
                 let existing_content = Self::resource_link_md(&resource_link.uri, path_style);
                 let new_content = Self::block_string_contents(&block, path_style);
@@ -840,12 +887,29 @@ impl ContentBlock {
     fn decode_image(
         image_content: &acp::ImageContent,
     ) -> Option<(Arc<gpui::Image>, Option<gpui::Size<u32>>)> {
+        Self::decode_image_data(&image_content.data, &image_content.mime_type)
+    }
+
+    fn decode_embedded_resource_image(
+        resource: &acp::EmbeddedResource,
+    ) -> Option<(Arc<gpui::Image>, Option<gpui::Size<u32>>)> {
+        let acp::EmbeddedResourceResource::BlobResourceContents(blob) = &resource.resource else {
+            return None;
+        };
+        let mime_type = blob.mime_type.as_deref()?;
+        Self::decode_image_data(&blob.blob, mime_type)
+    }
+
+    fn decode_image_data(
+        data: &str,
+        mime_type: &str,
+    ) -> Option<(Arc<gpui::Image>, Option<gpui::Size<u32>>)> {
         use base64::Engine as _;
 
         let bytes = base64::engine::general_purpose::STANDARD
-            .decode(image_content.data.as_bytes())
+            .decode(data.as_bytes())
             .ok()?;
-        let format = gpui::ImageFormat::from_mime_type(&image_content.mime_type)?;
+        let format = gpui::ImageFormat::from_mime_type(mime_type)?;
         let dimensions = Self::image_dimensions(&bytes, format);
         Some((Arc::new(gpui::Image::from_bytes(format, bytes)), dimensions))
     }
@@ -875,19 +939,141 @@ impl ContentBlock {
         cx: &mut App,
     ) -> ContentBlock {
         ContentBlock::Markdown {
-            markdown: cx.new(|cx| {
-                Markdown::new_with_options(
-                    content.into(),
-                    Some(language_registry.clone()),
-                    None,
-                    MarkdownOptions {
-                        render_mermaid_diagrams: true,
-                        render_metadata_blocks: true,
-                        ..Default::default()
-                    },
-                    cx,
-                )
-            }),
+            markdown: Self::create_markdown(content, language_registry, cx),
+        }
+    }
+
+    fn create_markdown(
+        content: String,
+        language_registry: &Arc<LanguageRegistry>,
+        cx: &mut App,
+    ) -> Entity<Markdown> {
+        cx.new(|cx| {
+            Markdown::new_with_options(
+                content.into(),
+                Some(language_registry.clone()),
+                None,
+                MarkdownOptions {
+                    render_mermaid_diagrams: true,
+                    render_metadata_blocks: true,
+                    ..Default::default()
+                },
+                cx,
+            )
+        })
+    }
+
+    fn embedded_resource_markdown(
+        resource: &acp::EmbeddedResource,
+        language_registry: &Arc<LanguageRegistry>,
+        cx: &mut App,
+    ) -> Option<Entity<Markdown>> {
+        match &resource.resource {
+            acp::EmbeddedResourceResource::TextResourceContents(text) => Some(
+                Self::create_markdown(Self::text_resource_markdown(text), language_registry, cx),
+            ),
+            acp::EmbeddedResourceResource::BlobResourceContents(_) => None,
+            _ => None,
+        }
+    }
+
+    fn text_resource_markdown(resource: &acp::TextResourceContents) -> String {
+        match text_resource_render_mode(resource.mime_type.as_deref()) {
+            TextResourceRenderMode::Markdown => resource.text.clone(),
+            TextResourceRenderMode::CodeBlock(language) => {
+                Self::fenced_code_block(&resource.text, language)
+            }
+        }
+    }
+
+    pub fn text_content<'a>(&'a self, cx: &'a App) -> Option<&'a str> {
+        match self {
+            ContentBlock::Markdown { markdown } => Some(markdown.read(cx).source()),
+            ContentBlock::EmbeddedResource { resource, .. } => match &resource.resource {
+                acp::EmbeddedResourceResource::TextResourceContents(text) => Some(&text.text),
+                acp::EmbeddedResourceResource::BlobResourceContents(_) => None,
+                _ => None,
+            },
+            ContentBlock::Empty
+            | ContentBlock::ResourceLink { .. }
+            | ContentBlock::Image { .. } => None,
+        }
+    }
+
+    fn fenced_code_block(text: &str, language: Option<&str>) -> String {
+        let fence_len = text
+            .as_bytes()
+            .chunk_by(|left, right| left == right)
+            .filter(|chunk| chunk.first() == Some(&b'`'))
+            .map(|chunk| chunk.len() + 1)
+            .max()
+            .unwrap_or(3)
+            .max(3);
+        let fence = "`".repeat(fence_len);
+
+        let mut markdown = String::new();
+        markdown.push_str(&fence);
+        if let Some(language) = language {
+            markdown.push_str(language);
+        }
+        markdown.push('\n');
+        markdown.push_str(text);
+        if !text.ends_with('\n') {
+            markdown.push('\n');
+        }
+        markdown.push_str(&fence);
+        markdown
+    }
+
+    fn embedded_resource_string_contents(
+        resource: &acp::EmbeddedResource,
+        path_style: PathStyle,
+    ) -> String {
+        match &resource.resource {
+            acp::EmbeddedResourceResource::TextResourceContents(text) => {
+                Self::resource_link_md(&text.uri, path_style)
+            }
+            acp::EmbeddedResourceResource::BlobResourceContents(blob) => {
+                Self::resource_link_md(&blob.uri, path_style)
+            }
+            _ => String::new(),
+        }
+    }
+
+    fn embedded_resource_text(resource: &acp::EmbeddedResource) -> &str {
+        match &resource.resource {
+            acp::EmbeddedResourceResource::TextResourceContents(text) => &text.text,
+            acp::EmbeddedResourceResource::BlobResourceContents(blob) => &blob.uri,
+            _ => "",
+        }
+    }
+
+    fn embedded_resource_label(resource: &acp::EmbeddedResource) -> &str {
+        match &resource.resource {
+            acp::EmbeddedResourceResource::TextResourceContents(text) => &text.uri,
+            acp::EmbeddedResourceResource::BlobResourceContents(blob) => &blob.uri,
+            _ => "",
+        }
+    }
+
+    pub fn embedded_resource(&self) -> Option<(&acp::EmbeddedResource, Option<&Entity<Markdown>>)> {
+        match self {
+            ContentBlock::EmbeddedResource { resource, markdown } => {
+                Some((resource, markdown.as_ref()))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn visible_content(&self, cx: &App) -> bool {
+        match self {
+            ContentBlock::Empty => false,
+            ContentBlock::Markdown { markdown } => !markdown.read(cx).source().trim().is_empty(),
+            ContentBlock::EmbeddedResource { resource, markdown } => match markdown {
+                Some(markdown) => !markdown.read(cx).source().trim().is_empty(),
+                None => !Self::embedded_resource_text(resource).trim().is_empty(),
+            },
+            ContentBlock::ResourceLink { .. } | ContentBlock::Image { .. } => true,
         }
     }
 
@@ -926,6 +1112,13 @@ impl ContentBlock {
         match self {
             ContentBlock::Empty => "",
             ContentBlock::Markdown { markdown } => markdown.read(cx).source(),
+            ContentBlock::EmbeddedResource { resource, markdown } => {
+                if let Some(markdown) = markdown {
+                    markdown.read(cx).source()
+                } else {
+                    Self::embedded_resource_label(resource)
+                }
+            }
             ContentBlock::ResourceLink { resource_link } => &resource_link.uri,
             ContentBlock::Image { .. } => "`Image`",
         }
@@ -935,6 +1128,7 @@ impl ContentBlock {
         match self {
             ContentBlock::Empty => None,
             ContentBlock::Markdown { markdown } => Some(markdown),
+            ContentBlock::EmbeddedResource { markdown, .. } => markdown.as_ref(),
             ContentBlock::ResourceLink { .. } => None,
             ContentBlock::Image { .. } => None,
         }
@@ -955,6 +1149,58 @@ impl ContentBlock {
     }
 }
 
+enum TextResourceRenderMode {
+    Markdown,
+    CodeBlock(Option<&'static str>),
+}
+
+fn text_resource_render_mode(mime_type: Option<&str>) -> TextResourceRenderMode {
+    let Some(mime_type) = mime_type else {
+        return TextResourceRenderMode::CodeBlock(None);
+    };
+    let mime_type = mime_type
+        .split(';')
+        .next()
+        .unwrap_or(mime_type)
+        .trim()
+        .to_ascii_lowercase();
+
+    if matches!(mime_type.as_str(), "text/markdown" | "text/x-markdown") {
+        return TextResourceRenderMode::Markdown;
+    }
+
+    let language = match mime_type.as_str() {
+        "application/json" | "text/json" | "text/x-json" => Some("json"),
+        "application/xml" | "text/xml" => Some("xml"),
+        "text/html" => Some("html"),
+        "text/css" => Some("css"),
+        "text/csv" => Some("csv"),
+        "text/tab-separated-values" => Some("tsv"),
+        "text/javascript" | "application/javascript" | "application/x-javascript" => {
+            Some("javascript")
+        }
+        "text/typescript" | "application/typescript" => Some("typescript"),
+        "text/x-shellscript" | "application/x-shellscript" | "application/x-sh" => Some("sh"),
+        "text/x-python" => Some("python"),
+        "text/x-rust" => Some("rust"),
+        "text/x-go" => Some("go"),
+        "text/x-ruby" => Some("ruby"),
+        "text/x-c" => Some("c"),
+        "text/x-c++" => Some("cpp"),
+        "application/graphql" => Some("graphql"),
+        "application/toml" => Some("toml"),
+        "application/yaml" | "application/x-yaml" => Some("yaml"),
+        "text/plain" => None,
+        other if other.ends_with("+json") => Some("json"),
+        other if other.ends_with("+xml") => Some("xml"),
+        other if other.ends_with("+yaml") || other.ends_with("+yml") => Some("yaml"),
+        other if other.starts_with("text/") => None,
+        _ => return TextResourceRenderMode::CodeBlock(None),
+    };
+
+    TextResourceRenderMode::CodeBlock(language)
+}
+
 #[derive(Debug)]
 pub enum ToolCallContent {
     ContentBlock(ContentBlock),
@@ -971,14 +1217,14 @@ impl ToolCallContent {
         cx: &mut App,
     ) -> Result<Option<Self>> {
         match content {
-            acp::ToolCallContent::Content(acp::Content { content, .. }) => {
-                Ok(Some(Self::ContentBlock(ContentBlock::new(
+            acp::ToolCallContent::Content(acp::Content { content, .. }) => Ok(Some(
+                Self::ContentBlock(ContentBlock::new_tool_call_content(
                     content,
                     &language_registry,
                     path_style,
                     cx,
-                ))))
-            }
+                )),
+            )),
             acp::ToolCallContent::Diff(diff) => Ok(Some(Self::Diff(cx.new(|cx| {
                 Diff::finalized(
                     diff.path.to_string_lossy().into_owned(),
@@ -1626,24 +1872,54 @@ impl AcpThread {
         cx: &mut Context<Self>,
     ) -> Result<(), acp::Error> {
         match update {
-            acp::SessionUpdate::UserMessageChunk(acp::ContentChunk { content, .. }) => {
+            acp::SessionUpdate::UserMessageChunk(acp::ContentChunk {
+                content,
+                message_id,
+                ..
+            }) => {
                 // We optimistically add the full user prompt before calling `prompt`.
-                // Some ACP servers echo user chunks back over updates. Skip the chunk if
-                // it's already present in the current user message to avoid duplicating content.
+                // Some ACP servers echo user chunks back over updates. Skip echoed
+                // chunks only when they match the local optimistic message.
                 let already_in_user_message = self
                     .entries
-                    .last()
-                    .and_then(|entry| entry.user_message())
-                    .is_some_and(|message| message.chunks.contains(&content));
+                    .last_mut()
+                    .and_then(|entry| match entry {
+                        AgentThreadEntry::UserMessage(message) => Some(message),
+                        _ => None,
+                    })
+                    .is_some_and(|message| {
+                        let already_in_user_message = message.is_optimistic
+                            && message.chunks.contains(&content)
+                            && can_merge_message_chunks(
+                                message.protocol_id.as_ref(),
+                                message_id.as_ref(),
+                            );
+                        if already_in_user_message && message.protocol_id.is_none() {
+                            message.protocol_id = message_id.clone();
+                        }
+                        already_in_user_message
+                    });
                 if !already_in_user_message {
-                    self.push_user_content_block(None, content, cx);
+                    self.push_user_content_block_from_agent(message_id, content, cx);
                 }
             }
-            acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk { content, .. }) => {
-                self.push_assistant_content_block(content, false, cx);
+            acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk {
+                content,
+                message_id,
+                ..
+            }) => {
+                self.push_assistant_content_block_with_message_id(
+                    message_id, content, false, false, cx,
+                );
             }
-            acp::SessionUpdate::AgentThoughtChunk(acp::ContentChunk { content, .. }) => {
-                self.push_assistant_content_block(content, true, cx);
+            acp::SessionUpdate::AgentThoughtChunk(acp::ContentChunk {
+                content,
+                message_id,
+                ..
+            }) => {
+                self.push_assistant_content_block_with_message_id(
+                    message_id, content, true, false, cx,
+                );
             }
             acp::SessionUpdate::ToolCall(tool_call) => {
                 self.upsert_tool_call(tool_call, cx)?;
@@ -1714,6 +1990,35 @@ impl AcpThread {
         indented: bool,
         cx: &mut Context<Self>,
     ) {
+        let is_optimistic = message_id.is_some();
+        self.push_user_content_block_with_protocol_id(
+            message_id,
+            is_optimistic,
+            None,
+            chunk,
+            indented,
+            cx,
+        )
+    }
+
+    fn push_user_content_block_from_agent(
+        &mut self,
+        protocol_id: Option<String>,
+        chunk: acp::ContentBlock,
+        cx: &mut Context<Self>,
+    ) {
+        self.push_user_content_block_with_protocol_id(None, false, protocol_id, chunk, false, cx)
+    }
+
+    fn push_user_content_block_with_protocol_id(
+        &mut self,
+        message_id: Option<UserMessageId>,
+        is_optimistic: bool,
+        protocol_id: Option<String>,
+        chunk: acp::ContentBlock,
+        indented: bool,
+        cx: &mut Context<Self>,
+    ) {
         let language_registry = self.project.read(cx).languages().clone();
         let path_style = self.project.read(cx).path_style(cx);
         let entries_len = self.entries.len();
@@ -1721,15 +2026,26 @@ impl AcpThread {
         if let Some(last_entry) = self.entries.last_mut()
             && let AgentThreadEntry::UserMessage(UserMessage {
                 id,
+                protocol_id: existing_protocol_id,
+                is_optimistic: existing_is_optimistic,
                 content,
                 chunks,
                 indented: existing_indented,
                 ..
             }) = last_entry
             && *existing_indented == indented
+            && can_merge_message_chunks(existing_protocol_id.as_ref(), protocol_id.as_ref())
+            && !(*existing_is_optimistic
+                && !is_optimistic
+                && existing_protocol_id.is_none()
+                && protocol_id.is_some())
         {
             Self::flush_streaming_text(&mut self.streaming_text_buffer, cx);
             *id = message_id.or(id.take());
+            *existing_is_optimistic |= is_optimistic;
+            if existing_protocol_id.is_none() {
+                *existing_protocol_id = protocol_id;
+            }
             content.append(chunk.clone(), &language_registry, path_style, cx);
             chunks.push(chunk);
             let idx = entries_len - 1;
@@ -1739,6 +2055,8 @@ impl AcpThread {
             self.push_entry(
                 AgentThreadEntry::UserMessage(UserMessage {
                     id: message_id,
+                    protocol_id,
+                    is_optimistic,
                     content,
                     chunks: vec![chunk],
                     checkpoint: None,
@@ -1755,11 +2073,22 @@ impl AcpThread {
         is_thought: bool,
         cx: &mut Context<Self>,
     ) {
-        self.push_assistant_content_block_with_indent(chunk, is_thought, false, cx)
+        self.push_assistant_content_block_with_message_id(None, chunk, is_thought, false, cx)
     }
 
     pub fn push_assistant_content_block_with_indent(
         &mut self,
+        chunk: acp::ContentBlock,
+        is_thought: bool,
+        indented: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.push_assistant_content_block_with_message_id(None, chunk, is_thought, indented, cx)
+    }
+
+    fn push_assistant_content_block_with_message_id(
+        &mut self,
+        message_id: Option<String>,
         chunk: acp::ContentBlock,
         is_thought: bool,
         indented: bool,
@@ -1770,7 +2099,9 @@ impl AcpThread {
         // For text chunks going to an existing Markdown block, buffer for smooth
         // streaming instead of appending all at once which may feel more choppy.
         if let acp::ContentBlock::Text(text_content) = &chunk {
-            if let Some(markdown) = self.streaming_markdown_target(is_thought, indented) {
+            if let Some(markdown) =
+                self.streaming_markdown_target(message_id.as_ref(), is_thought, indented)
+            {
                 let entries_len = self.entries.len();
                 cx.emit(AcpThreadEvent::EntryUpdated(entries_len - 1));
                 self.buffer_streaming_text(&markdown, text_content.text.clone(), cx);
@@ -1792,25 +2123,52 @@ impl AcpThread {
             Self::flush_streaming_text(&mut self.streaming_text_buffer, cx);
             cx.emit(AcpThreadEvent::EntryUpdated(idx));
             match (chunks.last_mut(), is_thought) {
-                (Some(AssistantMessageChunk::Message { block }), false)
-                | (Some(AssistantMessageChunk::Thought { block }), true) => {
+                (
+                    Some(AssistantMessageChunk::Message {
+                        id: existing_id,
+                        block,
+                    }),
+                    false,
+                )
+                | (
+                    Some(AssistantMessageChunk::Thought {
+                        id: existing_id,
+                        block,
+                    }),
+                    true,
+                ) if can_merge_message_chunks(existing_id.as_ref(), message_id.as_ref()) => {
+                    if existing_id.is_none() {
+                        *existing_id = message_id;
+                    }
                     block.append(chunk, &language_registry, path_style, cx)
                 }
                 _ => {
                     let block = ContentBlock::new(chunk, &language_registry, path_style, cx);
                     if is_thought {
-                        chunks.push(AssistantMessageChunk::Thought { block })
+                        chunks.push(AssistantMessageChunk::Thought {
+                            id: message_id,
+                            block,
+                        })
                     } else {
-                        chunks.push(AssistantMessageChunk::Message { block })
+                        chunks.push(AssistantMessageChunk::Message {
+                            id: message_id,
+                            block,
+                        })
                     }
                 }
             }
         } else {
             let block = ContentBlock::new(chunk, &language_registry, path_style, cx);
             let chunk = if is_thought {
-                AssistantMessageChunk::Thought { block }
+                AssistantMessageChunk::Thought {
+                    id: message_id,
+                    block,
+                }
             } else {
-                AssistantMessageChunk::Message { block }
+                AssistantMessageChunk::Message {
+                    id: message_id,
+                    block,
+                }
             };
 
             self.push_entry(
@@ -1825,32 +2183,40 @@ impl AcpThread {
     }
 
     fn streaming_markdown_target(
-        &self,
+        &mut self,
+        message_id: Option<&String>,
         is_thought: bool,
         indented: bool,
     ) -> Option<Entity<Markdown>> {
-        let last_entry = self.entries.last()?;
+        let last_entry = self.entries.last_mut()?;
         if let AgentThreadEntry::AssistantMessage(AssistantMessage {
             chunks,
             indented: existing_indented,
             ..
         }) = last_entry
             && *existing_indented == indented
-            && let [.., chunk] = chunks.as_slice()
+            && let [.., chunk] = chunks.as_mut_slice()
         {
             match (chunk, is_thought) {
                 (
                     AssistantMessageChunk::Message {
+                        id: existing_id,
                         block: ContentBlock::Markdown { markdown },
                     },
                     false,
                 )
                 | (
                     AssistantMessageChunk::Thought {
+                        id: existing_id,
                         block: ContentBlock::Markdown { markdown },
                     },
                     true,
-                ) => Some(markdown.clone()),
+                ) if can_merge_message_chunks(existing_id.as_ref(), message_id) => {
+                    if existing_id.is_none() {
+                        *existing_id = message_id.cloned();
+                    }
+                    Some(markdown.clone())
+                }
                 _ => None,
             }
         } else {
@@ -2407,6 +2773,8 @@ impl AcpThread {
                 this.push_entry(
                     AgentThreadEntry::UserMessage(UserMessage {
                         id: Some(message_id.clone()),
+                        protocol_id: None,
+                        is_optimistic: true,
                         content: block,
                         chunks: message,
                         checkpoint: None,
@@ -3701,6 +4069,8 @@ mod tests {
             assert_eq!(thread.entries.len(), 1);
             if let AgentThreadEntry::UserMessage(user_msg) = &thread.entries[0] {
                 assert_eq!(user_msg.id, None);
+                assert_eq!(user_msg.protocol_id, None);
+                assert!(!user_msg.is_optimistic);
                 assert_eq!(user_msg.content.to_markdown(cx), "Hello, ");
             } else {
                 panic!("Expected UserMessage");
@@ -3717,6 +4087,8 @@ mod tests {
             assert_eq!(thread.entries.len(), 1);
             if let AgentThreadEntry::UserMessage(user_msg) = &thread.entries[0] {
                 assert_eq!(user_msg.id, Some(message_1_id));
+                assert_eq!(user_msg.protocol_id, None);
+                assert!(user_msg.is_optimistic);
                 assert_eq!(user_msg.content.to_markdown(cx), "Hello, world!");
             } else {
                 panic!("Expected UserMessage");
@@ -3741,10 +4113,292 @@ mod tests {
             assert_eq!(thread.entries.len(), 3);
             if let AgentThreadEntry::UserMessage(user_msg) = &thread.entries[2] {
                 assert_eq!(user_msg.id, Some(message_2_id));
+                assert_eq!(user_msg.protocol_id, None);
+                assert!(user_msg.is_optimistic);
                 assert_eq!(user_msg.content.to_markdown(cx), "New user message");
             } else {
                 panic!("Expected UserMessage at index 2");
             }
+        });
+    }
+
+    #[gpui::test]
+    async fn test_user_message_chunks_use_protocol_message_id_boundaries(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.executor());
+        let project = Project::test(fs, [], cx).await;
+        let connection = Rc::new(FakeAgentConnection::new());
+        let thread = cx
+            .update(|cx| {
+                connection.new_session(project, PathList::new(&[Path::new(path!("/test"))]), cx)
+            })
+            .await
+            .unwrap();
+
+        thread.update(cx, |thread, cx| {
+            thread
+                .handle_session_update(
+                    acp::SessionUpdate::UserMessageChunk(
+                        acp::ContentChunk::new("First ".into()).message_id("msg_user_1"),
+                    ),
+                    cx,
+                )
+                .unwrap();
+            thread
+                .handle_session_update(
+                    acp::SessionUpdate::UserMessageChunk(
+                        acp::ContentChunk::new("message".into()).message_id("msg_user_1"),
+                    ),
+                    cx,
+                )
+                .unwrap();
+            thread
+                .handle_session_update(
+                    acp::SessionUpdate::UserMessageChunk(
+                        acp::ContentChunk::new("Second message".into()).message_id("msg_user_2"),
+                    ),
+                    cx,
+                )
+                .unwrap();
+        });
+
+        thread.read_with(cx, |thread, cx| {
+            assert_eq!(thread.entries.len(), 2);
+
+            let AgentThreadEntry::UserMessage(first_message) = &thread.entries[0] else {
+                panic!("expected first entry to be a user message");
+            };
+            assert_eq!(first_message.id, None);
+            assert_eq!(first_message.protocol_id.as_deref(), Some("msg_user_1"));
+            assert!(!first_message.is_optimistic);
+            assert_eq!(first_message.content.to_markdown(cx), "First message");
+
+            let AgentThreadEntry::UserMessage(second_message) = &thread.entries[1] else {
+                panic!("expected second entry to be a user message");
+            };
+            assert_eq!(second_message.id, None);
+            assert_eq!(second_message.protocol_id.as_deref(), Some("msg_user_2"));
+            assert!(!second_message.is_optimistic);
+            assert_eq!(second_message.content.to_markdown(cx), "Second message");
+        });
+    }
+
+    #[gpui::test]
+    async fn test_echoed_user_chunk_does_not_duplicate_optimistic_message(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.executor());
+        let project = Project::test(fs, [], cx).await;
+        let connection = Rc::new(FakeAgentConnection::new());
+        let thread = cx
+            .update(|cx| {
+                connection.new_session(project, PathList::new(&[Path::new(path!("/test"))]), cx)
+            })
+            .await
+            .unwrap();
+
+        thread.update(cx, |thread, cx| {
+            thread.push_user_content_block_with_protocol_id(
+                None,
+                true,
+                None,
+                "Echo".into(),
+                false,
+                cx,
+            );
+            thread
+                .handle_session_update(
+                    acp::SessionUpdate::UserMessageChunk(
+                        acp::ContentChunk::new("Echo".into()).message_id("msg_user_3"),
+                    ),
+                    cx,
+                )
+                .unwrap();
+            thread
+                .handle_session_update(
+                    acp::SessionUpdate::UserMessageChunk(
+                        acp::ContentChunk::new("Echo".into()).message_id("msg_user_3"),
+                    ),
+                    cx,
+                )
+                .unwrap();
+        });
+
+        thread.read_with(cx, |thread, cx| {
+            assert_eq!(thread.entries.len(), 1);
+            let AgentThreadEntry::UserMessage(message) = &thread.entries[0] else {
+                panic!("expected first entry to be a user message");
+            };
+            assert_eq!(message.id, None);
+            assert_eq!(message.protocol_id.as_deref(), Some("msg_user_3"));
+            assert!(message.is_optimistic);
+            assert_eq!(message.content.to_markdown(cx), "Echo");
+            assert_eq!(message.chunks, vec![acp::ContentBlock::from("Echo")]);
+        });
+    }
+
+    #[gpui::test]
+    async fn test_protocol_user_chunk_does_not_merge_into_optimistic_prompt(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.executor());
+        let project = Project::test(fs, [], cx).await;
+        let connection = Rc::new(FakeAgentConnection::new());
+        let thread = cx
+            .update(|cx| {
+                connection.new_session(project, PathList::new(&[Path::new(path!("/test"))]), cx)
+            })
+            .await
+            .unwrap();
+
+        thread.update(cx, |thread, cx| {
+            thread.push_user_content_block_with_protocol_id(
+                None,
+                true,
+                None,
+                "Typed prompt".into(),
+                false,
+                cx,
+            );
+            thread
+                .handle_session_update(
+                    acp::SessionUpdate::UserMessageChunk(
+                        acp::ContentChunk::new("Agent user chunk".into())
+                            .message_id("agent_user_chunk"),
+                    ),
+                    cx,
+                )
+                .unwrap();
+        });
+
+        thread.read_with(cx, |thread, cx| {
+            assert_eq!(thread.entries.len(), 2);
+
+            let AgentThreadEntry::UserMessage(optimistic_message) = &thread.entries[0] else {
+                panic!("expected first entry to be optimistic user message");
+            };
+            assert!(optimistic_message.is_optimistic);
+            assert_eq!(optimistic_message.protocol_id, None);
+            assert_eq!(optimistic_message.content.to_markdown(cx), "Typed prompt");
+
+            let AgentThreadEntry::UserMessage(agent_message) = &thread.entries[1] else {
+                panic!("expected second entry to be protocol user chunk");
+            };
+            assert!(!agent_message.is_optimistic);
+            assert_eq!(
+                agent_message.protocol_id.as_deref(),
+                Some("agent_user_chunk")
+            );
+            assert_eq!(agent_message.content.to_markdown(cx), "Agent user chunk");
+        });
+    }
+
+    #[gpui::test]
+    async fn test_assistant_chunks_use_protocol_message_id_boundaries(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.executor());
+        let project = Project::test(fs, [], cx).await;
+        let connection = Rc::new(FakeAgentConnection::new());
+        let thread = cx
+            .update(|cx| {
+                connection.new_session(project, PathList::new(&[Path::new(path!("/test"))]), cx)
+            })
+            .await
+            .unwrap();
+
+        thread.update(cx, |thread, cx| {
+            thread
+                .handle_session_update(
+                    acp::SessionUpdate::AgentThoughtChunk(
+                        acp::ContentChunk::new("Thinking ".into()).message_id("msg_thought_1"),
+                    ),
+                    cx,
+                )
+                .unwrap();
+            thread
+                .handle_session_update(
+                    acp::SessionUpdate::AgentThoughtChunk(
+                        acp::ContentChunk::new("hard".into()).message_id("msg_thought_1"),
+                    ),
+                    cx,
+                )
+                .unwrap();
+            thread
+                .handle_session_update(
+                    acp::SessionUpdate::AgentThoughtChunk(
+                        acp::ContentChunk::new("A separate thought".into())
+                            .message_id("msg_thought_2"),
+                    ),
+                    cx,
+                )
+                .unwrap();
+            thread
+                .handle_session_update(
+                    acp::SessionUpdate::AgentMessageChunk(
+                        acp::ContentChunk::new("Answer ".into()).message_id("msg_agent_1"),
+                    ),
+                    cx,
+                )
+                .unwrap();
+            thread
+                .handle_session_update(
+                    acp::SessionUpdate::AgentMessageChunk(
+                        acp::ContentChunk::new("done".into()).message_id("msg_agent_1"),
+                    ),
+                    cx,
+                )
+                .unwrap();
+            thread
+                .handle_session_update(
+                    acp::SessionUpdate::AgentMessageChunk(
+                        acp::ContentChunk::new("Follow-up".into()).message_id("msg_agent_2"),
+                    ),
+                    cx,
+                )
+                .unwrap();
+        });
+
+        thread.read_with(cx, |thread, cx| {
+            assert_eq!(thread.entries.len(), 1);
+
+            let AgentThreadEntry::AssistantMessage(message) = &thread.entries[0] else {
+                panic!("expected assistant entry");
+            };
+            assert_eq!(message.chunks.len(), 4);
+
+            let AssistantMessageChunk::Thought { id, block } = &message.chunks[0] else {
+                panic!("expected first chunk to be a thought");
+            };
+            assert_eq!(block.to_markdown(cx), "Thinking hard");
+            assert_eq!(id.as_deref(), Some("msg_thought_1"));
+
+            let AssistantMessageChunk::Thought { id, block } = &message.chunks[1] else {
+                panic!("expected second chunk to be a thought");
+            };
+            assert_eq!(block.to_markdown(cx), "A separate thought");
+            assert_eq!(id.as_deref(), Some("msg_thought_2"));
+
+            let AssistantMessageChunk::Message { id, block } = &message.chunks[2] else {
+                panic!("expected third chunk to be a message");
+            };
+            assert_eq!(block.to_markdown(cx), "Answer done");
+            assert_eq!(id.as_deref(), Some("msg_agent_1"));
+
+            let AssistantMessageChunk::Message { id, block } = &message.chunks[3] else {
+                panic!("expected fourth chunk to be a message");
+            };
+            assert_eq!(block.to_markdown(cx), "Follow-up");
+            assert_eq!(id.as_deref(), Some("msg_agent_2"));
         });
     }
 
@@ -4213,6 +4867,203 @@ mod tests {
                     ..
                 })
             ));
+        });
+    }
+
+    #[test]
+    fn text_resource_markdown_uses_mime_type_for_code_blocks() {
+        let shell = acp::TextResourceContents::new("echo 'hello from exec test'", "tool://preview")
+            .mime_type("text/x-shellscript".to_string());
+        assert_eq!(
+            ContentBlock::text_resource_markdown(&shell),
+            "```sh\necho 'hello from exec test'\n```"
+        );
+
+        let markdown = acp::TextResourceContents::new("**approval** requested", "tool://preview")
+            .mime_type("text/markdown".to_string());
+        assert_eq!(
+            ContentBlock::text_resource_markdown(&markdown),
+            "**approval** requested"
+        );
+
+        let plain = acp::TextResourceContents::new("plain preview", "tool://preview")
+            .mime_type("text/plain".to_string());
+        assert_eq!(
+            ContentBlock::text_resource_markdown(&plain),
+            "```\nplain preview\n```"
+        );
+
+        let cpp = acp::TextResourceContents::new("int main() {}", "tool://preview")
+            .mime_type("text/x-c++; charset=utf-8".to_string());
+        assert_eq!(
+            ContentBlock::text_resource_markdown(&cpp),
+            "```cpp\nint main() {}\n```"
+        );
+
+        let untyped = acp::TextResourceContents::new("# plain preview", "tool://preview");
+        assert_eq!(
+            ContentBlock::text_resource_markdown(&untyped),
+            "```\n# plain preview\n```"
+        );
+    }
+
+    #[gpui::test]
+    async fn test_tool_call_content_preserves_embedded_text_resource(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        init_test(cx);
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+
+        cx.update(|cx| {
+            let content = acp::ContentBlock::Resource(acp::EmbeddedResource::new(
+                acp::EmbeddedResourceResource::TextResourceContents(
+                    acp::TextResourceContents::new("echo 'hello from exec test'", "tool://preview")
+                        .mime_type("text/x-shellscript".to_string()),
+                ),
+            ));
+
+            let block = ContentBlock::new_tool_call_content(
+                content,
+                &language_registry,
+                PathStyle::local(),
+                cx,
+            );
+
+            let ContentBlock::EmbeddedResource { resource, markdown } = &block else {
+                panic!("expected embedded resource block, got {block:?}");
+            };
+            match &resource.resource {
+                acp::EmbeddedResourceResource::TextResourceContents(text) => {
+                    assert_eq!(text.text, "echo 'hello from exec test'");
+                    assert_eq!(text.uri, "tool://preview");
+                    assert_eq!(text.mime_type.as_deref(), Some("text/x-shellscript"));
+                }
+                other => panic!("expected text resource contents, got {other:?}"),
+            }
+
+            let markdown = markdown
+                .as_ref()
+                .expect("text resources should have renderable markdown")
+                .read(cx)
+                .source()
+                .to_string();
+            assert_eq!(markdown, "```sh\necho 'hello from exec test'\n```");
+            assert_eq!(
+                block.to_markdown(cx),
+                "```sh\necho 'hello from exec test'\n```"
+            );
+            assert_eq!(block.text_content(cx), Some("echo 'hello from exec test'"));
+
+            let untyped = ContentBlock::new_tool_call_content(
+                acp::ContentBlock::Resource(acp::EmbeddedResource::new(
+                    acp::EmbeddedResourceResource::TextResourceContents(
+                        acp::TextResourceContents::new("# plain preview", "tool://preview"),
+                    ),
+                )),
+                &language_registry,
+                PathStyle::local(),
+                cx,
+            );
+            assert_eq!(untyped.to_markdown(cx), "```\n# plain preview\n```");
+            assert_eq!(untyped.text_content(cx), Some("# plain preview"));
+        });
+    }
+
+    #[gpui::test]
+    async fn test_tool_call_content_renders_embedded_image_blob_resource(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        init_test(cx);
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+
+        cx.update(|cx| {
+            let image_blob = acp::ContentBlock::Resource(acp::EmbeddedResource::new(
+                acp::EmbeddedResourceResource::BlobResourceContents(
+                    acp::BlobResourceContents::new(
+                        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+                        "tool://preview.png",
+                    )
+                    .mime_type("image/png".to_string()),
+                ),
+            ));
+
+            let block = ContentBlock::new_tool_call_content(
+                image_blob,
+                &language_registry,
+                PathStyle::local(),
+                cx,
+            );
+
+            let ContentBlock::Image { image, dimensions } = &block else {
+                panic!("expected image block, got {block:?}");
+            };
+            assert_eq!(image.format(), gpui::ImageFormat::Png);
+            assert_eq!(
+                dimensions.as_ref().map(|size| (size.width, size.height)),
+                Some((1, 1))
+            );
+            assert_eq!(block.to_markdown(cx), "`Image`");
+            assert_eq!(block.text_content(cx), None);
+        });
+    }
+
+    #[gpui::test]
+    async fn test_tool_call_content_falls_back_for_non_image_blob_resource(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        init_test(cx);
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+
+        cx.update(|cx| {
+            let archive_blob = acp::ContentBlock::Resource(acp::EmbeddedResource::new(
+                acp::EmbeddedResourceResource::BlobResourceContents(
+                    acp::BlobResourceContents::new("not an image", "tool://archive.bin")
+                        .mime_type("application/octet-stream".to_string()),
+                ),
+            ));
+
+            let block = ContentBlock::new_tool_call_content(
+                archive_blob,
+                &language_registry,
+                PathStyle::local(),
+                cx,
+            );
+
+            let ContentBlock::EmbeddedResource { resource, markdown } = &block else {
+                panic!("expected embedded resource block, got {block:?}");
+            };
+            assert!(markdown.is_none());
+            match &resource.resource {
+                acp::EmbeddedResourceResource::BlobResourceContents(blob) => {
+                    assert_eq!(blob.uri, "tool://archive.bin");
+                    assert_eq!(blob.mime_type.as_deref(), Some("application/octet-stream"));
+                }
+                other => panic!("expected blob resource contents, got {other:?}"),
+            }
+            assert_eq!(block.to_markdown(cx), "tool://archive.bin");
+            assert_eq!(block.text_content(cx), None);
+
+            let invalid_image_blob = acp::ContentBlock::Resource(acp::EmbeddedResource::new(
+                acp::EmbeddedResourceResource::BlobResourceContents(
+                    acp::BlobResourceContents::new("not-base64", "tool://preview.png")
+                        .mime_type("image/png".to_string()),
+                ),
+            ));
+            let invalid = ContentBlock::new_tool_call_content(
+                invalid_image_blob,
+                &language_registry,
+                PathStyle::local(),
+                cx,
+            );
+            let ContentBlock::EmbeddedResource { resource, markdown } = &invalid else {
+                panic!("expected embedded resource block, got {invalid:?}");
+            };
+            assert!(markdown.is_none());
+            assert_eq!(
+                ContentBlock::embedded_resource_label(resource),
+                "tool://preview.png"
+            );
+            assert_eq!(invalid.to_markdown(cx), "tool://preview.png");
         });
     }
 
@@ -5100,6 +5951,9 @@ mod tests {
                             let markdown_text = markdown.read(cx).source();
                             assert!(markdown_text.contains("Tool call not found"));
                         }
+                        ContentBlock::EmbeddedResource { .. } => {
+                            panic!("Expected markdown content, got embedded resource")
+                        }
                         ContentBlock::Empty => panic!("Expected markdown content, got empty"),
                         ContentBlock::ResourceLink { .. } => {
                             panic!("Expected markdown content, got resource link")
@@ -5673,6 +6527,8 @@ mod tests {
             thread.push_entry(
                 AgentThreadEntry::UserMessage(UserMessage {
                     id: Some(UserMessageId::new()),
+                    protocol_id: None,
+                    is_optimistic: false,
                     content: ContentBlock::Empty,
                     chunks: vec!["Injected message (no checkpoint)".into()],
                     checkpoint: None,

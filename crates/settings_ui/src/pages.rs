@@ -2,6 +2,7 @@ mod audio_input_output_setup;
 mod edit_prediction_provider_setup;
 mod feature_flags;
 mod llm_providers_page;
+mod mcp_servers_page;
 mod tool_permissions_setup;
 
 pub(crate) use audio_input_output_setup::{
@@ -9,12 +10,16 @@ pub(crate) use audio_input_output_setup::{
 };
 pub(crate) use edit_prediction_provider_setup::render_edit_prediction_setup_page;
 pub(crate) use feature_flags::render_feature_flags_page;
-pub(crate) use llm_providers_page::render_llm_providers_page;
+pub(crate) use llm_providers_page::{
+    LlmProviderForm, render_add_llm_provider_button, render_llm_providers_page,
+};
+pub(crate) use mcp_servers_page::render_mcp_servers_page;
 pub(crate) use tool_permissions_setup::render_tool_permissions_setup_page;
 
 pub use tool_permissions_setup::{
     render_copy_path_tool_config, render_create_directory_tool_config,
     render_delete_path_tool_config, render_edit_file_tool_config, render_fetch_tool_config,
     render_move_path_tool_config, render_restore_file_from_disk_tool_config,
-    render_save_file_tool_config, render_terminal_tool_config, render_web_search_tool_config,
+    render_save_file_tool_config, render_skill_tool_config, render_terminal_tool_config,
+    render_web_search_tool_config,
 };

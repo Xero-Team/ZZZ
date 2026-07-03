@@ -15,7 +15,6 @@ use gpui::{
     anchored, deferred, div,
 };
 use i18n::tr;
-use itertools::Itertools;
 use menu;
 use persistence::TerminalDb;
 use project::{Project, ProjectEntryId, search::SearchQuery};
@@ -949,8 +948,11 @@ impl TerminalView {
         });
     }
 
-    fn add_paths_to_terminal(&self, paths: &[PathBuf], window: &mut Window, cx: &mut App) {
-        let mut text = paths.iter().map(|path| format!(" {path:?}")).join("");
+    pub fn add_paths_to_terminal(&self, paths: &[PathBuf], window: &mut Window, cx: &mut App) {
+        let mut text = paths
+            .iter()
+            .filter_map(|path| Some(format!(" {}", shlex::try_quote(path.to_str()?).ok()?)))
+            .collect::<String>();
         text.push(' ');
         window.focus(&self.focus_handle(cx), cx);
         self.terminal.update(cx, |terminal, _| {
@@ -2178,7 +2180,7 @@ mod tests {
         let mut text = String::new();
         for path in paths {
             text.push(' ');
-            text.push_str(&format!("{path:?}"));
+            text.push_str(&shlex::try_quote(path.to_str().unwrap()).unwrap());
         }
         text.push(' ');
         text
@@ -2565,6 +2567,7 @@ mod tests {
     ) {
         let params = cx.update(AppState::test);
         cx.update(|cx| {
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
         });
 
