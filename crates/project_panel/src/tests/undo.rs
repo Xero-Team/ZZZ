@@ -229,6 +229,7 @@ impl TestContext {
 
     async fn new_with_tree(cx: &mut gpui::TestAppContext, tree: Value) -> TestContext {
         project_panel_tests::init_test(cx);
+        cx.update(i18n::init);
 
         let fs = FakeFs::new(cx.executor());
         fs.insert_tree("/workspace", tree).await;
