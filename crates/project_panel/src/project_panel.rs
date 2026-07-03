@@ -62,10 +62,10 @@ use std::{
 };
 use theme_settings::ThemeSettings;
 use ui::{
-    Color, ContextMenu, ContextMenuEntry, DecoratedIcon, Divider, Icon, IconDecoration,
-    IconDecorationKind, IndentGuideColors, IndentGuideLayout, Indicator, KeyBinding, Label,
-    LabelSize, ListItem, ListItemSpacing, ScrollAxes, ScrollableHandle, Scrollbars,
-    StickyCandidate, Tooltip, WithScrollbar, prelude::*, v_flex,
+    Color, ContextMenu, DecoratedIcon, Divider, Icon, IconDecoration, IconDecorationKind,
+    IndentGuideColors, IndentGuideLayout, Indicator, KeyBinding, Label, LabelSize, ListItem,
+    ListItemSpacing, ScrollAxes, ScrollableHandle, Scrollbars, StickyCandidate, Tooltip,
+    WithScrollbar, prelude::*, v_flex,
 };
 use util::{
     ResultExt, TakeUntilExt, TryFutureExt,
@@ -340,8 +340,12 @@ actions!(
         CollapseSelectedEntry,
         /// Collapses the selected entry and its children in the project tree.
         CollapseSelectedEntryAndChildren,
+        /// Expands the selected entry and its children in the project tree.
+        ExpandSelectedEntryAndChildren,
         /// Collapses all entries in the project tree.
         CollapseAllEntries,
+        /// Expands all entries in the project tree.
+        ExpandAllEntries,
         /// Creates a new directory.
         NewDirectory,
         /// Creates a new file.
@@ -498,6 +502,14 @@ pub fn init(cx: &mut App) {
             if let Some(panel) = workspace.panel::<ProjectPanel>(cx) {
                 panel.update(cx, |panel, cx| {
                     panel.collapse_all_entries(action, window, cx);
+                });
+            }
+        });
+
+        workspace.register_action(|workspace, action: &ExpandAllEntries, window, cx| {
+            if let Some(panel) = workspace.panel::<ProjectPanel>(cx) {
+                panel.update(cx, |panel, cx| {
+                    panel.expand_all_entries(action, window, cx);
                 });
             }
         });
@@ -1102,7 +1114,6 @@ impl ProjectPanel {
             };
 
             let has_pasteable_content = self.has_pasteable_content(cx);
-            let entity = cx.entity();
             let context_menu = ContextMenu::build(window, cx, |menu, _, cx| {
                 menu.context(self.focus_handle.clone()).map(|menu| {
                     if is_read_only {
@@ -1300,28 +1311,29 @@ impl ProjectPanel {
                                     ),
                                     Box::new(RemoveFromProject),
                                 )
-                        })
-                        .when(is_dir && !is_root, |menu| {
-                            menu.separator().action(
-                                tr(cx, "project_panel.menu.collapse_all", "Collapse All"),
-                                Box::new(CollapseSelectedEntryAndChildren),
-                            )
-                        })
-                        .when(is_dir && is_root, |menu| {
-                            let entity = entity.clone();
-                            menu.separator().item(
-                                ContextMenuEntry::new(tr(
-                                    cx,
-                                    "project_panel.menu.collapse_all",
-                                    "Collapse All",
-                                ))
-                                .handler(move |window, cx| {
-                                    entity.update(cx, |this, cx| {
-                                        this.collapse_all_for_root(window, cx);
-                                    });
-                                }),
-                            )
-                        })
+                            })
+                            .when(is_dir && !is_root, |menu| {
+                                menu.separator()
+                                    .action(
+                                        tr(cx, "project_panel.menu.expand_all", "Expand All"),
+                                        Box::new(ExpandSelectedEntryAndChildren),
+                                    )
+                                    .action(
+                                        tr(cx, "project_panel.menu.collapse_all", "Collapse All"),
+                                        Box::new(CollapseSelectedEntryAndChildren),
+                                    )
+                            })
+                            .when(is_dir && is_root, |menu| {
+                                menu.separator()
+                                    .action(
+                                        tr(cx, "project_panel.menu.expand_all", "Expand All"),
+                                        Box::new(ExpandAllEntries),
+                                    )
+                                    .action(
+                                        tr(cx, "project_panel.menu.collapse_all", "Collapse All"),
+                                        Box::new(CollapseAllEntries),
+                                    )
+                            })
                     }
                 })
             });
@@ -1503,9 +1515,26 @@ impl ProjectPanel {
         }
     }
 
+    fn expand_selected_entry_and_children(
+        &mut self,
+        _: &ExpandSelectedEntryAndChildren,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some((worktree, entry)) = self.selected_entry(cx) {
+            let worktree_id = worktree.id();
+            let entry_id = entry.id;
+
+            self.expand_all_for_entry(worktree_id, entry_id, cx);
+            self.update_visible_entries(Some((worktree_id, entry_id)), false, false, window, cx);
+            cx.notify();
+        }
+    }
+
     /// Handles "Collapse All" from the context menu when a root directory is selected.
     /// With a single visible worktree, keeps the root expanded (matching CollapseAllEntries behavior).
     /// With multiple visible worktrees, collapses the root and all its children.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn collapse_all_for_root(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some((worktree, entry)) = self.selected_entry(cx) else {
             return;
@@ -1565,6 +1594,35 @@ impl ProjectPanel {
                     None => *expanded_entries = Default::default(),
                 };
             });
+
+        self.update_visible_entries(None, false, false, window, cx);
+        cx.notify();
+    }
+
+    fn expand_all_entries(
+        &mut self,
+        _: &ExpandAllEntries,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let visible_worktree_ids = self
+            .project
+            .read(cx)
+            .visible_worktrees(cx)
+            .map(|worktree| worktree.read(cx).id())
+            .collect::<Vec<_>>();
+
+        for worktree_id in visible_worktree_ids {
+            let root_entry_id = self
+                .project
+                .read(cx)
+                .worktree_for_id(worktree_id, cx)
+                .and_then(|worktree| worktree.read(cx).root_entry().map(|entry| entry.id));
+
+            if let Some(root_entry_id) = root_entry_id {
+                self.expand_all_for_entry(worktree_id, root_entry_id, cx);
+            }
+        }
 
         self.update_visible_entries(None, false, false, window, cx);
         cx.notify();
@@ -7056,7 +7114,9 @@ impl Render for ProjectPanel {
                 .on_action(cx.listener(Self::select_prev_directory))
                 .on_action(cx.listener(Self::expand_selected_entry))
                 .on_action(cx.listener(Self::collapse_selected_entry))
+                .on_action(cx.listener(Self::expand_selected_entry_and_children))
                 .on_action(cx.listener(Self::collapse_all_entries))
+                .on_action(cx.listener(Self::expand_all_entries))
                 .on_action(cx.listener(Self::collapse_selected_entry_and_children))
                 .on_action(cx.listener(Self::open))
                 .on_action(cx.listener(Self::open_permanent))

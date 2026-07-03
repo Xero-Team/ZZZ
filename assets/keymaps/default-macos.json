@@ -1026,6 +1026,7 @@
       "left": "project_panel::CollapseSelectedEntry",
       "cmd-left": "project_panel::CollapseAllEntries",
       "right": "project_panel::ExpandSelectedEntry",
+      "cmd-right": "project_panel::ExpandAllEntries",
       "cmd-n": "project_panel::NewFile",
       "cmd-d": "project_panel::Duplicate",
       "alt-cmd-n": "project_panel::NewDirectory",
@@ -1646,4 +1647,3 @@
     },
   },
 ]
-
