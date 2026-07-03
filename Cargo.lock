@@ -10474,6 +10474,7 @@ dependencies = [
  "gpui",
  "gpui_platform",
  "i18n",
+ "image",
  "language",
  "languages",
  "linkify",
