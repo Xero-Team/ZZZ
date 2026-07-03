@@ -1,6 +1,7 @@
 mod footer;
 mod head;
 pub mod highlighted_match_with_paths;
+mod persistence;
 pub mod popover_menu;
 mod preview;
 
