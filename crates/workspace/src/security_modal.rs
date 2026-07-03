@@ -492,7 +492,6 @@ impl SecurityModal {
             .upgrade()
             .map(|store| store.read(cx).path_style())
             .unwrap_or_else(PathStyle::local);
-<<<<<<< HEAD
         validate_trust_scope(&typed, &project, self.home_dir.as_deref(), path_style)
             .map(Some)
             .map_err(|error| error.message(cx))
