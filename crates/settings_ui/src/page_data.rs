@@ -10,7 +10,7 @@ use crate::{
     ActionLink, DynamicItem, PROJECT, SettingField, SettingItem, SettingsFieldMetadata,
     SettingsPage, SettingsPageItem, SubPageLink, USER, UiText, active_language, all_language_names,
     pages::{
-        render_edit_prediction_setup_page, render_llm_providers_page,
+        render_edit_prediction_setup_page, render_llm_providers_page, render_mcp_servers_page,
         render_tool_permissions_setup_page,
     },
 };
@@ -8843,6 +8843,27 @@ fn ai_page(cx: &App) -> SettingsPage {
                 files: USER,
                 render: render_tool_permissions_setup_page,
             }),
+            SettingsPageItem::SubPageLink(SubPageLink {
+                title: lt("settings_ui.page_data.title.mcp_servers", "MCP Servers"),
+                r#type: Default::default(),
+                search_aliases: &[
+                    "context server",
+                    "context servers",
+                    "mcp",
+                    "mcp server",
+                    "mcp servers",
+                    "timeout",
+                    "tool timeout",
+                ],
+                json_path: Some("context_server_timeout"),
+                description: Some(lt(
+                    "settings_ui.page_data.description.configure.mcp.server.settings.including.default.tool.timeout",
+                    "Configure MCP server settings, including the default tool timeout.",
+                )),
+                in_json: true,
+                files: USER | PROJECT,
+                render: render_mcp_servers_page,
+            }),
         ];
 
         items.extend([
@@ -9095,36 +9116,6 @@ fn ai_page(cx: &App) -> SettingsPage {
         items.into_boxed_slice()
     }
 
-    fn context_servers_section() -> [SettingsPageItem; 2] {
-        [
-            SettingsPageItem::SectionHeader(lt(
-                "settings_ui.page_data.section.context.servers",
-                "Context Servers",
-            )),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: lt(
-                    "settings_ui.page_data.title.context.server.timeout",
-                    "Context Server Timeout",
-                ),
-                description: lt(
-                    "settings_ui.page_data.description.default.timeout.in.seconds.for.context.server.tool.calls.can.be.overridden.per.server.in.context.servers.configuration",
-                    "Default timeout in seconds for context server tool calls. Can be overridden per-server in context_servers configuration.",
-                ),
-                field: Box::new(SettingField {
-                    json_path: Some("context_server_timeout"),
-                    pick: |settings_content| {
-                        settings_content.project.context_server_timeout.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.project.context_server_timeout = value;
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-        ]
-    }
-
     fn edit_prediction_display_sub_section() -> [SettingsPageItem; 1] {
         [SettingsPageItem::SettingItem(SettingItem {
             title: lt("settings_ui.page_data.title.display.mode", "Display Mode"),
@@ -9162,7 +9153,6 @@ fn ai_page(cx: &App) -> SettingsPage {
         items: concat_sections![
             general_section(),
             agent_configuration_section(cx),
-            context_servers_section(),
             edit_prediction_language_settings_section(),
             edit_prediction_display_sub_section()
         ],
@@ -11547,5 +11537,31 @@ mod tests {
         write_vim_mode_inner(&mut settings, Some(true));
         assert_eq!(settings.vim_mode, Some(true));
         assert_eq!(settings.helix_mode, Some(false));
+    }
+
+    #[gpui::test]
+    async fn ai_page_includes_mcp_servers_subpage_and_omits_context_servers_section(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        cx.update(|cx| {
+            let ai_page = ai_page(cx);
+
+            let has_mcp_servers_subpage = ai_page.items.iter().any(|item| {
+                matches!(
+                    item,
+                    SettingsPageItem::SubPageLink(SubPageLink { title, .. })
+                        if title.fallback() == "MCP Servers"
+                )
+            });
+            let has_context_servers_section = ai_page.items.iter().any(|item| {
+                matches!(
+                    item,
+                    SettingsPageItem::SectionHeader(title) if title.fallback() == "Context Servers"
+                )
+            });
+
+            assert!(has_mcp_servers_subpage);
+            assert!(!has_context_servers_section);
+        });
     }
 }
