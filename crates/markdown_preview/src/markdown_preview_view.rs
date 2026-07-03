@@ -1373,13 +1373,52 @@ impl Render for MarkdownPreviewView {
                         let max_width = MarkdownPreviewSettings::get_global(cx).max_width;
                         let content = right_click_menu("markdown-preview-context-menu")
                             .trigger(move |_, _, _| markdown_element)
-                            .menu(move |window, cx| {
+                            .maybe_menu(move |window, cx| {
                                 let focus = window.focused(cx);
+                                let markdown_state = markdown.read(cx);
                                 let context_menu_link =
-                                    markdown.read(cx).context_menu_link().cloned();
+                                    markdown_state.context_menu_link().cloned();
+                                let selected_text =
+                                    markdown_state.context_menu_selected_text().cloned();
+                                let selected_markdown =
+                                    markdown_state.context_menu_selected_markdown().cloned();
+                                if context_menu_link.is_none()
+                                    && selected_text.is_none()
+                                    && selected_markdown.is_none()
+                                {
+                                    return None;
+                                }
                                 let copy_link = tr(cx, "markdown_preview.copy_link", "Copy Link");
-                                ContextMenu::build(window, cx, move |menu, _, _cx| {
+                                Some(ContextMenu::build(window, cx, move |menu, _, _cx| {
                                     menu.when_some(focus, |menu, focus| menu.context(focus))
+                                        .when_some(selected_text, |menu, text| {
+                                            menu.entry("Copy", Some(Box::new(markdown::Copy)), {
+                                                let text = text.clone();
+                                                move |_, cx| {
+                                                    cx.write_to_clipboard(
+                                                        ClipboardItem::new_string(
+                                                            text.to_string(),
+                                                        ),
+                                                    );
+                                                }
+                                            })
+                                        })
+                                        .when_some(selected_markdown, |menu, text| {
+                                            menu.entry(
+                                                "Copy as Markdown",
+                                                Some(Box::new(markdown::CopyAsMarkdown)),
+                                                {
+                                                    let text = text.clone();
+                                                    move |_, cx| {
+                                                        cx.write_to_clipboard(
+                                                            ClipboardItem::new_string(
+                                                                text.to_string(),
+                                                            ),
+                                                        );
+                                                    }
+                                                },
+                                            )
+                                        })
                                         .when_some(context_menu_link, |menu, url| {
                                             menu.entry(copy_link.clone(), None, move |_, cx| {
                                                 cx.write_to_clipboard(ClipboardItem::new_string(
@@ -1387,7 +1426,7 @@ impl Render for MarkdownPreviewView {
                                                 ));
                                             })
                                         })
-                                })
+                                }))
                             });
                         div()
                             .w_full()
