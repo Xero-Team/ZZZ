@@ -15,6 +15,7 @@ fn init_test(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let settings_store = SettingsStore::test(cx);
         cx.set_global(settings_store);
+        i18n::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         DisableAiSettings::register(cx);
     });
@@ -917,7 +918,8 @@ async fn test_open_project_closes_empty_workspace_but_not_non_empty_ones(cx: &mu
 
     // Cancelling keeps the empty workspace.
     assert!(cx.has_pending_prompt(),);
-    cx.simulate_prompt_answer("Cancel");
+    let cancel = cx.update(|_, cx| i18n::tr(cx, "prompt.common.cancel", "Cancel"));
+    cx.simulate_prompt_answer(&cancel);
     cx.run_until_parked();
     assert_eq!(open_task.await.unwrap(), empty_workspace);
     window
@@ -943,7 +945,8 @@ async fn test_open_project_closes_empty_workspace_but_not_non_empty_ones(cx: &mu
     cx.run_until_parked();
 
     assert!(cx.has_pending_prompt(),);
-    cx.simulate_prompt_answer("Don't Save");
+    let dont_save = cx.update(|_, cx| i18n::tr(cx, "workspace.pane.dont_save", "Don't Save"));
+    cx.simulate_prompt_answer(&dont_save);
     cx.run_until_parked();
 
     let workspace_a = open_task.await.unwrap();

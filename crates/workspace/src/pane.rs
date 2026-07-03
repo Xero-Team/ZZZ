@@ -7996,7 +7996,8 @@ mod tests {
         });
 
         cx.executor().run_until_parked();
-        cx.simulate_prompt_answer("Save all");
+        let save_all = cx.update(|_, cx| tr(cx, "workspace.pane.save_all", "Save all"));
+        cx.simulate_prompt_answer(&save_all);
         save.await.unwrap();
         assert_item_labels(&pane, [], cx);
 
@@ -8016,7 +8017,8 @@ mod tests {
         });
 
         cx.executor().run_until_parked();
-        cx.simulate_prompt_answer("Discard all");
+        let discard_all = cx.update(|_, cx| tr(cx, "workspace.pane.discard_all", "Discard all"));
+        cx.simulate_prompt_answer(&discard_all);
         save.await.unwrap();
         assert_item_labels(&pane, [], cx);
 
@@ -8046,7 +8048,8 @@ mod tests {
         });
 
         cx.executor().run_until_parked();
-        cx.simulate_prompt_answer("Discard all");
+        let discard_all = cx.update(|_, cx| tr(cx, "workspace.pane.discard_all", "Discard all"));
+        cx.simulate_prompt_answer(&discard_all);
         close_task.await.unwrap();
         assert_item_labels(&pane, [], cx);
 
@@ -8070,7 +8073,8 @@ mod tests {
         });
 
         cx.executor().run_until_parked();
-        cx.simulate_prompt_answer("Cancel");
+        let cancel = cx.update(|_, cx| tr(cx, "prompt.common.cancel", "Cancel"));
+        cx.simulate_prompt_answer(&cancel);
         close_task.await.unwrap();
         assert_item_labels(&pane, ["Dirty*^"], cx);
     }
@@ -8109,7 +8113,8 @@ mod tests {
         });
 
         cx.executor().run_until_parked();
-        cx.simulate_prompt_answer("Discard all");
+        let discard_all = cx.update(|_, cx| tr(cx, "workspace.pane.discard_all", "Discard all"));
+        cx.simulate_prompt_answer(&discard_all);
         close_task.await.unwrap();
         assert_item_labels(&pane, [], cx);
 
@@ -8151,7 +8156,8 @@ mod tests {
         });
 
         cx.executor().run_until_parked();
-        cx.simulate_prompt_answer("Don't Save");
+        let dont_save = cx.update(|_, cx| tr(cx, "workspace.pane.dont_save", "Don't Save"));
+        cx.simulate_prompt_answer(&dont_save);
         close_task.await.unwrap();
         assert_item_labels(&pane, [], cx);
 
@@ -8284,7 +8290,8 @@ mod tests {
         });
 
         cx.executor().run_until_parked();
-        cx.simulate_prompt_answer("Discard all");
+        let discard_all = cx.update(|_, cx| tr(cx, "workspace.pane.discard_all", "Discard all"));
+        cx.simulate_prompt_answer(&discard_all);
         close_task.await.unwrap();
         assert_item_labels(&pane, [], cx);
 
@@ -8400,7 +8407,8 @@ mod tests {
         });
 
         cx.executor().run_until_parked();
-        cx.simulate_prompt_answer("Save all");
+        let save_all = cx.update(|_, cx| tr(cx, "workspace.pane.save_all", "Save all"));
+        cx.simulate_prompt_answer(&save_all);
         save.await.unwrap();
         assert_item_labels(&pane, ["C", "A*^"], cx);
 
@@ -8431,7 +8439,8 @@ mod tests {
         });
 
         cx.executor().run_until_parked();
-        cx.simulate_prompt_answer("Discard all");
+        let discard_all = cx.update(|_, cx| tr(cx, "workspace.pane.discard_all", "Discard all"));
+        cx.simulate_prompt_answer(&discard_all);
         save.await.unwrap();
         assert_item_labels(&pane, ["C", "A*^"], cx);
     }
@@ -9225,15 +9234,27 @@ mod tests {
         };
         cx.update(|cx| {
             let path_message = dirty_message_for(Some(project_path), PathStyle::Posix, cx);
+            let display_path = MarkdownInlineCode("dir/__init__.py").to_string();
             assert_eq!(
                 path_message,
-                "`dir/__init__.py` contains unsaved edits. Do you want to save it?"
+                tr(
+                    cx,
+                    "workspace.pane.unsaved_edits",
+                    "{} contains unsaved edits. Do you want to save it?",
+                )
+                .replacen("{}", &display_path, 1)
             );
 
             let generic_message = dirty_message_for(None, PathStyle::Posix, cx);
+            let this_buffer = tr(cx, "workspace.pane.this_buffer", "This buffer");
             assert_eq!(
                 generic_message,
-                "This buffer contains unsaved edits. Do you want to save it?"
+                tr(
+                    cx,
+                    "workspace.pane.unsaved_edits",
+                    "{} contains unsaved edits. Do you want to save it?",
+                )
+                .replacen("{}", &this_buffer, 1)
             );
         });
     }

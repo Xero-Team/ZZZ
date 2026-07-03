@@ -425,6 +425,7 @@ mod tests {
             if !cx.has_global::<settings::SettingsStore>() {
                 settings::init(cx);
             }
+            i18n::init(cx);
             if !cx.has_global::<theme::GlobalTheme>() {
                 theme_settings::init(theme::LoadThemes::JustBase, cx);
             }
