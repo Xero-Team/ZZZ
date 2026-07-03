@@ -13780,6 +13780,7 @@ dependencies = [
  "i18n",
  "itertools 0.14.0",
  "language",
+ "markdown_preview",
  "menu",
  "notifications",
  "pretty_assertions",
