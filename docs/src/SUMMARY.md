@@ -195,4 +195,5 @@
   - [Using Debuggers](./development/debuggers.md)
   - [Performance](./performance.md)
   - [Glossary](./development/glossary.md)
+  - [Upstream Sync 2026-07-03](./development/upstream-sync-2026-07-03.md)
 - [Release Notes](./development/release-notes.md)
