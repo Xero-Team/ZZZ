@@ -888,3 +888,41 @@ pub mod notebook {
         ]
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn buffer_search_helpers_produce_expected_modes() {
+        let find = buffer_search::Deploy::find();
+        let replace = buffer_search::Deploy::replace();
+
+        assert!(find.focus);
+        assert!(!find.replace_enabled);
+        assert!(!find.selection_search_enabled);
+
+        assert!(replace.focus);
+        assert!(replace.replace_enabled);
+        assert!(!replace.selection_search_enabled);
+    }
+
+    #[test]
+    fn spawn_modal_uses_modal_variant_without_reveal_target() {
+        assert_eq!(
+            Spawn::modal(),
+            Spawn::ViaModal {
+                reveal_target: None,
+            }
+        );
+    }
+
+    #[test]
+    fn defaults_match_documented_task_and_worktree_behavior() {
+        assert_eq!(RevealTarget::default(), RevealTarget::Dock);
+        assert_eq!(
+            NewWorktreeBranchTarget::default(),
+            NewWorktreeBranchTarget::CurrentBranch
+        );
+    }
+}

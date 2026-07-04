@@ -378,3 +378,46 @@ pub fn interpolate_edits(
 
     if edits.is_empty() { None } else { Some(edits) }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn icon_set_builder_overrides_only_requested_icons() {
+        let icon_set = EditPredictionIconSet::new(IconName::Copilot)
+            .with_disabled(IconName::CopilotDisabled)
+            .with_up(IconName::ZedPredictUp)
+            .with_down(IconName::ZedPredictDown)
+            .with_error(IconName::CopilotError);
+
+        assert_eq!(icon_set.base, IconName::Copilot);
+        assert_eq!(icon_set.disabled, IconName::CopilotDisabled);
+        assert_eq!(icon_set.up, IconName::ZedPredictUp);
+        assert_eq!(icon_set.down, IconName::ZedPredictDown);
+        assert_eq!(icon_set.error, IconName::CopilotError);
+    }
+
+    #[test]
+    fn data_collection_state_reports_support_enablement_and_project_type() {
+        let unsupported = DataCollectionState::Unsupported;
+        let enabled = DataCollectionState::Enabled {
+            is_project_open_source: true,
+        };
+        let disabled = DataCollectionState::Disabled {
+            is_project_open_source: false,
+        };
+
+        assert!(!unsupported.is_supported());
+        assert!(!unsupported.is_enabled());
+        assert!(!unsupported.is_project_open_source());
+
+        assert!(enabled.is_supported());
+        assert!(enabled.is_enabled());
+        assert!(enabled.is_project_open_source());
+
+        assert!(disabled.is_supported());
+        assert!(!disabled.is_enabled());
+        assert!(!disabled.is_project_open_source());
+    }
+}

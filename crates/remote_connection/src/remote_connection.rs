@@ -258,6 +258,7 @@ impl RemoteConnectionModal {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        #[allow(unreachable_patterns)]
         let (connection_string, nickname, is_wsl, is_devcontainer) = match connection_options {
             RemoteConnectionOptions::Ssh(options) => (
                 options.connection_string(),
@@ -269,10 +270,7 @@ impl RemoteConnectionModal {
                 (options.distro_name.clone(), None, true, false)
             }
             RemoteConnectionOptions::Docker(options) => (options.name.clone(), None, false, true),
-            #[cfg(any(test, feature = "test-support"))]
-            RemoteConnectionOptions::Mock(options) => {
-                (format!("mock-{}", options.id), None, false, false)
-            }
+            _ => (connection_options.display_name(), None, false, false),
         };
         Self {
             prompt: cx.new(|cx| {
@@ -929,4 +927,77 @@ async fn cleanup_remote_server_cache(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    fn file_names_in(dir: &std::path::Path) -> BTreeSet<String> {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn cleanup_remote_server_cache_preserves_keep_file_and_non_gz_entries() {
+        smol::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let platform_dir = temp_dir.path();
+            let keep_path = platform_dir.join("keep.gz");
+            let old_a = platform_dir.join("old-a.gz");
+            let old_b = platform_dir.join("old-b.gz");
+            let notes = platform_dir.join("notes.txt");
+
+            smol::fs::write(&keep_path, b"keep").await.unwrap();
+            smol::fs::write(&old_a, b"a").await.unwrap();
+            smol::fs::write(&old_b, b"b").await.unwrap();
+            smol::fs::write(&notes, b"notes").await.unwrap();
+
+            cleanup_remote_server_cache(platform_dir, &keep_path, 2)
+                .await
+                .unwrap();
+
+            let file_names = file_names_in(platform_dir);
+            assert!(file_names.contains("keep.gz"));
+            assert!(file_names.contains("notes.txt"));
+            assert_eq!(
+                file_names
+                    .iter()
+                    .filter(|name| name.ends_with(".gz"))
+                    .count(),
+                2
+            );
+        });
+    }
+
+    #[test]
+    fn cleanup_remote_server_cache_skips_deletion_when_limit_is_zero() {
+        smol::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let platform_dir = temp_dir.path();
+            let keep_path = platform_dir.join("keep.gz");
+            let old_a = platform_dir.join("old-a.gz");
+            let old_b = platform_dir.join("old-b.gz");
+
+            smol::fs::write(&keep_path, b"keep").await.unwrap();
+            smol::fs::write(&old_a, b"a").await.unwrap();
+            smol::fs::write(&old_b, b"b").await.unwrap();
+
+            cleanup_remote_server_cache(platform_dir, &keep_path, 0)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                file_names_in(platform_dir),
+                BTreeSet::from([
+                    "keep.gz".to_owned(),
+                    "old-a.gz".to_owned(),
+                    "old-b.gz".to_owned(),
+                ])
+            );
+        });
+    }
 }

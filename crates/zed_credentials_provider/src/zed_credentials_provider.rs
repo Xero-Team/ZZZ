@@ -129,6 +129,27 @@ impl DevelopmentCredentialsProvider {
 
         Ok(())
     }
+
+    fn read_stored_credential(&self, url: &str) -> Option<(String, Vec<u8>)> {
+        self.load_credentials()
+            .unwrap_or_default()
+            .get(url)
+            .cloned()
+    }
+
+    fn write_stored_credential(&self, url: &str, username: &str, password: &[u8]) -> Result<()> {
+        let mut credentials = self.load_credentials().unwrap_or_default();
+        credentials.insert(url.to_owned(), (username.to_owned(), password.to_vec()));
+
+        self.save_credentials(&credentials)
+    }
+
+    fn delete_stored_credential(&self, url: &str) -> Result<()> {
+        let mut credentials = self.load_credentials()?;
+        credentials.remove(url);
+
+        self.save_credentials(&credentials)
+    }
 }
 
 impl CredentialsProvider for DevelopmentCredentialsProvider {
@@ -137,14 +158,7 @@ impl CredentialsProvider for DevelopmentCredentialsProvider {
         url: &'a str,
         _cx: &'a AsyncApp,
     ) -> Pin<Box<dyn Future<Output = Result<Option<(String, Vec<u8>)>>> + 'a>> {
-        async move {
-            Ok(self
-                .load_credentials()
-                .unwrap_or_default()
-                .get(url)
-                .cloned())
-        }
-        .boxed_local()
+        async move { Ok(self.read_stored_credential(url)) }.boxed_local()
     }
 
     fn write_credentials<'a>(
@@ -154,13 +168,7 @@ impl CredentialsProvider for DevelopmentCredentialsProvider {
         password: &'a [u8],
         _cx: &'a AsyncApp,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
-        async move {
-            let mut credentials = self.load_credentials().unwrap_or_default();
-            credentials.insert(url.to_owned(), (username.to_owned(), password.to_vec()));
-
-            self.save_credentials(&credentials)
-        }
-        .boxed_local()
+        async move { self.write_stored_credential(url, username, password) }.boxed_local()
     }
 
     fn delete_credentials<'a>(
@@ -168,12 +176,87 @@ impl CredentialsProvider for DevelopmentCredentialsProvider {
         url: &'a str,
         _cx: &'a AsyncApp,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
-        async move {
-            let mut credentials = self.load_credentials()?;
-            credentials.remove(url);
+        async move { self.delete_stored_credential(url) }.boxed_local()
+    }
+}
 
-            self.save_credentials(&credentials)
-        }
-        .boxed_local()
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use tempfile::TempDir;
+
+    use super::DevelopmentCredentialsProvider;
+
+    fn provider_in_tempdir() -> (DevelopmentCredentialsProvider, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let provider = DevelopmentCredentialsProvider {
+            path: temp_dir.path().join("development_credentials.json"),
+        };
+        (provider, temp_dir)
+    }
+
+    #[test]
+    fn load_and_save_credentials_round_trip() {
+        let (provider, _temp_dir) = provider_in_tempdir();
+        let expected = HashMap::from([
+            (
+                "https://zed.dev".to_string(),
+                ("zed".to_string(), b"secret".to_vec()),
+            ),
+            (
+                "https://example.com".to_string(),
+                ("other".to_string(), b"token".to_vec()),
+            ),
+        ]);
+
+        provider.save_credentials(&expected).unwrap();
+
+        assert_eq!(provider.load_credentials().unwrap(), expected);
+    }
+
+    #[test]
+    fn read_stored_credential_returns_none_for_missing_and_invalid_files() {
+        let (provider, _temp_dir) = provider_in_tempdir();
+
+        assert_eq!(provider.read_stored_credential("https://zed.dev"), None);
+
+        std::fs::write(&provider.path, "{not json").unwrap();
+
+        assert_eq!(provider.read_stored_credential("https://zed.dev"), None);
+    }
+
+    #[test]
+    fn write_and_delete_stored_credential_updates_target_entry_only() {
+        let (provider, _temp_dir) = provider_in_tempdir();
+
+        provider
+            .write_stored_credential("https://zed.dev", "zed", b"secret")
+            .unwrap();
+        provider
+            .write_stored_credential("https://example.com", "other", b"token")
+            .unwrap();
+        provider
+            .write_stored_credential("https://zed.dev", "updated", b"new-secret")
+            .unwrap();
+
+        assert_eq!(
+            provider.read_stored_credential("https://zed.dev"),
+            Some(("updated".to_string(), b"new-secret".to_vec()))
+        );
+        assert_eq!(
+            provider.read_stored_credential("https://example.com"),
+            Some(("other".to_string(), b"token".to_vec()))
+        );
+
+        provider
+            .delete_stored_credential("https://zed.dev")
+            .unwrap();
+
+        assert_eq!(provider.read_stored_credential("https://zed.dev"), None);
+        assert_eq!(
+            provider.read_stored_credential("https://example.com"),
+            Some(("other".to_string(), b"token".to_vec()))
+        );
     }
 }

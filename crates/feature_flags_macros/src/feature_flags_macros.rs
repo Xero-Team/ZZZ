@@ -174,6 +174,7 @@ fn to_space_separated(ident: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use syn::parse_quote;
 
     #[test]
     fn kebab_case() {
@@ -186,5 +187,73 @@ mod tests {
     fn space_separated() {
         assert_eq!(to_space_separated("Low"), "Low");
         assert_eq!(to_space_separated("NewWorktree"), "New Worktree");
+    }
+
+    #[test]
+    fn expand_rejects_non_enum_input() {
+        let input: DeriveInput = parse_quote! {
+            struct NotAFlag;
+        };
+
+        let error = expand(&input).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "EnumFeatureFlag can only be derived for enums"
+        );
+    }
+
+    #[test]
+    fn expand_requires_default_variant() {
+        let input: DeriveInput = parse_quote! {
+            enum MissingDefault {
+                Off,
+                On,
+            }
+        };
+
+        let error = expand(&input).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "EnumFeatureFlag requires exactly one variant to be marked with #[default]"
+        );
+    }
+
+    #[test]
+    fn expand_rejects_multiple_default_variants() {
+        let input: DeriveInput = parse_quote! {
+            enum MultipleDefaults {
+                #[default]
+                Off,
+                #[default]
+                On,
+            }
+        };
+
+        let error = expand(&input).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "only one variant may be marked with #[default]"
+        );
+    }
+
+    #[test]
+    fn expand_rejects_non_unit_variants() {
+        let input: DeriveInput = parse_quote! {
+            enum NonUnitVariant {
+                #[default]
+                Off(bool),
+                On,
+            }
+        };
+
+        let error = expand(&input).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "EnumFeatureFlag only supports unit variants (no fields)"
+        );
     }
 }

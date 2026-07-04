@@ -6,7 +6,7 @@ use gpui::{
     ScrollHandle, Subscription, WeakEntity, Window,
 };
 use settings::Settings;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use theme_settings::ThemeSettings;
 use ui::{
     Divider, DividerColor, DynamicSpacing, LabelSize, WithScrollbar, prelude::*,
@@ -288,8 +288,9 @@ fn group_bindings(
     let mut result = Vec::new();
 
     for (first_key, mut group_bindings) in groups {
-        // Remove duplicates within each group
-        group_bindings.dedup_by_key(|(keystrokes, _)| keystrokes.clone());
+        // Remove duplicate key sequences within each group regardless of insertion order.
+        let mut seen_keystrokes = HashSet::new();
+        group_bindings.retain(|(keystrokes, _)| seen_keystrokes.insert(keystrokes.clone()));
 
         if let Some(first_key) = first_key
             && group_bindings.len() > 1
@@ -305,4 +306,30 @@ fn group_bindings(
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_keystrokes(sequence: &str) -> Vec<Keystroke> {
+        sequence
+            .split(' ')
+            .map(|part| Keystroke::parse(part).expect("valid keystroke"))
+            .collect()
+    }
+
+    #[test]
+    fn group_bindings_collapses_shared_prefixes_and_deduplicates() {
+        let grouped = group_bindings(vec![
+            (parse_keystrokes("a b"), "Action One".into()),
+            (parse_keystrokes("a c"), "Action Two".into()),
+            (parse_keystrokes("a b"), "Duplicate Action".into()),
+            (parse_keystrokes("z"), "Standalone".into()),
+        ]);
+
+        assert!(grouped.contains(&(parse_keystrokes("a"), "+2 keybinds".into())));
+        assert!(grouped.contains(&(parse_keystrokes("z"), "Standalone".into())));
+        assert_eq!(grouped.len(), 2);
+    }
 }

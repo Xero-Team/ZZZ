@@ -476,3 +476,60 @@ impl PromptBuilder {
             .render("terminal_assistant_prompt", &context)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use util::rel_path::RelPath;
+
+    #[test]
+    fn project_context_tracks_rule_and_user_rule_presence() {
+        let worktrees = vec![
+            WorktreeContext {
+                root_name: "no-rules".into(),
+                abs_path: Arc::<Path>::from(Path::new("/tmp/no-rules")),
+                rules_file: None,
+            },
+            WorktreeContext {
+                root_name: "with-rules".into(),
+                abs_path: Arc::<Path>::from(Path::new("/tmp/with-rules")),
+                rules_file: Some(RulesFileContext {
+                    path_in_worktree: RelPath::unix("AGENTS.md").unwrap().into_arc(),
+                    text: "rules".into(),
+                    project_entry_id: 1,
+                }),
+            },
+        ];
+        let user_rules = vec![UserRulesContext {
+            uuid: UserPromptId("550e8400-e29b-41d4-a716-446655440010".parse().unwrap()),
+            title: Some("Personal".into()),
+            contents: "Always run tests".into(),
+        }];
+
+        let context = ProjectContext::new(worktrees.clone(), user_rules);
+
+        assert!(context.has_rules);
+        assert!(context.has_user_rules);
+        assert_eq!(context.worktrees, worktrees);
+        assert_eq!(context.user_rules.len(), 1);
+        assert_eq!(context.user_rules[0].title.as_deref(), Some("Personal"));
+        assert_eq!(context.os, std::env::consts::OS);
+        assert_eq!(context.arch, std::env::consts::ARCH);
+        assert!(!context.shell.is_empty());
+    }
+
+    #[test]
+    fn project_context_without_rules_sets_false_flags() {
+        let context = ProjectContext::new(
+            vec![WorktreeContext {
+                root_name: "workspace".into(),
+                abs_path: Arc::<Path>::from(Path::new("/tmp/workspace")),
+                rules_file: None,
+            }],
+            Vec::new(),
+        );
+
+        assert!(!context.has_rules);
+        assert!(!context.has_user_rules);
+    }
+}

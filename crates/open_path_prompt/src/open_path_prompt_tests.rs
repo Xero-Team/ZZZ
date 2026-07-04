@@ -481,6 +481,7 @@ async fn test_dismiss_cancels_in_flight_match(cx: &mut TestAppContext) {
 fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
     cx.update(|cx| {
         let state = AppState::test(cx);
+        i18n::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
 
         editor::init(cx);

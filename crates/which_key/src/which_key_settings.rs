@@ -16,3 +16,22 @@ impl Settings for WhichKeySettings {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn which_key_settings_reads_enabled_and_delay_values() {
+        let mut content = SettingsContent::default();
+        content.which_key = Some(WhichKeySettingsContent {
+            enabled: Some(true),
+            delay_ms: Some(250),
+        });
+
+        let settings = WhichKeySettings::from_settings(&content);
+
+        assert!(settings.enabled);
+        assert_eq!(settings.delay_ms, 250);
+    }
+}

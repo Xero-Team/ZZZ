@@ -151,3 +151,51 @@ impl GlobalCommandPaletteInterceptor {
         Some(handler(query, workspace, cx))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::any::TypeId;
+
+    use super::CommandPaletteFilter;
+    use gpui::actions;
+
+    actions!(test_actions, [AlphaAction, BetaAction]);
+
+    #[test]
+    fn hidden_namespace_hides_matching_actions() {
+        let mut filter = CommandPaletteFilter::default();
+        filter.hide_namespace("test_actions");
+
+        assert!(filter.is_hidden(&AlphaAction));
+        assert!(filter.is_hidden(&BetaAction));
+    }
+
+    #[test]
+    fn shown_action_type_overrides_hidden_namespace() {
+        let mut filter = CommandPaletteFilter::default();
+        filter.hide_namespace("test_actions");
+        filter.show_action_types([&TypeId::of::<AlphaAction>()]);
+
+        assert!(!filter.is_hidden(&AlphaAction));
+        assert!(filter.is_hidden(&BetaAction));
+    }
+
+    #[test]
+    fn hide_action_type_clears_previous_show_override() {
+        let mut filter = CommandPaletteFilter::default();
+        filter.show_action_types([&TypeId::of::<AlphaAction>()]);
+        filter.hide_action_types([&TypeId::of::<AlphaAction>()]);
+
+        assert!(filter.is_hidden(&AlphaAction));
+    }
+
+    #[test]
+    fn show_namespace_restores_namespace_visibility() {
+        let mut filter = CommandPaletteFilter::default();
+        filter.hide_namespace("test_actions");
+        filter.show_namespace("test_actions");
+
+        assert!(!filter.is_hidden(&AlphaAction));
+        assert!(!filter.is_hidden(&BetaAction));
+    }
+}

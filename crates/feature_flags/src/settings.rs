@@ -74,3 +74,29 @@ pub fn generate_feature_flags_schema() -> Schema {
         }
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::generate_feature_flags_schema;
+
+    #[test]
+    fn generated_schema_includes_known_flags_and_unknown_string_fallback() {
+        let schema = serde_json::to_value(generate_feature_flags_schema()).unwrap();
+
+        assert_eq!(schema["type"], "object");
+        assert_eq!(schema["additionalProperties"]["type"], "string");
+
+        let panic_flag = &schema["properties"]["panic"];
+        assert_eq!(panic_flag["type"], "string");
+        assert_eq!(panic_flag["enum"], serde_json::json!(["on", "off"]));
+        assert_eq!(
+            panic_flag["enumDescriptions"],
+            serde_json::json!(["On", "Off"])
+        );
+        assert!(
+            panic_flag["description"]
+                .as_str()
+                .is_some_and(|description| description.contains("Default: `off`"))
+        );
+    }
+}

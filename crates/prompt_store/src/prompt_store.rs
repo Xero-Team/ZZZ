@@ -606,6 +606,74 @@ mod tests {
     use super::*;
     use gpui::TestAppContext;
 
+    fn metadata(id: PromptId, title: &str, saved_at: &str) -> PromptMetadata {
+        PromptMetadata {
+            id,
+            title: Some(title.into()),
+            default: false,
+            saved_at: saved_at.parse().unwrap(),
+        }
+    }
+
+    #[test]
+    fn prompt_id_helpers_distinguish_user_and_builtin_prompts() {
+        let user_uuid = UserPromptId("550e8400-e29b-41d4-a716-446655440111".parse().unwrap());
+        let user_prompt = PromptId::from(user_uuid);
+        let built_in_prompt = PromptId::from(BuiltInPrompt::CommitMessage);
+
+        assert_eq!(user_prompt.as_user(), Some(user_uuid));
+        assert_eq!(user_prompt.as_built_in(), None);
+        assert!(!user_prompt.is_built_in());
+        assert!(user_prompt.can_edit());
+
+        assert_eq!(built_in_prompt.as_user(), None);
+        assert_eq!(
+            built_in_prompt.as_built_in(),
+            Some(BuiltInPrompt::CommitMessage)
+        );
+        assert!(built_in_prompt.is_built_in());
+        assert!(built_in_prompt.can_edit());
+        assert_eq!(built_in_prompt.to_string(), "Commit message");
+    }
+
+    #[test]
+    fn metadata_cache_sorts_and_removes_entries() {
+        let mut cache = MetadataCache::default();
+        let alpha_old = PromptId::from(UserPromptId(
+            "550e8400-e29b-41d4-a716-446655440001".parse().unwrap(),
+        ));
+        let alpha_new = PromptId::from(UserPromptId(
+            "550e8400-e29b-41d4-a716-446655440002".parse().unwrap(),
+        ));
+        let beta = PromptId::from(UserPromptId(
+            "550e8400-e29b-41d4-a716-446655440003".parse().unwrap(),
+        ));
+
+        cache.insert(metadata(alpha_old, "Alpha", "2024-01-01T00:00:00Z"));
+        cache.insert(metadata(beta, "Beta", "2024-01-01T00:00:00Z"));
+        cache.insert(metadata(alpha_new, "Alpha", "2024-02-01T00:00:00Z"));
+
+        assert_eq!(
+            cache
+                .metadata
+                .iter()
+                .map(|metadata| metadata.id)
+                .collect::<Vec<_>>(),
+            vec![alpha_new, alpha_old, beta]
+        );
+
+        cache.remove(alpha_old);
+        assert_eq!(
+            cache
+                .metadata
+                .iter()
+                .map(|metadata| metadata.id)
+                .collect::<Vec<_>>(),
+            vec![alpha_new, beta]
+        );
+        assert!(!cache.metadata_by_id.contains_key(&alpha_old));
+    }
+
     #[gpui::test]
     async fn test_built_in_prompt_load_save(cx: &mut TestAppContext) {
         cx.executor().allow_parking();

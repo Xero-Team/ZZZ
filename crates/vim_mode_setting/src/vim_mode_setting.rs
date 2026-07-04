@@ -40,3 +40,28 @@ impl Settings for HelixModeSetting {
         Self(content.helix_mode.unwrap())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vim_mode_setting_reads_boolean_from_settings_content() {
+        let mut content = SettingsContent::default();
+        content.vim_mode = Some(true);
+
+        let setting = VimModeSetting::from_settings(&content);
+
+        assert!(setting.0);
+    }
+
+    #[test]
+    fn helix_mode_setting_reads_boolean_from_settings_content() {
+        let mut content = SettingsContent::default();
+        content.helix_mode = Some(false);
+
+        let setting = HelixModeSetting::from_settings(&content);
+
+        assert!(!setting.0);
+    }
+}

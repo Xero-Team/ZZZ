@@ -6369,6 +6369,8 @@ dependencies = [
  "extension_host",
  "gpui",
  "i18n",
+ "release_channel",
+ "semver",
  "system_specs",
  "urlencoding",
  "util",
@@ -22921,6 +22923,7 @@ dependencies = [
  "release_channel",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

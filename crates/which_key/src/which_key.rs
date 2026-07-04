@@ -92,3 +92,27 @@ pub static FILTERED_KEYSTROKES: LazyLock<Vec<Vec<Keystroke>>> = LazyLock::new(||
     })
     .collect()
 });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_keystrokes(sequence: &str) -> Vec<Keystroke> {
+        sequence
+            .split(' ')
+            .map(|part| Keystroke::parse(part).expect("valid keystroke"))
+            .collect()
+    }
+
+    #[test]
+    fn filtered_keystrokes_include_known_duplicate_vim_bindings() {
+        assert!(
+            FILTERED_KEYSTROKES.contains(&parse_keystrokes("ctrl-w ctrl-w")),
+            "expected duplicate ctrl-w binding to be filtered"
+        );
+        assert!(
+            FILTERED_KEYSTROKES.contains(&parse_keystrokes("g j")),
+            "expected vim motion alias to be filtered"
+        );
+    }
+}

@@ -153,3 +153,50 @@ fn format_installed_extensions_for_clipboard(cx: &mut App) -> String {
         lines.join("\n")
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use release_channel::{AppCommitSha, ReleaseChannel};
+    use semver::Version;
+
+    use super::{email_body, email_zed_url, file_bug_report_url};
+
+    fn sample_specs() -> system_specs::SystemSpecs {
+        system_specs::SystemSpecs::new_stateless(
+            Version::new(1, 2, 3),
+            Some(AppCommitSha::new("abcdef0".to_string())),
+            ReleaseChannel::Dev,
+        )
+    }
+
+    #[test]
+    fn file_bug_report_url_encodes_system_specs_in_environment_field() {
+        let specs = sample_specs();
+
+        let url = file_bug_report_url(&specs);
+
+        assert!(url.starts_with("https://github.com/zed-industries/zed/issues/new?"));
+        assert!(url.contains("template=10_bug_report.yml"));
+        assert!(url.contains("&environment="));
+
+        let encoded_environment = url.split("&environment=").nth(1).unwrap();
+        let decoded_environment = urlencoding::decode(encoded_environment).unwrap();
+        let rendered_specs = specs.to_string();
+
+        assert_eq!(decoded_environment, rendered_specs);
+    }
+
+    #[test]
+    fn email_helpers_prefix_body_with_system_information_block() {
+        let specs = sample_specs();
+
+        let encoded_body = email_body(&specs);
+        let decoded_body = urlencoding::decode(&encoded_body).unwrap();
+
+        assert!(decoded_body.starts_with("\n\nSystem Information:\n\n"));
+        assert!(decoded_body.contains(&specs.to_string()));
+
+        let email_url = email_zed_url(&specs);
+        assert_eq!(email_url, format!("mailto:hi@zed.dev?body={encoded_body}"));
+    }
+}

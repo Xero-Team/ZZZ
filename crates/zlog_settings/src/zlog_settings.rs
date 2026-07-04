@@ -28,3 +28,33 @@ impl Settings for ZlogSettings {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_settings_copies_log_scopes() {
+        let mut content = settings::SettingsContent::default();
+        content.log = Some(
+            [
+                ("client".to_owned(), "warn".to_owned()),
+                ("remote".to_owned(), "debug".to_owned()),
+            ]
+            .into_iter()
+            .collect(),
+        );
+
+        let settings = ZlogSettings::from_settings(&content);
+
+        assert_eq!(
+            settings.scopes,
+            [
+                ("client".to_owned(), "warn".to_owned()),
+                ("remote".to_owned(), "debug".to_owned()),
+            ]
+            .into_iter()
+            .collect()
+        );
+    }
+}

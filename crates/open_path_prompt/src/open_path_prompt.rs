@@ -987,9 +987,13 @@ fn get_dir_and_suffix(query: String, path_style: PathStyle) -> (String, String) 
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
+    use project::DirectoryItem;
+    use settings::ProjectPanelSortMode;
     use util::paths::PathStyle;
 
-    use super::get_dir_and_suffix;
+    use super::{get_dir_and_suffix, path_candidates};
 
     #[test]
     fn test_get_dir_and_suffix_with_windows_style() {
@@ -1090,5 +1094,55 @@ mod tests {
         let (dir, suffix) = get_dir_and_suffix("/root/.hidden".into(), PathStyle::Posix);
         assert_eq!(dir, "/root/");
         assert_eq!(suffix, ".hidden");
+    }
+
+    #[test]
+    fn test_path_candidates_adds_root_entry_and_sorts_directories_first() {
+        let candidates = path_candidates(
+            true,
+            vec![
+                DirectoryItem {
+                    is_dir: false,
+                    path: PathBuf::from("b.txt"),
+                },
+                DirectoryItem {
+                    is_dir: true,
+                    path: PathBuf::from("a_dir"),
+                },
+            ],
+            ProjectPanelSortMode::DirectoriesFirst,
+        );
+
+        assert_eq!(candidates.len(), 3);
+        assert_eq!(candidates[0].path.string, "");
+        assert!(candidates[0].is_dir);
+        assert_eq!(candidates[1].path.string, "a_dir");
+        assert!(candidates[1].is_dir);
+        assert_eq!(candidates[2].path.string, "b.txt");
+        assert!(!candidates[2].is_dir);
+    }
+
+    #[test]
+    fn test_path_candidates_can_sort_files_first_without_root_injection() {
+        let candidates = path_candidates(
+            false,
+            vec![
+                DirectoryItem {
+                    is_dir: true,
+                    path: PathBuf::from("z_dir"),
+                },
+                DirectoryItem {
+                    is_dir: false,
+                    path: PathBuf::from("a.txt"),
+                },
+            ],
+            ProjectPanelSortMode::FilesFirst,
+        );
+
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(candidates[0].path.string, "a.txt");
+        assert!(!candidates[0].is_dir);
+        assert_eq!(candidates[1].path.string, "z_dir");
+        assert!(candidates[1].is_dir);
     }
 }

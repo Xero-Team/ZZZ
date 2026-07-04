@@ -285,3 +285,21 @@ impl FeatureFlagAppExt for App {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{FeatureFlagValue, PresenceFlag};
+
+    #[test]
+    fn presence_flag_helpers_match_expected_semantics() {
+        assert_eq!(PresenceFlag::default(), PresenceFlag::Off);
+        assert_eq!(PresenceFlag::on_variant(), PresenceFlag::On);
+        assert_eq!(PresenceFlag::On.override_key(), "on");
+        assert_eq!(PresenceFlag::Off.override_key(), "off");
+        assert_eq!(PresenceFlag::On.label(), "On");
+        assert_eq!(PresenceFlag::Off.label(), "Off");
+        assert_eq!(PresenceFlag::from_wire("anything"), Some(PresenceFlag::On));
+        assert!(*PresenceFlag::On);
+        assert!(!*PresenceFlag::Off);
+    }
+}
