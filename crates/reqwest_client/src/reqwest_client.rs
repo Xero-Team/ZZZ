@@ -205,7 +205,7 @@ impl AsyncRead for ChannelReader {
             }
 
             match Pin::new(&mut self.receiver).poll_next(cx) {
-                Poll::Ready(Some(Ok(chunk))) if chunk.is_empty() => continue,
+                Poll::Ready(Some(Ok(chunk))) if chunk.is_empty() => {}
                 Poll::Ready(Some(Ok(chunk))) => {
                     self.chunk = Some(std::io::Cursor::new(chunk));
                 }
