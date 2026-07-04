@@ -147,3 +147,65 @@ async fn store_window_stack(db: KeyValueStore, windows: &[u64]) {
             .log_err();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{SESSION_ID_KEY, SESSION_WINDOW_STACK_KEY, Session, store_window_stack};
+    use db::kvp::KeyValueStore;
+    use gpui::WindowId;
+
+    #[gpui::test]
+    async fn session_new_restores_previous_values() {
+        let db = KeyValueStore::open_test_db("session_restores_previous_values").await;
+        db.write_kvp(SESSION_ID_KEY.to_string(), "old-session".to_string())
+            .await
+            .unwrap();
+        db.write_kvp(
+            SESSION_WINDOW_STACK_KEY.to_string(),
+            "[7,11,42]".to_string(),
+        )
+        .await
+        .unwrap();
+
+        let session = Session::new("new-session".to_string(), db.clone()).await;
+
+        assert_eq!(session.id(), "new-session");
+        assert_eq!(session.old_session_id.as_deref(), Some("old-session"));
+        assert_eq!(
+            session.old_window_ids,
+            Some(vec![
+                WindowId::from(7_u64),
+                WindowId::from(11_u64),
+                WindowId::from(42_u64),
+            ])
+        );
+        assert_eq!(
+            db.read_kvp(SESSION_ID_KEY).unwrap(),
+            Some("new-session".to_string())
+        );
+    }
+
+    #[gpui::test]
+    async fn session_new_ignores_invalid_window_stack_json() {
+        let db = KeyValueStore::open_test_db("session_ignores_invalid_window_stack").await;
+        db.write_kvp(SESSION_WINDOW_STACK_KEY.to_string(), "not-json".to_string())
+            .await
+            .unwrap();
+
+        let session = Session::new("new-session".to_string(), db).await;
+
+        assert_eq!(session.old_window_ids, None);
+    }
+
+    #[gpui::test]
+    async fn store_window_stack_writes_json_array() {
+        let db = KeyValueStore::open_test_db("session_store_window_stack").await;
+
+        store_window_stack(db.clone(), &[3, 5, 8]).await;
+
+        assert_eq!(
+            db.read_kvp(SESSION_WINDOW_STACK_KEY).unwrap(),
+            Some("[3,5,8]".to_string())
+        );
+    }
+}

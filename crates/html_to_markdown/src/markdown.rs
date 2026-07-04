@@ -274,3 +274,70 @@ impl HandleTag for CodeHandler {
         HandlerOutcome::NoOp
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use indoc::indoc;
+    use pretty_assertions::assert_eq;
+
+    use crate::{TagHandler, convert_html_to_markdown};
+
+    use super::*;
+
+    fn markdown_handlers() -> Vec<TagHandler> {
+        vec![
+            Rc::new(RefCell::new(WebpageChromeRemover)),
+            Rc::new(RefCell::new(ParagraphHandler)),
+            Rc::new(RefCell::new(HeadingHandler)),
+            Rc::new(RefCell::new(ListHandler)),
+            Rc::new(RefCell::new(TableHandler::new())),
+            Rc::new(RefCell::new(StyledTextHandler)),
+            Rc::new(RefCell::new(CodeHandler)),
+        ]
+    }
+
+    #[test]
+    fn test_convert_html_to_markdown_formats_common_blocks() {
+        let html = "<nav>skip me</nav><h2>Intro</h2><p>Use <strong>cargo test</strong> with <code>--workspace</code>.</p><ul><li>One</li><li>Two</li></ul>";
+
+        let expected = indoc! {r#"
+            ## Intro
+
+            Use **cargo test** with `--workspace`.
+            - One
+            - Two
+        "#}
+        .trim();
+
+        assert_eq!(
+            convert_html_to_markdown(html.as_bytes(), &mut markdown_handlers()).unwrap(),
+            expected
+        );
+    }
+
+    #[test]
+    fn test_convert_html_to_markdown_formats_tables_and_preformatted_code() {
+        let html = "<table><thead><tr><th>Name</th><th>Age</th></tr></thead><tbody><tr><td>Ada</td><td>30</td></tr></tbody></table><pre><code>fn main() {\n    println!(\"hi\");\n}</code></pre>";
+
+        let expected = indoc! {r#"
+            | Name | Age |
+            | --- | --- |
+            | Ada | 30 |
+
+            ```
+            fn main() {
+                println!("hi");
+            }
+            ```
+        "#}
+        .trim();
+
+        assert_eq!(
+            convert_html_to_markdown(html.as_bytes(), &mut markdown_handlers()).unwrap(),
+            expected
+        );
+    }
+}

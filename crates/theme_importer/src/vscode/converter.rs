@@ -275,3 +275,35 @@ impl VsCodeThemeConverter {
         Ok(highlight_styles)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_try_parse_font_weight() {
+        assert_eq!(try_parse_font_weight("bold"), Some(FontWeightContent::BOLD));
+        assert_eq!(
+            try_parse_font_weight("italic underline bold"),
+            Some(FontWeightContent::BOLD)
+        );
+        assert_eq!(try_parse_font_weight("italic"), None);
+    }
+
+    #[test]
+    fn test_try_parse_font_style() {
+        assert_eq!(
+            try_parse_font_style("italic"),
+            Some(FontStyleContent::Italic)
+        );
+        assert_eq!(
+            try_parse_font_style("oblique"),
+            Some(FontStyleContent::Oblique)
+        );
+        assert_eq!(
+            try_parse_font_style("italic oblique"),
+            Some(FontStyleContent::Italic)
+        );
+        assert_eq!(try_parse_font_style("underline"), None);
+    }
+}

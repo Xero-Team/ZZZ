@@ -12,3 +12,19 @@ pub fn tls_config() -> anyhow::Result<ClientConfig> {
 
     ClientConfig::with_platform_verifier().context("building platform TLS verifier")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::tls_config;
+
+    #[test]
+    fn tls_config_builds_successfully() {
+        tls_config().unwrap();
+    }
+
+    #[test]
+    fn tls_config_can_be_built_multiple_times() {
+        tls_config().unwrap();
+        tls_config().unwrap();
+    }
+}

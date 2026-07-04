@@ -1136,6 +1136,35 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_format_compound_year_month() {
+        assert_eq!(format_compound_year_month(12), "1 year ago");
+        assert_eq!(format_compound_year_month(13), "1 year, 1 month ago");
+        assert_eq!(format_compound_year_month(26), "2 years, 2 months ago");
+    }
+
+    #[test]
+    fn test_format_timestamp_naive_time_handles_midnight_and_noon() {
+        let midnight = create_offset_datetime(1990, 4, 12, 0, 5, 0);
+        let noon = create_offset_datetime(1990, 4, 12, 12, 0, 0);
+
+        assert_eq!(format_timestamp_naive_time(midnight, true), "12:05 AM");
+        assert_eq!(format_timestamp_naive_time(midnight, false), "00:05");
+        assert_eq!(format_timestamp_naive_time(noon, true), "12:00 PM");
+        assert_eq!(format_timestamp_naive_time(noon, false), "12:00");
+    }
+
+    #[test]
+    fn test_format_local_timestamp_relative_dispatch() {
+        let reference = create_offset_datetime(1990, 4, 12, 23, 0, 0);
+        let timestamp = create_offset_datetime(1990, 4, 12, 22, 58, 0);
+
+        assert_eq!(
+            format_local_timestamp(timestamp, reference, TimestampFormat::Relative),
+            "2 minutes ago"
+        );
+    }
+
     fn test_timezone() -> UtcOffset {
         UtcOffset::from_hms(0, 0, 0).expect("Valid timezone offset")
     }

@@ -892,7 +892,63 @@ fn keymap_schema_for_actions(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mdbook_core::book::{Book, Chapter};
     use serde_json::json;
+
+    #[test]
+    fn test_handle_frontmatter_replaces_yaml_with_metadata_comment() {
+        let mut book = Book::new();
+        book.push_item(Chapter::new(
+            "Intro",
+            "---\ntitle: Welcome\ndescription: Start here\n---\n# Heading".into(),
+            "intro.md",
+            Vec::new(),
+        ));
+
+        let mut errors = HashSet::default();
+        handle_frontmatter(&mut book, &mut errors);
+
+        assert!(errors.is_empty());
+        let chapter = book.chapters().next().unwrap();
+        let regex = Regex::new(&FRONT_MATTER_COMMENT.replace("{}", "(.*)")).unwrap();
+        let captures = regex.captures(&chapter.content).unwrap();
+        let metadata: HashMap<String, String> = serde_json::from_str(&captures[1]).unwrap();
+
+        assert_eq!(metadata.get("title").map(String::as_str), Some("Welcome"));
+        assert_eq!(
+            metadata.get("description").map(String::as_str),
+            Some("Start here")
+        );
+        assert!(chapter.content.contains("# Heading"));
+    }
+
+    #[test]
+    fn test_handle_frontmatter_reports_invalid_lines() {
+        let mut book = Book::new();
+        book.push_item(Chapter::new(
+            "Intro",
+            "---\ninvalid-line\ntitle: Welcome\n---\nBody".into(),
+            "intro.md",
+            vec!["Docs".into()],
+        ));
+
+        let mut errors = HashSet::default();
+        handle_frontmatter(&mut book, &mut errors);
+
+        assert!(errors.contains(&PreprocessorError::InvalidFrontmatterLine(
+            "[Some(\"intro.md\")] Docs > Intro: invalid-line".into()
+        )));
+    }
+
+    #[test]
+    fn test_name_for_action_and_format_binding_helpers() {
+        assert_eq!(
+            name_for_action("\"editor::ToggleComments\", {\"advance_downwards\":false}".into()),
+            "editor::ToggleComments"
+        );
+        assert_eq!(name_for_action("workspace::Save".into()), "workspace::Save");
+        assert_eq!(format_binding("ctrl-\\".into()), "ctrl-\\\\");
+    }
 
     #[test]
     fn test_find_binding_prefers_exact_match_over_parameterized() {

@@ -333,4 +333,41 @@ mod tests {
             ]))
         );
     }
+
+    #[test]
+    fn test_capture_name_lookup_helpers() {
+        let theme = SyntaxTheme::new_test([
+            ("function", gpui::red()),
+            ("function.method", gpui::green()),
+            ("keyword", gpui::blue()),
+        ]);
+
+        assert_eq!(theme.get_capture_name(0usize), Some("function"));
+        assert_eq!(theme.get_capture_name(1usize), Some("function.method"));
+        assert_eq!(theme.get_capture_name(99usize), None);
+
+        assert_eq!(
+            theme.style_for_name("keyword"),
+            Some(HighlightStyle {
+                color: Some(gpui::blue()),
+                ..Default::default()
+            })
+        );
+        assert_eq!(theme.style_for_name("missing"), None);
+    }
+
+    #[test]
+    fn test_highlight_id_prefers_longest_matching_prefix() {
+        let theme = SyntaxTheme::new_test([
+            ("function", gpui::red()),
+            ("function.method", gpui::green()),
+            ("keyword", gpui::blue()),
+        ]);
+
+        assert_eq!(theme.highlight_id("function"), Some(0));
+        assert_eq!(theme.highlight_id("function.method"), Some(1));
+        assert_eq!(theme.highlight_id("function.method.async"), Some(1));
+        assert_eq!(theme.highlight_id("functionality"), None);
+        assert_eq!(theme.highlight_id("missing"), None);
+    }
 }

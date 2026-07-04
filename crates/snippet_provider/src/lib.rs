@@ -270,10 +270,45 @@ impl SnippetProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::format::{ListOrDirect, VsCodeSnippet, VsSnippetsFile};
+    use collections::HashMap;
     use fs::FakeFs;
     use gpui;
     use gpui::TestAppContext;
     use indoc::indoc;
+
+    #[test]
+    fn file_stem_to_key_maps_global_and_language_specific_files() {
+        assert_eq!(file_stem_to_key("snippets"), None);
+        assert_eq!(file_stem_to_key("rust"), Some("rust".to_string()));
+    }
+
+    #[test]
+    fn file_to_snippets_uses_name_as_default_prefix_and_joins_multiline_fields() {
+        let file = VsSnippetsFile {
+            snippets: HashMap::from_iter([(
+                "Log to console".to_string(),
+                VsCodeSnippet {
+                    prefix: None,
+                    body: ListOrDirect::List(vec![
+                        "console.info(\"Hello, ${1:World}!\")".into(),
+                        "$0".into(),
+                    ]),
+                    description: Some(ListOrDirect::List(vec!["Logs".into(), "to console".into()])),
+                },
+            )]),
+        };
+
+        let snippets = file_to_snippets(file, "rust.json".as_ref())
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+
+        assert_eq!(snippets.len(), 1);
+        assert_eq!(snippets[0].name, "Log to console");
+        assert_eq!(snippets[0].prefix, vec!["Log to console"]);
+        assert_eq!(snippets[0].body, "console.info(\"Hello, ${1:World}!\")\n$0");
+        assert_eq!(snippets[0].description.as_deref(), Some("Logs\nto console"));
+    }
 
     #[gpui::test]
     fn test_lookup_snippets_dup_registry_snippets(cx: &mut TestAppContext) {

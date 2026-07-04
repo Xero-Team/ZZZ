@@ -221,3 +221,102 @@ impl FromStr for ReleaseChannel {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvRestore {
+        name: String,
+        original: Option<String>,
+    }
+
+    impl EnvRestore {
+        fn new(name: &str) -> Self {
+            Self {
+                name: name.to_string(),
+                original: env::var(name).ok(),
+            }
+        }
+    }
+
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            match self.original.as_deref() {
+                Some(value) => unsafe { env::set_var(&self.name, value) },
+                None => unsafe { env::remove_var(&self.name) },
+            }
+        }
+    }
+
+    #[test]
+    fn app_commit_sha_full_and_short_preserve_expected_lengths() {
+        let sha = AppCommitSha::new("1234567890abcdef".to_string());
+
+        assert_eq!(sha.full(), "1234567890abcdef");
+        assert_eq!(sha.short(), "1234567");
+    }
+
+    #[test]
+    fn app_version_load_uses_env_override_and_build_metadata() {
+        let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+        let _restore = EnvRestore::new("ZED_APP_VERSION");
+        unsafe { env::set_var("ZED_APP_VERSION", "1.2.3") };
+
+        let version = AppVersion::load(
+            "9.9.9",
+            Some("42"),
+            Some(AppCommitSha::new("abcdef0".to_string())),
+        );
+
+        assert_eq!(
+            version,
+            Version::parse("1.2.3+dev.42.abcdef0").expect("valid semver")
+        );
+    }
+
+    #[test]
+    fn app_version_load_falls_back_to_package_version_without_metadata() {
+        let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+        let _restore = EnvRestore::new("ZED_APP_VERSION");
+        unsafe { env::remove_var("ZED_APP_VERSION") };
+
+        let version = AppVersion::load("0.9.1", None, None);
+
+        assert_eq!(version, Version::parse("0.9.1+dev").expect("valid semver"));
+    }
+
+    #[test]
+    fn release_channel_parsing_and_properties_match_supported_values() {
+        assert_eq!(ReleaseChannel::from_str("dev"), Ok(ReleaseChannel::Dev));
+        assert_eq!(
+            ReleaseChannel::from_str("stable"),
+            Ok(ReleaseChannel::Stable)
+        );
+        assert_eq!(
+            ReleaseChannel::from_str("preview"),
+            Ok(ReleaseChannel::Stable)
+        );
+        assert_eq!(
+            ReleaseChannel::from_str("nightly"),
+            Ok(ReleaseChannel::Stable)
+        );
+        assert_eq!(ReleaseChannel::from_str("beta"), Err(InvalidReleaseChannel));
+
+        assert_eq!(ReleaseChannel::Dev.display_name(), "ZZZ Dev");
+        assert_eq!(ReleaseChannel::Stable.display_name(), "ZZZ");
+        assert_eq!(ReleaseChannel::Dev.dev_name(), "dev");
+        assert_eq!(ReleaseChannel::Stable.dev_name(), "stable");
+        assert_eq!(ReleaseChannel::Dev.app_id(), "dev.zzz.ZZZ-Dev");
+        assert_eq!(ReleaseChannel::Stable.app_id(), "dev.zzz.ZZZ");
+        assert!(!ReleaseChannel::Dev.poll_for_updates());
+        assert!(ReleaseChannel::Stable.poll_for_updates());
+        assert_eq!(
+            ReleaseChannel::ALL,
+            [ReleaseChannel::Dev, ReleaseChannel::Stable]
+        );
+    }
+}

@@ -76,3 +76,29 @@ pub(crate) struct VsCodeSnippet {
     /// The snippet description displayed inside the completion menu.
     pub(crate) description: Option<ListOrDirect>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn list_or_direct_conversions_preserve_contents() {
+        let single = ListOrDirect::Single("log".into());
+        let list = ListOrDirect::List(vec!["line 1".into(), "line 2".into()]);
+
+        assert_eq!(Vec::<String>::from(single), vec!["log"]);
+        assert_eq!(
+            Vec::<String>::from(list),
+            vec!["line 1".to_string(), "line 2".to_string()]
+        );
+    }
+
+    #[test]
+    fn list_or_direct_display_joins_multiline_values() {
+        assert_eq!(ListOrDirect::Single("log".into()).to_string(), "log");
+        assert_eq!(
+            ListOrDirect::List(vec!["line 1".into(), "line 2".into()]).to_string(),
+            "line 1\nline 2"
+        );
+    }
+}

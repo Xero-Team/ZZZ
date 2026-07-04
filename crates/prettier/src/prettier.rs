@@ -724,6 +724,48 @@ mod tests {
 
     use super::*;
 
+    fn prettier_settings(parser: Option<&str>) -> PrettierSettings {
+        PrettierSettings {
+            allowed: true,
+            parser: parser.map(ToOwned::to_owned),
+            plugins: HashSet::default(),
+            options: HashMap::default(),
+        }
+    }
+
+    #[test]
+    fn test_prettier_parser_name_for_unsaved_buffers() {
+        let err = prettier_parser_name(None, None, &prettier_settings(None)).unwrap_err();
+        assert!(err.to_string().contains("Cannot determine prettier parser"));
+
+        assert_eq!(
+            prettier_parser_name(None, None, &prettier_settings(Some("typescript"))).unwrap(),
+            Some("typescript".into())
+        );
+    }
+
+    #[test]
+    fn test_prettier_parser_name_for_saved_buffers_without_language_override() {
+        assert_eq!(
+            prettier_parser_name(
+                Some(Path::new("/tmp/file.js")),
+                None,
+                &prettier_settings(Some("babel"))
+            )
+            .unwrap(),
+            Some("babel".into())
+        );
+        assert_eq!(
+            prettier_parser_name(
+                Some(Path::new("/tmp/file.js")),
+                None,
+                &prettier_settings(None)
+            )
+            .unwrap(),
+            None
+        );
+    }
+
     #[gpui::test]
     async fn test_prettier_lookup_finds_nothing(cx: &mut gpui::TestAppContext) {
         let fs = FakeFs::new(cx.executor());

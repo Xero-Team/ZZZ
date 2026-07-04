@@ -100,3 +100,30 @@ impl EncryptedPassword {
         Ok(String::from_utf8(std::mem::take(&mut self.0))?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encrypted_password_round_trips_plaintext() {
+        let password = EncryptedPassword::try_from("hunter2").unwrap();
+
+        let decrypted = password
+            .decrypt(IKnowWhatIAmDoingAndIHaveReadTheDocs)
+            .unwrap();
+
+        assert_eq!(decrypted, "hunter2");
+    }
+
+    #[test]
+    fn encrypted_password_round_trips_empty_string() {
+        let password = EncryptedPassword::try_from("").unwrap();
+
+        let decrypted = password
+            .decrypt(IKnowWhatIAmDoingAndIHaveReadTheDocs)
+            .unwrap();
+
+        assert_eq!(decrypted, "");
+    }
+}

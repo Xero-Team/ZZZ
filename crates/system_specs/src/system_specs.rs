@@ -291,3 +291,91 @@ fn bundle_type() -> Option<String> {
         .map(|bundle_type| bundle_type.to_owned())
         .or_else(|| env::var("ZED_BUNDLE_TYPE").ok())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvRestore {
+        name: String,
+        original: Option<String>,
+    }
+
+    impl EnvRestore {
+        fn new(name: &str) -> Self {
+            Self {
+                name: name.to_string(),
+                original: env::var(name).ok(),
+            }
+        }
+    }
+
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            match self.original.as_deref() {
+                Some(value) => unsafe { env::set_var(&self.name, value) },
+                None => unsafe { env::remove_var(&self.name) },
+            }
+        }
+    }
+
+    #[test]
+    fn bundle_type_uses_runtime_env_when_compile_time_value_is_absent() {
+        let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+        let _restore = EnvRestore::new("ZED_BUNDLE_TYPE");
+        unsafe { env::set_var("ZED_BUNDLE_TYPE", "portable-test") };
+
+        let expected = option_env!("ZED_BUNDLE_TYPE")
+            .map(str::to_string)
+            .unwrap_or_else(|| "portable-test".to_string());
+
+        assert_eq!(bundle_type(), Some(expected));
+    }
+
+    #[test]
+    fn new_stateless_includes_commit_sha_only_for_dev_channel() {
+        let dev_specs = SystemSpecs::new_stateless(
+            Version::new(1, 2, 3),
+            Some(AppCommitSha::new("abcdef0".to_string())),
+            ReleaseChannel::Dev,
+        );
+        let stable_specs = SystemSpecs::new_stateless(
+            Version::new(1, 2, 3),
+            Some(AppCommitSha::new("abcdef0".to_string())),
+            ReleaseChannel::Stable,
+        );
+
+        assert_eq!(dev_specs.app_version, "1.2.3");
+        assert_eq!(dev_specs.release_channel, "ZZZ Dev");
+        assert_eq!(dev_specs.commit_sha.as_deref(), Some("abcdef0"));
+
+        assert_eq!(stable_specs.release_channel, "ZZZ");
+        assert_eq!(stable_specs.commit_sha, None);
+    }
+
+    #[test]
+    fn display_renders_core_fields_and_optional_gpu_line() {
+        let specs = SystemSpecs {
+            app_version: "1.2.3".to_string(),
+            release_channel: "ZZZ Dev",
+            os_name: "TestOS".to_string(),
+            os_version: "9.9".to_string(),
+            memory: 1024,
+            architecture: "x86_64",
+            commit_sha: Some("abcdef0".to_string()),
+            bundle_type: Some("portable".to_string()),
+            gpu_specs: Some("GPU A || Driver B || Info C".to_string()),
+        };
+
+        let rendered = specs.to_string();
+
+        assert!(rendered.contains("ZZZ: v1.2.3 (ZZZ Dev abcdef0) (portable)"));
+        assert!(rendered.contains("OS: TestOS 9.9"));
+        assert!(rendered.contains("Memory:"));
+        assert!(rendered.contains("Architecture: x86_64"));
+        assert!(rendered.contains("GPU: GPU A || Driver B || Info C"));
+    }
+}

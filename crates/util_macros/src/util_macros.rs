@@ -23,15 +23,7 @@ use syn::{ItemFn, LitStr, parse_macro_input, parse_quote};
 #[proc_macro]
 pub fn path(input: TokenStream) -> TokenStream {
     let path = parse_macro_input!(input as LitStr);
-    let mut path = path.value();
-
-    #[cfg(target_os = "windows")]
-    {
-        path = path.replace("/", "\\");
-        if path.starts_with("\\") {
-            path = format!("C:{}", path);
-        }
-    }
+    let path = normalize_path(&path.value());
 
     TokenStream::from(quote! {
         #path
@@ -54,10 +46,7 @@ pub fn path(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn uri(input: TokenStream) -> TokenStream {
     let uri = parse_macro_input!(input as LitStr);
-    let uri = uri.value();
-
-    #[cfg(target_os = "windows")]
-    let uri = uri.replace("file:///", "file:///C:/");
+    let uri = normalize_uri(&uri.value());
 
     TokenStream::from(quote! {
         #uri
@@ -80,14 +69,51 @@ pub fn uri(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn line_endings(input: TokenStream) -> TokenStream {
     let text = parse_macro_input!(input as LitStr);
-    let text = text.value();
-
-    #[cfg(target_os = "windows")]
-    let text = text.replace("\n", "\r\n");
+    let text = normalize_line_endings(&text.value());
 
     TokenStream::from(quote! {
         #text
     })
+}
+
+fn normalize_path(path: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        let mut path = path.replace("/", "\\");
+        if path.starts_with("\\") {
+            path = format!("C:{}", path);
+        }
+        path
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        path.to_owned()
+    }
+}
+
+fn normalize_uri(uri: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        uri.replace("file:///", "file:///C:/")
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        uri.to_owned()
+    }
+}
+
+fn normalize_line_endings(text: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        text.replace("\n", "\r\n")
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        text.to_owned()
+    }
 }
 
 /// Inner data for the perf macro.
@@ -283,4 +309,76 @@ pub fn perf(our_attr: TokenStream, input: TokenStream) -> TokenStream {
     fns.into_iter()
         .flat_map(|f| TokenStream::from(f.into_token_stream()))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::ToTokens;
+    use syn::parse::Parser;
+
+    #[test]
+    fn path_normalization_matches_platform() {
+        #[cfg(target_os = "windows")]
+        assert_eq!(
+            normalize_path("/Users/user/file.txt"),
+            "C:\\Users\\user\\file.txt"
+        );
+
+        #[cfg(not(target_os = "windows"))]
+        assert_eq!(
+            normalize_path("/Users/user/file.txt"),
+            "/Users/user/file.txt"
+        );
+    }
+
+    #[test]
+    fn uri_normalization_matches_platform() {
+        #[cfg(target_os = "windows")]
+        assert_eq!(
+            normalize_uri("file:///path/to/file"),
+            "file:///C:/path/to/file"
+        );
+
+        #[cfg(not(target_os = "windows"))]
+        assert_eq!(
+            normalize_uri("file:///path/to/file"),
+            "file:///path/to/file"
+        );
+    }
+
+    #[test]
+    fn line_endings_normalization_matches_platform() {
+        #[cfg(target_os = "windows")]
+        assert_eq!(normalize_line_endings("Hello\nWorld"), "Hello\r\nWorld");
+
+        #[cfg(not(target_os = "windows"))]
+        assert_eq!(normalize_line_endings("Hello\nWorld"), "Hello\nWorld");
+    }
+
+    #[test]
+    fn perf_args_parse_supported_flags() {
+        let mut args = PerfArgs::default();
+        let parser = syn::meta::parser(|meta| PerfArgs::parse_into(&mut args, meta));
+
+        parser
+            .parse2(quote!(iterations = 7, weight = 3, critical))
+            .unwrap();
+
+        assert_eq!(
+            args.iterations.unwrap().into_token_stream().to_string(),
+            "7"
+        );
+        assert_eq!(args.weight.unwrap().into_token_stream().to_string(), "3");
+        assert_eq!(args.importance, Importance::Critical);
+    }
+
+    #[test]
+    fn perf_args_reject_unexpected_identifiers() {
+        let mut args = PerfArgs::default();
+        let parser = syn::meta::parser(|meta| PerfArgs::parse_into(&mut args, meta));
+        let error = parser.parse2(quote!(mystery)).unwrap_err();
+
+        assert_eq!(error.to_string(), "unexpected identifier");
+    }
 }

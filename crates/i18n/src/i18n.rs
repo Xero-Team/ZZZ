@@ -198,21 +198,46 @@ mod tests {
     use gpui::{BorrowAppContext, TestAppContext};
     use settings::SettingsStore;
 
+    fn set_display_language(cx: &mut gpui::App, language: settings::DisplayLanguage) {
+        cx.update_global::<SettingsStore, _>(|store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.workspace.display_language = Some(language);
+            });
+        });
+    }
+
+    #[test]
+    fn active_locale_metadata_matches_catalog_codes() {
+        assert_eq!(ActiveLocale::English.language_name(), "English");
+        assert_eq!(ActiveLocale::English.code(), "en");
+        assert_eq!(ActiveLocale::SimplifiedChinese.language_name(), "简体中文");
+        assert_eq!(ActiveLocale::SimplifiedChinese.code(), "zh-CN");
+    }
+
+    #[test]
+    fn resolve_locale_respects_explicit_display_language() {
+        assert_eq!(
+            resolve_locale(DisplayLanguageSetting::English),
+            ActiveLocale::English
+        );
+        assert_eq!(
+            resolve_locale(DisplayLanguageSetting::SimplifiedChinese),
+            ActiveLocale::SimplifiedChinese
+        );
+    }
+
     #[gpui::test]
     fn reload_switches_to_simplified_chinese(cx: &mut TestAppContext) {
         cx.update(|cx| {
             let store = SettingsStore::test(cx);
             cx.set_global(store);
+            set_display_language(cx, settings::DisplayLanguage::En);
 
             init(cx);
             assert_eq!(active_locale(cx), ActiveLocale::English);
             assert_eq!(tr(cx, "menu.about", "About ZZZ"), "About ZZZ");
 
-            cx.update_global::<SettingsStore, _>(|store, cx| {
-                store.update_user_settings(cx, |settings| {
-                    settings.workspace.display_language = Some(settings::DisplayLanguage::ZhCn);
-                });
-            });
+            set_display_language(cx, settings::DisplayLanguage::ZhCn);
 
             assert!(reload(cx));
             assert_eq!(active_locale(cx), ActiveLocale::SimplifiedChinese);

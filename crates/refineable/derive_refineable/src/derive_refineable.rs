@@ -546,3 +546,84 @@ fn get_wrapper_type(field: &Field, ty: &Type) -> syn::Type {
         parse_quote!(Option<#ty>)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::ToTokens;
+    use syn::parse_quote;
+
+    #[test]
+    fn detects_refineable_fields_by_attribute() {
+        let refineable_field: Field = parse_quote! {
+            #[refineable]
+            pub nested: Nested
+        };
+        let regular_field: Field = parse_quote! {
+            pub nested: Nested
+        };
+
+        assert!(is_refineable_field(&refineable_field));
+        assert!(!is_refineable_field(&regular_field));
+    }
+
+    #[test]
+    fn detects_only_plain_option_fields() {
+        let plain_option: Field = parse_quote! {
+            pub value: Option<String>
+        };
+        let qualified_option: Field = parse_quote! {
+            pub value: std::option::Option<String>
+        };
+        let regular_field: Field = parse_quote! {
+            pub value: String
+        };
+
+        assert!(is_optional_field(&plain_option));
+        assert!(!is_optional_field(&qualified_option));
+        assert!(!is_optional_field(&regular_field));
+    }
+
+    #[test]
+    fn get_wrapper_type_converts_refineable_and_plain_fields() {
+        let refineable_field: Field = parse_quote! {
+            #[refineable]
+            pub nested: Nested<u8>
+        };
+        let optional_field: Field = parse_quote! {
+            pub value: Option<String>
+        };
+        let plain_field: Field = parse_quote! {
+            pub value: String
+        };
+        let existing_refinement_field: Field = parse_quote! {
+            #[refineable]
+            pub nested: NestedRefinement<u8>
+        };
+
+        assert_eq!(
+            get_wrapper_type(&refineable_field, &refineable_field.ty)
+                .into_token_stream()
+                .to_string(),
+            "NestedRefinement < u8 >"
+        );
+        assert_eq!(
+            get_wrapper_type(&optional_field, &optional_field.ty)
+                .into_token_stream()
+                .to_string(),
+            "Option < String >"
+        );
+        assert_eq!(
+            get_wrapper_type(&plain_field, &plain_field.ty)
+                .into_token_stream()
+                .to_string(),
+            "Option < String >"
+        );
+        assert_eq!(
+            get_wrapper_type(&existing_refinement_field, &existing_refinement_field.ty)
+                .into_token_stream()
+                .to_string(),
+            "NestedRefinement < u8 >"
+        );
+    }
+}

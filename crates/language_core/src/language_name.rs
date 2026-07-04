@@ -107,3 +107,35 @@ impl From<LanguageName> for String {
         Self::from(value)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn language_id_increments_monotonically() {
+        let first = LanguageId::new();
+        let second = LanguageId::new();
+        assert!(first < second);
+    }
+
+    #[test]
+    fn language_name_helpers_convert_and_normalize_lsp_ids() {
+        let rust = LanguageName::new("Rust");
+        assert_eq!(rust.as_ref(), "Rust");
+        assert_eq!(rust.to_proto(), "Rust");
+        assert_eq!(rust.lsp_id(), "rust");
+        assert_eq!(rust.to_string(), "Rust");
+        assert_eq!(String::from(LanguageName::new("Rust")), "Rust");
+        assert_eq!(
+            SharedString::from(LanguageName::new("Rust")),
+            SharedString::new("Rust")
+        );
+
+        let plain_text = LanguageName::new_static("Plain Text");
+        assert_eq!(plain_text.lsp_id(), "plaintext");
+
+        let from_proto = LanguageName::from_proto("TypeScript".into());
+        assert_eq!(from_proto, "TypeScript");
+    }
+}

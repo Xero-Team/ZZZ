@@ -7737,6 +7737,7 @@ dependencies = [
  "serde",
  "smol_str",
 ]
+ "serde_json",
 
 [[package]]
 name = "gpui_tokio"

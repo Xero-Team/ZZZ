@@ -308,3 +308,81 @@ impl ZedSyntaxToken {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn token_color(scope: VsCodeTokenScope, foreground: Option<&str>) -> VsCodeTokenColor {
+        VsCodeTokenColor {
+            name: None,
+            scope: Some(scope),
+            settings: VsCodeTokenColorSettings {
+                foreground: foreground.map(ToOwned::to_owned),
+                background: None,
+                font_style: None,
+            },
+        }
+    }
+
+    #[test]
+    fn test_find_best_token_color_match_prefers_highest_rank() {
+        let token_colors = vec![
+            token_color(
+                VsCodeTokenScope::One("variable.function".into()),
+                Some("#111111"),
+            ),
+            token_color(
+                VsCodeTokenScope::One("entity.function".into()),
+                Some("#222222"),
+            ),
+            token_color(
+                VsCodeTokenScope::Many(vec![
+                    "entity.name.function, variable.function".into(),
+                    "meta.function-call".into(),
+                ]),
+                Some("#333333"),
+            ),
+        ];
+
+        let best_match = ZedSyntaxToken::Function
+            .find_best_token_color_match(&token_colors)
+            .unwrap();
+
+        assert_eq!(best_match.settings.foreground.as_deref(), Some("#333333"));
+    }
+
+    #[test]
+    fn test_find_best_token_color_match_ignores_entries_without_foreground() {
+        let token_colors = vec![
+            token_color(VsCodeTokenScope::One("entity.name.function".into()), None),
+            token_color(
+                VsCodeTokenScope::One("variable.function".into()),
+                Some("#abcdef"),
+            ),
+        ];
+
+        let best_match = ZedSyntaxToken::Function
+            .find_best_token_color_match(&token_colors)
+            .unwrap();
+
+        assert_eq!(best_match.settings.foreground.as_deref(), Some("#abcdef"));
+    }
+
+    #[test]
+    fn test_fallbacks_cover_derived_tokens() {
+        assert_eq!(
+            ZedSyntaxToken::CommentDoc.fallbacks(),
+            &[ZedSyntaxToken::Comment]
+        );
+        assert_eq!(
+            ZedSyntaxToken::Number.fallbacks(),
+            &[ZedSyntaxToken::Constant]
+        );
+        assert_eq!(
+            ZedSyntaxToken::StringEscape.fallbacks(),
+            &[ZedSyntaxToken::String]
+        );
+        assert!(ZedSyntaxToken::Keyword.fallbacks().is_empty());
+    }
+}

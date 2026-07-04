@@ -129,8 +129,8 @@ fn flatten_stream(tokens: TokenStream, result: &mut Vec<(String, Span)>) {
 fn open_delimiter(delimiter: Delimiter) -> String {
     match delimiter {
         Delimiter::Parenthesis => "( ".to_owned(),
-        Delimiter::Brace => "[ ".to_owned(),
-        Delimiter::Bracket => "{ ".to_owned(),
+        Delimiter::Brace => "{ ".to_owned(),
+        Delimiter::Bracket => "[ ".to_owned(),
         Delimiter::None => "".to_owned(),
     }
 }
@@ -138,8 +138,35 @@ fn open_delimiter(delimiter: Delimiter) -> String {
 fn close_delimiter(delimiter: Delimiter) -> String {
     match delimiter {
         Delimiter::Parenthesis => " ) ".to_owned(),
-        Delimiter::Brace => " ] ".to_owned(),
-        Delimiter::Bracket => " } ".to_owned(),
+        Delimiter::Brace => " } ".to_owned(),
+        Delimiter::Bracket => " ] ".to_owned(),
         Delimiter::None => "".to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repair_sqlite_numbered_placeholders_compacts_digit_suffixes() {
+        let sql = "SELECT ? 1, ?, ?   23, ?   FROM test".to_owned();
+
+        assert_eq!(
+            repair_sqlite_numbered_placeholders(sql),
+            "SELECT ?1, ?, ?23, ?   FROM test"
+        );
+    }
+
+    #[test]
+    fn delimiter_mappings_match_token_delimiters() {
+        assert_eq!(open_delimiter(Delimiter::Parenthesis), "( ");
+        assert_eq!(close_delimiter(Delimiter::Parenthesis), " ) ");
+        assert_eq!(open_delimiter(Delimiter::Brace), "{ ");
+        assert_eq!(close_delimiter(Delimiter::Brace), " } ");
+        assert_eq!(open_delimiter(Delimiter::Bracket), "[ ");
+        assert_eq!(close_delimiter(Delimiter::Bracket), " ] ");
+        assert_eq!(open_delimiter(Delimiter::None), "");
+        assert_eq!(close_delimiter(Delimiter::None), "");
     }
 }

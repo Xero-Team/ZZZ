@@ -139,3 +139,36 @@ impl<T: ?Sized + Debug> Debug for ArcCow<'_, T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn borrowed_and_owned_arc_cow_compare_equally() {
+        let borrowed: ArcCow<'_, str> = ArcCow::from("zed");
+        let owned: ArcCow<'_, str> = ArcCow::from(String::from("zed"));
+
+        assert_eq!(borrowed, owned);
+        assert_eq!(borrowed.as_ref(), "zed");
+        assert_eq!(&*owned, "zed");
+    }
+
+    #[test]
+    fn arc_cow_from_cow_and_string_slices() {
+        let borrowed = ArcCow::from(Cow::Borrowed("abc"));
+        let owned = ArcCow::from(Cow::Owned(String::from("xyz")));
+        let bytes: ArcCow<'_, [u8]> = ArcCow::from("hi");
+
+        assert_eq!(borrowed.as_ref(), "abc");
+        assert_eq!(owned.as_ref(), "xyz");
+        assert_eq!(bytes.as_ref(), b"hi");
+    }
+
+    #[test]
+    fn arc_cow_vec_conversion_preserves_slice_contents() {
+        let values: ArcCow<'_, [u8]> = ArcCow::from(vec![1, 2, 3]);
+
+        assert_eq!(values.as_ref(), &[1, 2, 3]);
+    }
+}

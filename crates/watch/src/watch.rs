@@ -226,6 +226,29 @@ mod tests {
         assert_eq!(receiver.recv().await, Err(NoSenderError));
     }
 
+    #[test]
+    fn test_new_receiver_starts_at_current_version() {
+        let (mut sender, mut receiver) = channel(0);
+        assert_eq!(sender.send(1), Ok(()));
+        assert_eq!(*receiver.borrow(), 1);
+
+        let mut current_receiver = sender.receiver();
+        assert_eq!(*current_receiver.borrow(), 1);
+        assert_eq!(current_receiver.changed().now_or_never(), None);
+
+        assert_eq!(sender.send(2), Ok(()));
+        assert_eq!(current_receiver.changed().now_or_never(), Some(Ok(())));
+        assert_eq!(*current_receiver.borrow(), 2);
+    }
+
+    #[test]
+    fn test_constant_receiver_never_changes() {
+        let mut receiver = Receiver::constant(42);
+
+        assert_eq!(*receiver.borrow(), 42);
+        assert_eq!(receiver.changed().now_or_never(), None);
+    }
+
     #[allow(
         clippy::future_not_send,
         reason = "GPUI test contexts intentionally run on a local executor"

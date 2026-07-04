@@ -130,3 +130,107 @@ impl<S: Refineable + Default> Cascade<S> {
         merged
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone, Debug, Default, PartialEq, Eq)]
+    struct Example {
+        value: i32,
+    }
+
+    #[derive(Clone, Debug, Default, PartialEq, Eq)]
+    struct ExampleRefinement {
+        value: Option<i32>,
+    }
+
+    impl IsEmpty for ExampleRefinement {
+        fn is_empty(&self) -> bool {
+            self.value.is_none()
+        }
+    }
+
+    impl Refineable for Example {
+        type Refinement = ExampleRefinement;
+
+        fn refine(&mut self, refinement: &Self::Refinement) {
+            if let Some(value) = refinement.value {
+                self.value = value;
+            }
+        }
+
+        fn refined(mut self, refinement: Self::Refinement) -> Self {
+            self.refine(&refinement);
+            self
+        }
+
+        fn is_superset_of(&self, refinement: &Self::Refinement) -> bool {
+            refinement.value.is_none_or(|value| self.value == value)
+        }
+
+        fn subtract(&self, refinement: &Self::Refinement) -> Self::Refinement {
+            if refinement.value == Some(self.value) {
+                ExampleRefinement::default()
+            } else {
+                ExampleRefinement {
+                    value: Some(self.value),
+                }
+            }
+        }
+    }
+
+    impl Refineable for ExampleRefinement {
+        type Refinement = ExampleRefinement;
+
+        fn refine(&mut self, refinement: &Self::Refinement) {
+            if let Some(value) = refinement.value {
+                self.value = Some(value);
+            }
+        }
+
+        fn refined(mut self, refinement: Self::Refinement) -> Self {
+            self.refine(&refinement);
+            self
+        }
+
+        fn is_superset_of(&self, refinement: &Self::Refinement) -> bool {
+            refinement.value.is_none() || self.value == refinement.value
+        }
+
+        fn subtract(&self, refinement: &Self::Refinement) -> Self::Refinement {
+            if self.value == refinement.value {
+                Self::default()
+            } else {
+                self.clone()
+            }
+        }
+    }
+
+    #[test]
+    fn merged_applies_later_slots_after_base() {
+        let mut cascade = Cascade::<Example>::default();
+        cascade.base().value = Some(1);
+
+        let first_slot = cascade.reserve();
+        let second_slot = cascade.reserve();
+        cascade.set(first_slot, Some(ExampleRefinement { value: Some(2) }));
+        cascade.set(second_slot, Some(ExampleRefinement { value: Some(3) }));
+
+        assert_eq!(cascade.merged().value, Some(3));
+        assert_eq!(Example::from_cascade(&cascade).value, 3);
+    }
+
+    #[test]
+    fn clearing_slot_removes_it_from_future_merges() {
+        let mut cascade = Cascade::<Example>::default();
+        cascade.base().value = Some(1);
+
+        let slot = cascade.reserve();
+        cascade.set(slot, Some(ExampleRefinement { value: Some(4) }));
+        assert_eq!(cascade.merged().value, Some(4));
+
+        cascade.set(slot, None);
+        assert_eq!(cascade.merged().value, Some(1));
+    }
+}

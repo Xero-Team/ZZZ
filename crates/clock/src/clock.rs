@@ -283,3 +283,94 @@ impl fmt::Debug for Global {
         write!(f, "}}")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn replica_ids_report_labels_and_remote_state() {
+        assert_eq!(format!("{:?}", ReplicaId::LOCAL), "<local>");
+        assert_eq!(format!("{:?}", ReplicaId::REMOTE_SERVER), "<remote>");
+        assert_eq!(format!("{:?}", ReplicaId::AGENT), "<agent>");
+        assert_eq!(format!("{:?}", ReplicaId::LOCAL_BRANCH), "<branch>");
+        assert!(ReplicaId::REMOTE_SERVER.is_remote());
+        assert!(ReplicaId::FIRST_COLLAB_ID.is_remote());
+        assert!(!ReplicaId::LOCAL.is_remote());
+    }
+
+    #[test]
+    fn lamport_tick_observe_and_order_work() {
+        let replica = ReplicaId::new(9);
+        let mut lamport = Lamport::new(replica);
+
+        let first = lamport.tick();
+        assert_eq!(first.value, 1);
+        assert_eq!(lamport.value, 2);
+
+        lamport.observe(Lamport {
+            replica_id: ReplicaId::REMOTE_SERVER,
+            value: 7,
+        });
+        assert_eq!(lamport.value, 8);
+        assert!(Lamport::new(replica) < Lamport::MAX);
+        assert_eq!(
+            first.as_u64(),
+            ((first.value as u64) << 32) | replica.as_u16() as u64
+        );
+    }
+
+    #[test]
+    fn global_observe_join_meet_and_recent_work() {
+        let local = Lamport {
+            replica_id: ReplicaId::LOCAL,
+            value: 3,
+        };
+        let remote = Lamport {
+            replica_id: ReplicaId::REMOTE_SERVER,
+            value: 2,
+        };
+        let collab = Lamport {
+            replica_id: ReplicaId::FIRST_COLLAB_ID,
+            value: 7,
+        };
+
+        let mut left = Global::from_iter([local, collab]);
+        let right = Global::from_iter([
+            Lamport {
+                replica_id: ReplicaId::LOCAL,
+                value: 5,
+            },
+            remote,
+        ]);
+
+        assert!(left.observed(local));
+        assert!(!left.observed(remote));
+
+        left.join(&right);
+        assert_eq!(left.get(ReplicaId::LOCAL), 5);
+        assert_eq!(left.get(ReplicaId::REMOTE_SERVER), 2);
+        assert_eq!(left.most_recent(), Some(collab));
+        assert!(left.observed_all(&right));
+
+        left.meet(&right);
+        assert_eq!(left.get(ReplicaId::LOCAL), 5);
+        assert_eq!(left.get(ReplicaId::REMOTE_SERVER), 2);
+        assert_eq!(left.get(ReplicaId::FIRST_COLLAB_ID), 7);
+        assert!(left.observed_any(&right));
+        assert!(left.changed_since(&Global::from_iter([local])));
+    }
+
+    #[test]
+    fn fake_system_clock_can_be_set_and_advanced() {
+        let clock = FakeSystemClock::new();
+        let now = Instant::now();
+
+        clock.set_now(now);
+        assert_eq!(clock.utc_now(), now);
+
+        clock.advance(Duration::from_secs(5));
+        assert_eq!(clock.utc_now(), now + Duration::from_secs(5));
+    }
+}

@@ -63,3 +63,49 @@ impl Assets {
             .unwrap()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use gpui::AssetSource as _;
+
+    use super::Assets;
+
+    #[test]
+    fn load_returns_embedded_asset_bytes() {
+        let asset = Assets
+            .load("fonts/lilex/Lilex-Regular.ttf")
+            .unwrap()
+            .unwrap();
+
+        assert!(!asset.is_empty());
+    }
+
+    #[test]
+    fn load_returns_contextual_error_for_missing_asset() {
+        let error = Assets.load("fonts/does-not-exist.ttf").unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("loading asset at path \"fonts/does-not-exist.ttf\"")
+        );
+    }
+
+    #[test]
+    fn list_filters_to_requested_prefix() {
+        let fonts = Assets.list("fonts").unwrap();
+
+        assert!(!fonts.is_empty());
+        assert!(fonts.iter().all(|path| path.as_ref().starts_with("fonts/")));
+        assert!(
+            fonts
+                .iter()
+                .any(|path| path.as_ref() == "fonts/lilex/Lilex-Regular.ttf")
+        );
+        assert!(
+            fonts
+                .iter()
+                .all(|path| !path.as_ref().starts_with("icons/"))
+        );
+    }
+}

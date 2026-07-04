@@ -93,3 +93,45 @@ pub fn init() {
 
 #[cfg(not(ztracing))]
 pub fn init() {}
+
+#[cfg(all(test, not(ztracing)))]
+mod tests {
+    use super::{
+        Span, debug_span, error_span, event, info_span, init, span, trace_span, warn_span,
+    };
+
+    #[test]
+    fn stub_span_methods_are_callable() {
+        let span = Span::current();
+        span.enter();
+        span.record("answer", 42);
+    }
+
+    #[test]
+    fn stub_macros_accept_tracing_like_syntax() {
+        let root = span!(super::Level::INFO, "root", answer = 42, ok = true);
+        root.enter();
+
+        let trace = trace_span!("trace", path = "crate::module");
+        trace.record("field", "value");
+
+        let info = info_span!(target: "tests", "info", count = 2);
+        info.enter();
+
+        let debug = debug_span!("debug", maybe = ?Some(5));
+        debug.enter();
+
+        let warn = warn_span!("warn", data = %123);
+        warn.record("extra", "value");
+
+        let error = error_span!("error", success = false);
+        error.enter();
+
+        let _event = event!(super::Level::WARN, message = "ignored", retries = 3);
+    }
+
+    #[test]
+    fn init_is_callable_without_tracing_backend() {
+        init();
+    }
+}

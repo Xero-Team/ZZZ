@@ -122,3 +122,85 @@ impl ToolchainList {
             .cloned()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_toolchain(name: &str, path: &str) -> Toolchain {
+        Toolchain {
+            name: SharedString::new(name),
+            path: SharedString::new(path),
+            language_name: LanguageName::new("Rust"),
+            as_json: serde_json::json!({
+                "name": name,
+                "path": path,
+            }),
+        }
+    }
+
+    #[test]
+    fn toolchain_equality_ignores_json_payload() {
+        let left = sample_toolchain("stable", "/toolchains/stable");
+        let mut right = sample_toolchain("stable", "/toolchains/stable");
+        right.as_json = serde_json::json!({ "different": true });
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn toolchain_scope_labels_and_descriptions_match_ui_copy() {
+        let subproject = ToolchainScope::Subproject(
+            Arc::<Path>::from(Path::new("/workspace")),
+            Arc::from(RelPath::unix("crates/core").expect("relative path")),
+        );
+        assert_eq!(subproject.label(), "Subproject");
+        assert_eq!(
+            subproject.description(),
+            "Available only in the subproject you're currently in."
+        );
+        assert_eq!(ToolchainScope::Project.label(), "Project");
+        assert_eq!(
+            ToolchainScope::Project.description(),
+            "Available in all locations in your current project."
+        );
+        assert_eq!(ToolchainScope::Global.label(), "Global");
+        assert_eq!(
+            ToolchainScope::Global.description(),
+            "Available in all of your projects on this machine."
+        );
+    }
+
+    #[test]
+    fn toolchain_list_returns_default_and_group_for_index() {
+        let stable = sample_toolchain("stable", "/toolchains/stable");
+        let nightly = sample_toolchain("nightly", "/toolchains/nightly");
+        let list = ToolchainList {
+            toolchains: vec![stable.clone(), nightly],
+            default: Some(0),
+            groups: vec![
+                (0, SharedString::new("Installed")),
+                (1, SharedString::new("Suggested")),
+            ]
+            .into_boxed_slice(),
+        };
+
+        assert_eq!(
+            list.toolchains(),
+            &[
+                stable.clone(),
+                sample_toolchain("nightly", "/toolchains/nightly")
+            ]
+        );
+        assert_eq!(list.default_toolchain(), Some(stable));
+        assert_eq!(
+            list.group_for_index(0),
+            Some((0, SharedString::new("Installed")))
+        );
+        assert_eq!(
+            list.group_for_index(1),
+            Some((1, SharedString::new("Suggested")))
+        );
+        assert_eq!(list.group_for_index(2), None);
+    }
+}

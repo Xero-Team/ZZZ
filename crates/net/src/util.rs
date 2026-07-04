@@ -74,3 +74,47 @@ fn sun_path_offset(addr: &SOCKADDR_UN) -> usize {
     let path = &addr.sun_path as *const _ as usize;
     path - base
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sockaddr_un_encodes_path_and_length() {
+        let path = Path::new("socket.sock");
+        let (addr, len) = sockaddr_un(path).unwrap();
+        let path_bytes = path.to_str().unwrap().as_bytes();
+
+        assert_eq!(addr.sun_family, ADDRESS_FAMILY(AF_UNIX));
+        assert_eq!(len, sun_path_offset(&addr) + path_bytes.len() + 1);
+
+        let encoded_path: Vec<u8> = addr.sun_path[..path_bytes.len()]
+            .iter()
+            .map(|byte| *byte as u8)
+            .collect();
+        assert_eq!(encoded_path, path_bytes);
+        assert_eq!(addr.sun_path[path_bytes.len()], 0);
+    }
+
+    #[test]
+    fn sockaddr_un_rejects_interior_null_bytes() {
+        let error = sockaddr_un(Path::new("socket\0.sock")).unwrap_err();
+
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+        assert_eq!(
+            error.to_string(),
+            "paths may not contain interior null bytes"
+        );
+    }
+
+    #[test]
+    fn sockaddr_un_rejects_too_long_path() {
+        let max_len = SOCKADDR_UN::default().sun_path.len();
+        let path = "a".repeat(max_len);
+
+        let error = sockaddr_un(Path::new(&path)).unwrap_err();
+
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+        assert_eq!(error.to_string(), "path must be shorter than SUN_LEN");
+    }
+}

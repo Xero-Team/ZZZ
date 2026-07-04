@@ -446,3 +446,37 @@ fn type_id_hasher() {
     verify_hashing_with(TypeId::of::<&str>());
     verify_hashing_with(TypeId::of::<Vec<u8>>());
 }
+
+#[test]
+fn post_inc_returns_previous_value() {
+    let mut value = 7_u32;
+
+    assert_eq!(post_inc(&mut value), 7);
+    assert_eq!(value, 8);
+}
+
+#[test]
+fn defer_runs_on_drop_and_abort_cancels() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering::SeqCst},
+    };
+
+    let counter = Arc::new(AtomicUsize::new(0));
+    {
+        let counter = counter.clone();
+        let _deferred = defer(move || {
+            counter.fetch_add(1, SeqCst);
+        });
+    }
+    assert_eq!(counter.load(SeqCst), 1);
+
+    {
+        let counter = counter.clone();
+        let deferred = defer(move || {
+            counter.fetch_add(1, SeqCst);
+        });
+        deferred.abort();
+    }
+    assert_eq!(counter.load(SeqCst), 1);
+}

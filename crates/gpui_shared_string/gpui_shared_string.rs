@@ -201,3 +201,50 @@ impl<'de> Deserialize<'de> for SharedString {
         Ok(SharedString::new(&s))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_and_static_values_are_empty() {
+        assert_eq!(SharedString::default().as_str(), "");
+        assert_eq!(SharedString::new_static("static").as_str(), "static");
+    }
+
+    #[test]
+    fn conversions_preserve_contents() {
+        let owned = String::from("owned");
+        let shared_from_owned = SharedString::from(owned.clone());
+        let shared_from_ref = SharedString::from(&owned);
+        let shared_from_cow = SharedString::from(Cow::Borrowed("borrowed"));
+        let shared_from_arc = SharedString::from(Arc::<str>::from("arc"));
+
+        assert_eq!(shared_from_owned.as_str(), "owned");
+        assert_eq!(shared_from_ref.as_str(), "owned");
+        assert_eq!(shared_from_cow.as_str(), "borrowed");
+        assert_eq!(shared_from_arc.as_str(), "arc");
+        assert_eq!(String::from(shared_from_owned), "owned");
+    }
+
+    #[test]
+    fn comparisons_match_string_types() {
+        let shared = SharedString::new("value");
+
+        assert_eq!(shared, "value");
+        assert_eq!(shared, String::from("value"));
+        assert_eq!(String::from("value"), shared);
+    }
+
+    #[test]
+    fn serde_round_trips_as_a_json_string() {
+        let shared = SharedString::new("hello");
+
+        let json = serde_json::to_string(&shared).expect("serialize shared string");
+        let deserialized: SharedString =
+            serde_json::from_str(&json).expect("deserialize shared string");
+
+        assert_eq!(json, "\"hello\"");
+        assert_eq!(deserialized, shared);
+    }
+}

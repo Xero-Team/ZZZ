@@ -1052,4 +1052,158 @@ mod tests {
         assert!(!chunks[1].is_last_update);
         assert!(chunks[2].is_last_update);
     }
+
+    #[test]
+    fn test_timestamp_roundtrip_and_pre_epoch_conversion() {
+        let timestamp = Timestamp {
+            seconds: 123,
+            nanos: 400,
+        };
+        let time = SystemTime::from(timestamp);
+
+        let timestamp = Timestamp::from(time);
+        assert_eq!(timestamp.seconds, 123);
+        assert_eq!(timestamp.nanos, 400);
+        assert_eq!(SystemTime::from(timestamp), time);
+
+        let pre_epoch_time = UNIX_EPOCH.checked_sub(Duration::from_secs(1)).unwrap();
+        let timestamp = Timestamp::from(pre_epoch_time);
+        assert_eq!(timestamp.seconds, 0);
+        assert_eq!(timestamp.nanos, 0);
+    }
+
+    #[test]
+    fn test_nonce_roundtrip() {
+        let nonce_value = 0x0123_4567_89ab_cdef_fedc_ba98_7654_3210_u128;
+
+        let nonce = Nonce::from(nonce_value);
+        assert_eq!(nonce.upper_half, 0x0123_4567_89ab_cdef);
+        assert_eq!(nonce.lower_half, 0xfedc_ba98_7654_3210);
+        assert_eq!(u128::from(nonce), nonce_value);
+    }
+
+    #[test]
+    fn test_split_worktree_update_chunks_and_preserves_final_metadata() {
+        let update = UpdateWorktree {
+            project_id: 7,
+            worktree_id: 11,
+            root_name: "workspace".into(),
+            abs_path: "/tmp/workspace".into(),
+            root_repo_common_dir: Some("/tmp/workspace/.git".into()),
+            root_repo_is_linked_worktree: true,
+            updated_entries: vec![Entry::default(), Entry::default(), Entry::default()],
+            removed_entries: vec![1, 2, 3],
+            scan_id: 99,
+            is_last_update: true,
+            updated_repositories: vec![RepositoryEntry {
+                repository_id: 5,
+                branch_summary: Some(Branch {
+                    ref_name: "refs/heads/main".into(),
+                    ..Default::default()
+                }),
+                updated_statuses: vec![
+                    StatusEntry::default(),
+                    StatusEntry::default(),
+                    StatusEntry::default(),
+                ],
+                removed_statuses: vec!["deleted.rs".into()],
+                current_merge_conflicts: vec!["conflict.rs".into()],
+            }],
+            removed_repositories: vec![21, 34],
+        };
+
+        let chunks = split_worktree_update(update).collect::<Vec<_>>();
+
+        assert_eq!(chunks.len(), 2);
+
+        assert_eq!(chunks[0].project_id, 7);
+        assert_eq!(chunks[0].worktree_id, 11);
+        assert_eq!(chunks[0].root_name, "workspace");
+        assert_eq!(chunks[0].abs_path, "/tmp/workspace");
+        assert_eq!(
+            chunks[0].root_repo_common_dir.as_deref(),
+            Some("/tmp/workspace/.git")
+        );
+        assert!(chunks[0].root_repo_is_linked_worktree);
+        assert_eq!(chunks[0].updated_entries.len(), 2);
+        assert_eq!(chunks[0].removed_entries, vec![1, 2]);
+        assert_eq!(chunks[0].updated_repositories.len(), 1);
+        assert_eq!(chunks[0].updated_repositories[0].repository_id, 5);
+        assert_eq!(
+            chunks[0].updated_repositories[0]
+                .branch_summary
+                .as_ref()
+                .map(|branch| branch.ref_name.as_str()),
+            Some("refs/heads/main")
+        );
+        assert_eq!(chunks[0].updated_repositories[0].updated_statuses.len(), 2);
+        assert_eq!(
+            chunks[0].updated_repositories[0].removed_statuses,
+            vec!["deleted.rs"]
+        );
+        assert!(chunks[0].removed_repositories.is_empty());
+        assert!(!chunks[0].is_last_update);
+
+        assert_eq!(chunks[1].updated_entries.len(), 1);
+        assert_eq!(chunks[1].removed_entries, vec![3]);
+        assert_eq!(chunks[1].updated_repositories.len(), 1);
+        assert_eq!(chunks[1].updated_repositories[0].updated_statuses.len(), 1);
+        assert!(
+            chunks[1].updated_repositories[0]
+                .removed_statuses
+                .is_empty()
+        );
+        assert_eq!(chunks[1].removed_repositories, vec![21, 34]);
+        assert!(chunks[1].is_last_update);
+    }
+
+    #[test]
+    fn test_lsp_query_name_and_write_permissions() {
+        let cases = [
+            (
+                LspQuery {
+                    request: Some(lsp_query::Request::GetHover(GetHover::default())),
+                    ..Default::default()
+                },
+                ("GetHover", false),
+            ),
+            (
+                LspQuery {
+                    request: Some(lsp_query::Request::GetCodeActions(GetCodeActions::default())),
+                    ..Default::default()
+                },
+                ("GetCodeActions", true),
+            ),
+            (
+                LspQuery {
+                    request: Some(lsp_query::Request::GetDocumentDiagnostics(
+                        GetDocumentDiagnostics::default(),
+                    )),
+                    ..Default::default()
+                },
+                ("GetDocumentDiagnostics", false),
+            ),
+            (
+                LspQuery {
+                    request: Some(lsp_query::Request::SemanticTokens(SemanticTokens::default())),
+                    ..Default::default()
+                },
+                ("SemanticTokens", false),
+            ),
+            (
+                LspQuery {
+                    request: Some(lsp_query::Request::GetDocumentLinks(
+                        GetDocumentLinks::default(),
+                    )),
+                    ..Default::default()
+                },
+                ("GetDocumentLinks", false),
+            ),
+            (LspQuery::default(), ("<unknown>", true)),
+        ];
+
+        for (query, expected) in cases {
+            assert_eq!(query.query_name_and_write_permissions(), expected);
+        }
+    }
 }

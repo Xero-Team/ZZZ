@@ -601,3 +601,107 @@ pub fn global_gitignore_path() -> Option<PathBuf> {
         .get_or_init(::ignore::gitignore::gitconfig_excludes_path)
         .clone()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvRestore {
+        name: String,
+        original: Option<String>,
+    }
+
+    impl EnvRestore {
+        fn new(name: &str) -> Self {
+            Self {
+                name: name.to_string(),
+                original: env::var(name).ok(),
+            }
+        }
+    }
+
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            match self.original.as_deref() {
+                Some(value) => unsafe { env::set_var(&self.name, value) },
+                None => unsafe { env::remove_var(&self.name) },
+            }
+        }
+    }
+
+    fn unique_temp_dir(prefix: &str) -> PathBuf {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        env::temp_dir().join(format!("{prefix}-{}-{stamp}", std::process::id()))
+    }
+
+    #[test]
+    fn relative_names_and_paths_match_workspace_conventions() {
+        assert_eq!(remote_server_dir_relative().as_unix_str(), ".zed_server");
+        assert_eq!(
+            remote_wsl_server_dir_relative().as_unix_str(),
+            ".zed_wsl_server"
+        );
+        assert_eq!(local_settings_folder_name(), ".ZZZ");
+        assert_eq!(local_vscode_folder_name(), ".vscode");
+        assert_eq!(
+            local_settings_file_relative_path().as_unix_str(),
+            ".ZZZ/settings.json"
+        );
+        assert_eq!(
+            local_tasks_file_relative_path().as_unix_str(),
+            ".ZZZ/tasks.json"
+        );
+        assert_eq!(
+            local_vscode_tasks_file_relative_path().as_unix_str(),
+            ".vscode/tasks.json"
+        );
+        assert_eq!(
+            local_debug_file_relative_path().as_unix_str(),
+            ".ZZZ/debug.json"
+        );
+        assert_eq!(
+            local_vscode_launch_file_relative_path().as_unix_str(),
+            ".vscode/launch.json"
+        );
+    }
+
+    #[test]
+    fn prompt_overrides_dir_prefers_repo_assets_when_present() {
+        let repo_path = unique_temp_dir("paths-prompt-overrides");
+        let assets_prompts = repo_path.join("assets").join("prompts");
+        std::fs::create_dir_all(&assets_prompts).expect("create fake assets/prompts");
+
+        let result = prompt_overrides_dir(Some(&repo_path));
+
+        assert_eq!(result, assets_prompts);
+
+        std::fs::remove_dir_all(&repo_path).expect("cleanup fake repo");
+    }
+
+    #[test]
+    fn vscode_settings_paths_include_env_overrides() {
+        let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+        let _portable_restore = EnvRestore::new("VSCODE_PORTABLE");
+        let _appdata_restore = EnvRestore::new("VSCODE_APPDATA");
+        unsafe {
+            env::set_var("VSCODE_PORTABLE", "/tmp/vscode-portable");
+            env::set_var("VSCODE_APPDATA", "/tmp/vscode-appdata");
+        }
+
+        let paths = vscode_settings_file_paths();
+
+        assert!(paths.contains(&PathBuf::from(
+            "/tmp/vscode-portable/user-data/User/settings.json"
+        )));
+        assert!(paths.contains(&PathBuf::from(
+            "/tmp/vscode-appdata/Code/User/settings.json"
+        )));
+    }
+}

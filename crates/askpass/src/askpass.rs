@@ -390,3 +390,44 @@ fn generate_askpass_script(
         "#,
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_askpass_script_includes_expected_transport_fragments() {
+        #[cfg(target_os = "windows")]
+        let shell_kind = ShellKind::PowerShell;
+        #[cfg(not(target_os = "windows"))]
+        let shell_kind = ShellKind::Posix;
+
+        #[cfg(target_os = "windows")]
+        let askpass_program = std::path::Path::new(r"C:\Program Files\Zed\zed.exe");
+        #[cfg(not(target_os = "windows"))]
+        let askpass_program = std::path::Path::new("/opt/zed/bin/zed");
+
+        #[cfg(target_os = "windows")]
+        let askpass_socket = std::path::Path::new(r"C:\Temp\zed askpass.sock");
+        #[cfg(not(target_os = "windows"))]
+        let askpass_socket = std::path::Path::new("/tmp/zed askpass.sock");
+
+        let script = generate_askpass_script(shell_kind, askpass_program, askpass_socket).unwrap();
+
+        assert!(script.contains("--askpass="));
+        assert!(script.contains("zed"));
+
+        #[cfg(target_os = "windows")]
+        {
+            assert!(script.contains("$args -join [char]0"));
+            assert!(script.contains("2> $null"));
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            assert!(script.starts_with("#!/bin/sh\n"));
+            assert!(script.contains("printf '%s\\0' \"$@\""));
+            assert!(script.contains("2> /dev/null"));
+        }
+    }
+}

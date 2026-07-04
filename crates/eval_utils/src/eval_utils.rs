@@ -144,3 +144,88 @@ pub fn eval<P>(
 
     processor.assert();
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    };
+
+    use super::{EvalOutput, EvalOutputProcessor, OutcomeKind, eval};
+
+    struct RecordingProcessor {
+        outcomes: Arc<Mutex<Vec<OutcomeKind>>>,
+        asserted: Arc<AtomicBool>,
+    }
+
+    impl EvalOutputProcessor for RecordingProcessor {
+        type Metadata = ();
+
+        fn process(&mut self, output: &EvalOutput<Self::Metadata>) {
+            self.outcomes.lock().unwrap().push(output.outcome.clone());
+        }
+
+        fn assert(&mut self) {
+            self.asserted.store(true, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn eval_output_constructors_set_default_metadata_and_outcomes() {
+        let passed = EvalOutput::<Vec<String>>::passed("all good");
+        let failed = EvalOutput::<Vec<String>>::failed("not good");
+
+        assert_eq!(passed.outcome, OutcomeKind::Passed);
+        assert_eq!(passed.data, "all good");
+        assert!(passed.metadata.is_empty());
+
+        assert_eq!(failed.outcome, OutcomeKind::Failed);
+        assert_eq!(failed.data, "not good");
+        assert!(failed.metadata.is_empty());
+    }
+
+    #[test]
+    fn eval_processes_all_outputs_and_asserts_on_success() {
+        let outcomes = Arc::new(Mutex::new(Vec::new()));
+        let asserted = Arc::new(AtomicBool::new(false));
+
+        eval(
+            3,
+            1.0,
+            RecordingProcessor {
+                outcomes: outcomes.clone(),
+                asserted: asserted.clone(),
+            },
+            || EvalOutput::passed("ok"),
+        );
+
+        assert_eq!(
+            *outcomes.lock().unwrap(),
+            vec![
+                OutcomeKind::Passed,
+                OutcomeKind::Passed,
+                OutcomeKind::Passed
+            ]
+        );
+        assert!(asserted.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn eval_panics_when_actual_pass_ratio_is_too_low() {
+        let counter = Arc::new(AtomicUsize::new(0));
+
+        let result = std::panic::catch_unwind(|| {
+            let counter = counter.clone();
+            eval(2, 1.0, super::NoProcessor, move || {
+                if counter.fetch_add(1, Ordering::SeqCst) == 0 {
+                    EvalOutput::passed("first")
+                } else {
+                    EvalOutput::failed("second")
+                }
+            });
+        });
+
+        assert!(result.is_err());
+    }
+}

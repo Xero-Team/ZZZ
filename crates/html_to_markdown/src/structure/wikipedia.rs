@@ -178,4 +178,16 @@ mod tests {
             expected
         )
     }
+
+    #[test]
+    fn test_wikipedia_code_blocks_capture_language_and_preserve_text() {
+        let html = "<div class=\"mw-highlight mw-highlight-lang-rust\"><pre><code>fn main() {\n    println!(\"hi\");\n}</code></pre></div>";
+        let expected = "```rust\nfn main() {\n    println!(\"hi\");\n}\n```";
+
+        let mut handlers = vec![Rc::new(RefCell::new(WikipediaCodeHandler::new())) as TagHandler];
+        assert_eq!(
+            convert_html_to_markdown(html.as_bytes(), &mut handlers).unwrap(),
+            expected
+        );
+    }
 }
