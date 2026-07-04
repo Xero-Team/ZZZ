@@ -277,8 +277,8 @@ fn new_input(
     window: &mut Window,
     cx: &mut Context<SettingsWindow>,
 ) -> Entity<Editor> {
-    let placeholder = placeholder.to_string();
-    let initial = initial.map(str::to_string);
+    let placeholder = placeholder.to_owned();
+    let initial = initial.map(str::to_owned);
     cx.new(|cx| {
         let mut editor = Editor::single_line(window, cx);
         editor.set_placeholder_text(placeholder.as_str(), window, cx);
@@ -989,7 +989,7 @@ fn validate_llm_provider_form(
         ));
     }
 
-    let api_url = values.api_url.trim().to_string();
+    let api_url = values.api_url.trim().to_owned();
     if api_url.is_empty() {
         return Err(tr(
             cx,
@@ -998,7 +998,7 @@ fn validate_llm_provider_form(
         ));
     }
 
-    let api_key = values.api_key.trim().to_string();
+    let api_key = values.api_key.trim().to_owned();
     if api_key.is_empty() {
         return Err(tr(
             cx,
@@ -1037,7 +1037,7 @@ fn parse_model_name(model: &ModelValues, cx: &App) -> Result<String, SharedStrin
             "Model Name cannot be empty",
         ));
     }
-    Ok(name.to_string())
+    Ok(name.to_owned())
 }
 
 fn parse_open_ai_model(

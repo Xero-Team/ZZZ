@@ -1490,7 +1490,7 @@ impl Vim {
                 // conflicting bindings and still provides bindings for
                 // `escape`/`ctrl-c` to `ClearOperators`.
                 operator_id = active_operator.id();
-                mode = "waiting".to_string();
+                mode = "waiting".to_owned();
             } else {
                 operator_id = active_operator.id();
                 mode = "operator".to_owned();

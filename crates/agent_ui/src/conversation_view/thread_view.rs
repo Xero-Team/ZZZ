@@ -8178,7 +8178,7 @@ impl ThreadView {
             })
             .when(!uri.is_empty(), |this| {
                 this.child(
-                    Label::new(uri.to_string())
+                    Label::new(uri.to_owned())
                         .size(LabelSize::XSmall)
                         .color(Color::Muted),
                 )
