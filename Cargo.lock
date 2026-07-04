@@ -7737,9 +7737,9 @@ version = "0.1.0"
 dependencies = [
  "schemars 1.2.1",
  "serde",
+ "serde_json",
  "smol_str",
 ]
- "serde_json",
 
 [[package]]
 name = "gpui_tokio"
@@ -22518,10 +22518,10 @@ dependencies = [
  "anyhow",
  "schemars 1.2.1",
  "serde",
+ "serde_json",
  "strum 0.28.0",
 ]
 
- "serde_json",
 [[package]]
 name = "xattr"
 version = "1.6.1"
@@ -23439,7 +23439,7 @@ dependencies = [
 
 [[package]]
 name = "zzz"
-version = "1.9.0"
+version = "1.11.0"
 dependencies = [
  "acp_thread",
  "acp_tools",
