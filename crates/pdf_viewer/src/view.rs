@@ -38,12 +38,14 @@ pub(crate) struct PasswordRequiredState {
     pub error: Option<gpui::SharedString>,
     pub retry_task: Option<Task<()>>,
     pub opening: bool,
+    pub fallback_worker: Option<Arc<PdfWorker>>,
 }
 
 impl PasswordRequiredState {
     fn new(
         path: PathBuf,
         data: Arc<[u8]>,
+        fallback_worker: Option<Arc<PdfWorker>>,
         error: Option<gpui::SharedString>,
         window: &mut Window,
         cx: &mut App,
@@ -66,7 +68,12 @@ impl PasswordRequiredState {
             error,
             retry_task: None,
             opening: false,
+            fallback_worker,
         }
+    }
+
+    pub(crate) fn can_continue_without_password(&self) -> bool {
+        self.fallback_worker.is_some()
     }
 }
 
@@ -79,6 +86,7 @@ pub(crate) struct LoadedState {
     pub rendering: HashMap<usize, Task<()>>,
     pub search: SearchState,
     pub encryption_warning: bool,
+    pub opened_with_password: bool,
     /// Low-priority task that fills the cache outward from the current page
     /// while the user is idle, bounded by [`crate::CACHE_MEMORY_BUDGET`].
     pub idle_prefetch: Option<Task<()>>,
@@ -344,7 +352,18 @@ impl PdfView {
                 .flatten();
 
             let Some(abs_path) = abs_path else {
-                Self::set_error(&this, "Could not resolve PDF path", cx);
+                this.update(cx, |view, cx| {
+                    view.load_state = LoadState::Error(
+                        tr(
+                            cx,
+                            "pdf_viewer.error.resolve_path",
+                            "Could not resolve PDF path",
+                        )
+                        .into(),
+                    );
+                    cx.notify();
+                })
+                .ok();
                 return;
             };
 
@@ -366,13 +385,28 @@ impl PdfView {
 
             match PdfWorker::open(abs_path.clone(), data.clone(), Vec::new()).await {
                 Ok(worker) => {
+                    let worker = Arc::new(worker);
                     this.update_in(cx, |view, window, cx| {
-                        view.set_loaded(Arc::new(worker), window, cx);
+                        if worker.summary().security == crate::document::PdfSecurity::Encrypted {
+                            view.load_state =
+                                LoadState::PasswordRequired(Box::new(PasswordRequiredState::new(
+                                    abs_path.clone(),
+                                    data.clone(),
+                                    Some(worker),
+                                    None,
+                                    window,
+                                    cx,
+                                )));
+                            view.focus_password_input(window, cx);
+                            cx.notify();
+                        } else {
+                            view.set_loaded(worker, false, window, cx);
+                        }
                     })
                     .ok();
                 }
                 Err(error) if is_wrong_password(&error) => {
-                    Self::set_password_required(&this, abs_path, data, None, cx);
+                    Self::set_password_required(&this, abs_path, data, None, None, cx);
                 }
                 Err(error) => Self::set_error(&this, error.to_string(), cx),
             }
@@ -396,12 +430,18 @@ impl PdfView {
         this: &gpui::WeakEntity<Self>,
         path: PathBuf,
         data: Arc<[u8]>,
+        fallback_worker: Option<Arc<PdfWorker>>,
         error: Option<gpui::SharedString>,
         cx: &mut gpui::AsyncWindowContext,
     ) {
         this.update_in(cx, |view, window, cx| {
             view.load_state = LoadState::PasswordRequired(Box::new(PasswordRequiredState::new(
-                path, data, error, window, cx,
+                path,
+                data,
+                fallback_worker,
+                error,
+                window,
+                cx,
             )));
             view.focus_password_input(window, cx);
             cx.notify();
@@ -409,7 +449,13 @@ impl PdfView {
         .ok();
     }
 
-    fn set_loaded(&mut self, worker: Arc<PdfWorker>, window: &mut Window, cx: &mut Context<Self>) {
+    fn set_loaded(
+        &mut self,
+        worker: Arc<PdfWorker>,
+        opened_with_password: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let summary = worker.summary().clone();
         self.load_state = LoadState::Loaded(Box::new(LoadedState {
             worker,
@@ -418,6 +464,7 @@ impl PdfView {
             rendering: HashMap::default(),
             search: SearchState::default(),
             encryption_warning: false,
+            opened_with_password,
             idle_prefetch: None,
         }));
         self.current_page = self.current_page.min(self.page_count().saturating_sub(1));
@@ -479,7 +526,7 @@ impl PdfView {
 
             this.update_in(cx, |view, window, cx| match result {
                 Ok(worker) => {
-                    view.set_loaded(Arc::new(worker), window, cx);
+                    view.set_loaded(Arc::new(worker), true, window, cx);
                 }
                 Err(error) if is_wrong_password(&error) => {
                     if let LoadState::PasswordRequired(state) = &mut view.load_state {
@@ -506,6 +553,23 @@ impl PdfView {
         });
         state.retry_task = Some(task);
         cx.notify();
+    }
+
+    pub(crate) fn continue_without_password(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let LoadState::PasswordRequired(state) = &self.load_state else {
+            return;
+        };
+        if state.opening {
+            return;
+        }
+        let Some(worker) = state.fallback_worker.clone() else {
+            return;
+        };
+        self.set_loaded(worker, false, window, cx);
     }
 
     pub(crate) fn loaded(&self) -> Option<&LoadedState> {
@@ -656,7 +720,7 @@ impl PdfView {
             .path
             .file_name()
             .map(|name| name.to_owned())
-            .unwrap_or_else(|| "PDF".to_owned())
+            .unwrap_or_else(|| tr(cx, "pdf_viewer.file_name.fallback", "PDF"))
     }
 
     pub(crate) fn abs_path(&self, cx: &App) -> Option<PathBuf> {
@@ -684,20 +748,33 @@ impl PdfView {
         let mut lines = vec![self.relative_path(cx).display(path_style).into_owned()];
         if let Some(summary) = self.loaded().map(|state| &state.summary) {
             if let Some(title) = &summary.title {
-                lines.push(format!("Title: {title}"));
+                lines.push(
+                    tr(cx, "pdf_viewer.metadata.title", "Title: {}").replacen("{}", title, 1),
+                );
             }
             if let Some(author) = &summary.author {
-                lines.push(format!("Author: {author}"));
+                lines.push(
+                    tr(cx, "pdf_viewer.metadata.author", "Author: {}").replacen("{}", author, 1),
+                );
             }
             if summary.security == crate::document::PdfSecurity::Encrypted {
-                lines.push("Encrypted document".to_owned());
+                lines.push(tr(
+                    cx,
+                    "pdf_viewer.metadata.encrypted_document",
+                    "Encrypted document",
+                ));
             }
             lines.push(format!(
-                "PDF {}.{} · {} page{}",
+                "{} {}.{} · {} {}",
+                tr(cx, "pdf_viewer.file_name.fallback", "PDF"),
                 summary.version.0,
                 summary.version.1,
                 summary.page_count,
-                if summary.page_count == 1 { "" } else { "s" },
+                if summary.page_count == 1 {
+                    tr(cx, "pdf_viewer.metadata.page_singular", "page")
+                } else {
+                    tr(cx, "pdf_viewer.metadata.page_plural", "pages")
+                },
             ));
         }
         lines.join("\n")
@@ -721,8 +798,9 @@ impl PdfView {
 
     pub(crate) fn encryption_warning(&self) -> bool {
         self.loaded().is_some_and(|state| {
-            state.encryption_warning
-                || state.summary.security == crate::document::PdfSecurity::Encrypted
+            !state.opened_with_password
+                && (state.encryption_warning
+                    || state.summary.security == crate::document::PdfSecurity::Encrypted)
         })
     }
 }

@@ -74,28 +74,55 @@ impl PdfView {
                 )
                 .child(Label::new(tr(
                     cx,
-                    "pdf_viewer.password.description",
-                    "This PDF is password-protected. Enter the password to open and search it.",
+                    if state.can_continue_without_password() {
+                        "pdf_viewer.password.optional_description"
+                    } else {
+                        "pdf_viewer.password.description"
+                    },
+                    if state.can_continue_without_password() {
+                        "This PDF is encrypted. Enter a password to unlock it, or continue without one."
+                    } else {
+                        "This PDF is password-protected. Enter the password to open and search it."
+                    },
                 )))
                 .child(state.input.clone())
                 .when_some(state.error.clone(), |this, error| {
                     this.child(Label::new(error).color(Color::Error).size(LabelSize::Small))
                 })
                 .child(
-                    h_flex().justify_end().gap_2().child(
-                        Button::new(
-                            "pdf-unlock",
-                            if state.opening {
-                                tr(cx, "pdf_viewer.password.unlocking", "Unlocking...")
-                            } else {
-                                tr(cx, "pdf_viewer.password.unlock", "Unlock")
-                            },
-                        )
-                        .disabled(state.opening)
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.submit_password(&menu::Confirm, window, cx);
-                        })),
-                    ),
+                    h_flex()
+                        .justify_end()
+                        .gap_2()
+                        .when(state.can_continue_without_password(), |this| {
+                            this.child(
+                                Button::new(
+                                    "pdf-continue-without-password",
+                                    tr(
+                                        cx,
+                                        "pdf_viewer.password.continue_without_password",
+                                        "Continue Without Password",
+                                    ),
+                                )
+                                .disabled(state.opening)
+                                .on_click(cx.listener(|view, _, window, cx| {
+                                    view.continue_without_password(window, cx);
+                                })),
+                            )
+                        })
+                        .child(
+                            Button::new(
+                                "pdf-unlock",
+                                if state.opening {
+                                    tr(cx, "pdf_viewer.password.unlocking", "Unlocking...")
+                                } else {
+                                    tr(cx, "pdf_viewer.password.unlock", "Unlock")
+                                },
+                            )
+                            .disabled(state.opening)
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.submit_password(&menu::Confirm, window, cx);
+                            })),
+                        ),
                 ),
         )
     }
