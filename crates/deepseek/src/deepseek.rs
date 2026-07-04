@@ -339,3 +339,85 @@ pub async fn stream_completion(
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn role_round_trip_and_invalid_value_are_stable() {
+        assert_eq!(
+            Role::try_from("user".to_string()).expect("user"),
+            Role::User
+        );
+        assert_eq!(
+            Role::try_from("assistant".to_string()).expect("assistant"),
+            Role::Assistant
+        );
+        assert_eq!(String::from(Role::System), "system");
+        assert_eq!(String::from(Role::Tool), "tool");
+
+        let error = Role::try_from("invalid".to_string()).expect_err("invalid role");
+        assert!(error.to_string().contains("invalid role 'invalid'"));
+    }
+
+    #[test]
+    fn model_helpers_cover_built_in_and_custom_variants() {
+        assert_eq!(Model::default(), Model::V4Pro);
+        assert_eq!(Model::default_fast(), Model::V4Flash);
+        assert_eq!(
+            Model::from_id("deepseek-v4-flash").expect("flash"),
+            Model::V4Flash
+        );
+        assert_eq!(
+            Model::from_id("deepseek-v4-pro").expect("pro"),
+            Model::V4Pro
+        );
+
+        let built_in = Model::V4Pro;
+        assert_eq!(built_in.id(), "deepseek-v4-pro");
+        assert_eq!(built_in.display_name(), "DeepSeek V4 Pro");
+        assert_eq!(built_in.max_token_count(), 1_000_000);
+        assert_eq!(built_in.max_output_tokens(), Some(384_000));
+
+        let custom = Model::Custom {
+            name: "deepseek/custom".into(),
+            display_name: None,
+            max_tokens: 42,
+            max_output_tokens: Some(7),
+        };
+        assert_eq!(custom.id(), "deepseek/custom");
+        assert_eq!(custom.display_name(), "deepseek/custom");
+        assert_eq!(custom.max_token_count(), 42);
+        assert_eq!(custom.max_output_tokens(), Some(7));
+    }
+
+    #[test]
+    fn invalid_model_id_returns_actionable_error() {
+        let error = Model::from_id("unknown-model").expect_err("unknown model");
+        assert!(error.to_string().contains("invalid model id unknown-model"));
+    }
+
+    #[test]
+    fn request_message_round_trip_preserves_tool_calls_and_reasoning() {
+        let message = RequestMessage::Assistant {
+            content: Some("done".into()),
+            tool_calls: vec![ToolCall {
+                id: "tool-1".into(),
+                content: ToolCallContent::Function {
+                    function: FunctionContent {
+                        name: "lookup".into(),
+                        arguments: "{\"query\":\"rust\"}".into(),
+                    },
+                },
+            }],
+            reasoning_content: Some("thinking".into()),
+        };
+
+        let serialized = serde_json::to_value(&message).expect("serialize message");
+        let deserialized: RequestMessage =
+            serde_json::from_value(serialized).expect("deserialize message");
+
+        assert_eq!(deserialized, message);
+    }
+}

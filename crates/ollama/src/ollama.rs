@@ -392,6 +392,54 @@ mod tests {
     use super::*;
 
     #[test]
+    fn model_helpers_use_latest_suffix_fallback_and_defaults() {
+        let defaulted = Model::new("llama3:latest", None, None, Some(true), Some(false), None);
+        assert_eq!(defaulted.id(), "llama3:latest");
+        assert_eq!(defaulted.display_name(), "llama3");
+        assert_eq!(defaulted.max_token_count(), 4096);
+        assert_eq!(defaulted.keep_alive, Some(KeepAlive::indefinite()));
+        assert_eq!(defaulted.supports_tools, Some(true));
+        assert_eq!(defaulted.supports_vision, Some(false));
+        assert_eq!(defaulted.supports_thinking, None);
+
+        let explicit = Model::new(
+            "custom/model",
+            Some("Custom"),
+            Some(8192),
+            Some(false),
+            Some(true),
+            Some(true),
+        );
+        assert_eq!(explicit.display_name(), "Custom");
+        assert_eq!(explicit.max_token_count(), 8192);
+        assert_eq!(explicit.supports_tools, Some(false));
+        assert_eq!(explicit.supports_vision, Some(true));
+        assert_eq!(explicit.supports_thinking, Some(true));
+    }
+
+    #[test]
+    fn model_show_capability_helpers_detect_all_supported_flags() {
+        let details = ModelShow {
+            capabilities: vec!["tools".into(), "vision".into(), "thinking".into()],
+            context_length: Some(16_384),
+            architecture: Some("llama".into()),
+        };
+
+        assert!(details.supports_tools());
+        assert!(details.supports_vision());
+        assert!(details.supports_thinking());
+
+        let empty = ModelShow {
+            capabilities: vec!["completion".into()],
+            context_length: None,
+            architecture: None,
+        };
+        assert!(!empty.supports_tools());
+        assert!(!empty.supports_vision());
+        assert!(!empty.supports_thinking());
+    }
+
+    #[test]
     fn parse_completion() {
         let response = serde_json::json!({
         "model": "llama3.2",

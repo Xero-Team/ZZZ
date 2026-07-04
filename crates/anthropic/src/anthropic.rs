@@ -1161,6 +1161,96 @@ mod tests {
     fn xhigh_effort_serializes_without_underscore() {
         assert_eq!(serde_json::to_string(&Effort::XHigh).unwrap(), "\"xhigh\"");
     }
+
+    #[test]
+    fn beta_headers_trims_and_joins_non_empty_values() {
+        let model = Model {
+            id: "claude-test".into(),
+            display_name: "Claude Test".into(),
+            max_input_tokens: 200_000,
+            max_output_tokens: 64_000,
+            default_temperature: 1.0,
+            mode: AnthropicModelMode::Default,
+            supports_thinking: false,
+            supports_adaptive_thinking: false,
+            supports_images: false,
+            supports_speed: false,
+            supported_effort_levels: Vec::new(),
+            tool_override: None,
+            extra_beta_headers: vec![" fast-mode ".into(), "".into(), "beta-2".into()],
+        };
+
+        assert_eq!(model.beta_headers().as_deref(), Some("fast-mode,beta-2"));
+    }
+
+    #[test]
+    fn request_id_uses_tool_override_only_for_tool_requests() {
+        let model = Model {
+            id: "claude-native".into(),
+            display_name: "Claude Native".into(),
+            max_input_tokens: 200_000,
+            max_output_tokens: 64_000,
+            default_temperature: 1.0,
+            mode: AnthropicModelMode::Default,
+            supports_thinking: false,
+            supports_adaptive_thinking: false,
+            supports_images: false,
+            supports_speed: false,
+            supported_effort_levels: Vec::new(),
+            tool_override: Some("claude-tools".into()),
+            extra_beta_headers: Vec::new(),
+        };
+
+        assert_eq!(model.request_id(false), "claude-native");
+        assert_eq!(model.request_id(true), "claude-tools");
+    }
+
+    #[test]
+    fn parse_retry_after_and_rate_limit_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert("retry-after", HeaderValue::from_static("12"));
+        headers.insert(
+            "anthropic-ratelimit-requests-limit",
+            HeaderValue::from_static("100"),
+        );
+        headers.insert(
+            "anthropic-ratelimit-requests-remaining",
+            HeaderValue::from_static("42"),
+        );
+        headers.insert(
+            "anthropic-ratelimit-requests-reset",
+            HeaderValue::from_static("2026-07-04T12:34:56Z"),
+        );
+
+        let rate_limits = RateLimitInfo::from_headers(&headers);
+        let requests = rate_limits.requests.expect("expected request rate limit");
+
+        assert_eq!(parse_retry_after(&headers), Some(Duration::from_secs(12)));
+        assert_eq!(rate_limits.retry_after, Some(Duration::from_secs(12)));
+        assert_eq!(requests.limit, 100);
+        assert_eq!(requests.remaining, 42);
+        assert_eq!(requests.reset.to_rfc3339(), "2026-07-04T12:34:56+00:00");
+        assert!(rate_limits.tokens.is_none());
+        assert!(rate_limits.input_tokens.is_none());
+        assert!(rate_limits.output_tokens.is_none());
+    }
+
+    #[test]
+    fn api_error_helpers_report_codes_and_rate_limits() {
+        let rate_limit = ApiError {
+            error_type: "rate_limit_error".into(),
+            message: "slow down".into(),
+        };
+        assert_eq!(rate_limit.code(), Some(ApiErrorCode::RateLimitError));
+        assert!(rate_limit.is_rate_limit_error());
+
+        let unknown = ApiError {
+            error_type: "mystery_error".into(),
+            message: "unknown".into(),
+        };
+        assert_eq!(unknown.code(), None);
+        assert!(!unknown.is_rate_limit_error());
+    }
 }
 
 #[test]

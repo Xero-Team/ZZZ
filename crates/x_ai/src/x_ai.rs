@@ -130,3 +130,89 @@ impl Model {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn built_in_models_report_expected_metadata() {
+        let model = Model::default_fast();
+        assert_eq!(model, Model::Grok43);
+        assert_eq!(model.id(), "grok-4.3");
+        assert_eq!(model.display_name(), "Grok 4.3");
+        assert_eq!(model.max_token_count(), 1_000_000);
+        assert_eq!(model.max_output_tokens(), Some(64_000));
+        assert!(model.supports_parallel_tool_calls());
+        assert!(model.requires_json_schema_subset());
+        assert!(model.supports_tool());
+        assert!(model.supports_images());
+        assert!(model.supports_reasoning_effort());
+        assert!(!model.supports_prompt_cache_key());
+    }
+
+    #[test]
+    fn from_id_accepts_known_models_and_rejects_unknown_ones() {
+        assert_eq!(Model::from_id("grok-4.3").expect("grok-4.3"), Model::Grok43);
+        assert_eq!(
+            Model::from_id("grok-4.20-0309-reasoning").expect("reasoning"),
+            Model::Grok420Reasoning
+        );
+        assert_eq!(
+            Model::from_id("grok-4.20-0309-non-reasoning").expect("non-reasoning"),
+            Model::Grok420NonReasoning
+        );
+
+        let error = Model::from_id("unknown-model").expect_err("unknown model must fail");
+        assert!(
+            error
+                .to_string()
+                .contains("invalid model id 'unknown-model'")
+        );
+    }
+
+    #[test]
+    fn custom_model_uses_explicit_capabilities_and_name_fallbacks() {
+        let explicit = Model::Custom {
+            name: "acme/custom".into(),
+            display_name: Some("Acme Custom".into()),
+            max_tokens: 123_456,
+            max_output_tokens: Some(4_096),
+            max_completion_tokens: Some(2_048),
+            supports_images: Some(true),
+            supports_tools: Some(true),
+            parallel_tool_calls: Some(true),
+        };
+        assert_eq!(explicit.id(), "acme/custom");
+        assert_eq!(explicit.display_name(), "Acme Custom");
+        assert_eq!(explicit.max_token_count(), 123_456);
+        assert_eq!(explicit.max_output_tokens(), Some(4_096));
+        assert!(explicit.supports_parallel_tool_calls());
+        assert!(explicit.supports_tool());
+        assert!(explicit.supports_images());
+        assert!(!explicit.requires_json_schema_subset());
+        assert!(!explicit.supports_reasoning_effort());
+
+        let fallback = Model::Custom {
+            name: "acme/fallback".into(),
+            display_name: None,
+            max_tokens: 99,
+            max_output_tokens: None,
+            max_completion_tokens: None,
+            supports_images: None,
+            supports_tools: None,
+            parallel_tool_calls: None,
+        };
+        assert_eq!(fallback.display_name(), "acme/fallback");
+        assert_eq!(fallback.max_output_tokens(), None);
+        assert!(!fallback.supports_parallel_tool_calls());
+        assert!(!fallback.supports_tool());
+        assert!(!fallback.supports_images());
+    }
+
+    #[test]
+    fn serde_alias_deserializes_latest_grok_alias() {
+        let model: Model = serde_json::from_str("\"grok-4.3-latest\"").expect("deserialize");
+        assert_eq!(model, Model::Grok43);
+    }
+}

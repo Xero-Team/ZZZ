@@ -180,3 +180,66 @@ impl Client for LiveKitClient {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Client, LiveKitClient};
+
+    #[test]
+    fn new_trims_single_trailing_slash() {
+        let client = LiveKitClient::new(
+            "https://livekit.example.com/".to_string(),
+            "api-key".to_string(),
+            "secret".to_string(),
+        );
+
+        assert_eq!(client.url(), "https://livekit.example.com");
+    }
+
+    #[test]
+    fn new_preserves_url_without_trailing_slash() {
+        let client = LiveKitClient::new(
+            "https://livekit.example.com".to_string(),
+            "api-key".to_string(),
+            "secret".to_string(),
+        );
+
+        assert_eq!(client.url(), "https://livekit.example.com");
+    }
+
+    #[test]
+    fn room_token_encodes_join_permissions() {
+        let client = LiveKitClient::new(
+            "https://livekit.example.com".to_string(),
+            "api-key".to_string(),
+            "secret".to_string(),
+        );
+
+        let token = client.room_token("room-a", "alice").unwrap();
+        let claims = crate::token::validate(&token, "secret").unwrap();
+
+        assert_eq!(claims.sub.as_deref(), Some("alice"));
+        assert_eq!(claims.video.room.as_deref(), Some("room-a"));
+        assert_eq!(claims.video.room_join, Some(true));
+        assert_eq!(claims.video.can_publish, Some(true));
+        assert_eq!(claims.video.can_subscribe, Some(true));
+    }
+
+    #[test]
+    fn guest_token_encodes_guest_permissions() {
+        let client = LiveKitClient::new(
+            "https://livekit.example.com".to_string(),
+            "api-key".to_string(),
+            "secret".to_string(),
+        );
+
+        let token = client.guest_token("room-a", "guest").unwrap();
+        let claims = crate::token::validate(&token, "secret").unwrap();
+
+        assert_eq!(claims.sub.as_deref(), Some("guest"));
+        assert_eq!(claims.video.room.as_deref(), Some("room-a"));
+        assert_eq!(claims.video.room_join, Some(true));
+        assert_eq!(claims.video.can_publish, Some(false));
+        assert_eq!(claims.video.can_subscribe, Some(true));
+    }
+}

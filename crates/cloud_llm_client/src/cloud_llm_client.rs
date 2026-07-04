@@ -332,6 +332,7 @@ pub struct UsageData {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_usage_limit_from_str() {
@@ -348,5 +349,46 @@ mod tests {
             let limit = UsageLimit::from_str(value);
             assert!(limit.is_err());
         }
+    }
+
+    #[test]
+    fn completion_event_helpers_return_expected_variant() {
+        let status_event = CompletionEvent::<String>::Status(CompletionRequestStatus::Started);
+        assert_eq!(
+            status_event.into_status(),
+            Some(CompletionRequestStatus::Started)
+        );
+
+        let payload_event = CompletionEvent::Event("payload".to_string());
+        assert_eq!(payload_event.into_event().as_deref(), Some("payload"));
+    }
+
+    #[test]
+    fn completion_request_status_unknown_deserializes_to_unknown_variant() {
+        let status =
+            serde_json::from_value::<CompletionRequestStatus>(json!("new_status")).unwrap();
+        assert_eq!(status, CompletionRequestStatus::Unknown);
+    }
+
+    #[test]
+    fn reject_reason_defaults_to_discarded_when_missing() {
+        let rejection = serde_json::from_value::<EditPredictionRejection>(json!({
+            "request_id": "req-1",
+            "was_shown": true
+        }))
+        .unwrap();
+
+        assert_eq!(rejection.reason, EditPredictionRejectReason::Discarded);
+        assert!(rejection.model_version.is_none());
+        assert!(rejection.e2e_latency_ms.is_none());
+    }
+
+    #[test]
+    fn language_model_provider_round_trips_in_snake_case() {
+        let serialized = serde_json::to_string(&LanguageModelProvider::OpenAi).unwrap();
+        assert_eq!(serialized, "\"open_ai\"");
+
+        let deserialized = serde_json::from_str::<LanguageModelProvider>("\"x_ai\"").unwrap();
+        assert_eq!(deserialized, LanguageModelProvider::XAi);
     }
 }

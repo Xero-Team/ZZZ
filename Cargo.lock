@@ -1789,8 +1789,12 @@ dependencies = [
 name = "aws_http_client"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
+ "futures 0.3.32",
+ "http 1.4.0",
+ "http-body 1.0.1",
  "http_client",
 ]
 
@@ -22514,6 +22518,7 @@ dependencies = [
  "strum 0.28.0",
 ]
 
+ "serde_json",
 [[package]]
 name = "xattr"
 version = "1.6.1"

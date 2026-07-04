@@ -491,6 +491,71 @@ mod tests {
     use super::*;
 
     #[test]
+    fn role_round_trip_and_invalid_value_are_stable() {
+        assert_eq!(
+            Role::try_from("user".to_string()).expect("user"),
+            Role::User
+        );
+        assert_eq!(String::from(Role::Assistant), "assistant");
+        assert_eq!(String::from(Role::System), "system");
+        assert_eq!(String::from(Role::Tool), "tool");
+
+        let error = Role::try_from("invalid".to_string()).expect_err("invalid role");
+        assert!(error.to_string().contains("invalid role 'invalid'"));
+    }
+
+    #[test]
+    fn model_helpers_use_defaults_and_explicit_capabilities() {
+        let defaulted = Model::new("local/model:latest", None, None, true, false);
+        assert_eq!(defaulted.id(), "local/model:latest");
+        assert_eq!(defaulted.display_name(), "local/model:latest");
+        assert_eq!(defaulted.max_token_count(), 2048);
+        assert!(defaulted.supports_tool_calls());
+        assert!(!defaulted.supports_images);
+
+        let custom = Model::new("custom/model", Some("Custom"), Some(8192), false, true);
+        assert_eq!(custom.display_name(), "Custom");
+        assert_eq!(custom.max_token_count(), 8192);
+        assert!(!custom.supports_tool_calls());
+        assert!(custom.supports_images);
+    }
+
+    #[test]
+    fn message_content_helpers_preserve_plain_and_multipart_forms() {
+        let mut content = MessageContent::empty();
+        content.push_part(MessagePart::Text {
+            text: "hello".into(),
+        });
+        assert_eq!(content, MessageContent::Plain("hello".into()));
+
+        content.push_part(MessagePart::Image {
+            image_url: ImageUrl {
+                url: "https://example.com/image.png".into(),
+                detail: None,
+            },
+        });
+        assert!(matches!(content, MessageContent::Multipart(_)));
+
+        let plain = MessageContent::from(vec![MessagePart::Text {
+            text: "plain".into(),
+        }]);
+        assert_eq!(plain, MessageContent::Plain("plain".into()));
+    }
+
+    #[test]
+    fn capabilities_detect_tool_and_image_support() {
+        let capabilities: Capabilities =
+            serde_json::from_value(serde_json::json!(["tool_use", "vision"])).expect("caps");
+        assert!(capabilities.supports_tool_calls());
+        assert!(capabilities.supports_images());
+
+        let capabilities: Capabilities =
+            serde_json::from_value(serde_json::json!(["text"])).expect("caps");
+        assert!(!capabilities.supports_tool_calls());
+        assert!(!capabilities.supports_images());
+    }
+
+    #[test]
     fn test_image_message_part_serialization() {
         let image_part = MessagePart::Image {
             image_url: ImageUrl {

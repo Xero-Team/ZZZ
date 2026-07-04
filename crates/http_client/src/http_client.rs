@@ -495,3 +495,126 @@ impl HttpClient for FakeHttpClient {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http::header::{AUTHORIZATION, HeaderName};
+    use std::sync::Arc;
+
+    #[test]
+    fn custom_headers_iterate_in_insertion_order() {
+        let headers = CustomHeaders::new(vec![
+            (
+                HeaderName::from_static("x-one"),
+                HeaderValue::from_static("1"),
+            ),
+            (
+                HeaderName::from_static("x-two"),
+                HeaderValue::from_static("2"),
+            ),
+        ]);
+
+        let collected = headers
+            .iter()
+            .map(|(name, value)| {
+                (
+                    name.as_str().to_string(),
+                    value.to_str().unwrap().to_string(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            collected,
+            vec![
+                ("x-one".to_string(), "1".to_string()),
+                ("x-two".to_string(), "2".to_string()),
+            ]
+        );
+        assert!(!headers.is_empty());
+    }
+
+    #[test]
+    fn extra_headers_appends_custom_headers_to_request_builder() {
+        let headers = CustomHeaders::new(vec![
+            (AUTHORIZATION, HeaderValue::from_static("Bearer token")),
+            (
+                HeaderName::from_static("x-test"),
+                HeaderValue::from_static("ok"),
+            ),
+        ]);
+
+        let request = Request::builder()
+            .uri("https://example.com")
+            .extra_headers(&headers)
+            .body(AsyncBody::default())
+            .unwrap();
+
+        assert_eq!(
+            request.headers().get(AUTHORIZATION).unwrap(),
+            "Bearer token"
+        );
+        assert_eq!(request.headers().get("x-test").unwrap(), "ok");
+    }
+
+    #[test]
+    fn url_builder_maps_zed_hosts_to_api_cloud_and_llm_hosts() {
+        let client =
+            HttpClientWithUrl::new(Arc::new(BlockedHttpClient::new()), "https://zed.dev", None);
+
+        assert_eq!(client.build_url("/rpc"), "https://zed.dev/rpc");
+        assert_eq!(
+            client
+                .build_zed_api_url("/v1/models", &[("limit", "10")])
+                .unwrap()
+                .as_str(),
+            "https://api.zed.dev/v1/models?limit=10"
+        );
+        assert_eq!(
+            client.build_zed_cloud_url("/v1/files").unwrap().as_str(),
+            "https://cloud.zed.dev/v1/files"
+        );
+        assert_eq!(
+            client
+                .build_zed_llm_url("/v1/completions", &[("provider", "openai")])
+                .unwrap()
+                .as_str(),
+            "https://cloud.zed.dev/v1/completions?provider=openai"
+        );
+    }
+
+    #[test]
+    fn url_builder_uses_localhost_and_staging_overrides() {
+        let localhost = HttpClientWithUrl::new(
+            Arc::new(BlockedHttpClient::new()),
+            "http://localhost:3000",
+            None,
+        );
+        let staging = HttpClientWithUrl::new(
+            Arc::new(BlockedHttpClient::new()),
+            "https://staging.zed.dev",
+            None,
+        );
+
+        assert_eq!(
+            localhost
+                .build_zed_api_url("/status", &[])
+                .unwrap()
+                .as_str(),
+            "http://localhost:8080/status?"
+        );
+        assert_eq!(
+            localhost.build_zed_cloud_url("/health").unwrap().as_str(),
+            "http://localhost:8787/health"
+        );
+        assert_eq!(
+            staging.build_zed_api_url("/status", &[]).unwrap().as_str(),
+            "https://api-staging.zed.dev/status?"
+        );
+        assert_eq!(
+            staging.build_zed_llm_url("/v1/chat", &[]).unwrap().as_str(),
+            "https://llm-staging.zed.dev/v1/chat?"
+        );
+    }
+}

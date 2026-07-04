@@ -475,3 +475,148 @@ pub async fn stream_completion(
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn role_round_trip_and_invalid_value_are_stable() {
+        assert_eq!(
+            Role::try_from("user".to_string()).expect("user"),
+            Role::User
+        );
+        assert_eq!(
+            Role::try_from("assistant".to_string()).expect("assistant"),
+            Role::Assistant
+        );
+        assert_eq!(String::from(Role::System), "system");
+        assert_eq!(String::from(Role::Tool), "tool");
+
+        let error = Role::try_from("invalid".to_string()).expect_err("invalid role");
+        assert!(error.to_string().contains("invalid role 'invalid'"));
+    }
+
+    #[test]
+    fn model_helpers_cover_built_in_and_custom_variants() {
+        assert_eq!(Model::default(), Model::CodestralLatest);
+        assert_eq!(Model::default_fast(), Model::MistralSmallLatest);
+        assert_eq!(
+            Model::from_id("mistral-large-latest").expect("large"),
+            Model::MistralLargeLatest
+        );
+        assert_eq!(
+            Model::from_id("magistral-medium-latest").expect("magistral"),
+            Model::MagistralMediumLatest
+        );
+
+        let built_in = Model::MistralSmallLatest;
+        assert_eq!(built_in.id(), "mistral-small-latest");
+        assert_eq!(built_in.display_name(), "mistral-small-latest");
+        assert_eq!(built_in.max_token_count(), 256000);
+        assert_eq!(built_in.max_output_tokens(), None);
+        assert!(built_in.supports_tools());
+        assert!(built_in.supports_images());
+        assert!(!built_in.supports_thinking());
+
+        let thinking = Model::MagistralMediumLatest;
+        assert!(thinking.supports_tools());
+        assert!(thinking.supports_images());
+        assert!(thinking.supports_thinking());
+
+        let custom = Model::Custom {
+            name: "mistral/custom".into(),
+            display_name: None,
+            max_tokens: 1234,
+            max_output_tokens: Some(111),
+            max_completion_tokens: Some(77),
+            supports_tools: Some(false),
+            supports_images: Some(true),
+            supports_thinking: Some(true),
+        };
+        assert_eq!(custom.id(), "mistral/custom");
+        assert_eq!(custom.display_name(), "mistral/custom");
+        assert_eq!(custom.max_token_count(), 1234);
+        assert_eq!(custom.max_output_tokens(), Some(111));
+        assert!(!custom.supports_tools());
+        assert!(custom.supports_images());
+        assert!(custom.supports_thinking());
+    }
+
+    #[test]
+    fn invalid_model_id_returns_actionable_error() {
+        let error = Model::from_id("unknown-model").expect_err("unknown model");
+        assert!(
+            error
+                .to_string()
+                .contains("invalid model id 'unknown-model'")
+        );
+    }
+
+    #[test]
+    fn message_content_push_part_preserves_plain_text_until_non_text_part() {
+        let mut content = MessageContent::empty();
+        content.push_part(MessagePart::Text {
+            text: "hello".into(),
+        });
+        content.push_part(MessagePart::Text {
+            text: " world".into(),
+        });
+        assert_eq!(
+            content,
+            MessageContent::Plain {
+                content: "hello world".into()
+            }
+        );
+
+        content.push_part(MessagePart::ImageUrl {
+            image_url: "https://example.com/image.png".into(),
+        });
+        assert!(matches!(content, MessageContent::Multipart { .. }));
+    }
+
+    #[test]
+    fn request_message_and_content_delta_round_trip() {
+        let message = RequestMessage::Assistant {
+            content: Some(MessageContent::Multipart {
+                content: vec![
+                    MessagePart::Text {
+                        text: "hello".into(),
+                    },
+                    MessagePart::Thinking {
+                        thinking: vec![ThinkingPart::Text {
+                            text: "reason".into(),
+                        }],
+                    },
+                ],
+            }),
+            tool_calls: vec![ToolCall {
+                id: "tool-1".into(),
+                content: ToolCallContent::Function {
+                    function: FunctionContent {
+                        name: "lookup".into(),
+                        arguments: "{\"query\":\"rust\"}".into(),
+                    },
+                },
+            }],
+        };
+        let serialized = serde_json::to_value(&message).expect("serialize");
+        let deserialized: RequestMessage = serde_json::from_value(serialized).expect("deserialize");
+        assert_eq!(deserialized, message);
+
+        let text_delta: MessageContentDelta =
+            serde_json::from_value(serde_json::json!("chunk")).expect("text delta");
+        assert_eq!(text_delta, MessageContentDelta::Text("chunk".into()));
+
+        let parts_delta: MessageContentDelta = serde_json::from_value(serde_json::json!([
+            { "type": "text", "text": "chunk" }
+        ]))
+        .expect("parts delta");
+        assert_eq!(
+            parts_delta,
+            MessageContentDelta::Parts(vec![MessagePart::Text {
+                text: "chunk".into()
+            }])
+        );
+    }
+}

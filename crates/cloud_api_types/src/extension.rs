@@ -83,3 +83,32 @@ pub struct ExtensionMetadata {
 pub struct GetExtensionsResponse {
     pub data: Vec<ExtensionMetadata>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{ExtensionApiManifest, ExtensionProvides};
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn manifest_provides_filters_unknown_values() {
+        let manifest = serde_json::from_value::<ExtensionApiManifest>(serde_json::json!({
+            "name": "Example",
+            "version": "1.0.0",
+            "description": null,
+            "authors": ["Example"],
+            "repository": "https://example.com/repo",
+            "schema_version": 1,
+            "wasm_api_version": "0.1.0",
+            "provides": ["themes", "future-thing", "language-servers", "themes"]
+        }))
+        .unwrap();
+
+        assert_eq!(
+            manifest.provides,
+            BTreeSet::from([
+                ExtensionProvides::Themes,
+                ExtensionProvides::LanguageServers,
+            ])
+        );
+    }
+}

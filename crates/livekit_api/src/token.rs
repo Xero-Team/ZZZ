@@ -108,3 +108,74 @@ pub fn validate<'a>(token: &'a str, secret_key: &str) -> Result<ClaimGrants<'a>>
 
     Ok(token.claims)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{DEFAULT_TTL, VideoGrant, create, validate};
+
+    #[test]
+    fn video_grant_helpers_set_expected_flags() {
+        let admin = VideoGrant::to_admin("room-a");
+        assert_eq!(admin.room_admin, Some(true));
+        assert_eq!(admin.room.as_deref(), Some("room-a"));
+        assert_eq!(admin.room_join, None);
+
+        let join = VideoGrant::to_join("room-b");
+        assert_eq!(join.room.as_deref(), Some("room-b"));
+        assert_eq!(join.room_join, Some(true));
+        assert_eq!(join.can_publish, Some(true));
+        assert_eq!(join.can_subscribe, Some(true));
+
+        let guest = VideoGrant::for_guest("room-c");
+        assert_eq!(guest.room.as_deref(), Some("room-c"));
+        assert_eq!(guest.room_join, Some(true));
+        assert_eq!(guest.can_publish, Some(false));
+        assert_eq!(guest.can_subscribe, Some(true));
+    }
+
+    #[test]
+    fn create_requires_identity_for_join_grant() {
+        let error = create("api-key", "secret", None, VideoGrant::to_join("room-a")).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("identity is required for room_join grant")
+        );
+    }
+
+    #[test]
+    fn create_and_validate_round_trip_claims() {
+        let token = create(
+            "api-key",
+            "secret",
+            Some("alice"),
+            VideoGrant::for_guest("room-a"),
+        )
+        .unwrap();
+
+        let claims = validate(&token, "secret").unwrap();
+        assert_eq!(claims.iss.as_ref(), "api-key");
+        assert_eq!(claims.sub.as_deref(), Some("alice"));
+        assert_eq!(claims.jwtid.as_deref(), Some("alice"));
+        assert_eq!(claims.video.room.as_deref(), Some("room-a"));
+        assert_eq!(claims.video.room_join, Some(true));
+        assert_eq!(claims.video.can_publish, Some(false));
+        assert_eq!(claims.video.can_subscribe, Some(true));
+        assert_eq!(claims.nbf, 0);
+        assert!(claims.exp >= claims.iat + DEFAULT_TTL.as_secs());
+    }
+
+    #[test]
+    fn validate_rejects_wrong_secret() {
+        let token = create(
+            "api-key",
+            "secret",
+            Some("alice"),
+            VideoGrant::to_admin("room-a"),
+        )
+        .unwrap();
+
+        assert!(validate(&token, "wrong-secret").is_err());
+    }
+}

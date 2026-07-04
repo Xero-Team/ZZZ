@@ -70,3 +70,83 @@ impl WebSearchRegistry {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::{WebSearchProvider, WebSearchProviderId, WebSearchRegistry};
+    use cloud_llm_client::WebSearchResponse;
+    use gpui::{App, SharedString, Task};
+
+    struct TestProvider(&'static str);
+
+    impl WebSearchProvider for TestProvider {
+        fn id(&self) -> WebSearchProviderId {
+            WebSearchProviderId(SharedString::from(self.0))
+        }
+
+        fn search(&self, _query: String, _cx: &mut App) -> Task<anyhow::Result<WebSearchResponse>> {
+            panic!("search should not be called in registry tests")
+        }
+    }
+
+    #[test]
+    fn set_active_provider_inserts_and_marks_active() {
+        let mut registry = WebSearchRegistry::default();
+        let provider = Arc::new(TestProvider("provider-a"));
+
+        registry.set_active_provider(provider.clone());
+
+        assert_eq!(registry.providers().count(), 1);
+        assert_eq!(registry.active_provider().unwrap().id(), provider.id());
+        assert!(
+            registry
+                .providers()
+                .any(|candidate| candidate.id() == provider.id())
+        );
+    }
+
+    #[test]
+    fn unregistering_active_provider_clears_active_provider() {
+        let mut registry = WebSearchRegistry::default();
+        let provider = Arc::new(TestProvider("provider-a"));
+        let provider_id = provider.id();
+        registry.set_active_provider(provider);
+
+        registry.unregister_provider(provider_id.clone());
+
+        assert!(registry.active_provider().is_none());
+        assert!(
+            !registry
+                .providers()
+                .any(|candidate| candidate.id() == provider_id)
+        );
+    }
+
+    #[test]
+    fn unregistering_inactive_provider_keeps_active_provider() {
+        let mut registry = WebSearchRegistry::default();
+        let active_provider = Arc::new(TestProvider("provider-a"));
+        let inactive_provider = Arc::new(TestProvider("provider-b"));
+        let inactive_id = inactive_provider.id();
+
+        registry.set_active_provider(active_provider.clone());
+        registry
+            .providers
+            .insert(inactive_provider.id(), inactive_provider);
+
+        registry.unregister_provider(inactive_id.clone());
+
+        assert_eq!(
+            registry.active_provider().unwrap().id(),
+            active_provider.id()
+        );
+        assert_eq!(registry.providers().count(), 1);
+        assert!(
+            !registry
+                .providers()
+                .any(|candidate| candidate.id() == inactive_id)
+        );
+    }
+}

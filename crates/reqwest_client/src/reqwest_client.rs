@@ -386,4 +386,17 @@ mod tests {
             "An invalid proxy URL should add no proxy to the client!"
         )
     }
+
+    #[test]
+    fn test_user_agent_helpers() {
+        let client = ReqwestClient::user_agent("zed-test-agent/1.0").unwrap();
+        assert_eq!(client.proxy(), None);
+
+        let proxied = ReqwestClient::proxy_and_user_agent(None, "zed-test-agent/2.0").unwrap();
+        assert_eq!(
+            proxied.user_agent().and_then(|value| value.to_str().ok()),
+            Some("zed-test-agent/2.0")
+        );
+        assert_eq!(proxied.proxy(), None);
+    }
 }

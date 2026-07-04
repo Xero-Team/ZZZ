@@ -370,7 +370,81 @@ impl Model {
 
 #[cfg(test)]
 mod tests {
-    use super::{Model, ReasoningEffort};
+    use super::{MessageContent, MessagePart, Model, ReasoningEffort, Role};
+
+    fn custom_model(
+        reasoning_effort: Option<ReasoningEffort>,
+        supports_chat_completions: bool,
+    ) -> Model {
+        Model::Custom {
+            name: "custom-model".into(),
+            display_name: Some("Custom Display".into()),
+            max_tokens: 123_456,
+            max_output_tokens: Some(4_096),
+            max_completion_tokens: Some(2_048),
+            reasoning_effort,
+            supports_chat_completions,
+            supports_images: false,
+        }
+    }
+
+    #[test]
+    fn role_round_trips_and_rejects_invalid_values() {
+        assert_eq!(Role::try_from("user".to_string()).unwrap(), Role::User);
+        assert_eq!(
+            Role::try_from("assistant".to_string()).unwrap(),
+            Role::Assistant
+        );
+        assert_eq!(String::from(Role::System), "system");
+        assert_eq!(String::from(Role::Tool), "tool");
+
+        let error = Role::try_from("invalid".to_string()).unwrap_err();
+        assert_eq!(error.to_string(), "invalid role 'invalid'");
+    }
+
+    #[test]
+    fn default_and_known_model_helpers_match_expected_values() {
+        assert_eq!(Model::default_fast(), Model::FiveMini);
+        assert_eq!(
+            Model::from_id("gpt-5.4-pro").unwrap(),
+            Model::FivePointFourPro
+        );
+        assert_eq!(Model::FivePointFourPro.id(), "gpt-5.4-pro");
+        assert_eq!(Model::FivePointFourPro.display_name(), "gpt-5.4-pro");
+        assert_eq!(Model::FivePointFourPro.max_token_count(), 1_050_000);
+        assert_eq!(Model::FivePointFourPro.max_output_tokens(), Some(128_000));
+        assert!(Model::FivePointFourPro.uses_responses_api());
+        assert!(Model::FivePointFourPro.supports_parallel_tool_calls());
+
+        let error = Model::from_id("not-a-model").unwrap_err();
+        assert_eq!(error.to_string(), "invalid model id 'not-a-model'");
+    }
+
+    #[test]
+    fn custom_model_helpers_use_custom_configuration() {
+        let chat_model = custom_model(Some(ReasoningEffort::High), true);
+        let responses_only_model = custom_model(None, false);
+
+        assert_eq!(chat_model.id(), "custom-model");
+        assert_eq!(chat_model.display_name(), "Custom Display");
+        assert_eq!(chat_model.max_token_count(), 123_456);
+        assert_eq!(chat_model.max_output_tokens(), Some(4_096));
+        assert_eq!(chat_model.reasoning_effort(), Some(ReasoningEffort::High));
+        assert_eq!(
+            chat_model.supported_reasoning_efforts(),
+            &[ReasoningEffort::High]
+        );
+        assert!(!chat_model.uses_responses_api());
+        assert!(!chat_model.supports_parallel_tool_calls());
+        assert!(!chat_model.supports_priority());
+
+        assert!(responses_only_model.uses_responses_api());
+        assert!(
+            responses_only_model
+                .supported_reasoning_efforts()
+                .is_empty()
+        );
+    }
 
     #[test]
     fn gpt_5_1_uses_none_reasoning_by_default() {
@@ -468,6 +542,47 @@ mod tests {
             }
             .supports_priority()
         );
+    }
+
+    #[test]
+    fn message_content_push_part_preserves_plain_text_until_needed() {
+        let mut content = MessageContent::empty();
+        content.push_part(MessagePart::Text {
+            text: "hello".into(),
+        });
+        assert_eq!(content, MessageContent::Plain("hello".into()));
+
+        content.push_part(MessagePart::Text {
+            text: "world".into(),
+        });
+        assert_eq!(
+            content,
+            MessageContent::Multipart(vec![
+                MessagePart::Text {
+                    text: "hello".into()
+                },
+                MessagePart::Text {
+                    text: "world".into()
+                },
+            ])
+        );
+    }
+
+    #[test]
+    fn message_content_handles_image_parts_and_single_text_conversion() {
+        let mut content = MessageContent::empty();
+        content.push_part(MessagePart::Image {
+            image_url: super::ImageUrl {
+                url: "https://example.com/image.png".into(),
+                detail: Some("high".into()),
+            },
+        });
+        assert!(matches!(content, MessageContent::Multipart(_)));
+
+        let from_single_text = MessageContent::from(vec![MessagePart::Text {
+            text: "only text".into(),
+        }]);
+        assert_eq!(from_single_text, MessageContent::Plain("only text".into()));
     }
 }
 

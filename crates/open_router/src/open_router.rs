@@ -848,3 +848,139 @@ impl From<ApiError> for language_model_core::LanguageModelCompletionError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_construction_and_capabilities_use_expected_defaults() {
+        let default_model = Model::default();
+        assert_eq!(default_model.id(), "openrouter/auto");
+        assert_eq!(default_model.display_name(), "Auto Router");
+        assert_eq!(default_model.max_token_count(), 2_000_000);
+        assert!(default_model.supports_tool_calls());
+        assert!(!default_model.supports_parallel_tool_calls());
+        assert_eq!(default_model.max_output_tokens(), None);
+
+        let custom = Model::new("custom/model", None, None, None, Some(true), None, None);
+        assert_eq!(custom.display_name(), "custom/model");
+        assert_eq!(custom.max_token_count(), 2_000_000);
+        assert!(!custom.supports_tool_calls());
+    }
+
+    #[test]
+    fn role_round_trip_and_error_message_are_stable() {
+        assert_eq!(
+            Role::try_from("user".to_string()).expect("user"),
+            Role::User
+        );
+        assert_eq!(
+            Role::try_from("assistant".to_string()).expect("assistant"),
+            Role::Assistant
+        );
+        assert_eq!(String::from(Role::System), "system");
+        assert_eq!(String::from(Role::Tool), "tool");
+
+        let error = Role::try_from("invalid".to_string()).expect_err("invalid role");
+        assert!(error.to_string().contains("invalid role 'invalid'"));
+    }
+
+    #[test]
+    fn message_content_helpers_preserve_text_and_parts() {
+        let mut content = MessageContent::empty();
+        assert_eq!(content.as_text(), Some(""));
+
+        content.push_part(MessagePart::Text {
+            text: "hello".into(),
+            cache_control: None,
+        });
+        assert_eq!(content.as_text(), Some("hello"));
+        assert_eq!(content.to_text(), "hello");
+
+        content.push_part(MessagePart::Image {
+            image_url: "https://example.com/image.png".into(),
+        });
+        assert_eq!(content.as_text(), None);
+        assert_eq!(content.to_text(), "hello");
+
+        let plain = MessageContent::from(vec![MessagePart::Text {
+            text: "plain".into(),
+            cache_control: None,
+        }]);
+        assert_eq!(plain, MessageContent::Plain("plain".into()));
+
+        let multipart = MessageContent::from(vec![MessagePart::Text {
+            text: "cached".into(),
+            cache_control: Some(CacheControl {
+                cache_type: CacheControlType::Ephemeral,
+                ttl: Some(CacheTtl::FiveMinutes),
+            }),
+        }]);
+        assert_eq!(multipart.as_text(), Some("cached"));
+        assert_eq!(multipart.to_text(), "cached");
+    }
+
+    #[test]
+    fn api_error_codes_map_statuses_and_display_strings() {
+        assert_eq!(
+            ApiErrorCode::from_status(400),
+            ApiErrorCode::InvalidRequestError
+        );
+        assert_eq!(
+            ApiErrorCode::from_status(401),
+            ApiErrorCode::AuthenticationError
+        );
+        assert_eq!(
+            ApiErrorCode::from_status(402),
+            ApiErrorCode::PaymentRequiredError
+        );
+        assert_eq!(
+            ApiErrorCode::from_status(403),
+            ApiErrorCode::PermissionError
+        );
+        assert_eq!(
+            ApiErrorCode::from_status(408),
+            ApiErrorCode::RequestTimedOut
+        );
+        assert_eq!(ApiErrorCode::from_status(429), ApiErrorCode::RateLimitError);
+        assert_eq!(ApiErrorCode::from_status(502), ApiErrorCode::ApiError);
+        assert_eq!(
+            ApiErrorCode::from_status(503),
+            ApiErrorCode::OverloadedError
+        );
+        assert_eq!(ApiErrorCode::from_status(599), ApiErrorCode::ApiError);
+
+        assert_eq!(ApiErrorCode::RateLimitError.to_string(), "rate_limit_error");
+        assert_eq!(
+            ApiErrorCode::OverloadedError.to_string(),
+            "overloaded_error"
+        );
+    }
+
+    #[test]
+    fn retry_after_prefers_future_header_and_ignores_invalid_values() {
+        let mut future_headers = http::HeaderMap::new();
+        let future_epoch_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time after unix epoch")
+            .as_millis() as u64
+            + 1_000;
+        future_headers.insert(
+            "X-RateLimit-Reset",
+            http::HeaderValue::from_str(&future_epoch_ms.to_string()).expect("header value"),
+        );
+        assert!(extract_retry_after(&future_headers).is_some());
+
+        let mut past_headers = http::HeaderMap::new();
+        past_headers.insert("X-RateLimit-Reset", http::HeaderValue::from_static("1"));
+        assert_eq!(extract_retry_after(&past_headers), None);
+
+        let mut invalid_headers = http::HeaderMap::new();
+        invalid_headers.insert(
+            "X-RateLimit-Reset",
+            http::HeaderValue::from_static("not-a-number"),
+        );
+        assert_eq!(extract_retry_after(&invalid_headers), None);
+    }
+}

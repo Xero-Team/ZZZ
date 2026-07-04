@@ -127,3 +127,59 @@ pub struct SubmitEditPredictionFeedbackBody {
     pub expected_output: Option<String>,
     pub feedback: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        CreateLlmTokenBody, GetAuthenticatedUserResponse, KnownOrUnknown, Plan, SystemSettings,
+    };
+
+    #[test]
+    fn authenticated_user_response_defaults_optional_collections() {
+        let response = serde_json::from_value::<GetAuthenticatedUserResponse>(serde_json::json!({
+            "user": {
+                "id": 1,
+                "metrics_id": "metrics-1",
+                "avatar_url": "https://example.com/avatar.png",
+                "github_login": "octocat",
+                "name": "Octo Cat",
+                "is_staff": true,
+                "accepted_tos_at": null,
+                "has_connected_to_collab_once": false
+            },
+            "feature_flags": ["flag-a"],
+            "plan": {
+                "plan_v3": "zed_pro",
+                "subscription_period": null,
+                "usage": {
+                    "edit_predictions": {
+                        "used": 0,
+                        "limit": "unlimited"
+                    }
+                },
+                "trial_started_at": null,
+                "is_account_too_young": false,
+                "has_overdue_invoices": false
+            }
+        }))
+        .unwrap();
+
+        assert!(response.organizations.is_empty());
+        assert!(response.default_organization_id.is_none());
+        assert!(response.plans_by_organization.is_empty());
+        assert!(response.configuration_by_organization.is_empty());
+        assert_eq!(response.plan.plan, KnownOrUnknown::Known(Plan::ZedPro));
+    }
+
+    #[test]
+    fn default_bodies_serialize_without_optional_organization() {
+        let create = serde_json::to_value(CreateLlmTokenBody::default()).unwrap();
+        let settings = serde_json::to_value(SystemSettings::default()).unwrap();
+
+        assert_eq!(create, serde_json::json!({ "organization_id": null }));
+        assert_eq!(
+            settings,
+            serde_json::json!({ "selected_organization_id": null })
+        );
+    }
+}

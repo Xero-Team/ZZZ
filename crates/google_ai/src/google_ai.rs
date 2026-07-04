@@ -615,6 +615,130 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn valid_request() -> GenerateContentRequest {
+        GenerateContentRequest {
+            model: ModelName {
+                model_id: "gemini-2.5-flash".into(),
+            },
+            contents: vec![Content {
+                role: Role::User,
+                parts: vec![Part::TextPart(TextPart {
+                    text: "Hello".into(),
+                })],
+            }],
+            system_instruction: None,
+            generation_config: None,
+            safety_settings: None,
+            tools: None,
+            tool_config: None,
+        }
+    }
+
+    #[test]
+    fn validate_generate_content_request_rejects_missing_required_fields() {
+        let mut request = valid_request();
+        request.model = ModelName::default();
+        let error = validate_generate_content_request(&request).expect_err("missing model");
+        assert!(error.to_string().contains("Model must be specified"));
+
+        let mut request = valid_request();
+        request.contents.clear();
+        let error = validate_generate_content_request(&request).expect_err("missing contents");
+        assert!(
+            error
+                .to_string()
+                .contains("Request must contain at least one content item")
+        );
+
+        let mut request = valid_request();
+        request.contents[0].parts.clear();
+        let error = validate_generate_content_request(&request).expect_err("empty user parts");
+        assert!(
+            error
+                .to_string()
+                .contains("User content must contain at least one part")
+        );
+    }
+
+    #[test]
+    fn validate_generate_content_request_accepts_non_user_empty_parts() {
+        let request = GenerateContentRequest {
+            model: ModelName {
+                model_id: "gemini-2.5-flash".into(),
+            },
+            contents: vec![Content {
+                role: Role::Model,
+                parts: vec![],
+            }],
+            system_instruction: None,
+            generation_config: None,
+            safety_settings: None,
+            tools: None,
+            tool_config: None,
+        };
+
+        validate_generate_content_request(&request).expect("model role may have empty parts");
+    }
+
+    #[test]
+    fn model_name_serialization_requires_models_prefix() {
+        let model_name = ModelName {
+            model_id: "gemini-2.5-flash".into(),
+        };
+        let serialized = serde_json::to_string(&model_name).expect("serialize model name");
+        assert_eq!(serialized, "\"models/gemini-2.5-flash\"");
+
+        let deserialized: ModelName =
+            serde_json::from_str("\"models/gemini-2.5-flash\"").expect("deserialize model name");
+        assert_eq!(deserialized.model_id, "gemini-2.5-flash");
+
+        let error = serde_json::from_str::<ModelName>("\"gemini-2.5-flash\"")
+            .expect_err("missing prefix must fail");
+        assert!(
+            error
+                .to_string()
+                .contains("Expected model name to begin with models/")
+        );
+    }
+
+    #[test]
+    fn model_helpers_cover_built_in_aliases_and_custom_modes() {
+        let alias: Model = serde_json::from_str("\"gemini-2.5-flash-preview-latest\"")
+            .expect("alias deserializes");
+        assert_eq!(alias, Model::Gemini25Flash);
+
+        let default_model = Model::default();
+        assert_eq!(default_model, Model::Gemini25Flash);
+        assert_eq!(Model::default_fast(), Model::Gemini31FlashLite);
+        assert_eq!(default_model.id(), "gemini-2.5-flash");
+        assert_eq!(default_model.request_id(), "gemini-2.5-flash");
+        assert_eq!(default_model.display_name(), "Gemini 2.5 Flash");
+        assert_eq!(default_model.max_token_count(), 1_048_576);
+        assert_eq!(default_model.max_output_tokens(), Some(65_536));
+        assert!(default_model.supports_tools());
+        assert!(default_model.supports_images());
+        assert!(matches!(
+            default_model.mode(),
+            GoogleModelMode::Thinking {
+                budget_tokens: None
+            }
+        ));
+
+        let custom = Model::Custom {
+            name: "custom/gemini".into(),
+            display_name: None,
+            max_tokens: 1234,
+            mode: GoogleModelMode::Default,
+        };
+        assert_eq!(custom.id(), "custom/gemini");
+        assert_eq!(custom.request_id(), "custom/gemini");
+        assert_eq!(custom.display_name(), "custom/gemini");
+        assert_eq!(custom.max_token_count(), 1234);
+        assert_eq!(custom.max_output_tokens(), None);
+        assert!(matches!(custom.mode(), GoogleModelMode::Default));
+        assert_eq!(custom.to_string(), "custom/gemini");
+    }
+
     #[test]
     fn test_function_call_part_with_signature_serializes_correctly() {
         let part = FunctionCallPart {

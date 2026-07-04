@@ -422,3 +422,70 @@ pub struct Message {
     pub content: String,
     pub role: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{CodestralRequest, CodestralResponse};
+    use serde_json::json;
+
+    #[test]
+    fn request_serialization_omits_none_fields() {
+        let request = CodestralRequest {
+            model: "codestral-latest".into(),
+            prompt: "fn main() {".into(),
+            suffix: None,
+            max_tokens: Some(350),
+            temperature: Some(0.2),
+            top_p: Some(1.0),
+            stream: Some(false),
+            stop: None,
+            random_seed: None,
+            min_tokens: None,
+        };
+
+        let value = serde_json::to_value(&request).unwrap();
+        assert_eq!(value["model"], json!("codestral-latest"));
+        assert_eq!(value["prompt"], json!("fn main() {"));
+        assert_eq!(value["max_tokens"], json!(350));
+        assert_eq!(value["stream"], json!(false));
+        assert!(value.get("suffix").is_none());
+        assert!(value.get("stop").is_none());
+        assert!(value.get("random_seed").is_none());
+        assert!(value.get("min_tokens").is_none());
+    }
+
+    #[test]
+    fn response_deserialization_preserves_usage_and_choice_message() {
+        let response = serde_json::from_value::<CodestralResponse>(json!({
+            "id": "resp_123",
+            "object": "fim.completion",
+            "model": "codestral-latest",
+            "created": 1_720_000_000u64,
+            "usage": {
+                "prompt_tokens": 12,
+                "completion_tokens": 5,
+                "total_tokens": 17
+            },
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "content": "println!(\"hi\");",
+                        "role": "assistant"
+                    },
+                    "finish_reason": "stop"
+                }
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(response.id, "resp_123");
+        assert_eq!(response.model, "codestral-latest");
+        assert_eq!(response.usage.prompt_tokens, 12);
+        assert_eq!(response.usage.completion_tokens, 5);
+        assert_eq!(response.usage.total_tokens, 17);
+        assert_eq!(response.choices.len(), 1);
+        assert_eq!(response.choices[0].message.role, "assistant");
+        assert_eq!(response.choices[0].message.content, "println!(\"hi\");");
+    }
+}
