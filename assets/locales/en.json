@@ -2916,7 +2916,7 @@
     "workspace.pane.go_forward": "Go Forward",
     "workspace.pane.open_in_terminal": "Open in Terminal",
     "workspace.pane.reveal_in_project_panel": "Reveal In Project Panel",
-    "workspace.pane.tooltip.new": "New...",
+    "workspace.pane.tooltip.new": "New…",
     "workspace.pane.new_file": "New File",
     "workspace.pane.open_file": "Open File",
     "workspace.pane.search_project": "Search Project",

@@ -2916,7 +2916,7 @@
     "workspace.pane.go_forward": "前进",
     "workspace.pane.open_in_terminal": "在终端中打开",
     "workspace.pane.reveal_in_project_panel": "在项目面板中显示",
-    "workspace.pane.tooltip.new": "新建...",
+    "workspace.pane.tooltip.new": "新建…",
     "workspace.pane.new_file": "新建文件",
     "workspace.pane.open_file": "打开文件",
     "workspace.pane.search_project": "搜索项目",
