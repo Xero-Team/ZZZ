@@ -1230,34 +1230,6 @@ impl Thread {
         &self.id
     }
 
-    // Only used by Seatbelt-style sandboxes (macOS); Linux relies on bwrap's
-    // tmpfs `/tmp` and Windows on the WSL bwrap tmpfs, so neither needs a
-    // per-thread temp directory.
-    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-    pub(crate) fn sandboxed_terminal_temp_dir(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> Result<PathBuf> {
-        if let Some(temp_dir) = &self.sandboxed_terminal_temp_dir {
-            std::fs::create_dir_all(temp_dir).with_context(|| {
-                format!(
-                    "failed to recreate sandboxed terminal temp directory {}",
-                    temp_dir.display()
-                )
-            })?;
-            return Ok(temp_dir.clone());
-        }
-
-        let temp_dir = tempfile::Builder::new()
-            .prefix("zed-agent-terminal-")
-            .tempdir()
-            .context("failed to create sandboxed terminal temp directory")?;
-        let temp_dir = temp_dir.keep();
-        self.sandboxed_terminal_temp_dir = Some(temp_dir.clone());
-        cx.notify();
-        Ok(temp_dir)
-    }
-
     pub fn replay(
         &mut self,
         cx: &mut Context<Self>,
