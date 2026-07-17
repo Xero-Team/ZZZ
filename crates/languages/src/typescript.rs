@@ -635,6 +635,8 @@ impl TypeScriptLspAdapter {
             "node_modules/typescript/lib"
         };
 
+        // typescript-language-server doesn't support TypeScript 7+, which no longer
+        // ships `tsserver.js`.
         if self
             .fs
             .is_file(
