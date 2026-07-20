@@ -2894,7 +2894,7 @@
     "workspace.pane.close": "Close",
     "workspace.pane.conflict_message": "This file has changed on disk since you started editing it. Do you want to overwrite it?",
     "workspace.pane.overwrite": "Overwrite",
-    "workspace.pane.discard": "Discard",
+    "workspace.pane.discard": "Discard Edits",
     "workspace.pane.dont_save": "Don't Save",
     "workspace.pane.unlock_file": "Unlock File",
     "workspace.pane.unlock_file_detail": "This will make this file editable",

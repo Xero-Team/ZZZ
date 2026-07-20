@@ -2894,7 +2894,7 @@
     "workspace.pane.close": "关闭",
     "workspace.pane.conflict_message": "自你开始编辑后，该文件已在磁盘上发生变化。要覆盖它吗？",
     "workspace.pane.overwrite": "覆盖",
-    "workspace.pane.discard": "放弃",
+    "workspace.pane.discard": "放弃编辑",
     "workspace.pane.dont_save": "不保存",
     "workspace.pane.unlock_file": "解锁文件",
     "workspace.pane.unlock_file_detail": "这会使该文件可编辑",

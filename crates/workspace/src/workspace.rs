@@ -12071,7 +12071,7 @@ mod tests {
         assert!(cx.has_pending_prompt());
 
         // Cancel saving item 3.
-        let discard = cx.update(|_, cx| i18n::tr(cx, "workspace.pane.discard", "Discard"));
+        let discard = cx.update(|_, cx| i18n::tr(cx, "workspace.pane.discard", "Discard Edits"));
         cx.simulate_prompt_answer(&discard);
         cx.executor().run_until_parked();
 

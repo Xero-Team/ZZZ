@@ -2369,7 +2369,7 @@ impl Pane {
                     "This file has changed on disk since you started editing it. Do you want to overwrite it?",
                 );
                 let overwrite = tr(cx, "workspace.pane.overwrite", "Overwrite");
-                let discard = tr(cx, "workspace.pane.discard", "Discard");
+                let discard = tr(cx, "workspace.pane.discard", "Discard Edits");
                 let cancel = tr(cx, "prompt.common.cancel", "Cancel");
                 window.prompt(
                     PromptLevel::Warning,
