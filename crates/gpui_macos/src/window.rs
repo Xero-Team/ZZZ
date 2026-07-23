@@ -1480,9 +1480,9 @@ impl PlatformWindow for MacWindow {
         unsafe {
             let title: id = msg_send![self.0.lock().native_window, title];
             if title.is_null() {
-                "".to_string()
+                "".to_owned()
             } else {
-                title.to_str().to_string()
+                title.to_str().to_owned()
             }
         }
     }
@@ -1685,7 +1685,7 @@ impl PlatformWindow for MacWindow {
                 if msg_send![window, isKindOfClass: WINDOW_CLASS] {
                     let handle = get_window_state(&*window).lock().handle;
                     let title: id = msg_send![window, title];
-                    let title = SharedString::from(title.to_str().to_string());
+                    let title = SharedString::from(title.to_str().to_owned());
 
                     result.push(SystemWindowTab::new(title, handle));
                 }

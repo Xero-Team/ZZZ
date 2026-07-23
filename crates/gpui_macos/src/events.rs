@@ -342,7 +342,7 @@ unsafe fn parse_keystroke(native_event: id) -> Keystroke {
         let characters = native_event
             .charactersIgnoringModifiers()
             .to_str()
-            .to_string();
+            .to_owned();
         let mut key_char = None;
         let first_char = characters.chars().next().map(|ch| ch as u16);
         let modifiers = native_event.modifierFlags();
@@ -358,66 +358,66 @@ unsafe fn parse_keystroke(native_event: id) -> Keystroke {
         #[allow(non_upper_case_globals)]
         let key = match first_char {
             Some(SPACE_KEY) => {
-                key_char = Some(" ".to_string());
-                "space".to_string()
+                key_char = Some(" ".to_owned());
+                "space".to_owned()
             }
             Some(TAB_KEY) => {
-                key_char = Some("\t".to_string());
-                "tab".to_string()
+                key_char = Some("\t".to_owned());
+                "tab".to_owned()
             }
             Some(ENTER_KEY) | Some(NUMPAD_ENTER_KEY) => {
-                key_char = Some("\n".to_string());
-                "enter".to_string()
+                key_char = Some("\n".to_owned());
+                "enter".to_owned()
             }
-            Some(BACKSPACE_KEY) => "backspace".to_string(),
-            Some(ESCAPE_KEY) => "escape".to_string(),
-            Some(SHIFT_TAB_KEY) => "tab".to_string(),
-            Some(NSUpArrowFunctionKey) => "up".to_string(),
-            Some(NSDownArrowFunctionKey) => "down".to_string(),
-            Some(NSLeftArrowFunctionKey) => "left".to_string(),
-            Some(NSRightArrowFunctionKey) => "right".to_string(),
-            Some(NSPageUpFunctionKey) => "pageup".to_string(),
-            Some(NSPageDownFunctionKey) => "pagedown".to_string(),
-            Some(NSHomeFunctionKey) => "home".to_string(),
-            Some(NSEndFunctionKey) => "end".to_string(),
-            Some(NSDeleteFunctionKey) => "delete".to_string(),
+            Some(BACKSPACE_KEY) => "backspace".to_owned(),
+            Some(ESCAPE_KEY) => "escape".to_owned(),
+            Some(SHIFT_TAB_KEY) => "tab".to_owned(),
+            Some(NSUpArrowFunctionKey) => "up".to_owned(),
+            Some(NSDownArrowFunctionKey) => "down".to_owned(),
+            Some(NSLeftArrowFunctionKey) => "left".to_owned(),
+            Some(NSRightArrowFunctionKey) => "right".to_owned(),
+            Some(NSPageUpFunctionKey) => "pageup".to_owned(),
+            Some(NSPageDownFunctionKey) => "pagedown".to_owned(),
+            Some(NSHomeFunctionKey) => "home".to_owned(),
+            Some(NSEndFunctionKey) => "end".to_owned(),
+            Some(NSDeleteFunctionKey) => "delete".to_owned(),
             // Observed Insert==NSHelpFunctionKey not NSInsertFunctionKey.
-            Some(NSHelpFunctionKey) => "insert".to_string(),
-            Some(NSF1FunctionKey) => "f1".to_string(),
-            Some(NSF2FunctionKey) => "f2".to_string(),
-            Some(NSF3FunctionKey) => "f3".to_string(),
-            Some(NSF4FunctionKey) => "f4".to_string(),
-            Some(NSF5FunctionKey) => "f5".to_string(),
-            Some(NSF6FunctionKey) => "f6".to_string(),
-            Some(NSF7FunctionKey) => "f7".to_string(),
-            Some(NSF8FunctionKey) => "f8".to_string(),
-            Some(NSF9FunctionKey) => "f9".to_string(),
-            Some(NSF10FunctionKey) => "f10".to_string(),
-            Some(NSF11FunctionKey) => "f11".to_string(),
-            Some(NSF12FunctionKey) => "f12".to_string(),
-            Some(NSF13FunctionKey) => "f13".to_string(),
-            Some(NSF14FunctionKey) => "f14".to_string(),
-            Some(NSF15FunctionKey) => "f15".to_string(),
-            Some(NSF16FunctionKey) => "f16".to_string(),
-            Some(NSF17FunctionKey) => "f17".to_string(),
-            Some(NSF18FunctionKey) => "f18".to_string(),
-            Some(NSF19FunctionKey) => "f19".to_string(),
-            Some(NSF20FunctionKey) => "f20".to_string(),
-            Some(NSF21FunctionKey) => "f21".to_string(),
-            Some(NSF22FunctionKey) => "f22".to_string(),
-            Some(NSF23FunctionKey) => "f23".to_string(),
-            Some(NSF24FunctionKey) => "f24".to_string(),
-            Some(NSF25FunctionKey) => "f25".to_string(),
-            Some(NSF26FunctionKey) => "f26".to_string(),
-            Some(NSF27FunctionKey) => "f27".to_string(),
-            Some(NSF28FunctionKey) => "f28".to_string(),
-            Some(NSF29FunctionKey) => "f29".to_string(),
-            Some(NSF30FunctionKey) => "f30".to_string(),
-            Some(NSF31FunctionKey) => "f31".to_string(),
-            Some(NSF32FunctionKey) => "f32".to_string(),
-            Some(NSF33FunctionKey) => "f33".to_string(),
-            Some(NSF34FunctionKey) => "f34".to_string(),
-            Some(NSF35FunctionKey) => "f35".to_string(),
+            Some(NSHelpFunctionKey) => "insert".to_owned(),
+            Some(NSF1FunctionKey) => "f1".to_owned(),
+            Some(NSF2FunctionKey) => "f2".to_owned(),
+            Some(NSF3FunctionKey) => "f3".to_owned(),
+            Some(NSF4FunctionKey) => "f4".to_owned(),
+            Some(NSF5FunctionKey) => "f5".to_owned(),
+            Some(NSF6FunctionKey) => "f6".to_owned(),
+            Some(NSF7FunctionKey) => "f7".to_owned(),
+            Some(NSF8FunctionKey) => "f8".to_owned(),
+            Some(NSF9FunctionKey) => "f9".to_owned(),
+            Some(NSF10FunctionKey) => "f10".to_owned(),
+            Some(NSF11FunctionKey) => "f11".to_owned(),
+            Some(NSF12FunctionKey) => "f12".to_owned(),
+            Some(NSF13FunctionKey) => "f13".to_owned(),
+            Some(NSF14FunctionKey) => "f14".to_owned(),
+            Some(NSF15FunctionKey) => "f15".to_owned(),
+            Some(NSF16FunctionKey) => "f16".to_owned(),
+            Some(NSF17FunctionKey) => "f17".to_owned(),
+            Some(NSF18FunctionKey) => "f18".to_owned(),
+            Some(NSF19FunctionKey) => "f19".to_owned(),
+            Some(NSF20FunctionKey) => "f20".to_owned(),
+            Some(NSF21FunctionKey) => "f21".to_owned(),
+            Some(NSF22FunctionKey) => "f22".to_owned(),
+            Some(NSF23FunctionKey) => "f23".to_owned(),
+            Some(NSF24FunctionKey) => "f24".to_owned(),
+            Some(NSF25FunctionKey) => "f25".to_owned(),
+            Some(NSF26FunctionKey) => "f26".to_owned(),
+            Some(NSF27FunctionKey) => "f27".to_owned(),
+            Some(NSF28FunctionKey) => "f28".to_owned(),
+            Some(NSF29FunctionKey) => "f29".to_owned(),
+            Some(NSF30FunctionKey) => "f30".to_owned(),
+            Some(NSF31FunctionKey) => "f31".to_owned(),
+            Some(NSF32FunctionKey) => "f32".to_owned(),
+            Some(NSF33FunctionKey) => "f33".to_owned(),
+            Some(NSF34FunctionKey) => "f34".to_owned(),
+            Some(NSF35FunctionKey) => "f35".to_owned(),
             _ => {
                 // Cases to test when modifying this:
                 //
@@ -527,7 +527,7 @@ fn chars_for_modified_key(code: CGKeyCode, modifiers: u32) -> String {
 
     let keyboard = unsafe { TISCopyCurrentKeyboardLayoutInputSource() };
     if keyboard.is_null() {
-        return "".to_string();
+        return "".to_owned();
     }
     let layout_data = unsafe {
         TISGetInputSourceProperty(keyboard, kTISPropertyUnicodeKeyLayoutData as *const c_void)
@@ -537,7 +537,7 @@ fn chars_for_modified_key(code: CGKeyCode, modifiers: u32) -> String {
         unsafe {
             let _: () = msg_send![keyboard, release];
         }
-        return "".to_string();
+        return "".to_owned();
     }
     let keyboard_layout = unsafe { CFDataGetBytePtr(layout_data) };
 

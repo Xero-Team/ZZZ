@@ -478,6 +478,7 @@ pub fn python_env_kernel_specifications(
     cx: &mut App,
 ) -> impl Future<Output = Result<Vec<KernelSpecification>>> + use<> {
     let remote_kernel_label = tr(cx, "repl.kernels.remote_kernel", "Remote {}");
+    #[cfg(target_os = "windows")]
     let wsl_kernel_label = tr(cx, "repl.kernels.wsl_kernel", "WSL: {} {}");
     let python_language = LanguageName::new_static("Python");
     let is_remote = project.read(cx).is_remote();

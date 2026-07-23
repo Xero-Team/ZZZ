@@ -436,124 +436,123 @@ impl MacTextSystemState {
     ) -> Result<(Size<DevicePixels>, Vec<u8>)> {
         if glyph_bounds.size.width.0 == 0 || glyph_bounds.size.height.0 == 0 {
             anyhow::bail!("glyph bounds are empty");
-        } else {
-            // Add an extra pixel when the subpixel variant isn't zero to make room for anti-aliasing.
-            let mut bitmap_size = glyph_bounds.size;
-            if params.subpixel_variant.x > 0 {
-                bitmap_size.width += DevicePixels(1);
-            }
-            if params.subpixel_variant.y > 0 {
-                bitmap_size.height += DevicePixels(1);
-            }
-            let bitmap_size = bitmap_size;
-
-            let mut bytes;
-            let cx;
-            if params.is_emoji {
-                bytes = vec![0; bitmap_size.width.0 as usize * 4 * bitmap_size.height.0 as usize];
-                cx = CGContext::create_bitmap_context(
-                    Some(bytes.as_mut_ptr() as *mut _),
-                    bitmap_size.width.0 as usize,
-                    bitmap_size.height.0 as usize,
-                    8,
-                    bitmap_size.width.0 as usize * 4,
-                    &CGColorSpace::create_device_rgb(),
-                    kCGImageAlphaPremultipliedLast,
-                );
-            } else {
-                bytes = vec![0; bitmap_size.width.0 as usize * bitmap_size.height.0 as usize];
-                cx = CGContext::create_bitmap_context(
-                    Some(bytes.as_mut_ptr() as *mut _),
-                    bitmap_size.width.0 as usize,
-                    bitmap_size.height.0 as usize,
-                    8,
-                    bitmap_size.width.0 as usize,
-                    &CGColorSpace::create_device_gray(),
-                    kCGImageAlphaOnly,
-                );
-            }
-
-            // Move the origin to bottom left and account for scaling, this
-            // makes drawing text consistent with the font-kit's raster_bounds.
-            cx.translate(
-                -glyph_bounds.origin.x.0 as CGFloat,
-                (glyph_bounds.origin.y.0 + glyph_bounds.size.height.0) as CGFloat,
-            );
-            cx.scale(
-                params.scale_factor as CGFloat,
-                params.scale_factor as CGFloat,
-            );
-            if params.synthetic_italic.is_enabled() {
-                cx.concat_ctm(CGAffineTransform::new(
-                    1.0,
-                    0.0,
-                    params.synthetic_italic.to_skew() as CGFloat,
-                    1.0,
-                    0.0,
-                    0.0,
-                ));
-            }
-
-            let subpixel_shift = params
-                .subpixel_variant
-                .map(|v| v as f32 / SUBPIXEL_VARIANTS_X as f32);
-            cx.set_text_drawing_mode(CGTextDrawingMode::CGTextFill);
-            cx.set_allows_antialiasing(true);
-            cx.set_should_antialias(true);
-            cx.set_allows_font_subpixel_positioning(true);
-            cx.set_should_subpixel_position_fonts(true);
-            cx.set_allows_font_subpixel_quantization(false);
-            cx.set_should_subpixel_quantize_fonts(false);
-
-            if params.dilation > 0 {
-                let luminance = params.dilation as f64 * 0.25;
-                cx.set_should_smooth_fonts(true);
-                cx.set_gray_fill_color(luminance, 1.0);
-            } else {
-                cx.set_gray_fill_color(0.0, 1.0);
-            }
-            self.fonts[params.font_id.0]
-                .native_font()
-                .clone_with_font_size(f32::from(params.font_size) as CGFloat)
-                .draw_glyphs(
-                    &[params.glyph_id.0 as CGGlyph],
-                    &[CGPoint::new(
-                        (subpixel_shift.x / params.scale_factor) as CGFloat,
-                        (subpixel_shift.y / params.scale_factor) as CGFloat,
-                    )],
-                    cx.clone(),
-                );
-            if params.synthetic_bold.is_enabled() && !params.is_emoji {
-                let bold_amount = params
-                    .synthetic_bold
-                    .device_pixel_amount(params.font_size, params.scale_factor);
-                let strike_count = bold_amount.ceil() as i32;
-                for strike_index in 1..=strike_count {
-                    let strike_offset = bold_amount.min(strike_index as f32) / params.scale_factor;
-                    self.fonts[params.font_id.0]
-                        .native_font()
-                        .clone_with_font_size(f32::from(params.font_size) as CGFloat)
-                        .draw_glyphs(
-                            &[params.glyph_id.0 as CGGlyph],
-                            &[CGPoint::new(
-                                ((subpixel_shift.x / params.scale_factor) + strike_offset)
-                                    as CGFloat,
-                                (subpixel_shift.y / params.scale_factor) as CGFloat,
-                            )],
-                            cx.clone(),
-                        );
-                }
-            }
-
-            if params.is_emoji {
-                // Convert from RGBA with premultiplied alpha to BGRA with straight alpha.
-                for pixel in bytes.chunks_exact_mut(4) {
-                    swap_rgba_pa_to_bgra(pixel);
-                }
-            }
-
-            Ok((bitmap_size, bytes))
         }
+
+        // Add an extra pixel when the subpixel variant isn't zero to make room for anti-aliasing.
+        let mut bitmap_size = glyph_bounds.size;
+        if params.subpixel_variant.x > 0 {
+            bitmap_size.width += DevicePixels(1);
+        }
+        if params.subpixel_variant.y > 0 {
+            bitmap_size.height += DevicePixels(1);
+        }
+        let bitmap_size = bitmap_size;
+
+        let mut bytes;
+        let cx;
+        if params.is_emoji {
+            bytes = vec![0; bitmap_size.width.0 as usize * 4 * bitmap_size.height.0 as usize];
+            cx = CGContext::create_bitmap_context(
+                Some(bytes.as_mut_ptr() as *mut _),
+                bitmap_size.width.0 as usize,
+                bitmap_size.height.0 as usize,
+                8,
+                bitmap_size.width.0 as usize * 4,
+                &CGColorSpace::create_device_rgb(),
+                kCGImageAlphaPremultipliedLast,
+            );
+        } else {
+            bytes = vec![0; bitmap_size.width.0 as usize * bitmap_size.height.0 as usize];
+            cx = CGContext::create_bitmap_context(
+                Some(bytes.as_mut_ptr() as *mut _),
+                bitmap_size.width.0 as usize,
+                bitmap_size.height.0 as usize,
+                8,
+                bitmap_size.width.0 as usize,
+                &CGColorSpace::create_device_gray(),
+                kCGImageAlphaOnly,
+            );
+        }
+
+        // Move the origin to bottom left and account for scaling, this
+        // makes drawing text consistent with the font-kit's raster_bounds.
+        cx.translate(
+            -glyph_bounds.origin.x.0 as CGFloat,
+            (glyph_bounds.origin.y.0 + glyph_bounds.size.height.0) as CGFloat,
+        );
+        cx.scale(
+            params.scale_factor as CGFloat,
+            params.scale_factor as CGFloat,
+        );
+        if params.synthetic_italic.is_enabled() {
+            cx.concat_ctm(CGAffineTransform::new(
+                1.0,
+                0.0,
+                params.synthetic_italic.to_skew() as CGFloat,
+                1.0,
+                0.0,
+                0.0,
+            ));
+        }
+
+        let subpixel_shift = params
+            .subpixel_variant
+            .map(|v| v as f32 / SUBPIXEL_VARIANTS_X as f32);
+        cx.set_text_drawing_mode(CGTextDrawingMode::CGTextFill);
+        cx.set_allows_antialiasing(true);
+        cx.set_should_antialias(true);
+        cx.set_allows_font_subpixel_positioning(true);
+        cx.set_should_subpixel_position_fonts(true);
+        cx.set_allows_font_subpixel_quantization(false);
+        cx.set_should_subpixel_quantize_fonts(false);
+
+        if params.dilation > 0 {
+            let luminance = params.dilation as f64 * 0.25;
+            cx.set_should_smooth_fonts(true);
+            cx.set_gray_fill_color(luminance, 1.0);
+        } else {
+            cx.set_gray_fill_color(0.0, 1.0);
+        }
+        self.fonts[params.font_id.0]
+            .native_font()
+            .clone_with_font_size(f32::from(params.font_size) as CGFloat)
+            .draw_glyphs(
+                &[params.glyph_id.0 as CGGlyph],
+                &[CGPoint::new(
+                    (subpixel_shift.x / params.scale_factor) as CGFloat,
+                    (subpixel_shift.y / params.scale_factor) as CGFloat,
+                )],
+                cx.clone(),
+            );
+        if params.synthetic_bold.is_enabled() && !params.is_emoji {
+            let bold_amount = params
+                .synthetic_bold
+                .device_pixel_amount(params.font_size, params.scale_factor);
+            let strike_count = bold_amount.ceil() as i32;
+            for strike_index in 1..=strike_count {
+                let strike_offset = bold_amount.min(strike_index as f32) / params.scale_factor;
+                self.fonts[params.font_id.0]
+                    .native_font()
+                    .clone_with_font_size(f32::from(params.font_size) as CGFloat)
+                    .draw_glyphs(
+                        &[params.glyph_id.0 as CGGlyph],
+                        &[CGPoint::new(
+                            ((subpixel_shift.x / params.scale_factor) + strike_offset) as CGFloat,
+                            (subpixel_shift.y / params.scale_factor) as CGFloat,
+                        )],
+                        cx.clone(),
+                    );
+            }
+        }
+
+        if params.is_emoji {
+            // Convert from RGBA with premultiplied alpha to BGRA with straight alpha.
+            for pixel in bytes.chunks_exact_mut(4) {
+                swap_rgba_pa_to_bgra(pixel);
+            }
+        }
+
+        Ok((bitmap_size, bytes))
     }
 
     fn layout_line(&mut self, text: &str, font_size: Pixels, font_runs: &[FontRun]) -> LineLayout {

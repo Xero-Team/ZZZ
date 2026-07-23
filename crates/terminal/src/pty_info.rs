@@ -260,13 +260,16 @@ mod tests {
         reason = "the test needs real short-lived child processes and may block"
     )]
     fn process_map_stays_bounded() {
-        let mut info = PtyProcessInfo::new(ProcessIdGetter::new(-1, std::process::id()));
+        let mut info = PtyProcessInfo::new(ProcessIdGetter {
+            handle: -1,
+            fallback_pid: std::process::id(),
+        });
         assert!(
             info.get_child().is_some(),
             "the spawned child must be inspectable for kill_child_process \
              before the first foreground refresh"
         );
-        assert!(info.load_for_test().is_some());
+        assert!(info.load().is_some());
         let initial_len = info.system.read().processes().len();
         assert!(
             initial_len <= 2,
@@ -278,8 +281,11 @@ mod tests {
                 .arg("30")
                 .spawn()
                 .expect("failed to spawn child process");
-            info.pid_getter = ProcessIdGetter::new(-1, child.id());
-            assert!(info.load_for_test().is_some());
+            info.pid_getter = ProcessIdGetter {
+                handle: -1,
+                fallback_pid: child.id(),
+            };
+            assert!(info.load().is_some());
             child.kill().expect("failed to kill child process");
             child.wait().expect("failed to wait for child process");
         }
