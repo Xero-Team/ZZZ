@@ -439,6 +439,10 @@ impl<D: PickerDelegate> Picker<D> {
         cx: &mut Context<Self>,
     ) -> Self {
         let element_container = Self::create_element_container(container);
+        let initial_preview_layout = preview
+            .as_ref()
+            .map(|preview| preview.layout)
+            .unwrap_or(preview::Layout::Hidden);
         let mut this = Self {
             delegate,
             head,
@@ -458,7 +462,7 @@ impl<D: PickerDelegate> Picker<D> {
         };
         // give delegate the initial preview layout
         this.delegate
-            .preview_layout_changed(matches!(initial_layout, preview::Layout::Right));
+            .preview_layout_changed(matches!(initial_preview_layout, preview::Layout::Right));
         if this.reopenable {
             let focus_handle = this.focus_handle(cx);
             workspace::register_reopenable_picker(&focus_handle, cx);
@@ -1196,12 +1200,14 @@ impl<D: PickerDelegate> Picker<D> {
 mod tests {
     use super::*;
     use gpui::TestAppContext;
-    use std::cell::Cell;
+    use project::{FakeFs, Project};
+    use std::cell::{Cell, RefCell};
 
     struct TestDelegate {
         items: Vec<bool>,
         selected_index: usize,
         confirmed_index: Rc<Cell<Option<usize>>>,
+        preview_layouts: Rc<RefCell<Vec<bool>>>,
     }
 
     impl TestDelegate {
@@ -1210,6 +1216,7 @@ mod tests {
                 items,
                 selected_index: 0,
                 confirmed_index: Rc::new(Cell::new(None)),
+                preview_layouts: Rc::new(RefCell::new(Vec::new())),
             }
         }
     }
@@ -1245,6 +1252,10 @@ mod tests {
 
         fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
             "Test".into()
+        }
+
+        fn preview_layout_changed(&mut self, layout_is_horizontal: bool) {
+            self.preview_layouts.borrow_mut().push(layout_is_horizontal);
         }
 
         fn update_matches(
@@ -1290,6 +1301,24 @@ mod tests {
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);
         });
+    }
+
+    #[gpui::test]
+    async fn test_preview_picker_notifies_delegate_of_initial_layout(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.background_executor.clone());
+        let project = Project::test(fs, [], cx).await;
+        let preview_layouts = Rc::new(RefCell::new(Vec::new()));
+        let preview_layouts_for_delegate = Rc::clone(&preview_layouts);
+
+        let (_picker, _cx) = cx.add_window_view(|window, cx| {
+            let mut delegate = TestDelegate::new(Vec::new());
+            delegate.preview_layouts = preview_layouts_for_delegate;
+            Picker::uniform_list_with_preview(delegate, project, window, cx)
+        });
+
+        assert_eq!(&*preview_layouts.borrow(), &[true]);
     }
 
     #[gpui::test]
