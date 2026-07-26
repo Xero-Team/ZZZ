@@ -9616,6 +9616,7 @@ dependencies = [
  "http_client",
  "log",
  "partial-json-fixer",
+ "pretty_assertions",
  "schemars 1.2.1",
  "serde",
  "serde_json",
