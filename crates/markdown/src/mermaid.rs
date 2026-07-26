@@ -370,8 +370,8 @@ pub(crate) fn render_mermaid_diagram(
 
     if let Some(result) = cached.and_then(|cached| cached.render_image.get()) {
         match result {
-            Ok(render_image) => container
-                .child(render_image(render_image.clone()))
+            Ok(image) => container
+                .child(render_image(image.clone()))
                 .into_any_element(),
             Err(_) => container
                 .child(StyledText::new(parsed.contents.contents.clone()))
