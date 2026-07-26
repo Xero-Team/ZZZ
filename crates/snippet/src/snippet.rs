@@ -156,8 +156,8 @@ fn parse_choices<'a>(
                 source = &source[1..];
 
                 if let Some(c) = source.chars().next() {
+                    current_choice.push(c);
                     if !found_default_choice {
-                        current_choice.push(c);
                         text.push(c);
                     }
                     source = &source[c.len_utf8()..];
@@ -273,6 +273,34 @@ mod tests {
         assert_eq!(
             tabstop_choices(&snippet),
             &[&Some(vec!["${1|one,two,tree|}".to_string(),]), &None]
+        );
+    }
+
+    #[test]
+    fn test_snippet_with_escaped_chars_in_non_default_choices() {
+        let snippet =
+            Snippet::parse(r"${1|a,b\,c|}").expect("snippet with an escaped comma should parse");
+        assert_eq!(snippet.text, "a");
+        assert_eq!(tabstops(&snippet), &[vec![0..1], vec![1..1]]);
+        assert_eq!(
+            tabstop_choices(&snippet),
+            &[&Some(vec!["a".to_string(), "b,c".to_string()]), &None]
+        );
+
+        let snippet = Snippet::parse(r"${1|one,two\|2,three\\3|}")
+            .expect("snippet with escaped pipe and backslash should parse");
+        assert_eq!(snippet.text, "one");
+        assert_eq!(tabstops(&snippet), &[vec![0..3], vec![3..3]]);
+        assert_eq!(
+            tabstop_choices(&snippet),
+            &[
+                &Some(vec![
+                    "one".to_string(),
+                    "two|2".to_string(),
+                    r"three\3".to_string()
+                ]),
+                &None
+            ]
         );
     }
 
