@@ -61,7 +61,7 @@ The packages in this section provide binary installs for ZZZ but are not officia
 
 #### Debian and Ubuntu
 
-ZZZ is available in [this community-maintained repository](https://debian.griffo.io/).
+ZZZ is available in [this community-maintained repository](https://deb.griffo.io/).
 
 Instructions for each version are available in the README of the repository where packages are built.
 Build, packaging and instructions for each version are available in the README of the [repository](https://github.com/dariogriffo/zed-debian)
