@@ -76,8 +76,9 @@ use util::{
 };
 use workspace::{
     DraggedSelection, OpenInTerminal, OpenMode, OpenOptions, OpenVisible, PreviewTabsSettings,
-    SelectedEntry, SplitDirection, Workspace,
+    SelectedEntry, SplitDirection, Workspace, WorkspaceSettings,
     dock::{DockPosition, Panel, PanelEvent},
+    focus_follows_mouse::FocusFollowsMouse as _,
     notifications::{DetachAndPromptErr, NotifyResultExt, NotifyTaskExt},
 };
 use worktree::CreatedEntry;
@@ -7417,6 +7418,10 @@ impl Render for ProjectPanel {
                             div()
                                 .id("project-panel-blank-area")
                                 .block_mouse_except_scroll()
+                                .focus_follows_mouse(
+                                    WorkspaceSettings::get_global(cx).focus_follows_mouse,
+                                    cx,
+                                )
                                 .flex_grow()
                                 .on_scroll_wheel({
                                     let scroll_handle = self.scroll_handle.clone();
