@@ -1185,8 +1185,9 @@ impl EditorElement {
         window: &mut Window,
         cx: &mut Context<Editor>,
     ) {
-        if !editor.has_pending_selection()
-            && matches!(editor.selection_drag_state, SelectionDragState::None)
+        if editor.has_autoscroll_request()
+            || !editor.has_pending_selection()
+                && matches!(editor.selection_drag_state, SelectionDragState::None)
         {
             return;
         }
