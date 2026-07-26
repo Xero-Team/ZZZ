@@ -10230,19 +10230,29 @@ pub(crate) fn open_link(
         return;
     };
 
-    if let Some(mention) = MentionUri::parse(&url, workspace.read(cx).path_style(cx)).log_err() {
+    let path_style = workspace.read(cx).path_style(cx);
+    if let Some(mention) = MentionUri::parse_hyperlink(&url, path_style).log_err() {
+        // Percent escapes in bare paths are ambiguous. Prefer the decoded
+        // interpretation, but use a literal filename when only it resolves.
+        let resolves_in_project = |mention: &MentionUri, cx: &App| {
+            mention.abs_path().is_some_and(|abs_path| {
+                let project = workspace.read(cx).project().read(cx);
+                project
+                    .find_project_path(abs_path, cx)
+                    .is_some_and(|path| project.entry_for_path(&path, cx).is_some())
+            })
+        };
+        let mention = match MentionUri::parse_hyperlink_literal(&url, path_style) {
+            Some(literal)
+                if !resolves_in_project(&mention, cx) && resolves_in_project(&literal, cx) =>
+            {
+                literal
+            }
+            _ => mention,
+        };
         workspace.update(cx, |workspace, cx| match mention {
             MentionUri::File { abs_path } => {
-                let project = workspace.project();
-                let Some(path) =
-                    project.update(cx, |project, cx| project.find_project_path(abs_path, cx))
-                else {
-                    return;
-                };
-
-                workspace
-                    .open_path(path, None, true, window, cx)
-                    .detach_and_log_err(cx);
+                open_abs_path_at_point(workspace, abs_path, None, window, cx);
             }
             MentionUri::PastedImage { .. } => {}
             MentionUri::Directory { abs_path } => {
@@ -10266,7 +10276,7 @@ pub(crate) fn open_link(
                 open_abs_path_at_point(
                     workspace,
                     path,
-                    Point::new(*line_range.start(), 0),
+                    Some(Point::new(*line_range.start(), 0)),
                     window,
                     cx,
                 );
@@ -10279,7 +10289,7 @@ pub(crate) fn open_link(
                 open_abs_path_at_point(
                     workspace,
                     path,
-                    Point::new(*line_range.start(), column.unwrap_or(0)),
+                    Some(Point::new(*line_range.start(), column.unwrap_or(0))),
                     window,
                     cx,
                 );

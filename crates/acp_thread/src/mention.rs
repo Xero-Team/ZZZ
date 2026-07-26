@@ -160,7 +160,10 @@ impl MentionUri {
                 };
                 let decoded = decode(trimmed).unwrap_or(Cow::Borrowed(trimmed));
                 let normalized: Cow<str> = if path_style.is_windows() {
-                    Cow::Owned(decoded.replace('/', "\\"))
+                    match to_native_windows_path(&decoded) {
+                        Some(native) => Cow::Owned(native),
+                        None => decoded,
+                    }
                 } else {
                     decoded
                 };
@@ -290,6 +293,47 @@ impl MentionUri {
             }
             "http" | "https" => Ok(MentionUri::Fetch { url }),
             other => bail!("unrecognized scheme {:?}", other),
+        }
+    }
+
+    /// Parses a hyperlink target from agent-authored Markdown.
+    ///
+    /// Mention URIs stay strict so they can round-trip, while hyperlinks may
+    /// contain a Windows shell path rather than a URI.
+    pub fn parse_hyperlink(input: &str, path_style: PathStyle) -> Result<Self> {
+        if let Some(target) = bare_path_target(input, path_style) {
+            return parse_hyperlink_path(target, path_style, DecodePercentEscapes::Yes)
+                .with_context(|| format!("Invalid hyperlink path target: {input}"));
+        }
+        Self::parse(input, path_style)
+    }
+
+    /// Returns the literal interpretation of a bare hyperlink path when
+    /// decoding percent escapes would produce a different path.
+    pub fn parse_hyperlink_literal(input: &str, path_style: PathStyle) -> Option<Self> {
+        let target = bare_path_target(input, path_style)?;
+        let (path_input, _) = split_path_fragment(target);
+        if !matches!(decode_path_escapes(path_input), Cow::Owned(_)) {
+            return None;
+        }
+        parse_hyperlink_path(target, path_style, DecodePercentEscapes::No).ok()
+    }
+
+    /// The absolute path this mention refers to, if it refers to one.
+    pub fn abs_path(&self) -> Option<&Path> {
+        match self {
+            MentionUri::File { abs_path }
+            | MentionUri::Directory { abs_path }
+            | MentionUri::Symbol { abs_path, .. } => Some(abs_path),
+            MentionUri::Selection { abs_path, .. } => abs_path.as_deref(),
+            MentionUri::PastedImage { .. }
+            | MentionUri::Thread { .. }
+            | MentionUri::Rule { .. }
+            | MentionUri::Diagnostics { .. }
+            | MentionUri::Fetch { .. }
+            | MentionUri::TerminalSelection { .. }
+            | MentionUri::GitDiff { .. }
+            | MentionUri::MergeConflict { .. } => None,
         }
     }
 
@@ -506,6 +550,186 @@ impl fmt::Display for MentionLink<'_> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DecodePercentEscapes {
+    Yes,
+    No,
+}
+
+/// Returns a bare absolute path target, with agent-added backticks removed.
+fn bare_path_target(input: &str, path_style: PathStyle) -> Option<&str> {
+    let input = input
+        .strip_prefix('`')
+        .and_then(|input| input.strip_suffix('`'))
+        .unwrap_or(input);
+    (is_absolute(input, path_style) && !input.contains("://")).then_some(input)
+}
+
+fn split_path_fragment(input: &str) -> (&str, Option<&str>) {
+    input
+        .split_once('#')
+        .map_or((input, None), |(path, fragment)| (path, Some(fragment)))
+}
+
+fn parse_hyperlink_path(
+    input: &str,
+    path_style: PathStyle,
+    decode_escapes: DecodePercentEscapes,
+) -> Result<MentionUri> {
+    let (path_input, fragment) = split_path_fragment(input);
+    let path_input = normalize_path_mention(path_input, path_style, decode_escapes);
+
+    if let Some(fragment) = fragment.and_then(|fragment| parse_line_range(fragment).ok()) {
+        return Ok(MentionUri::Selection {
+            abs_path: Some(path_input.into()),
+            line_range: fragment,
+            column: None,
+        });
+    }
+
+    let path_with_position = PathWithPosition::parse_str(&path_input);
+    let abs_path = path_with_position.path;
+    if let Some(row) = path_with_position.row {
+        let line = row
+            .checked_sub(1)
+            .context("Line numbers should be 1-based")?;
+        Ok(MentionUri::Selection {
+            abs_path: Some(abs_path),
+            line_range: line..=line,
+            column: path_with_position
+                .column
+                .map(|column| column.saturating_sub(1)),
+        })
+    } else {
+        Ok(MentionUri::File { abs_path })
+    }
+}
+
+fn parse_line_range(fragment: &str) -> Result<RangeInclusive<u32>> {
+    let range = fragment.strip_prefix("L").unwrap_or(fragment);
+    let (start, end) = if let Some((start, end)) = range.split_once(":") {
+        (start, end)
+    } else if let Some((start, end)) = range.split_once("-") {
+        (start, end.strip_prefix("L").unwrap_or(end))
+    } else {
+        (range, range)
+    };
+
+    let start_line = start
+        .parse::<u32>()
+        .context("Parsing line range start")?
+        .checked_sub(1)
+        .context("Line numbers should be 1-based")?;
+    let end_line = end
+        .parse::<u32>()
+        .context("Parsing line range end")?
+        .checked_sub(1)
+        .context("Line numbers should be 1-based")?;
+    Ok(start_line..=end_line)
+}
+
+fn normalize_path_mention(
+    input: &str,
+    path_style: PathStyle,
+    decode_escapes: DecodePercentEscapes,
+) -> Cow<'_, str> {
+    let decoded = match decode_escapes {
+        DecodePercentEscapes::Yes => decode_path_escapes(input),
+        DecodePercentEscapes::No => Cow::Borrowed(input),
+    };
+    if !path_style.is_windows() {
+        return decoded;
+    }
+    match to_native_windows_path(&decoded) {
+        Some(native) => Cow::Owned(native),
+        None => decoded,
+    }
+}
+
+/// Decodes percent escapes without decoding separators, so an escaped
+/// separator cannot change which directory is opened.
+fn decode_path_escapes(input: &str) -> Cow<'_, str> {
+    fn hex_digit(byte: u8) -> Option<u8> {
+        match byte {
+            b'0'..=b'9' => Some(byte - b'0'),
+            b'a'..=b'f' => Some(byte - b'a' + 10),
+            b'A'..=b'F' => Some(byte - b'A' + 10),
+            _ => None,
+        }
+    }
+
+    if !input.contains('%') {
+        return Cow::Borrowed(input);
+    }
+    let bytes = input.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%'
+            && let Some(high) = bytes.get(index + 1).copied().and_then(hex_digit)
+            && let Some(low) = bytes.get(index + 2).copied().and_then(hex_digit)
+        {
+            let byte = (high << 4) | low;
+            if byte != b'/' && byte != b'\\' {
+                decoded.push(byte);
+                index += 3;
+                continue;
+            }
+        }
+        decoded.push(bytes[index]);
+        index += 1;
+    }
+    if decoded == bytes {
+        return Cow::Borrowed(input);
+    }
+    String::from_utf8(decoded).map_or_else(|_| Cow::Borrowed(input), Cow::Owned)
+}
+
+/// Converts common Windows path spellings in Markdown to the native spelling
+/// used for worktree-path comparison.
+fn to_native_windows_path(path: &str) -> Option<String> {
+    fn join_drive(drive: char, rest: &str) -> String {
+        format!(
+            "{}:\\{}",
+            drive.to_ascii_uppercase(),
+            rest.replace('/', "\\")
+        )
+    }
+
+    if let Some(rest) = path.strip_prefix('/') {
+        let mut chars = rest.chars();
+        if let (Some(drive), Some(':'), Some('/' | '\\')) =
+            (chars.next(), chars.next(), chars.next())
+            && drive.is_ascii_alphabetic()
+        {
+            return Some(join_drive(drive, chars.as_str()));
+        }
+
+        let mut chars = rest.chars();
+        if let (Some(drive), Some('/' | '\\')) = (chars.next(), chars.next())
+            && drive.is_ascii_lowercase()
+        {
+            return Some(join_drive(drive, chars.as_str()));
+        }
+    }
+
+    let mut chars = path.chars();
+    if let (Some(drive), Some(':')) = (chars.next(), chars.next())
+        && drive.is_ascii_alphabetic()
+    {
+        if drive.is_ascii_uppercase() && !path.contains('/') {
+            return None;
+        }
+        return Some(format!(
+            "{}:{}",
+            drive.to_ascii_uppercase(),
+            chars.as_str().replace('/', "\\")
+        ));
+    }
+
+    path.contains('/').then(|| path.replace('/', "\\"))
+}
+
 fn default_include_errors() -> bool {
     true
 }
@@ -558,6 +782,70 @@ mod tests {
             _ => panic!("Expected File variant"),
         }
         assert_eq!(parsed.to_uri().to_string(), file_uri);
+    }
+
+    #[test]
+    fn test_parse_windows_file_uri_with_spaces() {
+        let parsed =
+            MentionUri::parse("file:///C:/path%20with%20space/file.rs", PathStyle::Windows)
+                .unwrap();
+        assert_eq!(
+            parsed,
+            MentionUri::File {
+                abs_path: PathBuf::from("C:\\path with space\\file.rs")
+            }
+        );
+        assert_eq!(
+            parsed.to_uri().to_string(),
+            "file:///C:/path%20with%20space/file.rs"
+        );
+    }
+
+    #[test]
+    fn test_parse_windows_hyperlink_paths() {
+        let selection = MentionUri::parse_hyperlink(
+            "/C:/Projects/Example%20Workspace/Cargo.toml:2",
+            PathStyle::Windows,
+        )
+        .unwrap();
+        assert_eq!(
+            selection,
+            MentionUri::Selection {
+                abs_path: Some(PathBuf::from("C:\\Projects\\Example Workspace\\Cargo.toml")),
+                line_range: 1..=1,
+                column: None,
+            }
+        );
+
+        let file = MentionUri::parse_hyperlink(
+            "/c/Projects/Example Workspace/AGENTS.md",
+            PathStyle::Windows,
+        )
+        .unwrap();
+        assert_eq!(
+            file,
+            MentionUri::File {
+                abs_path: PathBuf::from("C:\\Projects\\Example Workspace\\AGENTS.md")
+            }
+        );
+    }
+
+    #[test]
+    fn test_hyperlink_literal_path_preserves_escaped_separator() {
+        let parsed =
+            MentionUri::parse_hyperlink("/project/a%20b%2Fc.rs", PathStyle::Posix).unwrap();
+        assert_eq!(
+            parsed,
+            MentionUri::File {
+                abs_path: PathBuf::from("/project/a b%2Fc.rs")
+            }
+        );
+        assert_eq!(
+            MentionUri::parse_hyperlink_literal("/project/a%20b.rs", PathStyle::Posix),
+            Some(MentionUri::File {
+                abs_path: PathBuf::from("/project/a%20b.rs")
+            })
+        );
     }
 
     #[test]
