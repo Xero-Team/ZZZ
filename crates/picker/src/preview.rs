@@ -3,9 +3,10 @@ use std::path::PathBuf;
 
 use editor::{Editor, HighlightKey, MultiBuffer, RowHighlightOptions};
 use gpui::{App, AppContext, Context, Entity, Task, Window};
+use gpui_util::ResultExt as _;
 use i18n::tr;
-use language::{Buffer, HighlightedText, ToPoint};
-use project::Project;
+use language::{Bias, Buffer, HighlightedText, ToPoint};
+use project::{Project, Symbol};
 use rope::Point;
 use ui::{IntoElement, Pixels, prelude::*, px};
 
@@ -49,6 +50,7 @@ impl Preview {
 pub enum PreviewSource {
     Path(PathBuf),
     Buffer(Entity<Buffer>),
+    Symbol(Symbol),
     Message(HighlightedText),
 }
 
@@ -83,6 +85,13 @@ impl Update {
             match_location: Some(highlight),
         }
     }
+
+    pub fn from_symbol(symbol: Symbol) -> Self {
+        Self {
+            source: PreviewSource::Symbol(symbol),
+            match_location: None,
+        }
+    }
 }
 
 struct SearchMatchLineHighlight;
@@ -91,6 +100,7 @@ struct EditorPreview {
     project: Entity<Project>,
     message: Option<HighlightedText>,
     preview_editor: Entity<Editor>,
+    pending_update: Task<()>,
 }
 
 impl EditorPreview {
@@ -126,6 +136,7 @@ impl EditorPreview {
             project,
             message: None,
             preview_editor,
+            pending_update: Task::ready(()),
         };
         this.clear(cx);
         this
@@ -147,6 +158,7 @@ impl EditorPreview {
                 self.update_from_buffer(buffer, update.match_location, window, cx);
                 cx.notify();
             }
+            PreviewSource::Symbol(symbol) => self.update_from_symbol(symbol, window, cx),
             PreviewSource::Message(message) => {
                 self.message = Some(message);
                 cx.notify();
@@ -174,15 +186,41 @@ impl EditorPreview {
             }
         });
 
-        cx.spawn_in(window, async move |this, cx| {
-            let buffer = open_task.await?;
+        self.pending_update = cx.spawn_in(window, async move |this, cx| {
+            let Some(buffer) = open_task.await.log_err() else {
+                return;
+            };
             this.update_in(cx, |this, window, cx| {
                 this.update_from_buffer(buffer, highlight, window, cx);
                 cx.notify();
-            })?;
-            anyhow::Ok(())
-        })
-        .detach_and_log_err(cx);
+            })
+            .log_err();
+        });
+    }
+
+    fn update_from_symbol(&mut self, symbol: Symbol, window: &mut Window, cx: &mut Context<Self>) {
+        let open_task = self.project.update(cx, |project, cx| {
+            project.open_buffer_for_symbol(&symbol, cx)
+        });
+
+        self.pending_update = cx.spawn_in(window, async move |this, cx| {
+            let Some(buffer) = open_task.await.log_err() else {
+                return;
+            };
+            this.update_in(cx, |this, window, cx| {
+                let snapshot = buffer.read(cx).text_snapshot();
+                let start = snapshot.clip_point_utf16(symbol.range.start, Bias::Left);
+                let end = snapshot.clip_point_utf16(symbol.range.end, Bias::Left);
+                let highlight = MatchLocation {
+                    anchor_range: snapshot.anchor_before(start)..snapshot.anchor_after(end),
+                    range: snapshot.point_utf16_to_offset(start)
+                        ..snapshot.point_utf16_to_offset(end),
+                };
+                this.update_from_buffer(buffer, Some(highlight), window, cx);
+                cx.notify();
+            })
+            .log_err();
+        });
     }
 
     fn update_from_buffer(
