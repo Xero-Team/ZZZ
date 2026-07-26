@@ -581,7 +581,7 @@ fn parse_hyperlink_path(
 
     if let Some(fragment) = fragment.and_then(|fragment| parse_line_range(fragment).ok()) {
         return Ok(MentionUri::Selection {
-            abs_path: Some(path_input.into()),
+            abs_path: Some(path_input.as_ref().into()),
             line_range: fragment,
             column: None,
         });
