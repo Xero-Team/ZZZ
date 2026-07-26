@@ -7,7 +7,7 @@ use crate::{
     AgentTool, Templates, Thread, ToolCallEventStream, ToolInput, ToolInputPayload,
     edit_agent::{
         EditAgent, EditAgentOutputEvent, EditFormat,
-        reindent::{Reindenter, compute_indent_delta},
+        reindent::{Reindenter, compute_indent_delta, compute_rest_indent_delta},
         streaming_fuzzy_matcher::StreamingFuzzyMatcher,
     },
 };
@@ -979,15 +979,30 @@ impl EditSession {
                     ]));
 
                     let buffer_indent = snapshot.line_indent_for_row(line);
+                    let query_lines = matcher.query_lines();
                     let query_indent = text::LineIndent::from_iter(
-                        matcher
-                            .query_lines()
+                        query_lines
                             .first()
                             .map(|s| s.as_str())
                             .unwrap_or("")
                             .chars(),
                     );
-                    let indent_delta = compute_indent_delta(buffer_indent, query_indent);
+                    let first_line_delta = compute_indent_delta(buffer_indent, query_indent);
+                    let rest_delta = compute_rest_indent_delta(
+                        first_line_delta,
+                        matcher
+                            .line_pairs(&range)
+                            .unwrap_or(&[])
+                            .iter()
+                            .filter(|(query_row, _)| *query_row != 0)
+                            .filter_map(|(query_row, buffer_row)| {
+                                let query_line = query_lines.get(*query_row as usize)?;
+                                Some((
+                                    snapshot.line_indent_for_row(*buffer_row),
+                                    text::LineIndent::from_iter(query_line.chars()),
+                                ))
+                            }),
+                    );
                     let old_text_in_buffer =
                         snapshot.text_for_range(range.clone()).collect::<String>();
                     let text_snapshot = self
@@ -996,7 +1011,7 @@ impl EditSession {
                     self.pipeline.current_edit = Some(EditPipelineEntry::StreamingNewText {
                         streaming_diff: StreamingDiff::new(old_text_in_buffer),
                         edit_cursor: range.start,
-                        reindenter: Reindenter::new(indent_delta),
+                        reindenter: Reindenter::with_deltas(first_line_delta, rest_delta),
                         original_snapshot: text_snapshot,
                     });
                 }
@@ -3557,6 +3572,91 @@ mod tests {
         assert_eq!(
             fs.load(path!("/root/file.txt").as_ref()).await.unwrap(),
             "alpha\ngamma\n"
+        );
+    }
+
+    #[gpui::test]
+    async fn test_streaming_edit_first_line_missing_indent(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let content = concat!(
+            "class Outer:\n",
+            "    def method(self):\n",
+            "        self.kept = \"unchanged\"\n",
+            "        self.target_a = \"before\"\n",
+            "        self.extra = \"row\"\n",
+            "        self.target_b = \"before\"\n",
+            "        self.target_c = \"before\"\n",
+            "        self.target_d = \"before\"\n",
+            "        self.kept_2 = \"unchanged\"\n",
+        );
+        let fs = project::FakeFs::new(cx.executor());
+        fs.insert_tree("/root", json!({"file.py": content})).await;
+        let project = Project::test(fs.clone(), [path!("/root").as_ref()], cx).await;
+        let language_registry = project.read_with(cx, |project, _cx| project.languages().clone());
+        let context_server_registry =
+            cx.new(|cx| ContextServerRegistry::new(project.read(cx).context_server_store(), cx));
+        let thread = cx.new(|cx| {
+            Thread::new(
+                project.clone(),
+                cx.new(|_cx| ProjectContext::default()),
+                context_server_registry,
+                Templates::new(),
+                None,
+                cx,
+            )
+        });
+
+        let result = cx
+            .update(|cx| {
+                Arc::new(EditFileTool::new(
+                    project.clone(),
+                    thread.downgrade(),
+                    language_registry,
+                    Templates::new(),
+                ))
+                .run(
+                    ToolInput::resolved(EditFileToolInput {
+                        display_description: "Update targets".into(),
+                        path: "root/file.py".into(),
+                        mode: EditFileMode::Edit,
+                        content: None,
+                        edits: Some(vec![EditOperation {
+                            old_text: concat!(
+                                "self.target_a = \"before\"\n",
+                                "        self.target_b = \"before\"\n",
+                                "        self.target_c = \"before\"\n",
+                                "        self.target_d = \"before\"",
+                            )
+                            .into(),
+                            new_text: concat!(
+                                "self.target_a = \"after\"\n",
+                                "        self.target_b = \"after\"\n",
+                                "        self.target_c = \"after\"\n",
+                                "        self.target_d = \"after\"",
+                            )
+                            .into(),
+                        }]),
+                    }),
+                    ToolCallEventStream::test().0,
+                    cx,
+                )
+            })
+            .await;
+
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!(
+            fs.load(path!("/root/file.py").as_ref()).await.unwrap(),
+            concat!(
+                "class Outer:\n",
+                "    def method(self):\n",
+                "        self.kept = \"unchanged\"\n",
+                "        self.target_a = \"after\"\n",
+                "        self.target_b = \"after\"\n",
+                "        self.target_c = \"after\"\n",
+                "        self.target_d = \"after\"\n",
+                "        self.kept_2 = \"unchanged\"\n",
+            )
         );
     }
 

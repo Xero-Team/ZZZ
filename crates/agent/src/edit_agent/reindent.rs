@@ -1,7 +1,7 @@
 use language::LineIndent;
 use std::{cmp, iter};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum IndentDelta {
     Spaces(isize),
     Tabs(isize),
@@ -31,20 +31,54 @@ pub fn compute_indent_delta(buffer_indent: LineIndent, query_indent: LineIndent)
     }
 }
 
+/// Computes the indent delta for the lines after the first, given per-line
+/// `(buffer, query)` indents for those lines.
+///
+/// When the remaining lines agree on a consistent delta, that delta is
+/// returned even if it differs from `first_line_delta`. This handles queries
+/// where only the first line's indentation was stripped. When the remaining
+/// lines are inconsistent (or all blank), fall back to `first_line_delta`.
+pub fn compute_rest_indent_delta(
+    first_line_delta: IndentDelta,
+    indent_pairs: impl IntoIterator<Item = (LineIndent, LineIndent)>,
+) -> IndentDelta {
+    let mut rest_delta = None;
+    for (buffer_indent, query_indent) in indent_pairs {
+        if buffer_indent.line_blank || query_indent.line_blank {
+            continue;
+        }
+        let delta = compute_indent_delta(buffer_indent, query_indent);
+        match rest_delta {
+            None => rest_delta = Some(delta),
+            Some(existing) if existing == delta => {}
+            Some(_) => return first_line_delta,
+        }
+    }
+    rest_delta.unwrap_or(first_line_delta)
+}
+
 /// Synchronous re-indentation adapter. Buffers incomplete lines and applies
 /// an `IndentDelta` to each line's leading whitespace before emitting it.
 pub struct Reindenter {
-    delta: IndentDelta,
+    first_line_delta: IndentDelta,
+    rest_delta: IndentDelta,
     buffer: String,
     in_leading_whitespace: bool,
+    on_first_line: bool,
 }
 
 impl Reindenter {
     pub fn new(delta: IndentDelta) -> Self {
+        Self::with_deltas(delta, delta)
+    }
+
+    pub fn with_deltas(first_line_delta: IndentDelta, rest_delta: IndentDelta) -> Self {
         Self {
-            delta,
+            first_line_delta,
+            rest_delta,
             buffer: String::new(),
             in_leading_whitespace: true,
+            on_first_line: true,
         }
     }
 
@@ -70,14 +104,19 @@ impl Reindenter {
                 None => (self.buffer.len(), true),
             };
             let line = &self.buffer[start_ix..line_end];
+            let delta = if self.on_first_line {
+                self.first_line_delta
+            } else {
+                self.rest_delta
+            };
 
             if self.in_leading_whitespace {
-                if let Some(non_whitespace_ix) = line.find(|c| self.delta.character() != c) {
+                if let Some(non_whitespace_ix) = line.find(|c| delta.character() != c) {
                     // We found a non-whitespace character, adjust indentation
                     // based on the delta.
                     let new_indent_len =
-                        cmp::max(0, non_whitespace_ix as isize + self.delta.len()) as usize;
-                    indented.extend(iter::repeat(self.delta.character()).take(new_indent_len));
+                        cmp::max(0, non_whitespace_ix as isize + delta.len()) as usize;
+                    indented.extend(iter::repeat(delta.character()).take(new_indent_len));
                     indented.push_str(&line[non_whitespace_ix..]);
                     self.in_leading_whitespace = false;
                 } else if is_pending_line && !is_final {
@@ -98,6 +137,7 @@ impl Reindenter {
             }
 
             self.in_leading_whitespace = true;
+            self.on_first_line = false;
             indented.push('\n');
             start_ix = line_end + 1;
         }
@@ -176,6 +216,86 @@ mod tests {
         assert_eq!(out, "   \n    code\n");
         let out = r.finish();
         assert_eq!(out, "");
+    }
+
+    #[test]
+    fn test_distinct_first_line_delta() {
+        let mut reindenter =
+            Reindenter::with_deltas(IndentDelta::Spaces(8), IndentDelta::Spaces(0));
+        let mut out = reindenter.push("self.target_a = ");
+        out.push_str(&reindenter.push("\"after\"\n    "));
+        out.push_str(&reindenter.push("    self.target_b = \"after\"\n"));
+        out.push_str(&reindenter.push("\n        self.target_c = \"after\""));
+        out.push_str(&reindenter.finish());
+        assert_eq!(
+            out,
+            concat!(
+                "        self.target_a = \"after\"\n",
+                "        self.target_b = \"after\"\n",
+                "\n",
+                "        self.target_c = \"after\"",
+            )
+        );
+    }
+
+    fn line_indent(text: &str) -> LineIndent {
+        LineIndent::from_iter(text.chars())
+    }
+
+    #[test]
+    fn test_compute_rest_indent_delta() {
+        let first_line_delta = IndentDelta::Spaces(8);
+
+        assert_eq!(
+            compute_rest_indent_delta(
+                first_line_delta,
+                vec![
+                    (line_indent("        b"), line_indent("        b")),
+                    (line_indent(""), line_indent("")),
+                    (line_indent("        c"), line_indent("        c")),
+                ],
+            ),
+            IndentDelta::Spaces(0),
+        );
+        assert_eq!(
+            compute_rest_indent_delta(
+                first_line_delta,
+                vec![
+                    (line_indent("        b"), line_indent("    b")),
+                    (line_indent("   "), line_indent("")),
+                    (line_indent("        c"), line_indent("    c")),
+                ],
+            ),
+            IndentDelta::Spaces(4),
+        );
+        assert_eq!(
+            compute_rest_indent_delta(
+                first_line_delta,
+                vec![(line_indent("\t\tb"), line_indent("\tb"))],
+            ),
+            IndentDelta::Tabs(1),
+        );
+        assert_eq!(
+            compute_rest_indent_delta(
+                first_line_delta,
+                vec![
+                    (line_indent("        b"), line_indent("        b")),
+                    (line_indent("        c"), line_indent("    c")),
+                ],
+            ),
+            first_line_delta,
+        );
+        assert_eq!(
+            compute_rest_indent_delta(
+                first_line_delta,
+                vec![(line_indent("   "), line_indent(""))]
+            ),
+            first_line_delta,
+        );
+        assert_eq!(
+            compute_rest_indent_delta(first_line_delta, Vec::<(LineIndent, LineIndent)>::new()),
+            first_line_delta,
+        );
     }
 
     #[test]
