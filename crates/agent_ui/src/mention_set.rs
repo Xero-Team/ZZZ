@@ -240,7 +240,7 @@ impl MentionSet {
                 .read(cx)
                 .project_path_for_absolute_path(&abs_path, cx)
             else {
-                log::error!("project path not found");
+                log::error!("project path not found for image mention {abs_path:?}");
                 return Task::ready(());
             };
             let image_task = project.update(cx, |project, cx| project.open_image(project_path, cx));
@@ -377,10 +377,13 @@ impl MentionSet {
             .read(cx)
             .project_path_for_absolute_path(&abs_path, cx)
         else {
-            return Task::ready(Err(anyhow!(app_i18n::tr(
-                cx,
-                "agent_ui.mention_set.project_path_not_found",
-                "Project path not found",
+            return Task::ready(Err(anyhow!(format!(
+                "{} for file mention {abs_path:?}",
+                app_i18n::tr(
+                    cx,
+                    "agent_ui.mention_set.project_path_not_found",
+                    "Project path not found",
+                )
             ))));
         };
         if is_raster_image_path(&abs_path) {
@@ -463,10 +466,13 @@ impl MentionSet {
             .read(cx)
             .project_path_for_absolute_path(&abs_path, cx)
         else {
-            return Task::ready(Err(anyhow!(app_i18n::tr(
-                cx,
-                "agent_ui.mention_set.project_path_not_found",
-                "Project path not found",
+            return Task::ready(Err(anyhow!(format!(
+                "{} for symbol mention {abs_path:?}",
+                app_i18n::tr(
+                    cx,
+                    "agent_ui.mention_set.project_path_not_found",
+                    "Project path not found",
+                )
             ))));
         };
         let buffer = project.update(cx, |project, cx| project.open_buffer(project_path, cx));
@@ -1250,10 +1256,13 @@ fn full_mention_for_directory(
         .read(cx)
         .project_path_for_absolute_path(&abs_path, cx)
     else {
-        return Task::ready(Err(anyhow!(app_i18n::tr(
-            cx,
-            "agent_ui.mention_set.project_path_not_found",
-            "Project path not found",
+        return Task::ready(Err(anyhow!(format!(
+            "{} for directory mention {abs_path:?}",
+            app_i18n::tr(
+                cx,
+                "agent_ui.mention_set.project_path_not_found",
+                "Project path not found",
+            )
         ))));
     };
     let Some(entry) = project.read(cx).entry_for_path(&project_path, cx) else {
