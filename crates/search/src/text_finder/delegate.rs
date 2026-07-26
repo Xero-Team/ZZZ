@@ -1257,6 +1257,7 @@ mod tests {
         cx.update(|cx| {
             let settings = SettingsStore::test(cx);
             cx.set_global(settings);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);
             crate::init(cx);
