@@ -331,6 +331,8 @@ pub(crate) fn render_mermaid_diagram(
     cx: &App,
 ) -> AnyElement {
     let cached = mermaid_state.cache.get(&parsed.contents);
+    let allow_overflow_x = style.code_block_overflow_x_scroll;
+    let source_offset = parsed.content_range.start;
     let mut container = div().w_full();
     container.style().refine(&style.code_block);
     let failed_to_load = tr(
@@ -343,23 +345,33 @@ pub(crate) fn render_mermaid_diagram(
         "markdown.mermaid.rendering",
         "Rendering mermaid diagram...",
     );
+    let render_image = |render_image: Arc<RenderImage>| {
+        let failed_to_load = failed_to_load.clone();
+        let image = img(ImageSource::Render(render_image)).with_fallback(move || {
+            div()
+                .child(Label::new(failed_to_load.clone()))
+                .into_any_element()
+        });
+
+        if allow_overflow_x {
+            div()
+                .id(("mermaid-scroll", source_offset))
+                .w_full()
+                .map(|mut container| {
+                    container.style().restrict_scroll_to_axis = Some(true);
+                    container.overflow_x_scroll()
+                })
+                .child(image)
+                .into_any_element()
+        } else {
+            div().w_full().child(image.max_w_full()).into_any_element()
+        }
+    };
 
     if let Some(result) = cached.and_then(|cached| cached.render_image.get()) {
         match result {
             Ok(render_image) => container
-                .child(
-                    div().w_full().child(
-                        img(ImageSource::Render(render_image.clone()))
-                            .max_w_full()
-                            .with_fallback({
-                                move || {
-                                    div()
-                                        .child(Label::new(failed_to_load.clone()))
-                                        .into_any_element()
-                                }
-                            }),
-                    ),
-                )
+                .child(render_image(render_image.clone()))
                 .into_any_element(),
             Err(_) => container
                 .child(StyledText::new(parsed.contents.contents.clone()))
@@ -369,18 +381,7 @@ pub(crate) fn render_mermaid_diagram(
         container
             .child(
                 div()
-                    .w_full()
-                    .child(
-                        img(ImageSource::Render(fallback.clone()))
-                            .max_w_full()
-                            .with_fallback({
-                                move || {
-                                    div()
-                                        .child(Label::new(failed_to_load.clone()))
-                                        .into_any_element()
-                                }
-                            }),
-                    )
+                    .child(render_image(fallback.clone()))
                     .with_animation(
                         "mermaid-fallback-pulse",
                         Animation::new(Duration::from_secs(2))
