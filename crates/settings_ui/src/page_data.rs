@@ -7939,7 +7939,7 @@ fn terminal_page() -> SettingsPage {
         ]
     }
 
-    fn behavior_settings_section() -> [SettingsPageItem; 5] {
+    fn behavior_settings_section() -> [SettingsPageItem; 6] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.behavior.settings",
@@ -7964,6 +7964,34 @@ fn terminal_page() -> SettingsPage {
                             .terminal
                             .get_or_insert_default()
                             .option_as_meta = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.open.links.in.mouse.mode",
+                    "Open Links In Mouse Mode",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.whether.cmd.click.ctrl.click.opens.hyperlinks.when.the.terminal.application.has.enabled.mouse.reporting",
+                    "Whether cmd-click (ctrl-click on Linux and Windows) opens hyperlinks even when the terminal application has enabled mouse reporting. When disabled, these clicks are forwarded to the application; links can still be opened with shift-cmd-click.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("terminal.open_links_in_mouse_mode"),
+                    pick: |settings_content| {
+                        settings_content
+                            .terminal
+                            .as_ref()?
+                            .open_links_in_mouse_mode
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .terminal
+                            .get_or_insert_default()
+                            .open_links_in_mouse_mode = value;
                     },
                 }),
                 metadata: None,
