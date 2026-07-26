@@ -3,6 +3,7 @@
     "context": "Picker > Editor",
     "bindings": {
       "ctrl-shift-a": "picker::ToggleActionsMenu",
+      "ctrl-shift-s": "picker::ToggleMultiSelect",
       "ctrl-alt-p": "picker::TogglePreview",
       "ctrl-alt-right": "picker::SetPreviewRight",
       "ctrl-alt-down": "picker::SetPreviewBelow",

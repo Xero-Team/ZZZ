@@ -148,15 +148,17 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
         editor: &Arc<dyn ErasedEditor>,
         window: &mut Window,
         cx: &mut Context<Picker<Self>>,
-    ) -> Div {
-        h_flex()
-            .flex_none()
-            .h_9()
-            .px_2p5()
-            .justify_between()
-            .border_b_1()
-            .border_color(cx.theme().colors().border_variant)
-            .child(editor.render(window, cx))
+    ) -> Option<Div> {
+        Some(
+            h_flex()
+                .flex_none()
+                .h_9()
+                .px_2p5()
+                .justify_between()
+                .border_b_1()
+                .border_color(cx.theme().colors().border_variant)
+                .child(editor.render(window, cx)),
+        )
     }
 
     fn match_count(&self) -> usize {

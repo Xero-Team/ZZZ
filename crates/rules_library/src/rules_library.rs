@@ -466,20 +466,22 @@ impl PickerDelegate for RulePickerDelegate {
         editor: &Arc<dyn ErasedEditor>,
         _: &mut Window,
         cx: &mut Context<Picker<Self>>,
-    ) -> Div {
+    ) -> Option<Div> {
         let editor = editor.as_any().downcast_ref::<Entity<Editor>>().unwrap();
 
-        h_flex()
-            .py_1()
-            .px_1p5()
-            .mx_1()
-            .gap_1p5()
-            .rounded_sm()
-            .bg(cx.theme().colors().editor_background)
-            .border_1()
-            .border_color(cx.theme().colors().border)
-            .child(Icon::new(IconName::MagnifyingGlass).color(Color::Muted))
-            .child(editor.clone())
+        Some(
+            h_flex()
+                .py_1()
+                .px_1p5()
+                .mx_1()
+                .gap_1p5()
+                .rounded_sm()
+                .bg(cx.theme().colors().editor_background)
+                .border_1()
+                .border_color(cx.theme().colors().border)
+                .child(Icon::new(IconName::MagnifyingGlass).color(Color::Muted))
+                .child(editor.clone()),
+        )
     }
 }
 

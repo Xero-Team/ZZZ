@@ -129,6 +129,7 @@ pub enum IconName {
     FileGit,
     FileLock,
     FileMarkdown,
+    FileMultiple,
     FileRust,
     FileTextFilled,
     FileTextOutlined,

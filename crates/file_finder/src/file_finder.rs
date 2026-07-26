@@ -24,7 +24,7 @@ use open_path_prompt::{
     OpenPathPrompt,
     file_finder_settings::{FileFinderSettings, FileFinderWidth},
 };
-use picker::{Picker, PickerDelegate};
+use picker::{Picker, PickerDelegate, ToggleMultiSelect};
 use project::{
     PathMatchCandidateSet, Project, ProjectPath, WorktreeId, worktree_store::WorktreeStore,
 };
@@ -41,8 +41,8 @@ use std::{
     },
 };
 use ui::{
-    ButtonLike, CommonAnimationExt, ContextMenu, HighlightedLabel, Indicator, KeyBinding, ListItem,
-    ListItemSpacing, PopoverMenu, PopoverMenuHandle, TintColor, Tooltip, prelude::*,
+    ButtonLike, Checkbox, CommonAnimationExt, ContextMenu, HighlightedLabel, Indicator, KeyBinding,
+    ListItem, ListItemSpacing, PopoverMenu, PopoverMenuHandle, TintColor, Tooltip, prelude::*,
 };
 use ui_input::ErasedEditor;
 use util::{
@@ -2042,6 +2042,97 @@ impl PickerDelegate for FileFinderDelegate {
         window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
+        self.render_match_impl(ix, selected, None, window, cx)
+    }
+
+    fn render_match_with_checkbox(
+        &self,
+        ix: usize,
+        selected: bool,
+        checkbox: AnyElement,
+        window: &mut Window,
+        cx: &mut Context<Picker<Self>>,
+    ) -> Option<Self::ListItem> {
+        self.render_match_impl(ix, selected, Some(checkbox), window, cx)
+    }
+
+    fn render_editor(
+        &self,
+        editor: &Arc<dyn ErasedEditor>,
+        window: &mut Window,
+        cx: &mut Context<Picker<Self>>,
+    ) -> Option<Div> {
+        let has_search_query = self.latest_search_query.is_some();
+        let is_project_scan_running = {
+            let worktree_store = self.project.read(cx).worktree_store();
+            !worktree_store.read(cx).initial_scan_completed()
+        };
+        let multi_select_active = cx.entity().read(cx).multi_select_active();
+        let focus_handle = self.focus_handle.clone();
+
+        Some(
+            h_flex()
+                .flex_none()
+                .h_9()
+                .px_2p5()
+                .justify_between()
+                .border_b_1()
+                .border_color(cx.theme().colors().border_variant)
+                .child(editor.render(window, cx))
+                .when(is_project_scan_running && has_search_query, |this| {
+                    this.child(
+                        h_flex()
+                            .id("project-scan-indicator")
+                            .tooltip(Tooltip::text(tr(
+                                cx,
+                                "file_finder.project_scan_in_progress",
+                                "Project Scan in Progress...",
+                            )))
+                            .child(
+                                Icon::new(IconName::LoadCircle)
+                                    .color(Color::Accent)
+                                    .size(IconSize::Small)
+                                    .with_rotate_animation(2),
+                            ),
+                    )
+                })
+                .child(
+                    IconButton::new("picker-multi-select-toggle", IconName::FileMultiple)
+                        .icon_size(IconSize::Small)
+                        .toggle_state(multi_select_active)
+                        .tooltip(move |_window, cx| {
+                            Tooltip::for_action_in(
+                                tr(cx, "picker.multi_select.toggle", "Toggle Multi Select"),
+                                &ToggleMultiSelect,
+                                &focus_handle,
+                                cx,
+                            )
+                        })
+                        .on_click(|_, window, cx| {
+                            window.dispatch_action(ToggleMultiSelect.boxed_clone(), cx);
+                        }),
+                ),
+        )
+    }
+
+    fn render_footer(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Picker<Self>>,
+    ) -> Option<AnyElement> {
+        self.render_footer_impl(window, cx)
+    }
+}
+
+impl FileFinderDelegate {
+    fn render_match_impl(
+        &self,
+        ix: usize,
+        selected: bool,
+        checkbox: Option<AnyElement>,
+        window: &mut Window,
+        cx: &mut Context<Picker<Self>>,
+    ) -> Option<ListItem> {
         let settings = FileFinderSettings::get_global(cx);
 
         let path_match = self.matches.get(ix)?;
@@ -2062,11 +2153,10 @@ impl PickerDelegate for FileFinderDelegate {
             Match::CreateNew(_) => Empty.into_any_element(),
         };
 
-        let is_create_new = matches!(path_match, Match::CreateNew(_));
-
         let (file_name_label, full_path_label) = self.labels_for_match(path_match, window, cx);
 
-        let file_icon = match path_match {
+        let start_icon = match path_match {
+            Match::CreateNew(_) => Some(Icon::new(IconName::Plus).size(IconSize::Small)),
             Match::Channel { .. } => Some(Icon::new(IconName::Hash).color(Color::Muted)),
             _ => maybe!({
                 if !settings.file_icons {
@@ -2079,18 +2169,33 @@ impl PickerDelegate for FileFinderDelegate {
             }),
         };
 
+        let checkbox = checkbox.map(|checkbox| {
+            if matches!(path_match, Match::CreateNew(_) | Match::Channel { .. }) {
+                div()
+                    .flex_none()
+                    .size(Checkbox::container_size())
+                    .into_any_element()
+            } else {
+                checkbox
+            }
+        });
+        let start_slot: Option<AnyElement> = match (checkbox, start_icon) {
+            (Some(checkbox), icon) => Some(
+                h_flex()
+                    .gap_1p5()
+                    .child(checkbox)
+                    .children(icon)
+                    .into_any_element(),
+            ),
+            (None, icon) => icon.map(IntoElement::into_any_element),
+        };
+
         Some(
             ListItem::new(ix)
                 .spacing(ListItemSpacing::Sparse)
                 .inset(true)
                 .toggle_state(selected)
-                .map(|this| {
-                    if is_create_new {
-                        this.start_slot(Icon::new(IconName::Plus).size(IconSize::Small))
-                    } else {
-                        this.start_slot::<Icon>(file_icon)
-                    }
-                })
+                .start_slot::<AnyElement>(start_slot)
                 .child(
                     h_flex()
                         .w_full()
@@ -2103,46 +2208,11 @@ impl PickerDelegate for FileFinderDelegate {
         )
     }
 
-    fn render_editor(
+    fn render_footer_impl(
         &self,
-        editor: &Arc<dyn ErasedEditor>,
-        window: &mut Window,
+        _: &mut Window,
         cx: &mut Context<Picker<Self>>,
-    ) -> Div {
-        let has_search_query = self.latest_search_query.is_some();
-        let is_project_scan_running = {
-            let worktree_store = self.project.read(cx).worktree_store();
-            !worktree_store.read(cx).initial_scan_completed()
-        };
-
-        h_flex()
-            .flex_none()
-            .h_9()
-            .px_2p5()
-            .justify_between()
-            .border_b_1()
-            .border_color(cx.theme().colors().border_variant)
-            .child(editor.render(window, cx))
-            .when(is_project_scan_running && has_search_query, |this| {
-                this.child(
-                    h_flex()
-                        .id("project-scan-indicator")
-                        .tooltip(Tooltip::text(tr(
-                            cx,
-                            "file_finder.project_scan_in_progress",
-                            "Project Scan in Progress...",
-                        )))
-                        .child(
-                            Icon::new(IconName::LoadCircle)
-                                .color(Color::Accent)
-                                .size(IconSize::Small)
-                                .with_rotate_animation(2),
-                        ),
-                )
-            })
-    }
-
-    fn render_footer(&self, _: &mut Window, cx: &mut Context<Picker<Self>>) -> Option<AnyElement> {
+    ) -> Option<AnyElement> {
         let focus_handle = self.focus_handle.clone();
 
         Some(
