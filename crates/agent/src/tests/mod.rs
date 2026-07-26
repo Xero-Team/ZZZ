@@ -5301,6 +5301,56 @@ async fn test_fetch_tool_allow_rule_skips_confirmation(cx: &mut TestAppContext) 
     );
 }
 
+#[gpui::test]
+async fn test_fetch_tool_reauthorizes_redirect_target(cx: &mut TestAppContext) {
+    init_test(cx);
+
+    cx.update(|cx| {
+        let mut settings = agent_settings::AgentSettings::get_global(cx).clone();
+        settings.tool_permissions.tools.insert(
+            FetchTool::NAME.into(),
+            agent_settings::ToolRules {
+                default: Some(settings::ToolPermissionMode::Confirm),
+                always_allow: vec![
+                    agent_settings::CompiledRegex::new(r"^https://example\.com", false).unwrap(),
+                ],
+                always_deny: vec![],
+                always_confirm: vec![],
+                invalid_patterns: vec![],
+            },
+        );
+        agent_settings::AgentSettings::override_global(settings, cx);
+    });
+
+    let http_client = gpui::http_client::FakeHttpClient::create(|request| async move {
+        let uri = request.uri().to_string();
+        assert!(
+            uri.contains("example.com"),
+            "the redirect target must not be requested before authorization, got {uri}",
+        );
+        Ok(gpui::http_client::Response::builder()
+            .status(302)
+            .header("location", "https://redirect-target.example/landing")
+            .body("".into())
+            .unwrap())
+    });
+
+    #[allow(clippy::arc_with_non_send_sync)]
+    let tool = Arc::new(crate::FetchTool::new(http_client));
+    let (event_stream, mut receiver) = crate::ToolCallEventStream::test();
+    let input: crate::FetchToolInput =
+        serde_json::from_value(json!({"url": "https://example.com/start"})).unwrap();
+
+    let _task = cx.update(|cx| tool.run(ToolInput::resolved(input), event_stream, cx));
+    cx.run_until_parked();
+
+    let authorization = receiver.expect_authorization().await;
+    assert_eq!(
+        authorization.context.unwrap().input_values,
+        ["https://redirect-target.example/landing"],
+    );
+}
+
 /// Approving one pending tool call with "Always for <tool>" auto-resolves
 /// sibling pending authorizations for the same tool in the same turn.
 #[gpui::test]

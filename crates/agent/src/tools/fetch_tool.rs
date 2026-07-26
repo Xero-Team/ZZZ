@@ -22,6 +22,25 @@ enum ContentType {
     Json,
 }
 
+/// The maximum number of HTTP redirects the fetch tool will follow. Each hop
+/// receives its own tool-permission check before being requested.
+const MAX_REDIRECTS: usize = 20;
+
+/// The outcome of a single request with automatic redirect handling disabled.
+enum FetchStep {
+    Redirect(String),
+    Complete(String),
+}
+
+/// Prepends `https://` when the URL has no explicit HTTP(S) scheme.
+fn normalize_url(url: &str) -> Cow<'_, str> {
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        Cow::Owned(format!("https://{url}"))
+    } else {
+        Cow::Borrowed(url)
+    }
+}
+
 /// Fetches a URL and returns the content as Markdown.
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct FetchToolInput {
@@ -38,14 +57,33 @@ impl FetchTool {
         Self { http_client }
     }
 
-    async fn build_message(http_client: Arc<HttpClientWithUrl>, url: &str) -> Result<String> {
-        let url = if !url.starts_with("https://") && !url.starts_with("http://") {
-            Cow::Owned(format!("https://{url}"))
-        } else {
-            Cow::Borrowed(url)
-        };
+    /// Performs a single HTTP GET without following redirects. Redirect targets
+    /// are returned to the caller so their URL can be separately authorized.
+    async fn fetch_step(http_client: Arc<HttpClientWithUrl>, url: &str) -> Result<FetchStep> {
+        let normalized = normalize_url(url);
 
-        let mut response = http_client.get(&url, AsyncBody::default(), true).await?;
+        let mut response = http_client
+            .get(&normalized, AsyncBody::default(), false)
+            .await?;
+
+        let status = response.status();
+        if status.is_redirection() {
+            let location = response
+                .headers()
+                .get("location")
+                .context("redirect response is missing a Location header")?
+                .to_str()
+                .context("redirect response has an invalid Location header")?;
+            let target = url::Url::parse(&normalized)
+                .with_context(|| format!("could not parse URL {normalized:?}"))?
+                .join(location)
+                .with_context(|| format!("invalid redirect target {location:?}"))?;
+            anyhow::ensure!(
+                matches!(target.scheme(), "http" | "https"),
+                "refusing to follow redirect to non-HTTP(S) URL {target}"
+            );
+            return Ok(FetchStep::Redirect(target.to_string()));
+        }
 
         let mut body = Vec::new();
         response
@@ -54,12 +92,9 @@ impl FetchTool {
             .await
             .context("error reading response body")?;
 
-        if response.status().is_client_error() {
+        if status.is_client_error() {
             let text = String::from_utf8_lossy(body.as_slice());
-            bail!(
-                "status error {}, response: {text:?}",
-                response.status().as_u16()
-            );
+            bail!("status error {}, response: {text:?}", status.as_u16());
         }
 
         let Some(content_type) = response.headers().get("content-type") else {
@@ -77,7 +112,7 @@ impl FetchTool {
             ContentType::Html
         };
 
-        match content_type {
+        let text = match content_type {
             ContentType::Html => {
                 let mut handlers: Vec<TagHandler> = vec![
                     Rc::new(RefCell::new(markdown::WebpageChromeRemover)),
@@ -87,7 +122,7 @@ impl FetchTool {
                     Rc::new(RefCell::new(markdown::TableHandler::new())),
                     Rc::new(RefCell::new(markdown::StyledTextHandler)),
                 ];
-                if url.contains("wikipedia.org") {
+                if normalized.contains("wikipedia.org") {
                     use html_to_markdown::structure::wikipedia;
 
                     handlers.push(Rc::new(RefCell::new(wikipedia::WikipediaChromeRemover)));
@@ -99,18 +134,17 @@ impl FetchTool {
                     handlers.push(Rc::new(RefCell::new(markdown::CodeHandler)));
                 }
 
-                convert_html_to_markdown(&body[..], &mut handlers)
+                convert_html_to_markdown(&body[..], &mut handlers)?
             }
-            ContentType::Plaintext => Ok(std::str::from_utf8(&body)?.to_owned()),
+            ContentType::Plaintext => std::str::from_utf8(&body)?.to_owned(),
             ContentType::Json => {
                 let json: serde_json::Value = serde_json::from_slice(&body)?;
 
-                Ok(format!(
-                    "```json\n{}\n```",
-                    serde_json::to_string_pretty(&json)?
-                ))
+                format!("```json\n{}\n```", serde_json::to_string_pretty(&json)?)
             }
-        }
+        };
+
+        Ok(FetchStep::Complete(text))
     }
 }
 
@@ -145,30 +179,49 @@ impl AgentTool for FetchTool {
         cx.spawn(async move |cx| {
             let input: FetchToolInput = input.recv().await.map_err(|e| e.to_string())?;
 
-            let authorize = cx.update(|cx| {
-                let context =
-                    crate::ToolPermissionContext::new(Self::NAME, vec![input.url.clone()]);
+            let mut current_url = input.url;
+            let mut redirects = 0;
+            let text = loop {
+                let authorize = cx.update(|cx| {
+                    let context =
+                        crate::ToolPermissionContext::new(Self::NAME, vec![current_url.clone()]);
 
-                event_stream.authorize(
-                    format!("Fetch {}", MarkdownInlineCode(&input.url)),
-                    context,
-                    cx,
-                )
-            });
-
-            let fetch_task = cx.background_spawn({
-                let http_client = http_client.clone();
-                let url = input.url.clone();
-                async move {
-                    authorize.await?;
-                    Self::build_message(http_client, &url).await
+                    event_stream.authorize(
+                        format!("Fetch {}", MarkdownInlineCode(&current_url)),
+                        context,
+                        cx,
+                    )
+                });
+                futures::select! {
+                    result = authorize.fuse() => result.map_err(|e| e.to_string())?,
+                    _ = event_stream.cancelled_by_user().fuse() => {
+                        return Err("Fetch cancelled by user".to_owned());
+                    }
                 }
-            });
 
-            let text = futures::select! {
-                result = fetch_task.fuse() => result.map_err(|e| e.to_string())?,
-                _ = event_stream.cancelled_by_user().fuse() => {
-                    return Err("Fetch cancelled by user".to_owned());
+                let fetch_task = cx.background_spawn({
+                    let http_client = http_client.clone();
+                    let url = current_url.clone();
+                    async move { Self::fetch_step(http_client, &url).await }
+                });
+                let step = futures::select! {
+                    result = fetch_task.fuse() => result.map_err(|e| e.to_string())?,
+                    _ = event_stream.cancelled_by_user().fuse() => {
+                        return Err("Fetch cancelled by user".to_owned());
+                    }
+                };
+
+                match step {
+                    FetchStep::Complete(text) => break text,
+                    FetchStep::Redirect(target) => {
+                        redirects += 1;
+                        if redirects > MAX_REDIRECTS {
+                            return Err(format!(
+                                "exceeded the maximum of {MAX_REDIRECTS} redirects"
+                            ));
+                        }
+                        current_url = target;
+                    }
                 }
             };
             if text.trim().is_empty() {
