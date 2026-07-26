@@ -14581,6 +14581,47 @@ async fn test_read_only_files_empty_setting(cx: &mut gpui::TestAppContext) {
 }
 
 #[gpui::test]
+#[cfg(not(windows))]
+async fn test_os_read_only_files_open_as_read_only(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    cx.executor().allow_parking();
+
+    let root = TempTree::new(json!({
+        "project": {
+            "test.txt": "hello",
+        },
+    }));
+    let file_path = root.path().join("project/test.txt");
+    let mut permissions = std::fs::metadata(&file_path)
+        .expect("test file should have filesystem metadata")
+        .permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&file_path, permissions)
+        .expect("test file permissions should be made read-only");
+
+    let project = Project::test(
+        Arc::new(RealFs::new(None, cx.executor())),
+        [root.path()],
+        cx,
+    )
+    .await;
+
+    let buffer = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer(file_path.as_path(), cx)
+        })
+        .await
+        .expect("read-only test file should open");
+
+    buffer.read_with(cx, |buffer, _| {
+        assert!(
+            buffer.read_only(),
+            "OS read-only files should open as read-only"
+        );
+    });
+}
+
+#[gpui::test]
 async fn test_read_only_files_with_lock_files(cx: &mut gpui::TestAppContext) {
     init_test(cx);
 
