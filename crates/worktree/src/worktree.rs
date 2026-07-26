@@ -2952,6 +2952,7 @@ impl LocalSnapshot {
         fs: &dyn Fs,
     ) -> IgnoreStack {
         let mut new_ignores = Vec::new();
+        let mut repo_excludes = Vec::new();
         let mut repo_root = None;
         for (index, ancestor) in abs_path.ancestors().enumerate() {
             if index > 0 {
@@ -2962,10 +2963,18 @@ impl LocalSnapshot {
                 }
             }
 
-            let metadata = fs.metadata(&ancestor.join(DOT_GIT)).await.ok().flatten();
-            if metadata.is_some() {
-                repo_root = Some(Arc::from(ancestor));
-                break;
+            // Collect the `info/exclude` rules of every containing repository, not just
+            // the innermost one: a nested repository's files are still governed by the
+            // exclude rules of the outer repository that contains it.
+            if let Some((repo_exclude, _)) = self.repo_exclude_by_work_dir_abs_path.get(ancestor) {
+                repo_excludes.push(repo_exclude.clone());
+            }
+
+            if repo_root.is_none() {
+                let metadata = fs.metadata(&ancestor.join(DOT_GIT)).await.ok().flatten();
+                if metadata.is_some() {
+                    repo_root = Some(Arc::from(ancestor));
+                }
             }
         }
 
@@ -2975,11 +2984,8 @@ impl LocalSnapshot {
             IgnoreStack::none()
         };
 
-        if let Some((repo_exclude, _)) = repo_root
-            .as_ref()
-            .and_then(|abs_path| self.repo_exclude_by_work_dir_abs_path.get(abs_path))
-        {
-            ignore_stack = ignore_stack.append(IgnoreKind::RepoExclude, repo_exclude.clone());
+        for repo_exclude in repo_excludes.into_iter().rev() {
+            ignore_stack = ignore_stack.append(IgnoreKind::RepoExclude, repo_exclude);
         }
         ignore_stack.repo_root = repo_root;
         for (parent_abs_path, ignore) in new_ignores.into_iter().rev() {
