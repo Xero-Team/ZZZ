@@ -5006,6 +5006,7 @@ mod tests {
         cx.update(|cx| {
             let app_state = AppState::test(cx);
 
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             client::init(&app_state.client, cx);
             workspace::init(app_state.clone(), cx);
