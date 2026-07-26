@@ -282,6 +282,22 @@ impl DirectXAtlasTexture {
         bounds: Bounds<DevicePixels>,
         bytes: &[u8],
     ) {
+        // `UpdateSubresource` reads `row_pitch * height` bytes from `bytes`
+        // based on the `D3D11_BOX` below. A shorter source slice would let the
+        // driver read past the end of the allocation, so skip that upload.
+        let row_bytes = bounds.size.width.to_bytes(self.bytes_per_pixel as u8) as usize;
+        let expected = row_bytes * bounds.size.height.0.max(0) as usize;
+        if bytes.len() < expected {
+            log::error!(
+                "DirectXAtlasTexture::upload: source slice is {} bytes but the {}x{} region \\
+                 requires {} bytes; skipping upload to avoid a driver over-read",
+                bytes.len(),
+                bounds.size.width.0,
+                bounds.size.height.0,
+                expected,
+            );
+            return;
+        }
         unsafe {
             device_context.UpdateSubresource(
                 &self.texture,
