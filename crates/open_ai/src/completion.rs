@@ -6,7 +6,7 @@ use language_model_core::{
     LanguageModelImage, LanguageModelRequest, LanguageModelRequestMessage, LanguageModelToolChoice,
     LanguageModelToolResultContent, LanguageModelToolUse, LanguageModelToolUseId, MessageContent,
     Role, StopReason, TokenUsage,
-    util::{fix_streamed_json, parse_tool_arguments},
+    util::{fix_streamed_json, is_context_window_exceeded_message, parse_tool_arguments},
 };
 use std::pin::Pin;
 use std::sync::Arc;
@@ -924,15 +924,15 @@ impl OpenAiResponseEventMapper {
                 events.push(Ok(LanguageModelCompletionEvent::Stop(stop_reason)));
                 events
             }
-            ResponsesStreamEvent::Failed { response } => {
-                let message = response_failure_message(&response);
-                vec![Err(LanguageModelCompletionError::Other(anyhow!(message)))]
-            }
+            ResponsesStreamEvent::Failed { response } => match response.error.as_ref() {
+                Some(error) => vec![Err(completion_error_from_response_error(error))],
+                None => vec![Err(LanguageModelCompletionError::Other(anyhow!(
+                    response_failure_message(&response)
+                )))],
+            },
             ResponsesStreamEvent::Error { error }
             | ResponsesStreamEvent::GenericError { error } => {
-                vec![Err(LanguageModelCompletionError::Other(anyhow!(
-                    response_error_message(&error)
-                )))]
+                vec![Err(completion_error_from_response_error(&error))]
             }
             ResponsesStreamEvent::ReasoningSummaryPartAdded { summary_index, .. } => {
                 if summary_index > 0 {
@@ -1154,6 +1154,15 @@ fn response_failure_message(response: &ResponsesSummary) -> String {
         .as_deref()
         .map(|status| format!("response.{status}"))
         .unwrap_or_else(|| "response.failed".to_owned())
+}
+
+fn completion_error_from_response_error(error: &ResponseError) -> LanguageModelCompletionError {
+    let message = response_error_message(error);
+    if is_context_window_exceeded_message(&message) {
+        LanguageModelCompletionError::PromptTooLarge { tokens: None }
+    } else {
+        LanguageModelCompletionError::Other(anyhow!(message))
+    }
 }
 
 fn response_error_message(error: &ResponseError) -> String {
@@ -2304,6 +2313,29 @@ mod tests {
     }
 
     #[test]
+    fn responses_stream_maps_failed_context_length_exceeded_to_prompt_too_large() {
+        let mut mapper = OpenAiResponseEventMapper::new();
+        let mapped = mapper.map_event(ResponsesStreamEvent::Failed {
+            response: ResponseSummary {
+                status: Some("failed".into()),
+                error: Some(ResponseError {
+                    code: Some("context_length_exceeded".into()),
+                    message: "Your input exceeds the context window of this model.".into(),
+                    param: Some("input".into()),
+                }),
+                ..Default::default()
+            },
+        });
+
+        assert_eq!(mapped.len(), 1);
+        let error = mapped.into_iter().next().unwrap().unwrap_err();
+        assert!(matches!(
+            error,
+            LanguageModelCompletionError::PromptTooLarge { tokens: None }
+        ));
+    }
+
+    #[test]
     fn responses_stream_deserializes_documented_error_event() {
         let event = serde_json::from_value::<ResponsesStreamEvent>(json!({
             "type": "error",
@@ -2339,6 +2371,29 @@ mod tests {
         assert_eq!(mapped.len(), 1);
         let error = mapped.into_iter().next().unwrap().unwrap_err();
         assert_eq!(error.to_string(), "invalid_request_error: Invalid request.");
+    }
+
+    #[test]
+    fn responses_stream_maps_context_length_exceeded_to_prompt_too_large() {
+        let event = serde_json::from_value::<ResponsesStreamEvent>(json!({
+            "type": "response.error",
+            "error": {
+                "code": "context_length_exceeded",
+                "message": "Your input exceeds the context window of this model.",
+                "param": "input"
+            }
+        }))
+        .expect("response error event");
+
+        let mut mapper = OpenAiResponseEventMapper::new();
+        let mapped = mapper.map_event(event);
+
+        assert_eq!(mapped.len(), 1);
+        let error = mapped.into_iter().next().unwrap().unwrap_err();
+        assert!(matches!(
+            error,
+            LanguageModelCompletionError::PromptTooLarge { tokens: None }
+        ));
     }
 
     #[test]
