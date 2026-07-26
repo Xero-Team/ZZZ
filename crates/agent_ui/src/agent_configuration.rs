@@ -40,7 +40,7 @@ use ui::{
 };
 use util::ResultExt as _;
 use workspace::{Workspace, create_and_open_local_file};
-use zed_actions::{ExtensionCategoryFilter, OpenBrowser};
+use zed_actions::ExtensionCategoryFilter;
 
 pub(crate) use configure_context_server_modal::ConfigureContextServerModal;
 pub(crate) use configure_context_server_tools_modal::ConfigureContextServerToolsModal;
@@ -1268,15 +1268,8 @@ impl AgentConfiguration {
                                 .icon(IconName::ArrowUpRight)
                                 .icon_color(Color::Muted)
                                 .icon_position(IconPosition::End)
-                                .handler({
-                                    move |window, cx| {
-                                        window.dispatch_action(
-                                            Box::new(OpenBrowser {
-                                                url: "https://agentclientprotocol.com/".into(),
-                                            }),
-                                            cx,
-                                        );
-                                    }
+                                .handler(|_window, cx| {
+                                    cx.open_url("https://agentclientprotocol.com/")
                                 }),
                         )
                     }))
