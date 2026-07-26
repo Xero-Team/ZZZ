@@ -593,7 +593,25 @@ html5ever = { package = "spider-html5ever", version = "0.39.0" }
 http = "1.4"
 http-body = "1.0"
 ignore = "0.4.25"
-image = "0.25.10"
+# image's default features minus "avif", which only adds an encoder (rav1e);
+# decoding AVIF would additionally need the non-default "avif-native" feature.
+image = { version = "0.25.10", default-features = false, features = [
+    "bmp",
+    "dds",
+    "exr",
+    "ff",
+    "gif",
+    "hdr",
+    "ico",
+    "jpeg",
+    "png",
+    "pnm",
+    "qoi",
+    "rayon",
+    "tga",
+    "tiff",
+    "webp",
+] }
 imara-diff = "0.2.0"
 indexmap = { version = "2.14.0", features = ["serde"] }
 indoc = "2"
