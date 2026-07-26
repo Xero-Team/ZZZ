@@ -170,19 +170,19 @@ fn possibly_open_target(
             if open_target.is_file() {
                 if let Some(Ok(opened_item)) = opened_item {
                     if let Some(row) = path_to_open.row {
-                        let col = path_to_open.column.unwrap_or(0);
+                        let column = path_to_open.column.unwrap_or(0);
                         if let Some(active_editor) = opened_item.downcast::<Editor>() {
                             active_editor
                                 .downgrade()
                                 .update_in(cx, |editor, window, cx| {
-                                    editor.go_to_singleton_buffer_point(
-                                        language::Point::new(
-                                            row.saturating_sub(1),
-                                            col.saturating_sub(1),
-                                        ),
-                                        window,
-                                        cx,
-                                    )
+                                    if let Some(buffer) = editor.buffer().read(cx).as_singleton() {
+                                        let point =
+                                            buffer.read(cx).snapshot().point_from_external_input(
+                                                row.saturating_sub(1),
+                                                column.saturating_sub(1),
+                                            );
+                                        editor.go_to_singleton_buffer_point(point, window, cx);
+                                    }
                                 })
                                 .log_err();
                         }
