@@ -2587,6 +2587,13 @@ impl LocalLspStore {
         );
 
         let stdout = String::from_utf8(output.stdout)?;
+        if stdout.is_empty() && !text.is_empty() {
+            log::warn!(
+                "External formatter `{command}` produced no output on stdout; leaving the buffer unchanged"
+            );
+            return Ok(None);
+        }
+
         Ok(Some(
             buffer
                 .handle
