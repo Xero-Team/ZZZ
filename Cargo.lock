@@ -9592,6 +9592,7 @@ dependencies = [
  "env_var",
  "futures 0.3.32",
  "gpui",
+ "gpui_util",
  "http_client",
  "i18n",
  "icons",
@@ -9602,7 +9603,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
- "util",
 ]
 
 [[package]]
