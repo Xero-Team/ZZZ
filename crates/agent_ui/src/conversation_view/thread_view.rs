@@ -6689,10 +6689,7 @@ impl ThreadView {
             || (should_show_raw_input && tool_call.raw_input.is_some());
 
         let is_collapsible = has_content && !needs_confirmation;
-        let mut is_open = self
-            .entry_view_state
-            .read(cx)
-            .is_tool_call_expanded(&tool_call.id);
+        let mut is_open = self.expanded_tool_calls.contains(&tool_call.id);
 
         is_open |= needs_confirmation;
 
