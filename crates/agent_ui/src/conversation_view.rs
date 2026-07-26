@@ -5657,6 +5657,15 @@ pub(crate) mod tests {
             .unwrap();
         cx.run_until_parked();
 
+        thread.read_with(cx, |thread, _| {
+            let entries = thread.entries();
+            // The first response ends a finalized turn because another user
+            // prompt follows it. The trailing response is finalized by the
+            // thread status instead, so the helper leaves it undecided.
+            assert_eq!(ThreadView::entry_is_finalized_turn_end(entries, 1), Some(true));
+            assert_eq!(ThreadView::entry_is_finalized_turn_end(entries, 3), None);
+        });
+
         // Move somewhere else first so we're not trivially already on the last user prompt.
         active_thread(&conversation_view, cx).update(cx, |view, cx| {
             view.scroll_to_top(cx);

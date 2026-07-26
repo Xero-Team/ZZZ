@@ -5067,9 +5067,11 @@ impl ThreadView {
             primary
         };
 
-        let primary = if matches!(entry, AgentThreadEntry::AssistantMessage(_))
-            && !assistant_message_is_blank
-        {
+        let is_generating = matches!(thread.read(cx).status(), ThreadStatus::Generating);
+        let is_turn_end = Self::entry_is_finalized_turn_end(thread.read(cx).entries(), entry_ix)
+            .unwrap_or(!is_generating);
+
+        let primary = if is_turn_end && !assistant_message_is_blank {
             let user_message_index = thread
                 .read(cx)
                 .entries()
@@ -5193,6 +5195,33 @@ impl ThreadView {
             )
     }
 
+    /// A turn ends when no further assistant output (message or tool call)
+    /// follows before the next user message, and it is finalized once a user
+    /// message follows it.
+    pub(crate) fn entry_is_finalized_turn_end(
+        entries: &[AgentThreadEntry],
+        entry_ix: usize,
+    ) -> Option<bool> {
+        if !matches!(
+            entries.get(entry_ix),
+            Some(AgentThreadEntry::AssistantMessage(_))
+        ) {
+            return Some(false);
+        }
+
+        for entry in &entries[entry_ix + 1..] {
+            match entry {
+                AgentThreadEntry::UserMessage(_) => return Some(true),
+                AgentThreadEntry::AssistantMessage(_) | AgentThreadEntry::ToolCall(_) => {
+                    return Some(false);
+                }
+                AgentThreadEntry::CompletedPlan(_) => {}
+            }
+        }
+
+        None
+    }
+
     fn render_thread_controls(
         &self,
         thread: &Entity<AcpThread>,
@@ -5240,18 +5269,20 @@ impl ThreadView {
                     this.scroll_to_user_message_index(user_message_index, cx);
                 }));
 
-        let scroll_to_top = IconButton::new("scroll_to_top", IconName::ArrowUp)
-            .shape(ui::IconButtonShape::Square)
-            .icon_size(IconSize::Small)
-            .icon_color(Color::Ignored)
-            .tooltip(Tooltip::text(tr(
-                cx,
-                "agent_ui.thread_view.scroll_to_top",
-                "Scroll To Top",
-            )))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.scroll_to_top(cx);
-            }));
+        let scroll_to_top = is_thread_bottom.then(|| {
+            IconButton::new("scroll_to_top", IconName::ArrowUp)
+                .shape(ui::IconButtonShape::Square)
+                .icon_size(IconSize::Small)
+                .icon_color(Color::Ignored)
+                .tooltip(Tooltip::text(tr(
+                    cx,
+                    "agent_ui.thread_view.scroll_to_top",
+                    "Scroll To Top",
+                )))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.scroll_to_top(cx);
+                }))
+        });
 
         let open_as_markdown = is_thread_bottom.then(|| {
             IconButton::new("open-as-markdown", IconName::FileMarkdown)
@@ -5425,7 +5456,7 @@ impl ThreadView {
             .when_some(open_as_markdown, |this, button| this.child(button))
             .when_some(copy_response_button, |this, button| this.child(button))
             .child(scroll_to_user_message)
-            .child(scroll_to_top)
+            .when_some(scroll_to_top, |this, button| this.child(button))
             .into_any_element()
     }
 
