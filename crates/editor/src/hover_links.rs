@@ -49,8 +49,16 @@ impl RangeInEditor {
     ) -> bool {
         match (self, trigger_point) {
             (Self::Text(range), TriggerPoint::Text(point)) => {
-                let point_after_start = range.start.cmp(point, &snapshot.buffer_snapshot()).is_le();
-                point_after_start && range.end.cmp(point, &snapshot.buffer_snapshot()).is_ge()
+                let buffer_snapshot = snapshot.buffer_snapshot();
+                if !range.start.is_valid(&buffer_snapshot)
+                    || !range.end.is_valid(&buffer_snapshot)
+                    || !point.is_valid(&buffer_snapshot)
+                {
+                    return false;
+                }
+                let point_after_start = range.start.cmp(point, &buffer_snapshot).is_le();
+                let point_after_end = range.end.cmp(point, &buffer_snapshot).is_ge();
+                point_after_start && point_after_end
             }
             (Self::Inlay(highlight), TriggerPoint::InlayHint(point, _, _)) => {
                 highlight.inlay == point.inlay
@@ -1075,8 +1083,9 @@ mod tests {
     use futures::StreamExt;
     use gpui::{Modifiers, MousePressureEvent, PressureStage};
     use indoc::indoc;
+    use language::Point;
     use lsp::request::{GotoDefinition, GotoTypeDefinition};
-    use multi_buffer::MultiBufferOffset;
+    use multi_buffer::{MultiBufferOffset, PathKey};
     use settings::InlayHintSettingsContent;
     use std::{
         str::FromStr,
@@ -1255,6 +1264,197 @@ mod tests {
             struct «Aˇ»;
             let variable = A;
         "});
+    }
+
+    #[gpui::test]
+    async fn test_hover_link_after_multibuffer_path_changes(cx: &mut gpui::TestAppContext) {
+        init_test(cx, |_| {});
+
+        let mut cx = EditorLspTestContext::new_rust(Default::default(), cx).await;
+        cx.set_state("https://zed.dev/ˇreleases");
+        let old_snapshot = cx.update_editor(|editor, window, cx| editor.snapshot(window, cx));
+        let link_start = MultiBufferOffset(17).to_display_point(&old_snapshot.display_snapshot);
+        let link_end = MultiBufferOffset(22).to_display_point(&old_snapshot.display_snapshot);
+        let point_for_position = |point| PointForPosition {
+            previous_valid: point,
+            next_valid: point,
+            nearest_valid: point,
+            exact_unclipped: point,
+            column_overshoot_after_line_end: 0,
+        };
+
+        let buffer = cx.editor(|editor, _, cx| {
+            editor
+                .buffer()
+                .read(cx)
+                .as_singleton()
+                .expect("test editor should contain a singleton buffer")
+        });
+        cx.update_multibuffer(|multibuffer, cx| {
+            let max_point = buffer.read(cx).max_point();
+            multibuffer.set_excerpts_for_path(
+                PathKey::sorted(1),
+                buffer,
+                [Point::zero()..max_point],
+                0,
+                cx,
+            );
+        });
+        cx.run_until_parked();
+
+        let modifiers = if cfg!(target_os = "macos") {
+            Modifiers::command_shift()
+        } else {
+            Modifiers::control_shift()
+        };
+        cx.update_editor(|editor, window, cx| {
+            editor.update_hovered_link(
+                point_for_position(link_start),
+                None,
+                &old_snapshot,
+                modifiers,
+                window,
+                cx,
+            );
+        });
+        cx.run_until_parked();
+
+        cx.update_editor(|editor, window, cx| {
+            editor.update_hovered_link(
+                point_for_position(link_end),
+                None,
+                &old_snapshot,
+                modifiers,
+                window,
+                cx,
+            );
+        });
+    }
+
+    #[gpui::test]
+    async fn test_go_to_definition_link_dedup(cx: &mut gpui::TestAppContext) {
+        init_test(cx, |_| {});
+
+        let mut cx = EditorLspTestContext::new_rust(
+            lsp::ServerCapabilities {
+                hover_provider: Some(lsp::HoverProviderCapability::Simple(true)),
+                definition_provider: Some(lsp::OneOf::Left(true)),
+                ..Default::default()
+            },
+            cx,
+        )
+        .await;
+
+        cx.set_state(indoc! {"
+            fn ˇtest() { do_work(); }
+            fn do_work() { test(); }
+        "});
+
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let _requests = cx.set_request_handler::<GotoDefinition, _, _>({
+            let request_count = request_count.clone();
+            move |url, _, _| {
+                request_count.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    // Return a bare `Location`, not an `originSelectionRange`
+                    // so we can confirm that jiggling the mouse within the same
+                    // symbol range does not trigger a second request, even
+                    // though `originSelectionRange` was not returned.
+                    Ok(Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                        uri: url,
+                        range: lsp::Range::default(),
+                    })))
+                }
+            }
+        });
+
+        let symbol_start = cx.pixel_position(indoc! {"
+            fn test() { ˇdo_work(); }
+            fn do_work() { test(); }
+        "});
+        let symbol_end = cx.pixel_position(indoc! {"
+            fn test() { do_worˇk(); }
+            fn do_work() { test(); }
+        "});
+        let other_symbol = cx.pixel_position(indoc! {"
+            fn test() { do_work(); }
+            fn do_work() { teˇst(); }
+        "});
+
+        cx.simulate_mouse_move(symbol_start, None, Modifiers::secondary_key());
+        cx.run_until_parked();
+
+        cx.simulate_mouse_move(symbol_end, None, Modifiers::secondary_key());
+        cx.run_until_parked();
+
+        cx.simulate_mouse_move(other_symbol, None, Modifiers::secondary_key());
+        cx.run_until_parked();
+
+        assert_eq!(
+            request_count.load(Ordering::SeqCst),
+            2,
+            "expected one request per symbol, reused within a symbol"
+        );
+    }
+
+    #[gpui::test]
+    async fn test_go_to_definition_link_dedup_no_link(cx: &mut gpui::TestAppContext) {
+        init_test(cx, |_| {});
+
+        let mut cx = EditorLspTestContext::new_rust(
+            lsp::ServerCapabilities {
+                hover_provider: Some(lsp::HoverProviderCapability::Simple(true)),
+                definition_provider: Some(lsp::OneOf::Left(true)),
+                ..Default::default()
+            },
+            cx,
+        )
+        .await;
+
+        cx.set_state(indoc! {"
+            fn ˇtest() { do_work(); }
+            fn do_work() { test(); }
+        "});
+
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let _requests = cx.set_request_handler::<GotoDefinition, _, _>({
+            let request_count = request_count.clone();
+
+            move |_, _, _| {
+                request_count.fetch_add(1, Ordering::SeqCst);
+
+                // Simulate response from the language server, reporting
+                // that no link was found.
+                async move { Ok(None) }
+            }
+        });
+
+        let first_point = cx.pixel_position(indoc! {"
+            fn test() { do_wˇork(); }
+            fn do_work() { test(); }
+        "});
+        let second_point = cx.pixel_position(indoc! {"
+            fn test() { do_woˇrk(); }
+            fn do_work() { test(); }
+        "});
+
+        cx.simulate_mouse_move(first_point, None, Modifiers::secondary_key());
+        cx.run_until_parked();
+
+        cx.simulate_mouse_move(second_point, None, Modifiers::secondary_key());
+        cx.run_until_parked();
+
+        // Jiggle within the same character should not produce a new request,
+        // even though the previous response was empty and produced no link to
+        // highlight.
+        cx.simulate_mouse_move(second_point, None, Modifiers::secondary_key());
+        cx.run_until_parked();
+
+        assert_eq!(
+            request_count.load(Ordering::SeqCst),
+            2,
+            "expected one definition request per distinct position"
+        );
     }
 
     #[gpui::test]
