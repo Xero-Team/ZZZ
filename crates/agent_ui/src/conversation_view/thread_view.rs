@@ -4678,6 +4678,8 @@ impl ThreadView {
                 .get(entry_ix.saturating_sub(1))
                 .is_none_or(|entry| !entry.is_indented());
 
+        let mut assistant_message_is_blank = false;
+
         let primary = match &entry {
             AgentThreadEntry::UserMessage(message) => {
                 let Some(editor) = self
@@ -4943,6 +4945,8 @@ impl ThreadView {
                     ))
                     .into_any();
 
+                assistant_message_is_blank = is_blank;
+
                 if is_blank {
                     Empty.into_any()
                 } else {
@@ -5063,16 +5067,56 @@ impl ThreadView {
             primary
         };
 
+        let primary = if matches!(entry, AgentThreadEntry::AssistantMessage(_))
+            && !assistant_message_is_blank
+        {
+            let user_message_index = thread
+                .read(cx)
+                .entries()
+                .iter()
+                .take(entry_ix)
+                .rposition(|entry| matches!(entry, AgentThreadEntry::UserMessage(_)));
+
+            v_flex()
+                .w_full()
+                .child(primary)
+                .child(self.render_thread_controls(
+                    &thread,
+                    entry_ix,
+                    Some(entry_ix),
+                    entry_ix + 1 == total_entries,
+                    user_message_index,
+                    cx,
+                ))
+                .into_any_element()
+        } else {
+            primary
+        };
+
+        let is_assistant = matches!(entry, AgentThreadEntry::AssistantMessage(_));
         let needs_confirmation = Self::is_waiting_for_confirmation(entry);
 
         let comments_editor = self.thread_feedback.comments_editor.clone();
 
         let primary = if entry_ix + 1 == total_entries {
+            let last_assistant_index = thread
+                .read(cx)
+                .entries()
+                .iter()
+                .rposition(|entry| matches!(entry, AgentThreadEntry::AssistantMessage(_)));
+
             v_flex()
                 .w_full()
                 .child(primary)
-                .when(!needs_confirmation, |this| {
-                    this.child(self.render_thread_controls(&thread, cx))
+                .when(!is_assistant && !needs_confirmation, |this| {
+                    this.child(self.render_thread_controls(
+                        &thread,
+                        entry_ix,
+                        last_assistant_index,
+                        true,
+                        None,
+                        cx,
+                    ))
                 })
                 .when_some(comments_editor, |this, editor| {
                     this.child(Self::render_feedback_feedback_editor(editor, cx))
@@ -5152,41 +5196,48 @@ impl ThreadView {
     fn render_thread_controls(
         &self,
         thread: &Entity<AcpThread>,
+        entry_ix: usize,
+        copy_response_index: Option<usize>,
+        is_thread_bottom: bool,
+        user_message_index: Option<usize>,
         cx: &Context<Self>,
     ) -> impl IntoElement {
         let is_generating = matches!(thread.read(cx).status(), ThreadStatus::Generating);
-        if is_generating {
+        if is_thread_bottom && is_generating {
             return Empty.into_any_element();
         }
 
-        let open_as_markdown = IconButton::new("open-as-markdown", IconName::FileMarkdown)
-            .shape(ui::IconButtonShape::Square)
-            .icon_size(IconSize::Small)
-            .icon_color(Color::Ignored)
-            .tooltip(Tooltip::text(tr(
-                cx,
-                "agent_ui.thread_view.open_thread_as_markdown",
-                "Open Thread as Markdown",
-            )))
-            .on_click(cx.listener(move |this, _, window, cx| {
-                if let Some(workspace) = this.workspace.upgrade() {
-                    this.open_thread_as_markdown(workspace, window, cx)
-                        .detach_and_log_err(cx);
-                }
-            }));
-
-        let scroll_to_recent_user_prompt =
-            IconButton::new("scroll_to_recent_user_prompt", IconName::ForwardArrow)
+        let copy_response_button = copy_response_index.map(|response_index| {
+            IconButton::new(("copy_agent_response", entry_ix), IconName::Copy)
                 .shape(ui::IconButtonShape::Square)
                 .icon_size(IconSize::Small)
                 .icon_color(Color::Ignored)
                 .tooltip(Tooltip::text(tr(
                     cx,
-                    "agent_ui.thread_view.scroll_to_most_recent_user_prompt",
-                    "Scroll To Most Recent User Prompt",
+                    "agent_ui.thread_view.copy_this_agent_response",
+                    "Copy This Agent Response",
                 )))
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.scroll_to_most_recent_user_prompt(cx);
+                    let entries = this.thread.read(cx).entries();
+                    if let Some(text) = Self::get_agent_message_content(entries, response_index, cx)
+                    {
+                        cx.write_to_clipboard(ClipboardItem::new_string(text));
+                    }
+                }))
+        });
+
+        let scroll_to_user_message =
+            IconButton::new(("scroll_to_user_message", entry_ix), IconName::ForwardArrow)
+                .shape(ui::IconButtonShape::Square)
+                .icon_size(IconSize::Small)
+                .icon_color(Color::Ignored)
+                .tooltip(Tooltip::text(tr(
+                    cx,
+                    "agent_ui.thread_view.scroll_to_user_message",
+                    "Scroll To User Message",
+                )))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.scroll_to_user_message_index(user_message_index, cx);
                 }));
 
         let scroll_to_top = IconButton::new("scroll_to_top", IconName::ArrowUp)
@@ -5202,7 +5253,25 @@ impl ThreadView {
                 this.scroll_to_top(cx);
             }));
 
-        let show_stats = AgentSettings::get_global(cx).show_turn_stats;
+        let open_as_markdown = is_thread_bottom.then(|| {
+            IconButton::new("open-as-markdown", IconName::FileMarkdown)
+                .shape(ui::IconButtonShape::Square)
+                .icon_size(IconSize::Small)
+                .icon_color(Color::Ignored)
+                .tooltip(Tooltip::text(tr(
+                    cx,
+                    "agent_ui.thread_view.open_thread_as_markdown",
+                    "Open Thread as Markdown",
+                )))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    if let Some(workspace) = this.workspace.upgrade() {
+                        this.open_thread_as_markdown(workspace, window, cx)
+                            .detach_and_log_err(cx);
+                    }
+                }))
+        });
+
+        let show_stats = is_thread_bottom && AgentSettings::get_global(cx).show_turn_stats;
         let last_turn_clock = show_stats
             .then(|| {
                 self.turn_fields
@@ -5254,25 +5323,27 @@ impl ThreadView {
                 },
             );
 
-        let enable_thread_feedback = util::maybe!({
-            let project = thread.read(cx).project().read(cx);
-            let user_store = project.user_store();
-            if let Some(configuration) = user_store.read(cx).current_organization_configuration() {
-                if !configuration.is_agent_thread_feedback_enabled {
-                    return false;
+        if is_thread_bottom
+            && util::maybe!({
+                let project = thread.read(cx).project().read(cx);
+                let user_store = project.user_store();
+                if let Some(configuration) =
+                    user_store.read(cx).current_organization_configuration()
+                {
+                    if !configuration.is_agent_thread_feedback_enabled {
+                        return false;
+                    }
                 }
-            }
 
-            AgentSettings::get_global(cx).enable_feedback
-                && self
-                    .thread
-                    .read(cx)
-                    .connection()
-                    .thread_snapshot_provider()
-                    .is_some()
-        });
-
-        if enable_thread_feedback {
+                AgentSettings::get_global(cx).enable_feedback
+                    && self
+                        .thread
+                        .read(cx)
+                        .connection()
+                        .thread_snapshot_provider()
+                        .is_some()
+            })
+        {
             let feedback = self.thread_feedback.feedback;
             let feedback_tooltip_meta = tr(
                 cx,
@@ -5351,24 +5422,30 @@ impl ThreadView {
         }
 
         container
-            .child(open_as_markdown)
-            .child(scroll_to_recent_user_prompt)
+            .when_some(open_as_markdown, |this, button| this.child(button))
+            .when_some(copy_response_button, |this, button| this.child(button))
+            .child(scroll_to_user_message)
             .child(scroll_to_top)
             .into_any_element()
     }
 
-    pub(crate) fn scroll_to_most_recent_user_prompt(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn scroll_to_user_message_index(
+        &mut self,
+        user_message_index: Option<usize>,
+        cx: &mut Context<Self>,
+    ) {
         let entries = self.thread.read(cx).entries();
         if entries.is_empty() {
             return;
         }
 
-        // Find the most recent user message and scroll it to the top of the viewport.
-        // (Fallback: if no user message exists, scroll to the bottom.)
-        if let Some(ix) = entries
-            .iter()
-            .rposition(|entry| matches!(entry, AgentThreadEntry::UserMessage(_)))
-        {
+        // Scroll to the associated user message, or fall back to the most recent
+        // one. If no user message exists, scroll to the bottom.
+        if let Some(ix) = user_message_index.or_else(|| {
+            entries
+                .iter()
+                .rposition(|entry| matches!(entry, AgentThreadEntry::UserMessage(_)))
+        }) {
             self.list_state.scroll_to(ListOffset {
                 item_ix: ix,
                 offset_in_item: px(0.0),

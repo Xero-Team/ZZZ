@@ -2292,6 +2292,7 @@
     "agent_ui.thread_view.run_command": "运行命令",
     "agent_ui.thread_view.select_options": "选择选项...",
     "agent_ui.thread_view.scroll_to_bottom": "滚动到底部",
+    "agent_ui.thread_view.scroll_to_user_message": "滚动到用户消息",
     "agent_ui.thread_view.scroll_to_most_recent_user_prompt": "滚动到最近的用户提示",
     "agent_ui.thread_view.scroll_to_subagent": "滚动到子代理",
     "agent_ui.thread_view.scroll_to_top": "滚动到顶部",

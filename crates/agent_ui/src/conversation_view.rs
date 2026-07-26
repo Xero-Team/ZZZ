@@ -5622,7 +5622,7 @@ pub(crate) mod tests {
     }
 
     #[gpui::test]
-    async fn test_scroll_to_most_recent_user_prompt(cx: &mut TestAppContext) {
+    async fn test_scroll_to_user_message_index(cx: &mut TestAppContext) {
         init_test(cx);
 
         let connection = StubAgentConnection::new();
@@ -5664,15 +5664,25 @@ pub(crate) mod tests {
         cx.run_until_parked();
 
         active_thread(&conversation_view, cx).update(cx, |view, cx| {
-            view.scroll_to_most_recent_user_prompt(cx);
+            view.scroll_to_user_message_index(None, cx);
             let scroll_top = view.list_state.logical_scroll_top();
             // Entries layout is: [User1, Assistant1, User2, Assistant2]
+            assert_eq!(scroll_top.item_ix, 2);
+
+            view.scroll_to_top(cx);
+            view.scroll_to_user_message_index(Some(0), cx);
+            let scroll_top = view.list_state.logical_scroll_top();
+            assert_eq!(scroll_top.item_ix, 0);
+
+            view.scroll_to_top(cx);
+            view.scroll_to_user_message_index(Some(2), cx);
+            let scroll_top = view.list_state.logical_scroll_top();
             assert_eq!(scroll_top.item_ix, 2);
         });
     }
 
     #[gpui::test]
-    async fn test_scroll_to_most_recent_user_prompt_falls_back_to_bottom_without_user_messages(
+    async fn test_scroll_to_user_message_index_falls_back_to_bottom_without_user_messages(
         cx: &mut TestAppContext,
     ) {
         init_test(cx);
@@ -5682,7 +5692,7 @@ pub(crate) mod tests {
 
         // With no entries, scrolling should be a no-op and must not panic.
         active_thread(&conversation_view, cx).update(cx, |view, cx| {
-            view.scroll_to_most_recent_user_prompt(cx);
+            view.scroll_to_user_message_index(None, cx);
             let scroll_top = view.list_state.logical_scroll_top();
             assert_eq!(scroll_top.item_ix, 0);
         });

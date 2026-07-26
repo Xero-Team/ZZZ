@@ -2292,6 +2292,7 @@
     "agent_ui.thread_view.run_command": "Run Command",
     "agent_ui.thread_view.select_options": "Select Options...",
     "agent_ui.thread_view.scroll_to_bottom": "Scroll to Bottom",
+    "agent_ui.thread_view.scroll_to_user_message": "Scroll To User Message",
     "agent_ui.thread_view.scroll_to_most_recent_user_prompt": "Scroll To Most Recent User Prompt",
     "agent_ui.thread_view.scroll_to_subagent": "Scroll to Subagent",
     "agent_ui.thread_view.scroll_to_top": "Scroll To Top",
