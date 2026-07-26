@@ -2611,6 +2611,7 @@ impl ConversationView {
 
         match settings.notify_when_agent_waiting {
             NotifyWhenAgentWaiting::PrimaryScreen => {
+                window.request_attention();
                 if let Some(primary) = cx.primary_display() {
                     self.pop_up(
                         icon,
@@ -2626,6 +2627,7 @@ impl ConversationView {
                 }
             }
             NotifyWhenAgentWaiting::AllScreens => {
+                window.request_attention();
                 let caption = caption.into();
                 for screen in cx.displays() {
                     self.pop_up(

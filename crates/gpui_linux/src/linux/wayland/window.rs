@@ -1288,6 +1288,8 @@ impl PlatformWindow for WaylandWindow {
         }
     }
 
+    fn request_attention(&self) {}
+
     fn is_active(&self) -> bool {
         self.borrow().active
     }
