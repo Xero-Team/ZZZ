@@ -10,6 +10,7 @@ use gpui::{
 };
 use i18n::tr;
 use project::project_settings::ProjectSettings;
+use release_channel::ReleaseChannel;
 use settings::Settings as _;
 use ui::{ButtonLike, CommonAnimationExt, ConfiguredApiCard, Vector, VectorName, prelude::*};
 use util::ResultExt as _;
@@ -76,6 +77,7 @@ fn open_copilot_code_verification_window(copilot: &Entity<Copilot>, window: &Win
         current_window_center - point(height / 2.0, width / 2.0),
         gpui::size(height, width),
     ));
+    let app_id = ReleaseChannel::global(cx).app_id();
     cx.open_window(
         WindowOptions {
             kind: gpui::WindowKind::PopUp,
@@ -83,9 +85,11 @@ fn open_copilot_code_verification_window(copilot: &Entity<Copilot>, window: &Win
             is_resizable: false,
             is_movable: true,
             titlebar: Some(gpui::TitlebarOptions {
+                title: Some("Use GitHub Copilot in ZZZ".into()),
                 appears_transparent: true,
                 ..Default::default()
             }),
+            app_id: Some(app_id.to_owned()),
             ..Default::default()
         },
         |window, cx| cx.new(|cx| CopilotCodeVerification::new(&copilot, window, cx)),
