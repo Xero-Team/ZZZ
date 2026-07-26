@@ -5,6 +5,7 @@ use crate::{
     edit_prediction_tests::FakeEditPredictionDelegate,
     element::{StickyHeader, header_jump_data},
     linked_editing_ranges::LinkedEditingRanges,
+    mouse_context_menu::MenuPosition,
     runnables::RunnableTasks,
     scroll::scroll_amount::ScrollAmount,
     test::{
@@ -29847,6 +29848,102 @@ async fn test_breakpoint_toggling(cx: &mut TestAppContext) {
 
     assert_eq!(0, breakpoints.len());
     assert_breakpoint(&breakpoints, &abs_path, vec![]);
+}
+
+#[gpui::test]
+async fn test_gutter_context_menu_anchor_in_multibuffer(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let fs = FakeFs::new(cx.executor());
+    let root_path = path!("/root");
+    fs.insert_tree(
+        root_path,
+        json!({
+            "first.rs": "fn one() {}\nfn two() {}\nfn three() {}\n",
+            "second.rs": "fn four() {}\nfn five() {}\nfn six() {}\n",
+        }),
+    )
+    .await;
+
+    let project = Project::test(fs, [root_path.as_ref()], cx).await;
+    let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+    let cx = &mut VisualTestContext::from_window(*window, cx);
+    let worktree_id = project.read_with(cx, |project, cx| {
+        project.worktrees(cx).next().unwrap().read(cx).id()
+    });
+
+    let buffer_a = project
+        .update(cx, |project, cx| {
+            project.open_buffer((worktree_id, rel_path("first.rs")), cx)
+        })
+        .await
+        .unwrap();
+    let buffer_b = project
+        .update(cx, |project, cx| {
+            project.open_buffer((worktree_id, rel_path("second.rs")), cx)
+        })
+        .await
+        .unwrap();
+
+    let multi_buffer = cx.new(|cx| {
+        let mut multi_buffer = MultiBuffer::new(ReadWrite);
+        multi_buffer.set_excerpts_for_path(
+            PathKey::sorted(0),
+            buffer_a,
+            [Point::new(0, 0)..Point::new(2, 0)],
+            0,
+            cx,
+        );
+        multi_buffer.set_excerpts_for_path(
+            PathKey::sorted(1),
+            buffer_b.clone(),
+            [Point::new(0, 0)..Point::new(2, 0)],
+            0,
+            cx,
+        );
+        multi_buffer
+    });
+
+    let (editor, cx) = cx.add_window_view(|window, cx| {
+        Editor::new(
+            EditorMode::full(),
+            multi_buffer,
+            Some(project.clone()),
+            window,
+            cx,
+        )
+    });
+
+    editor.update_in(cx, |editor, window, cx| {
+        let display_snapshot = editor.display_snapshot(cx);
+        let buffer_snapshot = display_snapshot.buffer_snapshot();
+        let buffer_anchor = buffer_b.read(cx).snapshot().anchor_before(Point::new(1, 0));
+        let multibuffer_anchor = buffer_snapshot.anchor_in_buffer(buffer_anchor).unwrap();
+        let buffer_point = buffer_snapshot.summary_for_anchor::<Point>(&multibuffer_anchor);
+        let display_row = display_snapshot
+            .point_to_display_point(buffer_point, Bias::Left)
+            .row();
+
+        assert_ne!(display_row.0, buffer_point.row);
+        editor.set_gutter_context_menu(display_row, None, Default::default(), window, cx);
+    });
+
+    editor.update(cx, |editor, cx| {
+        let menu = editor.mouse_context_menu.as_ref().unwrap();
+        let snapshot = editor.buffer().read(cx).snapshot(cx);
+        let MenuPosition::PinnedToEditor { source, .. } = &menu.position else {
+            panic!("expected gutter context menu to be pinned to the editor");
+        };
+        let (buffer_anchor, buffer_snapshot) = snapshot
+            .anchor_to_buffer_anchor(*source)
+            .expect("menu anchor should resolve to a buffer");
+
+        assert_eq!(buffer_snapshot.remote_id(), buffer_b.read(cx).remote_id());
+        assert_eq!(
+            buffer_snapshot.summary_for_anchor::<Point>(&buffer_anchor),
+            Point::new(1, 0),
+        );
+    });
 }
 
 #[gpui::test]
