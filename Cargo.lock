@@ -7805,6 +7805,7 @@ dependencies = [
  "raw-window-handle",
  "smallvec",
  "swash",
+ "unicode-bidi",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
