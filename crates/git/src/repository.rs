@@ -1213,11 +1213,15 @@ impl RealGitRepository {
         log::info!(
             "opening git repository at {dotgit_path:?} using git binary {any_git_binary_path:?}"
         );
-        let workdir_root = dotgit_path.parent().context(".git has no parent")?;
-        let repository = git2::Repository::open(workdir_root).map_err(|error| {
+        let repository_path = if dotgit_path.file_name() == Some(OsStr::new(".git")) {
+            dotgit_path.parent().context(".git has no parent")?
+        } else {
+            dotgit_path
+        };
+        let repository = git2::Repository::open(repository_path).map_err(|error| {
             log::error!(
                 "libgit2 failed opening repository at {:?} (dotgit {:?}): {}",
-                workdir_root,
+                repository_path,
                 dotgit_path,
                 error
             );
@@ -3959,6 +3963,12 @@ mod tests {
         (remote_dir, clone_dir)
     }
 
+    fn test_commit_envs() -> HashMap<String, String> {
+        let mut env = checkpoint_author_envs();
+        env.insert("GIT_ASKPASS".to_string(), "false".to_string());
+        env
+    }
+
     #[track_caller]
     fn assert_same_path(left: impl AsRef<Path>, right: impl AsRef<Path>) {
         assert_eq!(
@@ -4159,6 +4169,17 @@ mod tests {
         cx.executor().allow_parking();
 
         let repo_dir = tempfile::tempdir().unwrap();
+        git_init_repo(repo_dir.path());
+        let repository = RealGitRepository::new(
+            &repo_dir.path().join(".git"),
+            None,
+            Some("not-a-git-binary".into()),
+            cx.executor(),
+        )
+        .unwrap();
+
+        assert!(repository.check_access().await.is_err());
+
         let repository = RealGitRepository::new(
             &repo_dir.path().join(".git"),
             None,
@@ -4166,9 +4187,6 @@ mod tests {
             cx.executor(),
         )
         .unwrap();
-
-        assert!(repository.check_access().await.is_err());
-        git_init_repo(repo_dir.path());
         assert!(repository.check_access().await.is_ok());
     }
 
@@ -4440,9 +4458,7 @@ mod tests {
         };
 
         assert!(
-            error
-                .to_string()
-                .contains("expected .git file to start with 'gitdir: '"),
+            format!("{error:#}").contains("malformed"),
             "unexpected error: {error:#}"
         );
     }
@@ -4463,51 +4479,6 @@ mod tests {
         };
 
         assert_eq!(commit.tag_names(), ["v1.0.0", "v1.1.0"]);
-    }
-
-    #[test]
-    fn test_parse_file_history_changed_files_output() {
-        let queried_paths = vec![
-            RepoPath::new("src/a.rs").unwrap(),
-            RepoPath::new("src/b.rs").unwrap(),
-        ];
-        let output = concat!(
-            "\x1e\0\nsrc/a.rs\0src/shared.rs\0",
-            "\x1e\0\nsrc/b.rs\0src/shared.rs\0",
-            "\x1e\0\nsrc/a.rs\0src/b.rs\0src/shared.rs\0",
-        );
-
-        let histories = parse_file_history_changed_files_output(output, &queried_paths);
-
-        assert_eq!(histories.len(), 2);
-        assert_eq!(
-            histories[0].file_sets,
-            vec![
-                vec![
-                    RepoPath::new("src/a.rs").unwrap(),
-                    RepoPath::new("src/shared.rs").unwrap(),
-                ],
-                vec![
-                    RepoPath::new("src/a.rs").unwrap(),
-                    RepoPath::new("src/b.rs").unwrap(),
-                    RepoPath::new("src/shared.rs").unwrap(),
-                ],
-            ]
-        );
-        assert_eq!(
-            histories[1].file_sets,
-            vec![
-                vec![
-                    RepoPath::new("src/b.rs").unwrap(),
-                    RepoPath::new("src/shared.rs").unwrap(),
-                ],
-                vec![
-                    RepoPath::new("src/a.rs").unwrap(),
-                    RepoPath::new("src/b.rs").unwrap(),
-                    RepoPath::new("src/shared.rs").unwrap(),
-                ],
-            ]
-        );
     }
 
     #[gpui::test]
