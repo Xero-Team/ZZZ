@@ -32,7 +32,7 @@ pub use theme::*;
 pub use title_bar::*;
 pub use workspace::*;
 
-use collections::{HashMap, IndexMap};
+use collections::{HashMap, IndexMap, IndexSet};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings_macros::{MergeFrom, with_fallible_options};
@@ -1344,6 +1344,21 @@ impl<T> From<Vec<T>> for ExtendingVec<T> {
 impl<T: Clone> merge_from::MergeFrom for ExtendingVec<T> {
     fn merge_from(&mut self, other: &Self) {
         self.0.extend_from_slice(other.0.as_slice());
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct ExtendingSet<T: std::hash::Hash + Eq>(pub IndexSet<T>);
+
+impl<T: std::hash::Hash + Eq> From<Vec<T>> for ExtendingSet<T> {
+    fn from(values: Vec<T>) -> Self {
+        Self(values.into_iter().collect())
+    }
+}
+
+impl<T: Clone + std::hash::Hash + Eq> merge_from::MergeFrom for ExtendingSet<T> {
+    fn merge_from(&mut self, other: &Self) {
+        self.0.extend(other.0.iter().cloned());
     }
 }
 

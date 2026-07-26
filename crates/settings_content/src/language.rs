@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use settings_macros::{MergeFrom, with_fallible_options};
 use std::sync::Arc;
 
-use crate::{DocumentFoldingRanges, DocumentSymbols, ExtendingVec, SemanticTokens, merge_from};
+use crate::{DocumentFoldingRanges, DocumentSymbols, ExtendingSet, SemanticTokens, merge_from};
 
 /// The state of the modifier keys at some point in time
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
@@ -44,7 +44,7 @@ pub struct AllLanguageSettingsContent {
     pub languages: LanguageToSettingsMap,
     /// Settings for associating file extensions and filenames
     /// with languages.
-    pub file_types: Option<HashMap<Arc<str>, ExtendingVec<String>>>,
+    pub file_types: Option<HashMap<Arc<str>, ExtendingSet<String>>>,
 }
 
 impl merge_from::MergeFrom for AllLanguageSettingsContent {
