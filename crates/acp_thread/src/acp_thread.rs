@@ -3174,12 +3174,16 @@ impl AcpThread {
                 return Ok(());
             };
 
-            let equal = git_store
+            let Some(equal) = git_store
                 .update(cx, |git, cx| {
                     git.compare_checkpoints(old_checkpoint.clone(), new_checkpoint, cx)
                 })
                 .await
-                .unwrap_or(true);
+                .context("failed to compare checkpoints")
+                .log_err()
+            else {
+                return Ok(());
+            };
 
             this.update(cx, |this, cx| {
                 if let Some((ix, message)) = this.user_message_mut(&user_message_id) {
@@ -3693,7 +3697,7 @@ mod tests {
     use futures::{channel::mpsc, future::LocalBoxFuture, select};
     use gpui::{App, AsyncApp, TestAppContext, WeakEntity};
     use indoc::indoc;
-    use project::{AgentId, FakeFs, Fs};
+    use project::{AgentId, FakeFs, Fs, RemoveOptions};
     use rand::{distr, prelude::*};
     use serde_json::json;
     use settings::SettingsStore;
@@ -6546,6 +6550,96 @@ mod tests {
             "send should succeed even when new message added during update_last_checkpoint: {:?}",
             result.err()
         );
+    }
+
+    /// Regression test for a checkpoint comparison failure at the end of a turn.
+    /// An already-visible restore control must stay visible instead of being
+    /// silently hidden when the repository was recreated while the turn ran.
+    #[gpui::test]
+    async fn test_update_last_checkpoint_compare_error_keeps_checkpoint_visible(
+        cx: &mut TestAppContext,
+    ) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(path!("/test"), json!({".git": {}, "file.txt": "content"}))
+            .await;
+        let project = Project::test(fs.clone(), [Path::new(path!("/test"))], cx).await;
+
+        let (complete_tx, complete_rx) = futures::channel::oneshot::channel::<()>();
+        let complete_rx = RefCell::new(Some(complete_rx));
+        let connection = Rc::new(FakeAgentConnection::new().on_user_message(
+            move |_, _thread, _cx| {
+                let complete_rx = complete_rx.borrow_mut().take();
+                async move {
+                    if let Some(rx) = complete_rx {
+                        rx.await
+                            .expect("test prompt completion sender should remain available");
+                    }
+                    Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))
+                }
+                .boxed_local()
+            },
+        ));
+
+        let thread = cx
+            .update(|cx| {
+                connection.new_session(project, PathList::new(&[Path::new(path!("/test"))]), cx)
+            })
+            .await
+            .expect("fake ACP session should start");
+
+        let send_future = thread.update(cx, |thread, cx| thread.send_raw("message", cx));
+        let send_task = cx.background_executor.spawn(send_future);
+        cx.run_until_parked();
+
+        thread.update(cx, |thread, _| {
+            let (_, message) = thread
+                .last_user_message()
+                .expect("prompt should create a user message");
+            message
+                .checkpoint
+                .as_mut()
+                .expect("prompt should create a checkpoint")
+                .show = true;
+        });
+
+        fs.remove_dir(
+            Path::new(path!("/test/.git")),
+            RemoveOptions {
+                recursive: true,
+                ignore_if_not_exists: false,
+            },
+        )
+        .await
+        .expect("test repository should contain .git");
+        cx.run_until_parked();
+        fs.create_dir(Path::new(path!("/test/.git")))
+            .await
+            .expect("test repository .git directory should be recreated");
+        cx.run_until_parked();
+
+        complete_tx
+            .send(())
+            .expect("test prompt completion receiver should be waiting");
+        send_task
+            .await
+            .expect("prompt should finish after the completion signal");
+        cx.run_until_parked();
+
+        thread.update(cx, |thread, _| {
+            let (_, message) = thread
+                .last_user_message()
+                .expect("prompt user message should remain available");
+            assert!(
+                message
+                    .checkpoint
+                    .as_ref()
+                    .expect("checkpoint should remain available")
+                    .show,
+                "a checkpoint comparison failure must not hide the restore checkpoint control"
+            );
+        });
     }
 
     /// Tests that when a follow-up message is sent during generation,
