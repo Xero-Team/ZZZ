@@ -13208,6 +13208,7 @@ dependencies = [
  "anyhow",
  "editor",
  "gpui",
+ "gpui_util",
  "i18n",
  "language",
  "menu",
