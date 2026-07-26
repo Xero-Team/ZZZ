@@ -199,6 +199,57 @@ fn parse_path_with_position(argument_str: &str) -> anyhow::Result<String> {
     .map(|path_with_pos| path_with_pos.to_string(&|path| path.to_string_lossy().into_owned()))
 }
 
+/// Returns whether a parsed `--diff` path refers to an existing file or
+/// directory. The path may include a trailing position suffix for the right
+/// side of a single-file diff.
+fn diff_path_exists(diff_path: &str) -> bool {
+    Path::new(diff_path).exists() || PathWithPosition::parse_str(diff_path).path.exists()
+}
+
+/// Returns whether an argument resolves to a directory, including the case
+/// where the directory is followed by a position-looking suffix.
+fn diff_path_is_dir(diff_path: &str) -> bool {
+    let path = Path::new(diff_path);
+    path.is_dir() || (!path.exists() && PathWithPosition::parse_str(diff_path).path.is_dir())
+}
+
+/// Returns whether a suffix is a source position rather than part of an
+/// existing path name. This preserves POSIX paths such as `report:3`.
+fn diff_path_has_position(diff_path: &str) -> bool {
+    !Path::new(diff_path).exists() && PathWithPosition::parse_str(diff_path).row.is_some()
+}
+
+/// Parses one `--diff` pair while retaining ZZZ's existing directory-diff
+/// behavior. A source location is supported only for the right side of a
+/// single-file diff, which is the side displayed as the editable result.
+fn parse_diff_pair(
+    left_argument: &str,
+    right_argument: &str,
+    diff_all_mode: bool,
+) -> anyhow::Result<[String; 2]> {
+    let left = parse_path_with_position(left_argument)?;
+    anyhow::ensure!(
+        Path::new(&left).exists(),
+        "--diff path does not exist: {left}"
+    );
+
+    let right = parse_path_with_position(right_argument)?;
+    anyhow::ensure!(
+        diff_path_exists(&right),
+        "--diff path does not exist: {right}"
+    );
+
+    if diff_path_has_position(right_argument) {
+        let right_position = PathWithPosition::parse_str(&right);
+        anyhow::ensure!(
+            !diff_all_mode && !right_position.path.is_dir(),
+            "--diff positions are only supported for single-file diffs"
+        );
+    }
+
+    Ok([left, right])
+}
+
 fn expand_directory_diff_pairs(
     diff_pairs: Vec<[String; 2]>,
 ) -> anyhow::Result<(Vec<[String; 2]>, Vec<TempDir>)> {
@@ -361,6 +412,87 @@ mod tests {
         // Relative path
         let result = with_cwd(temp_tree.path(), || parse_path_with_position("file.txt")).unwrap();
         assert_path_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_parse_diff_pair_accepts_rhs_position() {
+        let temp_tree = TempTree::new(json!({
+            "old.txt": "old\n",
+            "new.txt": "one\ntwo\nthree\n",
+        }));
+        let old_path = temp_tree.path().join("old.txt");
+        let new_path = temp_tree.path().join("new.txt");
+        let right_argument = format!("{}:3:2", new_path.display());
+
+        let [left, right] = parse_diff_pair(
+            old_path
+                .to_str()
+                .expect("temporary old path should be valid UTF-8"),
+            &right_argument,
+            false,
+        )
+        .expect("right-side source position should be accepted for a file diff");
+
+        assert_path_eq!(left, old_path);
+        let right = PathWithPosition::parse_str(&right);
+        assert_path_eq!(right.path, new_path);
+        assert_eq!(right.row, Some(3));
+        assert_eq!(right.column, Some(2));
+    }
+
+    #[test]
+    fn test_parse_diff_pair_rejects_rhs_position_for_directory_diff() {
+        let temp_tree = TempTree::new(json!({
+            "old.txt": "old\n",
+            "new": { "file.txt": "new\n" },
+        }));
+        let old_path = temp_tree.path().join("old.txt");
+        let new_directory = temp_tree.path().join("new");
+        let right_argument = format!("{}:3", new_directory.display());
+
+        let error = parse_diff_pair(
+            old_path
+                .to_str()
+                .expect("temporary old path should be valid UTF-8"),
+            &right_argument,
+            true,
+        )
+        .expect_err("directory diff positions should be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("positions are only supported for single-file diffs"),
+            "unexpected error: {error:#}"
+        );
+    }
+
+    #[test]
+    fn test_parse_diff_pair_preserves_position_like_existing_path() {
+        let temp_tree = TempTree::new(json!({
+            "old.txt": "old\n",
+            "new.txt:3": "new\n",
+        }));
+        let old_path = temp_tree.path().join("old.txt");
+        let new_path = temp_tree.path().join("new.txt:3");
+
+        let [_, right] = parse_diff_pair(
+            old_path
+                .to_str()
+                .expect("temporary old path should be valid UTF-8"),
+            new_path
+                .to_str()
+                .expect("temporary new path should be valid UTF-8"),
+            false,
+        )
+        .expect("an existing position-like file name should remain a path");
+
+        assert_path_eq!(right, new_path);
+        assert!(!diff_path_has_position(
+            new_path
+                .to_str()
+                .expect("temporary new path should be valid UTF-8")
+        ));
     }
 
     // NOTE:
@@ -644,22 +776,16 @@ fn run() -> Result<()> {
     let mut stdin_tmp_file: Option<fs::File> = None;
     let mut anonymous_fd_tmp_files = vec![];
 
-    // Check if any diff paths are directories to determine diff_all mode
+    // Check if any diff paths are directories to determine diff_all mode.
+    // Position suffixes are parsed below, so account for the underlying path
+    // here as well.
     let diff_all_mode = args
         .diff
         .chunks(2)
-        .any(|pair| Path::new(&pair[0]).is_dir() || Path::new(&pair[1]).is_dir());
+        .any(|pair| diff_path_is_dir(&pair[0]) || diff_path_is_dir(&pair[1]));
 
     for path in args.diff.chunks(2) {
-        let left = parse_path_with_position(&path[0])?;
-        let right = parse_path_with_position(&path[1])?;
-        for diff_path in [&left, &right] {
-            anyhow::ensure!(
-                Path::new(diff_path).exists(),
-                "--diff path does not exist: {diff_path}"
-            );
-        }
-        diff_paths.push([left, right]);
+        diff_paths.push(parse_diff_pair(&path[0], &path[1], diff_all_mode)?);
     }
 
     let (expanded_diff_paths, temp_dirs) = expand_directory_diff_pairs(diff_paths)?;
