@@ -81,6 +81,12 @@ pub enum Model {
     Claude3_5Haiku,
 
     // -- OpenAI Responses API models --
+    #[serde(rename = "gpt-5.6-sol")]
+    Gpt5_6Sol,
+    #[serde(rename = "gpt-5.6-terra")]
+    Gpt5_6Terra,
+    #[serde(rename = "gpt-5.6-luna")]
+    Gpt5_6Luna,
     #[serde(rename = "gpt-5.5")]
     Gpt5_5,
     #[serde(rename = "gpt-5.5-pro")]
@@ -137,6 +143,8 @@ pub enum Model {
     Glm5,
     #[serde(rename = "glm-5.1")]
     Glm5_1,
+    #[serde(rename = "grok-4.5")]
+    Grok4_5,
     #[serde(rename = "kimi-k2.5")]
     KimiK2_5,
     #[serde(rename = "kimi-k2.6")]
@@ -241,6 +249,9 @@ impl Model {
             Self::ClaudeHaiku4_5 => "claude-haiku-4-5",
             Self::Claude3_5Haiku => "claude-3-5-haiku",
 
+            Self::Gpt5_6Sol => "gpt-5.6-sol",
+            Self::Gpt5_6Terra => "gpt-5.6-terra",
+            Self::Gpt5_6Luna => "gpt-5.6-luna",
             Self::Gpt5_5 => "gpt-5.5",
             Self::Gpt5_5Pro => "gpt-5.5-pro",
             Self::Gpt5_4 => "gpt-5.4",
@@ -269,6 +280,7 @@ impl Model {
             Self::MiniMaxM2_5Free => "minimax-m2.5-free",
             Self::Glm5 => "glm-5",
             Self::Glm5_1 => "glm-5.1",
+            Self::Grok4_5 => "grok-4.5",
             Self::KimiK2_5 => "kimi-k2.5",
             Self::KimiK2_6 => "kimi-k2.6",
             Self::MiniMaxM2_7 => "minimax-m2.7",
@@ -298,6 +310,9 @@ impl Model {
             Self::ClaudeHaiku4_5 => "Claude Haiku 4.5",
             Self::Claude3_5Haiku => "Claude Haiku 3.5",
 
+            Self::Gpt5_6Sol => "GPT 5.6 Sol",
+            Self::Gpt5_6Terra => "GPT 5.6 Terra",
+            Self::Gpt5_6Luna => "GPT 5.6 Luna",
             Self::Gpt5_5 => "GPT 5.5",
             Self::Gpt5_5Pro => "GPT 5.5 Pro",
             Self::Gpt5_4 => "GPT 5.4",
@@ -326,6 +341,7 @@ impl Model {
             Self::MiniMaxM2_5Free => "MiniMax M2.5 Free",
             Self::Glm5 => "GLM 5",
             Self::Glm5_1 => "GLM 5.1",
+            Self::Grok4_5 => "Grok 4.5",
             Self::KimiK2_5 => "Kimi K2.5",
             Self::KimiK2_6 => "Kimi K2.6",
             Self::MiniMaxM2_7 => "MiniMax M2.7",
@@ -367,7 +383,10 @@ impl Model {
             | Self::ClaudeHaiku4_5
             | Self::Claude3_5Haiku => ApiProtocol::Anthropic,
 
-            Self::Gpt5_5
+            Self::Gpt5_6Sol
+            | Self::Gpt5_6Terra
+            | Self::Gpt5_6Luna
+            | Self::Gpt5_5
             | Self::Gpt5_5Pro
             | Self::Gpt5_4
             | Self::Gpt5_4Pro
@@ -392,6 +411,7 @@ impl Model {
             Self::MiniMaxM2_5Free
             | Self::Glm5
             | Self::Glm5_1
+            | Self::Grok4_5
             | Self::KimiK2_5
             | Self::KimiK2_6
             | Self::MimoV2Pro
@@ -420,6 +440,7 @@ impl Model {
             Self::Claude3_5Haiku => 200_000,
 
             // OpenAI models
+            Self::Gpt5_6Sol | Self::Gpt5_6Terra | Self::Gpt5_6Luna => 1_050_000,
             Self::Gpt5_5 | Self::Gpt5_5Pro => 1_050_000,
             Self::Gpt5_4 | Self::Gpt5_4Pro => 1_050_000,
             Self::Gpt5_4Mini | Self::Gpt5_4Nano => 400_000,
@@ -439,6 +460,7 @@ impl Model {
             Self::MiniMaxM2_7 => 204_800,
             Self::MiniMaxM2_5 | Self::MiniMaxM2_5Free => 204_800,
             Self::Glm5 | Self::Glm5_1 => 202_725,
+            Self::Grok4_5 => 500_000,
             Self::KimiK2_6 | Self::KimiK2_5 => 262_144,
             Self::MimoV2_5Pro | Self::MimoV2Pro => 1_048_576,
             Self::MimoV2_5 => 1_000_000,
@@ -466,7 +488,10 @@ impl Model {
             Self::Claude3_5Haiku => Some(8_192),
 
             // OpenAI models
-            Self::Gpt5_5
+            Self::Gpt5_6Sol
+            | Self::Gpt5_6Terra
+            | Self::Gpt5_6Luna
+            | Self::Gpt5_5
             | Self::Gpt5_5Pro
             | Self::Gpt5_4
             | Self::Gpt5_4Pro
@@ -494,6 +519,7 @@ impl Model {
             Self::MiniMaxM2_7 => Some(131_072),
             Self::MiniMaxM2_5 | Self::MiniMaxM2_5Free => Some(131_072),
             Self::Glm5 | Self::Glm5_1 => Some(32_768),
+            Self::Grok4_5 => Some(500_000),
             Self::BigPickle => Some(128_000),
             Self::KimiK2_6 | Self::KimiK2_5 => Some(65_536),
             Self::Qwen3_5Plus | Self::Qwen3_6Plus => Some(65_536),
@@ -528,7 +554,10 @@ impl Model {
             | Self::Claude3_5Haiku => true,
 
             // OpenAI models support images
-            Self::Gpt5_5
+            Self::Gpt5_6Sol
+            | Self::Gpt5_6Terra
+            | Self::Gpt5_6Luna
+            | Self::Gpt5_5
             | Self::Gpt5_5Pro
             | Self::Gpt5_4
             | Self::Gpt5_4Pro
@@ -552,6 +581,7 @@ impl Model {
             // OpenAI-compatible models with image support
             Self::KimiK2_6
             | Self::KimiK2_5
+            | Self::Grok4_5
             | Self::MimoV2Omni
             | Self::MimoV2_5
             | Self::Qwen3_5Plus
@@ -584,6 +614,20 @@ impl Model {
 
     pub fn supported_reasoning_effort_levels(&self) -> Option<Vec<ReasoningEffort>> {
         match self {
+            Self::Gpt5_6Sol | Self::Gpt5_6Terra | Self::Gpt5_6Luna => Some(vec![
+                ReasoningEffort::None,
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+                ReasoningEffort::XHigh,
+            ]),
+
+            Self::Grok4_5 => Some(vec![
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+            ]),
+
             Self::MimoV2_5Pro
             | Self::MimoV2_5
             | Self::MimoV2Pro
@@ -615,6 +659,69 @@ impl Model {
 
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_updates_have_expected_metadata() {
+        for (model, id, display_name) in [
+            (Model::Gpt5_6Sol, "gpt-5.6-sol", "GPT 5.6 Sol"),
+            (Model::Gpt5_6Terra, "gpt-5.6-terra", "GPT 5.6 Terra"),
+            (Model::Gpt5_6Luna, "gpt-5.6-luna", "GPT 5.6 Luna"),
+        ] {
+            assert_eq!(model.id(), id);
+            assert_eq!(model.display_name(), display_name);
+            assert_eq!(serde_json::to_string(&model).unwrap(), format!(r#""{id}""#));
+            assert_eq!(
+                model.protocol(OpenCodeSubscription::Zen),
+                ApiProtocol::OpenAiResponses
+            );
+            assert_eq!(model.max_token_count(), 1_050_000);
+            assert_eq!(model.max_output_tokens(), Some(128_000));
+            assert!(model.supports_images());
+            assert_eq!(
+                model.supported_reasoning_effort_levels(),
+                Some(vec![
+                    ReasoningEffort::None,
+                    ReasoningEffort::Low,
+                    ReasoningEffort::Medium,
+                    ReasoningEffort::High,
+                    ReasoningEffort::XHigh,
+                ])
+            );
+            assert_eq!(
+                model.available_subscriptions(),
+                &[OpenCodeSubscription::Zen]
+            );
+        }
+
+        let model = Model::Grok4_5;
+        assert_eq!(model.id(), "grok-4.5");
+        assert_eq!(model.display_name(), "Grok 4.5");
+        assert_eq!(serde_json::to_string(&model).unwrap(), r#""grok-4.5""#);
+        assert_eq!(
+            model.protocol(OpenCodeSubscription::Zen),
+            ApiProtocol::OpenAiChat
+        );
+        assert_eq!(model.max_token_count(), 500_000);
+        assert_eq!(model.max_output_tokens(), Some(500_000));
+        assert!(model.supports_images());
+        assert_eq!(
+            model.supported_reasoning_effort_levels(),
+            Some(vec![
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+            ])
+        );
+        assert_eq!(
+            model.available_subscriptions(),
+            &[OpenCodeSubscription::Zen]
+        );
     }
 }
 
