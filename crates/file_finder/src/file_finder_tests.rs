@@ -4409,7 +4409,7 @@ async fn open_queried_buffer(
     history_items
 }
 
-fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
+pub(crate) fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
     cx.update(|cx| {
         let state = AppState::test(cx);
         i18n::init(cx);
@@ -4440,7 +4440,7 @@ fn build_find_picker(
 }
 
 #[track_caller]
-fn open_file_picker(
+pub(crate) fn open_file_picker(
     workspace: &Entity<Workspace>,
     cx: &mut VisualTestContext,
 ) -> Entity<Picker<FileFinderDelegate>> {
@@ -4451,7 +4451,7 @@ fn open_file_picker(
 }
 
 #[track_caller]
-fn active_file_picker(
+pub(crate) fn active_file_picker(
     workspace: &Entity<Workspace>,
     cx: &mut VisualTestContext,
 ) -> Entity<Picker<FileFinderDelegate>> {

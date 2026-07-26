@@ -60,7 +60,14 @@ actions!(
         SetPreviewBelow,
         SetPreviewHidden,
         /// Opens the picker's default actions menu.
-        ToggleActionsMenu
+        ToggleActionsMenu,
+        /// Toggles multi-select mode, in which clicking items adds them to
+        /// the selection instead of opening them
+        ToggleMultiSelect,
+        /// Toggles the current item in the multi-selection and advances to
+        /// the next item, starting multi-select mode if it isn't already
+        /// active
+        MultiSelectNext,
     ]
 );
 
@@ -88,6 +95,7 @@ pub struct Picker<D: PickerDelegate> {
     width: Option<Length>,
     widest_item: Option<usize>,
     max_height: Option<Length>,
+    select_instead_of_open: bool,
     /// An external control to display a scrollbar in the `Picker`.
     show_scrollbar: bool,
     /// Whether the `Picker` is rendered as a self-contained modal.
@@ -197,6 +205,41 @@ pub trait PickerDelegate: Sized + 'static {
         None
     }
     fn confirm(&mut self, secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>);
+    /// Whether this delegate supports selecting multiple items at once. When
+    /// `true`, the delegate owns the multi-selection state; the picker only
+    /// drives the generic UX (toggle action, indicator, click routing).
+    fn supports_multi_select(&self) -> bool {
+        false
+    }
+    /// Whether the item at `ix` is part of the current multi-selection.
+    fn is_item_selected(&self, _ix: usize) -> bool {
+        false
+    }
+    /// Toggle whether the item at `ix` is part of the multi-selection. Items
+    /// that cannot participate in multi-selection (e.g. non-file entries)
+    /// should leave the selection unchanged.
+    fn toggle_item_selected(
+        &mut self,
+        _ix: usize,
+        _window: &mut Window,
+        _cx: &mut Context<Picker<Self>>,
+    ) {
+    }
+    /// Number of items currently in the multi-selection.
+    fn selected_item_count(&self) -> usize {
+        0
+    }
+    /// Clear the multi-selection.
+    fn clear_selection(&mut self, _cx: &mut Context<Picker<Self>>) {}
+    /// Open every item in the multi-selection. Called on confirm when the
+    /// selection is non-empty; implementations should clear the selection.
+    fn confirm_multi(
+        &mut self,
+        _secondary: bool,
+        _window: &mut Window,
+        _cx: &mut Context<Picker<Self>>,
+    ) {
+    }
     /// Instead of interacting with currently selected entry, treats editor input literally,
     /// performing some kind of action on it.
     fn confirm_input(
@@ -453,6 +496,7 @@ impl<D: PickerDelegate> Picker<D> {
             width: None,
             widest_item: None,
             max_height: Some(rems(24.).into()),
+            select_instead_of_open: false,
             show_scrollbar: false,
             is_modal: true,
             picker_bounds: Rc::new(Cell::new(None)),
@@ -706,6 +750,8 @@ impl<D: PickerDelegate> Picker<D> {
 
     pub fn cancel(&mut self, _: &menu::Cancel, window: &mut Window, cx: &mut Context<Self>) {
         if self.delegate.should_dismiss() {
+            self.select_instead_of_open = false;
+            self.delegate.clear_selection(cx);
             self.delegate.dismissed(window, cx);
             cx.emit(DismissEvent);
         }
@@ -718,6 +764,41 @@ impl<D: PickerDelegate> Picker<D> {
         cx: &mut Context<Self>,
     ) {
         self.actions_menu_handle.toggle(window, cx);
+    }
+
+    fn toggle_multi_select(
+        &mut self,
+        _: &ToggleMultiSelect,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.delegate.supports_multi_select() {
+            return;
+        }
+        self.select_instead_of_open = !self.select_instead_of_open;
+        if !self.select_instead_of_open {
+            self.delegate.clear_selection(cx);
+        }
+        cx.notify();
+    }
+
+    fn multi_select_next(
+        &mut self,
+        _: &MultiSelectNext,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Propagate so `tab` retains its other meanings (e.g.
+        // `ConfirmCompletion`) in pickers without multi-select.
+        if !self.delegate.supports_multi_select() {
+            cx.propagate();
+            return;
+        }
+        self.select_instead_of_open = true;
+        let ix = self.delegate.selected_index();
+        self.delegate.toggle_item_selected(ix, window, cx);
+        self.select_next(&menu::SelectNext, window, cx);
+        cx.notify();
     }
 
     fn confirm(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
@@ -813,11 +894,20 @@ impl<D: PickerDelegate> Picker<D> {
             return;
         }
         self.set_selected_index(ix, None, false, window, cx);
-        self.do_confirm(secondary, window, cx)
+        if self.delegate.supports_multi_select() && (secondary || self.select_instead_of_open) {
+            self.select_instead_of_open = true;
+            self.delegate.toggle_item_selected(ix, window, cx);
+            cx.notify();
+        } else {
+            self.do_confirm(secondary, window, cx);
+        }
     }
 
     fn do_confirm(&mut self, secondary: bool, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(update_query) = self.delegate.confirm_update_query(window, cx) {
+        if self.delegate.supports_multi_select() && self.delegate.selected_item_count() > 0 {
+            self.select_instead_of_open = false;
+            self.delegate.confirm_multi(secondary, window, cx);
+        } else if let Some(update_query) = self.delegate.confirm_update_query(window, cx) {
             self.set_query(&update_query, window, cx);
             self.set_selected_index(0, Some(Direction::Down), false, window, cx);
         } else {
@@ -1011,9 +1101,16 @@ impl<D: PickerDelegate> Picker<D> {
         let item_bounds = self.item_bounds.clone();
         let selectable = self.delegate.can_select(ix, window, cx);
 
+        let supports_multi_select = self.delegate.supports_multi_select();
+        let is_multi_selected = supports_multi_select && self.delegate.is_item_selected(ix);
+        let multi_select_active = supports_multi_select && self.select_instead_of_open;
+
         div()
             .id(("item", ix))
             .when(selectable, |this| this.cursor_pointer())
+            .when(selectable && multi_select_active, |this| {
+                this.hover(|s| s.bg(cx.theme().colors().ghost_element_hover))
+            })
             .child(
                 canvas(
                     move |bounds, _window, _cx| {
@@ -1049,12 +1146,35 @@ impl<D: PickerDelegate> Picker<D> {
                     }
                 }))
             })
-            .children(self.delegate.render_match(
-                ix,
-                ix == self.delegate.selected_index(),
-                window,
-                cx,
-            ))
+            .map(|row| {
+                // Pickers without multi-select keep their element tree
+                // unchanged.
+                if supports_multi_select {
+                    row.child(
+                        h_flex()
+                            // Headers and separators cannot be part of the
+                            // selection, so they get no indicator.
+                            .when(multi_select_active && selectable, |this| {
+                                this.child(
+                                    self.render_multi_select_indicator(is_multi_selected, cx),
+                                )
+                            })
+                            .children(self.delegate.render_match(
+                                ix,
+                                ix == self.delegate.selected_index(),
+                                window,
+                                cx,
+                            )),
+                    )
+                } else {
+                    row.children(self.delegate.render_match(
+                        ix,
+                        ix == self.delegate.selected_index(),
+                        window,
+                        cx,
+                    ))
+                }
+            })
             .when(
                 self.delegate.separators_after_indices().contains(&ix),
                 |picker| {
@@ -1063,6 +1183,41 @@ impl<D: PickerDelegate> Picker<D> {
                         .border_b_1()
                         .py(px(-1.0))
                 },
+            )
+    }
+
+    /// The checkbox in front of items while in multi-select mode.
+    fn render_multi_select_indicator(
+        &self,
+        is_selected: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        h_flex()
+            .w_6()
+            .flex_none()
+            .justify_center()
+            .items_center()
+            .child(
+                div()
+                    .size_4()
+                    .flex_none()
+                    .rounded_sm()
+                    .border_1()
+                    .border_color(if is_selected {
+                        cx.theme().colors().border_focused
+                    } else {
+                        cx.theme().colors().border
+                    })
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .when(is_selected, |this| {
+                        this.bg(cx.theme().colors().element_selected).child(
+                            Icon::new(IconName::Check)
+                                .size(IconSize::Small)
+                                .color(Color::Accent),
+                        )
+                    }),
             )
     }
 
@@ -1208,6 +1363,9 @@ mod tests {
         selected_index: usize,
         confirmed_index: Rc<Cell<Option<usize>>>,
         preview_layouts: Rc<RefCell<Vec<bool>>>,
+        supports_multi_select: bool,
+        selected_items: Vec<usize>,
+        multi_confirmed: Rc<Cell<Option<Vec<usize>>>>,
     }
 
     impl TestDelegate {
@@ -1217,7 +1375,15 @@ mod tests {
                 selected_index: 0,
                 confirmed_index: Rc::new(Cell::new(None)),
                 preview_layouts: Rc::new(RefCell::new(Vec::new())),
+                supports_multi_select: false,
+                selected_items: Vec::new(),
+                multi_confirmed: Rc::new(Cell::new(None)),
             }
+        }
+
+        fn with_multi_select(mut self) -> Self {
+            self.supports_multi_select = true;
+            self
         }
     }
 
@@ -1274,6 +1440,45 @@ mod tests {
             _cx: &mut Context<Picker<Self>>,
         ) {
             self.confirmed_index.set(Some(self.selected_index));
+        }
+
+        fn supports_multi_select(&self) -> bool {
+            self.supports_multi_select
+        }
+
+        fn is_item_selected(&self, ix: usize) -> bool {
+            self.selected_items.contains(&ix)
+        }
+
+        fn toggle_item_selected(
+            &mut self,
+            ix: usize,
+            _window: &mut Window,
+            _cx: &mut Context<Picker<Self>>,
+        ) {
+            if let Some(position) = self.selected_items.iter().position(|&item| item == ix) {
+                self.selected_items.remove(position);
+            } else {
+                self.selected_items.push(ix);
+            }
+        }
+
+        fn selected_item_count(&self) -> usize {
+            self.selected_items.len()
+        }
+
+        fn clear_selection(&mut self, _cx: &mut Context<Picker<Self>>) {
+            self.selected_items.clear();
+        }
+
+        fn confirm_multi(
+            &mut self,
+            _secondary: bool,
+            _window: &mut Window,
+            _cx: &mut Context<Picker<Self>>,
+        ) {
+            self.multi_confirmed
+                .set(Some(std::mem::take(&mut self.selected_items)));
         }
 
         fn dismissed(&mut self, _window: &mut Window, _cx: &mut Context<Picker<Self>>) {}
@@ -1389,6 +1594,139 @@ mod tests {
             );
         });
     }
+
+    #[gpui::test]
+    async fn test_multi_select_mode_routes_clicks(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let confirmed_index = Rc::new(Cell::new(None));
+        let multi_confirmed = Rc::new(Cell::new(None));
+        let (picker, cx) = cx.add_window_view(|window, cx| {
+            let mut delegate = TestDelegate::new(vec![true, true, true]).with_multi_select();
+            delegate.confirmed_index = confirmed_index.clone();
+            delegate.multi_confirmed = multi_confirmed.clone();
+            Picker::uniform_list(delegate, window, cx)
+        });
+
+        // A plain click confirms just like in any picker.
+        picker.update_in(cx, |picker, window, cx| {
+            picker.handle_click(1, false, window, cx);
+        });
+        assert_eq!(confirmed_index.take(), Some(1));
+        picker.update(cx, |picker, _cx| {
+            assert_eq!(picker.delegate.selected_item_count(), 0);
+        });
+
+        // A secondary (cmd) click starts multi-select mode and toggles the
+        // clicked item into the selection instead of confirming.
+        picker.update_in(cx, |picker, window, cx| {
+            picker.handle_click(2, true, window, cx);
+        });
+        assert_eq!(confirmed_index.take(), None, "cmd+click must not confirm");
+        picker.update(cx, |picker, _cx| {
+            assert!(
+                picker.select_instead_of_open,
+                "cmd+click should start multi-select mode"
+            );
+            assert!(picker.delegate.is_item_selected(2));
+        });
+
+        // While the mode is on, plain clicks toggle items too.
+        picker.update_in(cx, |picker, window, cx| {
+            picker.handle_click(0, false, window, cx);
+        });
+        assert_eq!(
+            confirmed_index.take(),
+            None,
+            "in-mode clicks must not confirm"
+        );
+        picker.update(cx, |picker, _cx| {
+            assert!(picker.delegate.is_item_selected(0));
+            assert!(picker.delegate.is_item_selected(2));
+            assert!(!picker.delegate.is_item_selected(1));
+        });
+
+        // Confirming opens the whole selection and exits the mode.
+        picker.update_in(cx, |picker, window, cx| {
+            picker.do_confirm(false, window, cx);
+        });
+        assert_eq!(multi_confirmed.take(), Some(vec![2, 0]));
+        picker.update_in(cx, |picker, window, cx| {
+            picker.handle_click(1, false, window, cx);
+        });
+        assert_eq!(
+            confirmed_index.take(),
+            Some(1),
+            "the mode should be off again after confirming"
+        );
+    }
+
+    #[gpui::test]
+    async fn test_multi_select_next_starts_multi_select_mode(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let (picker, cx) = cx.add_window_view(|window, cx| {
+            Picker::uniform_list(
+                TestDelegate::new(vec![true, true, true]).with_multi_select(),
+                window,
+                cx,
+            )
+        });
+
+        picker.update_in(cx, |picker, window, cx| {
+            picker.multi_select_next(&MultiSelectNext, window, cx);
+        });
+        picker.update(cx, |picker, _cx| {
+            assert!(
+                picker.select_instead_of_open,
+                "selecting an item should start multi-select mode"
+            );
+            assert!(picker.delegate.is_item_selected(0));
+            assert_eq!(
+                picker.delegate.selected_index(),
+                1,
+                "selecting should advance the cursor to the next item"
+            );
+        });
+
+        // In pickers without multi-select the action does nothing.
+        let (plain_picker, cx) = cx.add_window_view(|window, cx| {
+            Picker::uniform_list(TestDelegate::new(vec![true, true]), window, cx)
+        });
+        plain_picker.update_in(cx, |picker, window, cx| {
+            picker.multi_select_next(&MultiSelectNext, window, cx);
+        });
+        plain_picker.update(cx, |picker, _cx| {
+            assert!(!picker.select_instead_of_open);
+            assert_eq!(picker.delegate.selected_item_count(), 0);
+        });
+    }
+
+    #[gpui::test]
+    async fn test_exiting_multi_select_mode_clears_selection(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let (picker, cx) = cx.add_window_view(|window, cx| {
+            Picker::uniform_list(
+                TestDelegate::new(vec![true, true]).with_multi_select(),
+                window,
+                cx,
+            )
+        });
+
+        picker.update_in(cx, |picker, window, cx| {
+            picker.toggle_multi_select(&ToggleMultiSelect, window, cx);
+            picker.handle_click(0, false, window, cx);
+            picker.toggle_multi_select(&ToggleMultiSelect, window, cx);
+        });
+        picker.update(cx, |picker, _cx| {
+            assert_eq!(
+                picker.delegate.selected_item_count(),
+                0,
+                "leaving the mode should clear the selection"
+            );
+        });
+    }
 }
 
 impl<D: PickerDelegate> EventEmitter<DismissEvent> for Picker<D> {}
@@ -1460,6 +1798,8 @@ impl<D: PickerDelegate> Picker<D> {
             .on_action(cx.listener(Self::set_preview_below))
             .on_action(cx.listener(Self::set_preview_hidden))
             .on_action(cx.listener(Self::toggle_actions_menu))
+            .on_action(cx.listener(Self::toggle_multi_select))
+            .on_action(cx.listener(Self::multi_select_next))
             .children(match &self.head {
                 Head::Editor(editor) => {
                     if editor_position == PickerEditorPosition::Start {
