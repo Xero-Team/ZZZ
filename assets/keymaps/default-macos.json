@@ -371,6 +371,7 @@
     "context": "AcpThread > Editor",
     "use_key_equivalents": true,
     "bindings": {
+      "cmd-f": "agent::ToggleSearch",
       "ctrl-pageup": "agent::ScrollOutputPageUp",
       "ctrl-pagedown": "agent::ScrollOutputPageDown",
       "ctrl-home": "agent::ScrollOutputToTop",
