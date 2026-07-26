@@ -943,7 +943,10 @@ impl Item for Editor {
         } else {
             buffers
                 .into_iter()
-                .filter(|buffer| buffer.read(cx).is_dirty())
+                .filter(|buffer| {
+                    let buffer = buffer.read(cx);
+                    buffer.is_dirty() && buffer.file().is_some()
+                })
                 .collect()
         };
 
