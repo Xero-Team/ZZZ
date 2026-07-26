@@ -380,15 +380,13 @@ pub(crate) fn render_mermaid_diagram(
     } else if let Some(fallback) = cached.and_then(|cached| cached.fallback_image.as_ref()) {
         container
             .child(
-                div()
-                    .child(render_image(fallback.clone()))
-                    .with_animation(
-                        "mermaid-fallback-pulse",
-                        Animation::new(Duration::from_secs(2))
-                            .repeat()
-                            .with_easing(pulsating_between(0.6, 1.0)),
-                        |element, delta| element.opacity(delta),
-                    ),
+                div().child(render_image(fallback.clone())).with_animation(
+                    "mermaid-fallback-pulse",
+                    Animation::new(Duration::from_secs(2))
+                        .repeat()
+                        .with_easing(pulsating_between(0.6, 1.0)),
+                    |element, delta| element.opacity(delta),
+                ),
             )
             .into_any_element()
     } else {

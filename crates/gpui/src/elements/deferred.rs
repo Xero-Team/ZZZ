@@ -98,8 +98,8 @@ impl Deferred {
 #[cfg(test)]
 mod tests {
     use crate::{
-        AnyView, Context, Entity, StyleRefinement, TestAppContext, Window, anchored, deferred,
-        div, point, prelude::*, px, size,
+        AnyView, Context, Entity, StyleRefinement, TestAppContext, Window, anchored, deferred, div,
+        point, prelude::*, px, size,
     };
 
     /// A stand-in for a dock panel hosting a popover (deferred draw) whose

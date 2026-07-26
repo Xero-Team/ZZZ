@@ -883,7 +883,10 @@ impl settings::Settings for AllLanguageSettings {
 
             file_types.insert(
                 language.clone(),
-                (builder.build().unwrap(), patterns.0.iter().cloned().collect()),
+                (
+                    builder.build().unwrap(),
+                    patterns.0.iter().cloned().collect(),
+                ),
             );
         }
 

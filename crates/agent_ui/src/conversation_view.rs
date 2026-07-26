@@ -5664,7 +5664,10 @@ pub(crate) mod tests {
             // The first response ends a finalized turn because another user
             // prompt follows it. The trailing response is finalized by the
             // thread status instead, so the helper leaves it undecided.
-            assert_eq!(ThreadView::entry_is_finalized_turn_end(entries, 1), Some(true));
+            assert_eq!(
+                ThreadView::entry_is_finalized_turn_end(entries, 1),
+                Some(true)
+            );
             assert_eq!(ThreadView::entry_is_finalized_turn_end(entries, 3), None);
         });
 
