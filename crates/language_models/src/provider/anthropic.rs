@@ -318,6 +318,7 @@ fn available_model_to_anthropic_model(available: &AvailableModel) -> anthropic::
         settings::ModelMode::Thinking { budget_tokens } => {
             AnthropicModelMode::Thinking { budget_tokens }
         }
+        settings::ModelMode::Adaptive => AnthropicModelMode::AdaptiveThinking,
     };
     let supports_thinking = matches!(
         mode,
@@ -369,6 +370,35 @@ fn available_model_to_anthropic_model(available: &AvailableModel) -> anthropic::
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn configured_adaptive_model_enables_adaptive_thinking() {
+        let available: AvailableModel = serde_json::from_str(
+            r#"{
+                "name": "claude-opus-4-7",
+                "max_tokens": 1000000,
+                "max_output_tokens": 128000,
+                "mode": { "type": "adaptive" }
+            }"#,
+        )
+        .expect("configured Anthropic model fixture should parse");
+
+        let model = available_model_to_anthropic_model(&available);
+
+        assert_eq!(model.mode, AnthropicModelMode::AdaptiveThinking);
+        assert!(model.supports_thinking);
+        assert!(model.supports_adaptive_thinking);
+        assert_eq!(
+            model.supported_effort_levels,
+            vec![
+                anthropic::Effort::Low,
+                anthropic::Effort::Medium,
+                anthropic::Effort::High,
+                anthropic::Effort::XHigh,
+                anthropic::Effort::Max,
+            ]
+        );
+    }
 
     #[test]
     fn configured_fast_model_enables_fast_mode_header_once() {
