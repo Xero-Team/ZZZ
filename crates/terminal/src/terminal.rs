@@ -1457,6 +1457,11 @@ impl Terminal {
         self.events.push_back(InternalEvent::Clear)
     }
 
+    /// Releases spare scrollback storage without removing visible terminal output.
+    pub fn shrink_to_used(&mut self) {
+        self.term.lock().grid_mut().truncate();
+    }
+
     pub fn scroll_line_up(&mut self) {
         self.events
             .push_back(InternalEvent::Scroll(AlacScroll::Delta(1)));
