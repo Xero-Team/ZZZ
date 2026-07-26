@@ -4277,7 +4277,10 @@ impl SymbolLocation {
 }
 
 fn should_log_lsp_request_failure(message: &str) -> bool {
-    message.ends_with("content modified") || message.ends_with("server cancelled the request")
+    // "content modified" and "server cancelled the request" are noisy failure
+    // modes of rust-analyzer where requests are denied before it has loaded a
+    // project.
+    !(message.ends_with("content modified") || message.ends_with("server cancelled the request"))
 }
 
 impl LspStore {
@@ -15259,4 +15262,27 @@ fn extend_formatting_transaction(
         }
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_log_lsp_request_failure_suppresses_known_noise() {
+        assert!(!should_log_lsp_request_failure(
+            "Get diagnostics via rust-analyzer failed: content modified"
+        ));
+        assert!(!should_log_lsp_request_failure(
+            "Get diagnostics via rust-analyzer failed: server cancelled the request"
+        ));
+
+        assert!(should_log_lsp_request_failure(
+            "Get diagnostics via rust-analyzer failed: server shut down"
+        ));
+        assert!(should_log_lsp_request_failure(
+            "Get diagnostics via rust-analyzer failed: Server reset the connection"
+        ));
+        assert!(should_log_lsp_request_failure("something else entirely"));
+    }
 }
