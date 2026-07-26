@@ -14143,7 +14143,6 @@ fn git_reset(offset: usize, repo: &git2::Repository) {
         .expect("Could not reset");
 }
 
-#[cfg(any())]
 #[track_caller]
 fn git_branch(name: &str, repo: &git2::Repository) {
     let head = repo
@@ -14154,7 +14153,6 @@ fn git_branch(name: &str, repo: &git2::Repository) {
     repo.branch(name, &head, false).expect("Failed to commit");
 }
 
-#[cfg(any())]
 #[track_caller]
 fn git_checkout(name: &str, repo: &git2::Repository) {
     repo.set_head(name).expect("Failed to set head");

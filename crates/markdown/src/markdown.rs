@@ -4367,8 +4367,11 @@ mod tests {
         cx.run_until_parked();
 
         assert_eq!(
-            markdown.read_with(cx, |markdown, _| markdown.selected_text()),
-            Some(source.to_string())
+            markdown.read_with(cx, |markdown, _| (
+                markdown.selection.start,
+                markdown.selection.end
+            )),
+            (0, source.len())
         );
     }
 
