@@ -6055,7 +6055,7 @@ mod tests {
                 window.draw(cx).clear();
                 window.viewport_size()
             })
-            .unwrap();
+            .expect("window should remain available while drawing the root");
 
         assert_eq!(child_bounds.get().size, viewport_size);
     }
@@ -6075,7 +6075,7 @@ mod tests {
         cx.update_window(window.into(), |_, window, cx| {
             window.draw(cx).clear();
         })
-        .unwrap();
+        .expect("window should remain available while drawing the root");
 
         assert_eq!(child_bounds.get().size, size(px(300.), px(200.)));
     }
