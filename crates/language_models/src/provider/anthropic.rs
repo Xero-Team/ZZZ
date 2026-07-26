@@ -324,6 +324,17 @@ fn available_model_to_anthropic_model(available: &AvailableModel) -> anthropic::
         AnthropicModelMode::Thinking { .. } | AnthropicModelMode::AdaptiveThinking
     );
     let supports_adaptive_thinking = matches!(mode, AnthropicModelMode::AdaptiveThinking);
+    let supports_speed = available
+        .supports_fast_mode
+        .unwrap_or_else(|| anthropic::supports_fast_mode(&available.name));
+    let mut extra_beta_headers = available.extra_beta_headers.clone();
+    if supports_speed
+        && !extra_beta_headers
+            .iter()
+            .any(|header| header.trim() == anthropic::FAST_MODE_BETA_HEADER)
+    {
+        extra_beta_headers.push(anthropic::FAST_MODE_BETA_HEADER.to_string());
+    }
 
     anthropic::Model {
         display_name: available
@@ -338,7 +349,7 @@ fn available_model_to_anthropic_model(available: &AvailableModel) -> anthropic::
         supports_thinking,
         supports_adaptive_thinking,
         supports_images: true,
-        supports_speed: false,
+        supports_speed,
         supported_effort_levels: if supports_adaptive_thinking {
             vec![
                 anthropic::Effort::Low,
@@ -351,7 +362,33 @@ fn available_model_to_anthropic_model(available: &AvailableModel) -> anthropic::
             vec![]
         },
         tool_override: available.tool_override.clone(),
-        extra_beta_headers: available.extra_beta_headers.clone(),
+        extra_beta_headers,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configured_fast_model_enables_fast_mode_header_once() {
+        let available: AvailableModel = serde_json::from_str(
+            r#"{
+                "name": "claude-custom-fast",
+                "max_tokens": 200000,
+                "supports_fast_mode": true,
+                "extra_beta_headers": ["fast-mode-2026-02-01"]
+            }"#,
+        )
+        .expect("configured Anthropic model fixture should parse");
+
+        let model = available_model_to_anthropic_model(&available);
+
+        assert!(model.supports_speed);
+        assert_eq!(
+            model.extra_beta_headers,
+            vec![anthropic::FAST_MODE_BETA_HEADER]
+        );
     }
 }
 
