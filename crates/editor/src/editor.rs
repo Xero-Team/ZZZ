@@ -231,7 +231,7 @@ use ui::{
     prelude::*, scrollbars::ScrollbarAutoHide, tooltip_container, utils::WithRemSize,
 };
 use ui_input::ErasedEditor;
-use util::{RangeExt, ResultExt, TryFutureExt, maybe, post_inc};
+use util::{RangeExt, ResultExt, TryFutureExt, maybe, post_inc, rel_path::RelPath};
 use workspace::{
     CollaboratorId, Item as WorkspaceItem, ItemId, ItemNavHistory, NavigationEntry, OpenInTerminal,
     OpenTerminal, Pane, RestoreOnStartupBehavior, SERIALIZATION_THROTTLE_TIME, SplitDirection,
@@ -13668,6 +13668,63 @@ impl Editor {
         if self.read_only(cx) {
             return;
         }
+
+        let clipboard_image = item.entries().iter().find_map(|entry| match entry {
+            ClipboardEntry::Image(image) if !image.bytes.is_empty() => Some(image),
+            _ => None,
+        });
+
+        if let Some(image) = clipboard_image {
+            let is_markdown = {
+                let display_map = self.display_snapshot(cx);
+                let selections = self.selections.all::<MultiBufferOffset>(&display_map);
+                selections
+                    .first()
+                    .and_then(|selection| {
+                        display_map.buffer_snapshot().language_at(selection.head())
+                    })
+                    .is_some_and(|language| language.name() == "Markdown")
+            };
+
+            if is_markdown {
+                let handled = maybe!({
+                    let buffer = self.buffer().read(cx).as_singleton()?;
+                    let file = buffer.read(cx).file()?;
+                    let worktree_id = file.worktree_id(cx);
+                    let directory_path = file.path().parent()?.into_arc();
+                    let worktree = self
+                        .project
+                        .as_ref()?
+                        .read(cx)
+                        .worktree_for_id(worktree_id, cx)?;
+
+                    let extension = image.format.extension();
+                    let snapshot = worktree.read(cx).snapshot();
+                    let (filename, file_path) =
+                        unused_image_path(&directory_path, extension, |path| {
+                            snapshot.entry_for_path(path).is_some()
+                        })?;
+
+                    let create_task = worktree.update(cx, |worktree, cx| {
+                        worktree.create_entry(file_path, false, Some(image.bytes.clone()), cx)
+                    });
+
+                    cx.spawn_in(window, async move |editor, cx| {
+                        create_task.await?;
+                        editor.update_in(cx, |editor, window, cx| {
+                            editor.insert_image_snippet(&filename, window, cx)
+                        })
+                    })
+                    .detach_and_log_err(cx);
+
+                    Some(())
+                });
+                if handled.is_some() {
+                    return;
+                }
+            }
+        }
+
         let clipboard_string = item.entries().iter().find_map(|entry| match entry {
             ClipboardEntry::String(s) => Some(s),
             _ => None,
@@ -13682,6 +13739,26 @@ impl Editor {
             ),
             _ => self.do_paste(&item.text().unwrap_or_default(), None, true, window, cx),
         }
+    }
+
+    fn insert_image_snippet(
+        &mut self,
+        filename: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(snippet) = Snippet::parse(&format!("![$1]({filename})$0")).log_err() else {
+            return;
+        };
+        let display_map = self.display_snapshot(cx);
+        let insertion_ranges = self
+            .selections
+            .all::<MultiBufferOffset>(&display_map)
+            .into_iter()
+            .map(|selection| selection.start..selection.end)
+            .collect::<Vec<_>>();
+        self.insert_snippet(&insertion_ranges, snippet, window, cx)
+            .log_err();
     }
 
     fn restore_selections(
@@ -24178,6 +24255,23 @@ fn edit_for_markdown_paste<'a>(
         Cow::Owned(format!("[{old_text}]({to_insert})"))
     };
     (range, new_text)
+}
+
+fn unused_image_path(
+    directory_path: &RelPath,
+    extension: &str,
+    exists: impl Fn(&RelPath) -> bool,
+) -> Option<(String, Arc<RelPath>)> {
+    let mut filename = format!("image.{extension}");
+    let mut counter = 1u32;
+    loop {
+        let candidate = directory_path.join(RelPath::unix(&filename).ok()?);
+        if !exists(&candidate) {
+            return Some((filename, candidate));
+        }
+        filename = format!("image_{counter}.{extension}");
+        counter += 1;
+    }
 }
 
 fn is_standalone_url(text: &str) -> bool {
