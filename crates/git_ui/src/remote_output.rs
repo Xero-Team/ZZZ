@@ -6,6 +6,29 @@ use git::repository::{Remote, RemoteCommandOutput};
 use ui::SharedString;
 use util::ResultExt as _;
 
+const PULL_REQUEST_HINTS: &[(&str, &str, &str)] = &[
+    (
+        "Create a pull request",
+        "git_ui.remote_output.create_pull_request",
+        "Create Pull Request",
+    ),
+    (
+        "Create pull request",
+        "git_ui.remote_output.create_pull_request",
+        "Create Pull Request",
+    ),
+    (
+        "create a merge request",
+        "git_ui.remote_output.create_merge_request",
+        "Create Merge Request",
+    ),
+    (
+        "View merge request",
+        "git_ui.remote_output.view_merge_request",
+        "View Merge Request",
+    ),
+];
+
 #[derive(Clone)]
 pub enum RemoteAction {
     Fetch(Option<Remote>),
@@ -26,11 +49,51 @@ impl RemoteAction {
 pub enum SuccessStyle {
     Toast,
     ToastWithLog { output: RemoteCommandOutput },
+    PushPullRequestLink { label: String, url: String },
 }
 
 pub struct SuccessMessage {
     pub message: String,
     pub style: SuccessStyle,
+}
+
+fn extract_pull_request_link(
+    output: &RemoteCommandOutput,
+    translate: impl Fn(&'static str, &'static str) -> String + Copy,
+) -> Option<(String, String)> {
+    let mut pending_label = None;
+
+    for line in output.stderr.lines() {
+        let Some(remote_line) = line.trim_start().strip_prefix("remote:") else {
+            pending_label = None;
+            continue;
+        };
+
+        if let Some((_, key, fallback)) = PULL_REQUEST_HINTS
+            .iter()
+            .find(|(hint, _, _)| remote_line.contains(hint))
+        {
+            pending_label = Some(translate(key, fallback));
+        }
+
+        if let Some(url) = extract_url(remote_line)
+            && let Some(label) = pending_label.as_ref()
+        {
+            return Some((label.clone(), url));
+        }
+    }
+
+    None
+}
+
+fn extract_url(line: &str) -> Option<String> {
+    let http_index = line.find("https://").or_else(|| line.find("http://"))?;
+    let url = line[http_index..]
+        .split_whitespace()
+        .next()?
+        .trim_end_matches(|character| matches!(character, ',' | '.' | ')' | ']' | '>'));
+
+    Some(url.to_string())
 }
 
 fn tr_arg_with(
@@ -211,15 +274,23 @@ fn format_output_impl(
                     style: SuccessStyle::Toast,
                 }
             } else {
-                SuccessMessage {
-                    message: tr_args_with(
-                        translate,
-                        "git_ui.remote_output.pushed_to",
-                        "Pushed {} to {}",
-                        branch_name,
-                        &remote_ref.name,
-                    ),
-                    style: SuccessStyle::ToastWithLog { output },
+                let message = tr_args_with(
+                    translate,
+                    "git_ui.remote_output.pushed_to",
+                    "Pushed {} to {}",
+                    branch_name,
+                    &remote_ref.name,
+                );
+                if let Some((label, url)) = extract_pull_request_link(&output, translate) {
+                    SuccessMessage {
+                        message,
+                        style: SuccessStyle::PushPullRequestLink { label, url },
+                    }
+                } else {
+                    SuccessMessage {
+                        message,
+                        style: SuccessStyle::ToastWithLog { output },
+                    }
                 }
             }
         }
@@ -269,8 +340,42 @@ mod tests {
 
         let msg = format_output(&action, output);
 
-        assert!(matches!(msg.style, SuccessStyle::ToastWithLog { .. }));
+        assert!(matches!(
+            msg.style,
+            SuccessStyle::PushPullRequestLink { ref label, ref url }
+                if label == "Create Pull Request"
+                    && url == "https://example.com/test/test/pull/new/test"
+        ));
         assert_eq!(msg.message, "Pushed test_branch to test_remote");
+    }
+
+    #[test]
+    fn test_push_new_branch_bitbucket_pull_request() {
+        let action = RemoteAction::Push(
+            SharedString::new_static("test_branch"),
+            Remote {
+                name: SharedString::new_static("test_remote"),
+            },
+        );
+
+        let output = RemoteCommandOutput {
+            stdout: String::new(),
+            stderr: indoc! {"
+                remote:
+                remote: Create pull request for test:
+                remote:   https://bitbucket.example.com/projects/TEST/repos/test/pull-requests?create&sourceBranch=refs/heads/test
+                "}
+            .to_string(),
+        };
+
+        let msg = format_output(&action, output);
+
+        assert!(matches!(
+            msg.style,
+            SuccessStyle::PushPullRequestLink { ref label, ref url }
+                if label == "Create Pull Request"
+                    && url == "https://bitbucket.example.com/projects/TEST/repos/test/pull-requests?create&sourceBranch=refs/heads/test"
+        ));
     }
 
     #[test]
@@ -298,7 +403,12 @@ mod tests {
 
         let msg = format_output(&action, output);
 
-        assert!(matches!(msg.style, SuccessStyle::ToastWithLog { .. }));
+        assert!(matches!(
+            msg.style,
+            SuccessStyle::PushPullRequestLink { ref label, ref url }
+                if label == "Create Merge Request"
+                    && url == "https://example.com/test/test/-/merge_requests/new?merge_request%5Bsource_branch%5D=test"
+        ));
         assert_eq!(msg.message, "Pushed test_branch to test_remote");
     }
 
@@ -331,7 +441,12 @@ mod tests {
 
         let msg = format_output(&action, output);
 
-        assert!(matches!(msg.style, SuccessStyle::ToastWithLog { .. }));
+        assert!(matches!(
+            msg.style,
+            SuccessStyle::PushPullRequestLink { ref label, ref url }
+                if label == "View Merge Request"
+                    && url == "https://example.com/test/test/-/merge_requests/99999"
+        ));
         assert_eq!(msg.message, "Pushed test_branch to test_remote");
     }
 
