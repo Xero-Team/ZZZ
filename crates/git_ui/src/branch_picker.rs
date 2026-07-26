@@ -15,12 +15,11 @@ use picker::{Picker, PickerDelegate, PickerEditorPosition};
 use project::git_store::{Repository, RepositoryEvent};
 use project::project_settings::ProjectSettings;
 use settings::Settings;
-use std::rc::Rc;
 use std::sync::Arc;
 use time::OffsetDateTime;
 use ui::{
-    Banner, ContextMenu, ContextMenuEntry, Divider, HighlightedLabel, Indicator, KeyBinding,
-    ListItem, ListItemSpacing, PopoverMenu, PopoverMenuHandle, Severity, Tooltip, prelude::*,
+    Banner, ContextMenu, Divider, HighlightedLabel, Indicator, KeyBinding, ListItem,
+    ListItemSpacing, ListSubHeader, PopoverMenu, PopoverMenuHandle, Severity, Tooltip, prelude::*,
 };
 use ui_input::ErasedEditor;
 use util::ResultExt;
@@ -43,7 +42,9 @@ actions!(
         /// Show only remote branches.
         ShowRemoteBranches,
         /// Cycle through branch filters.
-        CycleBranchFilter
+        CycleBranchFilter,
+        /// Toggles the branch filter menu.
+        ToggleFilterMenu
     ]
 );
 
@@ -448,7 +449,11 @@ impl BranchList {
     }
 
     pub(crate) fn branch_filter_menu_open(&self, cx: &App) -> bool {
-        self.picker.read(cx).delegate.branch_filter_menu_open
+        self.picker
+            .read(cx)
+            .delegate
+            .branch_filter_menu_handle
+            .is_deployed()
     }
 
     pub(crate) fn cycle_branch_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -493,13 +498,24 @@ impl Render for BranchList {
                     this.cycle_branch_filter(window, cx);
                 }),
             )
+            .on_action(
+                cx.listener(|this, _: &branch_picker::ToggleFilterMenu, window, cx| {
+                    let menu_handle = this
+                        .picker
+                        .read(cx)
+                        .delegate
+                        .branch_filter_menu_handle
+                        .clone();
+                    menu_handle.toggle(window, cx);
+                }),
+            )
             .child(self.picker.clone())
             .when(!self.embedded, |this| {
                 this.on_mouse_down_out({
                     cx.listener(move |this, _, window, cx| {
                         // The filter menu is a deferred popover, so clicks within it are outside
                         // the branch picker's bounds even though it is part of this interaction.
-                        if this.picker.read(cx).delegate.branch_filter_menu_open {
+                        if this.branch_filter_menu_open(cx) {
                             return;
                         }
                         this.picker.update(cx, |this, cx| {
@@ -575,6 +591,19 @@ impl BranchFilter {
             Self::Remote => Self::All,
         }
     }
+
+    fn label(self, cx: &App) -> SharedString {
+        match self {
+            Self::All => tr(cx, "git_ui.branch_picker.all_branches", "All Branches"),
+            Self::Local => tr(cx, "git_ui.branch_picker.local_branches", "Local Branches"),
+            Self::Remote => tr(
+                cx,
+                "git_ui.branch_picker.remote_branches",
+                "Remote Branches",
+            ),
+        }
+        .into()
+    }
 }
 
 struct GlobalBranchFilter(BranchFilter);
@@ -583,77 +612,35 @@ impl Global for GlobalBranchFilter {}
 
 fn branch_filter_menu(
     branch_filter: BranchFilter,
-    picker: WeakEntity<Picker<BranchListDelegate>>,
+    focus_handle: FocusHandle,
     window: &mut Window,
     cx: &mut App,
 ) -> Entity<ContextMenu> {
-    let show = tr(cx, "git_ui.branch_picker.show", "Show");
-    let all_branches = tr(cx, "git_ui.branch_picker.all_branches", "All Branches");
-    let local_branches = tr(cx, "git_ui.branch_picker.local_branches", "Local Branches");
-    let remote_branches = tr(
-        cx,
-        "git_ui.branch_picker.remote_branches",
-        "Remote Branches",
-    );
-    let picker_for_menu = picker.clone();
-    let menu = ContextMenu::build(window, cx, move |menu, _, _| {
-        menu.header(show)
-            .item(branch_filter_menu_entry(
-                all_branches,
-                BranchFilter::All,
-                branch_filter,
-                picker_for_menu.clone(),
-            ))
-            .item(branch_filter_menu_entry(
-                local_branches,
-                BranchFilter::Local,
-                branch_filter,
-                picker_for_menu.clone(),
-            ))
-            .item(branch_filter_menu_entry(
-                remote_branches,
-                BranchFilter::Remote,
-                branch_filter,
-                picker_for_menu,
-            ))
-    });
-    window
-        .subscribe(&menu, cx, move |_, _: &DismissEvent, window, cx| {
-            let picker = picker.clone();
-            window.defer(cx, move |_, cx| {
-                picker
-                    .update(cx, |picker, _| {
-                        picker.delegate.branch_filter_menu_open = false;
-                    })
-                    .log_err();
-            });
-        })
-        .detach();
-    menu
-}
+    ContextMenu::build(window, cx, move |mut menu, _, cx| {
+        menu = menu.context(focus_handle.clone());
 
-fn branch_filter_menu_entry(
-    label: impl Into<SharedString>,
-    branch_filter: BranchFilter,
-    current_branch_filter: BranchFilter,
-    picker: WeakEntity<Picker<BranchListDelegate>>,
-) -> ContextMenuEntry {
-    ContextMenuEntry::new(label)
-        .toggle(IconPosition::End, branch_filter == current_branch_filter)
-        .handler(move |window, cx| {
-            picker
-                .update(cx, |picker, cx| {
-                    cx.set_global(GlobalBranchFilter(branch_filter));
-                    if picker.delegate.branch_filter == branch_filter {
-                        return;
-                    }
-                    picker.delegate.branch_filter = branch_filter;
-                    picker.update_matches(picker.query(cx), window, cx);
-                    picker.refresh_placeholder(window, cx);
-                    cx.notify();
-                })
-                .log_err();
-        })
+        let filter_actions: [(BranchFilter, Box<dyn Action>); 3] = [
+            (BranchFilter::All, ShowAllBranches.boxed_clone()),
+            (BranchFilter::Local, ShowLocalBranches.boxed_clone()),
+            (BranchFilter::Remote, ShowRemoteBranches.boxed_clone()),
+        ];
+
+        for (filter, action) in filter_actions {
+            let handler_focus = focus_handle.clone();
+            let dispatched = action.boxed_clone();
+            menu = menu.toggleable_entry(
+                filter.label(cx),
+                filter == branch_filter,
+                IconPosition::End,
+                Some(action),
+                move |window, cx| {
+                    window.focus(&handler_focus, cx);
+                    window.dispatch_action(dispatched.boxed_clone(), cx);
+                },
+            );
+        }
+        menu
+    })
 }
 
 pub struct BranchListDelegate {
@@ -669,7 +656,6 @@ pub struct BranchListDelegate {
     modifiers: Modifiers,
     branch_filter: BranchFilter,
     branch_filter_menu_handle: PopoverMenuHandle<ContextMenu>,
-    branch_filter_menu_open: bool,
     state: PickerState,
     branch_selection_behavior: BranchSelectionBehavior,
     focus_handle: FocusHandle,
@@ -1004,7 +990,6 @@ impl BranchListDelegate {
             modifiers: Default::default(),
             branch_filter,
             branch_filter_menu_handle: PopoverMenuHandle::default(),
-            branch_filter_menu_open: false,
             state: PickerState::List,
             branch_selection_behavior,
             focus_handle: cx.focus_handle(),
@@ -1016,6 +1001,36 @@ impl BranchListDelegate {
 
     fn is_select_only(&self) -> bool {
         self.branch_selection_behavior.is_select_only()
+    }
+
+    fn branch_filter_trigger(&self) -> IconButton {
+        IconButton::new("branch-filter", IconName::Filter)
+            .icon_size(IconSize::Small)
+            .toggle_state(self.branch_filter != BranchFilter::All)
+            .when(self.branch_filter != BranchFilter::All, |this| {
+                this.indicator(Indicator::dot().color(Color::Info))
+            })
+    }
+
+    fn branch_filter_tooltip(
+        &self,
+        cx: &App,
+    ) -> impl Fn(&mut Window, &mut App) -> gpui::AnyView + 'static {
+        let focus_handle = self.focus_handle.clone();
+        let label: SharedString = tr(
+            cx,
+            "git_ui.branch_picker.filter_branches",
+            "Filter branches",
+        )
+        .into();
+        move |_, cx| {
+            Tooltip::for_action_in(
+                label.clone(),
+                &branch_picker::ToggleFilterMenu,
+                &focus_handle,
+                cx,
+            )
+        }
     }
 
     fn is_force_delete_hovering_index(&self, index: usize) -> bool {
@@ -1248,88 +1263,83 @@ impl PickerDelegate for BranchListDelegate {
         _window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Div> {
-        let picker = cx.weak_entity();
         let editor = editor.as_any().downcast_ref::<Entity<Editor>>().unwrap();
+        let editor_start = matches!(self.editor_position(), PickerEditorPosition::Start);
+        let editor_bottom = matches!(self.editor_position(), PickerEditorPosition::End);
 
-        let show_inline_filter =
-            self.editor_position() == PickerEditorPosition::End || !self.show_footer;
+        let warning_banner = || {
+            self.branch_list_error.as_deref().map(|error| {
+                let message = tr(
+                    cx,
+                    "git_ui.branch_picker.some_branches_could_not_be_loaded",
+                    "Some branches could not be loaded: {}",
+                )
+                .replacen("{}", error, 1);
+                div().p_1p5().child(
+                    Banner::new()
+                        .severity(Severity::Warning)
+                        .child(div().min_w_0().flex_1().child(Label::new(message))),
+                )
+            })
+        };
 
         Some(
             v_flex()
-                .when(
-                    self.editor_position() == PickerEditorPosition::End,
-                    |this| this.child(Divider::horizontal()),
-                )
-                .when_some(self.branch_list_error.clone(), |this, error| {
-                    let message = tr(
-                        cx,
-                        "git_ui.branch_picker.some_branches_could_not_be_loaded",
-                        "Some branches could not be loaded: {}",
-                    )
-                    .replacen("{}", &error, 1);
-                    this.child(
-                        div()
-                            .id("branch-list-error")
-                            .p_1p5()
-                            .child(
-                                Banner::new().severity(Severity::Warning).child(
-                                    Label::new(message.clone())
-                                        .size(LabelSize::Small)
-                                        .single_line()
-                                        .truncate(),
-                                ),
-                            )
-                            .tooltip(Tooltip::text(message)),
-                    )
+                .w_full()
+                .min_w_0()
+                .when(editor_bottom, |this| {
+                    this.child(Divider::horizontal())
+                        .when_some(warning_banner(), |this, banner| this.child(banner))
                 })
                 .child(
                     h_flex()
-                        .overflow_hidden()
-                        .flex_none()
                         .h_9()
                         .px_2p5()
+                        .flex_none()
+                        .overflow_hidden()
                         .child(editor.clone())
-                        .when(show_inline_filter, |this| {
+                        .map(|this| {
                             let branch_filter = self.branch_filter;
-                            let picker_for_menu_open = picker.clone();
+                            let focus_handle = self.focus_handle.clone();
                             this.gap_1().justify_between().child(
                                 PopoverMenu::new("branch-filter-menu")
                                     .with_handle(self.branch_filter_menu_handle.clone())
-                                    .on_open(Rc::new(move |_, cx| {
-                                        picker_for_menu_open
-                                            .update(cx, |picker, _| {
-                                                picker.delegate.branch_filter_menu_open = true;
-                                            })
-                                            .log_err();
-                                    }))
-                                    .trigger(
-                                        IconButton::new("branch-filter", IconName::ListFilter)
-                                            .toggle_state(branch_filter != BranchFilter::All)
-                                            .when(branch_filter != BranchFilter::All, |this| {
-                                                this.indicator(Indicator::dot().color(Color::Info))
-                                            })
-                                            .icon_size(IconSize::Small)
-                                            .tooltip(Tooltip::text(tr(
-                                                cx,
-                                                "git_ui.branch_picker.filter_branches",
-                                                "Filter branches",
-                                            ))),
+                                    .trigger_with_tooltip(
+                                        self.branch_filter_trigger(),
+                                        self.branch_filter_tooltip(cx),
                                     )
                                     .menu(move |window, cx| {
                                         Some(branch_filter_menu(
                                             branch_filter,
-                                            picker.clone(),
+                                            focus_handle.clone(),
                                             window,
                                             cx,
                                         ))
+                                    })
+                                    .map(|this| {
+                                        if editor_bottom {
+                                            this.anchor(gpui::Anchor::BottomRight)
+                                                .attach(gpui::Anchor::TopRight)
+                                                .offset(gpui::Point {
+                                                    x: px(0.0),
+                                                    y: px(-1.0),
+                                                })
+                                        } else {
+                                            this.anchor(gpui::Anchor::TopRight)
+                                                .attach(gpui::Anchor::BottomRight)
+                                                .offset(gpui::Point {
+                                                    x: px(1.0),
+                                                    y: px(1.0),
+                                                })
+                                        }
                                     }),
                             )
                         }),
                 )
-                .when(
-                    self.editor_position() == PickerEditorPosition::Start,
-                    |this| this.child(Divider::horizontal()),
-                ),
+                .when(editor_start, |this| {
+                    this.child(Divider::horizontal())
+                        .when_some(warning_banner(), |this, banner| this.child(banner))
+                }),
         )
     }
 
@@ -1342,6 +1352,29 @@ impl PickerDelegate for BranchListDelegate {
             BranchListStyle::Modal => PickerEditorPosition::Start,
             BranchListStyle::Popover => PickerEditorPosition::End,
         }
+    }
+
+    fn render_header(
+        &self,
+        _window: &mut Window,
+        cx: &mut Context<Picker<Self>>,
+    ) -> Option<AnyElement> {
+        if self.branch_filter == BranchFilter::All {
+            return None;
+        }
+
+        Some(
+            div()
+                .pt_1p5()
+                .mb_neg_0p5()
+                .child(ListSubHeader::new(self.branch_filter.label(cx)).inset(true))
+                .into_any_element(),
+        )
+    }
+
+    fn has_another_open_menu(&self, window: &Window, cx: &App) -> bool {
+        self.branch_filter_menu_handle.is_deployed()
+            || self.branch_filter_menu_handle.is_focused(window, cx)
     }
 
     fn match_count(&self) -> usize {
@@ -1972,7 +2005,6 @@ impl PickerDelegate for BranchListDelegate {
             return None;
         }
         let focus_handle = self.focus_handle.clone();
-        let picker = cx.weak_entity();
 
         let footer_container = || {
             h_flex()
@@ -2057,69 +2089,24 @@ impl PickerDelegate for BranchListDelegate {
 
                 Some(
                     footer_container()
-                        .map(|this| {
-                            if branch_from_default_button.is_some() {
-                                this.justify_end().when_some(
-                                    branch_from_default_button,
-                                    |this, button| {
-                                        this.child(button).child(
-                                            Button::new(
-                                                "create",
-                                                tr(cx, "git_ui.worktree_picker.create", "Create"),
-                                            )
-                                            .key_binding(
-                                                KeyBinding::for_action_in(
-                                                    &menu::Confirm,
-                                                    &focus_handle,
-                                                    cx,
-                                                )
-                                                .map(|kb| kb.size(rems_from_px(12.))),
-                                            )
-                                            .on_click(
-                                                cx.listener(|this, _, window, cx| {
-                                                    this.delegate.confirm(false, window, cx);
-                                                }),
-                                            ),
-                                        )
-                                    },
+                        .justify_end()
+                        .map(|this| match branch_from_default_button {
+                            Some(button) => this.child(button).child(
+                                Button::new(
+                                    "create",
+                                    tr(cx, "git_ui.worktree_picker.create", "Create"),
                                 )
-                            } else {
-                                this.justify_between()
-                                    .child({
-                                        let branch_filter = self.branch_filter;
-                                        let picker_for_menu_open = picker.clone();
-                                        PopoverMenu::new("branch-filter-footer-menu")
-                                            .with_handle(self.branch_filter_menu_handle.clone())
-                                            .on_open(Rc::new(move |_, cx| {
-                                                picker_for_menu_open
-                                                    .update(cx, |picker, _| {
-                                                        picker.delegate.branch_filter_menu_open =
-                                                            true;
-                                                    })
-                                                    .log_err();
-                                            }))
-                                            .trigger(
-                                                Button::new(
-                                                    "branch-filter",
-                                                    tr(
-                                                        cx,
-                                                        "git_ui.branch_picker.filter",
-                                                        "Filter…",
-                                                    ),
-                                                )
-                                                .toggle_state(branch_filter != BranchFilter::All),
-                                            )
-                                            .menu(move |window, cx| {
-                                                Some(branch_filter_menu(
-                                                    branch_filter,
-                                                    picker.clone(),
-                                                    window,
-                                                    cx,
-                                                ))
-                                            })
-                                    })
-                                    .child(delete_and_select_btns)
-                            }
+                                .key_binding(
+                                    KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
+                                        .map(|kb| kb.size(rems_from_px(12.))),
+                                )
+                                .on_click(cx.listener(
+                                    |this, _, window, cx| {
+                                        this.delegate.confirm(false, window, cx);
+                                    },
+                                )),
+                            ),
+                            None => this.child(delete_and_select_btns),
                         })
                         .into_any_element(),
                 )

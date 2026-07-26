@@ -1557,6 +1557,7 @@
       "cmd-shift-backspace": "branch_picker::DeleteBranch",
       "cmd-alt-shift-backspace": "branch_picker::ForceDeleteBranch",
       "cmd-shift-i": "branch_picker::CycleBranchFilter",
+      "cmd-k": "branch_picker::ToggleFilterMenu",
     },
   },
   {
