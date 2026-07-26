@@ -250,6 +250,24 @@ fi
 remote_rustflags="${base_rustflags}${link_rustflags}"
 if [[ "$remote_server_triple" == "$musl_triple" ]]; then
     remote_rustflags="${remote_rustflags} -C target-feature=+crt-static"
+
+    # Native dependencies must use musl's headers. In particular, compiling
+    # aws-lc-sys with the host Clang can emit glibc-only __isoc23_* references
+    # that cannot be resolved by the statically linked musl runtime.
+    remote_cc_variable="CC_${remote_server_triple//-/_}"
+    remote_cc="${!remote_cc_variable:-}"
+    if [[ -z "$remote_cc" ]]; then
+        musl_cc="${remote_server_triple%%-unknown-linux-musl}-linux-musl-gcc"
+        if command -v "$musl_cc" >/dev/null 2>&1; then
+            remote_cc="$(command -v "$musl_cc")"
+        elif command -v musl-gcc >/dev/null 2>&1; then
+            remote_cc="$(command -v musl-gcc)"
+        else
+            echo "Error: a musl C compiler is required to build remote_server for ${remote_server_triple}" >&2
+            exit 1
+        fi
+    fi
+    export "$remote_cc_variable=$remote_cc"
 fi
 export RUSTFLAGS="${remote_rustflags}"
 cargo build --release --target "${remote_server_triple}" --package remote_server
