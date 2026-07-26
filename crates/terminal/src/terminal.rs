@@ -867,6 +867,7 @@ pub struct TerminalContent {
     pub last_hovered_word: Option<HoveredWord>,
     pub scrolled_to_top: bool,
     pub scrolled_to_bottom: bool,
+    pub bottom_row_occupied: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -893,6 +894,7 @@ impl Default for TerminalContent {
             last_hovered_word: None,
             scrolled_to_top: false,
             scrolled_to_bottom: false,
+            bottom_row_occupied: false,
         }
     }
 }
@@ -1833,6 +1835,14 @@ impl Terminal {
             None
         };
 
+        let bottom_line = term.screen_lines() as i32 - 1 - content.display_offset as i32;
+        let bottom_row_occupied = content.cursor.point.line.0 >= bottom_line
+            || cells
+                .iter()
+                .rev()
+                .take_while(|cell| cell.point.line.0 >= bottom_line)
+                .any(|cell| cell.cell.c != ' ');
+
         TerminalContent {
             cells,
             mode: content.mode,
@@ -1845,6 +1855,7 @@ impl Terminal {
             last_hovered_word: last_content.last_hovered_word.clone(),
             scrolled_to_top: content.display_offset == term.history_size(),
             scrolled_to_bottom: content.display_offset == 0,
+            bottom_row_occupied,
         }
     }
 
