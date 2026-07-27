@@ -149,7 +149,7 @@ fn resolve_refs_recursive(
                     anyhow::bail!("$ref target not found in {defs_key}: {ref_str}");
                 };
 
-                let ref_owned = ref_str.to_string();
+                let ref_owned = ref_str.to_owned();
 
                 // Inline the referenced definition into the current object.
                 let mut resolved = def.clone();

@@ -125,7 +125,7 @@ fn parse_tag_names(output: &str, shas: &[Oid]) -> HashMap<Oid, Vec<String>> {
         let Some(tag_name) = fields.next().filter(|tag_name| !tag_name.is_empty()) else {
             continue;
         };
-        result.entry(sha).or_default().push(tag_name.to_string());
+        result.entry(sha).or_default().push(tag_name.to_owned());
     }
 
     result.retain(|sha, _| shas.contains(sha));

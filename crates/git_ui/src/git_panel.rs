@@ -5845,9 +5845,9 @@ impl GitPanel {
             );
             match &self.commit_history {
                 _ if !has_repo => this.child(Self::render_history_placeholder(no_git_repositories)),
-                CommitHistory::Error(_) => this.child(Self::render_history_placeholder(
-                    failed_to_load_commits.clone(),
-                )),
+                CommitHistory::Error(_) => {
+                    this.child(Self::render_history_placeholder(failed_to_load_commits))
+                }
                 CommitHistory::Loading => {
                     this.child(Self::render_history_placeholder(loading_commit_history))
                 }

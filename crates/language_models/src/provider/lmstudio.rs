@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use collections::HashMap;
 use credentials_provider::CredentialsProvider;
 use fs::Fs;
