@@ -1743,18 +1743,31 @@ impl GitPanel {
             let prompt = if skip_prompt {
                 Task::ready(Ok(0))
             } else {
-                let discard_changes = tr(cx, "git_ui.git_panel.discard_changes", "Discard Changes");
                 let cancel = tr(cx, "prompt.common.cancel", "Cancel");
+                let (message, confirm_text) = if entry.status.is_deleted() {
+                    (
+                        tr(
+                            cx,
+                            "git_ui.git_panel.restore_file_prompt",
+                            "Are you sure you want to restore {}?",
+                        ),
+                        tr(cx, "git_ui.git_panel.restore_file", "Restore File"),
+                    )
+                } else {
+                    (
+                        tr(
+                            cx,
+                            "git_ui.git_panel.discard_changes_to_file_prompt",
+                            "Are you sure you want to discard changes to {}?",
+                        ),
+                        tr(cx, "git_ui.git_panel.discard_changes", "Discard Changes"),
+                    )
+                };
                 let prompt = window.prompt(
                     PromptLevel::Warning,
-                    &tr(
-                        cx,
-                        "git_ui.git_panel.discard_changes_to_file_prompt",
-                        "Are you sure you want to discard changes to {}?",
-                    )
-                    .replacen(
+                    &message.replacen(
                         "{}",
-                        &MarkdownInlineCode(
+                        MarkdownInlineCode(
                             entry
                                 .repo_path
                                 .file_name()
@@ -1764,7 +1777,7 @@ impl GitPanel {
                         1,
                     ),
                     None,
-                    &[discard_changes.as_str(), cancel.as_str()],
+                    &[confirm_text.as_str(), cancel.as_str()],
                     cx,
                 );
                 cx.background_spawn(prompt)
@@ -6794,6 +6807,8 @@ impl GitPanel {
         };
         let restore_title = if entry.status.is_created() {
             tr(cx, "git_ui.git_panel.trash_file", "Trash File")
+        } else if entry.status.is_deleted() {
+            tr(cx, "git_ui.git_panel.restore_file", "Restore File")
         } else {
             tr(cx, "git_ui.git_panel.discard_changes", "Discard Changes")
         };
