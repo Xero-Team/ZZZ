@@ -12,7 +12,7 @@ use util::path;
 use workspace::{MultiWorkspace, Workspace, pane};
 
 use crate::file_finder_tests::{self, open_file_picker};
-use crate::{FileFinder, FileFinderDelegate, SEARCH_DEBOUNCE};
+use crate::{FileFinder, FileFinderDelegate};
 
 struct TestContext {
     picker: Entity<Picker<FileFinderDelegate>>,
@@ -71,7 +71,6 @@ impl TestContext {
         self.picker.update_in(&mut self.cx, |picker, window, cx| {
             picker.set_query(query, window, cx)
         });
-        self.cx.executor().advance_clock(SEARCH_DEBOUNCE);
         self.cx.run_until_parked();
     }
 
