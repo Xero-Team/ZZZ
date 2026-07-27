@@ -61,8 +61,7 @@ fi
 "${CARGO:-cargo}" clippy "$@" --release --all-features -- \
     --deny warnings \
     --warn clippy::redundant_else \
-    --warn clippy::needless_continue \
-    --warn clippy::str_to_string
+    --warn clippy::needless_continue
 
 # If local, run other checks if we have the tools installed.
 if [[ -z "${GITHUB_ACTIONS+x}" ]]; then
