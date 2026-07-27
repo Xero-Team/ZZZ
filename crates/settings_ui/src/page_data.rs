@@ -1099,12 +1099,37 @@ fn appearance_page() -> SettingsPage {
         ]
     }
 
-    fn agent_panel_font_section() -> [SettingsPageItem; 3] {
+    fn agent_panel_font_section() -> [SettingsPageItem; 5] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.agent.panel.font",
                 "Agent Panel Font",
             )),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.ui.font.family",
+                    "UI Font Family",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.font.family.for.agent.response.text.in.the.agent.panel.falls.back.to.the.regular.ui.font.family",
+                    "Font family for agent response text in the agent panel. Falls back to the regular UI font family.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("agent_ui_font_family"),
+                    pick: |settings_content| {
+                        settings_content
+                            .theme
+                            .agent_ui_font_family
+                            .as_ref()
+                            .or(settings_content.theme.ui_font_family.as_ref())
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content.theme.agent_ui_font_family = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: lt("settings_ui.page_data.title.ui.font.size", "UI Font Size"),
                 description: lt(
@@ -1122,6 +1147,31 @@ fn appearance_page() -> SettingsPage {
                     },
                     write: |settings_content, value, _| {
                         settings_content.theme.agent_ui_font_size = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.buffer.font.family",
+                    "Buffer Font Family",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.font.family.for.user.messages.in.the.agent.panel.falls.back.to.the.regular.buffer.font.family",
+                    "Font family for user messages in the agent panel. Falls back to the regular buffer font family.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("agent_buffer_font_family"),
+                    pick: |settings_content| {
+                        settings_content
+                            .theme
+                            .agent_buffer_font_family
+                            .as_ref()
+                            .or(settings_content.theme.buffer_font_family.as_ref())
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content.theme.agent_buffer_font_family = value;
                     },
                 }),
                 metadata: None,
