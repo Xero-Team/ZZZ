@@ -6896,7 +6896,7 @@ impl GitPanel {
                 if this.context_menu.as_ref().is_some_and(|context_menu| {
                     context_menu.0.focus_handle(cx).contains_focused(window, cx)
                 }) {
-                    cx.focus_self(window);
+                    this.activation_focus_handle(cx).focus(window, cx);
                 }
                 this.context_menu.take();
                 cx.notify();
@@ -7646,7 +7646,13 @@ impl Render for GitPanel {
 }
 
 impl Focusable for GitPanel {
-    fn focus_handle(&self, cx: &App) -> gpui::FocusHandle {
+    fn focus_handle(&self, _cx: &App) -> gpui::FocusHandle {
+        self.focus_handle.clone()
+    }
+}
+
+impl GitPanel {
+    fn activation_focus_handle(&self, cx: &App) -> gpui::FocusHandle {
         if self.entries.is_empty() || self.commit_editor_expanded {
             self.commit_editor.focus_handle(cx)
         } else {
@@ -7685,6 +7691,10 @@ impl editor::Addon for GitPanelAddon {
 }
 
 impl Panel for GitPanel {
+    fn activation_focus_handle(&self, cx: &App) -> FocusHandle {
+        self.activation_focus_handle(cx)
+    }
+
     fn persistent_name() -> &'static str {
         "GitPanel"
     }
