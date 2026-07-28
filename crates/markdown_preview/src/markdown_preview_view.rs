@@ -28,10 +28,12 @@ use settings::{SeedQuerySetting, Settings};
 use theme::{SystemAppearance, Theme, ThemeRegistry};
 use theme_settings::ThemeSettings;
 use ui::{ContextMenu, WithScrollbar, prelude::*, right_click_menu};
-use util::markdown::split_local_url_fragment;
-use util::normalize_path;
+use util::{
+    ResultExt, markdown::split_local_url_fragment, normalize_path, paths::PathWithPosition,
+};
 use workspace::item::{Item, ItemBufferKind, ItemHandle, SaveOptions, SerializableItem};
 use workspace::notifications::NotifyResultExt;
+use workspace::path_link::{PathMatching, resolve_open_target};
 use workspace::searchable::{
     Direction, SearchEvent, SearchOptions, SearchToken, SearchableItem, SearchableItemHandle,
 };
@@ -1011,13 +1013,7 @@ fn handle_url_click(
             });
         }
     } else {
-        open_preview_url(
-            SharedString::from(path_part.to_owned()),
-            base_directory,
-            workspace,
-            window,
-            cx,
-        );
+        open_preview_url(url, base_directory, workspace, window, cx);
     }
 }
 
@@ -1028,12 +1024,25 @@ fn open_preview_url(
     window: &mut Window,
     cx: &mut App,
 ) {
-    let (path_text, _) = split_preview_url(url.as_ref());
+    let decoded_url = urlencoding::decode(url.as_ref()).unwrap_or_else(|_| url.as_ref().into());
+    let (path_text, fragment) = split_preview_url(&decoded_url);
+
+    if let Some(path_with_position) = preview_path_with_position(path_text, fragment) {
+        open_preview_path_with_position(
+            path_with_position,
+            decoded_url.into_owned(),
+            base_directory,
+            workspace,
+            window,
+            cx,
+        );
+        return;
+    }
 
     if let Some(path) = resolve_preview_path(path_text, base_directory.as_deref())
         && let Some(workspace) = workspace.upgrade()
     {
-        let _ = workspace.update(cx, |workspace, cx| {
+        workspace.update(cx, |workspace, cx| {
             workspace
                 .open_abs_path(
                     normalize_path(path.as_path()),
@@ -1057,6 +1066,108 @@ fn split_preview_url(url: &str) -> (&str, Option<&str>) {
         Some((path, fragment)) => (path, Some(fragment)),
         None => (url, None),
     }
+}
+
+fn source_position_from_fragment(fragment: &str) -> Option<(u32, u32)> {
+    let fragment = fragment.strip_prefix('L').unwrap_or(fragment);
+    let (line, column) = match fragment.split_once([',', ':']) {
+        Some((line, column)) => (line, Some(column)),
+        None => (
+            fragment.split_once('-').map_or(fragment, |(line, _)| line),
+            None,
+        ),
+    };
+    let line = line.parse::<u32>().ok()?.checked_sub(1)?;
+    let column = column
+        .and_then(|column| column.parse::<u32>().ok())
+        .and_then(|column| column.checked_sub(1))
+        .unwrap_or(0);
+    Some((line, column))
+}
+
+fn preview_path_with_position(path: &str, fragment: Option<&str>) -> Option<String> {
+    if path.contains("://") {
+        return None;
+    }
+
+    if PathWithPosition::parse_str(path).row.is_some() {
+        return Some(path.to_owned());
+    }
+
+    fragment
+        .and_then(|fragment| fragment.strip_prefix('L'))
+        .and_then(source_position_from_fragment)
+        .map(|(row, column)| match column {
+            0 => format!("{path}:{}", row + 1),
+            _ => format!("{path}:{}:{}", row + 1, column + 1),
+        })
+}
+
+fn open_preview_path_with_position(
+    path_with_position: String,
+    fallback_url: String,
+    base_directory: Option<PathBuf>,
+    workspace: &WeakEntity<Workspace>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let open_target_task = resolve_open_target(
+        workspace,
+        PathMatching::Exact,
+        &path_with_position,
+        base_directory.as_deref(),
+        cx,
+    );
+    let workspace = workspace.clone();
+
+    window
+        .spawn(cx, async move |cx| {
+            let Some(open_target) = open_target_task.await else {
+                cx.update(|_, cx| cx.open_url(&fallback_url))?;
+                return anyhow::Ok(());
+            };
+
+            let path_to_open = open_target.path().clone();
+            let is_file = open_target.is_file();
+            let opened_items = workspace
+                .update_in(cx, |workspace, window, cx| {
+                    workspace.open_paths(
+                        vec![path_to_open.path.clone()],
+                        OpenOptions {
+                            visible: Some(OpenVisible::None),
+                            ..Default::default()
+                        },
+                        None,
+                        window,
+                        cx,
+                    )
+                })
+                .context("opening Markdown preview link")?
+                .await;
+
+            if is_file
+                && let Some(Some(Ok(opened_item))) = opened_items.first()
+                && let Some(row) = path_to_open.row
+                && let Some(editor) = opened_item.downcast::<Editor>()
+            {
+                let column = path_to_open.column.unwrap_or(0);
+                editor
+                    .downgrade()
+                    .update_in(cx, |editor, window, cx| {
+                        if let Some(buffer) = editor.buffer().read(cx).as_singleton() {
+                            let point = buffer.read(cx).snapshot().point_from_external_input(
+                                row.saturating_sub(1),
+                                column.saturating_sub(1),
+                            );
+                            editor.go_to_singleton_buffer_point(point, window, cx);
+                        }
+                    })
+                    .log_err();
+            }
+
+            anyhow::Ok(())
+        })
+        .detach_and_log_err(cx);
 }
 
 fn resolve_preview_path(url: &str, base_directory: Option<&Path>) -> Option<PathBuf> {
@@ -1848,8 +1959,8 @@ mod tests {
     };
 
     use super::{
-        ImageSource, MarkdownPreviewView, Resource, resolve_preview_clipboard_image_src,
-        resolve_preview_image, resolve_preview_path,
+        ImageSource, MarkdownPreviewView, Resource, preview_path_with_position,
+        resolve_preview_clipboard_image_src, resolve_preview_image, resolve_preview_path,
     };
 
     #[test]
@@ -1896,6 +2007,26 @@ mod tests {
     fn does_not_treat_web_links_as_preview_files() {
         assert_eq!(resolve_preview_path("https://zed.dev", None), None);
         assert_eq!(resolve_preview_path("http://example.com", None), None);
+    }
+
+    #[test]
+    fn resolves_preview_link_positions_without_misclassifying_web_urls() {
+        assert_eq!(
+            preview_path_with_position("../src/main.rs:2:4", None),
+            Some("../src/main.rs:2:4".to_owned())
+        );
+        assert_eq!(
+            preview_path_with_position("guide.md", Some("L2")),
+            Some("guide.md:2".to_owned())
+        );
+        assert_eq!(
+            preview_path_with_position("guide.md", Some("L3:4")),
+            Some("guide.md:3:4".to_owned())
+        );
+        assert_eq!(
+            preview_path_with_position("https://zed.dev/docs", None),
+            None
+        );
     }
 
     #[gpui::test]

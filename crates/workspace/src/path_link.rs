@@ -22,6 +22,15 @@ pub enum BackgroundFsChecks {
     Disabled,
 }
 
+/// Determines whether resolving a path-like string may guess a matching file.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum PathMatching {
+    /// Accept only an absolute, working-directory-relative, or worktree-relative match.
+    Exact,
+    /// Also resolve common terminal output forms, including diff prefixes and trailing paths.
+    Heuristic,
+}
+
 #[derive(Debug, Clone)]
 pub enum OpenTarget {
     Worktree(
@@ -128,7 +137,17 @@ pub fn possible_open_target(
     cwd: Option<&Path>,
     cx: &App,
 ) -> Task<Option<OpenTarget>> {
-    possible_open_target_internal(workspace, maybe_path, cwd, cx, None)
+    resolve_open_target(workspace, PathMatching::Heuristic, maybe_path, cwd, cx)
+}
+
+pub fn resolve_open_target(
+    workspace: &WeakEntity<Workspace>,
+    matching: PathMatching,
+    maybe_path: &str,
+    cwd: Option<&Path>,
+    cx: &App,
+) -> Task<Option<OpenTarget>> {
+    possible_open_target_internal(workspace, matching, maybe_path, cwd, cx, None)
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -139,11 +158,38 @@ pub fn possible_open_target_with_fs_checks(
     cx: &App,
     background_fs_checks: BackgroundFsChecks,
 ) -> Task<Option<OpenTarget>> {
-    possible_open_target_internal(workspace, maybe_path, cwd, cx, Some(background_fs_checks))
+    resolve_open_target_with_fs_checks(
+        workspace,
+        PathMatching::Heuristic,
+        maybe_path,
+        cwd,
+        cx,
+        background_fs_checks,
+    )
+}
+
+#[cfg(any(test, feature = "test-support"))]
+pub fn resolve_open_target_with_fs_checks(
+    workspace: &WeakEntity<Workspace>,
+    matching: PathMatching,
+    maybe_path: &str,
+    cwd: Option<&Path>,
+    cx: &App,
+    background_fs_checks: BackgroundFsChecks,
+) -> Task<Option<OpenTarget>> {
+    possible_open_target_internal(
+        workspace,
+        matching,
+        maybe_path,
+        cwd,
+        cx,
+        Some(background_fs_checks),
+    )
 }
 
 fn possible_open_target_internal(
     workspace: &WeakEntity<Workspace>,
+    matching: PathMatching,
     maybe_path: &str,
     cwd: Option<&Path>,
     cx: &App,
@@ -168,8 +214,11 @@ fn possible_open_target_internal(
         })
         .collect::<Vec<_>>();
 
-    const GIT_DIFF_PATH_PREFIXES: &[&str] = &["a", "b"];
-    for prefix_str in GIT_DIFF_PATH_PREFIXES.iter().chain(std::iter::once(&".")) {
+    let prefixes_to_strip: &[&str] = match matching {
+        PathMatching::Exact => &["."],
+        PathMatching::Heuristic => &["a", "b", "."],
+    };
+    for prefix_str in prefixes_to_strip {
         if let Ok(stripped) = original_path.path.strip_prefix(prefix_str) {
             potential_paths.push(PathWithPosition {
                 path: stripped.to_owned(),
@@ -385,7 +434,12 @@ fn possible_open_target_internal(
     });
 
     cx.spawn(async move |cx| {
-        background_fs_checks_task.await.or_else(|| {
+        let open_target = background_fs_checks_task.await;
+        if open_target.is_some() || matching == PathMatching::Exact {
+            return open_target;
+        }
+
+        (|| {
             for (worktree, worktree_paths_to_check) in worktree_paths_to_check {
                 if let Some(found_entry) =
                     worktree.update(cx, |worktree, _| -> Option<OpenTarget> {
@@ -417,6 +471,6 @@ fn possible_open_target_internal(
                 }
             }
             None
-        })
+        })()
     })
 }
