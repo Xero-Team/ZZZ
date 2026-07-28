@@ -43,7 +43,7 @@ time.workspace = true
 util.workspace = true
 is_executable = "1.0.5"
 notify = "8.2.0"
-trash = { git = "https://github.com/zed-industries/trash-rs", rev = "47761739192828a66b11a94ba5420b82d63c03c5" }
+trash = { git = "https://github.com/zed-industries/trash-rs", rev = "41c6c800d884a89351f3b8856d12894cccee261d" }
 
 [target.'cfg(unix)'.dependencies]
 rustix.workspace = true
