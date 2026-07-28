@@ -2768,6 +2768,7 @@
     "workspace.history.new_window": "新建窗口",
     "workspace.dock.close_dock": "关闭{}侧边栏",
     "workspace.dock.flex_width": "弹性宽度",
+    "workspace.dock.fixed_width": "固定宽度",
     "workspace.dock.panel.agent": "Agent 面板",
     "workspace.dock.panel.collab": "协作面板",
     "workspace.dock.panel.git": "Git 面板",

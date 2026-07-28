@@ -2768,6 +2768,7 @@
     "workspace.history.new_window": "New Window",
     "workspace.dock.close_dock": "Close {} Dock",
     "workspace.dock.flex_width": "Flex Width",
+    "workspace.dock.fixed_width": "Fixed Width",
     "workspace.dock.panel.agent": "Agent Panel",
     "workspace.dock.panel.collab": "Collab Panel",
     "workspace.dock.panel.git": "Git Panel",
