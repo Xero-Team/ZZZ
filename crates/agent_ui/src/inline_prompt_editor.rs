@@ -1655,6 +1655,8 @@ fn insert_message_creases(
                 crease.label.clone(),
                 crease.icon_path.clone(),
                 None,
+                None,
+                None,
                 start..end,
                 cx.weak_entity(),
             )
