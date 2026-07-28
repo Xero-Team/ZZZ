@@ -23171,9 +23171,9 @@ checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
 name = "zpdf"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01c7106db4785cd47e6b00fc53b64cbca9893c3ec96890a47802f39c61978f5e"
+checksum = "eae9b549abb81e668bf0abdcb928e6640499f0d7d6c9cab7a410cb713e35c851"
 dependencies = [
  "zpdf-color",
  "zpdf-content",
@@ -23185,13 +23185,14 @@ dependencies = [
  "zpdf-parser",
  "zpdf-render",
  "zpdf-render-cpu",
+ "zpdf-writer",
 ]
 
 [[package]]
 name = "zpdf-color"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5183aff97835b9183b3141aaf43ddb8e600f41df54663770a2f5b9af9694bc0"
+checksum = "ea29c5dc02d6875ce2e43bc9b6862132f78953d7a871484ac4866a1c21d879f6"
 dependencies = [
  "moxcms",
  "tracing",
@@ -23200,9 +23201,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-content"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "934cf7a498ee45a8e114be82aee1dd1700248ff3f2674576648f354e8f64867e"
+checksum = "ba6d5666c682e938f066cf137686dae208dbcbea5a5706304e1b6b2acf5601ed"
 dependencies = [
  "tracing",
  "zpdf-color",
@@ -23216,9 +23217,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-core"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "399ba8a77c2cb0fe85007f645e86178c6de4f557f3a437630c980fd22157f0da"
+checksum = "3dd12b2ae5d7c6be9c32e2d844b63ea6f11025700c0841621c120d54f7b10600"
 dependencies = [
  "smallvec",
  "thiserror 2.0.18",
@@ -23226,9 +23227,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-display-list"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee6fcb71c7f839ce936dcb2d393795e2e3869654372ee38443e34a2651ec1957"
+checksum = "657fd1d5cfd20945e241aef4b17e66f79f59af2faea1fe63972bcc07a9eb101d"
 dependencies = [
  "smallvec",
  "zpdf-core",
@@ -23236,10 +23237,15 @@ dependencies = [
 
 [[package]]
 name = "zpdf-document"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59bcc3f834504e5f4cbb694bd218581b34a534e63e7206dd4955df6c29b6cc0d"
+checksum = "341e10e4c59d3b1fde72d9ad4aa14c7941da3a3aa5850151677b83ae969255f9"
 dependencies = [
+ "p256 0.13.2",
+ "p384",
+ "rsa",
+ "sha1 0.10.6",
+ "sha2 0.10.9",
  "tracing",
  "zpdf-core",
  "zpdf-font",
@@ -23248,9 +23254,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-font"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d382878be79dae60a48bb4615bb0cd1f8b0da74f3d206fb3f979df9931cf1077"
+checksum = "0f339710b34adb01b480683944926b89812a3039a2c7cfeab39c680c1a4b5058"
 dependencies = [
  "tracing",
  "ttf-parser",
@@ -23259,9 +23265,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-image"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35939972b0f3227f7b720b98a1f3568c9efcf8eeedd8092e81dd1be573103ede"
+checksum = "c7f14ed54f4ffb5e3b45b8f9fc11c8bb915babf9894f3b570edbdf17dcb19db7"
 dependencies = [
  "hayro-jpeg2000",
  "tracing",
@@ -23272,9 +23278,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-parser"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71c49a08c634c7d541e80ebae6b3b23d022dc4b0b15c028b4d867c21bdcab2d0"
+checksum = "dbaade434bd3a9498ac23793560c39a1e12a8406ef98e051ac6a74fbe2ebb0aa"
 dependencies = [
  "aes",
  "cbc",
@@ -23289,9 +23295,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-render"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1743564c8478b35afc1def6e5883881683ca5d98c0964afb86faf75ca77f5b2"
+checksum = "5f23f99e49e94a76f2d0542b2c33cf46e95e792d511f2b0ae7bb86fb03361744"
 dependencies = [
  "zpdf-core",
  "zpdf-display-list",
@@ -23299,9 +23305,9 @@ dependencies = [
 
 [[package]]
 name = "zpdf-render-cpu"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "642c933a817adb19cc62faa58c3cfef803637332272a1b8cbe3112f12582c2b7"
+checksum = "ce6e0a41ec60a687e1ad047e98ff9c786e27e51ef28715ed018f29d5dc15113a"
 dependencies = [
  "image",
  "thiserror 2.0.18",
@@ -23313,6 +23319,28 @@ dependencies = [
  "zpdf-font",
  "zpdf-image",
  "zpdf-render",
+]
+
+[[package]]
+name = "zpdf-writer"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8623fec0dc76b8f88976943fcfa9a991bc08f24b1a06467340616728a1e3707f"
+dependencies = [
+ "aes",
+ "cbc",
+ "flate2",
+ "getrandom 0.2.17",
+ "p256 0.13.2",
+ "rsa",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "tracing",
+ "ttf-parser",
+ "zpdf-content",
+ "zpdf-core",
+ "zpdf-document",
+ "zpdf-parser",
 ]
 
 [[package]]
