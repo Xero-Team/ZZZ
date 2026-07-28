@@ -7,9 +7,10 @@ use anyhow::{Context as _, anyhow};
 use block::ConcreteBlock;
 use cocoa::{
     appkit::{
-        NSApplication, NSApplicationActivationPolicy::NSApplicationActivationPolicyRegular,
-        NSControl as _, NSEventModifierFlags, NSMenu, NSMenuItem, NSModalResponse, NSOpenPanel,
-        NSSavePanel, NSVisualEffectState, NSVisualEffectView, NSWindow,
+        NSAppearanceNameVibrantDark, NSAppearanceNameVibrantLight, NSApplication,
+        NSApplicationActivationPolicy::NSApplicationActivationPolicyRegular, NSControl as _,
+        NSEventModifierFlags, NSMenu, NSMenuItem, NSModalResponse, NSOpenPanel, NSSavePanel,
+        NSVisualEffectState, NSVisualEffectView, NSWindow,
     },
     base::{BOOL, NO, YES, id, nil, selector},
     foundation::{
@@ -659,6 +660,28 @@ impl Platform for MacPlatform {
             let app = NSApplication::sharedApplication(nil);
             let appearance: id = msg_send![app, effectiveAppearance];
             crate::window_appearance::window_appearance_from_native(appearance)
+        }
+    }
+
+    fn set_window_appearance(&self, appearance: Option<WindowAppearance>) {
+        unsafe {
+            let app: id = msg_send![APP_CLASS, sharedApplication];
+            let ns_appearance: id = match appearance {
+                None => nil,
+                Some(WindowAppearance::Light) => {
+                    msg_send![class!(NSAppearance), appearanceNamed: crate::window_appearance::NSAppearanceNameAqua]
+                }
+                Some(WindowAppearance::Dark) => {
+                    msg_send![class!(NSAppearance), appearanceNamed: crate::window_appearance::NSAppearanceNameDarkAqua]
+                }
+                Some(WindowAppearance::VibrantLight) => {
+                    msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantLight]
+                }
+                Some(WindowAppearance::VibrantDark) => {
+                    msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantDark]
+                }
+            };
+            let _: () = msg_send![app, setAppearance: ns_appearance];
         }
     }
 

@@ -403,6 +403,7 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
     .detach();
 
     init_cursor_hide_mode(cx);
+    init_app_appearance(cx);
 
     cx.observe_new(|_multi_workspace: &mut MultiWorkspace, window, cx| {
         let Some(window) = window else {
@@ -1917,6 +1918,21 @@ impl Settings for CursorHideModeSetting {
 
 fn init_cursor_hide_mode(cx: &mut App) {
     let apply = |cx: &mut App| cx.set_cursor_hide_mode(CursorHideModeSetting::get_global(cx).0);
+    apply(cx);
+    cx.observe_global::<SettingsStore>(apply).detach();
+}
+
+fn init_app_appearance(cx: &mut App) {
+    let apply = |cx: &mut App| {
+        let appearance = match ThemeSettings::get_global(cx).theme.mode() {
+            Some(theme_settings::ThemeAppearanceMode::System) => None,
+            _ => Some(match cx.theme().appearance() {
+                theme::Appearance::Light => gpui::WindowAppearance::Light,
+                theme::Appearance::Dark => gpui::WindowAppearance::Dark,
+            }),
+        };
+        cx.set_window_appearance(appearance);
+    };
     apply(cx);
     cx.observe_global::<SettingsStore>(apply).detach();
 }

@@ -158,6 +158,9 @@ pub trait Platform: 'static {
     /// Returns the appearance of the application's windows.
     fn window_appearance(&self) -> WindowAppearance;
 
+    /// Overrides the appearance of the application's windows when supported.
+    fn set_window_appearance(&self, _appearance: Option<WindowAppearance>) {}
+
     /// Returns the window button layout configuration when supported.
     fn button_layout(&self) -> Option<WindowButtonLayout> {
         None

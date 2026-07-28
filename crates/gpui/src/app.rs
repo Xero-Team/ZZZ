@@ -1310,6 +1310,12 @@ impl App {
         self.platform.window_appearance()
     }
 
+    /// Overrides the appearance applied to the app's windows independently of the OS setting.
+    /// Pass `None` to clear the override and follow the system appearance again.
+    pub fn set_window_appearance(&self, appearance: Option<WindowAppearance>) {
+        self.platform.set_window_appearance(appearance);
+    }
+
     /// Returns the window button layout configuration when supported.
     pub fn button_layout(&self) -> Option<WindowButtonLayout> {
         self.platform.button_layout()
