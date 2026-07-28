@@ -708,6 +708,8 @@ impl Model {
 
             // Canada region inference profiles
             (Self::NovaLite, "ca") => Ok(format!("{}.{}", region_group, model_id)),
+            // Canada uses the US geo profile for these Opus models.
+            (Self::ClaudeOpus4_8 | Self::ClaudeOpus4_7, "ca") => Ok(format!("us.{}", model_id)),
 
             // EU region inference profiles
             (
@@ -740,6 +742,8 @@ impl Model {
                 Self::ClaudeHaiku4_5
                 | Self::ClaudeSonnet4_5
                 | Self::ClaudeSonnet4_6
+                | Self::ClaudeOpus4_7
+                | Self::ClaudeOpus4_8
                 | Self::Nova2Lite,
                 "jp",
             ) => Ok(format!("{}.{}", region_group, model_id)),
@@ -864,6 +868,14 @@ mod tests {
             "jp.anthropic.claude-sonnet-4-5-20250929-v1:0"
         );
         assert_eq!(
+            Model::ClaudeOpus4_8.cross_region_inference_id("ap-northeast-1", false)?,
+            "jp.anthropic.claude-opus-4-8"
+        );
+        assert_eq!(
+            Model::ClaudeOpus4_7.cross_region_inference_id("ap-northeast-3", false)?,
+            "jp.anthropic.claude-opus-4-7"
+        );
+        assert_eq!(
             Model::Nova2Lite.cross_region_inference_id("ap-northeast-1", false)?,
             "jp.amazon.nova-2-lite-v1:0"
         );
@@ -875,6 +887,14 @@ mod tests {
         assert_eq!(
             Model::NovaLite.cross_region_inference_id("ca-central-1", false)?,
             "ca.amazon.nova-lite-v1:0"
+        );
+        assert_eq!(
+            Model::ClaudeOpus4_8.cross_region_inference_id("ca-west-1", false)?,
+            "us.anthropic.claude-opus-4-8"
+        );
+        assert_eq!(
+            Model::ClaudeOpus4_7.cross_region_inference_id("ca-central-1", false)?,
+            "us.anthropic.claude-opus-4-7"
         );
         Ok(())
     }

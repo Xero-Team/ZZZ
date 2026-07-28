@@ -41,33 +41,11 @@ pub async fn stream_completion(
         .model_id(request.model.clone())
         .set_messages(request.messages.into());
 
-    let mut additional_fields: HashMap<String, Document> = HashMap::new();
-
-    match request.thinking {
-        Some(Thinking::Enabled {
-            budget_tokens: Some(budget_tokens),
-        }) => {
-            let thinking_config = HashMap::from([
-                ("type".to_owned(), Document::String("enabled".to_owned())),
-                (
-                    "budget_tokens".to_owned(),
-                    Document::Number(AwsNumber::PosInt(budget_tokens)),
-                ),
-            ]);
-            additional_fields.insert("thinking".to_owned(), Document::from(thinking_config));
-        }
-        Some(Thinking::Adaptive { effort: _ }) => {
-            let thinking_config = HashMap::from([
-                ("type".to_owned(), Document::String("adaptive".to_owned())),
-                (
-                    "display".to_owned(),
-                    Document::String("summarized".to_owned()),
-                ),
-            ]);
-            additional_fields.insert("thinking".to_owned(), Document::from(thinking_config));
-        }
-        _ => {}
-    }
+    let additional_fields = request
+        .thinking
+        .as_ref()
+        .map(thinking_request_fields)
+        .unwrap_or_default();
 
     if !additional_fields.is_empty() {
         response = response.additional_model_request_fields(Document::Object(additional_fields));
@@ -214,6 +192,45 @@ pub enum Thinking {
     },
 }
 
+fn thinking_request_fields(thinking: &Thinking) -> HashMap<String, Document> {
+    let mut fields = HashMap::new();
+    match thinking {
+        Thinking::Enabled {
+            budget_tokens: Some(budget_tokens),
+        } => {
+            let thinking_config = HashMap::from([
+                ("type".to_owned(), Document::String("enabled".to_owned())),
+                (
+                    "budget_tokens".to_owned(),
+                    Document::Number(AwsNumber::PosInt(*budget_tokens)),
+                ),
+            ]);
+            fields.insert("thinking".to_owned(), Document::from(thinking_config));
+        }
+        Thinking::Adaptive { effort } => {
+            let thinking_config = HashMap::from([
+                ("type".to_owned(), Document::String("adaptive".to_owned())),
+                (
+                    "display".to_owned(),
+                    Document::String("summarized".to_owned()),
+                ),
+            ]);
+            fields.insert("thinking".to_owned(), Document::from(thinking_config));
+            fields.insert(
+                "output_config".to_owned(),
+                Document::from(HashMap::from([(
+                    "effort".to_owned(),
+                    Document::String(effort.as_str().to_owned()),
+                )])),
+            );
+        }
+        Thinking::Enabled {
+            budget_tokens: None,
+        } => {}
+    }
+    fields
+}
+
 #[derive(Debug)]
 pub struct Request {
     pub model: String,
@@ -254,4 +271,33 @@ pub enum BedrockError {
     InternalServer(String),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn string_field<'a>(document: &'a Document, key: &str) -> Option<&'a str> {
+        match document {
+            Document::Object(map) => match map.get(key) {
+                Some(Document::String(value)) => Some(value),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn adaptive_thinking_serializes_effort_in_output_config() {
+        let fields = thinking_request_fields(&Thinking::Adaptive {
+            effort: BedrockAdaptiveThinkingEffort::XHigh,
+        });
+
+        let thinking = fields.get("thinking").expect("thinking field");
+        assert_eq!(string_field(thinking, "type"), Some("adaptive"));
+        assert_eq!(string_field(thinking, "display"), Some("summarized"));
+
+        let output_config = fields.get("output_config").expect("output config field");
+        assert_eq!(string_field(output_config, "effort"), Some("xhigh"));
+    }
 }
