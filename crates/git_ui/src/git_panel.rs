@@ -1767,7 +1767,7 @@ impl GitPanel {
                     PromptLevel::Warning,
                     &message.replacen(
                         "{}",
-                        MarkdownInlineCode(
+                        &MarkdownInlineCode(
                             entry
                                 .repo_path
                                 .file_name()
