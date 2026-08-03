@@ -2287,9 +2287,36 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
-    fn gutter_section() -> [SettingsPageItem; 9] {
+    fn gutter_section() -> [SettingsPageItem; 10] {
         [
             SettingsPageItem::SectionHeader(lt("settings_ui.page_data.section.gutter", "Gutter")),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.git.gutter.width",
+                    "Git Gutter Width",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.git.gutter.width",
+                    "Width, in pixels, of the git diff indicators in the gutter. When unset, the width scales with the buffer font size.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("gutter.git_gutter_width"),
+                    pick: |settings_content| settings_content
+                        .editor
+                        .gutter
+                        .as_ref()
+                        .and_then(|gutter| gutter.git_gutter_width.as_ref()),
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .editor
+                            .gutter
+                            .get_or_insert_default()
+                            .git_gutter_width = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: lt(
                     "settings_ui.page_data.title.show.line.numbers",

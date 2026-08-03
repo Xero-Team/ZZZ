@@ -343,6 +343,7 @@ impl VsCodeSettings {
                 "never" => Some(false),
                 _ => None,
             }),
+            git_gutter_width: None,
         })
     }
 
