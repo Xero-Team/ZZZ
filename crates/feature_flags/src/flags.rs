@@ -72,6 +72,9 @@ impl FeatureFlag for ProjectPanelUndoRedoFeatureFlag {
     fn enabled_for_staff() -> bool {
         true
     }
+    fn enabled_for_all() -> bool {
+        true
+    }
 }
 register_feature_flag!(ProjectPanelUndoRedoFeatureFlag);
 
