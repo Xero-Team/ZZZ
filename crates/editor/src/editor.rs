@@ -14303,7 +14303,7 @@ impl Editor {
         self.change_selections(Default::default(), window, cx, |s| {
             s.move_cursors_with(&mut |map, head, _| {
                 (
-                    movement::previous_word_start(map, head),
+                    movement::previous_word_start(map, head, false),
                     SelectionGoal::None,
                 )
             });
@@ -14335,7 +14335,7 @@ impl Editor {
         self.change_selections(Default::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| {
                 (
-                    movement::previous_word_start(map, head),
+                    movement::previous_word_start(map, head, false),
                     SelectionGoal::None,
                 )
             });
@@ -14373,7 +14373,7 @@ impl Editor {
                 s.move_with(&mut |map, selection| {
                     if selection.is_empty() {
                         let mut cursor = if action.ignore_newlines {
-                            movement::previous_word_start(map, selection.head())
+                            movement::previous_word_start(map, selection.head(), true)
                         } else {
                             movement::previous_word_start_or_newline(map, selection.head())
                         };
@@ -14432,7 +14432,10 @@ impl Editor {
     ) {
         self.change_selections(Default::default(), window, cx, |s| {
             s.move_cursors_with(&mut |map, head, _| {
-                (movement::next_word_end(map, head), SelectionGoal::None)
+                (
+                    movement::next_word_end(map, head, false),
+                    SelectionGoal::None,
+                )
             });
         })
     }
@@ -14458,7 +14461,10 @@ impl Editor {
     ) {
         self.change_selections(Default::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| {
-                (movement::next_word_end(map, head), SelectionGoal::None)
+                (
+                    movement::next_word_end(map, head, false),
+                    SelectionGoal::None,
+                )
             });
         })
     }
@@ -14490,7 +14496,7 @@ impl Editor {
                 s.move_with(&mut |map, selection| {
                     if selection.is_empty() {
                         let mut cursor = if action.ignore_newlines {
-                            movement::next_word_end(map, selection.head())
+                            movement::next_word_end(map, selection.head(), true)
                         } else {
                             movement::next_word_end_or_newline(map, selection.head())
                         };
