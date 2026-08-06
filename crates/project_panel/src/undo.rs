@@ -132,17 +132,21 @@
 
 use crate::ProjectPanel;
 use anyhow::{Context, Result, anyhow};
-use fs::TrashedEntry;
+use fs::{TrashRestoreError, TrashedEntry};
 use futures::channel::mpsc;
-use gpui::{AppContext, AsyncApp, SharedString, Task, WeakEntity};
+use gpui::{AppContext, AsyncApp, IntoElement, SharedString, Styled, Task, WeakEntity};
 use i18n::tr;
-use project::{ProjectPath, WorktreeId};
+use markdown::{Markdown, MarkdownElement};
+use project::{Project, ProjectPath, WorktreeId};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{collections::VecDeque, sync::Arc};
-use ui::App;
+use ui::{App, TextSize};
+use util::paths::PathStyle;
 use workspace::{
     Workspace,
-    notifications::{NotificationId, simple_message_notification::MessageNotification},
+    notifications::{
+        NotificationId, markdown_style, simple_message_notification::MessageNotification,
+    },
 };
 use worktree::CreatedEntry;
 
@@ -304,6 +308,17 @@ impl UndoMessage {
     }
 }
 
+fn project_path_display(
+    project: &Project,
+    project_path: &ProjectPath,
+    path_style: PathStyle,
+    cx: &App,
+) -> String {
+    project
+        .short_full_path_for_project_path(project_path, cx)
+        .unwrap_or_else(|| project_path.path.display(path_style).to_string())
+}
+
 impl Inner {
     async fn manage_undo_and_redo(mut self, mut cx: AsyncApp) {
         loop {
@@ -335,7 +350,7 @@ impl Inner {
                     error_title_key,
                     error_title_fallback,
                     self.workspace.clone(),
-                    e.to_string(),
+                    format!("{e:#}"),
                     &mut cx,
                 );
             }
@@ -488,18 +503,49 @@ impl Inner {
             return Err(anyhow!("Failed to obtain workspace."));
         };
 
-        let res: Result<Task<Result<CreatedEntry>>> = workspace.update(cx, |workspace, cx| {
-            workspace.project().update(cx, |project, cx| {
-                let entry_id = project
-                    .entry_for_path(from, cx)
-                    .map(|entry| entry.id)
-                    .ok_or_else(|| anyhow!("No entry for path."))?;
-
-                Ok(project.rename_entry(entry_id, to.clone(), cx))
-            })
+        let (from_name, to_name) = workspace.update(cx, |workspace, cx| {
+            let project = workspace.project().read(cx);
+            let path_style = project.path_style(cx);
+            (
+                project_path_display(project, from, path_style, cx),
+                project_path_display(project, to, path_style, cx),
+            )
         });
+        let operation = if from.path.parent() == to.path.parent() {
+            "rename"
+        } else {
+            "move"
+        };
 
-        res?.await
+        let rename_task: Result<Task<Result<CreatedEntry>>> =
+            workspace.update(cx, |workspace, cx| {
+                workspace.project().update(cx, |project, cx| {
+                    let entry_id = project
+                        .entry_for_path(from, cx)
+                        .map(|entry| entry.id)
+                        .with_context(|| {
+                            format!("Failed to {operation} `{from_name}`. It no longer exists.")
+                        })?;
+
+                    Ok(project.rename_entry(entry_id, to.clone(), cx))
+                })
+            });
+
+        rename_task?.await.map_err(|error| {
+            let already_exists = error.chain().any(|cause| {
+                cause
+                    .downcast_ref::<std::io::Error>()
+                    .is_some_and(|io_error| io_error.kind() == std::io::ErrorKind::AlreadyExists)
+            }) || format!("{error:#}").contains("already exists");
+
+            if already_exists {
+                anyhow!(
+                    "Failed to {operation} `{from_name}` to `{to_name}`. A file or folder already exists there."
+                )
+            } else {
+                error
+            }
+        })
     }
 
     async fn trash(&self, project_path: &ProjectPath, cx: &mut AsyncApp) -> Result<TrashedEntry> {
@@ -507,23 +553,28 @@ impl Inner {
             return Err(anyhow!("Failed to obtain workspace."));
         };
 
-        workspace
-            .update(cx, |workspace, cx| {
-                workspace.project().update(cx, |project, cx| {
-                    let entry_id = project
-                        .entry_for_path(&project_path, cx)
-                        .map(|entry| entry.id)
-                        .ok_or_else(|| anyhow!("No entry for path."))?;
+        let name = workspace.update(cx, |workspace, cx| {
+            let project = workspace.project().read(cx);
+            project_path_display(project, project_path, project.path_style(cx), cx)
+        });
 
-                    project
-                        .delete_entry(entry_id, true, cx)
-                        .ok_or_else(|| anyhow!("Worktree entry should exist"))
-                })
-            })?
-            .await
-            .and_then(|entry| {
-                entry.ok_or_else(|| anyhow!("When trashing we should always get a trashentry"))
+        let trash_task = workspace.update(cx, |workspace, cx| {
+            workspace.project().update(cx, |project, cx| {
+                let entry_id = project
+                    .entry_for_path(project_path, cx)
+                    .map(|entry| entry.id)
+                    .with_context(|| format!("Failed to trash `{name}`. It no longer exists."))?;
+
+                project
+                    .delete_entry(entry_id, true, cx)
+                    .with_context(|| format!("Failed to trash `{name}`."))
             })
+        })?;
+
+        trash_task
+            .await
+            .with_context(|| format!("Failed to trash `{name}`."))
+            .and_then(|entry| entry.ok_or_else(|| anyhow!("Failed to trash `{name}`.")))
     }
 
     async fn restore(
@@ -536,6 +587,8 @@ impl Inner {
             return Err(anyhow!("Failed to obtain workspace."));
         };
 
+        let name = trashed_entry.name.to_string_lossy().into_owned();
+
         workspace
             .update(cx, |workspace, cx| {
                 workspace.project().update(cx, |project, cx| {
@@ -543,9 +596,15 @@ impl Inner {
                 })
             })
             .await
+            .map_err(|error| match error.downcast_ref::<TrashRestoreError>() {
+                Some(TrashRestoreError::Collision { .. }) => anyhow!(
+                    "Failed to restore `{name}`. Something already exists at its original location."
+                ),
+                _ => anyhow!("Failed to restore `{name}`. It may have been permanently deleted."),
+            })
     }
 
-    /// Displays a notification with the provided `title` and `error`.
+    /// Displays a notification with the provided `title` and markdown `error`.
     fn show_error(
         title_key: &'static str,
         title_fallback: &'static str,
@@ -560,7 +619,15 @@ impl Inner {
 
                 workspace.show_notification(notification_id, cx, move |cx| {
                     let title = tr(cx, title_key, title_fallback);
-                    cx.new(|cx| MessageNotification::new(error, cx).with_title(title))
+                    cx.new(move |cx| {
+                        let markdown = cx.new(|cx| Markdown::new(error.into(), None, None, cx));
+                        MessageNotification::new_from_builder(cx, move |window, cx| {
+                            MarkdownElement::new(markdown.clone(), markdown_style(window, cx))
+                                .text_size(TextSize::Default.rems(cx))
+                                .into_any_element()
+                        })
+                        .with_title(title)
+                    })
                 })
             })
             .ok();
