@@ -3145,6 +3145,7 @@ mod tests {
                 cx.background_executor(),
                 PathStyle::local(),
             )
+            .expect("display-only terminal setup should succeed")
             .subscribe(cx)
         });
         let (terminal_view, cx) = cx.add_window_view(|window, cx| {
