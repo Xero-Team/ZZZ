@@ -278,6 +278,13 @@ impl DevContainer {
         }
     }
 
+    pub(crate) fn override_command(&self) -> bool {
+        self.override_command.unwrap_or(!matches!(
+            self.build_type(),
+            DevContainerBuildType::DockerCompose
+        ))
+    }
+
     pub(crate) fn validate_devcontainer_contents(&self) -> Result<(), DevContainerError> {
         match self.build_type() {
             DevContainerBuildType::Image(_) => Ok(()),

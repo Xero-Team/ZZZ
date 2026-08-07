@@ -794,9 +794,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
         let privileged = dev_container.privileged.unwrap_or(false)
             || self.features.iter().any(|f| f.privileged());
 
-        let entrypoint_script = if dev_container.override_command == Some(false) {
-            None
-        } else {
+        let entrypoint_script = if dev_container.override_command() {
             let mut entrypoint_script_lines = vec![
                 "echo Container started".to_owned(),
                 "trap \"exit 0\" 15".to_owned(),
@@ -811,6 +809,8 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
             ]);
 
             Some(entrypoint_script_lines.join("\n").trim().to_owned())
+        } else {
+            None
         };
 
         Ok(DockerBuildResources {
