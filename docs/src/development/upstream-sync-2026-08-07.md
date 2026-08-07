@@ -91,7 +91,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 08994c41 | B     | 5f2ed7e3     | CLI opens wait for session restoration or its first window.            |
 | 790dcefb | B     | --           | Safe self-hosted behavior needs a local provider/test adaptation.      |
 | 998fbf30 | B     | f6d8bc25     | Submodules retain their own local project identities.                  |
-| 9dc8880b | B     | --           | File-finder navigation needs local path review.                        |
+| 9dc8880b | A     | a115c679     | Cherry-picked; `path:line` selects an already-open target file.        |
 | 5638be1f | C     | --           | ChatGPT subscription authentication.                                   |
 | 9a631e54 | B     | --           | License metadata requires package review.                              |
 | b6b2148b | B     | --           | Grammar update pending generated-file review.                          |
@@ -603,6 +603,31 @@ PASS cd docs && npx prettier --write src/ (unrelated rewrites restored)
 PASS cd docs && npx prettier --check src/development/upstream-sync-2026-08-07.md
 FAIL cd docs && npx prettier --check src/
      Existing formatting failures: installation.md, migrate/vs-code.md, and reference/all-settings.md.
+```
+
+### Continuation, File Finder `path:line` review
+
+- `9dc8880b2b96ae729539f9f6b971d0255a2f3b15`: A, local commit
+  `a115c679606e2266300b9712840248f43fe367a1`, cherry-picked with `-x -s`.
+  This local file-finder correction uses the parsed path, rather than the raw
+  `path:line[:column]` query, for the create-file fallback; it reevaluates a
+  preserved selection when the requested row changes; and it does not skip an
+  active matching file when a position is supplied. It has no account,
+  telemetry, collaboration, provider, agent, remote-project, or network path.
+  No upstream behavior was omitted.
+
+Continuation verification:
+
+```text
+PASS git diff --check
+PASS cargo check --locked -p file_finder
+PASS cargo fmt --check -p file_finder
+FAIL cargo test --locked -p file_finder --lib path_with_position_when_target_file_is_open
+FAIL cargo test --locked -p file_finder --lib row_column_numbers_query_inside_file
+     Both panic before assertions in FileFinderDelegate::render_editor because
+     Picker is read while already being updated. This is pre-existing: the
+     same failure is reproduced on commit 6783b19d4c7ae8cefcbb0a83bf9a8682d6393900
+     with cargo test --locked -p file_finder --lib test_matching_paths.
 ```
 
 ## Verification
