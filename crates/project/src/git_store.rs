@@ -7565,15 +7565,6 @@ impl Repository {
                     backend.diff_tree(diff_type).await
                 }
                 RepositoryState::Remote(RemoteRepositoryState { client, project_id }) => {
-                    let (is_merge, includes_worktree, base, head) = match diff_type {
-                        DiffTreeType::MergeBase { base, head } => (true, false, base, head),
-                        // Older servers ignore `includes_worktree` and use the existing fields,
-                        // so HEAD keeps this request valid as a committed-only fallback.
-                        DiffTreeType::MergeBaseWithWorktree { base } => {
-                            (true, true, base, "HEAD".into())
-                        }
-                        DiffTreeType::Since { base, head } => (false, false, base, head),
-                    };
                     let response = client
                         .request(proto::GetTreeDiff {
                             project_id: project_id.0,
