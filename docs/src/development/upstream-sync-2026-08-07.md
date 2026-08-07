@@ -78,7 +78,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | d88f6821 | B     | ad7db886     | Windows Vim/Helix Escape dismisses notifications.                      |
 | a473ea63 | C     | --           | Broad GPUI/image lifecycle contract cannot be safely isolated.         |
 | 27ca0526 | B     | f09e3aab     | Font fallback docs ported; unrelated formatting restored.              |
-| c9d1d0dd | B     | --           | Dependency cleanup conflicts with local gpui_util refactor.            |
+| c9d1d0dd | C     | --           | Dependency-only helper relocation has no independent behavior.         |
 | 9677f83f | C     | --           | Triage automation.                                                     |
 | a6a23c7b | B     | --           | Dependency cleanup not needed for behavior.                            |
 | cdf3ccd0 | C     | --           | Extension refactor introduces telemetry events.                        |
@@ -455,6 +455,15 @@ FAIL npx prettier --check src/reference/all-settings.md after restoration
 PASS cargo fmt --check
 PASS git diff --check
 ```
+
+### Continuation, fuzzy dependency review
+
+- `c9d1d0ddfec3c4e5c75e67b13a79a2ab2c76f687`: C. The complete diff only
+  relocates `truncate_to_bottom_n_sorted_by` from `util` to `gpui_util` and
+  rewires `fuzzy_nucleo` dependencies, benchmark imports, and the lockfile.
+  It intentionally preserves matching behavior. ZZZ's local crate split has a
+  separate dependency graph, so importing this churn would have no independent
+  user-facing or safety value.
 
 ## Verification
 
