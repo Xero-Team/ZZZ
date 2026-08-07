@@ -8548,6 +8548,9 @@ pub async fn resolve_git_worktree_to_main_repo(fs: &dyn Fs, path: &Path) -> Opti
     let content = fs.load(&dot_git).await.ok()?;
     let gitdir_rel = content.strip_prefix("gitdir:")?.trim();
     let gitdir_abs = fs.canonicalize(&path.join(gitdir_rel)).await.ok()?;
+    if is_submodule_git_dir(&gitdir_abs) {
+        return None;
+    }
     // Read commondir to find the main .git directory
     let commondir_content = fs.load(&gitdir_abs.join("commondir")).await.ok()?;
     let common_dir = fs
@@ -8683,6 +8686,26 @@ pub fn repo_identity_path(common_dir: &Path) -> &Path {
     } else {
         common_dir
     }
+}
+
+/// Returns whether `git_dir` is a Git submodule's git directory.
+///
+/// Submodules keep their git directory below the superproject's
+/// `<superproject>/.git/modules/<name>`. Unlike linked worktrees, their
+/// identity is their own working directory.
+pub fn is_submodule_git_dir(git_dir: &Path) -> bool {
+    let mut previous_was_git_dir = false;
+    for component in git_dir.components() {
+        if let std::path::Component::Normal(name) = component {
+            if previous_was_git_dir && name == std::ffi::OsStr::new("modules") {
+                return true;
+            }
+            previous_was_git_dir = name.to_string_lossy().ends_with(".git");
+        } else {
+            previous_was_git_dir = false;
+        }
+    }
+    false
 }
 
 /// Returns a short name for a linked worktree suitable for UI display
@@ -9184,6 +9207,47 @@ mod tests {
             path,
             PathBuf::from("/home/user/dev/worktrees/lsp-tests/nimble-sky/lsp-tests")
         );
+    }
+
+    #[test]
+    fn test_is_submodule_git_dir() {
+        assert!(is_submodule_git_dir(Path::new("/Foo/.git/modules/Bar")));
+        assert!(is_submodule_git_dir(Path::new(
+            "/Foo/.git/modules/nested/modules/Baz"
+        )));
+        assert!(is_submodule_git_dir(Path::new("/Foo/foo.git/modules/Bar")));
+
+        assert!(!is_submodule_git_dir(Path::new("/Foo/Bar/.git")));
+        assert!(!is_submodule_git_dir(Path::new(
+            "/repo/.git/worktrees/feature"
+        )));
+        assert!(!is_submodule_git_dir(Path::new("/foo/.bare")));
+        assert!(!is_submodule_git_dir(Path::new("/Foo/modules/Bar")));
+    }
+
+    #[gpui::test]
+    async fn test_resolve_git_worktree_to_main_repo_ignores_submodule(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            Path::new("/Foo"),
+            json!({
+                ".git": {
+                    "modules": {
+                        "Bar": {
+                            "HEAD": "ref: refs/heads/main"
+                        }
+                    }
+                },
+                "Bar": {
+                    ".git": "gitdir: ../.git/modules/Bar\\n",
+                    "src": { "main.rs": "" }
+                }
+            }),
+        )
+        .await;
+
+        let resolved = resolve_git_worktree_to_main_repo(fs.as_ref(), Path::new("/Foo/Bar")).await;
+        assert_eq!(resolved, None);
     }
 
     #[gpui::test]

@@ -1371,6 +1371,7 @@ impl WorktreeStore {
                 let folder_path = snapshot.abs_path().to_path_buf();
                 let main_path = snapshot
                     .root_repo_common_dir()
+                    .filter(|directory| !crate::git_store::is_submodule_git_dir(directory))
                     .map(|dir| crate::git_store::repo_identity_path(dir))
                     .filter(|repo_path| {
                         snapshot.root_repo_is_linked_worktree()

@@ -5315,6 +5315,40 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn test_recent_workspace_identity_for_submodule(cx: &mut gpui::TestAppContext) {
+        let fs = fs::FakeFs::new(cx.executor());
+
+        fs.insert_tree(
+            "/Foo",
+            json!({
+                ".git": {
+                    "modules": {
+                        "Bar": {
+                            "HEAD": "ref: refs/heads/main"
+                        }
+                    }
+                },
+                "Bar": {
+                    ".git": "gitdir: ../.git/modules/Bar\\n",
+                    "src": { "main.rs": "" }
+                },
+                "src": { "lib.rs": "" }
+            }),
+        )
+        .await;
+
+        let result = local_recent_workspace(
+            WorkspaceId(1),
+            PathList::new(&["/Foo/Bar"]),
+            Utc::now(),
+            fs.as_ref(),
+        )
+        .await;
+
+        assert_eq!(result.identity_paths.paths(), &[PathBuf::from("/Foo/Bar")]);
+    }
+
+    #[gpui::test]
     async fn test_recent_workspace_identity_deduplicates_main_and_linked_worktree(
         cx: &mut gpui::TestAppContext,
     ) {
