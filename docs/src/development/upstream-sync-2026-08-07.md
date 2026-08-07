@@ -94,7 +94,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 9dc8880b | A     | a115c679     | Cherry-picked; `path:line` selects an already-open target file.        |
 | 5638be1f | C     | --           | ChatGPT subscription authentication.                                   |
 | 9a631e54 | C     | --           | Upstream `path` crate is absent; local `paths` has separate GPL scope. |
-| b6b2148b | B     | --           | Grammar update pending generated-file review.                          |
+| b6b2148b | A     | 00daf646     | Cherry-picked; class constructors use the existing `type.class` scope. |
 | ae394f3d | C     | --           | Staff-only edit-prediction policy.                                     |
 | e99616cd | B     | --           | Window-state API needs GPUI review.                                    |
 | b7de7640 | B     | --           | Dev-container Compose behavior needs integration review.               |
@@ -646,6 +646,26 @@ Continuation verification:
 ```text
 NOT RUN cargo checks or tests: rejected after full diff, package manifest,
 license symlink, workspace member, and dependency-path review; no source changed.
+```
+
+### Continuation, class-instantiation grammar review
+
+- `b6b2148bd0e23f4dc3bfe17468ad1a6fbd89b748`: A, local commit
+  `00daf64603c1ff3509e38787f8f06c01e9161393`, cherry-picked with `-x -s`.
+  The JavaScript, TypeScript, and TSX highlight queries now assign constructor
+  identifiers in `new` expressions to the existing `type.class` theme scope,
+  matching class declarations. The complete diff contains only those three
+  query changes and a focused local language-highlighting test: no grammar
+  binary, generated source, dependency, lockfile, extension, account,
+  telemetry, agent, provider, or network behavior changed.
+
+Continuation verification:
+
+```text
+PASS git diff --check
+PASS cargo check --locked -p languages
+PASS cargo test --locked -p languages --lib test_class_instantiation_highlighting
+PASS cargo fmt --check -p languages -p grammars
 ```
 
 ## Verification
