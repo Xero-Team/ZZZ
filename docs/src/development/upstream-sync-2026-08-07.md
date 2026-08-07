@@ -115,14 +115,14 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 2318f45f | B     | --           | Multi-workspace close behavior needs UI review.                          |
 | 779c35d2 | B     | 754161d0     | ACP terminal disables configured Git pagers.                             |
 | f99da3a4 | C     | --           | GPT subscription provider icon.                                          |
-| f56ff65c | B     | --           | Superseded by later punctuation revert.                                  |
+| f56ff65c | A     | --           | Superseded by later punctuation revert; current code is equivalent.      |
 | 98f39bfc | C     | --           | Community automation.                                                    |
 | 5e03f2d3 | B     | bd5077b3     | Solo diffs hide generic multibuffer controls.                            |
 | 5e1fd392 | B     | --           | Git diff-base setting needs settings review.                             |
 | 21f16f7b | C     | --           | Broad crate-graph/lockfile refactor has no independent product behavior. |
 | 90d024b8 | B     | 5f35fd30     | Folded-row tab coordinate fix adapted to current editor API.             |
 | ce6f3af5 | B     | --           | Remote transfer quoting needs remote test review.                        |
-| 66ed3027 | B     | --           | ACP panel control needs ACP UI review.                                   |
+| 66ed3027 | C     | --           | Native agent panel UI; no ACP-only surface.                              |
 | 538a4a26 | C     | --           | Wezel build scenario infrastructure.                                     |
 | 8886dcb0 | B     | --           | GPUI test dispatcher API needs test review.                              |
 | 35cb7558 | B     | d93d94c7     | Configurable `gutter.git_gutter_width` setting.                          |
@@ -153,7 +153,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 6943d736 | C     | --           | Copilot OAuth cleanup.                                                   |
 | 0fb9a9da | C     | --           | Copilot settings path.                                                   |
 | 6153542c | C     | --           | Copilot credentials path.                                                |
-| 4b407d0f | B     | --           | Reverts transient punctuation behavior.                                  |
+| 4b407d0f | A     | --           | Current movement already matches the reverted punctuation behavior.      |
 | 02c6dd95 | C     | --           | Upstream release metadata.                                               |
 | 38df25d5 | B     | --           | GPUI scheduler readiness needs review.                                   |
 | a8cae3bd | B     | --           | Gesture dispatch needs GPUI tests.                                       |
@@ -820,6 +820,13 @@ PASS docs page Prettier check for the audit page
   Added the optional `gutter.git_gutter_width` setting through local settings,
   editor layout, settings UI, defaults, VS Code import, and documentation.
   The localized settings-page insertion was adapted after cherry-pick conflict.
+- `f56ff65c92b6346c16f1fed846fc736b39d9c71f`: A, already equivalent after
+  the later upstream punctuation revert; no transient movement behavior was
+  imported.
+- `4b407d0fe4c6a8a129cc9bb82801c0af4d75f077`: A, already equivalent. The
+  current ZZZ movement implementation matches the reverted upstream behavior.
+- `66ed3027b8ca7fed0feeee91d1ce6346ccd4ac39`: C. The change is confined to
+  the excluded native `agent_ui` panel and has no ACP-only surface.
 
 Verification:
 
