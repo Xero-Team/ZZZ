@@ -93,7 +93,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 998fbf30 | B     | f6d8bc25     | Submodules retain their own local project identities.                  |
 | 9dc8880b | A     | a115c679     | Cherry-picked; `path:line` selects an already-open target file.        |
 | 5638be1f | C     | --           | ChatGPT subscription authentication.                                   |
-| 9a631e54 | B     | --           | License metadata requires package review.                              |
+| 9a631e54 | C     | --           | Upstream `path` crate is absent; local `paths` has separate GPL scope. |
 | b6b2148b | B     | --           | Grammar update pending generated-file review.                          |
 | ae394f3d | C     | --           | Staff-only edit-prediction policy.                                     |
 | e99616cd | B     | --           | Window-state API needs GPUI review.                                    |
@@ -628,6 +628,24 @@ FAIL cargo test --locked -p file_finder --lib row_column_numbers_query_inside_fi
      Picker is read while already being updated. This is pre-existing: the
      same failure is reproduced on commit 6783b19d4c7ae8cefcbb0a83bf9a8682d6393900
      with cargo test --locked -p file_finder --lib test_matching_paths.
+```
+
+### Continuation, path crate license review
+
+- `9a631e5461194bbdbbd5b4a8d1b9236a211494ee`: C. The complete upstream diff
+  changes only `crates/path/Cargo.toml` from `GPL-3.0-or-later` to
+  `Apache-2.0`. That independent upstream `path` crate does not exist in ZZZ.
+  ZZZ instead contains `crates/paths`, with different `dirs`, `ignore`, and
+  `util` dependencies, an explicit `GPL-3.0-or-later` package declaration,
+  and a `LICENSE-GPL -> ../../LICENSE-GPL` symlink. Reassigning that distinct
+  crate's SPDX metadata would require separate source-provenance and licensing
+  review, not an upstream behavior port. No code or package metadata changed.
+
+Continuation verification:
+
+```text
+NOT RUN cargo checks or tests: rejected after full diff, package manifest,
+license symlink, workspace member, and dependency-path review; no source changed.
 ```
 
 ## Verification
