@@ -76,7 +76,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 410a8a06 | B     | 14fc451b     | Targeted semantic-token refresh preserves other servers.               |
 | 3652f301 | C     | --           | Copilot authentication split.                                          |
 | d88f6821 | B     | ad7db886     | Windows Vim/Helix Escape dismisses notifications.                      |
-| a473ea63 | B     | --           | Image viewer resource lifecycle review needed.                         |
+| a473ea63 | C     | --           | Broad GPUI/image lifecycle contract cannot be safely isolated.         |
 | 27ca0526 | B     | --           | Documentation not independently reviewed.                              |
 | c9d1d0dd | B     | --           | Dependency cleanup conflicts with local gpui_util refactor.            |
 | 9677f83f | C     | --           | Triage automation.                                                     |
@@ -423,6 +423,17 @@ PASS cargo test --locked -p vim --lib test_escape_cancels
 PASS cargo fmt --check
 NOT RUN upstream Windows notification regression: Linux host.
 ```
+
+### Continuation, image-viewer lifecycle review
+
+- `a473ea63a8bc199a73a7e44de3e1d9252e3ca895`: C. The texture-leak intent is
+  useful and local, but its complete diff adds GPUI asset-cache and atlas test
+  APIs, a window image-drop ownership contract, a 349-line asynchronous
+  image-viewer prefetch/display state machine, visual tests, dev dependencies,
+  and lockfile changes. The current ZZZ image-viewer/GPUI ownership model does
+  not expose that contract, and upstream history includes an earlier reversion
+  of image-resource cleanup. A partial drop call would risk freeing a texture
+  still used by another view, so no renderer or dependency change was made.
 
 ## Verification
 
