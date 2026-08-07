@@ -9,9 +9,9 @@ description: Selective Zed upstream sync audit.
 
 - Target branch: `main` at `33cec29132ac8ad489e0dd1c8541911881f2174f`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
-- Reviewed upstream head: `101ca00a1352ed71ef398f21b47836565d1998e3`
+- Reviewed upstream head: `027cf0def75e5c027504f402a6a6c0dcac11f178`
 - Live upstream head queried: `027cf0def75e5c027504f402a6a6c0dcac11f178`
-- Query time: `2026-08-07T18:55:18+02:00`
+- Query time: `2026-08-07T19:10:59+02:00`
 - Requested range starts after `7b030b500810b04cf5fb4aa5973be99a502d9f36`
 
 `A` is a complete safe absorption or an already-equivalent local change.
@@ -19,8 +19,8 @@ description: Selective Zed upstream sync audit.
 claimed as synchronized unless a local commit is listed. `C` is rejected by
 ZZZ's local-first, no-account, ACP-only boundary.
 
-The reviewed baseline remains `101ca00a1352ed71ef398f21b47836565d1998e3`.
-The live upstream query at `2026-08-07T18:55:18+02:00` returned
+The reviewed baseline is now `027cf0def75e5c027504f402a6a6c0dcac11f178`.
+The live upstream query at `2026-08-07T19:10:59+02:00` returned
 `027cf0def75e5c027504f402a6a6c0dcac11f178`; commits after the reviewed range
 are not claimed as audited or synchronized.
 
@@ -174,6 +174,14 @@ are not claimed as audited or synchronized.
 | 51db7df7 | A     | --                 | Already equivalent through the existing `4adbd64d` Markdown table-scroll port.            |
 | b914ba5c | A     | 814e93e2           | Python dunder variables receive attribute.special highlighting.                           |
 | 101ca00a | B     | bf4f35cb           | Punctuation boundaries adapted to consolidated editor.rs call sites.                      |
+| 6b2aa1c9 | C     | --                 | Reveal-policy API has no ZZZ caller; no independent behavior to retain.                   |
+| 87e698fb | C     | --                 | Native agent-thread UI behavior, outside ACP-only scope.                                  |
+| c24358d9 | C     | --                 | Dependency/lockfile bump and broad warning-only churn.                                    |
+| d356b2f5 | C     | --                 | Subscription OpenAI compaction and account-bound route.                                   |
+| c95e0c51 | C     | --                 | Community PR automation mapping.                                                          |
+| cc053a4a | C     | --                 | AccessKit accessibility chain is absent from current ZZZ GPUI.                            |
+| ca1ef7a4 | B     | 451ef402           | LSP unit params/results compatibility; existing smol channel used in tests.               |
+| 027cf0de | B     | e3fa4d74           | Markdown preview honors editor scrollbar.show settings.                                   |
 
 ## Applied Work
 
@@ -182,9 +190,9 @@ commit was created with `git cherry-pick -x -s`; B commits retain their full
 `Upstream:` trailer and explain omissions. No remote branch, pull request, or
 upstream remote was created.
 
-All B candidates in the reviewed range now have a local commit or an explicit
-reclassification to A/C. The reviewed baseline may advance only to the audited
-range head; the separately queried upstream tip is newer and not yet audited.
+All B candidates through the reviewed upstream head now have a local commit or
+an explicit reclassification to A/C. The reviewed baseline is advanced through
+`027cf0def75e5c027504f402a6a6c0dcac11f178`.
 
 ## Continuation 2026-08-07
 
@@ -195,9 +203,9 @@ range head; the separately queried upstream tip is newer and not yet audited.
   `6b2aa1c90aeb72cadfd30ed12141ed9e2569eded`
 - A fresh `git ls-remote` at `2026-08-07T15:53:40+02:00` reports current
   upstream `refs/heads/main` at `027cf0def75e5c027504f402a6a6c0dcac11f178`.
-- The reviewed history remains the requested range ending at
-  `101ca00a1352ed71ef398f21b47836565d1998e3`. It was fetched under the
-  temporary ref `refs/upstream-sync-tmp/20260807-101ca00a` only.
+- The initial continuation review ended at
+  `101ca00a1352ed71ef398f21b47836565d1998e3`. A follow-up extension reviewed
+  the eight commits through the live head below under a separate temporary ref.
 
 The following twenty candidates were individually re-read with their parent,
 complete diff, and current ZZZ call chain:
@@ -978,4 +986,48 @@ PASS cargo check --locked -p editor
 PASS cargo fmt --check and npx prettier --check src/development/upstream-sync-2026-08-07.md
 FAIL cargo check --locked -p gpui_linux for c7aea6cb: required external-drag GPUI APIs are absent; port reverted and classified C
 FAIL cargo check --locked -p project for 41c0f28b: `MergeBaseWithWorktree` is absent; port reverted and classified C
+```
+
+### Post-baseline extension through 027cf0def7
+
+- `6b2aa1c90aeb72cadfd30ed12141ed9e2569eded`: C. The new
+  `ScrollbarRevealPolicy` preserves the default behavior and has no
+  continuously-growing ZZZ caller that opts into `ScrollOnly`; adding an
+  unused API and its tests would provide no independent product behavior.
+- `87e698fb6fd09e69a16c66ae83060ac1e3af3fd6`: C. The change is in the
+  native agent thread UI and changes context-compaction scrolling outside
+  ZZZ's ACP-only boundary.
+- `c24358d96cdb4ce14ecbc088462295353b0103f0`: C. The diff is a broad
+  dependency/lockfile upgrade plus warning-only literal changes across
+  agent, collab, onboarding, and UI crates; no isolated ZZZ behavior was
+  retained.
+- `d356b2f5ef334f9f7b42827fd196839b9ecd532e`: C. Server-side compaction is
+  implemented in the subscription OpenAI provider and uses account-bound
+  credentials and the Codex subscription endpoint.
+- `c95e0c510518759a1db88892261e4152f396b549`: C. Community PR track
+  mappings are repository automation, outside the product runtime scope.
+- `cc053a4a6fa2fd0e8793201ed9099466af1be0b1`: C. The upstream builder
+  targets an AccessKit/ARIA node chain that is absent from current ZZZ GPUI;
+  there is no compatible local `author_id` storage or writer path.
+- `ca1ef7a4d25f6eb0ecf9809e55fadafa9a0d28c1`: B, local commit
+  `451ef4026e`. Unit-valued JSON-RPC params and results now accept `{}` and
+  `null`, response error/result nulls are omitted, and the tests use ZZZ's
+  existing `smol::channel`; the undeclared upstream `async_channel` reference
+  was omitted.
+- `027cf0def75e5c027504f402a6a6c0dcac11f178`: B, local commit
+  `e3fa4d744b`. Markdown preview scrollbars now use the existing editor
+  scrollbar visibility setting. Direct cherry-pick conflicted with local
+  Markdown rendering and notification/path-link changes, so the minimal
+  adaptation was committed manually.
+
+Verification for the post-baseline extension:
+
+```text
+PASS git diff --check
+PASS cargo check --locked -p lsp
+PASS cargo test --locked -p lsp test_unit_ (2 passed)
+PASS cargo check --locked -p markdown_preview
+PASS cargo fmt --check
+FAIL first cargo test --locked -p lsp test_unit_: upstream test referenced undeclared async_channel; test adapted to existing smol::channel and rerun passed
+CONFLICT 027cf0def7 direct cherry-pick: local Markdown preview context diverged; cherry-pick aborted and minimal B port committed
 ```
