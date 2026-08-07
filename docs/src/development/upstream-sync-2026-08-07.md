@@ -89,7 +89,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | ae99a867 | B     | a1e7b876     | X11 repaint ported; local scroll throttling preserved.                 |
 | 5786fee5 | C     | --           | Community automation.                                                  |
 | 08994c41 | B     | 5f2ed7e3     | CLI opens wait for session restoration or its first window.            |
-| 790dcefb | B     | --           | Allowed self-hosted provider behavior awaits local port.               |
+| 790dcefb | B     | --           | Safe self-hosted behavior needs a local provider/test adaptation.      |
 | 998fbf30 | B     | --           | Git submodule worktree model review required.                          |
 | 9dc8880b | B     | --           | File-finder navigation needs local path review.                        |
 | 5638be1f | C     | --           | ChatGPT subscription authentication.                                   |
@@ -551,6 +551,28 @@ PASS git diff --check
 PASS cargo fmt --check
 PASS cargo check --locked -p zzz
 NOT RUN macOS bundled CLI/session-restore regression: Linux host.
+```
+
+### Continuation, self-hosted Sweep edit-prediction review
+
+- `790dcefb01b8dd939434265c5524c8ae476ad77d`: B, not yet absorbed. The
+  complete diff is within ZZZ's allowed boundary: `SweepPrompt` is reachable
+  only through user-configured `open_ai_compatible_api` or local Ollama
+  settings, reuses the existing manually configured endpoint and credential
+  loader, and has no default service, account, telemetry, or proprietary
+  Sweep-provider route. A direct `git cherry-pick -x -s` was attempted and
+  aborted after conflicts in `edit_prediction_tests.rs` and
+  `edit_prediction_registry.rs`, where ZZZ has independently evolved provider
+  configuration and test helpers. The 884-line rewrite-window implementation
+  must be adapted and tested as a separate B port rather than force-merging
+  upstream architecture.
+
+Continuation verification:
+
+```text
+PASS git cherry-pick --abort
+PASS git diff --check after abort
+NOT RUN cargo checks: no source was retained after the required abort.
 ```
 
 ## Verification
