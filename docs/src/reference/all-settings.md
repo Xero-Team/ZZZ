@@ -4315,6 +4315,24 @@ The name of any font family installed on the user's system
 }
 ```
 
+### Terminal: Font Fallbacks
+
+- Description: The font fallbacks to use for terminal text. When unset, uses the buffer font fallbacks.
+- Setting: `font_fallbacks`
+- Default: `null`
+
+**Options**
+
+For example, to use `Nerd Font` as a fallback, add the following to your settings:
+
+```json [settings]
+{
+  "terminal": {
+    "font_fallbacks": ["Nerd Font"]
+  }
+}
+```
+
 ### Terminal: Font Features
 
 - Description: What font features to use for the terminal. When not set, defaults to matching the editor's font features.
