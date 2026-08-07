@@ -96,7 +96,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 9a631e54 | C     | --           | Upstream `path` crate is absent; local `paths` has separate GPL scope. |
 | b6b2148b | A     | 00daf646     | Cherry-picked; class constructors use the existing `type.class` scope. |
 | ae394f3d | C     | --           | Staff-only edit-prediction policy.                                     |
-| e99616cd | B     | --           | Window-state API needs GPUI review.                                    |
+| e99616cd | B     | d4bfa33b     | Linux decorations honor non-resizable/minimizable window options.      |
 | b7de7640 | B     | --           | Dev-container Compose behavior needs integration review.               |
 | 26103320 | B     | --           | Cross-platform path behavior needs Windows coverage.                   |
 | 2ec29977 | B     | --           | Remote-project preference needs local remote flow review.              |
@@ -666,6 +666,29 @@ PASS git diff --check
 PASS cargo check --locked -p languages
 PASS cargo test --locked -p languages --lib test_class_instantiation_highlighting
 PASS cargo fmt --check -p languages -p grammars
+```
+
+### Continuation, Linux window-option review
+
+- `e99616cdd4663ac5d29ae92bbd7ea1629689d4c8`: B, local commit
+  `d4bfa33bb4d864b30b33b0b164abf560d5bff3b2`. Retained the Linux-safe subset:
+  `Window` now retains and exposes `WindowOptions::is_resizable` and
+  `is_minimizable`; Wayland resize calls, Linux custom window controls, Linux
+  titlebar double-click maximization, and workspace client-side resize hitboxes
+  honor those options. This fixes locally configured non-resizable windows
+  without changing their default behavior. The macOS titlebar-double-click
+  implementation and Windows caption-button changes were omitted because they
+  require native platform validation and a `PlatformWindow` trait signature
+  change. No account, telemetry, collaboration, provider, agent, remote, or
+  network behavior was retained.
+
+Continuation verification:
+
+```text
+PASS git diff --check
+PASS cargo check --locked -p gpui -p gpui_linux -p platform_title_bar -p workspace
+PASS cargo test --locked -p gpui --lib (184 passed)
+PASS cargo fmt --check -p gpui -p platform_title_bar -p workspace
 ```
 
 ## Verification
