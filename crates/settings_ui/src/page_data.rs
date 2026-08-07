@@ -2301,11 +2301,13 @@ fn editor_page() -> SettingsPage {
                 ),
                 field: Box::new(SettingField {
                     json_path: Some("gutter.git_gutter_width"),
-                    pick: |settings_content| settings_content
-                        .editor
-                        .gutter
-                        .as_ref()
-                        .and_then(|gutter| gutter.git_gutter_width.as_ref()),
+                    pick: |settings_content| {
+                        settings_content
+                            .editor
+                            .gutter
+                            .as_ref()
+                            .and_then(|gutter| gutter.git_gutter_width.as_ref())
+                    },
                     write: |settings_content, value, _| {
                         settings_content
                             .editor
