@@ -42,12 +42,12 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 1102219f | B     | 937879bb     | C-column fragments ported; preview lifecycle omitted.            |
 | e4ac280d | C     | --           | Subscription provider extraction.                                |
 | 50ac7dc9 | A     | 6cd56a79     | Cherry-picked with `-x -s`.                                      |
-| 6dcb0e57 | B     | --           | Edit-prediction path needs local-model call-chain review.        |
+| 6dcb0e57 | B     | 08584285     | RelPath normalization ported; provider routing omitted.          |
 | baacd359 | C     | --           | Call diagnostics.                                                |
 | 424a6824 | B     | --           | Web worker fork needs GPUI Web dependency adaptation.            |
 | 06b6160d | B     | 063594c4     | Private macOS blur API removed; local ctor retained.             |
-| 82aef443 | B     | --           | GPUI idle API requires scheduler review.                         |
-| 5333ca1a | B     | --           | Overlaps local Git access-cache behavior.                        |
+| 82aef443 | C     | --           | Unused cross-platform idle scheduler API is too broad to add.    |
+| 5333ca1a | A     | 2200e0e8     | Cherry-picked; avoids redundant Git access checks.               |
 | bdb28659 | B     | --           | Documentation awaits feature review.                             |
 | 97961c2a | B     | --           | Web scrollbar API needs local GPUI review.                       |
 | c2db0f1a | A     | 227dd724     | Cherry-picked with `-x -s`.                                      |
@@ -103,7 +103,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 5f180e06 | B     | --           | Editor key context needs regression review.                      |
 | 58a3c0fa | B     | --           | Documentation awaits settings review.                            |
 | 864ff0ba | B     | --           | Dev-container lifecycle execution needs review.                  |
-| 0b3621db | B     | --           | Terminal rendering needs terminal test coverage.                 |
+| 0b3621db | A     | aa68f130     | Cherry-picked; local test constructor adaptation follows.        |
 | a5615f09 | B     | --           | Panel layout change needs UI review.                             |
 | b209000d | B     | --           | Linux installer behavior needs packaging review.                 |
 | 4f047acc | B     | --           | Edit-prediction local-model review needed.                       |
@@ -120,7 +120,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 5e03f2d3 | B     | --           | Solo diff UI needs local review.                                 |
 | 5e1fd392 | B     | --           | Git diff-base setting needs settings review.                     |
 | 21f16f7b | B     | --           | Cargo build optimization needs build review.                     |
-| 90d024b8 | B     | --           | Display-coordinate fix needs editor test review.                 |
+| 90d024b8 | B     | 5f35fd30     | Folded-row tab coordinate fix adapted to current editor API.     |
 | ce6f3af5 | B     | --           | Remote transfer quoting needs remote test review.                |
 | 66ed3027 | B     | --           | ACP panel control needs ACP UI review.                           |
 | 538a4a26 | C     | --           | Wezel build scenario infrastructure.                             |
@@ -216,6 +216,29 @@ complete diff, and current ZZZ call chain:
   accepts `#LlineCcolumn` and ranges; the upstream preview reuse, navigation,
   scroll lifecycle, language detection, and project-panel rewrite were
   omitted because ZZZ already has a separate link resolver implementation.
+- `6dcb0e57b5a6d12cc6bab21c11488fd76db0eaaf`: B, local commit
+  `0858428551c5801793d9858dc456b63839290f97`. The shared path serializer now
+  uses `RelPath` for Unix-style model context paths. Provider selection,
+  token, telemetry, data-collection, Copilot, account, and cloud-routing
+  behavior was explicitly omitted.
+- `82aef44308540b576e4e51fb379efa71614e5c91`: C. The commit adds a new
+  scheduler/GPUI/Web idle-execution API without a ZZZ caller and requires a
+  cross-platform Web `requestIdleCallback` implementation; this is broader
+  than an independently useful stability fix.
+- `5333ca1af7900d82cb939436ea5b7020ae7f317a`: A, local commit
+  `2200e0e8b8d12cfda8ab162084302862c49fd39b`. The complete safe Git access
+  cache change cherry-picked cleanly and removes redundant recomputation for
+  `.git/` file events.
+- `90d024b88abc91264d9a0ad260eb4f365fa695c3`: B, local commit
+  `5f35fd308f8b7db996c65fc6c10e8aaae4a31c39`. The folded-row column-selection
+  panic fix was adapted to ZZZ's current editor API, including the required
+  tab-row conversion. The direct cherry-pick conflicted because the upstream
+  dependency's tab-row model is not an ancestor of ZZZ; unrelated public API
+  widening was omitted.
+- `0b3621db47895cc0993aa2b934177b4aa1ba7548`: A, local commit
+  `aa68f1303141a645a5629e9f6cf413b9965d501f`, followed by test-only local
+  adaptation `7c37eebfb5`. The inline terminal height rounding fix cherry-picked
+  cleanly; its regression fixture was adapted to ZZZ's fallible builder API.
 
 Continuation verification:
 
@@ -228,6 +251,15 @@ PASS cargo check --locked -p markdown
 FAIL cargo test --locked -p markdown --lib (149 passed, 4 baseline GPUI window-context panics)
 PASS cargo check --locked -p markdown_preview
 PASS cargo test --locked -p markdown_preview resolves_preview_link_positions_without_misclassifying_web_urls
+PASS cargo check --locked -p edit_prediction
+PASS cargo test --locked -p edit_prediction test_buffer_path_with_id_fallback
+PASS cargo check --locked -p git_ui
+PASS cargo fmt --check and git diff --check after the Git cherry-pick
+PASS cargo check --locked -p editor
+BLOCKED cargo test --locked -p editor test_add_selection_above_below_with_fold
+       Existing duplicate test definitions in crates/editor/src/hover_links.rs prevent test binary compilation
+PASS cargo check --locked -p terminal_view
+PASS cargo test --locked -p terminal_view test_inline_terminal_displays_all_of_its_lines
 ```
 
 ## Verification
