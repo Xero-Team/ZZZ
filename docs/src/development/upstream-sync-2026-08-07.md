@@ -125,7 +125,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 66ed3027 | B     | --           | ACP panel control needs ACP UI review.                                   |
 | 538a4a26 | C     | --           | Wezel build scenario infrastructure.                                     |
 | 8886dcb0 | B     | --           | GPUI test dispatcher API needs test review.                              |
-| 35cb7558 | B     | --           | Git-gutter setting needs settings review.                                |
+| 35cb7558 | B     | d93d94c7     | Configurable `gutter.git_gutter_width` setting.                          |
 | 849ec589 | C     | --           | Native agent terminal path.                                              |
 | 2d9680fc | B     | --           | Transient undo feature flag requires release policy review.              |
 | be8c6f9f | B     | --           | Renderer resource changes need platform review.                          |
@@ -147,9 +147,9 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 158c16f5 | B     | --           | Workspace replacement needs UI lifecycle review.                         |
 | 381953d4 | C     | --           | Collaboration panel.                                                     |
 | 655ed138 | B     | --           | Wayland IME behavior needs Linux test review.                            |
-| 8e18ab0c | B     | --           | ShellBuilder redirect needs terminal test review.                        |
-| f25b256f | B     | --           | Terminal word-boundary behavior needs terminal tests.                    |
-| 2d9e6278 | B     | --           | Helix multi-key behavior needs Vim tests.                                |
+| 8e18ab0c | A     | 169004dd     | ShellBuilder stdin redirect fixed for POSIX and Fish.                    |
+| f25b256f | B     | 171a50cc     | Terminal tree-branch word boundary adapted to consolidated module.       |
+| 2d9e6278 | B     | 81f12b0f     | Helix multi-key cursor anchor refresh; Windows test omitted.             |
 | 6943d736 | C     | --           | Copilot OAuth cleanup.                                                   |
 | 0fb9a9da | C     | --           | Copilot settings path.                                                   |
 | 6153542c | C     | --           | Copilot credentials path.                                                |
@@ -804,6 +804,36 @@ PASS python -m json.tool assets/themes/gruvbox/gruvbox.json
 PASS docs page Prettier check for the audit page
 ```
 
+### Continuation, terminal, Vim, and editor settings review
+
+- `8e18ab0cd7cd8471a84d8d337bedeaefadd79a1e`: A, local commit `169004dd77`.
+  POSIX and Fish ShellBuilder stdin redirection now executes before parsing
+  the command; the complete safe change cherry-picked cleanly.
+- `f25b256f2c10e1b638031a3d8d5a524056ebf268`: B, local commit `171a50ccb9`.
+  Added the tree-branch glyph to Alacritty semantic escape characters in
+  ZZZ's consolidated terminal module. The upstream file split and platform
+  test placement were omitted.
+- `2d9e6278e7cb78c974918e34a2818821668f9322`: B, local commit `81f12b0f91`.
+  Refreshed selection anchors after the Helix normal-mode multi-key transition.
+  The unrelated Windows notification test was omitted after test-file conflict.
+- `35cb7558a9d9a6f2eaf31ce2e4dce4a0575820ef`: B, local commit `d93d94c7ab`.
+  Added the optional `gutter.git_gutter_width` setting through local settings,
+  editor layout, settings UI, defaults, VS Code import, and documentation.
+  The localized settings-page insertion was adapted after cherry-pick conflict.
+
+Verification:
+
+````text
+PASS cargo fmt --check -p util -p terminal -p editor -p vim -p settings_ui
+PASS cargo check --locked -p util
+PASS cargo check --locked -p terminal
+PASS cargo test --locked -p util --lib shell_builder (5 passed)
+PASS cargo test --locked -p terminal --lib (75 passed)
+PASS cargo check --locked -p vim
+PASS cargo test --locked -p vim --lib test_insert_line_with_multi_keybinding_to_normal
+PASS cargo check --locked -p settings_ui -p editor
+PASS git diff --check
+
 ## Verification
 
 Completed successfully before this report:
@@ -815,7 +845,7 @@ cargo check --locked -p project_panel
 cargo test --locked -p project_panel --lib undo
 cargo check --locked -p gpui_linux
 git diff --check
-```
+````
 
 The project-panel undo test selection ran ten tests successfully. macOS-only
 code was formatted and inspected but cannot be compiled on this Linux host.
