@@ -341,9 +341,11 @@ impl LifecycleScript {
         }
     }
     fn from_str(args: &str) -> Self {
-        let script: Vec<String> = args.split(" ").map(|a| a.to_owned()).collect();
+        Self::from_args(Self::shell_command(args))
+    }
 
-        Self::from_args(script)
+    fn shell_command(script: &str) -> Vec<String> {
+        vec!["/bin/sh".to_owned(), "-c".to_owned(), script.to_owned()]
     }
     fn from_args(args: Vec<String>) -> Self {
         Self::from_map(HashMap::from([("default".to_owned(), args)]))
@@ -440,9 +442,7 @@ impl<'de> Deserialize<'de> for LifecycleScript {
                 while let Some(key) = map.next_key::<String>()? {
                     let value: Value = map.next_value()?;
                     let script_args = match value {
-                        Value::String(s) => {
-                            s.split(" ").map(|s| s.to_owned()).collect::<Vec<String>>()
-                        }
+                        Value::String(s) => LifecycleScript::shell_command(&s),
                         Value::Array(arr) => {
                             let strings: Vec<String> = arr
                                 .into_iter()
@@ -639,6 +639,18 @@ mod test {
             ZedCustomizationsWrapper, deserialize_devcontainer_json,
         },
     };
+
+    #[test]
+    fn string_lifecycle_commands_use_shell() {
+        let script: LifecycleScript =
+            serde_json_lenient::from_str(r#""echo hi | tr i o""#).unwrap();
+        let command = script.script_commands().remove("default").unwrap();
+        assert_eq!(command.get_program(), "/bin/sh");
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            vec!["-c", "echo hi | tr i o"]
+        );
+    }
 
     #[test]
     fn should_deserialize_customizations_with_unknown_keys() {
