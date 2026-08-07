@@ -57,8 +57,8 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 007ffc79 | A     | 4e2deeed     | Cherry-picked with `-x -s`.                                       |
 | b005c0de | B     | 379c16e8     | Local deactivation behavior ported; collab UI omitted.            |
 | 12a19dcc | C     | --           | Native agent sandbox.                                             |
-| dc1e815e | B     | --           | GPUI IME dispatch needs local lifecycle review.                   |
-| a11083f9 | B     | --           | GPUI callback reentrancy needs local review.                      |
+| dc1e815e | B     | 59d89954     | Pending keybinding wins over IME; stale focus omitted.            |
+| a11083f9 | B     | e4fdf292     | Appearance callback deferred past App borrow.                     |
 | e24eeb71 | C     | --           | Upstream release metadata.                                        |
 | b9256fa8 | C     | --           | Upstream npm build infrastructure.                                |
 | f620cbc0 | C     | --           | Native agent sandbox bundling.                                    |
@@ -188,7 +188,7 @@ this report records a partial review only and does not advance a baseline.
   `101ca00a1352ed71ef398f21b47836565d1998e3`. It was fetched under the
   temporary ref `refs/upstream-sync-tmp/20260807-101ca00a` only.
 
-The following fifteen candidates were individually re-read with their parent,
+The following seventeen candidates were individually re-read with their parent,
 complete diff, and current ZZZ call chain:
 
 - `95106f9cde3a6e7b622b6c390c82cf426d7daaa1`: C. Its docs describe
@@ -262,6 +262,16 @@ complete diff, and current ZZZ call chain:
   deactivation, including a project-panel regression test. The collab-panel
   channel rename was omitted because ZZZ excludes collaboration UI and its
   cloud/social routing.
+- `dc1e815e47835095748cbb036541992abd9ac826`: B, local commit
+  `59d89954bf66901289d642bf1052a5fec35adc63`. GPUI now lets a pending
+  multi-stroke keybinding consume the next printable key before macOS IME
+  handling, while pending input from another focus is ignored. The existing
+  marked-text/IME path remains intact; no remote or agent behavior is involved.
+- `a11083f9a79495e9c7ddee0c5782f22d07695c31`: B, local commit
+  `e4fdf292259e9a73f9fef2ad02f7e891e80adad4`. Native appearance callbacks
+  are deferred to the foreground executor so AppKit cannot re-enter a live App
+  borrow. The test platform and GPUI regression test were retained; macOS
+  native code was inspected but not run on Linux.
 
 Continuation verification:
 
@@ -287,6 +297,9 @@ PASS cargo check --locked -p ui
 PASS cargo check --locked -p go_to_line
 PASS cargo check --locked -p project_panel
 PASS cargo test --locked -p project_panel --lib test_rename_survives_window_deactivation
+PASS cargo check --locked -p gpui
+PASS cargo test --locked -p gpui --lib test_input_handler_pending
+PASS cargo test --locked -p gpui --lib test_appearance_change_runs_after_app_update
 ```
 
 ## Verification
