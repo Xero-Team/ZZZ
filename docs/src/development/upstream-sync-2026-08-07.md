@@ -73,7 +73,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | b9301f5c | C     | --           | Native agent thread workflow.                                          |
 | f851d82e | A     | --           | Equivalent left-biased local cursor anchor already exists.             |
 | 200fb85c | C     | --           | Depends on unabsorbed bracket-cache and boundary-query architecture.   |
-| 410a8a06 | B     | --           | LSP refresh depends on 1efdc3e6 adaptation.                            |
+| 410a8a06 | B     | 14fc451b     | Targeted semantic-token refresh preserves other servers.               |
 | 3652f301 | C     | --           | Copilot authentication split.                                          |
 | d88f6821 | B     | --           | Release-note UI interaction requires local review.                     |
 | a473ea63 | B     | --           | Image viewer resource lifecycle review needed.                         |
@@ -379,6 +379,28 @@ PASS cd docs && npx prettier --write src/repl.md
 PASS cd docs && npx prettier --check src/repl.md
 NOT RUN f851d82e: behavior was already present and no source changed.
 NOT RUN 200fb85c: rejected after complete diff, caller, cache, and dry-run conflict review; no source changed.
+```
+
+### Continuation, semantic-token refresh review
+
+- `410a8a06ed7252a6243314da2bd9c390b1a29f9b`: B, local commit
+  `14fc451bbd92f9c96f61d10d9b656219ab3467b3`. ZZZ's newer per-server refresh
+  API was adapted so a refresh evicts only the source server's raw tokens. If
+  the source server has no request to make, ZZZ preserves and reprojects other
+  servers' cached tokens instead of clearing all semantic highlighting. The
+  upstream updates for code lenses, colors, links, symbols, folding ranges,
+  and its dynamic-registration test rewrite were omitted: ZZZ already has
+  separate per-server removal APIs for those data kinds, while the upstream
+  test helpers no longer match local APIs. This is local LSP cache behavior;
+  no provider, account, telemetry, cloud, or agent route was included.
+
+Continuation verification:
+
+```text
+PASS cargo fmt --check
+PASS git diff --check
+PASS cargo check --locked -p project
+PASS cargo test --locked -p project --lib targeted_refresh_keeps_other_servers_raw_tokens
 ```
 
 ## Verification
