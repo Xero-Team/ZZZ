@@ -8447,10 +8447,7 @@ mod tests {
     use util::path;
     use util::rel_path::rel_path;
 
-    use workspace::{
-        ActivatePaneLeft, ActivatePaneRight, MultiWorkspace, ToolbarItemEvent, ToolbarItemLocation,
-        item::test::TestItem,
-    };
+    use workspace::{ActivatePaneLeft, ActivatePaneRight, MultiWorkspace, item::test::TestItem};
 
     use super::*;
 
@@ -10960,7 +10957,7 @@ mod tests {
     async fn test_history_tab_pane_navigation_focuses_rendered_panel(cx: &mut TestAppContext) {
         init_test(cx);
 
-        let (_, _project, workspace, panel, mut cx) =
+        let (_project, workspace, panel, mut cx) =
             setup_git_panel_with_changes(cx, json!({ ".git": {} }), &[]).await;
 
         let center_item = workspace.update_in(&mut cx, |workspace, window, cx| {
