@@ -1028,6 +1028,8 @@ PASS cargo check --locked -p lsp
 PASS cargo test --locked -p lsp test_unit_ (2 passed)
 PASS cargo check --locked -p markdown_preview
 PASS cargo fmt --check
+PASS npx prettier --check src/development/upstream-sync-2026-08-07.md
+FAIL npx prettier --check src/: existing formatting issues in installation.md, migrate/vs-code.md, and reference/all-settings.md; not modified
 FAIL first cargo test --locked -p lsp test_unit_: upstream test referenced undeclared async_channel; test adapted to existing smol::channel and rerun passed
 CONFLICT 027cf0def7 direct cherry-pick: local Markdown preview context diverged; cherry-pick aborted and minimal B port committed
 ```
