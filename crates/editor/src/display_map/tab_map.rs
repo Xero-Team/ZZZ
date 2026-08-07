@@ -399,6 +399,11 @@ impl TabSnapshot {
         self.fold_point_to_tab_point(fold_point)
     }
 
+    pub fn buffer_row_to_tab_row(&self, buffer_row: multi_buffer::MultiBufferRow) -> u32 {
+        self.point_to_tab_point(Point::new(buffer_row.0, 0), Bias::Left)
+            .row()
+    }
+
     #[ztracing::instrument(skip_all)]
     pub fn tab_point_to_point(&self, point: TabPoint, bias: Bias) -> Point {
         let fold_point = self.tab_point_to_fold_point(point, bias).0;

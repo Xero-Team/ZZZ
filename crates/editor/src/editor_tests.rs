@@ -10767,6 +10767,48 @@ async fn test_split_selection_into_lines_interacting_with_creases(cx: &mut TestA
 }
 
 #[gpui::test]
+/// Folded buffer rows must be converted to tab-map rows before column placement.
+async fn test_add_selection_above_below_with_fold(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+    let mut cx = EditorTestContext::new(cx).await;
+
+    cx.set_state(indoc!(
+        r#"fn foo() {
+            aaaa
+            bbbb
+        }
+        one
+        twoˇ"#
+    ));
+    cx.update_editor(|editor, window, cx| {
+        editor.fold_creases(
+            vec![Crease::simple(
+                Point::new(0, 10)..Point::new(3, 0),
+                FoldPlaceholder::test(),
+            )],
+            true,
+            window,
+            cx,
+        );
+        editor.add_selection_above(
+            &AddSelectionAbove {
+                skip_soft_wrap: true,
+            },
+            window,
+            cx,
+        );
+    });
+    cx.assert_editor_state(indoc!(
+        r#"fn foo() {
+            aaaa
+            bbbb
+        }
+        oneˇ
+        twoˇ"#
+    ));
+}
+
+#[gpui::test]
 async fn test_add_selection_above_below(cx: &mut TestAppContext) {
     init_test(cx, |_| {});
 

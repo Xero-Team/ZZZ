@@ -136,7 +136,7 @@ use crate::{
 use block_map::{BlockPointCursor, BlockRow, BlockSnapshot};
 use fold_map::{FoldPointCursor, FoldSnapshot};
 use inlay_map::{BufferOffsetToInlayPointCursor, InlaySnapshot};
-use tab_map::{TabPointCursor, TabSnapshot};
+use tab_map::{TabPoint, TabPointCursor, TabSnapshot};
 use wrap_map::{WrapMap, WrapPatch, WrapPointCursor};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -1540,6 +1540,22 @@ impl DisplaySnapshot {
     }
     pub fn tab_snapshot(&self) -> &TabSnapshot {
         &self.block_snapshot.wrap_snapshot.tab_snapshot
+    }
+
+    pub(crate) fn point_for_tab_expanded_column(
+        &self,
+        buffer_row: multi_buffer::MultiBufferRow,
+        column: u32,
+    ) -> Point {
+        let tab_snapshot = self.tab_snapshot();
+        let tab_row = tab_snapshot.buffer_row_to_tab_row(buffer_row);
+        let column = column.min(tab_snapshot.line_len(tab_row));
+        tab_snapshot.tab_point_to_point(TabPoint(Point::new(tab_row, column)), Bias::Left)
+    }
+
+    pub(crate) fn tab_expanded_line_len(&self, buffer_row: multi_buffer::MultiBufferRow) -> u32 {
+        let tab_snapshot = self.tab_snapshot();
+        tab_snapshot.line_len(tab_snapshot.buffer_row_to_tab_row(buffer_row))
     }
 
     pub fn fold_snapshot(&self) -> &FoldSnapshot {
