@@ -11,7 +11,7 @@ description: Selective Zed upstream sync audit.
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Reviewed upstream head: `101ca00a1352ed71ef398f21b47836565d1998e3`
 - Live upstream head queried: `027cf0def75e5c027504f402a6a6c0dcac11f178`
-- Query time: `2026-08-07T18:36:15+02:00`
+- Query time: `2026-08-07T18:55:18+02:00`
 - Requested range starts after `7b030b500810b04cf5fb4aa5973be99a502d9f36`
 
 `A` is a complete safe absorption or an already-equivalent local change.
@@ -20,7 +20,7 @@ claimed as synchronized unless a local commit is listed. `C` is rejected by
 ZZZ's local-first, no-account, ACP-only boundary.
 
 The reviewed baseline remains `101ca00a1352ed71ef398f21b47836565d1998e3`.
-The live upstream query at `2026-08-07T18:36:15+02:00` returned
+The live upstream query at `2026-08-07T18:55:18+02:00` returned
 `027cf0def75e5c027504f402a6a6c0dcac11f178`; commits after the reviewed range
 are not claimed as audited or synchronized.
 
