@@ -84,8 +84,8 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | cdf3ccd0 | C     | --           | Extension refactor introduces telemetry events.                        |
 | f9a5bf91 | B     | 1ad7cdbb     | MCP configuration prompts route to the active local workspace.         |
 | 933c85b1 | C     | --           | ZZZ has no upstream MCP or external-agent server-list settings UI.     |
-| a8491e63 | B     | --           | macOS drag restoration needs platform review.                          |
-| 79cc17c2 | B     | --           | GPUI scroll API review required.                                       |
+| a8491e63 | C     | --           | macOS drag restoration requires an inseparable platform lifecycle.     |
+| 79cc17c2 | C     | --           | GPUI scrolling redesign is not independently isolatable.               |
 | ae99a867 | B     | a1e7b876     | X11 repaint ported; local scroll throttling preserved.                 |
 | 5786fee5 | C     | --           | Community automation.                                                  |
 | 08994c41 | B     | --           | Session/CLI lifecycle review required.                                 |
@@ -503,6 +503,34 @@ PASS cd docs && npx prettier --write src/development/upstream-sync-2026-08-07.md
 PASS cd docs && npx prettier --check src/development/upstream-sync-2026-08-07.md
 FAIL cd docs && npx prettier --check src/
      Existing formatting failures: installation.md, migrate/vs-code.md, and reference/all-settings.md.
+```
+
+### Continuation, platform drag and scrolling review
+
+- `a8491e63b54bf1881e10fe78bb3e7b1f8a5a2cac`: C. The full macOS drag fix
+  adds `PlatformOwnedDrag` ownership to `App`, a new `FileDropEvent::Ended`
+  lifecycle event, window-removal cleanup, and coordinated AppKit
+  `draggingEntered`, `draggingExited`, and drag-session completion behavior.
+  The original typed payload must remain suspended while external-path payloads
+  are active and must be released exactly once. That contract crosses GPUI,
+  macOS callbacks, and every platform's exhaustive file-drop handling; it
+  cannot be safely exercised on this Linux host or reduced to a local change.
+- `79cc17c216cf62d5deec7b3eed986d0f652d1c9a`: C. The horizontal-scroll
+  intent is local and useful, but the complete change relocates editor
+  `OngoingScroll` ownership into GPUI gesture dispatch, changes the
+  `restrict_scroll_to_axis` contract, and rewrites editor scrolling plus
+  markdown, search, data-table, preview, and agent-thread call sites across
+  thirteen files. Current ZZZ still owns the state in `editor::ScrollManager`;
+  porting only the div API would lack the touch-phase lifecycle and its
+  overscroll propagation behavior, while porting the full refactor would alter
+  excluded native-agent UI and broad editor input semantics. No code was
+  changed.
+
+Continuation verification:
+
+```text
+NOT RUN a8491e63: rejected after full diff and GPUI/macOS file-drop lifecycle review; no source changed.
+NOT RUN 79cc17c2: rejected after full diff, gesture/editor ownership, and caller review; no source changed.
 ```
 
 ## Verification
