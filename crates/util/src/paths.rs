@@ -437,9 +437,71 @@ impl PathStyle {
 
     pub fn normalize(self, path_like: &str) -> String {
         match self {
-            PathStyle::Windows => crate::normalize_path(Path::new(path_like))
-                .to_string_lossy()
-                .into_owned(),
+            PathStyle::Windows => {
+                let drive_and_remainder = path_like.split_once(':').filter(|(drive, _)| {
+                    let mut characters = drive.chars();
+                    characters
+                        .next()
+                        .is_some_and(|character| character.is_ascii_alphabetic())
+                        && characters.next().is_none()
+                });
+                let unc_remainder = path_like
+                    .strip_prefix("\\\\")
+                    .or_else(|| path_like.strip_prefix("//"));
+
+                let (prefix, remainder) = if let Some((drive, remainder)) = drive_and_remainder {
+                    if let Some(remainder) = remainder
+                        .strip_prefix('\\')
+                        .or_else(|| remainder.strip_prefix('/'))
+                    {
+                        (format!("{drive}:\\"), remainder)
+                    } else {
+                        (format!("{drive}:"), remainder)
+                    }
+                } else if let Some(remainder) = unc_remainder {
+                    let (server, remainder) = match remainder.split_once(['\\', '/']) {
+                        Some(parts) => parts,
+                        None => return path_like.to_string(),
+                    };
+                    let (share, remainder) = match remainder.split_once(['\\', '/']) {
+                        Some(parts) => parts,
+                        None => return format!("\\\\{server}\\{remainder}"),
+                    };
+                    (format!("\\\\{server}\\{share}\\"), remainder)
+                } else if let Some(remainder) = path_like
+                    .strip_prefix('\\')
+                    .or_else(|| path_like.strip_prefix('/'))
+                {
+                    ("\\".to_string(), remainder)
+                } else {
+                    (String::new(), path_like)
+                };
+
+                let mut components: Vec<&str> = Vec::new();
+                for component in remainder.split(['\\', '/']) {
+                    match component {
+                        "" | "." => {}
+                        ".." => {
+                            if components
+                                .last()
+                                .is_some_and(|component| *component != "..")
+                            {
+                                components.pop();
+                            } else if prefix.is_empty() {
+                                components.push(component);
+                            }
+                        }
+                        component => components.push(component),
+                    }
+                }
+
+                let normalized = components.join("\\");
+                if prefix.is_empty() {
+                    normalized
+                } else {
+                    format!("{prefix}{normalized}")
+                }
+            }
             PathStyle::Posix => {
                 let is_absolute = path_like.starts_with('/');
                 let remainder = if is_absolute {
@@ -1698,6 +1760,54 @@ mod tests {
         assert_eq!(
             PathStyle::Windows.normalize("C:\\Users\\user\\dev\\worktrees"),
             "C:\\Users\\user\\dev\\worktrees"
+        );
+    }
+
+    #[test]
+    fn test_normalize_windows_path_regardless_of_host_platform() {
+        assert_eq!(
+            PathStyle::Windows.normalize(r"C:\Users\user\dev\..\worktrees"),
+            r"C:\Users\user\worktrees"
+        );
+        assert_eq!(
+            PathStyle::Windows.normalize(r"C:\Users\.\worktrees"),
+            r"C:\Users\worktrees"
+        );
+        assert_eq!(
+            PathStyle::Windows.normalize(r"C:\Users\user\dev\sub\..\..\worktrees"),
+            r"C:\Users\user\worktrees"
+        );
+        assert_eq!(
+            PathStyle::Windows.normalize("C:/Users/user/dev/../worktrees"),
+            r"C:\Users\user\worktrees"
+        );
+        assert_eq!(
+            PathStyle::Windows.normalize(r"C:/Users\user/dev\..\worktrees"),
+            r"C:\Users\user\worktrees"
+        );
+        assert_eq!(
+            PathStyle::Windows.normalize(r"C:\Users/user\.\worktrees"),
+            r"C:\Users\user\worktrees"
+        );
+        assert_eq!(
+            PathStyle::Windows.normalize(r"\\server\share\dev\..\worktrees"),
+            r"\\server\share\worktrees"
+        );
+        assert_eq!(
+            PathStyle::Windows.normalize(r"//server\share/dev\..\worktrees"),
+            r"\\server\share\worktrees"
+        );
+        assert_eq!(
+            PathStyle::Windows.normalize(r"\dev\..\worktrees"),
+            r"\worktrees"
+        );
+        assert_eq!(
+            PathStyle::Windows.normalize(r"dev\..\worktrees"),
+            r"worktrees"
+        );
+        assert_eq!(
+            PathStyle::Windows.normalize(r"C:\..\worktrees"),
+            r"C:\worktrees"
         );
     }
 
