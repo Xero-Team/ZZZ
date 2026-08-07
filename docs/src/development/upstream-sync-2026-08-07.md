@@ -97,7 +97,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | b6b2148b | A     | 00daf646     | Cherry-picked; class constructors use the existing `type.class` scope. |
 | ae394f3d | C     | --           | Staff-only edit-prediction policy.                                     |
 | e99616cd | B     | d4bfa33b     | Linux decorations honor non-resizable/minimizable window options.      |
-| b7de7640 | B     | --           | Dev-container Compose behavior needs integration review.               |
+| b7de7640 | B     | 4aa041f7     | Compose preserves omitted entrypoints per specification defaults.      |
 | 26103320 | B     | --           | Cross-platform path behavior needs Windows coverage.                   |
 | 2ec29977 | B     | --           | Remote-project preference needs local remote flow review.              |
 | 5f180e06 | B     | --           | Editor key context needs regression review.                            |
@@ -691,6 +691,25 @@ PASS git diff --check
 PASS cargo check --locked -p gpui -p gpui_linux -p platform_title_bar -p workspace
 PASS cargo test --locked -p gpui --lib (184 passed)
 PASS cargo fmt --check -p gpui -p platform_title_bar -p workspace
+```
+
+### Continuation, Dev Container Compose entrypoint review
+
+- `b7de76402cdffafe5e678554d45a965ddfb8e94c`: B, local commit
+  `4aa041f789de895b21774eaf7c6d5aad807a8036`. Retained the specification
+  default: omitted `overrideCommand` remains true for image/Dockerfile builds
+  and becomes false for Docker Compose, while explicit values win. The
+  conflicting upstream fixture assertions were omitted in favor of ZZZ's
+  existing manifest expectations. No account, telemetry, agent, provider, or
+  remote behavior was introduced.
+
+Verification:
+
+```text
+PASS cargo check --locked -p dev_container
+PASS cargo test --locked -p dev_container --lib override_command
+PASS cargo fmt --check -p dev_container
+PASS git diff --check
 ```
 
 ## Verification
