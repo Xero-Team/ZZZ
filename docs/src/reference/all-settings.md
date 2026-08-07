@@ -4807,6 +4807,34 @@ Run the {#action theme_selector::Toggle} action in the command palette to see a 
 - `show_menus`: Whether to show the menus in the titlebar
 - `button_layout`: The layout of window control buttons in the title bar (Linux only). Can be set to `"platform_default"` to follow the system setting, `"standard"` to use ZZZ's built-in layout, or a custom format like `"close:minimize,maximize"`
 
+## Window Decorations
+
+- Description: Controls whether ZZZ or the window manager or compositor draws window decorations.
+- Setting: `window_decorations`
+- Default: `"client"`
+
+**Options**
+
+1. To have ZZZ draw its own window decorations, use `"client"`:
+
+```json [settings]
+{
+  "window_decorations": "client"
+}
+```
+
+2. To have the window manager or compositor draw the window decorations, use `"server"`:
+
+```json [settings]
+{
+  "window_decorations": "server"
+}
+```
+
+> **Note:** This setting only affects Linux. GNOME Wayland does not support
+> server-side decorations. Changes only apply to newly created windows. Restart
+> ZZZ to apply the setting to all windows.
+
 ## Vim
 
 - Description: Whether or not to enable vim mode.
