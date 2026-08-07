@@ -15,7 +15,7 @@ use alacritty_terminal::{
     selection::{Selection, SelectionRange, SelectionType},
     sync::FairMutex,
     term::{
-        Config, RenderableCursor, TermMode,
+        Config, RenderableCursor, SEMANTIC_ESCAPE_CHARS, TermMode,
         cell::{Cell, Flags},
         search::{Match, RegexIter, RegexSearch},
     },
@@ -404,6 +404,7 @@ impl TerminalBuilder {
         let config = Config {
             scrolling_history,
             default_cursor_style,
+            semantic_escape_chars: format!("{SEMANTIC_ESCAPE_CHARS}─"),
             ..Config::default()
         };
 
@@ -602,6 +603,7 @@ impl TerminalBuilder {
             let config = Config {
                 scrolling_history,
                 default_cursor_style,
+                semantic_escape_chars: format!("{SEMANTIC_ESCAPE_CHARS}─"),
                 ..Config::default()
             };
 
