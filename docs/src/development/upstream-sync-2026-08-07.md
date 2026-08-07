@@ -51,11 +51,11 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | bdb28659 | C     | --           | `docs/theme` build configuration is outside this audit scope.     |
 | 97961c2a | B     | 170539df     | Web-compatible scrollbar clock ported.                            |
 | c2db0f1a | A     | 227dd724     | Cherry-picked with `-x -s`.                                       |
-| 5ccbbbd8 | B     | --           | GPUI layout API needs local review.                               |
+| 5ccbbbd8 | C     | --           | Unused GPUI grid API and public enum rename omitted.              |
 | ba4cb2a2 | A     | 2b99b9b3     | Cherry-picked with `-x -s`.                                       |
 | f85349be | A     | --           | Already equivalent through `TrashedEntry` retry semantics.        |
 | 007ffc79 | A     | 4e2deeed     | Cherry-picked with `-x -s`.                                       |
-| b005c0de | B     | --           | Go To Line/project panel only; collab UI omitted.                 |
+| b005c0de | B     | 379c16e8     | Local deactivation behavior ported; collab UI omitted.            |
 | 12a19dcc | C     | --           | Native agent sandbox.                                             |
 | dc1e815e | B     | --           | GPUI IME dispatch needs local lifecycle review.                   |
 | a11083f9 | B     | --           | GPUI callback reentrancy needs local review.                      |
@@ -188,7 +188,7 @@ this report records a partial review only and does not advance a baseline.
   `101ca00a1352ed71ef398f21b47836565d1998e3`. It was fetched under the
   temporary ref `refs/upstream-sync-tmp/20260807-101ca00a` only.
 
-The following thirteen candidates were individually re-read with their parent,
+The following fifteen candidates were individually re-read with their parent,
 complete diff, and current ZZZ call chain:
 
 - `95106f9cde3a6e7b622b6c390c82cf426d7daaa1`: C. Its docs describe
@@ -251,6 +251,17 @@ complete diff, and current ZZZ call chain:
   animation clock only. The direct cherry-pick lockfile conflict was resolved
   by adding the already locked workspace dependency to `ui`; no unrelated
   dependency updates, accounts, telemetry, agents, or providers were included.
+- `5ccbbbd88f74a6283241db699ea00cb14f7e5a7f`: C. The complete diff adds
+  unused `grid_rows_min_content` and `grid_rows_max_content` public APIs and
+  renames `TemplateColumnMinSize` to `GridTemplateMinSize`. No current ZZZ
+  caller needs row content sizing, so the public API churn has no independent
+  local value.
+- `b005c0de6728c65db431520647b2fb5c2887e14f`: B, local commit
+  `379c16e8843f502d88c781d75ca85ffac9dec36d`. The Go To Line dialog and
+  project-panel rename/new entry inputs now retain state on window
+  deactivation, including a project-panel regression test. The collab-panel
+  channel rename was omitted because ZZZ excludes collaboration UI and its
+  cloud/social routing.
 
 Continuation verification:
 
@@ -273,6 +284,9 @@ BLOCKED cargo test --locked -p editor test_add_selection_above_below_with_fold
 PASS cargo check --locked -p terminal_view
 PASS cargo test --locked -p terminal_view test_inline_terminal_displays_all_of_its_lines
 PASS cargo check --locked -p ui
+PASS cargo check --locked -p go_to_line
+PASS cargo check --locked -p project_panel
+PASS cargo test --locked -p project_panel --lib test_rename_survives_window_deactivation
 ```
 
 ## Verification
