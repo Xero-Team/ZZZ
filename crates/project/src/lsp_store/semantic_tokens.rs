@@ -115,13 +115,7 @@ impl LspStore {
             }
 
             if invalidate_cache {
-                let SemanticTokensData {
-                    raw_tokens,
-                    latest_invalidation_requests: _,
-                    update,
-                } = semantic_tokens_data;
-                *update = None;
-                raw_tokens.servers.clear();
+                semantic_tokens_data.invalidate_for_refresh(refresh.server_id);
             }
         }
 
@@ -131,11 +125,8 @@ impl LspStore {
             return task.clone();
         }
 
-        let new_tokens = self.fetch_semantic_tokens_for_buffer(
-            &buffer,
-            refresh.map(|refresh| refresh.server_id),
-            cx,
-        );
+        let for_server = refresh.map(|refresh| refresh.server_id);
+        let new_tokens = self.fetch_semantic_tokens_for_buffer(&buffer, for_server, cx);
 
         let task_buffer = buffer.clone();
         let task_version_queried_for = version_queried_for.clone();
@@ -188,16 +179,38 @@ impl LspStore {
                         .await,
                     )
                 } else {
-                    lsp_store.update(cx, |lsp_store, cx| {
+                    let remaining_tokens = lsp_store.update(cx, |lsp_store, cx| {
+                        let mut remaining_tokens = None;
                         if let Some(current_lsp_data) =
                             lsp_store.current_lsp_data(buffer.read(cx).remote_id())
+                            && current_lsp_data.buffer_version == version_queried_for
+                            && let Some(semantic_tokens) = current_lsp_data.semantic_tokens.as_mut()
                         {
-                            if current_lsp_data.buffer_version == version_queried_for {
+                            if for_server.is_none() || semantic_tokens.raw_tokens.servers.is_empty()
+                            {
                                 current_lsp_data.semantic_tokens = None;
+                            } else {
+                                // A targeted request may be skipped if the server no longer
+                                // supports semantic tokens for this buffer. Preserve and
+                                // reproject the other servers' still-valid cached tokens.
+                                let buffer_snapshot =
+                                    buffer.read_with(cx, |buffer, _| buffer.snapshot());
+                                remaining_tokens =
+                                    Some((semantic_tokens.raw_tokens.clone(), buffer_snapshot));
                             }
                         }
+                        remaining_tokens
                     })?;
-                    None
+                    match remaining_tokens {
+                        Some((raw_tokens, buffer_snapshot)) => Some(
+                            cx.background_spawn(raw_to_buffer_semantic_tokens(
+                                raw_tokens,
+                                buffer_snapshot.text.clone(),
+                            ))
+                            .await,
+                        ),
+                        None => None,
+                    }
                 };
                 Ok(BufferSemanticTokens { tokens: res })
             })
@@ -634,6 +647,11 @@ pub struct SemanticTokensData {
 }
 
 impl SemanticTokensData {
+    fn invalidate_for_refresh(&mut self, server_id: LanguageServerId) {
+        self.update = None;
+        self.raw_tokens.servers.remove(&server_id);
+    }
+
     pub(super) fn remove_server_data(&mut self, server_id: LanguageServerId) {
         self.raw_tokens.servers.remove(&server_id);
         self.latest_invalidation_requests.remove(&server_id);
@@ -753,6 +771,26 @@ mod tests {
     use super::*;
     use crate::lsp_command::SemanticTokensEdit;
     use lsp::SEMANTIC_TOKEN_MODIFIERS;
+
+    #[test]
+    fn targeted_refresh_keeps_other_servers_raw_tokens() {
+        let first_server = LanguageServerId(1);
+        let refreshed_server = LanguageServerId(2);
+        let mut data = SemanticTokensData::default();
+        data.raw_tokens.servers.insert(
+            first_server,
+            Arc::new(ServerSemanticTokens::from_full(vec![0, 0, 1, 0, 0], None)),
+        );
+        data.raw_tokens.servers.insert(
+            refreshed_server,
+            Arc::new(ServerSemanticTokens::from_full(vec![0, 1, 1, 0, 0], None)),
+        );
+
+        data.invalidate_for_refresh(refreshed_server);
+
+        assert!(data.raw_tokens.servers.contains_key(&first_server));
+        assert!(!data.raw_tokens.servers.contains_key(&refreshed_server));
+    }
 
     fn modifier_names(bits: u32) -> String {
         if bits == 0 {
