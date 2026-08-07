@@ -162,11 +162,11 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 8c259313 | C     | --           | External-agent promotional documentation.                                |
 | c305d68c | B     | --           | Mermaid dependency update needs lockfile review.                         |
 | 82878540 | C     | --           | Upstream benchmark infrastructure.                                       |
-| d61e80b8 | B     | --           | Git panel focus needs UI tests.                                          |
+| d61e80b8 | B     | 5e2e4af4     | Git panel Changes/History focus navigation.                              |
 | b5796233 | C     | --           | Native agent terminal runtime.                                           |
 | d0f797a3 | B     | --           | WGPU memory behavior needs renderer review.                              |
 | 51db7df7 | B     | --           | Overlaps Markdown table-scrolling port.                                  |
-| b914ba5c | B     | --           | Grammar update pending generated-file review.                            |
+| b914ba5c | A     | 814e93e2     | Python dunder variables receive attribute.special highlighting.          |
 | 101ca00a | B     | --           | Editor word movement needs dedicated regression port.                    |
 
 ## Applied Work
@@ -837,6 +837,13 @@ PASS docs page Prettier check for the audit page
 - `00cba838ad4e0be4b6176438551b72b2d512e9f8`: C. The 1,500-line Mermaid,
   GPUI SVG, dependency, and native agent-panel integration is too broad for
   a safe isolated port and includes the excluded agent UI surface.
+- `d61e80b85debf0c56ecdcadf635ffa2660ddfd37`: B, local commit `5e2e4af4d4`.
+  Git panel activation focus now follows the rendered Changes or History tab.
+  The local test setup tuple and existing Git panel fields were preserved;
+  the focused navigation test passed.
+- `b914ba5cb3f4619450ad0de38adbb6b215752b74`: A, local commit `814e93e2c1`.
+  Python dunder variables are highlighted with `attribute.special`; the
+  grammar-only change cherry-picked cleanly.
 
 Verification:
 
