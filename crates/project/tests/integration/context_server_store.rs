@@ -705,7 +705,14 @@ async fn test_context_server_loaded_when_first_worktree_added(cx: &mut TestAppCo
     });
 
     {
-        let _server_events = assert_server_events(&store, vec![], cx);
+        let _server_events = assert_server_events(
+            &store,
+            vec![
+                (server_id.clone(), ContextServerStatus::Starting),
+                (server_id.clone(), ContextServerStatus::Running),
+            ],
+            cx,
+        );
         drop(project.update(cx, |project, cx| {
             project.find_or_create_worktree(path!("/second"), true, cx)
         }));
