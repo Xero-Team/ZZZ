@@ -80,10 +80,10 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 27ca0526 | B     | f09e3aab     | Font fallback docs ported; unrelated formatting restored.              |
 | c9d1d0dd | C     | --           | Dependency-only helper relocation has no independent behavior.         |
 | 9677f83f | C     | --           | Triage automation.                                                     |
-| a6a23c7b | B     | --           | Dependency cleanup not needed for behavior.                            |
+| a6a23c7b | C     | --           | Dependency-only fuzzy cleanup has no independent behavior.             |
 | cdf3ccd0 | C     | --           | Extension refactor introduces telemetry events.                        |
-| f9a5bf91 | B     | --           | Safe MCP workspace routing awaits local call-chain port.               |
-| 933c85b1 | B     | --           | No equivalent upstream server-list UI in ZZZ settings.                 |
+| f9a5bf91 | B     | 1ad7cdbb     | MCP configuration prompts route to the active local workspace.         |
+| 933c85b1 | C     | --           | ZZZ has no upstream MCP or external-agent server-list settings UI.     |
 | a8491e63 | B     | --           | macOS drag restoration needs platform review.                          |
 | 79cc17c2 | B     | --           | GPUI scroll API review required.                                       |
 | ae99a867 | B     | a1e7b876     | X11 repaint ported; local scroll throttling preserved.                 |
@@ -464,6 +464,46 @@ PASS git diff --check
   It intentionally preserves matching behavior. ZZZ's local crate split has a
   separate dependency graph, so importing this churn would have no independent
   user-facing or safety value.
+
+### Continuation, MCP workspace routing review
+
+- `a6a23c7b80a5cefa0487b7856335be89ace7e483`: C. The full fuzzy cleanup only
+  replaces `util` imports with `path` and `gpui_util`, adds wasm-specific
+  `util` module guards, and changes the lockfile. It intentionally preserves
+  matching behavior; ZZZ has no standalone wasm caller requiring those broad
+  utility API guards, so the dependency churn has no independent value.
+- `cdf3ccd036859e76169e74d1b7e9bb5aa1a079eb`: C. The extension UI refactor
+  changes extension installation, upgrade, and remote metadata presentation
+  while emitting `telemetry::event!` for installation and removal. No separable
+  MCP behavior is present, and retaining any installation path would violate
+  ZZZ's no-telemetry boundary.
+- `f9a5bf918149ba623f5af1afd5468206910ed3dc`: B, local commit
+  `1ad7cdbb5eef0967600ec03f2b85223ab6dbc281`. Retained the neutral local MCP
+  configuration fix: extension events now select the active `MultiWorkspace`
+  and its active workspace, rather than subscribing each retained workspace to
+  the same event. Uninstall still removes only matching local context-server
+  settings. The regression test confirms that a retained background workspace
+  receives no hidden modal. No native agent runtime, account, provider,
+  telemetry, collaboration, or remote-project route was introduced.
+- `933c85b13442e42530ae2632530a7f148866ca1f`: C. Its MCP server-list fix
+  requires both the upstream `mcp_servers_page` store list and the
+  `external_agents_page`, neither of which exists in ZZZ: the local MCP page
+  intentionally exposes only the neutral timeout setting. Adding the upstream
+  settings UI would pull in the excluded external-agent surface, so there is
+  no independently safe UI behavior to port.
+
+Continuation verification:
+
+```text
+PASS git diff --check
+PASS cargo fmt --check
+PASS cargo check --locked -p agent_ui
+PASS cargo test --locked -p agent_ui --lib context_server_configuration::tests::test_configure_extension_only_opens_modal_in_active_workspace
+PASS cd docs && npx prettier --write src/development/upstream-sync-2026-08-07.md
+PASS cd docs && npx prettier --check src/development/upstream-sync-2026-08-07.md
+FAIL cd docs && npx prettier --check src/
+     Existing formatting failures: installation.md, migrate/vs-code.md, and reference/all-settings.md.
+```
 
 ## Verification
 
