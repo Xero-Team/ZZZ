@@ -1070,12 +1070,12 @@ fn split_preview_url(url: &str) -> (&str, Option<&str>) {
 
 fn source_position_from_fragment(fragment: &str) -> Option<(u32, u32)> {
     let fragment = fragment.strip_prefix('L').unwrap_or(fragment);
-    let (line, column) = match fragment.split_once([',', ':']) {
+    let fragment = fragment
+        .split_once('-')
+        .map_or(fragment, |(start, _)| start);
+    let (line, column) = match fragment.split_once([',', ':', 'C']) {
         Some((line, column)) => (line, Some(column)),
-        None => (
-            fragment.split_once('-').map_or(fragment, |(line, _)| line),
-            None,
-        ),
+        None => (fragment, None),
     };
     let line = line.parse::<u32>().ok()?.checked_sub(1)?;
     let column = column
@@ -2021,6 +2021,14 @@ mod tests {
         );
         assert_eq!(
             preview_path_with_position("guide.md", Some("L3:4")),
+            Some("guide.md:3:4".to_owned())
+        );
+        assert_eq!(
+            preview_path_with_position("guide.md", Some("L3C4")),
+            Some("guide.md:3:4".to_owned())
+        );
+        assert_eq!(
+            preview_path_with_position("guide.md", Some("L3C4-L8C10")),
             Some("guide.md:3:4".to_owned())
         );
         assert_eq!(
