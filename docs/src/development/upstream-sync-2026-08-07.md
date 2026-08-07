@@ -11,7 +11,7 @@ description: Selective Zed upstream sync audit.
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Reviewed upstream head: `027cf0def75e5c027504f402a6a6c0dcac11f178`
 - Live upstream head queried: `027cf0def75e5c027504f402a6a6c0dcac11f178`
-- Query time: `2026-08-07T19:10:59+02:00`
+- Query time: `2026-08-07T19:16:41+02:00`
 - Requested range starts after `7b030b500810b04cf5fb4aa5973be99a502d9f36`
 
 `A` is a complete safe absorption or an already-equivalent local change.
@@ -20,7 +20,7 @@ claimed as synchronized unless a local commit is listed. `C` is rejected by
 ZZZ's local-first, no-account, ACP-only boundary.
 
 The reviewed baseline is now `027cf0def75e5c027504f402a6a6c0dcac11f178`.
-The live upstream query at `2026-08-07T19:10:59+02:00` returned
+The live upstream query at `2026-08-07T19:16:41+02:00` returned
 `027cf0def75e5c027504f402a6a6c0dcac11f178`; commits after the reviewed range
 are not claimed as audited or synchronized.
 
@@ -1033,3 +1033,7 @@ FAIL npx prettier --check src/: existing formatting issues in installation.md, m
 FAIL first cargo test --locked -p lsp test_unit_: upstream test referenced undeclared async_channel; test adapted to existing smol::channel and rerun passed
 CONFLICT 027cf0def7 direct cherry-pick: local Markdown preview context diverged; cherry-pick aborted and minimal B port committed
 ```
+
+Follow-up query at `2026-08-07T19:16:41+02:00` returned the same
+`027cf0def75e5c027504f402a6a6c0dcac11f178` head; no new commits were present
+after the reviewed baseline.
