@@ -59,7 +59,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use thiserror::Error;
-use util::{RangeExt as _, ResultExt as _};
+use util::{RangeExt as _, ResultExt as _, rel_path::RelPath};
 
 pub mod cursor_excerpt;
 pub mod example_spec;
@@ -732,11 +732,14 @@ pub(crate) fn buffer_path_with_id_fallback(
     snapshot: &TextBufferSnapshot,
     cx: &App,
 ) -> Arc<Path> {
-    if let Some(file) = file {
-        file.full_path(cx).into()
-    } else {
-        Path::new(&format!("untitled-{}", snapshot.remote_id())).into()
-    }
+    let Some(file) = file else {
+        return Path::new(&format!("untitled-{}", snapshot.remote_id())).into();
+    };
+    let full_path = file.full_path(cx);
+    let Some(path) = RelPath::new(&full_path, file.path_style(cx)).ok() else {
+        return Path::new(&format!("untitled-{}", snapshot.remote_id())).into();
+    };
+    path.as_std_path().into()
 }
 
 impl EditPredictionStore {
