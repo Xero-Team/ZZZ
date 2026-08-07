@@ -186,6 +186,8 @@ this report records a partial review only and does not advance a baseline.
   `6b2aa1c90aeb72cadfd30ed12141ed9e2569eded`
 - Confirmed again with `git ls-remote` at `2026-08-07T05:33:03+02:00`:
   `6b2aa1c90aeb72cadfd30ed12141ed9e2569eded`
+- A fresh `git ls-remote` at `2026-08-07T15:53:40+02:00` reports current
+  upstream `refs/heads/main` at `027cf0def75e5c027504f402a6a6c0dcac11f178`.
 - The reviewed history remains the requested range ending at
   `101ca00a1352ed71ef398f21b47836565d1998e3`. It was fetched under the
   temporary ref `refs/upstream-sync-tmp/20260807-101ca00a` only.
