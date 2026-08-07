@@ -156,7 +156,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 4b407d0f | A     | --           | Current movement already matches the reverted punctuation behavior.      |
 | 02c6dd95 | C     | --           | Upstream release metadata.                                               |
 | 38df25d5 | B     | --           | GPUI scheduler readiness needs review.                                   |
-| a8cae3bd | B     | --           | Gesture dispatch needs GPUI tests.                                       |
+| a8cae3bd | A     | e39e8eae     | Multi-modifier gestures no longer synthesize standalone modifiers.       |
 | 00cba838 | B     | --           | Mermaid UI behavior needs preview tests.                                 |
 | 65a5c89a | B     | --           | Parser scheduling needs language tests.                                  |
 | 8c259313 | C     | --           | External-agent promotional documentation.                                |
@@ -827,6 +827,9 @@ PASS docs page Prettier check for the audit page
   current ZZZ movement implementation matches the reverted upstream behavior.
 - `66ed3027b8ca7fed0feeee91d1ce6346ccd4ac39`: C. The change is confined to
   the excluded native `agent_ui` panel and has no ACP-only surface.
+- `a8cae3bd77f6e1c1dde98bb1dcebba0d254dbd71`: A, local commit `e39e8eae9e`.
+  GPUI now invalidates standalone-modifier synthesis after multi-modifier
+  gestures; the focused regression test passed.
 
 Verification:
 
