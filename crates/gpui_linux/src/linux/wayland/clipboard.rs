@@ -191,7 +191,7 @@ impl Clipboard {
         if let Some(item) = self.contents.as_ref()
             && let Some(bytes) = bytes_for_mime(item, &mime_type)
         {
-            self.send_bytes(fd, bytes);
+            self.send_internal(fd, bytes);
         }
     }
 
@@ -199,7 +199,7 @@ impl Clipboard {
         if let Some(item) = self.primary_contents.as_ref()
             && let Some(bytes) = bytes_for_mime(item, &mime_type)
         {
-            self.send_bytes(fd, bytes);
+            self.send_internal(fd, bytes);
         }
     }
 
@@ -239,7 +239,7 @@ impl Clipboard {
         Some(item)
     }
 
-    pub fn send_bytes(&self, fd: OwnedFd, bytes: Vec<u8>) {
+    fn send_internal(&self, fd: OwnedFd, bytes: Vec<u8>) {
         let mut written = 0;
         self.loop_handle
             .insert_source(
