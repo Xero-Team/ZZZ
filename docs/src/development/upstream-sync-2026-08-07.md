@@ -62,10 +62,10 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | e24eeb71 | C     | --           | Upstream release metadata.                                        |
 | b9256fa8 | C     | --           | Upstream npm build infrastructure.                                |
 | f620cbc0 | C     | --           | Native agent sandbox bundling.                                    |
-| f52fd9ac | B     | --           | macOS drag API needs platform review.                             |
+| f52fd9ac | C     | --           | Broad macOS outbound-drag framework cannot be safely isolated.    |
 | 431734c9 | C     | --           | Collaboration contact finder.                                     |
-| 33f1112f | B     | --           | Theme schema compatibility review required.                       |
-| 36911f8c | B     | --           | Documentation not independently reviewed.                         |
+| 33f1112f | C     | --           | Upstream-hosted theme schema/type migration has no local publish path. |
+| 36911f8c | B     | 701e66ef     | Linux window-decoration docs and comments ported.                 |
 | 25929703 | B     | --           | Grammar update pending generated-file review.                     |
 | 6109c2e6 | B     | --           | Grammar update pending generated-file review.                     |
 | b535bec7 | B     | --           | Notebook action needs local UI review.                            |
@@ -188,7 +188,7 @@ this report records a partial review only and does not advance a baseline.
   `101ca00a1352ed71ef398f21b47836565d1998e3`. It was fetched under the
   temporary ref `refs/upstream-sync-tmp/20260807-101ca00a` only.
 
-The following seventeen candidates were individually re-read with their parent,
+The following twenty candidates were individually re-read with their parent,
 complete diff, and current ZZZ call chain:
 
 - `95106f9cde3a6e7b622b6c390c82cf426d7daaa1`: C. Its docs describe
@@ -272,6 +272,21 @@ complete diff, and current ZZZ call chain:
   are deferred to the foreground executor so AppKit cannot re-enter a live App
   borrow. The test platform and GPUI regression test were retained; macOS
   native code was inspected but not run on Linux.
+- `f52fd9ac44b298c089491d9920daa22964c32cc8`: C. Its 853-line change adds a
+  new public GPUI external-drag protocol, AppKit drag-session ownership, test
+  platform support, and project-panel routing. It cannot be reduced to a
+  standalone stability fix or exercised on this Linux host without importing
+  the broad native lifecycle framework.
+- `33f1112fc2aff8d27a910c2d1b6379bb51905512`: C. The 559-line migration
+  changes theme content types, importer conversions, schema generation, and
+  references to an upstream-hosted schema version. ZZZ has no independent
+  schema publishing path, so the format declaration cannot be retained safely.
+- `36911f8cabc0f76f611dedf7c760b08a22b6cdf4`: B, local commit
+  `701e66ef1cc59071a3226683f2f8f67b51a90321`. The existing Linux
+  `window_decorations` setting now describes client/server decorations and the
+  GNOME Wayland limitation in defaults, schema docs, and settings reference.
+  Only local ZZZ wording was used; unrelated pre-existing formatting was left
+  untouched.
 
 Continuation verification:
 
@@ -300,6 +315,11 @@ PASS cargo test --locked -p project_panel --lib test_rename_survives_window_deac
 PASS cargo check --locked -p gpui
 PASS cargo test --locked -p gpui --lib test_input_handler_pending
 PASS cargo test --locked -p gpui --lib test_appearance_change_runs_after_app_update
+PASS cargo check --locked -p settings_content
+PASS cargo check --locked -p gpui
+PASS npx prettier --check docs/src/reference/all-settings.md before restoring unrelated formatting
+FAIL npx prettier --check docs/src/reference/all-settings.md after restoration
+     Existing unrelated preview-tabs indentation remains intentionally untouched
 ```
 
 ## Verification
