@@ -188,7 +188,7 @@ this report records a partial review only and does not advance a baseline.
   `101ca00a1352ed71ef398f21b47836565d1998e3`. It was fetched under the
   temporary ref `refs/upstream-sync-tmp/20260807-101ca00a` only.
 
-The following six candidates were individually re-read with their parent,
+The following ten candidates were individually re-read with their parent,
 complete diff, and current ZZZ call chain:
 
 - `95106f9cde3a6e7b622b6c390c82cf426d7daaa1`: C. Its docs describe
