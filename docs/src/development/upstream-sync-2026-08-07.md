@@ -77,7 +77,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 3652f301 | C     | --           | Copilot authentication split.                                          |
 | d88f6821 | B     | ad7db886     | Windows Vim/Helix Escape dismisses notifications.                      |
 | a473ea63 | C     | --           | Broad GPUI/image lifecycle contract cannot be safely isolated.         |
-| 27ca0526 | B     | --           | Documentation not independently reviewed.                              |
+| 27ca0526 | B     | f09e3aab     | Font fallback docs ported; unrelated formatting restored.              |
 | c9d1d0dd | B     | --           | Dependency cleanup conflicts with local gpui_util refactor.            |
 | 9677f83f | C     | --           | Triage automation.                                                     |
 | a6a23c7b | B     | --           | Dependency cleanup not needed for behavior.                            |
@@ -434,6 +434,27 @@ NOT RUN upstream Windows notification regression: Linux host.
   not expose that contract, and upstream history includes an earlier reversion
   of image-resource cleanup. A partial drop call would risk freeing a texture
   still used by another view, so no renderer or dependency change was made.
+
+### Continuation, font fallback documentation review
+
+- `27ca0526293f8fb4b8bf05afa2fa82ffaa7e3106`: B, local commit
+  `f09e3aabd70ae3c74368469180b8bff84bd61a07`. Retained documentation for the
+  existing buffer, UI, and terminal fallback settings. `TerminalSettings` and
+  `terminal_view` confirm that terminal fallbacks inherit buffer fallbacks when
+  unset. No account, telemetry, cloud, provider, or agent setting was involved.
+  The one unrelated `preview_tabs` indentation change from targeted Prettier was
+  restored rather than included.
+
+Continuation verification:
+
+```text
+PASS npx prettier --check docs/src/appearance.md
+PASS npx prettier --write src/appearance.md src/reference/all-settings.md before restoring unrelated indentation
+FAIL npx prettier --check src/reference/all-settings.md after restoration
+     Existing preview_tabs indentation remains intentionally untouched.
+PASS cargo fmt --check
+PASS git diff --check
+```
 
 ## Verification
 
