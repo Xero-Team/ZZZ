@@ -100,24 +100,24 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | b7de7640 | B     | 4aa041f7     | Compose preserves omitted entrypoints per specification defaults.      |
 | 26103320 | B     | c01ab796     | Windows path normalization is host-platform independent.               |
 | 2ec29977 | B     | --           | Remote-project preference needs local remote flow review.              |
-| 5f180e06 | B     | --           | Editor key context needs regression review.                            |
-| 58a3c0fa | B     | --           | Documentation awaits settings review.                                  |
-| 864ff0ba | B     | --           | Dev-container lifecycle execution needs review.                        |
+| 5f180e06 | A     | 0c736c27     | Multiple-selection editor key context.                                 |
+| 58a3c0fa | A     | 8704b05d     | Project-panel dock default documentation corrected.                    |
+| 864ff0ba | B     | 7ce07f2c     | String lifecycle commands use `/bin/sh -c`; fixtures adapted locally.  |
 | 0b3621db | A     | aa68f130     | Cherry-picked; local test constructor adaptation follows.              |
-| a5615f09 | B     | --           | Panel layout change needs UI review.                                   |
-| b209000d | B     | --           | Linux installer behavior needs packaging review.                       |
-| 4f047acc | B     | --           | Edit-prediction local-model review needed.                             |
-| 9c7a5c94 | B     | --           | CLI documentation not independently reviewed.                          |
-| 56cf49bc | B     | --           | Theme data update needs snapshot review.                               |
+| a5615f09 | B     | f1a4b361     | Panel saved size resets when default_size changes.                     |
+| b209000d | A     | fa5adfda     | 32-bit Linux installer architectures rejected.                         |
+| 4f047acc | C     | --           | V4 cursor-marker route is absent from ZZZ's edit_prediction API.       |
+| 9c7a5c94 | A     | 6fe184ef     | CLI `--existing` option documented.                                    |
+| 56cf49bc | B     | cb84ff23     | Gruvbox parameter colors adapted to divergent local theme data.        |
 | c7aea6cb | B     | --           | Wayland outbound drag needs platform review.                           |
 | 1ac840ab | B     | --           | WSL remote drop needs remote-flow review.                              |
 | 59cb143c | C     | --           | Triage automation.                                                     |
 | 2318f45f | B     | --           | Multi-workspace close behavior needs UI review.                        |
-| 779c35d2 | B     | --           | ACP terminal change needs ACP test review.                             |
+| 779c35d2 | B     | 754161d0     | ACP terminal disables configured Git pagers.                           |
 | f99da3a4 | C     | --           | GPT subscription provider icon.                                        |
 | f56ff65c | B     | --           | Superseded by later punctuation revert.                                |
 | 98f39bfc | C     | --           | Community automation.                                                  |
-| 5e03f2d3 | B     | --           | Solo diff UI needs local review.                                       |
+| 5e03f2d3 | B     | bd5077b3     | Solo diffs hide generic multibuffer controls.                          |
 | 5e1fd392 | B     | --           | Git diff-base setting needs settings review.                           |
 | 21f16f7b | B     | --           | Cargo build optimization needs build review.                           |
 | 90d024b8 | B     | 5f35fd30     | Folded-row tab coordinate fix adapted to current editor API.           |
@@ -729,6 +729,61 @@ PASS cargo fmt --check -p util
 PASS cargo check --locked -p util
 PASS cargo test --locked -p util --lib test_normalize_windows_path_regardless_of_host_platform
 PASS git diff --check
+```
+
+### Continuation, editor, UI, ACP, and dev-container review
+
+- `5f180e06dc4e776d016ee7a52a39f0b00731af1a`: A, local commit
+  `0c736c2755`. Added the `multiple_selections` editor key context; the
+  complete three-line change cherry-picked cleanly.
+- `58a3c0fa0e9e32d1d2e554b56e8da969fd1d3621`: A, local commit
+  `8704b05d32`. Corrected project-panel dock defaults in the two local docs;
+  settings already use `right`.
+- `864ff0ba3fb1bbb0c8074e63156ade8c5f835347`: B, local commit `7ce07f2cfa`.
+  String-form Dev Container lifecycle commands now execute through
+  `/bin/sh -c`; array forms remain direct. Upstream fixture rewrites and
+  manifest formatting were omitted because local fixtures independently
+  diverged.
+- `a5615f092d82acde9accf56e675ba0c6444bd1fe`: B, local commit `f1a4b361a4`.
+  Dock settings changes clear persisted panel size when `default_size` changes.
+  The behavior was adapted to ZZZ's current four-subscription Dock entry.
+- `b209000d28820ed69fe5fa9c0749a12c6a44f0f4`: A, local commit `fa5adfdaf3`.
+  The installer no longer maps 32-bit Linux architectures to incompatible
+  64-bit artifacts.
+- `4f047acc1780eceed5be1f3dfd3f9ee652ed14cb`: C. Its V4
+  `prediction_edits_for_single_file_diff` and cursor-marker machinery are not
+  present in ZZZ; the active edit-prediction path uses a different API, so no
+  safe symbol-level port exists.
+- `9c7a5c9485669f57a22bc9c07b0f856cf1829a34`: A, local commit `6fe184ef9e`.
+  Documented the already-supported `--existing` CLI option.
+- `56cf49bc1afe05bbc777a7df5a01f79299ab4956`: B, local commit `cb84ff2312`.
+  Added `variable.parameter` colors to all local Gruvbox variants after a
+  cherry-pick conflict caused by independently changed theme data.
+- `779c35d256a320ddc7611706cb54c2df93618e68`: B, local commit `754161d05b`.
+  Centralized `PAGER` and `GIT_PAGER` overrides for ACP terminals; native Zed
+  agent framing was omitted.
+- `5e03f2d387e629237c10a4e4fed881b64abd8fea`: B, local commit `bd5077b303`.
+  Solo diff searches no longer expose the generic multibuffer fold control;
+  the predicate was adapted to ZZZ's existing split-editor state.
+
+Verification:
+
+```text
+PASS cargo fmt --check -p editor -p workspace -p dev_container -p acp_thread -p search
+PASS cargo check --locked -p editor
+PASS cargo check --locked -p workspace
+PASS cargo check --locked -p dev_container
+PASS cargo check --locked -p acp_thread
+PASS cargo check --locked -p search
+PASS cargo test --locked -p search --lib test_uses_primary_left_when_in_multi_buffer
+PASS cargo test --locked -p dev_container --lib string_lifecycle_commands_use_shell
+PASS git diff --check
+FAIL cargo test --locked -p dev_container --lib
+     Four existing fixture-equality tests still expect pre-spec string
+     tokenization; the focused shell regression passes and no unrelated
+     fixture rewrite was imported.
+PASS python -m json.tool assets/themes/gruvbox/gruvbox.json
+PASS docs page Prettier check for the audit page
 ```
 
 ## Verification
