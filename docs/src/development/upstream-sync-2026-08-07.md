@@ -90,7 +90,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 5786fee5 | C     | --           | Community automation.                                                  |
 | 08994c41 | B     | 5f2ed7e3     | CLI opens wait for session restoration or its first window.            |
 | 790dcefb | B     | --           | Safe self-hosted behavior needs a local provider/test adaptation.      |
-| 998fbf30 | B     | --           | Git submodule worktree model review required.                          |
+| 998fbf30 | B     | f6d8bc25     | Submodules retain their own local project identities.                  |
 | 9dc8880b | B     | --           | File-finder navigation needs local path review.                        |
 | 5638be1f | C     | --           | ChatGPT subscription authentication.                                   |
 | 9a631e54 | B     | --           | License metadata requires package review.                              |
@@ -573,6 +573,36 @@ Continuation verification:
 PASS git cherry-pick --abort
 PASS git diff --check after abort
 NOT RUN cargo checks: no source was retained after the required abort.
+```
+
+### Continuation, Git submodule identity review
+
+- `998fbf30ff2929cce866bd19b77237210db88484`: B, local commit
+  `f6d8bc2547377f553a617303c83489bc3ae90f13`. Retained the local Git identity
+  correction: directories below a superproject's `.git/modules` are recognized
+  as submodule git directories and retain their own working-directory identity
+  when projects are grouped, restored, or persisted as recent workspaces.
+  Linked worktrees and bare repositories retain their existing identity paths.
+  The direct `git cherry-pick -x -s` was aborted because upstream's test
+  insertion conflicted with independently added ZZZ Git-path aggregation tests;
+  the behavior and focused tests were then ported manually. No network,
+  account, telemetry, collaboration, agent, provider, or remote-project route
+  was added.
+
+Continuation verification:
+
+```text
+PASS git diff --check
+PASS cargo check --locked -p project
+PASS cargo test --locked -p project --lib is_submodule_git_dir
+PASS cargo test --locked -p project --lib resolve_git_worktree_to_main_repo_ignores_submodule
+PASS cargo check --locked -p workspace
+PASS cargo test --locked -p workspace --lib recent_workspace_identity_for_submodule
+PASS cargo fmt --check -p project -p workspace
+PASS cd docs && npx prettier --write src/ (unrelated rewrites restored)
+PASS cd docs && npx prettier --check src/development/upstream-sync-2026-08-07.md
+FAIL cd docs && npx prettier --check src/
+     Existing formatting failures: installation.md, migrate/vs-code.md, and reference/all-settings.md.
 ```
 
 ## Verification
