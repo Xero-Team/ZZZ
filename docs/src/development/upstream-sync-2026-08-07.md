@@ -98,7 +98,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | ae394f3d | C     | --           | Staff-only edit-prediction policy.                                     |
 | e99616cd | B     | d4bfa33b     | Linux decorations honor non-resizable/minimizable window options.      |
 | b7de7640 | B     | 4aa041f7     | Compose preserves omitted entrypoints per specification defaults.      |
-| 26103320 | B     | --           | Cross-platform path behavior needs Windows coverage.                   |
+| 26103320 | B     | c01ab796     | Windows path normalization is host-platform independent.               |
 | 2ec29977 | B     | --           | Remote-project preference needs local remote flow review.              |
 | 5f180e06 | B     | --           | Editor key context needs regression review.                            |
 | 58a3c0fa | B     | --           | Documentation awaits settings review.                                  |
@@ -709,6 +709,25 @@ Verification:
 PASS cargo check --locked -p dev_container
 PASS cargo test --locked -p dev_container --lib override_command
 PASS cargo fmt --check -p dev_container
+PASS git diff --check
+```
+
+### Continuation, Windows path normalization review
+
+- `2610332077ee05f4c9e2e1caa7d80a4dcde3deb6`: B, local commit
+  `c01ab796a6`. ZZZ has no upstream `crates/path`; its equivalent
+  `PathStyle` implementation lives in `crates/util/src/paths.rs`. The local
+  port lexically normalizes Windows drive, UNC, rooted, and relative paths,
+  treating both slash forms as separators without consulting host-platform
+  `std::path::Path` parsing. The upstream `crates/path` file was omitted
+  because that crate is absent from ZZZ.
+
+Verification:
+
+```text
+PASS cargo fmt --check -p util
+PASS cargo check --locked -p util
+PASS cargo test --locked -p util --lib test_normalize_windows_path_regardless_of_host_platform
 PASS git diff --check
 ```
 
