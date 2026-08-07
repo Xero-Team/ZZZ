@@ -155,9 +155,9 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 6153542c | C     | --           | Copilot credentials path.                                                |
 | 4b407d0f | A     | --           | Current movement already matches the reverted punctuation behavior.      |
 | 02c6dd95 | C     | --           | Upstream release metadata.                                               |
-| 38df25d5 | B     | --           | GPUI scheduler readiness needs review.                                   |
+| 38df25d5 | C     | --           | Benchmark-only dispatcher readiness API; no product behavior.            |
 | a8cae3bd | A     | e39e8eae     | Multi-modifier gestures no longer synthesize standalone modifiers.       |
-| 00cba838 | B     | --           | Mermaid UI behavior needs preview tests.                                 |
+| 00cba838 | C     | --           | Large Mermaid/GPUI dependency and excluded agent-panel integration.      |
 | 65a5c89a | B     | --           | Parser scheduling needs language tests.                                  |
 | 8c259313 | C     | --           | External-agent promotional documentation.                                |
 | c305d68c | B     | --           | Mermaid dependency update needs lockfile review.                         |
@@ -830,6 +830,13 @@ PASS docs page Prettier check for the audit page
 - `a8cae3bd77f6e1c1dde98bb1dcebba0d254dbd71`: A, local commit `e39e8eae9e`.
   GPUI now invalidates standalone-modifier synthesis after multi-modifier
   gestures; the focused regression test passed.
+- `38df25d54c6f3b3ad8b94312405a53978fd496fc`: C. The complete diff changes
+  only the benchmark/test dispatcher readiness path and adds no runtime UI
+  behavior; importing it would add benchmark infrastructure without a local
+  caller.
+- `00cba838ad4e0be4b6176438551b72b2d512e9f8`: C. The 1,500-line Mermaid,
+  GPUI SVG, dependency, and native agent-panel integration is too broad for
+  a safe isolated port and includes the excluded agent UI surface.
 
 Verification:
 
