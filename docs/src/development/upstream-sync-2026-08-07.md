@@ -20,154 +20,154 @@ ZZZ's local-first, no-account, ACP-only boundary.
 
 ## Decisions
 
-| Upstream | Class | Local commit | Disposition                                                            |
-| -------- | ----- | ------------ | ---------------------------------------------------------------------- |
-| 86531872 | A     | e301aba8     | Already absorbed.                                                      |
-| a1510de5 | C     | --           | Native agent permission runtime.                                       |
-| 4a1df1f7 | A     | 2841a150     | Already absorbed.                                                      |
-| c97b7c0e | B     | 1f504bf7     | Web fixes kept; unrelated missing benchmark declaration omitted.       |
-| 8e4e5a39 | A     | a16fa6de     | Already absorbed.                                                      |
-| a5d1afa5 | A     | 9f294f0f     | Cherry-picked with `-x -s`.                                            |
-| 65f3428f | C     | --           | Collaboration panel.                                                   |
-| ab92195a | A     | 99958903     | Cherry-picked with `-x -s`.                                            |
-| 8780e3a1 | B     | 5ac7e91c     | Undo errors ported; `TrashId` redesign omitted.                        |
-| 95106f9c | C     | --           | Staff/server-gated project-panel behavior is unavailable in ZZZ.       |
-| a8b57a25 | C     | --           | Release-channel rollout retains upstream flag policy.                  |
-| 1efdc3e6 | B     | 6fdb6647     | Response-first LSP refresh ported after test conflict.                 |
-| fa1d0362 | A     | b2206202     | Cherry-picked with `-x -s`.                                            |
-| fee527c7 | B     | 4adbd64d     | Wide-table scrolling ported; test harness omitted.                     |
-| 945764f9 | A     | b6b9c9dc     | Cherry-picked with `-x -s`.                                            |
-| b2131e9d | C     | --           | Cross-thread GPUI Web dispatcher APIs diverge locally.                 |
-| b6ebe0ff | A     | d67e88ac     | Cherry-picked with `-x -s`.                                            |
-| 1102219f | B     | 937879bb     | C-column fragments ported; preview lifecycle omitted.                  |
-| e4ac280d | C     | --           | Subscription provider extraction.                                      |
-| 50ac7dc9 | A     | 6cd56a79     | Cherry-picked with `-x -s`.                                            |
-| 6dcb0e57 | B     | 08584285     | RelPath normalization ported; provider routing omitted.                |
-| baacd359 | C     | --           | Call diagnostics.                                                      |
-| 424a6824 | C     | --           | wasm_thread fork-only dependency redirect; no behavior to retain.      |
-| 06b6160d | B     | 063594c4     | Private macOS blur API removed; local ctor retained.                   |
-| 82aef443 | C     | --           | Unused cross-platform idle scheduler API is too broad to add.          |
-| 5333ca1a | A     | 2200e0e8     | Cherry-picked; avoids redundant Git access checks.                     |
-| bdb28659 | C     | --           | `docs/theme` build configuration is outside this audit scope.          |
-| 97961c2a | B     | 170539df     | Web-compatible scrollbar clock ported.                                 |
-| c2db0f1a | A     | 227dd724     | Cherry-picked with `-x -s`.                                            |
-| 5ccbbbd8 | C     | --           | Unused GPUI grid API and public enum rename omitted.                   |
-| ba4cb2a2 | A     | 2b99b9b3     | Cherry-picked with `-x -s`.                                            |
-| f85349be | A     | --           | Already equivalent through `TrashedEntry` retry semantics.             |
-| 007ffc79 | A     | 4e2deeed     | Cherry-picked with `-x -s`.                                            |
-| b005c0de | B     | 379c16e8     | Local deactivation behavior ported; collab UI omitted.                 |
-| 12a19dcc | C     | --           | Native agent sandbox.                                                  |
-| dc1e815e | B     | 59d89954     | Pending keybinding wins over IME; stale focus omitted.                 |
-| a11083f9 | B     | e4fdf292     | Appearance callback deferred past App borrow.                          |
-| e24eeb71 | C     | --           | Upstream release metadata.                                             |
-| b9256fa8 | C     | --           | Upstream npm build infrastructure.                                     |
-| f620cbc0 | C     | --           | Native agent sandbox bundling.                                         |
-| f52fd9ac | C     | --           | Broad macOS outbound-drag framework cannot be safely isolated.         |
-| 431734c9 | C     | --           | Collaboration contact finder.                                          |
-| 33f1112f | C     | --           | Upstream-hosted theme schema/type migration has no local publish path. |
-| 36911f8c | B     | 701e66ef     | Linux window-decoration docs and comments ported.                      |
-| 25929703 | A     | 80cc1fdf     | Cherry-picked; enables Emmet in JSX/TSX function bodies.               |
-| 6109c2e6 | A     | 2872d245     | Cherry-picked; linked editing supports custom-element names.           |
-| b535bec7 | A     | ecc41447     | Cherry-picked; local notebook cell deletion action.                    |
-| 5e549b87 | B     | 1a9ea676     | Local Python toolchain guidance kept; remote routing omitted.          |
-| b9301f5c | C     | --           | Native agent thread workflow.                                          |
-| f851d82e | A     | --           | Equivalent left-biased local cursor anchor already exists.             |
-| 200fb85c | C     | --           | Depends on unabsorbed bracket-cache and boundary-query architecture.   |
-| 410a8a06 | B     | 14fc451b     | Targeted semantic-token refresh preserves other servers.               |
-| 3652f301 | C     | --           | Copilot authentication split.                                          |
-| d88f6821 | B     | ad7db886     | Windows Vim/Helix Escape dismisses notifications.                      |
-| a473ea63 | C     | --           | Broad GPUI/image lifecycle contract cannot be safely isolated.         |
-| 27ca0526 | B     | f09e3aab     | Font fallback docs ported; unrelated formatting restored.              |
-| c9d1d0dd | C     | --           | Dependency-only helper relocation has no independent behavior.         |
-| 9677f83f | C     | --           | Triage automation.                                                     |
-| a6a23c7b | C     | --           | Dependency-only fuzzy cleanup has no independent behavior.             |
-| cdf3ccd0 | C     | --           | Extension refactor introduces telemetry events.                        |
-| f9a5bf91 | B     | 1ad7cdbb     | MCP configuration prompts route to the active local workspace.         |
-| 933c85b1 | C     | --           | ZZZ has no upstream MCP or external-agent server-list settings UI.     |
-| a8491e63 | C     | --           | macOS drag restoration requires an inseparable platform lifecycle.     |
-| 79cc17c2 | C     | --           | GPUI scrolling redesign is not independently isolatable.               |
-| ae99a867 | B     | a1e7b876     | X11 repaint ported; local scroll throttling preserved.                 |
-| 5786fee5 | C     | --           | Community automation.                                                  |
-| 08994c41 | B     | 5f2ed7e3     | CLI opens wait for session restoration or its first window.            |
-| 790dcefb | B     | --           | Safe self-hosted behavior needs a local provider/test adaptation.      |
-| 998fbf30 | B     | f6d8bc25     | Submodules retain their own local project identities.                  |
-| 9dc8880b | A     | a115c679     | Cherry-picked; `path:line` selects an already-open target file.        |
-| 5638be1f | C     | --           | ChatGPT subscription authentication.                                   |
-| 9a631e54 | C     | --           | Upstream `path` crate is absent; local `paths` has separate GPL scope. |
-| b6b2148b | A     | 00daf646     | Cherry-picked; class constructors use the existing `type.class` scope. |
-| ae394f3d | C     | --           | Staff-only edit-prediction policy.                                     |
-| e99616cd | B     | d4bfa33b     | Linux decorations honor non-resizable/minimizable window options.      |
-| b7de7640 | B     | 4aa041f7     | Compose preserves omitted entrypoints per specification defaults.      |
-| 26103320 | B     | c01ab796     | Windows path normalization is host-platform independent.               |
-| 2ec29977 | B     | --           | Remote-project preference needs local remote flow review.              |
-| 5f180e06 | A     | 0c736c27     | Multiple-selection editor key context.                                 |
-| 58a3c0fa | A     | 8704b05d     | Project-panel dock default documentation corrected.                    |
-| 864ff0ba | B     | 7ce07f2c     | String lifecycle commands use `/bin/sh -c`; fixtures adapted locally.  |
-| 0b3621db | A     | aa68f130     | Cherry-picked; local test constructor adaptation follows.              |
-| a5615f09 | B     | f1a4b361     | Panel saved size resets when default_size changes.                     |
-| b209000d | A     | fa5adfda     | 32-bit Linux installer architectures rejected.                         |
-| 4f047acc | C     | --           | V4 cursor-marker route is absent from ZZZ's edit_prediction API.       |
-| 9c7a5c94 | A     | 6fe184ef     | CLI `--existing` option documented.                                    |
-| 56cf49bc | B     | cb84ff23     | Gruvbox parameter colors adapted to divergent local theme data.        |
-| c7aea6cb | B     | --           | Wayland outbound drag needs platform review.                           |
-| 1ac840ab | B     | --           | WSL remote drop needs remote-flow review.                              |
-| 59cb143c | C     | --           | Triage automation.                                                     |
-| 2318f45f | B     | --           | Multi-workspace close behavior needs UI review.                        |
-| 779c35d2 | B     | 754161d0     | ACP terminal disables configured Git pagers.                           |
-| f99da3a4 | C     | --           | GPT subscription provider icon.                                        |
-| f56ff65c | B     | --           | Superseded by later punctuation revert.                                |
-| 98f39bfc | C     | --           | Community automation.                                                  |
-| 5e03f2d3 | B     | bd5077b3     | Solo diffs hide generic multibuffer controls.                          |
-| 5e1fd392 | B     | --           | Git diff-base setting needs settings review.                           |
-| 21f16f7b | B     | --           | Cargo build optimization needs build review.                           |
-| 90d024b8 | B     | 5f35fd30     | Folded-row tab coordinate fix adapted to current editor API.           |
-| ce6f3af5 | B     | --           | Remote transfer quoting needs remote test review.                      |
-| 66ed3027 | B     | --           | ACP panel control needs ACP UI review.                                 |
-| 538a4a26 | C     | --           | Wezel build scenario infrastructure.                                   |
-| 8886dcb0 | B     | --           | GPUI test dispatcher API needs test review.                            |
-| 35cb7558 | B     | --           | Git-gutter setting needs settings review.                              |
-| 849ec589 | C     | --           | Native agent terminal path.                                            |
-| 2d9680fc | B     | --           | Transient undo feature flag requires release policy review.            |
-| be8c6f9f | B     | --           | Renderer resource changes need platform review.                        |
-| b036368c | B     | --           | ACP sidebar UI needs ACP review.                                       |
-| 7759e9f9 | B     | --           | Feature-flag cleanup depends on earlier flag policy.                   |
-| 41c0f28b | B     | --           | Remote branch-diff compatibility needs remote tests.                   |
-| b5764581 | B     | --           | Safe MCP refresh needs local context-server port.                      |
-| 4aad57fd | B     | --           | Remote workspace lifetime needs remote-flow review.                    |
-| e717010c | B     | --           | WSL remote streaming needs platform testing.                           |
-| 184e124b | B     | --           | Per-line terminal CWD resolver diverges locally.                       |
-| 1ade7854 | B     | --           | Regex engine semantics need search test review.                        |
-| c6e0868c | B     | --           | Vim indentation behavior needs Vim tests.                              |
-| bbd198f5 | B     | --           | Semantic-token ordering needs LSP regression review.                   |
-| b8c75f17 | B     | --           | Extension provider UI needs extension-path review.                     |
-| a12e3c06 | B     | --           | Feature-flag removal depends on earlier policy.                        |
-| 4601ead4 | B     | --           | Large WebGL backend needs dedicated platform port.                     |
-| 20ce54f8 | B     | --           | Worktree path identity needs project tests.                            |
-| 300972be | C     | --           | Upstream benchmark infrastructure.                                     |
-| 158c16f5 | B     | --           | Workspace replacement needs UI lifecycle review.                       |
-| 381953d4 | C     | --           | Collaboration panel.                                                   |
-| 655ed138 | B     | --           | Wayland IME behavior needs Linux test review.                          |
-| 8e18ab0c | B     | --           | ShellBuilder redirect needs terminal test review.                      |
-| f25b256f | B     | --           | Terminal word-boundary behavior needs terminal tests.                  |
-| 2d9e6278 | B     | --           | Helix multi-key behavior needs Vim tests.                              |
-| 6943d736 | C     | --           | Copilot OAuth cleanup.                                                 |
-| 0fb9a9da | C     | --           | Copilot settings path.                                                 |
-| 6153542c | C     | --           | Copilot credentials path.                                              |
-| 4b407d0f | B     | --           | Reverts transient punctuation behavior.                                |
-| 02c6dd95 | C     | --           | Upstream release metadata.                                             |
-| 38df25d5 | B     | --           | GPUI scheduler readiness needs review.                                 |
-| a8cae3bd | B     | --           | Gesture dispatch needs GPUI tests.                                     |
-| 00cba838 | B     | --           | Mermaid UI behavior needs preview tests.                               |
-| 65a5c89a | B     | --           | Parser scheduling needs language tests.                                |
-| 8c259313 | C     | --           | External-agent promotional documentation.                              |
-| c305d68c | B     | --           | Mermaid dependency update needs lockfile review.                       |
-| 82878540 | C     | --           | Upstream benchmark infrastructure.                                     |
-| d61e80b8 | B     | --           | Git panel focus needs UI tests.                                        |
-| b5796233 | C     | --           | Native agent terminal runtime.                                         |
-| d0f797a3 | B     | --           | WGPU memory behavior needs renderer review.                            |
-| 51db7df7 | B     | --           | Overlaps Markdown table-scrolling port.                                |
-| b914ba5c | B     | --           | Grammar update pending generated-file review.                          |
-| 101ca00a | B     | --           | Editor word movement needs dedicated regression port.                  |
+| Upstream | Class | Local commit | Disposition                                                              |
+| -------- | ----- | ------------ | ------------------------------------------------------------------------ |
+| 86531872 | A     | e301aba8     | Already absorbed.                                                        |
+| a1510de5 | C     | --           | Native agent permission runtime.                                         |
+| 4a1df1f7 | A     | 2841a150     | Already absorbed.                                                        |
+| c97b7c0e | B     | 1f504bf7     | Web fixes kept; unrelated missing benchmark declaration omitted.         |
+| 8e4e5a39 | A     | a16fa6de     | Already absorbed.                                                        |
+| a5d1afa5 | A     | 9f294f0f     | Cherry-picked with `-x -s`.                                              |
+| 65f3428f | C     | --           | Collaboration panel.                                                     |
+| ab92195a | A     | 99958903     | Cherry-picked with `-x -s`.                                              |
+| 8780e3a1 | B     | 5ac7e91c     | Undo errors ported; `TrashId` redesign omitted.                          |
+| 95106f9c | C     | --           | Staff/server-gated project-panel behavior is unavailable in ZZZ.         |
+| a8b57a25 | C     | --           | Release-channel rollout retains upstream flag policy.                    |
+| 1efdc3e6 | B     | 6fdb6647     | Response-first LSP refresh ported after test conflict.                   |
+| fa1d0362 | A     | b2206202     | Cherry-picked with `-x -s`.                                              |
+| fee527c7 | B     | 4adbd64d     | Wide-table scrolling ported; test harness omitted.                       |
+| 945764f9 | A     | b6b9c9dc     | Cherry-picked with `-x -s`.                                              |
+| b2131e9d | C     | --           | Cross-thread GPUI Web dispatcher APIs diverge locally.                   |
+| b6ebe0ff | A     | d67e88ac     | Cherry-picked with `-x -s`.                                              |
+| 1102219f | B     | 937879bb     | C-column fragments ported; preview lifecycle omitted.                    |
+| e4ac280d | C     | --           | Subscription provider extraction.                                        |
+| 50ac7dc9 | A     | 6cd56a79     | Cherry-picked with `-x -s`.                                              |
+| 6dcb0e57 | B     | 08584285     | RelPath normalization ported; provider routing omitted.                  |
+| baacd359 | C     | --           | Call diagnostics.                                                        |
+| 424a6824 | C     | --           | wasm_thread fork-only dependency redirect; no behavior to retain.        |
+| 06b6160d | B     | 063594c4     | Private macOS blur API removed; local ctor retained.                     |
+| 82aef443 | C     | --           | Unused cross-platform idle scheduler API is too broad to add.            |
+| 5333ca1a | A     | 2200e0e8     | Cherry-picked; avoids redundant Git access checks.                       |
+| bdb28659 | C     | --           | `docs/theme` build configuration is outside this audit scope.            |
+| 97961c2a | B     | 170539df     | Web-compatible scrollbar clock ported.                                   |
+| c2db0f1a | A     | 227dd724     | Cherry-picked with `-x -s`.                                              |
+| 5ccbbbd8 | C     | --           | Unused GPUI grid API and public enum rename omitted.                     |
+| ba4cb2a2 | A     | 2b99b9b3     | Cherry-picked with `-x -s`.                                              |
+| f85349be | A     | --           | Already equivalent through `TrashedEntry` retry semantics.               |
+| 007ffc79 | A     | 4e2deeed     | Cherry-picked with `-x -s`.                                              |
+| b005c0de | B     | 379c16e8     | Local deactivation behavior ported; collab UI omitted.                   |
+| 12a19dcc | C     | --           | Native agent sandbox.                                                    |
+| dc1e815e | B     | 59d89954     | Pending keybinding wins over IME; stale focus omitted.                   |
+| a11083f9 | B     | e4fdf292     | Appearance callback deferred past App borrow.                            |
+| e24eeb71 | C     | --           | Upstream release metadata.                                               |
+| b9256fa8 | C     | --           | Upstream npm build infrastructure.                                       |
+| f620cbc0 | C     | --           | Native agent sandbox bundling.                                           |
+| f52fd9ac | C     | --           | Broad macOS outbound-drag framework cannot be safely isolated.           |
+| 431734c9 | C     | --           | Collaboration contact finder.                                            |
+| 33f1112f | C     | --           | Upstream-hosted theme schema/type migration has no local publish path.   |
+| 36911f8c | B     | 701e66ef     | Linux window-decoration docs and comments ported.                        |
+| 25929703 | A     | 80cc1fdf     | Cherry-picked; enables Emmet in JSX/TSX function bodies.                 |
+| 6109c2e6 | A     | 2872d245     | Cherry-picked; linked editing supports custom-element names.             |
+| b535bec7 | A     | ecc41447     | Cherry-picked; local notebook cell deletion action.                      |
+| 5e549b87 | B     | 1a9ea676     | Local Python toolchain guidance kept; remote routing omitted.            |
+| b9301f5c | C     | --           | Native agent thread workflow.                                            |
+| f851d82e | A     | --           | Equivalent left-biased local cursor anchor already exists.               |
+| 200fb85c | C     | --           | Depends on unabsorbed bracket-cache and boundary-query architecture.     |
+| 410a8a06 | B     | 14fc451b     | Targeted semantic-token refresh preserves other servers.                 |
+| 3652f301 | C     | --           | Copilot authentication split.                                            |
+| d88f6821 | B     | ad7db886     | Windows Vim/Helix Escape dismisses notifications.                        |
+| a473ea63 | C     | --           | Broad GPUI/image lifecycle contract cannot be safely isolated.           |
+| 27ca0526 | B     | f09e3aab     | Font fallback docs ported; unrelated formatting restored.                |
+| c9d1d0dd | C     | --           | Dependency-only helper relocation has no independent behavior.           |
+| 9677f83f | C     | --           | Triage automation.                                                       |
+| a6a23c7b | C     | --           | Dependency-only fuzzy cleanup has no independent behavior.               |
+| cdf3ccd0 | C     | --           | Extension refactor introduces telemetry events.                          |
+| f9a5bf91 | B     | 1ad7cdbb     | MCP configuration prompts route to the active local workspace.           |
+| 933c85b1 | C     | --           | ZZZ has no upstream MCP or external-agent server-list settings UI.       |
+| a8491e63 | C     | --           | macOS drag restoration requires an inseparable platform lifecycle.       |
+| 79cc17c2 | C     | --           | GPUI scrolling redesign is not independently isolatable.                 |
+| ae99a867 | B     | a1e7b876     | X11 repaint ported; local scroll throttling preserved.                   |
+| 5786fee5 | C     | --           | Community automation.                                                    |
+| 08994c41 | B     | 5f2ed7e3     | CLI opens wait for session restoration or its first window.              |
+| 790dcefb | B     | --           | Safe self-hosted behavior needs a local provider/test adaptation.        |
+| 998fbf30 | B     | f6d8bc25     | Submodules retain their own local project identities.                    |
+| 9dc8880b | A     | a115c679     | Cherry-picked; `path:line` selects an already-open target file.          |
+| 5638be1f | C     | --           | ChatGPT subscription authentication.                                     |
+| 9a631e54 | C     | --           | Upstream `path` crate is absent; local `paths` has separate GPL scope.   |
+| b6b2148b | A     | 00daf646     | Cherry-picked; class constructors use the existing `type.class` scope.   |
+| ae394f3d | C     | --           | Staff-only edit-prediction policy.                                       |
+| e99616cd | B     | d4bfa33b     | Linux decorations honor non-resizable/minimizable window options.        |
+| b7de7640 | B     | 4aa041f7     | Compose preserves omitted entrypoints per specification defaults.        |
+| 26103320 | B     | c01ab796     | Windows path normalization is host-platform independent.                 |
+| 2ec29977 | B     | --           | Remote-project preference needs local remote flow review.                |
+| 5f180e06 | A     | 0c736c27     | Multiple-selection editor key context.                                   |
+| 58a3c0fa | A     | 8704b05d     | Project-panel dock default documentation corrected.                      |
+| 864ff0ba | B     | 7ce07f2c     | String lifecycle commands use `/bin/sh -c`; fixtures adapted locally.    |
+| 0b3621db | A     | aa68f130     | Cherry-picked; local test constructor adaptation follows.                |
+| a5615f09 | B     | f1a4b361     | Panel saved size resets when default_size changes.                       |
+| b209000d | A     | fa5adfda     | 32-bit Linux installer architectures rejected.                           |
+| 4f047acc | C     | --           | V4 cursor-marker route is absent from ZZZ's edit_prediction API.         |
+| 9c7a5c94 | A     | 6fe184ef     | CLI `--existing` option documented.                                      |
+| 56cf49bc | B     | cb84ff23     | Gruvbox parameter colors adapted to divergent local theme data.          |
+| c7aea6cb | B     | --           | Wayland outbound drag needs platform review.                             |
+| 1ac840ab | B     | --           | WSL remote drop needs remote-flow review.                                |
+| 59cb143c | C     | --           | Triage automation.                                                       |
+| 2318f45f | B     | --           | Multi-workspace close behavior needs UI review.                          |
+| 779c35d2 | B     | 754161d0     | ACP terminal disables configured Git pagers.                             |
+| f99da3a4 | C     | --           | GPT subscription provider icon.                                          |
+| f56ff65c | B     | --           | Superseded by later punctuation revert.                                  |
+| 98f39bfc | C     | --           | Community automation.                                                    |
+| 5e03f2d3 | B     | bd5077b3     | Solo diffs hide generic multibuffer controls.                            |
+| 5e1fd392 | B     | --           | Git diff-base setting needs settings review.                             |
+| 21f16f7b | C     | --           | Broad crate-graph/lockfile refactor has no independent product behavior. |
+| 90d024b8 | B     | 5f35fd30     | Folded-row tab coordinate fix adapted to current editor API.             |
+| ce6f3af5 | B     | --           | Remote transfer quoting needs remote test review.                        |
+| 66ed3027 | B     | --           | ACP panel control needs ACP UI review.                                   |
+| 538a4a26 | C     | --           | Wezel build scenario infrastructure.                                     |
+| 8886dcb0 | B     | --           | GPUI test dispatcher API needs test review.                              |
+| 35cb7558 | B     | --           | Git-gutter setting needs settings review.                                |
+| 849ec589 | C     | --           | Native agent terminal path.                                              |
+| 2d9680fc | B     | --           | Transient undo feature flag requires release policy review.              |
+| be8c6f9f | B     | --           | Renderer resource changes need platform review.                          |
+| b036368c | B     | --           | ACP sidebar UI needs ACP review.                                         |
+| 7759e9f9 | B     | --           | Feature-flag cleanup depends on earlier flag policy.                     |
+| 41c0f28b | B     | --           | Remote branch-diff compatibility needs remote tests.                     |
+| b5764581 | B     | --           | Safe MCP refresh needs local context-server port.                        |
+| 4aad57fd | B     | --           | Remote workspace lifetime needs remote-flow review.                      |
+| e717010c | B     | --           | WSL remote streaming needs platform testing.                             |
+| 184e124b | B     | --           | Per-line terminal CWD resolver diverges locally.                         |
+| 1ade7854 | B     | --           | Regex engine semantics need search test review.                          |
+| c6e0868c | B     | --           | Vim indentation behavior needs Vim tests.                                |
+| bbd198f5 | B     | --           | Semantic-token ordering needs LSP regression review.                     |
+| b8c75f17 | B     | --           | Extension provider UI needs extension-path review.                       |
+| a12e3c06 | B     | --           | Feature-flag removal depends on earlier policy.                          |
+| 4601ead4 | B     | --           | Large WebGL backend needs dedicated platform port.                       |
+| 20ce54f8 | B     | --           | Worktree path identity needs project tests.                              |
+| 300972be | C     | --           | Upstream benchmark infrastructure.                                       |
+| 158c16f5 | B     | --           | Workspace replacement needs UI lifecycle review.                         |
+| 381953d4 | C     | --           | Collaboration panel.                                                     |
+| 655ed138 | B     | --           | Wayland IME behavior needs Linux test review.                            |
+| 8e18ab0c | B     | --           | ShellBuilder redirect needs terminal test review.                        |
+| f25b256f | B     | --           | Terminal word-boundary behavior needs terminal tests.                    |
+| 2d9e6278 | B     | --           | Helix multi-key behavior needs Vim tests.                                |
+| 6943d736 | C     | --           | Copilot OAuth cleanup.                                                   |
+| 0fb9a9da | C     | --           | Copilot settings path.                                                   |
+| 6153542c | C     | --           | Copilot credentials path.                                                |
+| 4b407d0f | B     | --           | Reverts transient punctuation behavior.                                  |
+| 02c6dd95 | C     | --           | Upstream release metadata.                                               |
+| 38df25d5 | B     | --           | GPUI scheduler readiness needs review.                                   |
+| a8cae3bd | B     | --           | Gesture dispatch needs GPUI tests.                                       |
+| 00cba838 | B     | --           | Mermaid UI behavior needs preview tests.                                 |
+| 65a5c89a | B     | --           | Parser scheduling needs language tests.                                  |
+| 8c259313 | C     | --           | External-agent promotional documentation.                                |
+| c305d68c | B     | --           | Mermaid dependency update needs lockfile review.                         |
+| 82878540 | C     | --           | Upstream benchmark infrastructure.                                       |
+| d61e80b8 | B     | --           | Git panel focus needs UI tests.                                          |
+| b5796233 | C     | --           | Native agent terminal runtime.                                           |
+| d0f797a3 | B     | --           | WGPU memory behavior needs renderer review.                              |
+| 51db7df7 | B     | --           | Overlaps Markdown table-scrolling port.                                  |
+| b914ba5c | B     | --           | Grammar update pending generated-file review.                            |
+| 101ca00a | B     | --           | Editor word movement needs dedicated regression port.                    |
 
 ## Applied Work
 
@@ -765,6 +765,22 @@ PASS git diff --check
 - `5e03f2d387e629237c10a4e4fed881b64abd8fea`: B, local commit `bd5077b303`.
   Solo diff searches no longer expose the generic multibuffer fold control;
   the predicate was adapted to ZZZ's existing split-editor state.
+- `2ec2997789ead364eb53b23972127d7b82b7002f`: B, not yet absorbed. The
+  complete diff fixes existing-connection remote-project window reuse, but
+  ZZZ's remote action and workspace APIs differ; it remains a separate
+  remote-flow port candidate.
+- `1ac840ab2f3ef68c832ad8b4c7789a8d7f5e04a2`: B, not yet absorbed. The
+  WSL-only dropped-file translation is privacy-safe and uses the existing
+  local `try_windows_path_to_wsl` path, but needs a focused adaptation to
+  ZZZ's `is_via_wsl_with_host_interop` model.
+- `c7aea6cbbd43a5849c4f8be6cbd74789e9ca48c6`: B, not yet absorbed. Wayland
+  outbound file drag is a local platform behavior, but the upstream change
+  introduces a broad `wl_data_source`/GPUI external-drag lifecycle that needs
+  platform-specific review before porting.
+- `21f16f7b5b968092cf4cd9cb38684a2854834fda`: C. The full diff is a broad
+  crate extraction, Cargo.lock/workflow churn, and incremental-build policy;
+  it has no independent user-facing behavior and would import unrelated
+  dependency and build-graph changes.
 
 Verification:
 
