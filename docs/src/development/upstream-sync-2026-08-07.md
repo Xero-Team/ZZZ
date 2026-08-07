@@ -66,13 +66,13 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 431734c9 | C     | --           | Collaboration contact finder.                                          |
 | 33f1112f | C     | --           | Upstream-hosted theme schema/type migration has no local publish path. |
 | 36911f8c | B     | 701e66ef     | Linux window-decoration docs and comments ported.                      |
-| 25929703 | B     | --           | Grammar update pending generated-file review.                          |
-| 6109c2e6 | B     | --           | Grammar update pending generated-file review.                          |
-| b535bec7 | B     | --           | Notebook action needs local UI review.                                 |
-| 5e549b87 | B     | --           | REPL documentation not independently reviewed.                         |
+| 25929703 | A     | 80cc1fdf     | Cherry-picked; enables Emmet in JSX/TSX function bodies.               |
+| 6109c2e6 | A     | 2872d245     | Cherry-picked; linked editing supports custom-element names.           |
+| b535bec7 | A     | ecc41447     | Cherry-picked; local notebook cell deletion action.                    |
+| 5e549b87 | B     | 1a9ea676     | Local Python toolchain guidance kept; remote routing omitted.          |
 | b9301f5c | C     | --           | Native agent thread workflow.                                          |
-| f851d82e | B     | --           | Edit-prediction local-model review needed.                             |
-| 200fb85c | B     | --           | Language parser change needs regression review.                        |
+| f851d82e | A     | --           | Equivalent left-biased local cursor anchor already exists.             |
+| 200fb85c | C     | --           | Depends on unabsorbed bracket-cache and boundary-query architecture.   |
 | 410a8a06 | B     | --           | LSP refresh depends on 1efdc3e6 adaptation.                            |
 | 3652f301 | C     | --           | Copilot authentication split.                                          |
 | d88f6821 | B     | --           | Release-note UI interaction requires local review.                     |
@@ -320,6 +320,65 @@ PASS cargo check --locked -p gpui
 PASS npx prettier --check docs/src/reference/all-settings.md before restoring unrelated formatting
 FAIL npx prettier --check docs/src/reference/all-settings.md after restoration
      Existing unrelated preview-tabs indentation remains intentionally untouched
+```
+
+### Continuation, grammar and notebook review
+
+- `259297035a3fd64be4fb36042c229f59f074e38b`: A, local commit
+  `80cc1fdf4ad44f55567996ed36a001ad729734bc`. The complete grammar-only
+  change enables Emmet completions inside JSX and TSX return and arrow-function
+  bodies. It introduces no generated output, provider, account, telemetry, or
+  agent path.
+- `6109c2e6d83b81f653d20f13cc25a909518b2c31`: A, local commit
+  `2872d2455d195ef2c703dd5c9fdb2af8c472474e`. The complete safe change lets
+  linked editing keep JSX and TSX custom-element tag names synchronized across
+  `-`, including its editor regression coverage. No network or account path is
+  involved.
+- `b535bec7bf42bff5692f90022dc6c1049fdc1e91`: A, local commit
+  `ecc41447b6aae8eea1a8fd2dc127603126a1d1a7`. The local notebook
+  `DeleteCell` action, toolbar control, and command-mode key bindings were
+  retained. Its call path updates only local `cell_order` and `cell_map`; the
+  existing save path serializes `NotebookEditor::to_notebook`, without invoking
+  a kernel, remote project, provider, account, or agent route.
+- `5e549b871fb87d1038d9b1b242bf7d4d4e3b4d8f`: B, local commit
+  `1a9ea676d030bdb3c648051a3a2e19353b3dbadd`. Retained local documentation
+  distinguishing the manually selected Python toolchain from the REPL kernel.
+  Existing remote Jupyter-server documentation and all remote-kernel routing
+  were explicitly omitted.
+- `f851d82e880c152d0f41e4a60d363aa82b4b8114`: A, already equivalent. The
+  upstream V4 `udiff::prediction_edits_for_single_file_diff` route no longer
+  exists in ZZZ. Its active replacement calls
+  `zeta::compute_edits_and_cursor_position`, whose insertion branch already
+  keeps `anchor_before(buffer_offset)` fixed and applies
+  `offset_within_insertion`, the left-biased cursor behavior of the upstream
+  fix. No obsolete V4 path was reintroduced.
+- `200fb85c902b823ccc8bec3ae87fda3059424e27`: C. Although bracket recovery
+  is local and privacy-safe, the full diff moves the matcher to a new module,
+  changes the cache from ZZZ's indexed `Vec<Option<_>>` to a lazy hash map, and
+  relies on unbounded boundary queries from unabsorbed `146a6bf9`. Its ERROR
+  recovery and cross-chunk preservation are coupled: a direct dry-run
+  cherry-pick also conflicts with ZZZ's deleted `editor/src/input.rs` and the
+  divergent buffer and test APIs. Porting only the ERROR-node portion would
+  retain neither its cross-chunk safety invariant nor its regression coverage,
+  so no code was changed.
+
+Continuation verification:
+
+```text
+PASS git diff --check
+PASS cargo fmt --check
+PASS cargo check --locked -p grammars
+PASS cargo check --locked -p editor
+BLOCKED cargo test --locked -p editor --lib <linked-editing regression>
+        Existing duplicate hover_links test definitions prevent the editor test binary from building.
+PASS cargo check --locked -p repl
+PASS cargo test --locked -p repl --lib notebook test_open_single_file_notebook
+FAIL cargo test --locked -p repl --lib notebook test_run_cell_with_missing_interpreter_shows_error
+     Existing missing i18n::GlobalI18nService; unrelated to DeleteCell.
+PASS cd docs && npx prettier --write src/repl.md
+PASS cd docs && npx prettier --check src/repl.md
+NOT RUN f851d82e: behavior was already present and no source changed.
+NOT RUN 200fb85c: rejected after complete diff, caller, cache, and dry-run conflict review; no source changed.
 ```
 
 ## Verification
