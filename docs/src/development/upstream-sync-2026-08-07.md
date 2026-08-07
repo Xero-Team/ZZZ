@@ -88,7 +88,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 79cc17c2 | C     | --           | GPUI scrolling redesign is not independently isolatable.               |
 | ae99a867 | B     | a1e7b876     | X11 repaint ported; local scroll throttling preserved.                 |
 | 5786fee5 | C     | --           | Community automation.                                                  |
-| 08994c41 | B     | --           | Session/CLI lifecycle review required.                                 |
+| 08994c41 | B     | 5f2ed7e3     | CLI opens wait for session restoration or its first window.            |
 | 790dcefb | B     | --           | Allowed self-hosted provider behavior awaits local port.               |
 | 998fbf30 | B     | --           | Git submodule worktree model review required.                          |
 | 9dc8880b | B     | --           | File-finder navigation needs local path review.                        |
@@ -531,6 +531,26 @@ Continuation verification:
 ```text
 NOT RUN a8491e63: rejected after full diff and GPUI/macOS file-drop lifecycle review; no source changed.
 NOT RUN 79cc17c2: rejected after full diff, gesture/editor ownership, and caller review; no source changed.
+```
+
+### Continuation, session restore and CLI review
+
+- `08994c411cb1121a6779e194dfefba11d81d7f22`: B, local commit
+  `5f2ed7e31c8a0bbfd15198a266f6d3d2d976d9af`. Retained the local startup
+  ordering fix: post-startup CLI open requests wait until session restoration
+  completes or a restored `MultiWorkspace` is placed, preventing an avoidable
+  extra window. The first-window race means a slow remote restore does not
+  block a local request; no remote routing was added. macOS bundled CLI
+  integration was not runnable on this Linux host, and upstream supplied no
+  automated regression test.
+
+Continuation verification:
+
+```text
+PASS git diff --check
+PASS cargo fmt --check
+PASS cargo check --locked -p zzz
+NOT RUN macOS bundled CLI/session-restore regression: Linux host.
 ```
 
 ## Verification
