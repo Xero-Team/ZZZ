@@ -75,7 +75,7 @@ ZZZ's local-first, no-account, ACP-only boundary.
 | 200fb85c | C     | --           | Depends on unabsorbed bracket-cache and boundary-query architecture.   |
 | 410a8a06 | B     | 14fc451b     | Targeted semantic-token refresh preserves other servers.               |
 | 3652f301 | C     | --           | Copilot authentication split.                                          |
-| d88f6821 | B     | --           | Release-note UI interaction requires local review.                     |
+| d88f6821 | B     | ad7db886     | Windows Vim/Helix Escape dismisses notifications.                      |
 | a473ea63 | B     | --           | Image viewer resource lifecycle review needed.                         |
 | 27ca0526 | B     | --           | Documentation not independently reviewed.                              |
 | c9d1d0dd | B     | --           | Dependency cleanup conflicts with local gpui_util refactor.            |
@@ -401,6 +401,27 @@ PASS cargo fmt --check
 PASS git diff --check
 PASS cargo check --locked -p project
 PASS cargo test --locked -p project --lib targeted_refresh_keeps_other_servers_raw_tokens
+```
+
+### Continuation, Windows Vim notification review
+
+- `d88f68217b370f7a66d0c4b4971db31c0dff6df7`: B, local commit
+  `ad7db88634aaf1faa86e5f18b59e580071de544b`. Retained only the Windows Vim
+  and Helix normal-mode `Escape` bindings that try `menu::Cancel` before the
+  generic editor cancel binding. The result dismisses a visible local workspace
+  notification and otherwise falls through normally. The upstream Windows-only
+  workspace-notification test was omitted because this Linux host cannot
+  compile or execute that platform path. No update, account, telemetry, cloud,
+  agent, or provider behavior was retained.
+
+Continuation verification:
+
+```text
+PASS git diff --check
+PASS cargo check --locked -p vim
+PASS cargo test --locked -p vim --lib test_escape_cancels
+PASS cargo fmt --check
+NOT RUN upstream Windows notification regression: Linux host.
 ```
 
 ## Verification
