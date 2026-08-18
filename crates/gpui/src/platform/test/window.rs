@@ -10,6 +10,7 @@ use image::RgbaImage;
 use parking_lot::Mutex;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::{
+    cell::Cell,
     rc::{Rc, Weak},
     sync::{self, Arc},
 };
@@ -33,6 +34,8 @@ pub(crate) struct TestWindowState {
     resize_callback: Option<Box<dyn FnMut(Size<Pixels>, f32)>>,
     moved_callback: Option<Box<dyn FnMut()>>,
     appearance_change_callback: Option<Box<dyn FnMut()>>,
+    request_frame_callback: Option<Box<dyn FnMut(RequestFrameOptions)>>,
+    frame_wake_count: Rc<Cell<usize>>,
     input_handler: Option<PlatformInputHandler>,
     is_fullscreen: bool,
     appearance: WindowAppearance,
@@ -87,6 +90,8 @@ impl TestWindow {
             resize_callback: None,
             moved_callback: None,
             appearance_change_callback: None,
+            request_frame_callback: None,
+            frame_wake_count: Rc::new(Cell::new(0)),
             input_handler: None,
             is_fullscreen: false,
             appearance: WindowAppearance::Light,
@@ -125,6 +130,20 @@ impl TestWindow {
         drop(lock);
         callback();
         self.0.lock().appearance_change_callback = Some(callback);
+    }
+
+    pub fn frame_wake_count(&self) -> usize {
+        self.0.lock().frame_wake_count.get()
+    }
+
+    pub fn simulate_frame_request(&self, options: RequestFrameOptions) {
+        let mut lock = self.0.lock();
+        let Some(mut callback) = lock.request_frame_callback.take() else {
+            return;
+        };
+        drop(lock);
+        callback(options);
+        self.0.lock().request_frame_callback = Some(callback);
     }
 
     pub fn simulate_input(&mut self, event: PlatformInput) -> bool {
@@ -272,7 +291,16 @@ impl PlatformWindow for TestWindow {
         self.0.lock().is_fullscreen
     }
 
-    fn on_request_frame(&self, _callback: Box<dyn FnMut(RequestFrameOptions)>) {}
+    fn frame_waker(&self) -> Option<Rc<dyn Fn()>> {
+        let frame_wake_count = self.0.lock().frame_wake_count.clone();
+        Some(Rc::new(move || {
+            frame_wake_count.set(frame_wake_count.get() + 1);
+        }))
+    }
+
+    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
+        self.0.lock().request_frame_callback = Some(callback);
+    }
 
     fn on_input(&self, callback: Box<dyn FnMut(crate::PlatformInput) -> DispatchEventResult>) {
         self.0.lock().input_callback = Some(callback)
