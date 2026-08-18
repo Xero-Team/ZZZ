@@ -33010,11 +33010,10 @@ async fn test_linked_edits_on_typing_dash_in_custom_element_name(cx: &mut TestAp
     let language = Arc::new(Language::new(
         LanguageConfig {
             name: "TSX".into(),
-            matcher: (LanguageMatcher {
+            matcher: LanguageMatcher {
                 path_suffixes: vec!["tsx".to_string()],
                 ..LanguageMatcher::default()
-            })
-            .into(),
+            },
             brackets: BracketPairConfig {
                 pairs: vec![BracketPair {
                     start: "<".into(),
