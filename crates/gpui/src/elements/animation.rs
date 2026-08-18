@@ -16,6 +16,8 @@ pub struct Animation {
     pub duration: Duration,
     /// Whether to repeat this animation when it finishes
     pub oneshot: bool,
+    /// Whether to derive the phase from a shared clock. See [`Animation::repeat_synced`].
+    pub synced: bool,
     /// A function that takes a delta between 0 and 1 and returns a new delta
     /// between 0 and 1 based on the given easing function.
     pub easing: Rc<dyn Fn(f32) -> f32>,
@@ -28,6 +30,7 @@ impl Animation {
         Self {
             duration,
             oneshot: true,
+            synced: false,
             easing: Rc::new(linear),
         }
     }
@@ -35,6 +38,13 @@ impl Animation {
     /// Set the animation to loop when it finishes.
     pub fn repeat(mut self) -> Self {
         self.oneshot = false;
+        self
+    }
+
+    /// Set the animation to loop when it finishes, phase-locked to a clock shared by the whole [`App`].
+    pub fn repeat_synced(mut self) -> Self {
+        self.oneshot = false;
+        self.synced = true;
         self
     }
 
@@ -153,9 +163,15 @@ impl<E: IntoElement + 'static> Element for AnimationElement<E> {
                 animation_ix: 0,
             });
             let animation_ix = state.animation_ix;
+            let duration = self.animations[animation_ix].duration;
 
-            let mut delta = state.start.elapsed().as_secs_f32()
-                / self.animations[animation_ix].duration.as_secs_f32();
+            let elapsed = if self.animations[animation_ix].synced && !duration.is_zero() {
+                let elapsed = cx.background_executor().now() - cx.synced_animation_epoch;
+                Duration::from_nanos((elapsed.as_nanos() % duration.as_nanos()) as u64)
+            } else {
+                state.start.elapsed()
+            };
+            let mut delta = elapsed.as_secs_f32() / duration.as_secs_f32();
 
             let mut done = false;
             if delta > 1.0 {
@@ -281,6 +297,14 @@ mod tests {
     // Before parent-animation-element, using .with_animation
     // would not allow chaining .parent after. This is just a
     // build check that we can call div().id().with_animation().child()
+    #[test]
+    #[test]
+    fn test_repeat_synced_sets_phase_lock_flags() {
+        let animation = Animation::new(Duration::from_secs(1)).repeat_synced();
+        assert!(!animation.oneshot);
+        assert!(animation.synced);
+    }
+
     #[test]
     fn test_animation_parent() {
         div()

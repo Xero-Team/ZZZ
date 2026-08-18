@@ -726,6 +726,7 @@ pub struct App {
     pub(crate) window_update_stack: Vec<WindowId>,
     pub(crate) mode: GpuiMode,
     pub(crate) cursor_hide_mode: CursorHideMode,
+    pub(crate) synced_animation_epoch: Instant,
     flushing_effects: bool,
     pending_updates: usize,
     quit_mode: QuitMode,
@@ -750,6 +751,7 @@ impl App {
             background_executor.is_main_thread(),
             "must construct App on main thread"
         );
+        let synced_animation_epoch = background_executor.now();
 
         let text_system = Arc::new(TextSystem::new(platform.text_system()));
         let entities = EntityMap::new();
@@ -816,6 +818,7 @@ impl App {
                 quit_mode: QuitMode::default(),
                 quitting: false,
                 cursor_hide_mode: CursorHideMode::default(),
+                synced_animation_epoch,
 
                 #[cfg(any(test, feature = "test-support", debug_assertions))]
                 name: None,
