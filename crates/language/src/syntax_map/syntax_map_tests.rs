@@ -948,10 +948,10 @@ fn test_combined_injection_with_leading_content_layer_ordering(cx: &mut App) {
         Language::new(
             LanguageConfig {
                 name: LanguageName::new_static("Elixir"),
-                matcher: Arc::new(LanguageMatcher {
+                matcher: LanguageMatcher {
                     path_suffixes: vec![String::from("ex")],
                     ..Default::default()
-                }),
+                },
                 ..LanguageConfig::default()
             },
             Some(tree_sitter::Language::new(tree_sitter_elixir::LANGUAGE)),
