@@ -298,7 +298,6 @@ mod tests {
     // would not allow chaining .parent after. This is just a
     // build check that we can call div().id().with_animation().child()
     #[test]
-    #[test]
     fn test_repeat_synced_sets_phase_lock_flags() {
         let animation = Animation::new(Duration::from_secs(1)).repeat_synced();
         assert!(!animation.oneshot);
