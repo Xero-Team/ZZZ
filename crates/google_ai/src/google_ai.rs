@@ -499,6 +499,8 @@ pub enum Model {
     Gemini3Flash,
     #[serde(rename = "gemini-3.5-flash")]
     Gemini35Flash,
+    #[serde(rename = "gemini-3.6-flash")]
+    Gemini36Flash,
     #[serde(rename = "gemini-3.1-pro-preview", alias = "gemini-3-pro-preview")]
     Gemini31Pro,
     #[serde(rename = "custom")]
@@ -525,6 +527,7 @@ impl Model {
             Self::Gemini31FlashLite => "gemini-3.1-flash-lite",
             Self::Gemini3Flash => "gemini-3-flash-preview",
             Self::Gemini35Flash => "gemini-3.5-flash",
+            Self::Gemini36Flash => "gemini-3.6-flash",
             Self::Gemini31Pro => "gemini-3.1-pro-preview",
             Self::Custom { name, .. } => name,
         }
@@ -537,6 +540,7 @@ impl Model {
             Self::Gemini31FlashLite => "gemini-3.1-flash-lite",
             Self::Gemini3Flash => "gemini-3-flash-preview",
             Self::Gemini35Flash => "gemini-3.5-flash",
+            Self::Gemini36Flash => "gemini-3.6-flash",
             Self::Gemini31Pro => "gemini-3.1-pro-preview",
             Self::Custom { name, .. } => name,
         }
@@ -550,6 +554,7 @@ impl Model {
             Self::Gemini31FlashLite => "Gemini 3.1 Flash Lite",
             Self::Gemini3Flash => "Gemini 3 Flash",
             Self::Gemini35Flash => "Gemini 3.5 Flash",
+            Self::Gemini36Flash => "Gemini 3.6 Flash",
             Self::Gemini31Pro => "Gemini 3.1 Pro",
             Self::Custom {
                 name, display_name, ..
@@ -565,6 +570,7 @@ impl Model {
             | Self::Gemini31FlashLite
             | Self::Gemini3Flash
             | Self::Gemini35Flash
+            | Self::Gemini36Flash
             | Self::Gemini31Pro => 1_048_576,
             Self::Custom { max_tokens, .. } => *max_tokens,
         }
@@ -578,6 +584,7 @@ impl Model {
             | Model::Gemini31FlashLite
             | Model::Gemini3Flash
             | Model::Gemini35Flash
+            | Model::Gemini36Flash
             | Model::Gemini31Pro => Some(65_536),
             Model::Custom { .. } => None,
         }
@@ -602,7 +609,7 @@ impl Model {
             }
             Self::Gemini3Flash => GoogleModelMode::Default,
             Self::Gemini31FlashLite => GoogleModelMode::Default,
-            Self::Gemini35Flash => GoogleModelMode::Thinking {
+            Self::Gemini35Flash | Self::Gemini36Flash => GoogleModelMode::Thinking {
                 budget_tokens: None,
             },
             Self::Gemini31Pro => GoogleModelMode::Thinking {
@@ -641,6 +648,19 @@ mod tests {
             tools: None,
             tool_config: None,
         }
+    }
+
+    #[test]
+    fn test_gemini_3_6_flash_model_metadata() {
+        let model = Model::Gemini36Flash;
+        assert_eq!(model.id(), "gemini-3.6-flash");
+        assert_eq!(model.request_id(), "gemini-3.6-flash");
+        assert_eq!(model.display_name(), "Gemini 3.6 Flash");
+
+        let serialized = serde_json::to_value(&model).unwrap();
+        assert_eq!(serialized, json!("gemini-3.6-flash"));
+        let deserialized: Model = serde_json::from_value(json!("gemini-3.6-flash")).unwrap();
+        assert_eq!(deserialized, Model::Gemini36Flash);
     }
 
     #[test]
