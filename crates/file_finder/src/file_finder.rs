@@ -52,8 +52,8 @@ use util::{
     rel_path::RelPath,
 };
 use workspace::{
-    ModalView, OpenChannelNotesById, OpenOptions, OpenVisible, SplitDirection, Workspace,
-    item::PreviewTabsSettings, notifications::NotifyResultExt, pane,
+    MAX_RECENT_SELECTIONS, ModalView, OpenChannelNotesById, OpenOptions, OpenVisible,
+    SplitDirection, Workspace, item::PreviewTabsSettings, notifications::NotifyResultExt, pane,
 };
 use zed_actions::search::ToggleIncludeIgnored;
 
@@ -885,8 +885,6 @@ impl FoundPath {
         Self { project, absolute }
     }
 }
-
-const MAX_RECENT_SELECTIONS: usize = 20;
 
 pub enum Event {
     Selected(ProjectPath),
