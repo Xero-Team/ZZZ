@@ -117,6 +117,7 @@ pub enum Event {
         transaction_id: TransactionId,
     },
     Reloaded,
+    CapabilityChanged,
     LanguageChanged(BufferId, bool),
     Reparsed(BufferId),
     Saved,
@@ -1968,7 +1969,7 @@ impl MultiBuffer {
             BufferEvent::DiagnosticsUpdated => Event::DiagnosticsUpdated,
             BufferEvent::CapabilityChanged => {
                 self.capability = buffer.read(cx).capability();
-                return;
+                Event::CapabilityChanged
             }
             BufferEvent::Operation { .. } | BufferEvent::ReloadNeeded => return,
         });
