@@ -6162,6 +6162,7 @@ dependencies = [
  "extension",
  "fs",
  "gpui_platform",
+ "http_client",
  "language",
  "log",
  "reqwest_client",
