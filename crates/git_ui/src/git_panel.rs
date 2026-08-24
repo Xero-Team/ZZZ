@@ -466,6 +466,10 @@ enum GitListEntry {
 }
 
 impl GitListEntry {
+    fn is_selectable(&self) -> bool {
+        matches!(self, GitListEntry::Status(_) | GitListEntry::TreeStatus(_))
+    }
+
     fn status_entry(&self) -> Option<&GitStatusEntry> {
         match self {
             GitListEntry::Status(entry) => Some(entry),
@@ -488,6 +492,12 @@ impl GitListEntry {
             GitListEntry::TreeStatus(status) => status.depth,
             _ => 0,
         }
+    }
+}
+
+impl GitPanel {
+    fn visible_flat_entry_indices(&self) -> Vec<usize> {
+        (0..self.entries.len()).collect()
     }
 }
 
@@ -1446,18 +1456,21 @@ impl GitPanel {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let is_selectable = |index| {
+            self.entries
+                .get(index)
+                .is_some_and(GitListEntry::is_selectable)
+        };
         let first_entry = match &self.view_mode {
             GitPanelViewMode::Flat => self
-                .entries
+                .visible_flat_entry_indices()
+                .into_iter()
+                .find(|&index| is_selectable(index)),
+            GitPanelViewMode::Tree(state) => state
+                .logical_indices
                 .iter()
-                .position(|entry| entry.status_entry().is_some()),
-            GitPanelViewMode::Tree(state) => {
-                let index = self.entries.iter().position(|entry| {
-                    entry.status_entry().is_some() || entry.directory_entry().is_some()
-                });
-
-                index.map(|index| state.logical_indices[index])
-            }
+                .copied()
+                .find(|&index| is_selectable(index)),
         };
 
         if let Some(first_entry) = first_entry {
