@@ -88,6 +88,7 @@ pub enum IconName {
     Debug,
     DebugBreakpoint,
     DebugContinue,
+    DebugContinueThread,
     DebugDetach,
     DebugDisabledBreakpoint,
     DebugDisabledLogBreakpoint,
