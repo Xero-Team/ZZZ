@@ -379,6 +379,7 @@ pub struct Usage {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StreamResponse {
     pub id: String,
+    #[serde(default)]
     pub object: String,
     pub created: u64,
     pub model: String,
