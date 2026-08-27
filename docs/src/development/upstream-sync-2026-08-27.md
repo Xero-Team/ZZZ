@@ -112,3 +112,108 @@ NOT RUN cargo fmt --check (edition-2024 let-chain rustfmt errors on this host)
 The reviewed baseline is `4c7244790a075e862eeb4e5ccc12d6c8f5da6f7e`.
 Work remains on `sync/upstream-2026-08-27` and has not been merged to
 `main`.
+
+## Continuation: 2026-08-28
+
+### Scope
+
+- Target branch: `sync/upstream-2026-08-27`, continuing from `main` at
+  `2761d2445eca441bc5948e8d35bebb01274496cf`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline:
+  `4c7244790a075e862eeb4e5ccc12d6c8f5da6f7e`
+- Reviewed upstream head: `582e6a5789570f9abf9eab17bff027eaf18a0e3c`
+- Live upstream head queried: `8166e3d7b8b42d8aaf4d4dee7fcd25ab4ec65105`
+- Query time: `2026-08-28T00:29:32+02:00`
+
+This continuation reviewed the next 20 commits after `4c724479`. Counts:
+4 A, 9 B, 7 C. The reviewed baseline is now
+`582e6a5789570f9abf9eab17bff027eaf18a0e3c`; 135 commits remain through the
+queried live head.
+
+### Decisions
+
+| Upstream | Class | Local commit | Disposition                                                             |
+| -------- | ----- | ------------ | ----------------------------------------------------------------------- |
+| fa852694 | B     | 4b90cbaa     | Enable the existing CSV preview without an upstream feature flag.       |
+| 7a7c3e1d | C     | --           | Requires the removed auto-update downloader.                            |
+| 1a332533 | A     | 4bc1f8df     | Cherry-picked with `-x -s`.                                             |
+| 28c0f4ae | B     | 01bf9f79     | Collapse the nearest Git tree parent.                                   |
+| 99f4c21c | C     | --           | OpenCode Go/Zen subscription-model catalog and settings.                |
+| c43e2d97 | B     | 2a9c84a0     | Reject failed XKB context initialization.                               |
+| 45ae0572 | B     | 1450b072     | Stream web Fetch responses.                                             |
+| d70c45e5 | C     | --           | Needs absent web clipboard and external-drag GPUI APIs.                 |
+| fa00dccc | C     | --           | Large `crates/path` migration conflicts with ZZZ `paths`.               |
+| 9bb47879 | B     | 79a0a31d     | Hide Markdown syntax that does not render from find matches.            |
+| 0f84a49e | C     | --           | Native cloud websocket belongs to rejected account/collaboration paths. |
+| 71507659 | B     | ffbd393f     | Preserve `--user-data-dir` on normal restart.                           |
+| 242fe31a | A     | fe810e97     | Cherry-picked with `-x -s`.                                             |
+| f1cdbaad | B     | c9eded99     | Disable invalid Git-panel discard action.                               |
+| 7b48fc68 | A     | 6623fd1d     | Cherry-picked with `-x -s`.                                             |
+| 82854434 | B     | 8263bdc4     | Preserve lookaround context during regex replacement.                   |
+| 0cfb1ca1 | B     | c14c6130     | Normalize Pyright and basedpyright analysis settings.                   |
+| 0a4a4a95 | C     | --           | Upstream release-version and lockfile metadata only.                    |
+| badd2157 | A     | 7e7bf33b     | Cherry-picked with `-x -s`.                                             |
+| 582e6a57 | C     | --           | Broad async language-loader and query API rewrite.                      |
+
+### Applied work
+
+Direct A commits `1a332533`, `242fe31a`, `7b48fc68`, and `badd2157` were each
+absorbed with `git cherry-pick -x -s` as their listed local commits. The B
+ports below have `Upstream`, `Retained`, and `Omitted` trailers in their local
+commits.
+
+- `fa852694`: enabled ZZZ's existing `csv_preview` surface without moving to
+  upstream's renamed `tabular_data_preview` crate.
+- `28c0f4ae`: added nearest-parent collapse and Vim/Helix tree navigation;
+  omitted the incompatible visual-test helper.
+- `c43e2d97`: reject null XKB contexts in existing X11 and Wayland paths.
+- `45ae0572`: stream browser Fetch data with backpressure and cancellation.
+- `9bb47879`: omit non-rendered Markdown syntax from preview search results.
+- `71507659`: retain the canonical `--user-data-dir` across Linux, macOS, and
+  Windows restarts; omit deleted updater-only paths.
+- `f1cdbaad`: enable “Discard Tracked Changes” only with staged tracked files.
+  Omit upstream directory-scoped discard because ZZZ's context-menu state does
+  not retain a target entry.
+- `82854434`: calculate same-line replacement captures from their source
+  context, retaining lookahead and lookbehind behavior. Omit the diverged
+  multibuffer fixture.
+- `0cfb1ca1`: expose analysis settings in both nested and legacy dotted forms,
+  merging values without loss. Omit unrelated toolchain-default changes and
+  the documentation rewrite.
+
+### Rejected work
+
+- `7a7c3e1d` needs Zed's auto-update download state. Its generic GPUI
+  system-wake subscription is already present locally, but the requested
+  restart behavior has no allowed updater caller.
+- `99f4c21c` configures subscription-bound OpenCode Go and Zen model catalogs
+  and removes a subscription tier, outside ZZZ's silent manual-provider
+  boundary.
+- `d70c45e5` introduces the unabsorbed web async-clipboard and external-drag
+  GPUI surface; no complete ZZZ caller exists for it.
+- `fa00dccc` migrates path behavior into the absent `crates/path` crate and is
+  not isolatable from its broader Windows remote-path rewrite.
+- `0f84a49e` optimizes an account/collaboration cloud websocket route, which
+  ZZZ does not retain as a product surface.
+- `0a4a4a95` is upstream release metadata with no independent ZZZ behavior.
+- `582e6a57` adds public async language-loader and query-selection APIs across
+  extension and grammar loading. It is an unisolatable architecture rewrite,
+  not a current ZZZ caller fix.
+
+### Verification
+
+```text
+PASS git merge-base --is-ancestor 4c724479 FETCH_HEAD
+PASS cargo check --locked -p git_ui -p editor -p project -p languages -p search
+PASS cargo test --locked -p search test_replace_with_lookaround
+PASS cargo test --locked -p languages test_normalize_
+PASS cargo test --locked -p git_ui test_discard_tracked_changes_respects_staging
+PASS git diff --check
+FAIL cargo fmt --all --check (pre-existing formatting drift outside this batch)
+NOT RUN macOS / Windows / wasm32 gpui_web runtime
+NOT RUN cargo test --workspace
+```
+
+The reviewed baseline is `582e6a5789570f9abf9eab17bff027eaf18a0e3c`.
+Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
