@@ -1355,24 +1355,83 @@ impl GitPanel {
         }
     }
 
+    /// Finds the nearest expanded directory at or above the given path.
+    fn nearest_expanded_directory_key(
+        &self,
+        section: Section,
+        path: &RepoPath,
+    ) -> Option<TreeKey> {
+        let tree_state = self.view_mode.tree_state()?;
+        let mut candidate_path = Some(path.clone());
+
+        while let Some(path) = candidate_path {
+            candidate_path = path.parent().map(RepoPath::from_rel_path);
+            let key = TreeKey { section, path };
+
+            if tree_state.expanded_dirs.get(&key).copied() == Some(true) {
+                return Some(key);
+            }
+        }
+
+        None
+    }
+
+    fn directory_entry_index(&self, key: &TreeKey) -> Option<usize> {
+        self.entries.iter().position(|entry| {
+            entry
+                .directory_entry()
+                .is_some_and(|directory| directory.key == *key)
+        })
+    }
+
+    fn section_for_entry_index(&self, entry_index: usize) -> Option<Section> {
+        self.entries
+            .get(..=entry_index)?
+            .iter()
+            .rev()
+            .find_map(|entry| match entry {
+                GitListEntry::Header(header) => Some(header.header),
+                _ => None,
+            })
+    }
+
+    /// Collapses the selected directory or its nearest expanded ancestor.
+    ///
+    /// If a file or collapsed directory is selected, walks up the tree to find,
+    /// collapse, and select the nearest expanded directory.
+    /// For other entry types, selects the previous entry.
     fn collapse_selected_entry(
         &mut self,
         _: &CollapseSelectedEntry,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(entry) = self.get_selected_entry().cloned() else {
+        let Some(selected_index) = self.selected_entry else {
             return;
         };
 
-        if let GitListEntry::Directory(dir_entry) = entry {
-            if dir_entry.expanded {
-                self.toggle_directory(&dir_entry.key, window, cx);
-            } else {
-                self.select_previous(&menu::SelectPrevious, window, cx);
+        let directory_key = match self.entries.get(selected_index) {
+            Some(GitListEntry::Directory(directory)) => {
+                self.nearest_expanded_directory_key(directory.key.section, &directory.key.path)
             }
-        } else {
+            Some(GitListEntry::TreeStatus(status)) => self
+                .section_for_entry_index(selected_index)
+                .and_then(|section| {
+                    self.nearest_expanded_directory_key(section, &status.entry.repo_path)
+                }),
+            _ => None,
+        };
+
+        let Some(directory_key) = directory_key else {
             self.select_previous(&menu::SelectPrevious, window, cx);
+            return;
+        };
+
+        self.toggle_directory(&directory_key, window, cx);
+
+        if let Some(index) = self.directory_entry_index(&directory_key) {
+            self.selected_entry = Some(index);
+            self.scroll_to_selected_entry(cx);
         }
     }
 
