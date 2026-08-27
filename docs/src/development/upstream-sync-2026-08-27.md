@@ -216,4 +216,110 @@ NOT RUN cargo test --workspace
 ```
 
 The reviewed baseline is `582e6a5789570f9abf9eab17bff027eaf18a0e3c`.
-Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
+Work remains on `sync/upstream-2026-08-27` and has not been merged to
+`main`.
+
+## Continuation: 2026-08-28 (second batch)
+
+### Scope
+
+- Target branch: `sync/upstream-2026-08-27` from `main` at
+  `2761d2445eca441bc5948e8d35bebb01274496cf`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline:
+  `582e6a5789570f9abf9eab17bff027eaf18a0e3c`
+- Reviewed upstream head:
+  `09adbb01f6ed625a976339f014d6c11690aa6301`
+- Live upstream head queried:
+  `8166e3d7b8b42d8aaf4d4dee7fcd25ab4ec65105`
+- Query time: `2026-08-28T01:19:58+02:00`
+
+This continuation reviewed the next 20 commits after `582e6a57`. Counts:
+4 A, 10 B, 6 C. The reviewed baseline is now
+`09adbb01f6ed625a976339f014d6c11690aa6301`; 115 commits remain through the
+queried live head.
+
+### Decisions
+
+| Upstream | Class | Local commit | Disposition                                                   |
+| -------- | ----- | ------------ | ------------------------------------------------------------- |
+| d5dc01f2 | B     | 06ab03c7     | Localized Windows ZZZ registry-key lookup.                    |
+| 314e0902 | B     | 798e7cba     | Bash language-server workspace settings.                      |
+| 2936989f | C     | --           | New GPUI `LineLayout` APIs have no ZZZ caller.                |
+| 1861e58f | C     | --           | Telemetry/hang journaling violates the no-telemetry boundary. |
+| 8bbbeb3d | A     | fd98f700     | Cherry-picked with `-x -s`.                                   |
+| e3056061 | B     | 3548cd29     | Render C0 control characters in existing labels.              |
+| 30aea6ac | B     | b0b6e591     | Add `in_preview` keybinding context.                          |
+| 6a37cc11 | A     | 2a60883c     | Cherry-picked with `-x -s`.                                   |
+| 2bf9e264 | B     | 2e6f8124     | Support terminal Ctrl-Alt ASCII keys.                         |
+| 6e0a0835 | C     | --           | CI-only `gh` toolchain acquisition.                           |
+| 32a0e813 | B     | 94e27269     | Align debugger step bindings on local contexts.               |
+| a58fff13 | A     | e7d3e123     | Cherry-picked with `-x -s`.                                   |
+| cef06d35 | C     | --           | Depends on the rejected worktree streaming rewrite.           |
+| 4d1935b8 | A     | 2ede3ec0     | Cherry-picked with `-x -s`.                                   |
+| 282f47a5 | C     | --           | cargo-shear, lockfile, and CI cleanup only.                   |
+| 1b04e4ca | B     | 4d90d67e     | Do not bundle GLib in Linux archives.                         |
+| dbdcb310 | C     | --           | Requires the absent `lsp_locations` crate.                    |
+| 3ea4d186 | B     | 49ea83c5     | Canonicalize case-insensitive LSP paths.                      |
+| 58006060 | B     | 66b992dd     | Remove rename-created directories on undo.                    |
+| 09adbb01 | B     | 2b597735     | Persist recent navigation history across sessions.            |
+
+### Applied work
+
+Direct A commits `8bbbeb3d`, `6a37cc11`, `a58fff13`, and `4d1935b8` were
+absorbed with `git cherry-pick -x -s` as their listed local commits. The B
+ports have `Upstream`, `Retained`, and `Omitted` trailers in their local
+commits.
+
+- `d5dc01f2`: read the installer-written ZZZ registry keys while retaining
+  ZZZ's fallback title and local feature gates.
+- `314e0902`: read bash-language-server workspace configuration from ZZZ's
+  existing LSP settings store.
+- `e3056061`: replace C0 controls in labels, tabs, file-finder paths, picker
+  matches, terminal titles, and CSV headers; omit unavailable git UI files.
+- `30aea6ac`: expose preview-item state as the editor `in_preview` context;
+  omit a duplicate delimiter-expansion test.
+- `2bf9e264`: emit ESC-prefixed control bytes for Ctrl-Alt letters and fix the
+  modified F5 lookup.
+- `32a0e813`: add VS Code-style debugger step bindings while preserving ZZZ's
+  ACP/global keymap layout.
+- `1b04e4ca`: exclude GLib/private dependencies from Linux bundles and clarify
+  PipeWire errors, adapted to ZZZ's packaging names.
+- `3ea4d186`: canonicalize LSP-opened paths before worktree lookup and add
+  case-insensitive FakeFs coverage.
+- `58006060`: track missing parent directories as undoable create/remove
+  operations around project-panel renames.
+- `09adbb01`: persist and restore bounded recent project paths, update them on
+  rename, and clear/save them through existing workspace serialization. The
+  active-path test was adapted to invoke ZZZ's local callback directly.
+
+### Rejected work
+
+- `2936989f` adds public `LineLayout` split/paint APIs without a current ZZZ
+  caller, so importing them would be unused scaffolding.
+- `1861e58f` journals foreground work and reports hang incidents through
+  telemetry, contrary to ZZZ's local-first no-telemetry policy.
+- `6e0a0835` changes CI acquisition of `ts_query_ls` and has no product
+  behavior to absorb.
+- `cef06d35` depends on the earlier rejected `00c0e96e` large-file Rope
+  rewrite and cannot be isolated from it.
+- `282f47a5` only switches dependency-analysis tooling and lockfile/CI data.
+- `dbdcb310` routes locations through the absent upstream `lsp_locations`
+  crate, with no complete ZZZ equivalent.
+
+### Verification
+
+```text
+PASS git merge-base --is-ancestor 582e6a57 FETCH_HEAD
+PASS cargo check --locked -p workspace -p file_finder -p project -p editor
+PASS cargo test --locked -p workspace navigation_history
+PASS cargo test --locked -p workspace test_active_project_path_changes_are_persisted
+PASS git diff --check
+FAIL cargo fmt --all --check (pre-existing formatting drift outside this batch)
+NOT RUN macOS / Windows / wasm32 gpui_web runtime
+NOT RUN cargo test --workspace
+```
+
+The reviewed baseline is `09adbb01f6ed625a976339f014d6c11690aa6301`.
+Work remains on `sync/upstream-2026-08-27` and has not been merged to
+`main`.
