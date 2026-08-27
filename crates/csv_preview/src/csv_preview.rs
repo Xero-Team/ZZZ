@@ -1,5 +1,4 @@
 use editor::{Editor, EditorEvent};
-use feature_flags::{FeatureFlag, FeatureFlagAppExt as _, PresenceFlag, register_feature_flag};
 use gpui::{
     AppContext, Entity, EventEmitter, FocusHandle, Focusable, ListAlignment, Task, actions,
 };
@@ -25,14 +24,6 @@ mod table_data_engine;
 mod types;
 
 actions!(csv, [OpenPreview, OpenPreviewToTheSide]);
-
-pub struct TabularDataPreviewFeatureFlag;
-
-impl FeatureFlag for TabularDataPreviewFeatureFlag {
-    const NAME: &'static str = "tabular-data-preview";
-    type Value = PresenceFlag;
-}
-register_feature_flag!(TabularDataPreviewFeatureFlag);
 
 pub struct CsvPreviewView {
     pub(crate) engine: TableDataEngine,
@@ -87,8 +78,7 @@ impl CsvPreviewView {
 
     pub fn register(workspace: &mut Workspace) {
         workspace.register_action_renderer(|div, _, _, cx| {
-            div.when(cx.has_flag::<TabularDataPreviewFeatureFlag>(), |div| {
-                div.on_action(cx.listener(|workspace, _: &OpenPreview, window, cx| {
+            div.on_action(cx.listener(|workspace, _: &OpenPreview, window, cx| {
                     if let Some(editor) = workspace
                         .active_item(cx)
                         .and_then(|item| item.act_as::<Editor>(cx))
@@ -107,7 +97,7 @@ impl CsvPreviewView {
                         });
                         cx.notify();
                     }
-                }))
+            }))
                 .on_action(cx.listener(
                     |workspace, _: &OpenPreviewToTheSide, window, cx| {
                         if let Some(editor) = workspace
@@ -148,7 +138,6 @@ impl CsvPreviewView {
                         }
                     },
                 ))
-            })
         });
     }
 

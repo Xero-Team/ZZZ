@@ -4374,7 +4374,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "editor",
- "feature_flags",
  "gpui",
  "i18n",
  "log",
