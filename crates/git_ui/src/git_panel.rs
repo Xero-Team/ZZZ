@@ -75,7 +75,7 @@ use std::future::Future;
 use std::ops::Range;
 use std::path::Path;
 use std::rc::Rc;
-use std::{sync::Arc, time::Duration, usize};
+use std::{sync::Arc, time::Duration};
 use theme_settings::ThemeSettings;
 use time::OffsetDateTime;
 use ui::{
