@@ -34,7 +34,8 @@ pub(crate) struct TestPlatform {
     screen_capture_sources: RefCell<Vec<TestScreenCaptureSource>>,
     pub opened_url: RefCell<Option<String>>,
     pub text_system: Arc<dyn PlatformTextSystem>,
-    pub expect_restart: RefCell<Option<oneshot::Sender<Option<PathBuf>>>>,
+    pub expect_restart:
+        RefCell<Option<oneshot::Sender<(Option<PathBuf>, Vec<std::ffi::OsString>)>>>,
     headless_renderer_factory: Option<Box<dyn Fn() -> Option<Box<dyn PlatformHeadlessRenderer>>>>,
     weak: Weak<Self>,
 }
@@ -295,9 +296,9 @@ impl Platform for TestPlatform {
 
     fn quit(&self) {}
 
-    fn restart(&self, path: Option<PathBuf>) {
+    fn restart(&self, path: Option<PathBuf>, arguments: Vec<std::ffi::OsString>) {
         if let Some(tx) = self.expect_restart.take() {
-            tx.send(path).unwrap();
+            tx.send((path, arguments)).unwrap();
         }
     }
 

@@ -120,7 +120,7 @@ pub trait Platform: 'static {
 
     fn run(&self, on_finish_launching: Box<dyn 'static + FnOnce()>);
     fn quit(&self);
-    fn restart(&self, binary_path: Option<PathBuf>);
+    fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<std::ffi::OsString>);
     fn activate(&self, ignoring_other_apps: bool);
     fn hide(&self);
     fn hide_other_apps(&self);
