@@ -198,4 +198,5 @@
   - [Upstream Sync 2026-07-03](./development/upstream-sync-2026-07-03.md)
   - [Upstream Sync 2026-08-07](./development/upstream-sync-2026-08-07.md)
   - [Upstream Sync 2026-08-18](./development/upstream-sync-2026-08-18.md)
+  - [Upstream Sync 2026-08-27](./development/upstream-sync-2026-08-27.md)
 - [Release Notes](./development/release-notes.md)
