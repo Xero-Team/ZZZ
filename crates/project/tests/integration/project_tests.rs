@@ -70,7 +70,7 @@ use rand::{RngExt, rngs::StdRng};
 use serde_json::json;
 #[cfg(target_os = "linux")]
 use settings::{LocalSettingsKind, LocalSettingsPath};
-use settings::{Settings, SettingsStore};
+use settings::{Settings, SettingsStore, SplicingVec};
 #[cfg(not(windows))]
 use std::os;
 use std::{
@@ -11769,7 +11769,7 @@ async fn test_git_events_after_project_excludes_dot_git(cx: &mut gpui::TestAppCo
     cx.update(|cx| {
         SettingsStore::update_global(cx, |store, cx| {
             store.update_user_settings(cx, |settings| {
-                settings.project.worktree.file_scan_exclusions = Some(vec!["foo".to_string()]);
+                settings.project.worktree.file_scan_exclusions = Some(SplicingVec::from(vec!["foo".to_string()]));
             });
         });
     });
@@ -13593,7 +13593,7 @@ async fn test_rescan_with_gitignore(cx: &mut gpui::TestAppContext) {
     cx.update(|cx| {
         cx.update_global::<SettingsStore, _>(|store, cx| {
             store.update_user_settings(cx, |settings| {
-                settings.project.worktree.file_scan_exclusions = Some(Vec::new());
+                settings.project.worktree.file_scan_exclusions = Some(SplicingVec::from(Vec::new()));
             });
         });
     });
