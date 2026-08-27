@@ -1763,6 +1763,15 @@ impl Terminal {
                     .push_back(InternalEvent::SetSelection(Some((selection, point))));
             }
 
+            "V" => {
+                let point = self.last_content.cursor.point;
+                let selection_type = SelectionType::Lines;
+                let side = SelectionSide::Right;
+                let selection = Selection::new(selection_type, point, side);
+                self.events
+                    .push_back(InternalEvent::SetSelection(Some(selection)));
+            }
+
             "escape" => {
                 self.events.push_back(InternalEvent::SetSelection(None));
             }
