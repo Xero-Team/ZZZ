@@ -1,6 +1,8 @@
+use std::borrow::Cow;
+
 use gpui::ElementId;
 use i18n::tr;
-use ui::{Tooltip, prelude::*};
+use ui::{Tooltip, prelude::*, utils::replace_control_characters};
 
 use crate::{
     CsvPreviewView,
@@ -22,7 +24,10 @@ impl CsvPreviewView {
             .items_center()
             .w_full()
             .font_buffer(cx)
-            .child(div().child(header_text))
+            .child(div().child(match replace_control_characters(&header_text) {
+                Cow::Borrowed(_) => header_text.clone(),
+                Cow::Owned(replaced) => SharedString::from(replaced),
+            }))
             .child(h_flex().gap_1().child(self.create_sort_button(cx, col_idx)))
             .into_any_element()
     }
