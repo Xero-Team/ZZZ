@@ -245,7 +245,7 @@ impl Render for PlatformTitleBar {
             .map(|this| {
                 let show_left_controls = !(sidebar.open && sidebar.side == SidebarSide::Left);
 
-                if window.is_fullscreen() {
+                if window.is_fullscreen() || window.is_simple_fullscreen() {
                     this.pl_2()
                 } else if self.platform_style == PlatformStyle::Mac && show_left_controls {
                     this.pl(px(TRAFFIC_LIGHT_PADDING))
@@ -298,7 +298,9 @@ impl Render for PlatformTitleBar {
                     .w_full()
                     .children(children),
             )
-            .when(!window.is_fullscreen(), |title_bar| {
+            .when(
+                !window.is_fullscreen() && !window.is_simple_fullscreen(),
+                |title_bar| {
                 let show_right_controls = !(sidebar.open && sidebar.side == SidebarSide::Right);
 
                 let title_bar = title_bar.children(
