@@ -116,6 +116,16 @@ linux() {
     mkdir -p "$HOME/.local/zzz$suffix.app"
     tar -xzf "$temp/zzz-linux-$arch.tar.gz" -C "$HOME/.local/"
 
+    zzz_editor="$HOME/.local/zzz$suffix.app/libexec/zzz-editor"
+    if [ -f "$zzz_editor" ] && command -v ldd >/dev/null 2>&1; then
+        missing="$(ldd "$zzz_editor" 2>/dev/null | sed -n 's/^[[:space:]]*\(.*\) => not found$/\1/p')"
+        if [ -n "$missing" ]; then
+            echo "Warning: your system is missing libraries that ZZZ needs:"
+            echo "$missing" | sed 's/^/    /'
+            echo "Install them with your package manager, or ZZZ will fail to start."
+        fi
+    fi
+
     # Setup ~/.local directories
     mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications"
 
