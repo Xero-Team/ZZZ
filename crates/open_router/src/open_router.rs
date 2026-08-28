@@ -3,6 +3,7 @@ use futures::{AsyncBufReadExt, AsyncReadExt, StreamExt, io::BufReader, stream::B
 use http_client::{
     AsyncBody, CustomHeaders, HttpClient, Method, Request as HttpRequest, RequestBuilderExt, http,
 };
+pub use language_model_core::ReasoningEffort;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 pub use settings::DataCollection;
@@ -80,6 +81,14 @@ pub struct Model {
     pub supports_images: Option<bool>,
     #[serde(default)]
     pub mode: ModelMode,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub supported_efforts: Vec<ReasoningEffort>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_effort: Option<ReasoningEffort>,
+    #[serde(default)]
+    pub supports_max_tokens: bool,
+    #[serde(default)]
+    pub mandatory_reasoning: bool,
     pub provider: Option<Provider>,
 }
 
@@ -112,6 +121,10 @@ impl Model {
             supports_tools,
             supports_images,
             mode: mode.unwrap_or(ModelMode::Default),
+            supported_efforts: Vec::new(),
+            default_effort: None,
+            supports_max_tokens: false,
+            mandatory_reasoning: false,
             provider,
         }
     }
@@ -137,7 +150,7 @@ impl Model {
     }
 
     pub fn supports_parallel_tool_calls(&self) -> bool {
-        false
+        true
     }
 }
 
@@ -199,7 +212,7 @@ pub struct FunctionDefinition {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Reasoning {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub effort: Option<String>,
+    pub effort: Option<ReasoningEffort>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -473,12 +486,26 @@ pub struct ModelEntry {
     pub supported_parameters: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub architecture: Option<ModelArchitecture>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<ModelReasoning>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 pub struct ModelArchitecture {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub input_modalities: Vec<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+pub struct ModelReasoning {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_effort: Option<ReasoningEffort>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mandatory: Option<bool>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub supported_efforts: Vec<ReasoningEffort>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_max_tokens: Option<bool>,
 }
 
 pub async fn stream_completion(
@@ -637,12 +664,32 @@ pub async fn list_models(
                         .unwrap_or(false),
                 ),
                 mode: if entry.supported_parameters.contains(&"reasoning".to_owned()) {
-                    ModelMode::Thinking {
-                        budget_tokens: Some(4_096),
-                    }
+                    ModelMode::Adaptive
                 } else {
                     ModelMode::Default
                 },
+                supported_efforts: entry
+                    .reasoning
+                    .as_ref()
+                    .map(|reasoning| reasoning.supported_efforts.clone())
+                    .unwrap_or_default()
+                    .into_iter()
+                    .rev()
+                    .collect(),
+                default_effort: entry
+                    .reasoning
+                    .as_ref()
+                    .and_then(|reasoning| reasoning.default_effort),
+                supports_max_tokens: entry
+                    .reasoning
+                    .as_ref()
+                    .and_then(|reasoning| reasoning.supports_max_tokens)
+                    .unwrap_or(false),
+                mandatory_reasoning: entry
+                    .reasoning
+                    .as_ref()
+                    .and_then(|reasoning| reasoning.mandatory)
+                    .unwrap_or(false),
                 provider: None,
             })
             .collect();

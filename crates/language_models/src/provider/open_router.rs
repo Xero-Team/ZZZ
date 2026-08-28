@@ -7,11 +7,11 @@ use http_client::{CustomHeaders, HttpClient};
 use i18n::tr;
 use language_model::{
     ApiKeyState, AuthenticateError, EnvVar, IconOrSvg, LanguageModel, LanguageModelCompletionError,
-    LanguageModelCompletionEvent, LanguageModelId, LanguageModelName, LanguageModelProvider,
-    LanguageModelProviderId, LanguageModelProviderName, LanguageModelProviderState,
-    LanguageModelRequest, LanguageModelToolChoice, LanguageModelToolResultContent,
-    LanguageModelToolSchemaFormat, LanguageModelToolUse, MessageContent, RateLimiter, Role,
-    StopReason, TokenUsage, env_var,
+    LanguageModelCompletionEvent, LanguageModelEffortLevel, LanguageModelId, LanguageModelName,
+    LanguageModelProvider, LanguageModelProviderId, LanguageModelProviderName,
+    LanguageModelProviderState, LanguageModelRequest, LanguageModelToolChoice,
+    LanguageModelToolResultContent, LanguageModelToolSchemaFormat, LanguageModelToolUse,
+    MessageContent, RateLimiter, Role, StopReason, TokenUsage, env_var,
 };
 use open_router::{
     Model, ModelMode as OpenRouterModelMode, OPEN_ROUTER_API_URL, ResponseStreamEvent, list_models,
@@ -224,13 +224,18 @@ impl LanguageModelProvider for OpenRouterLanguageModelProvider {
         let mut settings_models = Vec::new();
 
         for model in &Self::settings(cx).available_models {
+            let mode = model.mode.unwrap_or_default();
             settings_models.push(open_router::Model {
                 name: model.name.clone(),
                 display_name: model.display_name.clone(),
                 max_tokens: model.max_tokens,
                 supports_tools: model.supports_tools,
                 supports_images: model.supports_images,
-                mode: model.mode.unwrap_or_default(),
+                mode,
+                supported_efforts: model.reasoning_effort.into_iter().collect(),
+                default_effort: model.reasoning_effort,
+                supports_max_tokens: false,
+                mandatory_reasoning: false,
                 provider: model.provider.clone(),
             });
         }
@@ -353,7 +358,33 @@ impl LanguageModel for OpenRouterLanguageModel {
     }
 
     fn supports_thinking(&self) -> bool {
-        matches!(self.model.mode, OpenRouterModelMode::Thinking { .. })
+        matches!(
+            self.model.mode,
+            OpenRouterModelMode::Thinking { .. } | OpenRouterModelMode::Adaptive
+        )
+    }
+
+    fn supported_effort_levels(&self) -> Vec<LanguageModelEffortLevel> {
+        let efforts: &[open_router::ReasoningEffort] = if !self.model.supported_efforts.is_empty() {
+            &self.model.supported_efforts
+        } else if self.model.supports_max_tokens {
+            &open_router::ReasoningEffort::OPENAI_COMPATIBLE_SELECTABLE
+        } else {
+            return Vec::new();
+        };
+        let default_effort = self.model.default_effort.or_else(|| {
+            self.model
+                .supports_max_tokens
+                .then_some(open_router::ReasoningEffort::Medium)
+        });
+        efforts
+            .iter()
+            .map(|&effort| LanguageModelEffortLevel {
+                name: effort.label().into(),
+                value: effort.value().into(),
+                is_default: Some(effort) == default_effort,
+            })
+            .collect()
     }
 
     fn tool_input_format(&self) -> LanguageModelToolSchemaFormat {
@@ -562,23 +593,40 @@ pub fn into_open_router(
         stop: request.stop,
         temperature: request.temperature.unwrap_or(0.4),
         max_tokens: max_output_tokens,
-        parallel_tool_calls: if model.supports_parallel_tool_calls() && !request.tools.is_empty() {
-            Some(false)
-        } else {
-            None
-        },
+        parallel_tool_calls: (!request.tools.is_empty() && !model.supports_parallel_tool_calls())
+            .then_some(false),
         usage: open_router::RequestUsage { include: true },
-        reasoning: if request.thinking_allowed
-            && let OpenRouterModelMode::Thinking { budget_tokens } = model.mode
-        {
-            Some(open_router::Reasoning {
-                effort: None,
-                max_tokens: budget_tokens,
-                exclude: Some(false),
-                enabled: Some(true),
-            })
-        } else {
-            None
+        reasoning: match model.mode {
+            OpenRouterModelMode::Adaptive if request.thinking_allowed => {
+                Some(open_router::Reasoning {
+                    enabled: Some(true),
+                    effort: request
+                        .thinking_effort
+                        .as_deref()
+                        .and_then(|effort| effort.parse::<open_router::ReasoningEffort>().ok()),
+                    max_tokens: None,
+                    exclude: None,
+                })
+            }
+            OpenRouterModelMode::Thinking { budget_tokens } if request.thinking_allowed => {
+                Some(open_router::Reasoning {
+                    enabled: Some(true),
+                    effort: None,
+                    max_tokens: budget_tokens,
+                    exclude: None,
+                })
+            }
+            OpenRouterModelMode::Adaptive | OpenRouterModelMode::Thinking { .. }
+                if !model.mandatory_reasoning =>
+            {
+                Some(open_router::Reasoning {
+                    enabled: Some(false),
+                    effort: None,
+                    max_tokens: None,
+                    exclude: None,
+                })
+            }
+            _ => None,
         },
         tools: request
             .tools
