@@ -15,6 +15,7 @@ use agent_servers::AgentServer;
 use collections::HashSet;
 use db::kvp::{Dismissable, KeyValueStore};
 use itertools::Itertools;
+use project::agent_server_store::AllAgentServersSettings;
 use project::AgentId;
 use serde::{Deserialize, Serialize};
 use settings::{LanguageModelProviderSetting, LanguageModelSelection};
@@ -896,14 +897,17 @@ impl AgentPanel {
 
                     // For collab projects don't restore a custom external agent since
                     // external agents are not supported in shared projects.
-                    let global_fallback =
-                        global_last_used_agent.filter(|_agent| !is_via_collab);
+                    let global_fallback = global_last_used_agent.filter(|agent| {
+                        !is_via_collab && panel.should_restore_agent(agent, cx)
+                    });
 
                     if let Some(serialized_panel) = &serialized_panel {
                         if let Some(selected_agent) = serialized_panel.selected_agent.clone() {
                             // Treat stale NativeAgent data as "no selection" so the panel
                             // shows the onboarding screen.
-                            if !selected_agent.is_native() {
+                            if !selected_agent.is_native()
+                                && panel.should_restore_agent(&selected_agent, cx)
+                            {
                                 panel.selected_agent = selected_agent;
                             }
                         } else if let Some(agent) = global_fallback {
@@ -1143,6 +1147,23 @@ impl AgentPanel {
 
     pub fn selected_agent(&self, _cx: &App) -> Agent {
         self.selected_agent.clone()
+    }
+
+    fn should_restore_agent(&self, agent: &Agent, cx: &App) -> bool {
+        let Agent::Custom { id } = agent else {
+            return true;
+        };
+        self.project.read(cx).is_via_remote_server()
+            || AllAgentServersSettings::get_global(cx).contains_key(id.0.as_ref())
+    }
+
+    fn restorable_agent_selection(&self, cx: &App) -> Agent {
+        let agent = self.selected_agent(cx);
+        if self.should_restore_agent(&agent, cx) {
+            agent
+        } else {
+            Agent::NativeAgent
+        }
     }
 
     pub fn open_thread(
@@ -2651,7 +2672,7 @@ impl AgentPanel {
         let source_panel = source_workspace.read(cx).panel::<AgentPanel>(cx)?;
         let source_panel = source_panel.read(cx);
         let initial_content = source_panel.active_initial_content(cx)?;
-        let agent = source_panel.selected_agent.clone();
+        let agent = source_panel.restorable_agent_selection(cx);
         Some((agent, initial_content))
     }
 
