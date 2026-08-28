@@ -119,7 +119,7 @@ git_hosting_providers.workspace = true
 git_ui = { workspace = true, features = ["call"] }
 go_to_line.workspace = true
 system_specs.workspace = true
-gpui = { workspace = true, features = ["input-latency-histogram"] }
+gpui = { workspace = true, features = ["input-latency-histogram", "stacker"] }
 gpui_platform = {workspace = true, features=["screen-capture", "font-kit", "wayland", "x11"]}
 image = { workspace = true, optional = true }
 semver.workspace = true
@@ -231,6 +231,7 @@ etw_tracing.workspace = true
 windows.workspace = true
 gpui = { workspace = true, features = [
     "input-latency-histogram",
+    "stacker",
     "windows-manifest",
 ] }
 
@@ -240,6 +241,7 @@ windows_resources = { path = "../windows_resources" }
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
 gpui = { workspace = true, features = [
     "input-latency-histogram",
+    "stacker",
     "wayland",
     "x11",
 ] }
@@ -256,7 +258,7 @@ pkg-config = "0.3.33"
 [dev-dependencies]
 call = { workspace = true, features = ["test-support"] }
 editor = { workspace = true, features = ["test-support"] }
-gpui = { workspace = true, features = ["input-latency-histogram", "test-support"] }
+gpui = { workspace = true, features = ["input-latency-histogram", "stacker", "test-support"] }
 image_viewer = { workspace = true, features = ["test-support"] }
 itertools.workspace = true
 language = { workspace = true, features = ["test-support"] }

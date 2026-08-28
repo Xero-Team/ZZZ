@@ -7,7 +7,8 @@ use crate::{
     },
 };
 use collections::{FxHashMap, FxHashSet};
-use stacksafe::{StackSafe, stacksafe};
+#[cfg(feature = "stacker")]
+use stacksafe::StackSafe;
 use std::{fmt::Debug, ops::Range};
 use taffy::{
     TaffyTree, TraversePartialTree as _,
@@ -17,16 +18,18 @@ use taffy::{
     tree::NodeId,
 };
 
-type NodeMeasureFn = StackSafe<
-    Box<
-        dyn FnMut(
-            Size<Option<Pixels>>,
-            Size<AvailableSpace>,
-            &mut Window,
-            &mut App,
-        ) -> Size<Pixels>,
-    >,
->;
+#[cfg(feature = "stacker")]
+type StackSafeBox<T> = StackSafe<T>;
+#[cfg(not(feature = "stacker"))]
+type StackSafeBox<T> = T;
+
+type MeasureFn = dyn FnMut(
+    Size<Option<Pixels>>,
+    Size<AvailableSpace>,
+    &mut Window,
+    &mut App,
+) -> Size<Pixels>;
+type NodeMeasureFn = StackSafeBox<Box<MeasureFn>>;
 
 struct NodeContext {
     measure: NodeMeasureFn,
@@ -104,7 +107,12 @@ impl TaffyLayoutEngine {
             .new_leaf_with_context(
                 taffy_style,
                 NodeContext {
-                    measure: StackSafe::new(Box::new(measure)),
+                    measure: {
+                        let measure = Box::new(measure) as Box<MeasureFn>;
+                        #[cfg(feature = "stacker")]
+                        let measure = StackSafe::new(measure);
+                        measure
+                    },
                 },
             )
             .expect(EXPECT_MESSAGE)
@@ -188,7 +196,7 @@ impl TaffyLayoutEngine {
         Ok(edges)
     }
 
-    #[stacksafe]
+    #[cfg_attr(feature = "stacker", stacksafe::stacksafe)]
     pub fn compute_layout(
         &mut self,
         id: LayoutId,
