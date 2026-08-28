@@ -2900,6 +2900,21 @@ impl AgentPanel {
                             )
                         }
 
+                        if let Some(conversation_view) = conversation_view.as_ref() {
+                            menu = menu.entry(
+                                tr(cx, "agent_ui.panel.reload_agent", "Reload Agent"),
+                                None,
+                                {
+                                    let conversation_view = conversation_view.clone();
+                                    move |window, cx| {
+                                        conversation_view.update(cx, |conversation_view, cx| {
+                                            conversation_view.retry_connection(window, cx);
+                                        });
+                                    }
+                                },
+                            );
+                        }
+
                         menu
                     }))
                 }
