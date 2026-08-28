@@ -113,6 +113,89 @@ The reviewed baseline is `4c7244790a075e862eeb4e5ccc12d6c8f5da6f7e`.
 Work remains on `sync/upstream-2026-08-27` and has not been merged to
 `main`.
 
+## Continuation: 2026-08-28 (fifth batch)
+
+Reviewed upstream `35aab214..391a66a5`; live head `cf1900f44d30c771207e36e2c9094b6c1f659bea`.
+Previous baseline: `7f2a2c3c3ee2f23f28772dee7661fb98d3910990`.
+
+| Upstream | Class | Local commit       | Disposition                                                      |
+| -------- | ----- | ------------------ | ---------------------------------------------------------------- |
+| 35aab214 | B     | adef72b4           | Document Tailwind CSS IntelliSense for CSS files.                |
+| 6805d952 | A     | 870a48d7           | Make slang-server the default SystemVerilog LSP.                 |
+| 93f07f6d | B     | ca0d018c           | Preserve modal focus when terminals appear.                      |
+| d6449a9e | B     | df156a42           | Bound oversized LSP hover content.                               |
+| 1b86941c | B     | dfedc287           | Add Gemini 3.5 Flash-Lite metadata.                              |
+| 4c4b19a2 | B     | 57a5358b           | Retire deprecated Gemini models and aliases.                     |
+| b9d1fe59 | A     | 715e321b           | Document Elixir debug adapter support.                           |
+| 99b0ed6b | B     | 23e55f0b           | Preserve configured workspace session state on close.            |
+| fdfd00e4 | C     | --                 | GitHub Enterprise Copilot cloud-account routing.                 |
+| 6e2fae61 | C     | --                 | Wasmtime/lockfile-only dependency update.                        |
+| a170a124 | A     | 2da28878           | Fix fold-at-level function-body boundaries.                      |
+| 49a841c7 | A     | 606fb782           | Pass task-template environment to PythonLocator.                 |
+| f1d27d54 | B     | c7d1e3f4, dab7f655 | Prewarm Linux font-match caches on local cosmic-text paths.      |
+| 5a2039b2 | C     | --                 | Requires absent ProviderRejection APIs and native-agent changes. |
+| eb96feb8 | A     | eab14afc           | Repaint editor gutter when bookmarks change.                     |
+| 0b1bf8dc | A     | 0b7b9f2a           | Remove stray SQL statement debug output.                         |
+| ff7b061d | C     | --                 | macOS provisioning-profile release metadata only.                |
+| 1747596a | C     | --                 | Extension-card layout targets a replaced local component.        |
+| 507a1b99 | B     | 294466a7           | Skip non-selectable entries when selecting Git changes.          |
+| 391a66a5 | B     | 4a44e54d           | Split debugger continue actions on local DAP APIs.               |
+
+### Applied work
+
+Direct A commits `6805d952`, `b9d1fe59`, `a170a124`, `49a841c7`, `eb96feb8`,
+and `0b1bf8dc` were absorbed with `git cherry-pick -x -s`. The B ports have
+`Upstream`, `Retained`, and `Omitted` trailers. `f1d27d54` first added the
+shared GPUI/platform and Linux startup hooks, then `dab7f655` implemented the
+ZZZ cosmic-text prewarm path after the upstream fallback-chain hunk conflicted.
+
+- `35aab214`: adapted Tailwind CSS IntelliSense guidance to ZZZ documentation.
+- `93f07f6d`: guarded task and shell terminal focus with active-modal checks;
+  omitted the absent serialized-restoration path.
+- `d6449a9e`: added a UTF-8-safe 100,000-byte hover bound; omitted the larger
+  upstream markdown fence reconstruction.
+- `1b86941c` / `4c4b19a2`: added Gemini 3.5 Flash-Lite and removed deprecated
+  Gemini 2.5/3.1 Flash-Lite variants while preserving ZZZ's mode API.
+- `99b0ed6b`: honored `on_last_window_closed` and flushed serialization before
+  removing a window, adapted to existing ZZZ persistence methods.
+- `507a1b99`: added local selectable-entry and visible-index handling; omitted
+  the upstream test fixture that requires absent helpers.
+- `391a66a5`: added Continue Program/Continue Thread actions and DAP response
+  handling; omitted the conflicting upstream DebugPanel button layout.
+
+### Rejected work
+
+`fdfd00e4` is data-resident GitHub Enterprise Copilot account/cloud routing,
+outside ZZZ's silent manual-provider boundary. `6e2fae61` only updates
+Wasmtime and lockfile metadata. `5a2039b2` depends on the absent
+`ProviderRejection`/provider-category API and broad native-agent changes.
+`ff7b061d` is release provisioning metadata. `1747596a` cannot be isolated
+from an upstream extension-card component that ZZZ replaced with a generic
+children-only card.
+
+### Verification
+
+```text
+PASS git merge-base --is-ancestor 7f2a2c3c FETCH_HEAD
+PASS cargo check --locked -p google_ai
+PASS cargo check --locked -p editor
+PASS cargo check --locked -p terminal_view
+PASS cargo check --locked -p workspace
+PASS cargo check --locked -p gpui_wgpu
+PASS cargo check --locked -p zzz
+PASS cargo check --locked -p debugger_ui
+PASS cargo check --locked -p git_ui --tests
+PASS cargo test --locked -p google_ai model_helpers_cover_built_in_aliases_and_custom_modes
+PASS git diff --check
+FAIL cargo fmt --all --check (pre-existing formatting drift outside this batch)
+NOT RUN macOS / Windows / wasm32 gpui_web runtime
+NOT RUN cargo test --workspace
+```
+
+The reviewed baseline is `391a66a5ad9f68e13a54f57b3b06f4605867614c`.
+Work remains on `sync/upstream-2026-08-27` and has not been merged to
+`main`.
+
 ## Continuation: 2026-08-28
 
 ### Scope
@@ -515,3 +598,12 @@ NOT RUN cargo test --workspace
 The reviewed baseline is `7f2a2c3c3ee2f23f28772dee7661fb98d3910990`.
 Work remains on `sync/upstream-2026-08-27` and has not been merged to
 `main`.
+
+## Fifth-batch finalization
+
+The fifth-batch decisions and verification are recorded above. The reviewed
+upstream range is `7f2a2c3c..391a66a5`, with live head
+`cf1900f44d30c771207e36e2c9094b6c1f659bea`; counts are 7 A, 8 B, and 5 C.
+The reviewed baseline is now
+`391a66a5ad9f68e13a54f57b3b06f4605867614c`.
+Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
