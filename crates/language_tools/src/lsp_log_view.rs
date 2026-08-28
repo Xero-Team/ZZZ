@@ -440,7 +440,7 @@ impl LspLogView {
                     }),
             )
             .collect::<Vec<_>>();
-        rows.sort_by_key(|row| row.server_id);
+        rows.sort_unstable_by_key(|row| row.server_id);
         rows.dedup_by_key(|row| row.server_id);
         Some(rows)
     }
