@@ -1146,7 +1146,7 @@ async fn test_keyboard_focus_in_does_not_set_selection(cx: &mut TestAppContext) 
         sidebar.selection = Some(0);
     });
 
-    cx.update(|window, _cx| {
+    cx.update(|window, cx| {
         window.blur(cx);
     });
     cx.run_until_parked();

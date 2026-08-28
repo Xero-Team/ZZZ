@@ -2,13 +2,13 @@
 
 use collections::HashSet;
 use fs::{FakeFs, Fs};
-use gpui::{App, BorrowAppContext, Context, Entity, VisualTestContext, Window};
+use gpui::{Entity, VisualTestContext};
 use project::{Project, ProjectPath};
 use serde_json::{Value, json};
 use std::path::Path;
 use std::sync::Arc;
 use util::rel_path::rel_path;
-use workspace::{Item, MultiWorkspace, register_project_item};
+use workspace::MultiWorkspace;
 
 use crate::project_panel_tests::{self, find_project_entry, select_path};
 use crate::{NewDirectory, NewFile, ProjectPanel, Redo, Rename, Trash, Undo};

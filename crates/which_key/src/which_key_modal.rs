@@ -311,10 +311,14 @@ fn group_bindings(
 mod tests {
     use super::*;
 
-    fn parse_keystrokes(sequence: &str) -> Vec<Keystroke> {
+    fn parse_keystrokes(sequence: &str) -> Vec<KeybindingKeystroke> {
         sequence
             .split(' ')
-            .map(|part| Keystroke::parse(part).expect("valid keystroke"))
+            .map(|part| {
+                KeybindingKeystroke::from_keystroke(
+                    Keystroke::parse(part).expect("valid keystroke"),
+                )
+            })
             .collect()
     }
 

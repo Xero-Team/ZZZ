@@ -199,17 +199,6 @@ impl Operation {
         Ok(change)
     }
 
-    fn trash_paths<'a>(&'a self, paths: &mut Vec<&'a ProjectPath>) {
-        match self {
-            Self::Trash(path) => paths.push(path),
-            Self::Batch(operations) => {
-                for operation in operations {
-                    operation.trash_paths(paths);
-                }
-            }
-            Self::Rename(..) | Self::Restore(..) | Self::CreateDir(..) | Self::RemoveDir(..) => {}
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
