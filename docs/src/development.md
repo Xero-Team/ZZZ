@@ -97,7 +97,8 @@ Open the command palette and run one of the following:
 - `zzz: record etw trace`: records CPU, GPU, memory, and I/O activity
 - `zzz: record etw trace with heap tracing`: includes heap allocation data for the ZZZ process
 
-ZZZ will prompt you to choose a save location for the `.etl` file, then request administrator permission. Once granted, recording will begin.
+ZZZ will request administrator permission when recording starts. When you
+save the trace, ZZZ prompts you to choose a location for the `.etl` file.
 
 ### Saving or canceling
 
@@ -105,8 +106,6 @@ While a trace is recording, open the command palette and run one of the followin
 
 - `zzz: save etw trace`: stops recording and saves the trace to disk
 - `zzz: cancel etw trace`: stops recording without saving
-
-Recordings automatically save after 60 seconds if not stopped manually.
 
 ## Contributor links
 
