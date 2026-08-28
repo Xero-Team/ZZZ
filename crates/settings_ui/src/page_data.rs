@@ -10664,12 +10664,26 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn miscellaneous_section() -> [SettingsPageItem; 7] {
+    fn miscellaneous_section() -> [SettingsPageItem; 8] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.miscellaneous",
                 "Miscellaneous",
             )),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Language Detection".into(),
+                description: "Whether to enable automatic language detection in unsaved buffers."
+                    .into(),
+                field: Box::new(SettingField {
+                    json_path: Some("language_detection"),
+                    pick: |settings_content| settings_content.editor.language_detection.as_ref(),
+                    write: |settings_content, value, _| {
+                        settings_content.editor.language_detection = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: lt(
                     "settings_ui.page_data.title.word.diff.enabled",

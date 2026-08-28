@@ -1947,6 +1947,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "betlang"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f89b0929539eaee70109704ae4e345df438be6ab02e4dc8ac060e05098ad1b7"
+dependencies = [
+ "fearless_simd",
+]
+
+[[package]]
 name = "bigdecimal"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5589,6 +5598,7 @@ dependencies = [
  "indoc",
  "itertools 0.14.0",
  "language",
+ "language_detection",
  "languages",
  "linkify",
  "log",
@@ -9557,6 +9567,15 @@ dependencies = [
  "toml 1.1.2+spec-1.1.0",
  "tree-sitter",
  "util",
+]
+
+[[package]]
+name = "language_detection"
+version = "0.1.0"
+dependencies = [
+ "betlang",
+ "gpui",
+ "language",
 ]
 
 [[package]]
