@@ -113,6 +113,83 @@ The reviewed baseline is `4c7244790a075e862eeb4e5ccc12d6c8f5da6f7e`.
 Work remains on `sync/upstream-2026-08-27` and has not been merged to
 `main`.
 
+## Continuation: 2026-08-28 (ninth batch)
+
+### Scope
+
+- Target branch: `sync/upstream-2026-08-27` from `main` at
+  `2761d2445eca441bc5948e8d35bebb01274496cf`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline:
+  `01acd0ee8e906dd0ec8b526fe08da94444a5e2af`
+- Reviewed upstream head:
+  `669bede5c582140d2f3917e2c5fae5b764f9023f`
+- Live upstream head queried: `669bede5c582140d2f3917e2c5fae5b764f9023f`
+- Query time: `2026-08-28T15:48:00+02:00`
+
+This continuation reviewed the seven commits after `01acd0ee`. Counts:
+0 A, 7 B, 0 C. The reviewed baseline is now
+`669bede5c582140d2f3917e2c5fae5b764f9023f`; no commits remain through the
+queried live head.
+
+### Decisions
+
+| Upstream | Class | Local commit     | Disposition                                                               |
+| -------- | ----- | ---------------- | ------------------------------------------------------------------------- |
+| a6ffd721 | B     | 2cae688b         | Delay ETW output-path selection until save.                               |
+| c90f1fed | B     | 6d486563         | Preserve platform-specific keybinding labels in Which Key.                |
+| 4b3ef3e4 | B     | 089592b          | Parse partial-clone filter metadata in remote URLs.                       |
+| cf1900f4 | B     | 47fb250          | Refresh YARA naming, links, and setup documentation.                      |
+| 351899e5 | B     | e011fcf, a096808 | Reveal already-open files in another pane when configured.                |
+| 8ee36b68 | B     | df35f2f          | Anchor bare-repository worktree names and paths to repository identity.   |
+| 669bede5 | B     | f1d34c2          | Detect languages in eligible untitled buffers with confidence thresholds. |
+
+### Applied work
+
+All seven upstream commits conflicted with ZZZ's branded documentation,
+deleted modules, renamed crates, or existing local APIs, so each was ported
+as an isolatable B change with `git commit -s`. The `351899e5` adaptation uses
+two local commits because one remaining editor callsite required a follow-up
+signature fix. No upstream remote, branch, pull request, or release metadata
+was created.
+
+- `a6ffd721`: retained ETW session state and deferred output-path selection;
+  adapted Windows documentation to ZZZ and omitted no product behavior.
+- `c90f1fed`: retained `KeybindingKeystroke` metadata through filtering,
+  grouping, sorting, and display while preserving local grouping tests.
+- `4b3ef3e4`: accepted `(fetch) [filter]` remote lines without changing ZZZ's
+  repository index implementation.
+- `cf1900f4`: applied YARA capitalization, corrected the language index link,
+  and added YLS setup while preserving ZZZ branding and issue links.
+- `351899e5`: added the `reveal_if_open` setting and cross-pane reuse for path
+  and project-item opens; omitted the new uncalled `open_url_or_file` API and
+  deleted upstream modules.
+- `8ee36b68`: adapted bare-repository identity anchoring to ZZZ's `git_ui`
+  crate and path-style safeguards; omitted the upstream `.rules` edit.
+- `669bede5`: added the `language_detection` crate, confidence-gap model
+  selection, untitled-buffer lifecycle hooks, persistence, settings, and
+  tests; adapted language loading and editor serialization to ZZZ APIs.
+
+### Verification
+
+```text
+PASS git merge-base --is-ancestor 01acd0ee FETCH_HEAD
+PASS cargo check --locked -p git -p project -p git_ui -p workspace -p editor -p settings -p settings_ui
+PASS cargo check --locked -p language_detection -p editor -p project_symbols -p project -p settings_ui -p zzz
+PASS git diff --check
+PASS cargo check --locked
+PASS ./script/clippy
+NOT RUN macOS / Windows / wasm32 gpui_web runtime
+NOT RUN cargo test --workspace
+```
+
+Additional cleanup landed as `1824b5fdc8` (test-context, type-import, and
+dead-code fixes) and `ef1a39950b` (formatting for the adapted worktree picker
+import), both required to keep the full workspace checks clean.
+
+The reviewed baseline is `669bede5c582140d2f3917e2c5fae5b764f9023f`.
+Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
+
 ## Continuation: 2026-08-28 (fifth batch)
 
 Reviewed upstream `35aab214..391a66a5`; live head `cf1900f44d30c771207e36e2c9094b6c1f659bea`.
