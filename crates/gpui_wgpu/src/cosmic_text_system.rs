@@ -8,7 +8,7 @@ use gpui::{
     Bounds, DevicePixels, Font, FontFeatures, FontId, FontMetrics, FontRun, FontStyle, FontWeight,
     GlyphId, LineLayout, Pixels, PlatformTextSystem, RenderGlyphParams, SUBPIXEL_VARIANTS_X,
     SUBPIXEL_VARIANTS_Y, ShapedGlyph, ShapedRun, SharedString, Size, SyntheticBold,
-    SyntheticItalic, TextRenderingMode, point, size, synthetic_bold_for,
+    SyntheticItalic, TextRenderingMode, IsZero as _, point, size, synthetic_bold_for,
 };
 
 use itertools::Itertools;
@@ -38,6 +38,7 @@ struct CosmicTextSystemState {
     font_system: FontSystem,
     scratch: ShapeBuffer,
     swash_scale_context: ScaleContext,
+    pending_glyph_images: HashMap<RenderGlyphParams, swash::scale::image::Image>,
     /// Contains all already loaded fonts, including all faces. Indexed by `FontId`.
     loaded_fonts: Vec<LoadedFont>,
     /// Caches the `FontId`s associated with a specific family to avoid iterating the font database
@@ -62,6 +63,7 @@ impl CosmicTextSystem {
             font_system,
             scratch: ShapeBuffer::default(),
             swash_scale_context: ScaleContext::new(),
+            pending_glyph_images: HashMap::default(),
             loaded_fonts: Vec::new(),
             font_ids_by_family_cache: HashMap::default(),
             system_font_fallback: system_font_fallback.to_owned(),
@@ -78,6 +80,7 @@ impl CosmicTextSystem {
             font_system,
             scratch: ShapeBuffer::default(),
             swash_scale_context: ScaleContext::new(),
+            pending_glyph_images: HashMap::default(),
             loaded_fonts: Vec::new(),
             font_ids_by_family_cache: HashMap::default(),
             system_font_fallback: system_font_fallback.to_owned(),
@@ -315,10 +318,14 @@ impl CosmicTextSystemState {
 
     fn raster_bounds(&mut self, params: &RenderGlyphParams) -> Result<Bounds<DevicePixels>> {
         let image = self.render_glyph_image(params)?;
-        Ok(Bounds {
+        let bounds = Bounds {
             origin: point(image.placement.left.into(), (-image.placement.top).into()),
             size: size(image.placement.width.into(), image.placement.height.into()),
-        })
+        };
+        if !bounds.is_zero() {
+            self.pending_glyph_images.insert(params.clone(), image);
+        }
+        Ok(bounds)
     }
 
     #[profiling::function]
@@ -331,7 +338,10 @@ impl CosmicTextSystemState {
             anyhow::bail!("glyph bounds are empty");
         }
 
-        let mut image = self.render_glyph_image(params)?;
+        let mut image = match self.pending_glyph_images.remove(params) {
+            Some(image) => image,
+            None => self.render_glyph_image(params)?,
+        };
         let bitmap_size = glyph_bounds.size;
         match image.content {
             swash::scale::image::Content::Color | swash::scale::image::Content::SubpixelMask => {
