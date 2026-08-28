@@ -603,11 +603,23 @@ impl OpenAiEventMapper {
             && let Some(prompt_tokens) = usage.prompt_tokens
             && let Some(completion_tokens) = usage.completion_tokens
         {
+            let cache_creation_input_tokens = usage
+                .prompt_tokens_details
+                .as_ref()
+                .and_then(|details| details.cache_write_tokens)
+                .unwrap_or(0);
+            let cache_read_input_tokens = usage
+                .prompt_tokens_details
+                .as_ref()
+                .and_then(|details| details.cached_tokens)
+                .unwrap_or(0);
             events.push(Ok(LanguageModelCompletionEvent::UsageUpdate(TokenUsage {
-                input_tokens: prompt_tokens,
+                input_tokens: prompt_tokens
+                    .saturating_sub(cache_creation_input_tokens)
+                    .saturating_sub(cache_read_input_tokens),
                 output_tokens: completion_tokens,
-                cache_creation_input_tokens: 0,
-                cache_read_input_tokens: 0,
+                cache_creation_input_tokens,
+                cache_read_input_tokens,
             })));
         }
 

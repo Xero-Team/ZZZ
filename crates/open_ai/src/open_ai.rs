@@ -407,7 +407,7 @@ impl Model {
 
 #[cfg(test)]
 mod tests {
-    use super::{MessageContent, MessagePart, Model, ReasoningEffort, Role};
+    use super::{MessageContent, MessagePart, Model, ReasoningEffort, ResponseStreamResult, Role};
 
     fn custom_model(
         reasoning_effort: Option<ReasoningEffort>,
@@ -666,6 +666,25 @@ mod tests {
         }]);
         assert_eq!(from_single_text, MessageContent::Plain("only text".into()));
     }
+
+    #[test]
+    fn stream_usage_with_null_prompt_cache_tokens_is_not_an_error() {
+        let chunk = r#"{"choices":[],"usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8,"prompt_tokens_details":{"cached_tokens":0,"cache_write_tokens":null}}}"#;
+
+        let ResponseStreamResult::Ok(event) =
+            serde_json::from_str::<ResponseStreamResult>(chunk).unwrap()
+        else {
+            panic!("usage-only chunk with null cache token fields must not fail to parse");
+        };
+
+        let details = event
+            .usage
+            .unwrap()
+            .prompt_tokens_details
+            .expect("prompt_tokens_details should be present");
+        assert_eq!(details.cached_tokens, Some(0));
+        assert_eq!(details.cache_write_tokens, None);
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -891,6 +910,14 @@ pub struct Usage {
     pub prompt_tokens: Option<u64>,
     pub completion_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_tokens_details: Option<PromptTokensDetails>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct PromptTokensDetails {
+    pub cached_tokens: Option<u64>,
+    pub cache_write_tokens: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
