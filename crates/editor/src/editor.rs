@@ -18594,8 +18594,6 @@ impl Editor {
                         window.defer(cx, move |window, cx| {
                             let target_editor: Entity<Self> =
                                 workspace.update(cx, |workspace, cx| {
-                                    let pane = workspace.active_pane().clone();
-
                                     let preview_tabs_settings = PreviewTabsSettings::get_global(cx);
                                     let keep_old_preview = preview_tabs_settings
                                         .enable_keep_preview_on_code_navigation;
@@ -23277,7 +23275,7 @@ impl Editor {
                                 let allow_new_preview = PreviewTabsSettings::get_global(cx)
                                     .enable_preview_from_multibuffer;
                                 workspace.open_project_item::<Self>(
-                                    pane.clone(),
+                                    Some(pane.clone()),
                                     buffer,
                                     true,
                                     true,
