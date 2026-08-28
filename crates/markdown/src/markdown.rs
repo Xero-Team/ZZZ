@@ -4997,8 +4997,8 @@ mod tests {
     #[test]
     fn test_task_list_marker_for_item() {
         let task_marker_states = |markdown: &str| -> Vec<(String, bool)> {
-            let events = crate::parser::parse_markdown_with_options(markdown, false, false, false)
-                .events;
+            let events =
+                crate::parser::parse_markdown_with_options(markdown, false, false, false).events;
 
             events
                 .iter()

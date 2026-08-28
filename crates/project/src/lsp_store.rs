@@ -15446,22 +15446,10 @@ mod tests {
 
     #[test]
     fn range_formatting_conflicts_preserve_lsp_insert_boundaries() {
-        assert!(lsp_ranges_conflict(
-            &lsp_range(1, 3),
-            &lsp_range(2, 4),
-        ));
-        assert!(!lsp_ranges_conflict(
-            &lsp_range(1, 2),
-            &lsp_range(2, 3),
-        ));
-        assert!(lsp_ranges_conflict(
-            &lsp_range(2, 2),
-            &lsp_range(2, 3),
-        ));
-        assert!(lsp_ranges_conflict(
-            &lsp_range(2, 2),
-            &lsp_range(2, 2),
-        ));
+        assert!(lsp_ranges_conflict(&lsp_range(1, 3), &lsp_range(2, 4),));
+        assert!(!lsp_ranges_conflict(&lsp_range(1, 2), &lsp_range(2, 3),));
+        assert!(lsp_ranges_conflict(&lsp_range(2, 2), &lsp_range(2, 3),));
+        assert!(lsp_ranges_conflict(&lsp_range(2, 2), &lsp_range(2, 2),));
     }
 
     #[test]

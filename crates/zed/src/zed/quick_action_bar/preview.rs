@@ -40,8 +40,7 @@ impl QuickActionBar {
                 } else if SvgPreviewView::resolve_active_item_as_svg_buffer(workspace, cx).is_some()
                 {
                     preview_type = Some(PreviewType::Svg);
-                } else if CsvPreviewView::resolve_active_item_as_csv_editor(workspace, cx)
-                    .is_some()
+                } else if CsvPreviewView::resolve_active_item_as_csv_editor(workspace, cx).is_some()
                 {
                     preview_type = Some(PreviewType::Csv);
                 }

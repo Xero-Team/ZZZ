@@ -2084,7 +2084,8 @@ impl EditPredictionStore {
         }
 
         let edit_prediction_settings = &all_language_settings(None, cx).edit_predictions;
-        let debounce_duration = edit_prediction_settings.debounce_for(edit_prediction_settings.provider);
+        let debounce_duration =
+            edit_prediction_settings.debounce_for(edit_prediction_settings.provider);
         let (needs_acceptance_tracking, max_pending_predictions) =
             match edit_prediction_settings.provider {
                 EditPredictionProvider::Zed | EditPredictionProvider::Mercury => (true, 2),

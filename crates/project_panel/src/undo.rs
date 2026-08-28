@@ -198,7 +198,6 @@ impl Operation {
 
         Ok(change)
     }
-
 }
 
 #[derive(Clone, Debug)]
@@ -656,11 +655,7 @@ impl Inner {
     /// user save or discard them.
     ///
     /// Returns `Ok(None)` if the user cancels the operation.
-    async fn trash(
-        &self,
-        project_path: &ProjectPath,
-        cx: &mut AsyncApp,
-    ) -> Result<TrashedEntry> {
+    async fn trash(&self, project_path: &ProjectPath, cx: &mut AsyncApp) -> Result<TrashedEntry> {
         let Some(workspace) = self.workspace.upgrade() else {
             return Err(anyhow!("Failed to obtain workspace."));
         };

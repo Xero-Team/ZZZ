@@ -1617,8 +1617,10 @@ async fn test_file_scan_exclusions(cx: &mut TestAppContext) {
     cx.update(|cx| {
         cx.update_global::<SettingsStore, _>(|store, cx| {
             store.update_user_settings(cx, |settings| {
-                settings.project.worktree.file_scan_exclusions =
-                    Some(SplicingVec::from(vec!["**/foo/**".to_string(), "**/.DS_Store".to_string()]));
+                settings.project.worktree.file_scan_exclusions = Some(SplicingVec::from(vec![
+                    "**/foo/**".to_string(),
+                    "**/.DS_Store".to_string(),
+                ]));
             });
         });
     });

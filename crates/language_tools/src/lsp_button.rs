@@ -727,7 +727,11 @@ fn tooltip_for_server_binary(
     let runtime = binary_path
         .rsplit(|character| path_style.separators_ch().contains(&character))
         .next()
-        .and_then(|name| ["node", "python"].into_iter().find(|runtime| name.starts_with(runtime)));
+        .and_then(|name| {
+            ["node", "python"]
+                .into_iter()
+                .find(|runtime| name.starts_with(runtime))
+        });
 
     let target_path = runtime
         .and_then(|_runtime| {

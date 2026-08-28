@@ -1371,11 +1371,7 @@ impl GitPanel {
     }
 
     /// Finds the nearest expanded directory at or above the given path.
-    fn nearest_expanded_directory_key(
-        &self,
-        section: Section,
-        path: &RepoPath,
-    ) -> Option<TreeKey> {
+    fn nearest_expanded_directory_key(&self, section: Section, path: &RepoPath) -> Option<TreeKey> {
         let tree_state = self.view_mode.tree_state()?;
         let mut candidate_path = Some(path.clone());
 

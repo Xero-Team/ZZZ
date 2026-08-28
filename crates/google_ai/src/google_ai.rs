@@ -717,10 +717,7 @@ mod tests {
         assert_eq!(default_model.max_output_tokens(), Some(65_536));
         assert!(default_model.supports_tools());
         assert!(default_model.supports_images());
-        assert!(matches!(
-            default_model.mode(),
-            GoogleModelMode::Default
-        ));
+        assert!(matches!(default_model.mode(), GoogleModelMode::Default));
 
         let custom = Model::Custom {
             name: "custom/gemini".into(),
