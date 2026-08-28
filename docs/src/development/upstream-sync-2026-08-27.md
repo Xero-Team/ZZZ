@@ -607,3 +607,106 @@ upstream range is `7f2a2c3c..391a66a5`, with live head
 The reviewed baseline is now
 `391a66a5ad9f68e13a54f57b3b06f4605867614c`.
 Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
+
+## Continuation: 2026-08-28 (sixth batch)
+
+### Scope
+
+- Target branch: `sync/upstream-2026-08-27` from `main` at
+  `2761d2445eca441bc5948e8d35bebb01274496cf`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline:
+  `391a66a5ad9f68e13a54f57b3b06f4605867614c`
+- Reviewed upstream head:
+  `5dd0666dfb627bb7c04b210b730005628f5a229a`
+- Live upstream head queried:
+  `351899e53107db60ba27dce7b94fa55d47b769c4`
+- Query time: `2026-08-28T14:29:33+02:00`
+
+This continuation reviewed the next 20 commits after `391a66a5`. Counts:
+5 A, 8 B, 7 C. The reviewed baseline is now
+`5dd0666dfb627bb7c04b210b730005628f5a229a`; 45 commits remain through the
+queried live head.
+
+### Decisions
+
+| Upstream | Class | Local commit      | Disposition                                                                 |
+| -------- | ----- | ----------------- | --------------------------------------------------------------------------- |
+| 5631830c | C     | --                | Depends on the unabsorbed Bedrock Mantle model surface.                     |
+| 4ca90055 | C     | --                | Broad tree-sitter/Wasmtime and lockfile/toolchain update.                   |
+| e9735934 | B     | 16b379a3          | Port preview typography onto the existing Markdown renderer.                |
+| 41d72f6c | B     | 8dbddbc6          | Make stacksafe opt-in while retaining ZZZ desktop protection.               |
+| 91ebd505 | B     | cd2645ca          | Serialize the latest selected ACP agent task.                               |
+| 693140ab | B     | 6b352045          | Accept nullable OpenAI prompt-cache usage fields.                           |
+| 96382d8e | B     | d72af3b5, 261dc08 | Add ACP agent retry controls.                                               |
+| 38c5dd7c | A     | b5099ab8          | Default missing Mistral stream `object` values.                             |
+| b20c4694 | A     | 91612188          | Account for removed lines when diffing overwritten files.                   |
+| 0969b0db | B     | 9ae568ad          | Ignore uninstalled custom agents during restoration.                        |
+| 224373ab | C     | --                | Web IME/input rewrite conflicts with ZZZ's web window path.                 |
+| f42c6e87 | B     | aa309ef8          | Use unstable sorting on existing deduplication paths.                       |
+| 3c2848e9 | C     | --                | Requires the absent provider error-category/native-agent API.               |
+| 1ff7cb66 | B     | c267bd7b          | Reuse measured glyph images in local cosmic-text paths.                     |
+| 55007f51 | C     | --                | Adds telemetry reporting and profiler surfaces rejected by ZZZ.             |
+| e0f913b0 | C     | --                | Targets upstream `tabular_data_preview`, replaced locally by `csv_preview`. |
+| d4cd310e | C     | --                | Modifies the deleted upstream action-profiler module.                       |
+| 7040aa56 | A     | b2c46bf7          | Clear Windows COLR emoji render targets before compositing.                 |
+| 081a45f6 | A     | 46266953          | Add Grok 4.5 and 4.6 manual-provider models.                                |
+| 5dd0666d | A     | ce84da0d          | Terminate X11 `WM_CLASS` with a second NUL byte.                            |
+
+### Applied work
+
+Direct A commits `38c5dd7c`, `b20c4694`, `7040aa56`, `081a45f6`, and
+`5dd0666d` were absorbed with `git cherry-pick -x -s`. The B ports have
+`Upstream`, `Retained`, and `Omitted` trailers in their local commits.
+
+- `e9735934`: applied preview body sizing, line-height, spacing, table padding,
+  muted quotes, and stronger heading styles; retained the local renderer.
+- `41d72f6c`: made `stacksafe` optional, gated recursive wrappers, and enabled
+  the feature for ZZZ desktop/test builds while preserving local feature names.
+- `91ebd505`: retained the latest selected-agent persistence task to prevent
+  out-of-order global KVP writes.
+- `693140ab`: added nullable prompt-cache usage details and cache-aware token
+  accounting to the existing OpenAI chat stream mapper.
+- `96382d8e`: added Retry/Reload controls through ZZZ's connection store and
+  reset path, split into two local commits for panel and conversation changes.
+- `0969b0db`: validated custom ACP registrations before restoring selections and
+  used a safe fallback for source-panel initialization.
+- `f42c6e87`: adapted the deleted `bracket_ranges.rs` hunk to ZZZ's merged
+  `language/src/buffer.rs` path and changed the other five sort sites.
+- `1ff7cb66`: cached non-empty glyph images between bounds measurement and
+  rasterization in the local cosmic-text implementation.
+
+### Rejected work
+
+- `5631830c` cannot be isolated because ZZZ does not contain the upstream
+  Bedrock Mantle model family introduced by its parent history.
+- `4ca90055` is a broad dependency, lockfile, tree-sitter, and Wasmtime update
+  with no independent ZZZ behavior.
+- `224373ab` introduces a new IME mirror and web lifecycle architecture that
+  conflicts with ZZZ's existing HTML input path.
+- `3c2848e9` needs provider billing/content-policy categories and native-agent
+  error handling absent from ZZZ.
+- `55007f51` reports frame timing data through telemetry, outside the
+  no-telemetry boundary, and also targets profiler fields absent locally.
+- `e0f913b0` targets the replaced `tabular_data_preview` crate.
+- `d4cd310e` modifies `crates/gpui/src/profiler/actions.rs`, deleted in ZZZ.
+
+### Verification
+
+```text
+PASS git merge-base --is-ancestor 391a66a5 FETCH_HEAD
+PASS cargo check --locked -p zzz
+PASS cargo check --locked -p agent_ui
+PASS cargo check --locked -p markdown
+PASS cargo check --locked -p open_ai
+PASS cargo check --locked -p gpui_wgpu -p gpui_windows -p x_ai -p mistral
+PASS cargo test --locked -p open_ai stream_usage_with_null_prompt_cache_tokens_is_not_an_error
+PASS cargo test --locked -p action_log test_overwriting_file_counts_removed_lines
+PASS git diff --check
+FAIL cargo fmt --all --check (pre-existing formatting drift outside this batch)
+NOT RUN macOS / Windows / wasm32 gpui_web runtime
+NOT RUN cargo test --workspace
+```
+
+The reviewed baseline is `5dd0666dfb627bb7c04b210b730005628f5a229a`.
+Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
