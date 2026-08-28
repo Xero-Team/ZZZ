@@ -79,65 +79,64 @@ impl CsvPreviewView {
     pub fn register(workspace: &mut Workspace) {
         workspace.register_action_renderer(|div, _, _, cx| {
             div.on_action(cx.listener(|workspace, _: &OpenPreview, window, cx| {
+                if let Some(editor) = workspace
+                    .active_item(cx)
+                    .and_then(|item| item.act_as::<Editor>(cx))
+                    .filter(|editor| Self::is_csv_file(editor, cx))
+                {
+                    let csv_preview = Self::new(&editor, cx);
+                    workspace.active_pane().update(cx, |pane, cx| {
+                        let existing = pane
+                            .items_of_type::<CsvPreviewView>()
+                            .find(|view| view.read(cx).active_editor_state.editor == editor);
+                        if let Some(idx) = existing.and_then(|e| pane.index_for_item(&e)) {
+                            pane.activate_item(idx, true, true, window, cx);
+                        } else {
+                            pane.add_item(Box::new(csv_preview), true, true, None, window, cx);
+                        }
+                    });
+                    cx.notify();
+                }
+            }))
+            .on_action(cx.listener(
+                |workspace, _: &OpenPreviewToTheSide, window, cx| {
                     if let Some(editor) = workspace
                         .active_item(cx)
                         .and_then(|item| item.act_as::<Editor>(cx))
                         .filter(|editor| Self::is_csv_file(editor, cx))
                     {
                         let csv_preview = Self::new(&editor, cx);
-                        workspace.active_pane().update(cx, |pane, cx| {
+                        let pane = workspace
+                            .find_pane_in_direction(SplitDirection::Right, cx)
+                            .unwrap_or_else(|| {
+                                workspace.split_pane(
+                                    workspace.active_pane().clone(),
+                                    SplitDirection::Right,
+                                    window,
+                                    cx,
+                                )
+                            });
+                        pane.update(cx, |pane, cx| {
                             let existing = pane
                                 .items_of_type::<CsvPreviewView>()
                                 .find(|view| view.read(cx).active_editor_state.editor == editor);
                             if let Some(idx) = existing.and_then(|e| pane.index_for_item(&e)) {
                                 pane.activate_item(idx, true, true, window, cx);
                             } else {
-                                pane.add_item(Box::new(csv_preview), true, true, None, window, cx);
+                                pane.add_item(
+                                    Box::new(csv_preview),
+                                    false,
+                                    false,
+                                    None,
+                                    window,
+                                    cx,
+                                );
                             }
                         });
                         cx.notify();
                     }
-            }))
-                .on_action(cx.listener(
-                    |workspace, _: &OpenPreviewToTheSide, window, cx| {
-                        if let Some(editor) = workspace
-                            .active_item(cx)
-                            .and_then(|item| item.act_as::<Editor>(cx))
-                            .filter(|editor| Self::is_csv_file(editor, cx))
-                        {
-                            let csv_preview = Self::new(&editor, cx);
-                            let pane = workspace
-                                .find_pane_in_direction(SplitDirection::Right, cx)
-                                .unwrap_or_else(|| {
-                                    workspace.split_pane(
-                                        workspace.active_pane().clone(),
-                                        SplitDirection::Right,
-                                        window,
-                                        cx,
-                                    )
-                                });
-                            pane.update(cx, |pane, cx| {
-                                let existing =
-                                    pane.items_of_type::<CsvPreviewView>().find(|view| {
-                                        view.read(cx).active_editor_state.editor == editor
-                                    });
-                                if let Some(idx) = existing.and_then(|e| pane.index_for_item(&e)) {
-                                    pane.activate_item(idx, true, true, window, cx);
-                                } else {
-                                    pane.add_item(
-                                        Box::new(csv_preview),
-                                        false,
-                                        false,
-                                        None,
-                                        window,
-                                        cx,
-                                    );
-                                }
-                            });
-                            cx.notify();
-                        }
-                    },
-                ))
+                },
+            ))
         });
     }
 
