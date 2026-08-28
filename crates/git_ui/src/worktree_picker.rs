@@ -12,7 +12,10 @@ use gpui::{
 };
 use i18n as app_i18n;
 use picker::{Picker, PickerDelegate, PickerEditorPosition};
-use project::{Project, git_store::{RepositoryEvent, repo_identity_path_if_local}};
+use project::{
+    Project,
+    git_store::{RepositoryEvent, repo_identity_path_if_local},
+};
 use ui::{
     Button, Divider, HighlightedLabel, IconButton, KeyBinding, ListItem, ListItemSpacing,
     ListSubHeader, Tooltip, prelude::*,
