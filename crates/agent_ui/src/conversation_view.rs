@@ -810,6 +810,15 @@ impl ConversationView {
         cx.notify();
     }
 
+    /// Drops the cached connection so the next request starts a fresh agent
+    /// process, then rebuilds the current thread state.
+    pub(crate) fn retry_connection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.connection_store.update(cx, |store, cx| {
+            store.restart_connection(self.connection_key.clone(), self.agent.clone(), cx);
+        });
+        self.reset(window, cx);
+    }
+
     fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let (resume_session_id, work_dirs, title) = self
             .root_thread_view()
@@ -2260,12 +2269,24 @@ impl ConversationView {
             ),
         };
 
+        let actions = h_flex()
+            .gap_1()
+            .child(
+                Button::new("retry-agent-launch", "Retry")
+                    .tooltip(Tooltip::text("Try to restart the agent"))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.retry_connection(window, cx);
+                    })),
+            )
+            .children(action_slot)
+            .into_any_element();
+
         Callout::new()
             .severity(Severity::Error)
             .icon(IconName::XCircleFilled)
             .title(title)
             .description(message)
-            .actions_slot(div().children(action_slot))
+            .actions_slot(actions)
             .into_any_element()
     }
 
