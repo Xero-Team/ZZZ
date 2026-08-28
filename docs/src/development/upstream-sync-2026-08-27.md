@@ -710,3 +710,101 @@ NOT RUN cargo test --workspace
 
 The reviewed baseline is `5dd0666dfb627bb7c04b210b730005628f5a229a`.
 Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
+
+## Continuation: 2026-08-28 (seventh batch)
+
+### Scope
+
+- Target branch: `sync/upstream-2026-08-27` from `main` at
+  `2761d2445eca441bc5948e8d35bebb01274496cf`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline:
+  `5dd0666dfb627bb7c04b210b730005628f5a229a`
+- Reviewed upstream head:
+  `5ed5bf95e518f1b35386a8787b512c99b90509f7`
+- Live upstream head queried:
+  `8ee36b682cf1971e51032cbd932dd16def575364`
+- Query time: `2026-08-28T14:46:58+02:00`
+
+This continuation reviewed the next 20 commits after `5dd0666d`. Counts:
+5 A, 0 B, 15 C. The reviewed baseline is now
+`5ed5bf95e518f1b35386a8787b512c99b90509f7`; 25 commits remain through the
+queried live head.
+
+### Decisions
+
+| Upstream | Class | Local commit | Disposition                                                               |
+| -------- | ----- | ------------ | ------------------------------------------------------------------------- |
+| 74490dac | A     | 5e77869b     | Cherry-picked with `-x -s`.                                               |
+| 4278ff36 | A     | f625b502     | Cherry-picked with `-x -s`.                                               |
+| 1d7e5f1d | A     | a7bef4c3     | Cherry-picked with `-x -s`.                                               |
+| 76478024 | C     | --           | Needs the absent local provider error-category API.                       |
+| b415b5d4 | C     | --           | GitHub maintainer-edit workflow automation only.                          |
+| 5f1f7e63 | C     | --           | Web IME architecture conflicts with ZZZ's input path.                     |
+| 1f7eae7f | C     | --           | Benchmark/test-support and upstream skill scaffolding only.               |
+| 45cd77bb | A     | dd8fa365     | Cherry-picked with `-x -s`.                                               |
+| fecc3273 | C     | --           | Depends on benchmark headless-renderer infrastructure.                    |
+| 4ccbcabf | A     | 5dc66f10     | Cherry-picked with `-x -s`.                                               |
+| 1475887f | C     | --           | Broad project-search-on-type rewrite is not isolatable locally.           |
+| 839ab7a9 | C     | --           | Shallow-diff UI/protocol rewrite needs absent git APIs and askpass UI.    |
+| 279da638 | C     | --           | Broad persistence shutdown rewrite conflicts with local lifecycle APIs.   |
+| c595091b | C     | --           | Dependency, lockfile, and crate-graph churn without independent behavior. |
+| 34241d5f | C     | --           | LLVM/settings deserializer rewrite failed on removed ZZZ fields.          |
+| ea701d40 | C     | --           | Agent persistence worker targets deleted/diverged native-agent paths.     |
+| 4a9a863c | C     | --           | Auto-indentation patch requires deleted `editor/src/input.rs`.            |
+| ac099b4a | C     | --           | Release-version and lockfile metadata only.                               |
+| 7ecab315 | C     | --           | Depends on the rejected project-search rewrite from `1475887f`.           |
+| 5ed5bf95 | C     | --           | Stream-mapping rewrite spans deleted and conflicting provider APIs.       |
+
+### Applied work
+
+Direct A commits `74490dac`, `4278ff36`, `1d7e5f1d`, `45cd77bb`, and
+`4ccbcabf` were absorbed with `git cherry-pick -x -s`. No B port was retained
+in this batch.
+
+- `74490dac`: implemented Windows DirectX headless `render_to_image` under
+  the existing test-support surface.
+- `4278ff36`: prevented wrapped lines from starting with closing punctuation.
+- `1d7e5f1d`: corrected secondary-monitor placement with differing DPI.
+- `45cd77bb`: refreshed the debugger panel when breakpoint state changes.
+- `4ccbcabf`: removed the unused `line_beginning` soft-boundary parameter and
+  updated Vim callers.
+
+### Rejected work
+
+- `76478024` cannot be isolated because ZZZ's OpenAI completion mapper no
+  longer exposes the upstream `ProviderErrorCategory` path.
+- `b415b5d4` is GitHub maintainer-edit automation, outside product scope.
+- `5f1f7e63` introduces an IME-mirror lifecycle absent from ZZZ's web input
+  implementation.
+- `1f7eae7f` and `fecc3273` are benchmark/test-support infrastructure and
+  upstream skill plumbing without an independent editor behavior change.
+- `1475887f` is a large project-search architecture and settings rewrite;
+  `839ab7a9` additionally requires missing shallow-history and askpass APIs.
+- `279da638` is a broad workspace shutdown/persistence lifecycle rewrite,
+  while `c595091b` is dependency-only churn.
+- `34241d5f` was attempted as a local optimization port but `cargo check`
+  failed because ZZZ removed `reduce_motion` and `telemetry` fields; the
+  attempt was fully reverted and reclassified C.
+- `ea701d40` targets native-agent session structures deleted or substantially
+  diverged in ZZZ. `4a9a863c` targets the deleted upstream `editor/src/input.rs`.
+- `ac099b4a` only bumps release metadata. `7ecab315` depends on the rejected
+  project-search rewrite. `5ed5bf95` cannot be isolated across the deleted
+  Copilot/subscribed providers and conflicting local stream APIs.
+
+### Verification
+
+```text
+PASS git merge-base --is-ancestor 5dd0666d FETCH_HEAD
+PASS cargo check --locked -p settings_content
+PASS cargo check --locked -p gpui -p gpui_windows -p debugger_ui -p editor -p vim
+PASS cargo check --locked -p zzz
+PASS cargo test --locked -p gpui test_is_word_char
+PASS git diff --check
+FAIL cargo fmt --all --check (pre-existing formatting drift outside this batch)
+NOT RUN macOS / Windows / wasm32 gpui_web runtime
+NOT RUN cargo test --workspace
+```
+
+The reviewed baseline is `5ed5bf95e518f1b35386a8787b512c99b90509f7`.
+Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
