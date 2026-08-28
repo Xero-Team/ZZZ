@@ -24,7 +24,7 @@ use ui::{
     ContextMenu, ContextMenuEntry, Indicator, PopoverMenu, PopoverMenuHandle, Tooltip, prelude::*,
 };
 
-use util::{ResultExt, paths::PathExt, rel_path::RelPath};
+use util::{ResultExt, paths::PathStyle, rel_path::RelPath};
 use workspace::{StatusItemView, Workspace};
 
 use crate::lsp_log_view;
@@ -187,6 +187,13 @@ struct ServerInfo {
     message: Option<SharedString>,
 }
 
+#[derive(Default, Clone)]
+struct ServerMetadata {
+    server_version: Option<SharedString>,
+    binary_display_path: Option<SharedString>,
+    process_id: Option<u32>,
+}
+
 impl ServerInfo {
     fn server_selector(&self) -> LanguageServerSelector {
         LanguageServerSelector::Id(self.id)
@@ -220,24 +227,32 @@ impl LanguageServerState {
             return menu;
         };
 
-        let server_metadata = self
-            .lsp_store
-            .update(cx, |lsp_store, _| {
-                lsp_store
-                    .language_server_statuses()
-                    .map(|(server_id, status)| {
-                        (
-                            server_id,
+        let path_style = self
+            .workspace
+            .upgrade()
+            .map(|workspace| workspace.read(cx).path_style(cx))
+            .unwrap_or_else(PathStyle::local);
+
+        let server_metadata =
+            self.lsp_store
+                .update(cx, |lsp_store, _| {
+                    lsp_store
+                        .language_server_statuses()
+                        .map(|(server_id, status)| {
                             (
-                                status.server_readable_version.clone(),
-                                status.binary.as_ref().map(|b| b.path.clone()),
-                                status.process_id,
-                            ),
-                        )
-                    })
-                    .collect::<HashMap<_, _>>()
-            })
-            .unwrap_or_default();
+                                server_id,
+                                ServerMetadata {
+                                    server_version: status.server_readable_version.clone(),
+                                    binary_display_path: status.binary.as_ref().map(|binary| {
+                                        tooltip_for_server_binary(binary, path_style)
+                                    }),
+                                    process_id: status.process_id,
+                                },
+                            )
+                        })
+                        .collect::<HashMap<_, _>>()
+                })
+                .unwrap_or_default();
 
         let process_memory_cache = self.process_memory_cache.clone();
 
@@ -351,17 +366,14 @@ impl LanguageServerState {
                 .or_else(|| server_info.binary_status.as_ref()?.message.as_ref())
                 .cloned();
 
-            let (server_version, binary_path, process_id) = server_metadata
+            let ServerMetadata {
+                server_version,
+                binary_display_path,
+                process_id,
+            } = server_metadata
                 .get(&server_info.id)
-                .map(|(version, path, process_id)| {
-                    (
-                        version.clone(),
-                        path.as_ref()
-                            .map(|p| SharedString::from(p.compact().to_string_lossy().to_string())),
-                        *process_id,
-                    )
-                })
-                .unwrap_or((None, None, None));
+                .cloned()
+                .unwrap_or_default();
 
             let server_message = message.clone();
 
@@ -612,7 +624,7 @@ impl LanguageServerState {
                         }
 
                         submenu = submenu.separator().custom_row({
-                            let binary_path = binary_path.clone();
+                            let binary_display_path = binary_display_path.clone();
                             let server_version = server_version.clone();
                             let server_message = server_message.clone();
                             let process_memory_cache = process_memory_cache.clone();
@@ -691,7 +703,7 @@ impl LanguageServerState {
                                                 .size(LabelSize::Small),
                                         )
                                     })
-                                    .when_some(binary_path.clone(), |el, path| {
+                                    .when_some(binary_display_path.clone(), |el, path| {
                                         el.tooltip(Tooltip::text(path))
                                     })
                                     .into_any_element()
@@ -704,6 +716,33 @@ impl LanguageServerState {
             );
         }
         menu
+    }
+}
+
+fn tooltip_for_server_binary(
+    server_binary: &lsp::LanguageServerBinary,
+    path_style: PathStyle,
+) -> SharedString {
+    let binary_path = server_binary.path.to_string_lossy();
+    let runtime = binary_path
+        .rsplit(|character| path_style.separators_ch().contains(&character))
+        .next()
+        .and_then(|name| ["node", "python"].into_iter().find(|runtime| name.starts_with(runtime)));
+
+    let target_path = runtime
+        .and_then(|_runtime| {
+            server_binary
+                .arguments
+                .iter()
+                .find(|argument| !argument.to_string_lossy().starts_with('-'))
+        })
+        .map(|argument| argument.to_string_lossy().into_owned())
+        .unwrap_or_else(|| binary_path.into_owned());
+    let display_path = path_style.normalize(&target_path);
+
+    match runtime {
+        Some(runtime) => format!("{display_path} ({runtime})").into(),
+        None => display_path.into(),
     }
 }
 
@@ -1594,6 +1633,55 @@ mod tests {
         assert!(
             state.health_statuses.contains_key(&server_id(2)),
             "the new server's health entry is present",
+        );
+    }
+
+    #[test]
+    fn tooltip_for_server_binary_handles_runtime_and_standalone_servers() {
+        let node_server = lsp::LanguageServerBinary {
+            path: "/usr/bin/node".into(),
+            arguments: vec![
+                "/zed/languages/basedpyright/langserver.index.js".into(),
+                "--stdio".into(),
+            ],
+            env: None,
+        };
+        assert_eq!(
+            tooltip_for_server_binary(&node_server, PathStyle::Posix),
+            "/zed/languages/basedpyright/langserver.index.js (node)"
+        );
+
+        let node_server_windows = lsp::LanguageServerBinary {
+            path: "C:\\Program Files\\nodejs\\node.exe".into(),
+            arguments: vec![
+                "C:\\Users\\ZZZ\\languages\\basedpyright\\node_modules\\basedpyright\\langserver.index.js".into(),
+                "--stdio".into(),
+            ],
+            env: None,
+        };
+        assert_eq!(
+            tooltip_for_server_binary(&node_server_windows, PathStyle::Windows),
+            "C:\\Users\\ZZZ\\languages\\basedpyright\\node_modules\\basedpyright\\langserver.index.js (node)"
+        );
+
+        let python_server = lsp::LanguageServerBinary {
+            path: "/usr/bin/python3".into(),
+            arguments: vec!["/zed/languages/pylsp/pylsp".into(), "--stdio".into()],
+            env: None,
+        };
+        assert_eq!(
+            tooltip_for_server_binary(&python_server, PathStyle::Posix),
+            "/zed/languages/pylsp/pylsp (python)"
+        );
+
+        let standalone_server = lsp::LanguageServerBinary {
+            path: "/usr/bin/ty".into(),
+            arguments: vec!["server".into()],
+            env: None,
+        };
+        assert_eq!(
+            tooltip_for_server_binary(&standalone_server, PathStyle::Posix),
+            "/usr/bin/ty"
         );
     }
 }
