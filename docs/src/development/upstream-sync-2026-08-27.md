@@ -420,3 +420,98 @@ NOT RUN cargo test --workspace
 The reviewed baseline is `ab208db8d264ad08f62bda7ba0ce560c220a347f`.
 Work remains on `sync/upstream-2026-08-27` and has not been merged to
 `main`.
+
+## Continuation: 2026-08-28 (fourth batch)
+
+### Scope
+
+- Target branch: `sync/upstream-2026-08-27` from `main` at
+  `2761d2445eca441bc5948e8d35bebb01274496cf`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline:
+  `ab208db8d264ad08f62bda7ba0ce560c220a347f`
+- Reviewed upstream head:
+  `7f2a2c3c3ee2f23f28772dee7661fb98d3910990`
+- Live upstream head queried:
+  `cf1900f44d30c771207e36e2c9094b6c1f659bea`
+- Query time: `2026-08-28T13:26:24+02:00`
+
+This continuation reviewed the next 20 commits after `ab208db8`. Counts:
+6 A, 3 B, 11 C. The reviewed baseline is now
+`7f2a2c3c3ee2f23f28772dee7661fb98d3910990`; 84 commits remain through the
+queried live head.
+
+### Decisions
+
+| Upstream | Class | Local commit | Disposition                                                               |
+| -------- | ----- | ------------ | ------------------------------------------------------------------------- |
+| 875e2a1c | C     | --           | Publishing docs target deleted ZZZ extension-publishing pages.            |
+| 9b5b5860 | C     | --           | `.rules` and Danger self-review automation are repository administration. |
+| 075520b9 | A     | c7d094f4     | Focus Git Graph items on the search editor.                               |
+| 10b2925e | A     | 85c1135b     | Document language auto-indentation rules.                                 |
+| ec18126b | C     | --           | Requires the absent `mermaid_render` crate and merman dependency.         |
+| 907ed09c | B     | 896b4f24     | Prevent saves and format-on-save for read-only items.                     |
+| 4c763e15 | B     | 095d7216     | Preserve Git context-menu bindings during initial focus.                  |
+| 53dbfe40 | C     | --           | Typed transport-error rewrite does not match ZZZ's OpenAI request APIs.   |
+| 51a3ac29 | A     | 3a8241b7     | Validate extension manifest metadata before builds.                       |
+| a7e23df6 | C     | --           | Attempted port failed test compilation; reverted per B-port rule.         |
+| 1ea16c1a | C     | --           | Needs upstream global `GitDiffBaseSetting` toggle path absent in ZZZ.     |
+| 107ee1a6 | C     | --           | Large terminal/dock restoration rewrite is unisolatable from ZZZ layout.  |
+| f36aec82 | C     | --           | `ask_user` tool/default is absent from ZZZ's ACP surface.                 |
+| 7316cf77 | C     | --           | Depends on deleted foreground profiler journal and bench machinery.       |
+| fd82517a | A     | a5f1387c     | Add Tangled Git hosting permalinks.                                       |
+| 7eec8920 | A     | 503c1b60     | Restore project LSP settings for legacy extension APIs.                   |
+| d9ad6aff | A     | 201a5184     | Release X11 client state before close callbacks.                          |
+| bcf033f8 | B     | a1582a51     | Clarify ZZZ Linux uninstall paths and parallel installations.             |
+| 6bf539cd | C     | --           | Depends on absent blame-revision actions in ZZZ.                          |
+| 7f2a2c3c | C     | --           | Requires deleted `crashes` sidecar and cross-platform quit API rewrite.   |
+
+### Applied work
+
+Direct A commits `075520b9`, `10b2925e`, `51a3ac29`, `fd82517a`, `7eec8920`,
+and `d9ad6aff` were absorbed with `git cherry-pick -x -s` as their listed
+local commits. The B ports have `Upstream`, `Retained`, and `Omitted` trailers.
+
+- `907ed09c`: block read-only editor saves and formatting, propagate capability
+  changes to tabs, and gate workspace save actions.
+- `4c763e15`: retain GitPanel/ChangesList key contexts while a context menu is
+  newly focused; adapt the regression test to ZZZ's four-argument API.
+- `bcf033f8`: correct ZZZ uninstall examples and explain absolute paths for
+  parallel installations.
+
+### Rejected work
+
+`875e2a1c`, `9b5b5860`, `107ee1a6`, and `7316cf77` are documentation or
+repository/benchmark infrastructure that either targets deleted ZZZ paths or
+cannot be isolated from rejected machinery. `ec18126b` targets the absent
+`mermaid_render` crate. `f36aec82` targets an absent agent tool.
+
+`53dbfe40` requires a typed OpenAI transport-error API that ZZZ does not have;
+`1ea16c1a` requires a missing global diff-base setting; `6bf539cd` requires
+missing blame-revision actions; and `7f2a2c3c` requires the deleted crash
+sidecar plus a broad platform callback rewrite.
+
+`a7e23df6` was initially attempted as a B port, but its focused test failed to
+compile because ZZZ lacks the upstream `indoc` test dependency and has an
+additional `ParsedMarkdown` initializer. The entire attempt was removed and
+the commit was reclassified C.
+
+### Verification
+
+```text
+PASS cargo test --locked -p workspace test_save_intents_are_noops_for_read_only_items
+PASS cargo test --locked -p git_graph test_focus_handle_focuses_search_editor
+PASS cargo test --locked -p git_ui test_dispatch_context_with_focus_states
+PASS cargo test --locked -p extension_cli test_validate_manifest
+PASS cargo test --locked -p git_hosting_providers tangled
+PASS cargo check --locked -p extension_host
+PASS cargo check --locked -p gpui_linux
+PASS git diff --check
+FAIL cargo fmt --all --check (pre-existing formatting drift outside this batch)
+NOT RUN macOS / Windows / wasm32 gpui_web runtime
+NOT RUN cargo test --workspace
+```
+
+The reviewed baseline is `7f2a2c3c3ee2f23f28772dee7661fb98d3910990`.
+Work remains on `sync/upstream-2026-08-27` and has not been merged to
+`main`.
