@@ -323,3 +323,100 @@ NOT RUN cargo test --workspace
 The reviewed baseline is `09adbb01f6ed625a976339f014d6c11690aa6301`.
 Work remains on `sync/upstream-2026-08-27` and has not been merged to
 `main`.
+
+## Continuation: 2026-08-28 (third batch)
+
+### Scope
+
+- Target branch: `sync/upstream-2026-08-27` from `main` at
+  `2761d2445eca441bc5948e8d35bebb01274496cf`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline:
+  `09adbb01f6ed625a976339f014d6c11690aa6301`
+- Reviewed upstream head:
+  `ab208db8d264ad08f62bda7ba0ce560c220a347f`
+- Live upstream head queried:
+  `4b3ef3e45a64f30525324ef8d0d60c1adca2cd7a`
+- Query time: `2026-08-28T12:04:52+02:00`
+
+This continuation reviewed the next 20 commits after `09adbb01`. Counts:
+1 A, 9 B, 10 C. The reviewed baseline is now
+`ab208db8d264ad08f62bda7ba0ce560c220a347f`; 103 commits remain through the
+queried live head.
+
+### Decisions
+
+| Upstream | Class | Local commit | Disposition                                                         |
+| -------- | ----- | ------------ | ------------------------------------------------------------------- |
+| c3b365d2 | C     | --           | Native Agent inline assistant is outside ZZZ's ACP-only boundary.   |
+| deb194b4 | B     | de81c421     | Deduplicate overlapping LSP range-format edits.                     |
+| 2b37a3ed | C     | --           | Upstream GitHub contributor-label link only.                        |
+| 53b39e8e | B     | 85beb270     | Bound global gitignore matching to repository/worktree roots.       |
+| b0e37a6c | B     | 2e471090     | Display Node/Python language-server script paths in LSP tooltips.   |
+| f4178619 | B     | b1c5a201     | Drain buffered X11 events after foreground work.                    |
+| debf6b21 | B     | df4d3558     | Order Flatpak launcher arguments before positional paths.           |
+| cb1352a2 | B     | 1332e495     | Add debounce only for manual local edit-prediction providers.       |
+| b427d4ec | A     | 87a8c7f3     | Cherry-picked with `-x -s`.                                         |
+| 1e9f1ef4 | C     | --           | Baseten uses cloud credentials and is not a silent manual provider. |
+| fe9556a1 | C     | --           | Unused browser performance-tracing API and web tracing machinery.   |
+| f5e87e53 | B     | 483087bb     | Clear the existing settings search field.                           |
+| 91bf967e | B     | deda284e     | Expose ZZZ's inspector as an explicit diagnostic feature.           |
+| 5255bd7f | C     | --           | Needs absent `PaymentRequired` completion-error API.                |
+| 84aaa525 | C     | --           | Upstream GitHub triage-project workflow and script removal.         |
+| 5b70f793 | B     | ee09d831     | Use `Duration` on existing local timing paths.                      |
+| ef50ad95 | C     | --           | GitHub CLA/draft pull-request cleanup automation.                   |
+| eb354c8d | C     | --           | Unisolatable Wayland/GPUI render-loop architecture rewrite.         |
+| 54230ad8 | C     | --           | OpenAI subscription-provider autocomplete is account-bound.         |
+| ab208db8 | C     | --           | Stabilizes an upstream bracket test that ZZZ does not contain.      |
+
+### Applied work
+
+Direct A commit `b427d4ec` was absorbed with `git cherry-pick -x -s` as
+`87a8c7f3`. The B ports have `Upstream`, `Retained`, and `Omitted` trailers in
+their local commits. They cover range-format overlap handling, global
+gitignore boundaries, script-path tooltips, buffered X11 events, Flatpak
+launch arguments, local prediction debounce, settings search clearing,
+explicit inspector enabling, and `Duration` types across existing ACP,
+terminal, search, project, editor, CLI, and profiler paths.
+
+`5b70f793` preserves millisecond configuration at the terminal settings
+boundary and omits only the removed `openai_subscribed` account route.
+
+### Rejected work
+
+`c3b365d2`, `1e9f1ef4`, and `54230ad8` conflict with the ACP-only or silent
+manual-provider boundary. `2b37a3ed`, `84aaa525`, and `ef50ad95` are upstream
+contributor, triage, or CLA administration. `fe9556a1` has no ZZZ caller.
+
+`5255bd7f` was evaluated as a manual Anthropic error-mapping port, but the
+needed `LanguageModelCompletionError::PaymentRequired` variant is absent;
+adding it would be unused public API, so the attempted patch was fully
+reverted. `eb354c8d` requires a divergent GPUI scheduling and Wayland
+presentation-state rewrite. `ab208db8` only stabilizes an upstream bracket
+test and fixture absent from ZZZ.
+
+### Verification
+
+```text
+PASS git merge-base --is-ancestor 09adbb01 FETCH_HEAD
+PASS cargo test --locked -p project range_formatting_conflicts_preserve_lsp_insert_boundaries
+PASS cargo test --locked -p worktree --test integration test_global_gitignore_without_repository
+PASS cargo test --locked -p language_tools tooltip_for_server_binary_handles_runtime_and_standalone_servers
+PASS cargo check --locked -p gpui_linux
+PASS cargo test --locked -p cli restart_cli_args_precedes_positional_paths
+PASS cargo test --locked -p settings_content delay_ms_accepts_display_values
+PASS cargo test --locked -p language edit_prediction_debounce_only_applies_to_manual_providers
+PASS cargo check --locked -p edit_prediction -p settings_ui
+PASS cargo check --locked -p zzz --features inspector
+PASS cargo check --locked -p terminal -p project -p acp_thread -p search -p edit_prediction_cli -p miniprofiler_ui -p editor
+PASS cargo test --locked -p terminal terminal_hyperlinks
+PASS cargo test --locked -p editor test_inlay_hints_request_timeout
+PASS git diff --check
+FAIL cargo fmt --all --check (pre-existing formatting drift outside this batch)
+NOT RUN macOS / Windows / wasm32 gpui_web runtime
+NOT RUN cargo test --workspace
+```
+
+The reviewed baseline is `ab208db8d264ad08f62bda7ba0ce560c220a347f`.
+Work remains on `sync/upstream-2026-08-27` and has not been merged to
+`main`.
