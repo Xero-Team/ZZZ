@@ -38,6 +38,7 @@ pub const MIN_POPOVER_CHARACTER_WIDTH: f32 = 20.;
 pub const MIN_POPOVER_LINE_HEIGHT: f32 = 4.;
 pub const POPOVER_RIGHT_OFFSET: Pixels = px(8.0);
 pub const HOVER_POPOVER_GAP: Pixels = px(10.);
+const MAX_HOVER_BYTES: usize = 100_000;
 
 /// Bindable action which uses the most recent selection head to trigger a hover
 pub fn hover(editor: &mut Editor, _: &Hover, window: &mut Window, cx: &mut Context<Editor>) {
@@ -671,6 +672,7 @@ fn parse_blocks(
             }
         })
         .join("\n\n");
+    let combined_text = truncate_hover_text(&combined_text);
 
     cx.new_window_entity(|_window, cx| {
         Markdown::new(
@@ -681,6 +683,17 @@ fn parse_blocks(
         )
     })
     .ok()
+}
+
+fn truncate_hover_text(text: &str) -> String {
+    if text.len() <= MAX_HOVER_BYTES {
+        return text.to_owned();
+    }
+    let mut end = MAX_HOVER_BYTES.saturating_sub("…".len());
+    while !text.is_char_boundary(end) {
+        end = end.saturating_sub(1);
+    }
+    format!("{}…", &text[..end])
 }
 
 pub fn hover_markdown_style(window: &Window, cx: &App) -> MarkdownStyle {
