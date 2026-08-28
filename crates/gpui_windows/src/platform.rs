@@ -502,8 +502,11 @@ impl Platform for WindowsPlatform {
         // borrow of the `AppCell` ending up with a double borrow panic
         self.foreground_executor
             .spawn(async move {
-                let mut command =
-                    ::util::command::new_std_command(::util::shell::get_windows_system_shell());
+                let Some(powershell) = ::util::shell::get_powershell() else {
+                    log::error!("failed to restart: PowerShell is unavailable");
+                    return;
+                };
+                let mut command = ::util::command::new_std_command(powershell);
                 let arguments = encode_restart_arguments(&arguments);
                 command
                     .arg("-command")
