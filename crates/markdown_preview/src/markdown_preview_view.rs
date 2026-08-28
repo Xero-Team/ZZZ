@@ -1809,9 +1809,9 @@ fn filter_non_rendered_matches(
             let candidate =
                 non_rendered_ranges.partition_point(|range| range.end <= match_range.start);
 
-            !non_rendered_ranges
+            non_rendered_ranges
                 .get(candidate)
-                .is_some_and(|range| range.start < match_range.end)
+                .is_none_or(|range| range.start >= match_range.end)
         })
         .collect()
 }

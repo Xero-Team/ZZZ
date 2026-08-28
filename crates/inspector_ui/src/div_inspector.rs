@@ -460,8 +460,7 @@ impl DivInspector {
                         cx,
                         "inspector_ui.div_inspector.unrecognized",
                         "unrecognized",
-                    )
-                    .to_string(),
+                    ),
                     severity: DiagnosticSeverity::WARNING,
                     is_primary: true,
                     group_id: ix,
