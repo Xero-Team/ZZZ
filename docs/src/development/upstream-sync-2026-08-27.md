@@ -603,7 +603,7 @@ Work remains on `sync/upstream-2026-08-27` and has not been merged to
 
 The fifth-batch decisions and verification are recorded above. The reviewed
 upstream range is `7f2a2c3c..391a66a5`, with live head
-`cf1900f44d30c771207e36e2c9094b6c1f659bea`; counts are 7 A, 8 B, and 5 C.
+`cf1900f44d30c771207e36e2c9094b6c1f659bea`; counts are 6 A, 9 B, and 5 C.
 The reviewed baseline is now
 `391a66a5ad9f68e13a54f57b3b06f4605867614c`.
 Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
