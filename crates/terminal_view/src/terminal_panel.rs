@@ -840,19 +840,20 @@ impl TerminalPanel {
                     )
                 }));
 
+                let take_focus = reveal_strategy == RevealStrategy::Always
+                    && !workspace.has_active_modal(window, cx);
                 match reveal_strategy {
-                    RevealStrategy::Always => {
+                    RevealStrategy::Always if take_focus => {
                         workspace.focus_panel::<Self>(window, cx);
                     }
-                    RevealStrategy::NoFocus => {
+                    RevealStrategy::Always | RevealStrategy::NoFocus => {
                         workspace.open_panel::<Self>(window, cx);
                     }
                     RevealStrategy::Never => {}
                 }
 
                 pane.update(cx, |pane, cx| {
-                    let focus = matches!(reveal_strategy, RevealStrategy::Always);
-                    pane.add_item(terminal_view, true, focus, None, window, cx);
+                    pane.add_item(terminal_view, true, take_focus, None, window, cx);
                 });
 
                 Ok(terminal.downgrade())
@@ -928,19 +929,20 @@ impl TerminalPanel {
                             )
                         }));
 
+                        let take_focus = reveal_strategy == RevealStrategy::Always
+                            && !workspace.has_active_modal(window, cx);
                         match reveal_strategy {
-                            RevealStrategy::Always => {
+                            RevealStrategy::Always if take_focus => {
                                 workspace.focus_panel::<Self>(window, cx);
                             }
-                            RevealStrategy::NoFocus => {
+                            RevealStrategy::Always | RevealStrategy::NoFocus => {
                                 workspace.open_panel::<Self>(window, cx);
                             }
                             RevealStrategy::Never => {}
                         }
 
                         pane.update(cx, |pane, cx| {
-                            let focus = matches!(reveal_strategy, RevealStrategy::Always);
-                            pane.add_item(terminal_view, true, focus, None, window, cx);
+                            pane.add_item(terminal_view, true, take_focus, None, window, cx);
                         });
 
                         Ok(terminal.downgrade())
