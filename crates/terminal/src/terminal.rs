@@ -657,7 +657,7 @@ impl TerminalBuilder {
             let mut terminal = Terminal {
                 task,
                 terminal_type: TerminalType::Pty {
-                    pty_tx: Notifier(pty_tx),
+                    pty_tx: Some(Notifier(pty_tx)),
                     info: Arc::new(pty_info),
                 },
                 completion_tx,
@@ -913,7 +913,7 @@ pub enum SelectionPhase {
 
 enum TerminalType {
     Pty {
-        pty_tx: Notifier,
+        pty_tx: Option<Notifier>,
         info: Arc<PtyProcessInfo>,
     },
     DisplayOnly,
@@ -1108,7 +1108,11 @@ impl Terminal {
 
                 self.last_content.terminal_bounds = new_bounds;
 
-                if let TerminalType::Pty { pty_tx, .. } = &self.terminal_type {
+                if let TerminalType::Pty {
+                    pty_tx: Some(pty_tx),
+                    ..
+                } = &self.terminal_type
+                {
                     pty_tx.0.send(Msg::Resize(new_bounds.into())).ok();
                 }
 
@@ -1551,7 +1555,11 @@ impl Terminal {
         let input = input.into();
         #[cfg(any(test, feature = "test-support"))]
         self.pty_write_log.borrow_mut().push(input.to_vec());
-        if let TerminalType::Pty { pty_tx, .. } = &self.terminal_type {
+        if let TerminalType::Pty {
+            pty_tx: Some(pty_tx),
+            ..
+        } = &self.terminal_type
+        {
             if log::log_enabled!(log::Level::Debug) {
                 if let Ok(str) = str::from_utf8(&input) {
                     log::debug!("Writing to PTY: {:?}", str);
@@ -1565,6 +1573,27 @@ impl Terminal {
 
     pub fn is_pty(&self) -> bool {
         matches!(self.terminal_type, TerminalType::Pty { .. })
+    }
+
+    /// Release the live PTY sender while retaining process metadata and buffered output.
+    /// This is used by ACP terminal history once command output is captured.
+    pub fn release_pty_resources(&mut self) {
+        let TerminalType::Pty { pty_tx, info } = &mut self.terminal_type else {
+            return;
+        };
+        let Some(pty_tx) = pty_tx.take() else {
+            return;
+        };
+        pty_tx.0.send(Msg::Shutdown).ok();
+        info.terminate_child_process();
+        let info = info.clone();
+        let timer = self.background_executor.timer(Duration::from_millis(100));
+        self.background_executor
+            .spawn(async move {
+                timer.await;
+                info.kill_child_process();
+            })
+            .detach();
     }
 
     pub fn input(&mut self, input: impl Into<Cow<'static, [u8]>>) {
@@ -2664,20 +2693,7 @@ unsafe fn append_text_to_term(term: &mut Term<ZedListener>, text_lines: &[&str])
 
 impl Drop for Terminal {
     fn drop(&mut self) {
-        if let TerminalType::Pty { pty_tx, info } =
-            std::mem::replace(&mut self.terminal_type, TerminalType::DisplayOnly)
-        {
-            pty_tx.0.send(Msg::Shutdown).ok();
-            info.terminate_child_process();
-
-            let timer = self.background_executor.timer(Duration::from_millis(100));
-            self.background_executor
-                .spawn(async move {
-                    timer.await;
-                    info.kill_child_process();
-                })
-                .detach();
-        }
+        self.release_pty_resources();
     }
 }
 

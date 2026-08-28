@@ -83,6 +83,9 @@ impl Terminal {
                             original_content_len,
                             content_line_count,
                         });
+                        this.terminal.update(cx, |terminal, _cx| {
+                            terminal.release_pty_resources();
+                        });
                         cx.notify();
                     })
                     .ok();
