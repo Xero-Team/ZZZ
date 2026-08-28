@@ -120,6 +120,10 @@ impl PlatformTextSystem for CosmicTextSystem {
         Ok(candidates[ix])
     }
 
+    fn prewarm_fonts(&self, font_ids: &[FontId]) {
+        self.0.write().prewarm_fonts(font_ids);
+    }
+
     fn font_metrics(&self, font_id: FontId) -> FontMetrics {
         let metrics = self
             .0
@@ -194,6 +198,35 @@ impl PlatformTextSystem for CosmicTextSystem {
 impl CosmicTextSystemState {
     fn loaded_font(&self, font_id: FontId) -> &LoadedFont {
         &self.loaded_fonts[font_id.0]
+    }
+
+    fn prewarm_fonts(&mut self, font_ids: &[FontId]) {
+        for &font_id in font_ids {
+            let (family, stretch, style, weight, features) = {
+                let loaded_font = self.loaded_font(font_id);
+                let Some(face) = self.font_system.db().face(loaded_font.font.id()) else {
+                    continue;
+                };
+                let Some(family) = face.families.first() else {
+                    continue;
+                };
+                (
+                    family.0.clone(),
+                    face.stretch,
+                    face.style,
+                    face.weight,
+                    loaded_font.features.clone(),
+                )
+            };
+            let attributes = Attrs::new()
+                .metadata(font_id.0)
+                .family(Family::Name(&family))
+                .stretch(stretch)
+                .style(style)
+                .weight(weight)
+                .font_features(features);
+            self.font_system.get_font_matches(&attributes);
+        }
     }
 
     #[profiling::function]
