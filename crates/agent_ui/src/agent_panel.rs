@@ -15,8 +15,8 @@ use agent_servers::AgentServer;
 use collections::HashSet;
 use db::kvp::{Dismissable, KeyValueStore};
 use itertools::Itertools;
-use project::agent_server_store::AllAgentServersSettings;
 use project::AgentId;
+use project::agent_server_store::AllAgentServersSettings;
 use serde::{Deserialize, Serialize};
 use settings::{LanguageModelProviderSetting, LanguageModelSelection};
 

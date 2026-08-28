@@ -6,9 +6,9 @@ use cosmic_text::{
 };
 use gpui::{
     Bounds, DevicePixels, Font, FontFeatures, FontId, FontMetrics, FontRun, FontStyle, FontWeight,
-    GlyphId, LineLayout, Pixels, PlatformTextSystem, RenderGlyphParams, SUBPIXEL_VARIANTS_X,
-    SUBPIXEL_VARIANTS_Y, ShapedGlyph, ShapedRun, SharedString, Size, SyntheticBold,
-    SyntheticItalic, TextRenderingMode, IsZero as _, point, size, synthetic_bold_for,
+    GlyphId, IsZero as _, LineLayout, Pixels, PlatformTextSystem, RenderGlyphParams,
+    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ShapedGlyph, ShapedRun, SharedString, Size,
+    SyntheticBold, SyntheticItalic, TextRenderingMode, point, size, synthetic_bold_for,
 };
 
 use itertools::Itertools;

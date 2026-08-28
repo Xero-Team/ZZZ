@@ -23,12 +23,8 @@ type StackSafeBox<T> = StackSafe<T>;
 #[cfg(not(feature = "stacker"))]
 type StackSafeBox<T> = T;
 
-type MeasureFn = dyn FnMut(
-    Size<Option<Pixels>>,
-    Size<AvailableSpace>,
-    &mut Window,
-    &mut App,
-) -> Size<Pixels>;
+type MeasureFn =
+    dyn FnMut(Size<Option<Pixels>>, Size<AvailableSpace>, &mut Window, &mut App) -> Size<Pixels>;
 type NodeMeasureFn = StackSafeBox<Box<MeasureFn>>;
 
 struct NodeContext {

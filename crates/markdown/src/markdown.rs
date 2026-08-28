@@ -351,11 +351,31 @@ impl MarkdownStyle {
         self.heading.text.color = Some(colors.text);
 
         self.heading_level_styles = Some(HeadingLevelStyles {
-            h1: Some(TextStyleRefinement { font_size: Some(rems(1.75).into()), font_weight: Some(FontWeight::SEMIBOLD), ..Default::default() }),
-            h2: Some(TextStyleRefinement { font_size: Some(rems(1.4).into()), font_weight: Some(FontWeight::SEMIBOLD), ..Default::default() }),
-            h3: Some(TextStyleRefinement { font_size: Some(rems(1.2).into()), font_weight: Some(FontWeight::SEMIBOLD), ..Default::default() }),
-            h4: Some(TextStyleRefinement { font_size: Some(rems(1.0).into()), font_weight: Some(FontWeight::SEMIBOLD), ..Default::default() }),
-            h5: Some(TextStyleRefinement { font_size: Some(rems(0.875).into()), font_weight: Some(FontWeight::SEMIBOLD), ..Default::default() }),
+            h1: Some(TextStyleRefinement {
+                font_size: Some(rems(1.75).into()),
+                font_weight: Some(FontWeight::SEMIBOLD),
+                ..Default::default()
+            }),
+            h2: Some(TextStyleRefinement {
+                font_size: Some(rems(1.4).into()),
+                font_weight: Some(FontWeight::SEMIBOLD),
+                ..Default::default()
+            }),
+            h3: Some(TextStyleRefinement {
+                font_size: Some(rems(1.2).into()),
+                font_weight: Some(FontWeight::SEMIBOLD),
+                ..Default::default()
+            }),
+            h4: Some(TextStyleRefinement {
+                font_size: Some(rems(1.0).into()),
+                font_weight: Some(FontWeight::SEMIBOLD),
+                ..Default::default()
+            }),
+            h5: Some(TextStyleRefinement {
+                font_size: Some(rems(0.875).into()),
+                font_weight: Some(FontWeight::SEMIBOLD),
+                ..Default::default()
+            }),
             h6: Some(TextStyleRefinement {
                 color: Some(colors.text_muted),
                 font_size: Some(rems(0.85).into()),
