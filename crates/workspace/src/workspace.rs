@@ -3342,28 +3342,34 @@ impl Workspace {
                     .count()
             })?;
 
-            #[cfg(target_os = "macos")]
-            let save_last_workspace = false;
-
-            // On Linux and Windows, closing the last window should restore the last workspace.
-            #[cfg(not(target_os = "macos"))]
             let save_last_workspace = {
-                let remaining_workspaces = cx.update(|_window, cx| {
-                    cx.windows()
+                let (remaining_workspaces, quits_on_last_window) = cx.update(|window, cx| {
+                    let current_window = window.window_handle();
+                    let remaining_workspaces = cx
+                        .windows()
                         .iter()
-                        .filter_map(|window| window.downcast::<MultiWorkspace>())
+                        .filter(|other_window| {
+                            other_window.window_id() != current_window.window_id()
+                        })
+                        .filter_map(|other_window| other_window.downcast::<MultiWorkspace>())
                         .filter_map(|multi_workspace| {
-                            multi_workspace
-                                .update(cx, |multi_workspace, _, cx| {
-                                    multi_workspace.workspace().read(cx).removing
-                                })
-                                .ok()
+                            multi_workspace.read(cx).ok().map(|multi_workspace| {
+                                multi_workspace.workspace().read(cx).removing
+                            })
                         })
                         .filter(|removing| !removing)
-                        .count()
+                        .count();
+                    let quits_on_last_window = match WorkspaceSettings::get_global(cx)
+                        .on_last_window_closed
+                    {
+                        settings::OnLastWindowClosed::QuitApp => true,
+                        settings::OnLastWindowClosed::PlatformDefault => !cfg!(target_os = "macos"),
+                    };
+                    (remaining_workspaces, quits_on_last_window)
                 })?;
-
-                close_intent != CloseIntent::ReplaceWindow && remaining_workspaces == 0
+                let closes_last_window =
+                    close_intent != CloseIntent::ReplaceWindow && remaining_workspaces == 0;
+                closes_last_window && quits_on_last_window
             };
 
             if let Some(active_call) = active_call

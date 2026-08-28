@@ -533,6 +533,19 @@ impl MultiWorkspace {
                 }
             }
 
+            let flush_tasks = this.update_in(cx, |multi_workspace, window, cx| {
+                let mut tasks = Vec::new();
+                for workspace in multi_workspace.workspaces() {
+                    tasks.push(workspace.update(cx, |workspace, cx| {
+                        workspace.flush_serialization(window, cx)
+                    }));
+                }
+                tasks.append(&mut multi_workspace.pending_removal_tasks);
+                tasks.push(multi_workspace.flush_serialization());
+                tasks
+            })?;
+            futures::future::join_all(flush_tasks).await;
+
             cx.update(|window, _cx| {
                 window.remove_window();
             })?;
