@@ -909,3 +909,13 @@ NOT RUN cargo test --workspace
 
 The reviewed baseline is `5ed5bf95e518f1b35386a8787b512c99b90509f7`.
 Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
+
+## Eighth-batch finalization
+
+The eighth-batch decisions and verification are recorded above. The reviewed
+upstream range is `5ed5bf95..01acd0ee`, with live head
+`8ee36b682cf1971e51032cbd932dd16def575364`; counts are 3 A, 5 B, and 12 C.
+The reviewed baseline is now
+`01acd0ee8e906dd0ec8b526fe08da94444a5e2af`; 6 commits remain through the
+queried live head. Work remains on `sync/upstream-2026-08-27` and has not been
+merged to `main`.
