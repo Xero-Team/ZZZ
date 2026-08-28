@@ -495,6 +495,8 @@ pub enum Model {
     Gemini25Pro,
     #[serde(rename = "gemini-3.1-flash-lite")]
     Gemini31FlashLite,
+    #[serde(rename = "gemini-3.5-flash-lite")]
+    Gemini35FlashLite,
     #[serde(rename = "gemini-3-flash-preview")]
     Gemini3Flash,
     #[serde(rename = "gemini-3.5-flash")]
@@ -527,6 +529,7 @@ impl Model {
             Self::Gemini25Flash => "gemini-2.5-flash",
             Self::Gemini25Pro => "gemini-2.5-pro",
             Self::Gemini31FlashLite => "gemini-3.1-flash-lite",
+            Self::Gemini35FlashLite => "gemini-3.5-flash-lite",
             Self::Gemini3Flash => "gemini-3-flash-preview",
             Self::Gemini35Flash => "gemini-3.5-flash",
             Self::Gemini36Flash => "gemini-3.6-flash",
@@ -541,6 +544,7 @@ impl Model {
             Self::Gemini25Flash => "gemini-2.5-flash",
             Self::Gemini25Pro => "gemini-2.5-pro",
             Self::Gemini31FlashLite => "gemini-3.1-flash-lite",
+            Self::Gemini35FlashLite => "gemini-3.5-flash-lite",
             Self::Gemini3Flash => "gemini-3-flash-preview",
             Self::Gemini35Flash => "gemini-3.5-flash",
             Self::Gemini36Flash => "gemini-3.6-flash",
@@ -556,6 +560,7 @@ impl Model {
             Self::Gemini25Flash => "Gemini 2.5 Flash",
             Self::Gemini25Pro => "Gemini 2.5 Pro",
             Self::Gemini31FlashLite => "Gemini 3.1 Flash Lite",
+            Self::Gemini35FlashLite => "Gemini 3.5 Flash-Lite",
             Self::Gemini3Flash => "Gemini 3 Flash",
             Self::Gemini35Flash => "Gemini 3.5 Flash",
             Self::Gemini36Flash => "Gemini 3.6 Flash",
@@ -573,6 +578,7 @@ impl Model {
             | Self::Gemini25Flash
             | Self::Gemini25Pro
             | Self::Gemini31FlashLite
+            | Self::Gemini35FlashLite
             | Self::Gemini3Flash
             | Self::Gemini35Flash
             | Self::Gemini36Flash
@@ -588,6 +594,7 @@ impl Model {
             | Model::Gemini25Flash
             | Model::Gemini25Pro
             | Model::Gemini31FlashLite
+            | Model::Gemini35FlashLite
             | Model::Gemini3Flash
             | Model::Gemini35Flash
             | Model::Gemini36Flash
@@ -616,6 +623,7 @@ impl Model {
             }
             Self::Gemini3Flash => GoogleModelMode::Default,
             Self::Gemini31FlashLite => GoogleModelMode::Default,
+            Self::Gemini35FlashLite => GoogleModelMode::Default,
             Self::Gemini35Flash | Self::Gemini36Flash | Self::Gemini37Flash => {
                 GoogleModelMode::Thinking {
                     budget_tokens: None,
