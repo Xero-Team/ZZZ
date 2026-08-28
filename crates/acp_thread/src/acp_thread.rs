@@ -4037,7 +4037,7 @@ mod tests {
                     ::terminal::terminal_settings::AlternateScroll::On,
                     None,
                     vec![],
-                    0,
+                    Duration::ZERO,
                     false,
                     0,
                     Some(completion_tx),

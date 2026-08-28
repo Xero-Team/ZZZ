@@ -34,14 +34,14 @@ impl Default for RegexSearches {
         Self {
             url_regex: RegexSearch::new(URL_REGEX).unwrap(),
             path_hyperlink_regexes: Vec::default(),
-            path_hyperlink_timeout: Duration::default(),
+            path_hyperlink_timeout: Duration::ZERO,
         }
     }
 }
 impl RegexSearches {
     pub(super) fn new(
         path_hyperlink_regexes: impl IntoIterator<Item: AsRef<str>>,
-        path_hyperlink_timeout_ms: u64,
+        path_hyperlink_timeout: Duration,
     ) -> Self {
         Self {
             url_regex: RegexSearch::new(URL_REGEX).unwrap(),
@@ -62,7 +62,7 @@ impl RegexSearches {
                         .ok()
                 })
                 .collect(),
-            path_hyperlink_timeout: Duration::from_millis(path_hyperlink_timeout_ms),
+            path_hyperlink_timeout,
         }
     }
 }
@@ -1263,7 +1263,7 @@ mod tests {
                 term: &Term<VoidListener>,
                 point: AlacPoint,
             ) -> Option<(String, bool, Match)> {
-                const PATH_HYPERLINK_TIMEOUT_MS: u64 = 1000;
+                const PATH_HYPERLINK_TIMEOUT: Duration = Duration::from_millis(1000);
 
                 thread_local! {
                     static TEST_REGEX_SEARCHES: RefCell<RegexSearches> =
@@ -1276,7 +1276,7 @@ mod tests {
 
                             RegexSearches::new(
                                 &default_terminal_settings.path_hyperlink_regexes,
-                                PATH_HYPERLINK_TIMEOUT_MS
+                                PATH_HYPERLINK_TIMEOUT
                             )
                         });
                 }
@@ -1858,7 +1858,7 @@ mod tests {
             r#"[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} (?<link>(?<path>.+))"#;
         const MULTIPLE_SAME_LINE_REGEX: &str =
             r#"(?<link>(?<path>🦀 multiple_same_line 🦀) 🚣(?<line>[0-9]+) 🏛(?<column>[0-9]+)):"#;
-        const PATH_HYPERLINK_TIMEOUT_MS: u64 = 1000;
+        const PATH_HYPERLINK_TIMEOUT: Duration = Duration::from_millis(1000);
 
         thread_local! {
             static TEST_REGEX_SEARCHES: RefCell<RegexSearches> =
@@ -1877,7 +1877,7 @@ mod tests {
                         .chain(default_terminal_settings.path_hyperlink_regexes
                             .iter()
                             .map(AsRef::as_ref)),
-                    PATH_HYPERLINK_TIMEOUT_MS)
+                    PATH_HYPERLINK_TIMEOUT)
                 });
         }
 
