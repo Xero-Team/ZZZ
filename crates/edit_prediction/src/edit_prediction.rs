@@ -2083,8 +2083,10 @@ impl EditPredictionStore {
             }
         }
 
+        let edit_prediction_settings = &all_language_settings(None, cx).edit_predictions;
+        let debounce_duration = edit_prediction_settings.debounce_for(edit_prediction_settings.provider);
         let (needs_acceptance_tracking, max_pending_predictions) =
-            match all_language_settings(None, cx).edit_predictions.provider {
+            match edit_prediction_settings.provider {
                 EditPredictionProvider::Zed | EditPredictionProvider::Mercury => (true, 2),
                 EditPredictionProvider::Ollama => (false, 1),
                 EditPredictionProvider::OpenAiCompatibleApi => (false, 2),
@@ -2104,6 +2106,10 @@ impl EditPredictionStore {
         let throttle_at_enqueue = *select_throttle(project_state, request_trigger);
 
         let task = cx.spawn(async move |this, cx| {
+            if !debounce_duration.is_zero() {
+                cx.background_executor().timer(debounce_duration).await;
+            }
+
             let throttle_wait = this
                 .update(cx, |this, cx| {
                     let project_state = this.get_or_init_project(&project, cx);

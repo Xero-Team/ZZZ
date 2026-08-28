@@ -13,7 +13,7 @@ use ec4rs::{
 use globset::{Glob, GlobMatcher, GlobSet, GlobSetBuilder};
 use gpui::{App, Modifiers, SharedString};
 use itertools::{Either, Itertools};
-use settings::{DocumentFoldingRanges, DocumentSymbols, IntoGpui, SemanticTokens};
+use settings::{DelayMs, DocumentFoldingRanges, DocumentSymbols, IntoGpui, SemanticTokens};
 
 pub use settings::{
     AutoIndentMode, CompletionSettingsContent, EditPredictionDataCollectionChoice,
@@ -24,7 +24,7 @@ pub use settings::{
 };
 use settings::{RegisterSetting, Settings, SettingsLocation, SettingsStore, merge_from::MergeFrom};
 use shellexpand;
-use std::{borrow::Cow, num::NonZeroU32, path::Path, sync::Arc};
+use std::{borrow::Cow, num::NonZeroU32, path::Path, sync::Arc, time::Duration};
 use text::ToOffset;
 
 /// Returns the settings for all languages from the provided file.
@@ -495,6 +495,22 @@ impl EditPredictionSettings {
             }
         })
     }
+
+    /// Returns the configured debounce delay for a ZZZ-managed prediction provider.
+    pub fn debounce_for(&self, provider: EditPredictionProvider) -> Duration {
+        let delay = match provider {
+            EditPredictionProvider::Ollama => self
+                .ollama
+                .as_ref()
+                .map_or_else(DelayMs::default, |settings| settings.prediction_debounce),
+            EditPredictionProvider::OpenAiCompatibleApi => self
+                .open_ai_compatible_api
+                .as_ref()
+                .map_or_else(DelayMs::default, |settings| settings.prediction_debounce),
+            _ => DelayMs::default(),
+        };
+        Duration::from_millis(delay.0)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -536,6 +552,8 @@ pub struct OpenAiCompatibleEditPredictionSettings {
     /// The prompt format to use for completions. When `None`, the format
     /// will be derived from the model name at request time.
     pub prompt_format: EditPredictionPromptFormat,
+    /// Automatic prediction debounce delay.
+    pub prediction_debounce: DelayMs,
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -855,6 +873,7 @@ impl settings::Settings for AllLanguageSettings {
                 max_output_tokens: ollama.max_output_tokens.unwrap(),
                 api_url: ollama.api_url.unwrap().into(),
                 prompt_format: ollama.prompt_format.unwrap().into(),
+                prediction_debounce: ollama.prediction_debounce.unwrap(),
             });
         let openai_compatible_settings = edit_predictions.open_ai_compatible_api.unwrap();
         let openai_compatible_settings = openai_compatible_settings
@@ -870,6 +889,7 @@ impl settings::Settings for AllLanguageSettings {
                 max_output_tokens: openai_compatible_settings.max_output_tokens.unwrap(),
                 api_url: api_url.into(),
                 prompt_format: openai_compatible_settings.prompt_format.unwrap().into(),
+                prediction_debounce: openai_compatible_settings.prediction_debounce.unwrap(),
             });
 
         let mut file_types: FxHashMap<Arc<str>, (GlobSet, Vec<String>)> = FxHashMap::default();
@@ -933,6 +953,34 @@ mod tests {
     use super::*;
     use gpui::TestAppContext;
     use util::rel_path::rel_path;
+
+    #[test]
+    fn edit_prediction_debounce_only_applies_to_manual_providers() {
+        let settings = EditPredictionSettings {
+            ollama: Some(OpenAiCompatibleEditPredictionSettings {
+                prediction_debounce: DelayMs(125),
+                ..Default::default()
+            }),
+            open_ai_compatible_api: Some(OpenAiCompatibleEditPredictionSettings {
+                prediction_debounce: DelayMs(250),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            settings.debounce_for(EditPredictionProvider::Ollama),
+            Duration::from_millis(125)
+        );
+        assert_eq!(
+            settings.debounce_for(EditPredictionProvider::OpenAiCompatibleApi),
+            Duration::from_millis(250)
+        );
+        assert_eq!(
+            settings.debounce_for(EditPredictionProvider::Zed),
+            Duration::ZERO
+        );
+    }
 
     #[gpui::test]
     fn test_edit_predictions_enabled_for_file(cx: &mut TestAppContext) {

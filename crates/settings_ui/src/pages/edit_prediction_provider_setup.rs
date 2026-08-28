@@ -615,6 +615,42 @@ fn ollama_settings() -> Box<[SettingsPageItem]> {
             metadata: None,
             files: USER,
         }),
+        SettingsPageItem::SettingItem(SettingItem {
+            title: lt(
+                "settings_ui.edit_prediction_provider_setup.title.prediction.debounce",
+                "Prediction Debounce",
+            ),
+            description: lt(
+                "settings_ui.edit_prediction_provider_setup.description.delay.in.milliseconds.before.automatically.requesting.a.prediction.after.typing.stops",
+                "Delay in milliseconds before automatically requesting a prediction after typing stops. Set to 0 to request predictions immediately.",
+            ),
+            field: Box::new(SettingField {
+                pick: |settings| {
+                    settings
+                        .project
+                        .all_languages
+                        .edit_predictions
+                        .as_ref()?
+                        .ollama
+                        .as_ref()?
+                        .prediction_debounce
+                        .as_ref()
+                },
+                write: |settings, value, _app: &App| {
+                    settings
+                        .project
+                        .all_languages
+                        .edit_predictions
+                        .get_or_insert_default()
+                        .ollama
+                        .get_or_insert_default()
+                        .prediction_debounce = value;
+                },
+                json_path: Some("edit_predictions.ollama.prediction_debounce"),
+            }),
+            metadata: None,
+            files: USER,
+        }),
     ])
 }
 
@@ -766,6 +802,42 @@ fn open_ai_compatible_settings() -> Box<[SettingsPageItem]> {
                         .max_output_tokens = value;
                 },
                 json_path: Some("edit_predictions.open_ai_compatible_api.max_output_tokens"),
+            }),
+            metadata: None,
+            files: USER,
+        }),
+        SettingsPageItem::SettingItem(SettingItem {
+            title: lt(
+                "settings_ui.edit_prediction_provider_setup.title.prediction.debounce",
+                "Prediction Debounce",
+            ),
+            description: lt(
+                "settings_ui.edit_prediction_provider_setup.description.delay.in.milliseconds.before.automatically.requesting.a.prediction.after.typing.stops",
+                "Delay in milliseconds before automatically requesting a prediction after typing stops. Set to 0 to request predictions immediately.",
+            ),
+            field: Box::new(SettingField {
+                pick: |settings| {
+                    settings
+                        .project
+                        .all_languages
+                        .edit_predictions
+                        .as_ref()?
+                        .open_ai_compatible_api
+                        .as_ref()?
+                        .prediction_debounce
+                        .as_ref()
+                },
+                write: |settings, value, _app: &App| {
+                    settings
+                        .project
+                        .all_languages
+                        .edit_predictions
+                        .get_or_insert_default()
+                        .open_ai_compatible_api
+                        .get_or_insert_default()
+                        .prediction_debounce = value;
+                },
+                json_path: Some("edit_predictions.open_ai_compatible_api.prediction_debounce"),
             }),
             metadata: None,
             files: USER,

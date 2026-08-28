@@ -32,6 +32,7 @@ pub use theme::*;
 pub use title_bar::*;
 pub use workspace::*;
 
+use anyhow::Context;
 use collections::{HashMap, IndexMap, IndexSet};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -1440,7 +1441,6 @@ impl merge_from::MergeFrom for SaturatingBool {
     Deserialize,
     MergeFrom,
     JsonSchema,
-    derive_more::FromStr,
 )]
 #[serde(transparent)]
 pub struct DelayMs(pub u64);
@@ -1454,5 +1454,29 @@ impl From<u64> for DelayMs {
 impl std::fmt::Display for DelayMs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}ms", self.0)
+    }
+}
+
+impl std::str::FromStr for DelayMs {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.trim()
+            .strip_suffix("ms")
+            .unwrap_or(s.trim())
+            .parse::<u64>()
+            .map(DelayMs)
+            .with_context(|| format!("failed to parse delay duration: {s}"))
+    }
+}
+
+#[cfg(test)]
+mod delay_ms_tests {
+    use super::DelayMs;
+
+    #[test]
+    fn delay_ms_accepts_display_values() {
+        assert_eq!("125".parse::<DelayMs>().unwrap(), DelayMs(125));
+        assert_eq!("125ms".parse::<DelayMs>().unwrap(), DelayMs(125));
     }
 }
