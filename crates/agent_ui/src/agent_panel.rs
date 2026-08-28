@@ -732,6 +732,7 @@ pub struct AgentPanel {
     _project_subscription: Subscription,
     zoomed: bool,
     pending_serialization: Option<Task<Result<()>>>,
+    persist_selected_agent_task: Task<()>,
     new_user_onboarding: Entity<AgentPanelOnboarding>,
     new_user_onboarding_upsell_dismissed: AtomicBool,
     selected_agent: Agent,
@@ -1066,6 +1067,7 @@ impl AgentPanel {
             _project_subscription,
             zoomed: false,
             pending_serialization: None,
+            persist_selected_agent_task: Task::ready(()),
             new_user_onboarding: onboarding,
             thread_store,
             selected_agent: Agent::default(),
@@ -2365,14 +2367,13 @@ impl AgentPanel {
             self.serialize(cx);
         }
 
-        cx.background_spawn({
+        self.persist_selected_agent_task = cx.background_spawn({
             let kvp = KeyValueStore::global(cx);
             let agent = agent.clone();
             async move {
                 write_global_last_used_agent(kvp, agent).await;
             }
-        })
-        .detach();
+        });
 
         let server = server_override
             .unwrap_or_else(|| agent.server(self.fs.clone(), self.thread_store.clone()));
