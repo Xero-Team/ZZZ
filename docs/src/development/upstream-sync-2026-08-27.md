@@ -183,9 +183,9 @@ NOT RUN macOS / Windows / wasm32 gpui_web runtime
 NOT RUN cargo test --workspace
 ```
 
-Additional cleanup landed as `1824b5fdc8` (test-context, type-import, and
-dead-code fixes) and `ef1a39950b` (formatting for the adapted worktree picker
-import), both required to keep the full workspace checks clean.
+The full workspace lint fixes landed as `1824b5fdc8` (test-context,
+type-import, and dead-code fixes). Formatting for the adapted worktree-picker
+import landed separately as `ef1a39950b`.
 
 The reviewed baseline is `669bede5c582140d2f3917e2c5fae5b764f9023f`.
 Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
