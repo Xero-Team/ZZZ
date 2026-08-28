@@ -18133,7 +18133,7 @@ impl Editor {
                                         .enable_preview_file_from_code_navigation;
 
                                     let editor = workspace.open_project_item(
-                                        pane.clone(),
+                                        split.then_some(pane.clone()),
                                         target_buffer.clone(),
                                         true,
                                         true,
@@ -18603,7 +18603,7 @@ impl Editor {
                                         .enable_preview_file_from_code_navigation;
 
                                     workspace.open_project_item(
-                                        pane,
+                                        None,
                                         target_buffer.clone(),
                                         true,
                                         true,
