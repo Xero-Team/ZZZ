@@ -467,35 +467,8 @@ impl<'de> Deserialize<'de> for ModelName {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq, strum::EnumIter)]
 pub enum Model {
-    #[serde(
-        rename = "gemini-2.5-flash-lite",
-        alias = "gemini-2.5-flash-lite-preview-06-17",
-        alias = "gemini-2.0-flash-lite-preview"
-    )]
-    Gemini25FlashLite,
-    #[serde(
-        rename = "gemini-2.5-flash",
-        alias = "gemini-2.0-flash-thinking-exp",
-        alias = "gemini-2.5-flash-preview-04-17",
-        alias = "gemini-2.5-flash-preview-05-20",
-        alias = "gemini-2.5-flash-preview-latest",
-        alias = "gemini-2.0-flash"
-    )]
-    #[default]
-    Gemini25Flash,
-    #[serde(
-        rename = "gemini-2.5-pro",
-        alias = "gemini-2.0-pro-exp",
-        alias = "gemini-2.5-pro-preview-latest",
-        alias = "gemini-2.5-pro-exp-03-25",
-        alias = "gemini-2.5-pro-preview-03-25",
-        alias = "gemini-2.5-pro-preview-05-06",
-        alias = "gemini-2.5-pro-preview-06-05"
-    )]
-    Gemini25Pro,
-    #[serde(rename = "gemini-3.1-flash-lite")]
-    Gemini31FlashLite,
     #[serde(rename = "gemini-3.5-flash-lite")]
+    #[default]
     Gemini35FlashLite,
     #[serde(rename = "gemini-3-flash-preview")]
     Gemini3Flash,
@@ -505,7 +478,7 @@ pub enum Model {
     Gemini36Flash,
     #[serde(rename = "gemini-3.7-flash")]
     Gemini37Flash,
-    #[serde(rename = "gemini-3.1-pro-preview", alias = "gemini-3-pro-preview")]
+    #[serde(rename = "gemini-3.1-pro-preview")]
     Gemini31Pro,
     #[serde(rename = "custom")]
     Custom {
@@ -520,15 +493,11 @@ pub enum Model {
 
 impl Model {
     pub fn default_fast() -> Self {
-        Self::Gemini31FlashLite
+        Self::Gemini35FlashLite
     }
 
     pub fn id(&self) -> &str {
         match self {
-            Self::Gemini25FlashLite => "gemini-2.5-flash-lite",
-            Self::Gemini25Flash => "gemini-2.5-flash",
-            Self::Gemini25Pro => "gemini-2.5-pro",
-            Self::Gemini31FlashLite => "gemini-3.1-flash-lite",
             Self::Gemini35FlashLite => "gemini-3.5-flash-lite",
             Self::Gemini3Flash => "gemini-3-flash-preview",
             Self::Gemini35Flash => "gemini-3.5-flash",
@@ -540,10 +509,6 @@ impl Model {
     }
     pub fn request_id(&self) -> &str {
         match self {
-            Self::Gemini25FlashLite => "gemini-2.5-flash-lite",
-            Self::Gemini25Flash => "gemini-2.5-flash",
-            Self::Gemini25Pro => "gemini-2.5-pro",
-            Self::Gemini31FlashLite => "gemini-3.1-flash-lite",
             Self::Gemini35FlashLite => "gemini-3.5-flash-lite",
             Self::Gemini3Flash => "gemini-3-flash-preview",
             Self::Gemini35Flash => "gemini-3.5-flash",
@@ -556,10 +521,6 @@ impl Model {
 
     pub fn display_name(&self) -> &str {
         match self {
-            Self::Gemini25FlashLite => "Gemini 2.5 Flash-Lite",
-            Self::Gemini25Flash => "Gemini 2.5 Flash",
-            Self::Gemini25Pro => "Gemini 2.5 Pro",
-            Self::Gemini31FlashLite => "Gemini 3.1 Flash Lite",
             Self::Gemini35FlashLite => "Gemini 3.5 Flash-Lite",
             Self::Gemini3Flash => "Gemini 3 Flash",
             Self::Gemini35Flash => "Gemini 3.5 Flash",
@@ -574,11 +535,7 @@ impl Model {
 
     pub fn max_token_count(&self) -> u64 {
         match self {
-            Self::Gemini25FlashLite
-            | Self::Gemini25Flash
-            | Self::Gemini25Pro
-            | Self::Gemini31FlashLite
-            | Self::Gemini35FlashLite
+            Self::Gemini35FlashLite
             | Self::Gemini3Flash
             | Self::Gemini35Flash
             | Self::Gemini36Flash
@@ -590,11 +547,7 @@ impl Model {
 
     pub fn max_output_tokens(&self) -> Option<u64> {
         match self {
-            Model::Gemini25FlashLite
-            | Model::Gemini25Flash
-            | Model::Gemini25Pro
-            | Model::Gemini31FlashLite
-            | Model::Gemini35FlashLite
+            Model::Gemini35FlashLite
             | Model::Gemini3Flash
             | Model::Gemini35Flash
             | Model::Gemini36Flash
@@ -614,15 +567,7 @@ impl Model {
 
     pub fn mode(&self) -> GoogleModelMode {
         match self {
-            Self::Gemini25FlashLite | Self::Gemini25Flash | Self::Gemini25Pro => {
-                GoogleModelMode::Thinking {
-                    // By default these models are set to "auto", so we preserve that behavior
-                    // but indicate they are capable of thinking mode
-                    budget_tokens: None,
-                }
-            }
             Self::Gemini3Flash => GoogleModelMode::Default,
-            Self::Gemini31FlashLite => GoogleModelMode::Default,
             Self::Gemini35FlashLite => GoogleModelMode::Default,
             Self::Gemini35Flash | Self::Gemini36Flash | Self::Gemini37Flash => {
                 GoogleModelMode::Thinking {
@@ -762,25 +707,19 @@ mod tests {
 
     #[test]
     fn model_helpers_cover_built_in_aliases_and_custom_modes() {
-        let alias: Model = serde_json::from_str("\"gemini-2.5-flash-preview-latest\"")
-            .expect("alias deserializes");
-        assert_eq!(alias, Model::Gemini25Flash);
-
         let default_model = Model::default();
-        assert_eq!(default_model, Model::Gemini25Flash);
-        assert_eq!(Model::default_fast(), Model::Gemini31FlashLite);
-        assert_eq!(default_model.id(), "gemini-2.5-flash");
-        assert_eq!(default_model.request_id(), "gemini-2.5-flash");
-        assert_eq!(default_model.display_name(), "Gemini 2.5 Flash");
+        assert_eq!(default_model, Model::Gemini35FlashLite);
+        assert_eq!(Model::default_fast(), Model::Gemini35FlashLite);
+        assert_eq!(default_model.id(), "gemini-3.5-flash-lite");
+        assert_eq!(default_model.request_id(), "gemini-3.5-flash-lite");
+        assert_eq!(default_model.display_name(), "Gemini 3.5 Flash-Lite");
         assert_eq!(default_model.max_token_count(), 1_048_576);
         assert_eq!(default_model.max_output_tokens(), Some(65_536));
         assert!(default_model.supports_tools());
         assert!(default_model.supports_images());
         assert!(matches!(
             default_model.mode(),
-            GoogleModelMode::Thinking {
-                budget_tokens: None
-            }
+            GoogleModelMode::Default
         ));
 
         let custom = Model::Custom {
