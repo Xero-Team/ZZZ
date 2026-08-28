@@ -99,27 +99,29 @@ sed -i "s|Exec=zzz|Exec=$HOME/.local/zzz.app/bin/zzz|g" ~/.local/share/applicati
 
 ### Standard Uninstall
 
-If ZZZ was installed using the default installation script, it can be uninstalled by supplying the `--uninstall` flag to the `zzz` shell command
+If ZZZ was installed using the default installation script, it can be uninstalled by supplying the `--uninstall` flag to the `zzz` shell command:
 
 ```sh
 zzz --uninstall
 ```
 
+Note that this will uninstall the ZZZ variant that the symlink points to. If you have multiple, parallel installations, use the absolute path to the intended installation instead.
+
 If there are no errors, the shell will then prompt you whether you'd like to keep your preferences or delete them. After making a choice, you should see a message that ZZZ was successfully uninstalled.
 
-In the case that the `zzz` shell command was not found in your PATH, you can try one of the following commands
+In the case that the `zzz` shell command was not found in your PATH, you can try one of the following commands:
 
 ```sh
 $HOME/.local/bin/zzz --uninstall
 ```
 
-or
+or the absolute path to your installation, such as
 
 ```sh
 $HOME/.local/zzz.app/bin/zzz --uninstall
 ```
 
-The first case might fail if a symlink was not properly established between `$HOME/.local/bin/zzz` and `$HOME/.local/zzz.app/bin/zzz`. But the second case should work as long as ZZZ was installed to its default location.
+The first case might fail if a symlink was not properly established between `$HOME/.local/bin/zzz` and `$HOME/.local/zzz.app/bin/zzz`, or if the symlink was overwritten by parallel installations. But the second command should always work as long as ZZZ was installed to its default location.
 
 If ZZZ was installed to a different location, you must invoke the `zzz` binary stored in that installation directory and pass the `--uninstall` flag to it in the same format as the previous commands.
 
