@@ -1147,7 +1147,7 @@ async fn test_keyboard_focus_in_does_not_set_selection(cx: &mut TestAppContext) 
     });
 
     cx.update(|window, _cx| {
-        window.blur();
+        window.blur(cx);
     });
     cx.run_until_parked();
 

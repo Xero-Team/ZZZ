@@ -684,7 +684,7 @@ impl<T: NumberFieldType> RenderOnce for NumberField<T> {
                                         .child(editor)
                                         .on_action::<menu::Confirm>({
                                             move |_, window, _| {
-                                                window.blur();
+                                                window.blur(cx);
                                             }
                                         })
                                         .into_any_element()
