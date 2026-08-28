@@ -608,6 +608,107 @@ The reviewed baseline is now
 `391a66a5ad9f68e13a54f57b3b06f4605867614c`.
 Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
 
+## Continuation: 2026-08-28 (eighth batch)
+
+### Scope
+
+- Target branch: `sync/upstream-2026-08-27` from `main` at
+  `2761d2445eca441bc5948e8d35bebb01274496cf`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline:
+  `5ed5bf95e518f1b35386a8787b512c99b90509f7`
+- Reviewed upstream head:
+  `01acd0ee8e906dd0ec8b526fe08da94444a5e2af`
+- Live upstream head queried:
+  `8ee36b682cf1971e51032cbd932dd16def575364`
+- Query time: `2026-08-28T15:11:16+02:00`
+
+This continuation reviewed the next 20 commits after `5ed5bf95`. Counts:
+3 A, 5 B, 12 C. The reviewed baseline is now
+`01acd0ee8e906dd0ec8b526fe08da94444a5e2af`; 6 commits remain through the
+queried live head.
+
+### Decisions
+
+| Upstream | Class | Local commit       | Disposition                                                                           |
+| -------- | ----- | ------------------ | ------------------------------------------------------------------------------------- |
+| a1cc2548 | B     | 2f97a63d, 9a6bba83 | Port OpenRouter effort reasoning onto local provider APIs.                            |
+| 3b90a968 | B     | 84c3db6c           | Release completed ACP PTY resources while retaining history metadata.                 |
+| 8fc1a8a0 | C     | --                 | Web text-input/IME architecture conflicts with ZZZ's input path.                      |
+| fc9258b4 | C     | --                 | File-permalink rewrite is not isolatable across local RPC/workspace divergences.      |
+| f66ed399 | B     | 7d377066           | Clear pending key sequences when a window blurs.                                      |
+| f595fd84 | C     | --                 | Upstream-only lint-creator skill documentation.                                       |
+| fe5b7ced | A     | 957fbe37           | Cherry-picked loop-invariant clone cleanup; local path API preserved.                 |
+| 6efd4950 | C     | --                 | Upstream-only lint-creator fixture guidance.                                          |
+| c8dfe26a | A     | 81117dbe           | Cherry-picked terminal Visual Line selection support.                                 |
+| d84e5d49 | C     | --                 | Depends on the rejected Web IME implementation from `8fc1a8a0`.                       |
+| 12ef40c3 | C     | --                 | Broad LSP diagnostic message/protocol rewrite conflicts with local diagnostics.       |
+| 5218009a | C     | --                 | Depends on the rejected Web IME implementation.                                       |
+| ec312b27 | C     | --                 | Large call-hierarchy crate and deleted keymap/protocol surfaces are not localizable.  |
+| 1e2e422c | C     | --                 | Broad remote extension-host/settings rewrite is not isolatable locally.               |
+| 8166e3d7 | C     | --                 | Cross-panel folder-indicator/settings migration conflicts with local settings APIs.   |
+| 756c2b73 | A     | 356be522           | Cherry-picked Helix mark/surround motions and selection preservation.                 |
+| 797e5dc9 | C     | --                 | Bookmark-tab lifecycle rewrite requires deleted navigation and divergent editor APIs. |
+| fa8d0b77 | C     | --                 | Targets the deleted crashes/telemetry crate.                                          |
+| 4c6c4750 | B     | 00754a85           | Port Windows PowerShell and Git Bash discovery into `util::shell`.                    |
+| 01acd0ee | B     | d565dd8a           | Port outline buffer typography and reparsed syntax highlighting; omit call hierarchy. |
+
+### Applied work
+
+Direct A commit `fe5b7ced` was absorbed with `git cherry-pick -x -s` as
+`957fbe37`. The local path-trie hunk was adapted to ZZZ's `util::RelPath`
+API. Direct A commit `c8dfe26a` was absorbed as `81117dbe`; its Visual Line
+selection event uses ZZZ's `(Selection, Point)` representation. Commit
+`756c2b73` was absorbed as `356be522`.
+
+The B ports carry `Upstream`, `Retained`, and `Omitted` trailers:
+
+- `a1cc2548`: added model capability metadata, adaptive reasoning requests,
+  effort-level discovery, and a manual settings field while retaining ZZZ's
+  local credentials UI and language-model trait.
+- `3b90a968`: made the PTY sender releasable after ACP output capture, while
+  preserving process metadata and omitting the native-agent `TerminalMode`
+  rewrite.
+- `f66ed399`: changed blur/focus paths to clear pending keystrokes and defer
+  observer notification, updating all affected ZZZ callers.
+- `4c6c4750`: moved the PowerShell/Git Bash discovery improvements into the
+  existing `util::shell` module and guarded restart when PowerShell is absent.
+- `01acd0ee`: shared buffer text styling, added syntax-run resolution, and
+  reparsed document-symbol labels when source-buffer highlights are missing.
+
+### Rejected work
+
+- `8fc1a8a0`, `d84e5d49`, and `5218009a` introduce a Web IME mirror/lifecycle
+  that conflicts with ZZZ's existing HTML input path.
+- `fc9258b4` requires a broad permalink/RPC/workspace rewrite across divergent
+  local files; `12ef40c3` similarly replaces the diagnostic message model and
+  wire protocol.
+- `f595fd84` and `6efd4950` only update an upstream skill absent from ZZZ.
+- `ec312b27` adds a large call-hierarchy crate plus deleted keymap and protocol
+  surfaces; `1e2e422c` is a broad remote extension-host rewrite.
+- `8166e3d7` and `797e5dc9` require cross-panel settings/editor lifecycle
+  rewrites that cannot be isolated on current ZZZ APIs.
+- `fa8d0b77` targets ZZZ's deleted crash-reporting/telemetry crate.
+
+### Verification
+
+```text
+PASS git merge-base --is-ancestor 5ed5bf95 FETCH_HEAD
+PASS cargo check --locked -p open_router -p language_models
+PASS cargo check --locked -p terminal -p acp_thread -p project
+PASS cargo check --locked -p gpui -p editor -p workspace -p project_panel -p settings_ui -p sidebar -p vim
+PASS cargo check --locked -p util -p gpui_windows
+PASS cargo check --locked -p ui -p language -p syntax_theme -p outline -p editor
+PASS git diff --check
+FAIL cargo fmt --all --check (pre-existing formatting drift outside this batch)
+NOT RUN macOS / Windows / wasm32 gpui_web runtime
+NOT RUN cargo test --workspace
+```
+
+The reviewed baseline is `01acd0ee8e906dd0ec8b526fe08da94444a5e2af`.
+Work remains on `sync/upstream-2026-08-27` and has not been merged to
+`main`.
+
 ## Continuation: 2026-08-28 (sixth batch)
 
 ### Scope
