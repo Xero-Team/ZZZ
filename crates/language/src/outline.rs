@@ -1,7 +1,9 @@
-use crate::{BufferSnapshot, Point, ToPoint, ToTreeSitterPoint};
+use crate::{BufferSnapshot, Language, Point, ToPoint, ToTreeSitterPoint};
 use fuzzy::{StringMatch, StringMatchCandidate};
 use gpui::{BackgroundExecutor, HighlightStyle};
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
+use text::Rope;
+use theme::SyntaxTheme;
 
 /// An outline of all the symbols contained in a buffer.
 #[derive(Debug)]
@@ -22,6 +24,18 @@ pub struct OutlineItem<T> {
     pub name_ranges: Vec<Range<usize>>,
     pub body_range: Option<Range<T>>,
     pub annotation_range: Option<Range<T>>,
+}
+
+/// Reparse a standalone outline label to recover syntax highlighting when its source
+/// buffer cannot provide ranges across multi-buffer boundaries.
+pub fn highlight_ranges_from_text(
+    text: &str,
+    language: &Arc<Language>,
+    syntax_theme: &SyntaxTheme,
+) -> Vec<(Range<usize>, HighlightStyle)> {
+    let rope = Rope::from(text);
+    let runs = language.highlight_text(&rope, 0..text.len());
+    syntax_theme.resolve_runs(&runs).collect()
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

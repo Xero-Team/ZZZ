@@ -1,6 +1,6 @@
 //! UI-related utilities
 
-use gpui::App;
+use gpui::{AbsoluteLength, App, TextStyle, relative};
 use i18n::tr;
 use theme::ActiveTheme;
 
@@ -25,6 +25,22 @@ pub use with_rem_size::*;
 /// Returns true if the current theme is light or vibrant light.
 pub fn is_light(cx: &mut App) -> bool {
     cx.theme().appearance.is_light()
+}
+
+/// Text style matching the configured editor buffer font.
+pub fn buffer_text_style(cx: &App) -> TextStyle {
+    let settings = theme::theme_settings(cx);
+    let buffer_font = settings.buffer_font(cx);
+    TextStyle {
+        color: cx.theme().colors().text,
+        font_family: buffer_font.family.clone(),
+        font_features: buffer_font.features.clone(),
+        font_fallbacks: buffer_font.fallbacks.clone(),
+        font_size: AbsoluteLength::from(settings.buffer_font_size(cx)),
+        font_weight: buffer_font.weight,
+        line_height: relative(1.),
+        ..TextStyle::default()
+    }
 }
 
 /// Returns the localized platform-appropriate label for the "reveal in file manager" action.

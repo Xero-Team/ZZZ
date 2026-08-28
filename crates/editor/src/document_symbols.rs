@@ -6,7 +6,7 @@ use futures::future::join_all;
 use gpui::{App, Context, HighlightStyle, Task};
 use itertools::Itertools as _;
 use language::language_settings::LanguageSettings;
-use language::{Buffer, OutlineItem};
+use language::{Buffer, OutlineItem, highlight_ranges_from_text};
 use multi_buffer::{
     Anchor, AnchorRangeExt as _, MultiBufferOffset, MultiBufferRow, MultiBufferSnapshot,
     ToOffset as _,
@@ -216,12 +216,20 @@ impl Editor {
                         let display_snapshot =
                             editor.display_map.update(cx, |map, cx| map.snapshot(cx));
                         let mut highlighted_results = results;
-                        for items in highlighted_results.values_mut() {
+                        for (buffer_id, items) in highlighted_results.iter_mut() {
+                            let language = editor
+                                .buffer
+                                .read(cx)
+                                .buffer(*buffer_id)
+                                .and_then(|buffer| buffer.read(cx).language().cloned());
                             for item in items {
                                 if let Some(highlights) =
                                     highlights_from_buffer(&display_snapshot, &item, &syntax)
                                 {
                                     item.highlight_ranges = highlights;
+                                } else if let Some(language) = &language {
+                                    item.highlight_ranges =
+                                        highlight_ranges_from_text(&item.text, language, &syntax);
                                 }
                             }
                         }
