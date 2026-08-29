@@ -1,7 +1,7 @@
 use crate::commit::{CommitDiffObject, CommitDiffObjectKind, parse_git_diff_raw};
 use crate::stash::GitStash;
 use crate::status::{DiffTreeType, GitStatus, TreeDiff};
-use crate::{Oid, RunHook, SHORT_SHA_LENGTH};
+use crate::{Oid, RunHook, SHA256_HEX_LENGTH, SHORT_SHA_LENGTH};
 use anyhow::{Context as _, Result, anyhow, bail};
 use async_channel::Sender;
 use collections::HashMap;
@@ -723,7 +723,7 @@ pub struct SearchCommitArgs {
 
 pub fn commit_hash_search_query(query: &str) -> Option<&str> {
     let query = query.trim();
-    (7..=40)
+    (SHORT_SHA_LENGTH..=SHA256_HEX_LENGTH)
         .contains(&query.len())
         .then_some(query)
         .filter(|query| query.bytes().all(|byte| byte.is_ascii_hexdigit()))
@@ -3816,6 +3816,26 @@ mod tests {
 
     use super::*;
     use gpui::TestAppContext;
+
+    #[test]
+    fn test_commit_hash_search_query_accepts_sha1_and_sha256_hashes() {
+        assert_eq!(
+            commit_hash_search_query("0123456789abcdef0123456789abcdef01234567"),
+            Some("0123456789abcdef0123456789abcdef01234567")
+        );
+        assert_eq!(
+            commit_hash_search_query(
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            ),
+            Some("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        );
+        assert_eq!(
+            commit_hash_search_query(
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"
+            ),
+            None
+        );
+    }
 
     fn disable_git_global_config() {
         unsafe {
