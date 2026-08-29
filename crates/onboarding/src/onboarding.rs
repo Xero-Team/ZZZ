@@ -1,5 +1,5 @@
 use crate::multibuffer_hint::MultibufferHint;
-use client::{Client, UserStore, zed_urls};
+use client::UserStore;
 use db::kvp::KeyValueStore;
 use fs::Fs;
 use gpui::{
@@ -24,7 +24,6 @@ use workspace::{
     AppState, Workspace, WorkspaceId,
     dock::DockPosition,
     item::{Item, ItemEvent},
-    notifications::NotifyResultExt as _,
     open_new, register_serializable_item, with_active_or_new_workspace,
 };
 use zed_actions::OpenOnboarding;
@@ -53,17 +52,15 @@ pub struct ImportCursorSettings {
 }
 
 pub const FIRST_OPEN: &str = "first_open";
-pub const DOCS_URL: &str = "https://zed.dev/docs/";
+pub const DOCS_URL: &str = "https://codeberg.org/ZZZEditor/ZZZ/wiki";
 
 actions!(
     onboarding,
     [
         /// Finish the onboarding process.
         Finish,
-        /// Sign in while in the onboarding flow.
+        /// Configure a provider while in the onboarding flow.
         SignIn,
-        /// Open the user account in zed.dev while in the onboarding flow.
-        OpenAccount,
         /// Resets the welcome screen hints to their initial state.
         ResetHints
     ]
@@ -241,21 +238,7 @@ impl Onboarding {
     }
 
     fn handle_sign_in(&mut self, _: &SignIn, window: &mut Window, cx: &mut Context<Self>) {
-        let client = Client::global(cx);
-        let workspace = self.workspace.clone();
-
-        window
-            .spawn(cx, async move |mut cx| {
-                client
-                    .sign_in_with_optional_connect(true, &cx)
-                    .await
-                    .notify_workspace_async_err(workspace, &mut cx);
-            })
-            .detach();
-    }
-
-    fn handle_open_account(_: &OpenAccount, _: &mut Window, cx: &mut App) {
-        cx.open_url(&zed_urls::account_url(cx))
+        let _ = (window, cx);
     }
 
     fn render_page(&mut self, cx: &mut Context<Self>) -> AnyElement {
@@ -278,7 +261,6 @@ impl Render for Onboarding {
             .bg(cx.theme().colors().editor_background)
             .on_action(Self::on_finish)
             .on_action(cx.listener(Self::handle_sign_in))
-            .on_action(Self::handle_open_account)
             .on_action(cx.listener(|_, _: &menu::SelectNext, window, cx| {
                 window.focus_next(cx);
                 cx.notify();

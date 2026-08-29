@@ -1,6 +1,5 @@
-use ai_onboarding::YoungAccountBanner;
 use anyhow::Result;
-use client::{Client, RefreshLlmTokenListener, UserStore, global_llm_token, zed_urls};
+use client::{Client, ClientSettings, RefreshLlmTokenListener, UserStore, global_llm_token};
 use cloud_api_client::LlmApiToken;
 use cloud_api_types::OrganizationId;
 use cloud_api_types::Plan;
@@ -17,11 +16,11 @@ use language_model::{
 use language_models_cloud::{CloudLlmTokenProvider, CloudModelProvider};
 use release_channel::AppVersion;
 
-use settings::SettingsStore;
 pub use settings::ZedDotDevAvailableModel as AvailableModel;
 pub use settings::ZedDotDevAvailableProvider as AvailableProvider;
+use settings::{Settings, SettingsStore};
 use std::sync::Arc;
-use ui::{TintColor, prelude::*};
+use ui::prelude::*;
 
 const PROVIDER_ID: LanguageModelProviderId = ZED_CLOUD_PROVIDER_ID;
 const PROVIDER_NAME: LanguageModelProviderName = ZED_CLOUD_PROVIDER_NAME;
@@ -164,6 +163,9 @@ impl State {
     }
 
     fn refresh_models(&mut self, cx: &mut Context<Self>) {
+        if !ClientSettings::get_global(cx).remote_server_enabled() && !cfg!(test) {
+            return;
+        }
         self.provider.update(cx, |provider, cx| {
             provider.refresh_models(cx).detach_and_log_err(cx);
         });
@@ -222,6 +224,9 @@ impl LanguageModelProvider for CloudLanguageModelProvider {
     }
 
     fn default_model(&self, cx: &App) -> Option<Arc<dyn LanguageModel>> {
+        if !ClientSettings::get_global(cx).remote_server_enabled() && !cfg!(test) {
+            return None;
+        }
         let state = self.state.read(cx);
         let provider = state.provider.read(cx);
         let model = provider.default_model()?;
@@ -229,6 +234,9 @@ impl LanguageModelProvider for CloudLanguageModelProvider {
     }
 
     fn default_fast_model(&self, cx: &App) -> Option<Arc<dyn LanguageModel>> {
+        if !ClientSettings::get_global(cx).remote_server_enabled() && !cfg!(test) {
+            return None;
+        }
         let state = self.state.read(cx);
         let provider = state.provider.read(cx);
         let model = provider.default_fast_model()?;
@@ -236,6 +244,9 @@ impl LanguageModelProvider for CloudLanguageModelProvider {
     }
 
     fn recommended_models(&self, cx: &App) -> Vec<Arc<dyn LanguageModel>> {
+        if !ClientSettings::get_global(cx).remote_server_enabled() && !cfg!(test) {
+            return Vec::new();
+        }
         let state = self.state.read(cx);
         let provider = state.provider.read(cx);
         provider
@@ -246,6 +257,9 @@ impl LanguageModelProvider for CloudLanguageModelProvider {
     }
 
     fn provided_models(&self, cx: &App) -> Vec<Arc<dyn LanguageModel>> {
+        if !ClientSettings::get_global(cx).remote_server_enabled() && !cfg!(test) {
+            return Vec::new();
+        }
         let state = self.state.read(cx);
         let provider = state.provider.read(cx);
         provider
@@ -257,10 +271,14 @@ impl LanguageModelProvider for CloudLanguageModelProvider {
 
     fn is_authenticated(&self, cx: &App) -> bool {
         let state = self.state.read(cx);
-        !state.is_signed_out(cx)
+        (ClientSettings::get_global(cx).remote_server_enabled() || cfg!(test))
+            && !state.is_signed_out(cx)
     }
 
     fn authenticate(&self, cx: &mut App) -> Task<Result<(), AuthenticateError>> {
+        if !ClientSettings::get_global(cx).remote_server_enabled() && !cfg!(test) {
+            return Task::ready(Ok(()));
+        }
         if self.is_authenticated(cx) {
             return Task::ready(Ok(()));
         }
@@ -310,6 +328,7 @@ impl LanguageModelProvider for CloudLanguageModelProvider {
 }
 
 #[derive(IntoElement, RegisterComponent)]
+#[allow(dead_code)]
 struct ZedAiConfiguration {
     is_connected: bool,
     plan: Option<Plan>,
@@ -321,146 +340,15 @@ struct ZedAiConfiguration {
 
 impl RenderOnce for ZedAiConfiguration {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let (subscription_text, has_paid_plan) = match self.plan {
-            Some(Plan::ZedPro) => (
-                tr(
-                    cx,
-                    "language_models.cloud.subscription.pro",
-                    "You have access to Zed's hosted models through your Pro subscription.",
-                ),
-                true,
-            ),
-            Some(Plan::ZedProTrial) => (
-                tr(
-                    cx,
-                    "language_models.cloud.subscription.pro_trial",
-                    "You have access to Zed's hosted models through your Pro trial.",
-                ),
-                false,
-            ),
-            Some(Plan::ZedStudent) => (
-                tr(
-                    cx,
-                    "language_models.cloud.subscription.student",
-                    "You have access to Zed's hosted models through your Student subscription.",
-                ),
-                true,
-            ),
-            Some(Plan::ZedBusiness) => (
-                if self.is_zed_model_provider_enabled {
-                    tr(
-                        cx,
-                        "language_models.cloud.subscription.organization_enabled",
-                        "You have access to Zed's hosted models through your organization.",
-                    )
-                } else {
-                    tr(
-                        cx,
-                        "language_models.cloud.subscription.organization_disabled",
-                        "Zed's hosted models are disabled by your organization's configuration.",
-                    )
-                },
-                true,
-            ),
-            Some(Plan::ZedFree) | None => (
-                if self.eligible_for_trial {
-                    tr(
-                        cx,
-                        "language_models.cloud.subscription.free_trial",
-                        "Subscribe for access to Zed's hosted models. Start with a 14 day free trial.",
-                    )
-                } else {
-                    tr(
-                        cx,
-                        "language_models.cloud.subscription.free",
-                        "Subscribe for access to Zed's hosted models.",
-                    )
-                },
-                false,
-            ),
-        };
-
-        let manage_subscription_buttons = if has_paid_plan {
-            Button::new(
-                "manage_settings",
-                tr(
-                    cx,
-                    "language_models.cloud.button.manage_subscription",
-                    "Manage Subscription",
-                ),
-            )
-            .full_width()
-            .label_size(LabelSize::Small)
-            .style(ButtonStyle::Tinted(TintColor::Accent))
-            .on_click(|_, _, cx| cx.open_url(&zed_urls::account_url(cx)))
-            .into_any_element()
-        } else if self.plan.is_none() || self.eligible_for_trial {
-            Button::new(
-                "start_trial",
-                tr(
-                    cx,
-                    "language_models.cloud.button.start_trial",
-                    "Start 14-day Free Pro Trial",
-                ),
-            )
-            .full_width()
-            .style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
-            .on_click(|_, _, cx| cx.open_url(&zed_urls::start_trial_url(cx)))
-            .into_any_element()
-        } else {
-            Button::new(
-                "upgrade",
-                tr(cx, "language_models.cloud.button.upgrade", "Upgrade to Pro"),
-            )
-            .full_width()
-            .style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
-            .on_click(|_, _, cx| cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx)))
-            .into_any_element()
-        };
-
-        if !self.is_connected {
-            return v_flex()
-                .gap_2()
-                .child(Label::new(tr(
-                    cx,
-                    "language_models.cloud.sign_in_message",
-                    "Sign in to have access to Zed's complete agentic experience with hosted models.",
-                )))
-                .child(
-                    Button::new(
-                        "sign_in",
-                        tr(
-                            cx,
-                            "language_models.cloud.button.sign_in",
-                            "Sign In to use Zed AI",
-                        ),
-                    )
-                        .start_icon(Icon::new(IconName::Github).size(IconSize::Small).color(Color::Muted))
-                        .full_width()
-                        .on_click({
-                            let callback = self.sign_in_callback.clone();
-                            move |_, window, cx| (callback)(window, cx)
-                        }),
-                );
-        }
-
-        v_flex().gap_2().w_full().map(|this| {
-            if self.account_too_young {
-                this.child(YoungAccountBanner).child(
-                    Button::new(
-                        "upgrade",
-                        tr(cx, "language_models.cloud.button.upgrade", "Upgrade to Pro"),
-                    )
-                    .style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
-                    .full_width()
-                    .on_click(|_, _, cx| cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx))),
-                )
-            } else {
-                this.text_sm()
-                    .child(subscription_text)
-                    .child(manage_subscription_buttons)
-            }
-        })
+        let _ = self;
+        v_flex()
+            .gap_2()
+            .w_full()
+            .child(Label::new(tr(
+                cx,
+                "language_models.cloud.manual_configuration",
+                "Remote providers are disabled by default. Configure a server URL manually to enable compatibility.",
+            )))
     }
 }
 
@@ -778,7 +666,7 @@ impl Component for ZedAiConfiguration {
                         }),
                     ),
                     single_example(
-                        "No Plan - Eligible for trial",
+                        "Remote provider - not configured",
                         configuration(PreviewConfiguration {
                             plan: None,
                             is_connected: true,
@@ -787,7 +675,7 @@ impl Component for ZedAiConfiguration {
                         }),
                     ),
                     single_example(
-                        "Free Plan",
+                        "Remote provider - disabled",
                         configuration(PreviewConfiguration {
                             plan: Some(Plan::ZedFree),
                             is_connected: true,
@@ -796,7 +684,7 @@ impl Component for ZedAiConfiguration {
                         }),
                     ),
                     single_example(
-                        "Zed Pro Trial Plan",
+                        "Remote provider - manually enabled",
                         configuration(PreviewConfiguration {
                             plan: Some(Plan::ZedProTrial),
                             is_connected: true,
@@ -805,7 +693,7 @@ impl Component for ZedAiConfiguration {
                         }),
                     ),
                     single_example(
-                        "Zed Pro Plan",
+                        "Remote provider - enabled",
                         configuration(PreviewConfiguration {
                             plan: Some(Plan::ZedPro),
                             is_connected: true,
@@ -814,7 +702,7 @@ impl Component for ZedAiConfiguration {
                         }),
                     ),
                     single_example(
-                        "Business Plan - Zed models enabled",
+                        "Organization remote provider enabled",
                         configuration(PreviewConfiguration {
                             plan: Some(Plan::ZedBusiness),
                             is_connected: true,
@@ -823,7 +711,7 @@ impl Component for ZedAiConfiguration {
                         }),
                     ),
                     single_example(
-                        "Business Plan - Zed models disabled",
+                        "Organization remote provider disabled",
                         configuration(PreviewConfiguration {
                             plan: Some(Plan::ZedBusiness),
                             is_connected: true,

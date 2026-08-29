@@ -15,7 +15,7 @@ pub use young_account_banner::YoungAccountBanner;
 
 use std::sync::Arc;
 
-use client::{Client, UserStore, zed_urls};
+use client::{Client, UserStore};
 use gpui::{AnyElement, Entity, IntoElement, ParentElement};
 use i18n as app_i18n;
 use ui::{
@@ -70,13 +70,9 @@ impl ZedAiOnboarding {
             plan: store.plan(),
             account_too_young: store.account_too_young(),
             continue_with_zed_ai,
-            sign_in: Arc::new(move |_window, cx| {
-                cx.spawn({
-                    let client = client.clone();
-                    async move |cx| client.sign_in_with_optional_connect(true, cx).await
-                })
-                .detach_and_log_err(cx);
-            }),
+            // ZZZ has no account onboarding. Remote providers are configured in
+            // the provider settings view, never through a sign-in flow.
+            sign_in: Arc::new(|_window, _cx| {}),
             dismiss_onboarding: None,
         }
     }
@@ -168,7 +164,7 @@ impl ZedAiOnboarding {
                 Label::new(tr(
                     cx,
                     "ai_onboarding.sign_in_try_pro",
-                    "Sign in to try Zed Pro free for 14 days.",
+                    "Configure a local or user-managed provider to use AI features.",
                 ))
                 .color(Color::Muted)
                 .mb_2(),
@@ -180,7 +176,7 @@ impl ZedAiOnboarding {
                     tr(
                         cx,
                         "ai_onboarding.try_zed_pro_for_free",
-                        "Try Zed Pro for Free",
+                        "Configure Provider",
                     ),
                 )
                 .disabled(signing_in)
@@ -227,9 +223,7 @@ impl ZedAiOnboarding {
                             Button::new("pro", tr(cx, "ai_onboarding.get_started", "Get Started"))
                                 .full_width()
                                 .style(ButtonStyle::Tinted(ui::TintColor::Accent))
-                                .on_click(move |_, _window, cx| {
-                                    cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx))
-                                }),
+                                .on_click(move |_, _window, _cx| {}),
                         ),
                 )
                 .children(self.render_dismiss_button(cx))
@@ -282,10 +276,14 @@ impl ZedAiOnboarding {
                             h_flex()
                                 .gap_2()
                                 .child(
-                                    Label::new(tr(cx, "ai_onboarding.plan.pro_trial", "Pro Trial"))
-                                        .size(LabelSize::Small)
-                                        .color(Color::Accent)
-                                        .buffer_font(cx),
+                                    Label::new(tr(
+                                        cx,
+                                        "ai_onboarding.plan.pro_trial",
+                                        "Configured",
+                                    ))
+                                    .size(LabelSize::Small)
+                                    .color(Color::Accent)
+                                    .buffer_font(cx),
                                 )
                                 .child(Divider::horizontal()),
                         )
@@ -293,13 +291,11 @@ impl ZedAiOnboarding {
                         .child(
                             Button::new(
                                 "pro",
-                                tr(cx, "ai_onboarding.start_free_trial", "Start Free Trial"),
+                                tr(cx, "ai_onboarding.configure_provider", "Configure Provider"),
                             )
                             .full_width()
                             .style(ButtonStyle::Tinted(ui::TintColor::Accent))
-                            .on_click(move |_, _window, cx| {
-                                cx.open_url(&zed_urls::start_trial_url(cx))
-                            }),
+                            .on_click(move |_, _window, _cx| {}),
                         ),
                 )
                 .into_any_element()
@@ -315,7 +311,7 @@ impl ZedAiOnboarding {
             .child(Headline::new(tr(
                 cx,
                 "ai_onboarding.welcome_zed_pro_trial",
-                "Welcome to the Zed Pro Trial",
+                "Local provider mode",
             )))
             .child(
                 Label::new(tr(
@@ -340,7 +336,7 @@ impl ZedAiOnboarding {
             .child(Headline::new(tr(
                 cx,
                 "ai_onboarding.welcome_zed_pro",
-                "Welcome to Zed Pro",
+                "Local provider mode",
             )))
             .child(
                 Label::new(tr(cx, "ai_onboarding.what_you_get", "Here's what you get:"))
@@ -465,7 +461,7 @@ impl Component for ZedAiOnboarding {
                         onboarding(SignInStatus::SignedIn, Some(Plan::ZedFree), false),
                     ),
                     single_example(
-                        "Pro Trial",
+                        "Configured",
                         onboarding(SignInStatus::SignedIn, Some(Plan::ZedProTrial), false),
                     ),
                     single_example(
@@ -592,7 +588,7 @@ impl Render for AgentLayoutOnboarding {
                         )
                         .label_size(LabelSize::Small)
                         .style(ButtonStyle::OutlinedGhost)
-                        .on_click(move |_, _, cx| cx.open_url(&zed_urls::parallel_agents_blog(cx))),
+                        .on_click(|_, _, _| {}),
                     )
                     .child(primary_button),
             )

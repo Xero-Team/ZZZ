@@ -5,10 +5,11 @@ use client::{Client, UserStore};
 use collections::HashSet;
 use credentials_provider::CredentialsProvider;
 use gpui::{App, Context, Entity};
-use language_model::{
-    ConfiguredModel, LanguageModelProviderId, LanguageModelRegistry, ZED_CLOUD_PROVIDER_ID,
-};
+use language_model::ZED_CLOUD_PROVIDER_ID;
+use language_model::{ConfiguredModel, LanguageModelProviderId, LanguageModelRegistry};
 use provider::deepseek::DeepSeekLanguageModelProvider;
+
+const ENVIRONMENT_FALLBACK_PROVIDER_IDS: [&str; 3] = ["ollama", "llama_cpp", "opencode"];
 
 pub mod extension;
 pub mod provider;
@@ -39,12 +40,56 @@ pub fn init(user_store: Entity<UserStore>, client: Arc<Client>, cx: &mut App) {
     registry.update(cx, |registry, cx| {
         register_language_model_providers(
             registry,
-            user_store,
+            user_store.clone(),
             client.clone(),
             credentials_provider.clone(),
             cx,
         );
     });
+
+    let mut cloud_enabled = client::ClientSettings::get_global(cx).remote_server_enabled();
+    if !cloud_enabled {
+        registry.update(cx, |registry, cx| {
+            registry.unregister_provider(ZED_CLOUD_PROVIDER_ID, cx);
+        });
+    }
+
+    let cloud_registry = registry.clone();
+    let cloud_user_store = user_store.clone();
+    let cloud_client = client.clone();
+    cx.observe_global::<SettingsStore>(move |cx| {
+        let enabled = client::ClientSettings::get_global(cx).remote_server_enabled();
+        if enabled == cloud_enabled {
+            return;
+        }
+        cloud_registry.update(cx, |registry, cx| {
+            if enabled {
+                registry.register_provider(
+                    Arc::new(CloudLanguageModelProvider::new(
+                        cloud_user_store.clone(),
+                        cloud_client.clone(),
+                        cx,
+                    )),
+                    cx,
+                );
+            } else {
+                registry.unregister_provider(ZED_CLOUD_PROVIDER_ID, cx);
+            }
+        });
+        cloud_enabled = enabled;
+        update_environment_fallback_model(cx);
+    })
+    .detach();
+
+    // Local model discovery changes provider state asynchronously. Recompute the
+    // fallback whenever any provider reports a state change, so discovered Ollama
+    // or llama.cpp models become usable without restarting the app.
+    cx.subscribe(&registry, |_registry, event: &language_model::Event, cx| {
+        if matches!(event, language_model::Event::ProviderStateChanged(_)) {
+            update_environment_fallback_model(cx);
+        }
+    })
+    .detach();
 
     // Subscribe to extension store events to track LLM extension installations
     if let Some(extension_store) = extension_host::ExtensionStore::try_global(cx) {
@@ -144,50 +189,56 @@ pub fn init(user_store: Entity<UserStore>, client: Arc<Client>, cx: &mut App) {
         }
     })
     .detach();
+
+    update_environment_fallback_model(cx);
 }
 
 /// Recomputes and sets the [`LanguageModelRegistry`]'s environment fallback
 /// model based on currently authenticated providers.
 ///
-/// Prefers the Zed cloud provider so that, once the user is signed in, we
-/// always pick a Zed-hosted model over models from other authenticated
-/// providers in the environment. If the Zed cloud provider is authenticated
-/// but hasn't finished loading its models yet, we don't fall back to another
-/// provider to avoid flickering between providers during sign in.
+/// Prefers discovered local models (Ollama, then llama.cpp). OpenCode is only
+/// considered after explicit user configuration. Hosted providers are never
+/// selected by default.
 pub fn update_environment_fallback_model(cx: &mut App) {
     let registry = LanguageModelRegistry::global(cx);
     let fallback_model = {
         let registry = registry.read(cx);
-        let cloud_provider = registry.provider(&ZED_CLOUD_PROVIDER_ID);
-        if cloud_provider
-            .as_ref()
-            .is_some_and(|provider| provider.is_authenticated(cx))
-        {
-            cloud_provider.and_then(|provider| {
+        ENVIRONMENT_FALLBACK_PROVIDER_IDS
+            .into_iter()
+            .find_map(|provider_id| {
+                let provider = registry.provider(&LanguageModelProviderId::new(provider_id))?;
+                if !provider.is_authenticated(cx) {
+                    return None;
+                }
                 let model = provider
                     .default_model(cx)
-                    .or_else(|| provider.recommended_models(cx).first().cloned())?;
+                    .or_else(|| provider.recommended_models(cx).first().cloned())
+                    .or_else(|| provider.provided_models(cx).into_iter().next())?;
                 Some(ConfiguredModel { provider, model })
             })
-        } else {
-            registry
-                .providers()
-                .iter()
-                .filter(|provider| provider.is_authenticated(cx))
-                .find_map(|provider| {
-                    let model = provider
-                        .default_model(cx)
-                        .or_else(|| provider.recommended_models(cx).first().cloned())?;
-                    Some(ConfiguredModel {
-                        provider: provider.clone(),
-                        model,
-                    })
-                })
-        }
     };
     registry.update(cx, |registry, cx| {
         registry.set_environment_fallback_model(fallback_model, cx);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ENVIRONMENT_FALLBACK_PROVIDER_IDS;
+
+    #[test]
+    fn local_provider_fallback_order_prefers_ollama_then_llama_cpp_then_opencode() {
+        assert_eq!(
+            ENVIRONMENT_FALLBACK_PROVIDER_IDS,
+            ["ollama", "llama_cpp", "opencode"]
+        );
+    }
+
+    #[test]
+    fn hosted_provider_is_not_an_environment_fallback() {
+        let hosted_id = language_model::ZED_CLOUD_PROVIDER_ID.to_string();
+        assert!(!ENVIRONMENT_FALLBACK_PROVIDER_IDS.contains(&hosted_id.as_str()));
+    }
 }
 
 fn register_openai_compatible_providers(
@@ -226,14 +277,18 @@ fn register_language_model_providers(
     credentials_provider: Arc<dyn CredentialsProvider>,
     cx: &mut Context<LanguageModelRegistry>,
 ) {
-    registry.register_provider(
-        Arc::new(CloudLanguageModelProvider::new(
-            user_store,
-            client.clone(),
+    // Do not even register the hosted provider on a fresh install. This keeps
+    // cloud models out of provider listings and avoids account discovery work.
+    if client::ClientSettings::get_global(cx).remote_server_enabled() {
+        registry.register_provider(
+            Arc::new(CloudLanguageModelProvider::new(
+                user_store,
+                client.clone(),
+                cx,
+            )),
             cx,
-        )),
-        cx,
-    );
+        );
+    }
     registry.register_provider(
         Arc::new(AnthropicLanguageModelProvider::new(
             client.http_client(),

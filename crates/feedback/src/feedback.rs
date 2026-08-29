@@ -3,7 +3,7 @@ use gpui::{App, ClipboardItem, PromptLevel, actions};
 use system_specs::{CopySystemSpecsIntoClipboard, SystemSpecs};
 use util::ResultExt;
 use workspace::Workspace;
-use zed_actions::feedback::{EmailZed, FileBugReport, RequestFeature};
+use zed_actions::feedback::{FileBugReport, RequestFeature};
 
 actions!(
     zed,
@@ -15,33 +15,19 @@ actions!(
     ]
 );
 
-const ZED_REPO_URL: &str = "https://github.com/zed-industries/zed";
+const ZED_REPO_URL: &str = "https://codeberg.org/ZZZEditor/ZZZ";
 
-const REQUEST_FEATURE_URL: &str = "https://github.com/zed-industries/zed/discussions/new/choose";
+const REQUEST_FEATURE_URL: &str = "https://codeberg.org/ZZZEditor/ZZZ/issues/new";
 
 fn file_bug_report_url(specs: &SystemSpecs) -> String {
     format!(
         concat!(
-            "https://github.com/zed-industries/zed/issues/new",
+            "https://codeberg.org/ZZZEditor/ZZZ/issues/new",
             "?",
-            "template=10_bug_report.yml",
-            "&",
-            "environment={}"
+            "body=Bug%20report%0A%0AEnvironment%3A%20{}"
         ),
         urlencoding::encode(&specs.to_string())
     )
-}
-
-fn email_zed_url(specs: &SystemSpecs) -> String {
-    format!(
-        concat!("mailto:hi@zed.dev", "?", "body={}"),
-        email_body(specs)
-    )
-}
-
-fn email_body(specs: &SystemSpecs) -> String {
-    let body = format!("\n\nSystem Information:\n\n{}", specs);
-    urlencoding::encode(&body).to_string()
 }
 
 pub fn init(cx: &mut App) {
@@ -107,17 +93,6 @@ pub fn init(cx: &mut App) {
                 })
                 .detach();
             })
-            .register_action(move |_, _: &EmailZed, window, cx| {
-                let specs = SystemSpecs::new(window, cx);
-                cx.spawn_in(window, async move |_, cx| {
-                    let specs = specs.await;
-                    cx.update(|_, cx| {
-                        cx.open_url(&email_zed_url(&specs));
-                    })
-                    .log_err();
-                })
-                .detach();
-            })
             .register_action(move |_, _: &OpenZedRepo, _, cx| {
                 cx.open_url(ZED_REPO_URL);
             });
@@ -159,7 +134,7 @@ mod tests {
     use release_channel::{AppCommitSha, ReleaseChannel};
     use semver::Version;
 
-    use super::{email_body, email_zed_url, file_bug_report_url};
+    use super::file_bug_report_url;
 
     fn sample_specs() -> system_specs::SystemSpecs {
         system_specs::SystemSpecs::new_stateless(
@@ -175,28 +150,13 @@ mod tests {
 
         let url = file_bug_report_url(&specs);
 
-        assert!(url.starts_with("https://github.com/zed-industries/zed/issues/new?"));
-        assert!(url.contains("template=10_bug_report.yml"));
-        assert!(url.contains("&environment="));
+        assert!(url.starts_with("https://codeberg.org/ZZZEditor/ZZZ/issues/new?"));
+        assert!(url.contains("body=Bug%20report"));
 
-        let encoded_environment = url.split("&environment=").nth(1).unwrap();
+        let encoded_environment = url.split("Environment%3A%20").nth(1).unwrap();
         let decoded_environment = urlencoding::decode(encoded_environment).unwrap();
         let rendered_specs = specs.to_string();
 
         assert_eq!(decoded_environment, rendered_specs);
-    }
-
-    #[test]
-    fn email_helpers_prefix_body_with_system_information_block() {
-        let specs = sample_specs();
-
-        let encoded_body = email_body(&specs);
-        let decoded_body = urlencoding::decode(&encoded_body).unwrap();
-
-        assert!(decoded_body.starts_with("\n\nSystem Information:\n\n"));
-        assert!(decoded_body.contains(&specs.to_string()));
-
-        let email_url = email_zed_url(&specs);
-        assert_eq!(email_url, format!("mailto:hi@zed.dev?body={encoded_body}"));
     }
 }

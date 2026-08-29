@@ -243,9 +243,7 @@ impl Render for ReplSessionsPage {
                             "repl.sessions.install_kernels",
                             "Install Kernels",
                         )))
-                        .on_click(move |_, _, cx| {
-                            cx.open_url("https://zed.dev/docs/repl#language-specific-instructions")
-                        }),
+                        .on_click(move |_, _, cx| cx.open_url(crate::KERNEL_DOCS_URL)),
                 ),
             );
         }

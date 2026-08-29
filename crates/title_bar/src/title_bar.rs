@@ -1,11 +1,9 @@
 mod application_menu;
 pub mod collab;
 mod onboarding_banner;
-mod plan_chip;
 mod title_bar_settings;
 
 use crate::application_menu::{ApplicationMenu, show_menus};
-use crate::plan_chip::PlanChip;
 use agent_settings::{AgentSettings, WindowLayout};
 use arrayvec::ArrayVec;
 use git_ui::worktree_picker::WorktreePicker;
@@ -22,8 +20,7 @@ use crate::application_menu::{
 };
 
 use call::ActiveCall;
-use client::{Client, UserStore, zed_urls};
-use cloud_api_types::Plan;
+use client::{Client, UserStore};
 use command_palette_hooks::CommandPaletteFilter;
 
 use gpui::{
@@ -1247,10 +1244,7 @@ impl TitleBar {
         let is_signed_in = user.is_some();
 
         let has_subscription_period = user_store_read.subscription_period().is_some();
-        let plan = user_store_read.plan().filter(|_| {
-            // Since the user might be on the legacy free plan we filter based on whether we have a subscription period.
-            has_subscription_period
-        });
+        let _plan = user_store_read.plan().filter(|_| has_subscription_period);
 
         let has_organization = user_store_read.current_organization().is_some();
 
@@ -1309,13 +1303,10 @@ impl TitleBar {
                                     .w_full()
                                     .justify_between()
                                     .child(Label::new(user_login))
-                                    .when(!has_organization, |parent| {
-                                        parent.child(PlanChip::new(plan.unwrap_or(Plan::ZedFree)))
-                                    })
                                     .into_any_element()
                             },
                             move |_, cx| {
-                                cx.open_url(&zed_urls::account_url(cx));
+                                let _ = cx;
                             },
                         )
                         .separator()
@@ -1326,7 +1317,7 @@ impl TitleBar {
 
                         for (organization, plan) in &organizations {
                             let organization = organization.clone();
-                            let plan = *plan;
+                            let _plan = *plan;
 
                             let is_current =
                                 current_organization
@@ -1354,7 +1345,6 @@ impl TitleBar {
                                                         )
                                                     }),
                                             )
-                                            .children(plan.map(|plan| PlanChip::new(plan)))
                                             .into_any_element()
                                     }
                                 },

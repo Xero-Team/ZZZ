@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
-use ai_onboarding::{AgentPanelOnboardingCard, PlanDefinitions};
-use client::zed_urls;
+use ai_onboarding::AgentPanelOnboardingCard;
 use gpui::{AnyElement, App, IntoElement, RenderOnce, Window};
 use i18n as app_i18n;
-use ui::{Divider, Tooltip, prelude::*};
+use ui::{Tooltip, prelude::*};
 
 fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()
@@ -23,79 +22,21 @@ impl EndTrialUpsell {
 
 impl RenderOnce for EndTrialUpsell {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let pro_section = v_flex()
-            .gap_1()
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        Label::new(tr(cx, "agent_ui.end_trial.pro", "Pro"))
-                            .size(LabelSize::Small)
-                            .color(Color::Accent)
-                            .buffer_font(cx),
-                    )
-                    .child(Divider::horizontal()),
-            )
-            .child(PlanDefinitions.pro_plan())
-            .child(
-                Button::new(
-                    "cta-button",
-                    tr(
-                        cx,
-                        "agent_ui.end_trial.upgrade_to_zed_pro",
-                        "Upgrade to Zed Pro",
-                    ),
-                )
-                    .full_width()
-                    .style(ButtonStyle::Tinted(ui::TintColor::Accent))
-                    .on_click(move |_, _window, cx| {
-                        cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx))
-                    }),
-            );
-
-        let free_section = v_flex()
-            .mt_1p5()
-            .gap_1()
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        Label::new(tr(cx, "agent_ui.end_trial.free", "Free"))
-                            .size(LabelSize::Small)
-                            .color(Color::Muted)
-                            .buffer_font(cx),
-                    )
-                    .child(
-                        Label::new(tr(
-                            cx,
-                            "agent_ui.end_trial.current_plan",
-                            "(Current Plan)",
-                        ))
-                            .size(LabelSize::Small)
-                            .color(Color::Custom(cx.theme().colors().text_muted.opacity(0.6)))
-                            .buffer_font(cx),
-                    )
-                    .child(Divider::horizontal()),
-            )
-            .child(PlanDefinitions.free_plan());
-
         AgentPanelOnboardingCard::new()
             .child(Headline::new(tr(
                 cx,
                 "agent_ui.end_trial.trial_expired",
-                "Your Zed Pro Trial has expired",
+                "Local provider configuration is available in settings",
             )))
             .child(
                 Label::new(tr(
                     cx,
                     "agent_ui.end_trial.reset_to_free",
-                    "You've been automatically reset to the Free plan.",
+                    "Cloud subscriptions are not part of the default experience.",
                 ))
                     .color(Color::Muted)
                     .mb_2(),
             )
-            .child(pro_section)
-            .child(free_section)
             .child(
                 h_flex().absolute().top_4().right_4().child(
                     IconButton::new("dismiss_onboarding", IconName::Close)

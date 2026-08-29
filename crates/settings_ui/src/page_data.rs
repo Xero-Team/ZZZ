@@ -9317,7 +9317,7 @@ fn network_page() -> SettingsPage {
                     },
                 }),
                 metadata: Some(Box::new(SettingsFieldMetadata {
-                    placeholder: Some("https://zed.dev"),
+                    placeholder: Some("http://127.0.0.1:7331"),
                     ..Default::default()
                 })),
                 files: USER,

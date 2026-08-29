@@ -146,7 +146,7 @@ fn fail_to_open_window_async(e: anyhow::Error, cx: &mut AsyncApp) {
 fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
     let _launch_failed = app_i18n::tr(_cx, "zed.launch.failed_title", "ZZZ failed to launch");
     eprintln!(
-        "{}: {e:?}. See https://zed.dev/docs/linux for troubleshooting steps.",
+        "{}: {e:?}. See the local troubleshooting documentation for help.",
         app_i18n::tr(
             _cx,
             "zed.launch.failed_to_open_window",
@@ -173,10 +173,8 @@ fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
                     notification_id,
                     Notification::new(_launch_failed.as_ref())
                         .body(Some(
-                            format!(
-                                "{e:?}. See https://zed.dev/docs/linux for troubleshooting steps."
-                            )
-                            .as_str(),
+                            format!("{e:?}. See the local troubleshooting documentation for help.")
+                                .as_str(),
                         ))
                         .priority(Priority::High)
                         .icon(ashpd::desktop::Icon::with_names(&[
@@ -1489,7 +1487,7 @@ struct Args {
     /// Use `path:line:row` syntax to open a file at a specific location.
     /// Non-existing paths and directories will ignore `:line:row` suffix.
     ///
-    /// URLs can either be `file://` or `zzz://` scheme, or relative to <https://zed.dev>.
+    /// URLs can either be `file://` or `zzz://` scheme, or relative to the local workspace.
     paths_or_urls: Vec<String>,
 
     /// Pairs of file paths to diff. Can be specified multiple times.

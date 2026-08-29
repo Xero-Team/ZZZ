@@ -275,8 +275,10 @@ impl Component for Callout {
                 "Multi-line Description",
                 Callout::new()
                     .icon(IconName::Sparkle)
-                    .title("Upgrade to Pro")
-                    .description("• Unlimited threads\n• Priority support\n• Advanced analytics")
+                    .title("Configure Provider")
+                    .description(
+                        "• Local-first defaults\n• Explicit network access\n• No account required",
+                    )
                     .actions_slot(multiple_actions())
                     .into_any_element(),
             )

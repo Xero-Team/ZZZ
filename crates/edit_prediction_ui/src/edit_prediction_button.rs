@@ -1,5 +1,5 @@
 use anyhow::Result;
-use client::{Client, UserStore, zed_urls};
+use client::UserStore;
 use cloud_llm_client::UsageLimit;
 use codestral::{self, CodestralEditPredictionDelegate};
 use copilot::Status;
@@ -59,7 +59,7 @@ actions!(
 
 const COPILOT_SETTINGS_PATH: &str = "/settings/copilot";
 const COPILOT_SETTINGS_URL: &str = concat!("https://github.com", "/settings/copilot");
-const PRIVACY_DOCS: &str = "https://zed.dev/docs/ai/privacy-and-security";
+const PRIVACY_DOCS: &str = "https://codeberg.org/ZZZEditor/ZZZ/wiki/privacy";
 
 struct CopilotErrorToast;
 
@@ -400,47 +400,6 @@ impl Render for EditPredictionButton {
                     }
                 };
 
-                if edit_prediction::should_show_upsell_modal(cx) {
-                    let tooltip_meta = if self.user_store.read(cx).current_user().is_some() {
-                        tr(
-                            cx,
-                            "edit_prediction_ui.button.choose_a_plan",
-                            "Choose a Plan",
-                        )
-                    } else {
-                        tr(
-                            cx,
-                            "edit_prediction_ui.button.configure_a_provider",
-                            "Configure a Provider",
-                        )
-                    };
-
-                    return div().child(
-                        IconButton::new("zed-predict-pending-button", ep_icon)
-                            .shape(IconButtonShape::Square)
-                            .indicator(Indicator::dot().color(Color::Muted))
-                            .indicator_border_color(Some(cx.theme().colors().status_bar_background))
-                            .tooltip(move |_window, cx| {
-                                Tooltip::with_meta(
-                                    tr(
-                                        cx,
-                                        "edit_prediction_ui.button.edit_predictions",
-                                        "Edit Predictions",
-                                    ),
-                                    None,
-                                    tooltip_meta.clone(),
-                                    cx,
-                                )
-                            })
-                            .on_click(cx.listener(move |_, _, window, cx| {
-                                window.dispatch_action(
-                                    zed_actions::OpenZedPredictOnboarding.boxed_clone(),
-                                    cx,
-                                );
-                            })),
-                    );
-                }
-
                 let mut over_limit = false;
 
                 if let Some(usage) = self
@@ -494,7 +453,7 @@ impl Render for EditPredictionButton {
                                 tr(
                                     cx,
                                     "edit_prediction_ui.button.sign_in_or_configure_provider",
-                                    "Sign In Or Configure a Provider",
+                                    "Configure a Provider",
                                 )
                             } else if provider_unavailable || show_editor_predictions {
                                 tooltip_meta.clone()
@@ -707,7 +666,7 @@ impl EditPredictionButton {
                     tr(
                         cx,
                         "edit_prediction_ui.button.sign_in_to_copilot",
-                        "Sign In to Copilot",
+                        "Configure Copilot",
                     ),
                     None,
                     move |window, cx| {
@@ -1204,13 +1163,13 @@ impl EditPredictionButton {
         ContextMenu::build(window, cx, |mut menu, window, cx| {
             let user = self.user_store.read(cx).current_user();
 
-            let needs_sign_in = user.is_none()
+            let needs_provider = user.is_none()
                 && matches!(
                     provider,
                     EditPredictionProvider::None | EditPredictionProvider::Zed
                 );
 
-            if needs_sign_in {
+            if needs_provider {
                 menu = menu
                     .custom_row(move |_window, cx| {
                         v_flex()
@@ -1225,11 +1184,11 @@ impl EditPredictionButton {
                             .child(
                                 Label::new(tr(
                                     cx,
-                                    "edit_prediction_ui.button.sign_in_description",
-                                    "You get 2,000 accepted suggestions at every keystroke for free, powered by Zeta, our open-source, open-data model",
+                                    "edit_prediction_ui.button.provider_description",
+                                    "Configure a local provider to enable edit predictions.",
                                 ))
-                                    .color(Color::Muted)
-                                    .size(LabelSize::Small),
+                                .color(Color::Muted)
+                                .size(LabelSize::Small),
                             )
                             .into_any_element()
                     })
@@ -1237,28 +1196,10 @@ impl EditPredictionButton {
                     .entry(
                         tr(
                             cx,
-                            "edit_prediction_ui.button.sign_in_start_using",
-                            "Sign In & Start Using",
+                            "edit_prediction_ui.button.configure_provider",
+                            "Configure Provider",
                         ),
                         None,
-                        |window, cx| {
-                        let client = Client::global(cx);
-                        window
-                            .spawn(cx, async move |cx| {
-                                client
-                                    .sign_in_with_optional_connect(true, &cx)
-                                    .await
-                                    .log_err();
-                            })
-                            .detach();
-                    },
-                    )
-                    .link_with_handler(
-                        tr(cx, "edit_prediction_ui.button.learn_more", "Learn More"),
-                        OpenBrowser {
-                            url: zed_urls::edit_prediction_docs(cx),
-                        }
-                        .boxed_clone(),
                         |_window, _cx| {},
                     )
                     .separator();
@@ -1282,8 +1223,8 @@ impl EditPredictionButton {
                         .item(
                             ContextMenuEntry::new(tr(
                                 cx,
-                                "edit_prediction_ui.button.upgrade_paid_plan_continue",
-                                "Upgrade to a paid plan to continue using the service",
+                                "edit_prediction_ui.button.configure_provider_continue",
+                                "Configure a provider to continue using the service",
                             ))
                             .disabled(true),
                         )
@@ -1326,78 +1267,13 @@ impl EditPredictionButton {
                                     )
                                     .into_any_element()
                             },
-                            move |_, cx| cx.open_url(&zed_urls::account_url(cx)),
-                        )
-                        .when(usage.over_limit(), |menu| -> ContextMenu {
-                            menu.entry(
-                                tr(
-                                    cx,
-                                    "edit_prediction_ui.button.subscribe_increase_limit",
-                                    "Subscribe to increase your limit",
-                                ),
-                                None,
-                                |_window, cx| cx.open_url(&zed_urls::account_url(cx)),
-                            )
-                        })
-                        .separator();
-                } else if self.user_store.read(cx).account_too_young() {
-                    menu = menu
-                        .custom_entry(
-                            |_window, cx| {
-                                Label::new(tr(
-                                    cx,
-                                    "edit_prediction_ui.button.github_account_less_than_30_days",
-                                    "Your GitHub account is less than 30 days old.",
-                                ))
-                                .size(LabelSize::Small)
-                                .color(Color::Warning)
-                                .into_any_element()
-                            },
-                            |_window, cx| cx.open_url(&zed_urls::account_url(cx)),
-                        )
-                        .entry(
-                            tr(
-                                cx,
-                                "edit_prediction_ui.button.upgrade_to_zed_pro_or_contact_us",
-                                "Upgrade to Zed Pro or contact us.",
-                            ),
-                            None,
-                            |_window, cx| cx.open_url(&zed_urls::account_url(cx)),
-                        )
-                        .separator();
-                } else if self.user_store.read(cx).has_overdue_invoices() {
-                    menu = menu
-                        .custom_entry(
-                            |_window, cx| {
-                                Label::new(tr(
-                                    cx,
-                                    "edit_prediction_ui.button.outstanding_invoice",
-                                    "You have an outstanding invoice",
-                                ))
-                                    .size(LabelSize::Small)
-                                    .color(Color::Warning)
-                                    .into_any_element()
-                            },
-                            |_window, cx| {
-                                cx.open_url(&zed_urls::account_url(cx))
-                            },
-                        )
-                        .entry(
-                            tr(
-                                cx,
-                                "edit_prediction_ui.button.check_payment_status",
-                                "Check your payment status or contact us at billing-support@zed.dev to continue using this feature.",
-                            ),
-                            None,
-                            |_window, cx| {
-                                cx.open_url(&zed_urls::account_url(cx))
-                            },
+                            move |_, _cx| {},
                         )
                         .separator();
                 }
             }
 
-            if !needs_sign_in {
+            if !needs_provider {
                 menu = self.build_language_settings_menu(menu, window, cx);
             }
             menu = self.add_provider_switching_section(menu, provider, cx);

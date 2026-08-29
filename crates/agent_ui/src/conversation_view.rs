@@ -1374,7 +1374,7 @@ impl ConversationView {
             ServerState::Loading { .. } => tr(cx, "agent_ui.conversation.loading", "Loading..."),
             ServerState::LoadError { error, .. } => match error {
                 LoadError::Unsupported { .. } => {
-                    app_i18n::tr(cx, "agent_ui.conversation.upgrade_agent", "Upgrade {}")
+                    app_i18n::tr(cx, "agent_ui.conversation.upgrade_agent", "Configure {}")
                         .replacen("{}", self.agent.agent_id().as_ref(), 1)
                         .into()
                 }
@@ -2301,7 +2301,7 @@ impl ConversationView {
         let heading_label = app_i18n::tr(
             cx,
             "agent_ui.conversation.upgrade_to_work_with_zzz",
-            "Upgrade {} to work with ZZZ",
+            "Configure {} to work with ZZZ",
         )
         .replacen("{}", self.agent.agent_id().as_ref(), 1);
         let description_label = if version.is_empty() {
@@ -5185,7 +5185,7 @@ pub(crate) mod tests {
         ) -> Task<gpui::Result<Entity<AcpThread>>> {
             if !*self.authenticated.lock() {
                 return Task::ready(Err(acp_thread::AuthRequired::new()
-                    .with_description("Sign in to continue".to_string())
+                    .with_description("Configure a provider to continue".to_string())
                     .into()));
             }
 

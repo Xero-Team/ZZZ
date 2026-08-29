@@ -229,7 +229,9 @@ impl Render for KeyContextView {
                             ),
                         )
                             .style(ButtonStyle::Filled)
-                            .on_click(|_, _, cx| cx.open_url("https://zed.dev/docs/key-bindings")),
+                            .on_click(|_, _, cx| {
+                                cx.open_url("https://codeberg.org/ZZZEditor/ZZZ")
+                            }),
                     )
                     .child(
                         Button::new(

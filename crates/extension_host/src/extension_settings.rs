@@ -12,7 +12,7 @@ pub struct ExtensionSettings {
     /// This is used to make functionality provided by extensions (e.g., language support)
     /// available out-of-the-box.
     ///
-    /// Default: { "html": true }
+    /// Defaults to no automatic installation; users may opt in per extension.
     pub auto_install_extensions: HashMap<Arc<str>, bool>,
     pub auto_update_extensions: HashMap<Arc<str>, bool>,
     pub granted_capabilities: Vec<ExtensionCapability>,
@@ -24,14 +24,14 @@ impl ExtensionSettings {
         self.auto_install_extensions
             .get(extension_id)
             .copied()
-            .unwrap_or(true)
+            .unwrap_or(false)
     }
 
     pub fn should_auto_update(&self, extension_id: &str) -> bool {
         self.auto_update_extensions
             .get(extension_id)
             .copied()
-            .unwrap_or(true)
+            .unwrap_or(false)
     }
 }
 
@@ -61,5 +61,17 @@ impl Settings for ExtensionSettings {
                 })
                 .collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ExtensionSettings;
+
+    #[test]
+    fn extensions_are_not_auto_installed_or_updated_by_default() {
+        let settings = ExtensionSettings::default();
+        assert!(!settings.should_auto_install("html"));
+        assert!(!settings.should_auto_update("html"));
     }
 }

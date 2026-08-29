@@ -546,32 +546,10 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                     tr(cx, "menu.help.request_feature", "Request Feature..."),
                     zed_actions::feedback::RequestFeature,
                 ),
-                MenuItem::action(
-                    tr(cx, "menu.help.email_us", "Email Us..."),
-                    zed_actions::feedback::EmailZed,
-                ),
                 MenuItem::separator(),
                 MenuItem::action(
-                    tr(cx, "menu.help.documentation", "Documentation"),
-                    super::OpenBrowser {
-                        url: "https://zed.dev/docs".into(),
-                    },
-                ),
-                MenuItem::action(
-                    tr(cx, "menu.help.zed_repository", "Zed Repository"),
+                    tr(cx, "menu.help.zed_repository", "ZZZ Repository"),
                     feedback::OpenZedRepo,
-                ),
-                MenuItem::action(
-                    tr(cx, "menu.help.zed_twitter", "Zed Twitter"),
-                    super::OpenBrowser {
-                        url: "https://twitter.com/zeddotdev".into(),
-                    },
-                ),
-                MenuItem::action(
-                    tr(cx, "menu.help.join_the_team", "Join the Team"),
-                    super::OpenBrowser {
-                        url: "https://zed.dev/jobs".into(),
-                    },
                 ),
             ],
         },

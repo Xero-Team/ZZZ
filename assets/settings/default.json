@@ -1095,13 +1095,11 @@
     // Content will be centered within the panel.
     "max_content_width": 850,
     // The default model to use when creating new threads.
+    // No model name is hard-coded. The runtime replaces this placeholder with
+    // a discovered Ollama model, then llama.cpp, when available.
     "default_model": {
-      // The provider to use.
-      "provider": "zed.dev",
-      // The model to use.
-      "model": "claude-sonnet-4",
-      // Whether thinking is enabled.
-      "enable_thinking": false,
+      "provider": "ollama",
+      "model": "",
     },
     // Additional parameters for language model requests. When making a request to a model, parameters will be taken
     // from the last entry in this list that matches the model's provider and name. In each entry, both provider
@@ -1118,12 +1116,8 @@
       //   "temperature": 0
       // }
       //
-      // To set parameters for a specific provider and model:
-      // {
-      //   "provider": "zed.dev",
-      //   "model": "claude-sonnet-4",
-      //   "temperature": 1.0
-      // }
+      // To set parameters for a specific provider and model, add an explicit
+      // provider entry here.
     ],
     // Permission rules for tool actions.
     //
@@ -1546,7 +1540,7 @@
   "disable_ai": false,
   // Automatically update ZZZ. This setting may be ignored on Linux if
   // installed through a package manager.
-  "auto_update": true,
+  "auto_update": false,
   // How to render LSP `textDocument/documentColor` colors in the editor.
   //
   // Possible values:
@@ -2117,13 +2111,9 @@
     "path": null,
     "npm_path": null,
   },
-  // The extensions that ZZZ should automatically install on startup.
-  //
-  // If you don't want any of these extensions, add this field to your settings
-  // and change the value to `false`.
-  "auto_install_extensions": {
-    "html": true,
-  },
+  // Extensions are never installed automatically on startup. Add an extension
+  // with `true` explicitly when you want to opt in to automatic installation.
+  "auto_install_extensions": {},
   // The capabilities granted to extensions.
   //
   // This list can be customized to restrict what extensions are able to do.
@@ -2450,7 +2440,10 @@
     },
     "openai_compatible": {},
     "opencode": {
-      "api_url": "https://opencode.ai/zen",
+      "api_url": "",
+      "show_zen_models": false,
+      "show_go_models": false,
+      "show_free_models": false,
     },
     "open_router": {
       "api_url": "https://openrouter.ai/api/v1",
@@ -2634,7 +2627,7 @@
   },
   // The server to connect to. If the environment variable
   // ZED_SERVER_URL is set, it will override this setting.
-  "server_url": "https://zed.dev",
+  "server_url": "http://127.0.0.1:7331",
   // Settings overrides to use when using ZZZ Preview.
   // Mostly useful for developers who are managing multiple instances of ZZZ.
   "preview": {

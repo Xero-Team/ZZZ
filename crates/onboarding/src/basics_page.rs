@@ -1,11 +1,9 @@
 use std::sync::Arc;
-use std::time::Duration;
 
-use client::{Client, UserStore, zed_urls};
-use cloud_api_types::Plan;
+use client::UserStore;
 use collections::HashMap;
 use fs::Fs;
-use gpui::{Action, Animation, AnimationExt, App, Entity, IntoElement, pulsating_between};
+use gpui::{Action, App, Entity, IntoElement};
 use i18n::tr;
 use project::agent_server_store::AllAgentServersSettings;
 use project::project_settings::ProjectSettings;
@@ -521,76 +519,24 @@ fn render_registry_agent_button(
         })
 }
 
-fn render_zed_agent_button(user_store: &Entity<UserStore>, cx: &mut App) -> impl IntoElement {
-    let client = Client::global(cx);
-    let status = *client.status().borrow();
-
-    let plan = user_store.read(cx).plan();
-    let is_free = matches!(plan, Some(Plan::ZedFree) | None);
-    let is_pro = matches!(plan, Some(Plan::ZedPro));
-    let is_trial = matches!(plan, Some(Plan::ZedProTrial));
-
-    let is_signed_out = status.is_signed_out()
-        || matches!(
-            status,
-            client::Status::AuthenticationError | client::Status::ConnectionError
-        );
-    let is_signing_in = status.is_signing_in();
-    let is_signed_in = !is_signed_out;
-
-    let state_element = if is_signed_out {
-        Label::new(tr(cx, "onboarding.basics.sign_in", "Sign In"))
-            .size(LabelSize::XSmall)
-            .color(Color::Muted)
-            .into_any_element()
-    } else if is_signing_in {
-        Label::new(tr(cx, "onboarding.basics.signing_in", "Signing In..."))
-            .size(LabelSize::XSmall)
-            .color(Color::Muted)
-            .with_animation(
-                "signing-in",
-                Animation::new(Duration::from_secs(2))
-                    .repeat()
-                    .with_easing(pulsating_between(0.4, 0.8)),
-                |label, delta| label.alpha(delta),
-            )
-            .into_any_element()
-    } else if is_signed_in && is_free {
-        Label::new(tr(
-            cx,
-            "onboarding.basics.start_free_trial",
-            "Start Free Trial",
-        ))
-        .size(LabelSize::XSmall)
-        .color(Color::Muted)
-        .into_any_element()
-    } else {
-        Icon::new(IconName::Check)
-            .size(IconSize::Small)
-            .color(Color::Success)
-            .into_any_element()
-    };
-
+fn render_zed_agent_button(_user_store: &Entity<UserStore>, cx: &mut App) -> impl IntoElement {
     AgentSetupButton::new("zed-agent-onboarding")
         .icon(
             Icon::new(IconName::ZedAgent)
                 .size(IconSize::XSmall)
                 .color(Color::Muted),
         )
-        .name(tr(cx, "onboarding.basics.zed_agent", "Zed Agent"))
-        .state(state_element)
-        .disabled(is_trial || is_pro)
-        .map(|this| {
-            if is_signed_in && is_free {
-                this.on_click(move |_, _window, cx| cx.open_url(&zed_urls::start_trial_url(cx)))
-            } else {
-                this.on_click(move |_, _, cx| {
-                    let client = Client::global(cx);
-                    cx.spawn(async move |cx| client.sign_in_with_optional_connect(true, cx).await)
-                        .detach_and_log_err(cx);
-                })
-            }
-        })
+        .name(tr(
+            cx,
+            "onboarding.basics.local_agent",
+            "Local Agent Providers",
+        ))
+        .state(Label::new(tr(
+            cx,
+            "onboarding.basics.configure_provider",
+            "Configure manually",
+        )))
+        .on_click(|_, _, _| {})
 }
 
 fn render_ai_section(user_store: &Entity<UserStore>, cx: &mut App) -> impl IntoElement {

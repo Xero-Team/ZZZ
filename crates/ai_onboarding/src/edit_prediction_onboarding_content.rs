@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use client::{Client, UserStore};
-use cloud_api_types::Plan;
 use gpui::{Entity, IntoElement, ParentElement};
 use ui::prelude::*;
 
@@ -36,12 +35,6 @@ impl EditPredictionOnboarding {
 
 impl Render for EditPredictionOnboarding {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let is_free_plan = self
-            .user_store
-            .read(cx)
-            .plan()
-            .is_some_and(|plan| plan == Plan::ZedFree);
-
         let github_copilot = v_flex()
             .gap_1()
             .child(Label::new(if self.copilot_is_configured {
@@ -74,8 +67,7 @@ impl Render for EditPredictionOnboarding {
                 self.continue_with_zed_ai.clone(),
                 cx,
             ))
-            .when(is_free_plan, |this| {
-                this.child(ui::Divider::horizontal()).child(github_copilot)
-            })
+            .child(ui::Divider::horizontal())
+            .child(github_copilot)
     }
 }

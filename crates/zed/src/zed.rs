@@ -631,7 +631,7 @@ fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
         let message = tr(
             cx,
             "zed.file_watcher.inotify_error_detail",
-            "inotify_init returned {}\n\nThis may be due to system-wide limits on inotify instances. For troubleshooting see: https://zed.dev/docs/linux",
+            "inotify_init returned {}\n\nThis may be due to system-wide limits on inotify instances. See the local troubleshooting documentation for help.",
         )
         .replacen("{}", &e.to_string(), 1);
         let prompt = window.prompt(
@@ -653,7 +653,6 @@ fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
         cx.spawn(async move |_, cx| {
             if prompt.await == Ok(0) {
                 cx.update(|cx| {
-                    cx.open_url("https://zed.dev/docs/linux#could-not-start-inotify");
                     cx.quit();
                 });
             }
@@ -669,7 +668,7 @@ fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
         let message = tr(
             cx,
             "zed.file_watcher.read_directory_changes_error_detail",
-            "ReadDirectoryChangesW initialization failed: {}\n\nThis may occur on network filesystems and WSL paths. For troubleshooting see: https://zed.dev/docs/windows",
+            "ReadDirectoryChangesW initialization failed: {}\n\nThis may occur on network filesystems and WSL paths. See the local troubleshooting documentation for help.",
         )
         .replacen("{}", &e.to_string(), 1);
         let prompt = window.prompt(
@@ -690,10 +689,7 @@ fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
         );
         cx.spawn(async move |_, cx| {
             if prompt.await == Ok(0) {
-                cx.update(|cx| {
-                    cx.open_url("https://zed.dev/docs/windows");
-                    cx.quit()
-                });
+                cx.update(|cx| cx.quit());
             }
         })
         .detach()
@@ -706,17 +702,15 @@ fn show_software_emulation_warning_if_needed(
     cx: &mut Context<Workspace>,
 ) {
     if specs.is_software_emulated && std::env::var("ZED_ALLOW_EMULATED_GPU").is_err() {
-        let (graphics_api, docs_url, open_url) = if cfg!(target_os = "windows") {
+        let (graphics_api, docs_url) = if cfg!(target_os = "windows") {
             (
                 tr(cx, "zed.gpu.graphics_api.directx", "DirectX"),
-                "https://zed.dev/docs/windows",
-                "https://zed.dev/docs/windows",
+                "local Windows troubleshooting documentation",
             )
         } else {
             (
                 tr(cx, "zed.gpu.graphics_api.vulkan", "Vulkan"),
-                "https://zed.dev/docs/linux",
-                "https://zed.dev/docs/linux#zed-fails-to-open-windows",
+                "local Linux troubleshooting documentation",
             )
         };
         let message = tr(
@@ -745,7 +739,6 @@ fn show_software_emulation_warning_if_needed(
         cx.spawn(async move |_, cx| {
             if prompt.await == Ok(1) {
                 cx.update(|cx| {
-                    cx.open_url(open_url);
                     cx.quit();
                 });
             }

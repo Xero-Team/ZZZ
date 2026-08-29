@@ -1367,7 +1367,7 @@ impl CollabPanel {
                                     ErrorCode::NeedsCla => Some(tr(
                                         cx,
                                         "collab_ui.collab_panel.error.user_has_not_signed_cla",
-                                        "This user has not yet signed the CLA at https://zed.dev/cla.",
+                                        "This user has not yet signed the contributor agreement.",
                                     )),
                                     _ => None,
                                 },

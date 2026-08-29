@@ -320,13 +320,12 @@ impl ExtensionStore {
             reload_future = Some(this.reload(None, cx));
         }
 
-        cx.spawn(async move |this, cx| {
+        cx.spawn(async move |_this, _cx| {
             if let Some(future) = reload_future {
                 future.await;
             }
-            this.update(cx, |this, cx| this.auto_install_extensions(cx))
-                .ok();
-            this.update(cx, |this, cx| this.check_for_updates(cx)).ok();
+            // Extensions are strictly opt-in. The store is initialized from disk,
+            // but never reaches the network during startup.
         })
         .detach();
 

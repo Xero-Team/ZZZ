@@ -114,6 +114,21 @@ pub struct ClientSettings {
     pub credentials_url: Option<String>,
 }
 
+impl ClientSettings {
+    /// The local-first default deliberately does not point at any hosted service.
+    /// A remote server is enabled only when the user explicitly configures one.
+    pub fn remote_server_enabled(&self) -> bool {
+        let value = self.server_url.trim_end_matches('/');
+        !value.is_empty()
+            && !value.starts_with("http://127.0.0.1")
+            && !value.starts_with("http://localhost")
+            && !value.starts_with("http://[::1]")
+            && !value.starts_with("https://127.0.0.1")
+            && !value.starts_with("https://localhost")
+            && !value.starts_with("https://[::1]")
+    }
+}
+
 impl Settings for ClientSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         if let Some(server_url) = &*ZED_SERVER_URL {
@@ -123,7 +138,10 @@ impl Settings for ClientSettings {
             };
         }
         Self {
-            server_url: content.server_url.clone().unwrap(),
+            server_url: content
+                .server_url
+                .clone()
+                .unwrap_or_else(|| "http://127.0.0.1:7331".to_owned()),
             credentials_url: content.credentials_url.clone(),
         }
     }
@@ -950,6 +968,10 @@ impl Client {
     /// The connection is re-established with exponential backoff if it drops or fails to
     /// establish.
     fn connect_to_cloud(self: &Arc<Self>, cx: &AsyncApp) {
+        let remote_enabled = cx.update(|cx| ClientSettings::get_global(cx).remote_server_enabled());
+        if !remote_enabled && !cfg!(test) {
+            return;
+        }
         let this = self.clone();
         let task = cx.spawn(async move |cx| {
             #[cfg(any(test, feature = "test-support"))]
@@ -1007,6 +1029,9 @@ impl Client {
         try_provider: bool,
         cx: &AsyncApp,
     ) -> Result<()> {
+        if !cx.update(|cx| ClientSettings::get_global(cx).remote_server_enabled()) && !cfg!(test) {
+            return Ok(());
+        }
         // Don't try to sign in again if we're already connected to Collab, as it will temporarily disconnect us.
         if self.status().borrow().is_connected() {
             return Ok(());
@@ -1056,6 +1081,10 @@ impl Client {
         try_provider: bool,
         cx: &AsyncApp,
     ) -> ConnectionResult<()> {
+        let remote_enabled = cx.update(|cx| ClientSettings::get_global(cx).remote_server_enabled());
+        if !remote_enabled && !cfg!(test) {
+            return ConnectionResult::Result(Ok(()));
+        }
         let was_disconnected = match *self.status().borrow() {
             Status::SignedOut | Status::Authenticated => true,
             Status::ConnectionError
@@ -1938,6 +1967,21 @@ mod tests {
             ProxySettings::from_settings(&content).proxy.as_deref(),
             Some("http://127.0.0.1:10809")
         );
+    }
+
+    #[test]
+    fn default_server_is_local_and_remote_requires_explicit_configuration() {
+        let local = ClientSettings {
+            server_url: "http://127.0.0.1:7331".into(),
+            credentials_url: None,
+        };
+        assert!(!local.remote_server_enabled());
+
+        let remote = ClientSettings {
+            server_url: "https://example.invalid".into(),
+            credentials_url: None,
+        };
+        assert!(remote.remote_server_enabled());
     }
 
     #[gpui::test(iterations = 10)]
