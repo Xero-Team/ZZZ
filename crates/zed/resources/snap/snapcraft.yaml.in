@@ -4,15 +4,15 @@ base: core24
 version: "$RELEASE_VERSION"
 summary: The editor for what's next
 description: |
-  Zed is a modern open-source code editor, built from the ground up in Rust with
-  a GPU-accelerated renderer. We help you build software faster than ever before.
+  ZZZ is a modern open-source code editor, built from the ground up in Rust with
+  a GPU-accelerated renderer and local-first defaults.
 grade: stable
 confinement: classic
 compression: lzo
-website: https://zed.dev/
-source-code: https://github.com/zed-industries/zed
-issues: https://github.com/zed-industries/zed/issues
-contact: https://zed.dev/community-links#support-and-feedback
+website: https://codeberg.org/ZZZEditor/ZZZ
+source-code: https://codeberg.org/ZZZEditor/ZZZ
+issues: https://codeberg.org/ZZZEditor/ZZZ/issues
+contact: https://codeberg.org/ZZZEditor/ZZZ/issues
 
 parts:
   zed:

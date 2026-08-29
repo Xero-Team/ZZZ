@@ -12,14 +12,14 @@
   xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
   xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
   IgnorableNamespaces="uap uap2 uap3 rescap desktop desktop4 desktop5 desktop6 uap10 com">
-  <!-- TODO: Use Zed's signature here. -->
+  <!-- TODO: Use the ZZZ signing certificate here. -->
   <Identity
     Name="ZZZIndustries.ZZZ.Nightly"
     Publisher="CN=Zed Industries Inc, O=Zed Industries Inc, L=Denver, S=Colorado, C=US"
     Version="1.0.0.0" />
   <Properties>
     <DisplayName>ZZZ Nightly</DisplayName>
-    <PublisherDisplayName>Zed Industries</PublisherDisplayName>
+    <PublisherDisplayName>ZZZ Community</PublisherDisplayName>
     <!-- TODO: Use actual icon here. -->
     <Logo>resources\logo_150x150.png</Logo>
     <uap10:AllowExternalContent>true</uap10:AllowExternalContent>

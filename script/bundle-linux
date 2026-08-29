@@ -273,16 +273,19 @@ export RUSTFLAGS="${remote_rustflags}"
 cargo build --release --target "${remote_server_triple}" --package remote_server
 remote_artifact_dir="${target_dir}/${remote_server_triple}/release"
 
-# Upload debug info to sentry.io
-if ! command -v sentry-cli >/dev/null 2>&1; then
+# Upload debug info to sentry.io (explicit opt-in only)
+if [[ "${ZZZ_ENABLE_SENTRY_UPLOAD:-}" != "1" ]]; then
+    echo "ZZZ_ENABLE_SENTRY_UPLOAD is not set to 1; skipped sentry upload."
+elif [[ -z "${SENTRY_AUTH_TOKEN:-}" ]]; then
+    echo "SENTRY_AUTH_TOKEN is missing; skipped sentry upload."
+elif ! command -v sentry-cli >/dev/null 2>&1; then
     echo "sentry-cli not found. skipping sentry upload."
     echo "install with: 'curl -sL https://sentry.io/get-cli | bash'"
 else
-    if [[ -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
-        echo "Uploading zed debug symbols to sentry..."
+    echo "Uploading zed debug symbols to sentry..."
         # note: this uploads the unstripped binary which is needed because it contains
         # .eh_frame data for stack unwinding. see https://github.com/getsentry/symbolic/issues/783
-        for attempt in 1 2 3; do
+    for attempt in 1 2 3; do
             echo "Attempting sentry upload (attempt $attempt/3)..."
             if sentry-cli debug-files upload --include-sources --wait -p zed -o zed-dev \
                 "${host_artifact_dir}/zzz" \
@@ -295,10 +298,7 @@ else
                     echo "All sentry upload attempts failed"
                 fi
             fi
-        done
-    else
-        echo "missing SENTRY_AUTH_TOKEN. skipping sentry upload."
-    fi
+    done
 fi
 
 # Strip debug symbols and save them for upload to DigitalOcean.

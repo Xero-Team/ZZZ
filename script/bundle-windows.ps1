@@ -306,13 +306,17 @@ function ZipZedAndItsFriendsDebug {
 
 
 function UploadToSentry {
+    if ($env:ZZZ_ENABLE_SENTRY_UPLOAD -ne "1") {
+        Write-Output "ZZZ_ENABLE_SENTRY_UPLOAD is not set to 1; skipped sentry upload."
+        return
+    }
     if (-not (Get-Command "sentry-cli" -ErrorAction SilentlyContinue)) {
         Write-Output "sentry-cli not found. skipping sentry upload."
         Write-Output "install with: 'winget install -e --id=Sentry.sentry-cli'"
         return
     }
-    if (-not (Test-Path "env:SENTRY_AUTH_TOKEN")) {
-        Write-Output "missing SENTRY_AUTH_TOKEN. skipping sentry upload."
+    if ([string]::IsNullOrWhiteSpace($env:SENTRY_AUTH_TOKEN)) {
+        Write-Output "SENTRY_AUTH_TOKEN is missing; skipped sentry upload."
         return
     }
     Write-Output "Uploading zed debug symbols to sentry..."

@@ -1,7 +1,7 @@
 use crate::tasks::workflows::{
     nix_build::build_nix,
     release::{
-        ReleaseBundleJobs, create_sentry_release, download_workflow_artifacts, notify_on_failure,
+        ReleaseBundleJobs, download_workflow_artifacts, notify_on_failure,
         prep_release_artifacts,
     },
     run_bundling::{bundle_linux, bundle_mac, bundle_windows},
@@ -123,7 +123,6 @@ fn update_nightly_tag_job(bundle: &ReleaseBundleJobs) -> NamedJob {
                         vars::DIGITALOCEAN_SPACES_SECRET_KEY,
                     )),
             )
-            .add_step(update_nightly_tag())
-            .add_step(create_sentry_release()),
+            .add_step(update_nightly_tag()),
     }
 }

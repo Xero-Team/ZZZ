@@ -2,10 +2,10 @@
 AppId={#AppId}
 AppName={#AppName}
 AppVerName={#AppDisplayName}
-AppPublisher=Zed Industries
-AppPublisherURL=https://www.zed.dev/
-AppSupportURL=https://www.zed.dev/
-AppUpdatesURL=https://www.zed.dev/
+AppPublisher=ZZZ Community
+AppPublisherURL=https://codeberg.org/ZZZEditor/ZZZ
+AppSupportURL=https://codeberg.org/ZZZEditor/ZZZ/wiki
+AppUpdatesURL=https://codeberg.org/ZZZEditor/ZZZ/releases
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 DisableReadyPage=yes

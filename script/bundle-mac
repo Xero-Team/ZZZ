@@ -305,6 +305,10 @@ function sign_binary() {
 function upload_debug_symbols() {
     if [ "$local_install" = true ]; then
         echo "local install; skipping sentry upload."
+    elif [ "${ZZZ_ENABLE_SENTRY_UPLOAD:-}" != "1" ]; then
+        echo "ZZZ_ENABLE_SENTRY_UPLOAD is not set to 1; skipped sentry upload."
+    elif [ -z "${SENTRY_AUTH_TOKEN:-}" ]; then
+        echo "SENTRY_AUTH_TOKEN is missing; skipped sentry upload."
     elif [[ -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
         echo "Uploading zed debug symbols to sentry..."
         exe_path="target/${target_triple}/release/ZZZ"
@@ -335,8 +339,6 @@ function upload_debug_symbols() {
                 fi
             fi
         done
-    else
-        echo "missing SENTRY_AUTH_TOKEN. skipping sentry upload."
     fi
 }
 
