@@ -4,7 +4,7 @@
 
 ![ZZZ Logo](crates/zed/resources/app-icon.png)
 
-ZZZ is a community fork of [Zed](https://github.com/zed-industries/zed),
+ZZZ is a community-maintained code editor,
 a high-performance code editor originally built by the creators of
 [Atom](https://github.com/atom/atom) and [Tree-sitter](https://github.com/tree-sitter/tree-sitter).
 
@@ -37,11 +37,11 @@ This fork exists because some things should not be configurable — they should 
 ## How ZZZ differs from other Zed forks
 
 [Gram](https://codeberg.org/GramEditor/gram) removes AI entirely — a valid and principled choice.
-[Zedless](https://github.com/zedless-editor/zedless) takes a similar privacy-first approach.
+[Zedless](https://codeberg.org/zedless-editor/zedless) takes a similar privacy-first approach.
 
 ZZZ takes a different position: **AI features can stay, but they default to your own infrastructure.**
 The editor ships pointed at a local endpoint. No account, no cloud, nowhere asking you to sign up.
-If you want a commercial provider, you can add it yourself — quietly. _Actually, you can even use Zed AI if you want._
+If you want a remote provider, you can add it yourself — explicitly and quietly.
 
 ---
 
@@ -53,12 +53,12 @@ ZZZ does not provide pre-built binaries yet. Build from source:
 cargo run
 ```
 
-See upstream build guides for system dependencies:
+See the local build guides for system dependencies:
 [macOS](./docs/src/development/macos.md) ·
 [Linux](./docs/src/development/linux.md) ·
 [Windows](./docs/src/development/windows.md)
 
-To use an AI provider (OpenAI, Anthropic, Zed AI, etc.), add the API key manually in settings.
+To use an AI provider, add it manually in settings. Ollama is preferred, then llama.cpp; remote providers are never selected automatically.
 
 ---
 
@@ -102,4 +102,3 @@ ZZZ inherits Zed's license structure.
 See [LICENSE-GPL](./LICENSE-GPL) and [LICENSE-APACHE](./LICENSE-APACHE).
 
 The original Zed README is preserved at [README.ORIGINAL.md](./README.ORIGINAL.md).
-
