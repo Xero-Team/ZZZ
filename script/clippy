@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+"$(dirname "$0")/check-philosophy"
+
 has_package_selection=false
 if [[ " $* " == *" -p "* || " $* " == *" --package "* ]]; then
     has_package_selection=true

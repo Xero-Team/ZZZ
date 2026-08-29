@@ -1,0 +1,46 @@
+# Hosts intentionally present in product defaults or explicit compatibility paths.
+# Every non-loopback host below is either a user-configured provider endpoint,
+# an upstream protocol/test fixture, or an opt-in diagnostics destination.
+# Keep this file reviewed whenever a new network host is introduced.
+
+# Local providers and test fixtures.
+127.0.0.1
+localhost
+::1
+# Provider APIs (only contacted after explicit provider configuration).
+ollama.com
+ollama.ai
+opencode.ai
+openai.com
+anthropic.com
+googleapis.com
+openrouter.ai
+amazonaws.com
+# Source/control hosts used by explicit user actions and extension tooling.
+github.com
+codeberg.org
+# Diagnostics upload (requires ZZZ_ENABLE_SENTRY_UPLOAD=1 and SENTRY_AUTH_TOKEN).
+sentry.io
+# Legacy hosted ZZZ compatibility mapping. These hosts must never be selected
+# by defaults; they are retained for explicitly configured remote server URLs
+# and protocol fixtures.
+zed.dev
+cloud.zed.dev
+api.zed.dev
+collab.zed.dev
+staging.zed.dev
+staging-collab.zed.dev
+# Third-party gateway/provider hosts (explicit configuration only).
+ai-gateway.vercel.sh
+api.anthropic.com
+api.deepseek.com
+api.mistral.ai
+api.openai.com
+api.x.ai
+codestral.mistral.ai
+generativelanguage.googleapis.com
+# Documentation/test placeholders and user-supplied examples.
+example.com
+example.invalid
+readtech.org
+code.big-corp.com

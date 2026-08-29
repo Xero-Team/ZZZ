@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+allowlist="$root/script/philosophy-allowlist"
+failures=0
+
+check() {
+    local description="$1"
+    shift
+    if ! "$@"; then
+        echo "FAIL: $description" >&2
+        failures=$((failures + 1))
+    fi
+}
+
+check_default_settings() {
+    rg -q '"auto_update": false' "$root/assets/settings/default.json" \
+        && rg -q '"server_url": "http://127\.0\.0\.1:7331"' "$root/assets/settings/default.json" \
+        && rg -q '"show_zen_models": false' "$root/assets/settings/default.json" \
+        && rg -q '"auto_install_extensions": \{\}' "$root/assets/settings/default.json" \
+        && ! rg -n '"auto_update_extensions"\s*:\s*\{[^}]*:\s*true' "$root/assets/settings/default.json"
+}
+
+check_no_telemetry_endpoint() {
+    ! rg -n '/v1/log/zed' "$root/crates" "$root/script" --glob '*.rs' --glob '*.sh' --glob '*.ps1'
+}
+
+check_sentry_opt_in() {
+    local file
+    for file in "$root/script/bundle-linux" "$root/script/bundle-mac" "$root/script/bundle-windows.ps1"; do
+        rg -q 'ZZZ_ENABLE_SENTRY_UPLOAD' "$file" || return 1
+        rg -q 'SENTRY_AUTH_TOKEN' "$file" || return 1
+    done
+}
+
+check_no_commercial_entrypoints() {
+    ! rg -n 'start_trial|upgrade_to_zed_pro|billing-support@zed\.dev|Try Zed Pro|Start Free Trial|Upgrade to Pro|Manage Subscription' \
+        "$root/crates/ai_onboarding" "$root/crates/onboarding" "$root/crates/title_bar" \
+        "$root/crates/edit_prediction_ui" "$root/crates/agent_ui" "$root/crates/language_models/src/provider/cloud.rs"
+}
+
+check_no_commercial_identifiers() {
+    ! rg -n 'start_trial|upgrade_to_zed_pro|billing-support@zed\.dev' \
+        "$root/crates" "$root/assets/locales" "$root/docs/src" "$root/legal" \
+        --glob '!script/check-philosophy'
+}
+
+check_help_menu() {
+    ! rg -ni 'twitter|join the team|zed\.dev/docs|email us' "$root/crates/zed/src/zed/app_menus.rs" \
+        && ! rg -ni '"menu\.help\.(zed_twitter|join_the_team|email_us)"\s*:\s*"(.*twitter|.*join the team|.*email|.*招聘)' \
+            "$root/assets/locales/en.json" "$root/assets/locales/zh-CN.json"
+}
+
+check_locale_commercial_copy() {
+    ! rg -n '"(Start Free Trial|Try Zed Pro|Upgrade to Pro|Manage Subscription|billing-support@zed\.dev)"' \
+        "$root/assets/locales/en.json" "$root/assets/locales/zh-CN.json"
+}
+
+check_packaging_terms_are_offline() {
+    ! rg -n 'billing-support@zed\.dev|hi@zed\.dev|Zed Industries|zed\.dev/pricing|Subscription Billing' \
+        "$root/legal/terms.md" "$root/script/terms/terms.rtf"
+}
+
+check_no_default_cloud_hosts() {
+    ! rg -n '"server_url"\s*:\s*"https://(zed\.dev|cloud\.zed\.dev|api\.zed\.dev|collab\.zed\.dev)"' \
+        "$root/assets/settings/default.json"
+}
+
+check_product_defaults_no_zed_host() {
+    ! rg -ni '"provider"\s*:\s*"zed\.dev"|"server_url"\s*:\s*"https?://(zed\.dev|cloud\.zed\.dev|api\.zed\.dev|collab\.zed\.dev)"' \
+        "$root/assets/settings/default.json" "$root/crates/zed/src/zed/app_menus.rs" \
+        "$root/crates/client/src/zed_urls.rs"
+}
+
+check_product_surfaces_no_hosted_docs() {
+    ! rg -n 'https?://(www\.)?zed\.dev/docs|https?://(www\.)?zed\.dev/(download|releases|pricing|account|terms)' \
+        "$root/crates/zed/src" "$root/crates/ai_onboarding" "$root/crates/onboarding" \
+        "$root/crates/title_bar" "$root/crates/edit_prediction_ui" "$root/crates/edit_prediction/src" \
+        "$root/crates/agent_ui" "$root/crates/settings_ui/src" "$root/crates/language_tools/src" \
+        "$root/crates/theme_selector/src" "$root/crates/debugger_ui/src" "$root/crates/repl/src" \
+        "$root/crates/install_cli/src" "$root/crates/language_onboarding/src" "$root/crates/feedback/src"
+}
+
+check_privacy_documented() {
+    rg -q '\./development/privacy-boundary\.md' "$root/docs/src/SUMMARY.md"
+}
+
+check_allowlisted_hosts() {
+    local urls
+    urls=$(rg --no-filename -o 'https?://[^"` )]+' "$root/assets/settings/default.json" "$root/crates/client/src/client.rs" \
+        "$root/crates/cloud_api_client/src" 2>/dev/null | sed -E 's#https?://([^/:]+).*#\1#; s/[][{}]//g' | sort -u)
+    while read -r host; do
+        [[ -z "$host" ]] && continue
+        if ! rg -qxF "$host" "$allowlist"; then
+            echo "host is not registered in script/philosophy-allowlist: $host" >&2
+            return 1
+        fi
+    done <<< "$urls"
+}
+
+check "default settings are local-first" check_default_settings
+check "telemetry endpoint is absent" check_no_telemetry_endpoint
+check "Sentry uploads require explicit opt-in" check_sentry_opt_in
+check "commercial entry points are absent" check_no_commercial_entrypoints
+check "commercial identifiers are absent from product surfaces" check_no_commercial_identifiers
+check "Help menu has no commercial links" check_help_menu
+check "locale has no commercial copy" check_locale_commercial_copy
+check "packaging terms are offline and non-commercial" check_packaging_terms_are_offline
+check "default cloud hosts are absent" check_no_default_cloud_hosts
+check "product defaults do not reference hosted ZZZ hosts" check_product_defaults_no_zed_host
+check "product surfaces have no hosted documentation links" check_product_surfaces_no_hosted_docs
+check "privacy boundary is linked from documentation summary" check_privacy_documented
+check "network hosts are allowlisted" check_allowlisted_hosts
+
+if (( failures > 0 )); then
+    echo "philosophy check failed with $failures violation(s)" >&2
+    exit 1
+fi
+echo "philosophy check passed"
