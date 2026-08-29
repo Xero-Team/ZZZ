@@ -173,14 +173,15 @@ ZZZ doesn’t import extensions or keybindings, but this import gets core editor
 You can configure most settings in the Settings Editor ({#kb zed::OpenSettings}). For advanced settings, run `zzz: open settings file` from the Command Palette to edit your settings file directly.
 
 Here’s how common VS Code settings translate:
-| VS Code | ZZZ | Notes |
-| --- | --- | --- |
-| editor.fontFamily | buffer_font_family | ZZZ uses Zed Mono by default |
-| editor.fontSize | buffer_font_size | Set in pixels |
-| editor.tabSize | tab_size | Can override per language |
-| editor.insertSpaces | insert_spaces | Boolean |
-| editor.formatOnSave | format_on_save | Works with formatter enabled |
-| editor.wordWrap | soft_wrap | Supports optional wrap column |
+
+| VS Code             | ZZZ                | Notes                         |
+| ------------------- | ------------------ | ----------------------------- |
+| editor.fontFamily   | buffer_font_family | ZZZ uses Zed Mono by default  |
+| editor.fontSize     | buffer_font_size   | Set in pixels                 |
+| editor.tabSize      | tab_size           | Can override per language     |
+| editor.insertSpaces | insert_spaces      | Boolean                       |
+| editor.formatOnSave | format_on_save     | Works with formatter enabled  |
+| editor.wordWrap     | soft_wrap          | Supports optional wrap column |
 
 ZZZ also supports per-project settings. You can find these in the Settings Editor as well.
 
@@ -316,8 +317,8 @@ Once signed in, just start typing. ZZZ will offer suggestions inline for you to 
 
 To use other AI models in ZZZ, you have several options:
 
-- Use ZZZ-hosted models, with higher rate limits. Requires [authentication](https://zed.dev/docs/authentication) and subscription to [ZZZ Pro](https://zed.dev/docs/ai/subscription.html).
-- Bring your own [API keys](https://zed.dev/docs/ai/llm-providers.html), no authentication needed
+- Use local Ollama or llama.cpp models by configuring a provider in ZZZ.
+- Bring your own [API keys](../ai/llm-providers.md), no ZZZ account required
 - Use [external agents like Claude Agent](https://zed.dev/docs/ai/external-agents.html).
 
 ### Advanced Config and Productivity Tweaks

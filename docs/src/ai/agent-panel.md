@@ -12,12 +12,10 @@ Open it with `agent: new thread` from [the Command Palette](../getting-started.m
 
 ## Getting Started {#getting-started}
 
-If you're using the Agent Panel for the first time, you need to have at least one LLM provider or external agent configured.
-You can do that by:
-
-1. [subscribing to our Pro plan](https://zed.dev/pricing), so you have access to our hosted models
-2. [using your own API keys](./llm-providers.md#use-your-own-keys), either from model providers like Anthropic or model gateways like OpenRouter.
-3. using an [external agent](./external-agents.md) like [Gemini CLI](./external-agents.md#gemini-cli) or [Claude Agent](./external-agents.md#claude-agent)
+If you're using the Agent Panel for the first time, configure at least one
+provider or external agent. Local Ollama and llama.cpp providers are preferred;
+you can also [use your own API keys](./llm-providers.md#use-your-own-keys) or an
+[external agent](./external-agents.md) such as Gemini CLI or Claude Agent.
 
 ## Overview {#overview}
 
@@ -269,7 +267,10 @@ You can also do this at any time with an ongoing thread via the "Agent Options" 
 
 ## Changing Models {#changing-models}
 
-After you've configured your LLM providers—either via [a custom API key](./llm-providers.md) or through [ZZZ-hosted models](./models.md)—you can switch between their models by clicking on the model selector on the message editor or by using the {#kb agent::ToggleModelSelector} keybinding.
+After you've configured your LLM providers—locally, via [a custom API key](./llm-providers.md),
+or through an explicitly configured remote endpoint—you can switch between their
+models by clicking on the model selector on the message editor or by using the
+{#kb agent::ToggleModelSelector} keybinding.
 
 > The same model can be offered via multiple providers - for example, Claude Sonnet 4.5 is available via ZZZ Pro, OpenRouter, Anthropic directly, and more.
 > Make sure you've selected the correct model **_provider_** for the model you'd like to use, delineated by the logo to the left of the model in the model selector.
@@ -346,7 +347,7 @@ Tool calling needs to be individually supported by each model and model provider
 Therefore, despite the presence of built-in tools, some models may not have the ability to pick them up.
 You should see a "No tools" label if you select a model that falls into this case.
 
-All [ZZZ-hosted models](./models.md) support tool calling out-of-the-box.
+Tool support depends on the selected provider and model.
 
 ### MCP Servers {#mcp-servers}
 

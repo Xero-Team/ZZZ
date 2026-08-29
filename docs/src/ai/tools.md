@@ -63,7 +63,9 @@ Searches the web for information, providing results with snippets and links from
 
 **Example:** Looking up whether a known bug in a dependency has been patched in a recent release, or finding the current API signature for a third-party library when the local docs are out of date.
 
-> **Note:** The built-in `search_web` tool is only available to [ZZZ Pro](https://zed.dev/pricing) subscribers using the ZZZ provider. If you're on a free plan or using a different provider, you can get equivalent functionality by connecting an MCP server that provides web search capabilities. See [MCP servers](./mcp.md) for details.
+> **Note:** `search_web` is available only when you explicitly configure a
+> compatible provider or MCP server. ZZZ has no hosted plan or account gate.
+> See [MCP servers](./mcp.md) for a local or user-managed web search service.
 
 ## Edit Tools
 

@@ -16,17 +16,19 @@ AI features in ZZZ include:
 
 By default, ZZZ does not store your prompts or code context. This data is sent to your selected AI provider (e.g., Anthropic, OpenAI, Google, or xAI) to generate responses, then discarded. ZZZ will not use your data to evaluate or improve AI features unless you explicitly share it (see [AI Feedback with Ratings](#ai-feedback-with-ratings)) or you opt in to edit prediction training data collection (see [Edit Predictions](#edit-predictions)).
 
-ZZZ is model-agnostic by design, and none of this changes based on which provider you choose. You can use your own API keys or ZZZ-hosted models without any data being retained.
+ZZZ is model-agnostic by design. You can use your own API keys or local models
+without any data being retained by ZZZ.
 
 ### Data Retention and Training
 
 ZZZ's Agent Panel can be used via:
 
-- [ZZZ-hosted models](./subscription.md)
+- [local models or explicitly configured remote providers](./llm-providers.md)
 - [connecting a non-ZZZ AI service via API key](./llm-providers.md)
 - using an [external agent](./external-agents.md) via ACP
 
-When using ZZZ-hosted models, we require assurances from our service providers that your user content won't be used for training models.
+When using a remote provider, review that provider's retention and training
+policy before sending data.
 
 | Provider  | No Training Guarantee                                   | Zero-Data Retention (ZDR)                                                                                                                     |
 | --------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -83,7 +85,8 @@ Note: ZZZ's `disabled_globs` settings will prevent predictions from being reques
 ZZZ does not collect training data for our edit prediction model unless the following conditions are met:
 
 1. **You opt in** – Toggle "Training Data Collection" under the **Privacy** section of the edit prediction status bar menu (click the edit prediction icon in the status bar).
-2. **The project is open source** — detected via LICENSE file ([see detection logic](https://github.com/zed-industries/zed/blob/main/crates/edit_prediction/src/license_detection.rs))
+2. **The project is open source** — detected via LICENSE file (see the local
+   license detection implementation)
 3. **The file isn't excluded** — via `disabled_globs`
 
 ### File Exclusions
@@ -105,7 +108,7 @@ Certain files are always excluded from edit predictions—regardless of opt-in s
 }
 ```
 
-Users may explicitly exclude additional paths and/or file extensions by adding them to [`edit_predictions.disabled_globs`](https://zed.dev/docs/reference/all-settings#edit-predictions) in their ZZZ settings file ([how to edit](../configuring-zed.md#settings-files)):
+Users may explicitly exclude additional paths and/or file extensions by adding them to [`edit_predictions.disabled_globs`](../reference/all-settings.md#edit-predictions) in their ZZZ settings file ([how to edit](../configuring-zed.md#settings-files)):
 
 ```json [settings]
 {
@@ -133,4 +136,5 @@ We then use this training dataset to fine-tune [Qwen2.5-Coder-7B](https://huggin
 
 ## Applicable terms
 
-Please see the [ZZZ Terms of Service](https://zed.dev/terms) for more.
+ZZZ does not add hosted terms or account requirements to this feature; any
+terms for a manually configured provider are between you and that provider.

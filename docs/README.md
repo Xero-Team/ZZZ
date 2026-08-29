@@ -2,7 +2,8 @@
 
 Welcome to ZZZ's documentation.
 
-This is built on push to `main` and published automatically to [https://zed.dev/docs](https://zed.dev/docs).
+Build the documentation locally with mdBook; ZZZ does not contact a hosted
+documentation service during normal application use.
 
 To preview the docs locally you will need to install [mdBook](https://rust-lang.github.io/mdBook/) (`cargo install mdbook@0.4.40`), generate the action metadata, and then serve:
 
@@ -29,14 +30,15 @@ If for some reason you need to bypass the docs preprocessor, you can comment out
 
 ## Images and videos
 
-To add images or videos to the docs, upload them to another location (e.g., zed.dev, GitHub's asset storage) and then link out to them from the docs.
+To add images or videos to the docs, prefer repository-local assets. Avoid
+adding hosted dependencies that would make offline documentation unavailable.
 
 Putting binary assets such as images in the Git repository will bloat the repository size over time.
 
 ## Internal notes:
 
-- We have a Cloudflare router called `docs-proxy` that intercepts requests to `zed.dev/docs` and forwards them to the "docs" Cloudflare Pages project.
-- The CI uploads a new version to the Cloudflare Pages project from `.github/workflows/deploy_docs.yml` on every push to `main`.
+- Documentation deployment is outside the desktop application's default
+  network boundary; local builds remain the source of truth.
 
 ### Table of Contents
 
@@ -157,4 +159,3 @@ title: "Some title"
 
 - The front matter must be at the top of the file, with only white-space preceding it.
 - The contents of the `title` and `description` will not be HTML escaped. They should be simple ASCII text with no unicode or emoji characters.
-

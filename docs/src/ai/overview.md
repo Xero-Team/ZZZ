@@ -11,9 +11,9 @@ ZZZ is an open-source AI code editor. AI runs throughout the editing experience:
 
 ZZZ's AI features run inside a native, GPU-accelerated application built in Rust. There is no Electron layer between you and the model output.
 
-- **Open source.** The editor and all AI features are [open source](https://github.com/zed-industries/zed). You can read how AI is implemented, how data flows to providers, and how tool calls execute.
-- **Multi-model.** Use ZZZ-hosted models or [bring your own API keys](./llm-providers.md) from Anthropic, OpenAI, Google, Ollama, and 8+ other providers. Run local models, connect to cloud APIs, or mix both. Switch models per task.
-- **External agents.** Run Claude Agent, Gemini CLI, Codex, and other CLI-based agents directly in ZZZ through the [Agent Client Protocol](https://zed.dev/acp). See [External Agents](./external-agents.md).
+- **Open source.** The editor and all AI features are available in this repository. You can inspect how AI is implemented, how data flows to providers, and how tool calls execute.
+- **Multi-model.** [Bring your own API keys](./llm-providers.md) or run local Ollama and llama.cpp models. Remote APIs are explicit opt-in choices.
+- **External agents.** Run Claude Agent, Gemini CLI, Codex, and other CLI-based agents directly in ZZZ through the Agent Client Protocol. See [External Agents](./external-agents.md).
 - **Privacy by default.** AI data sharing is opt-in. When you use your own API keys, ZZZ maintains zero-data retention agreements with providers. See [Privacy and Security](./privacy-and-security.md).
 
 ## Agentic editing
@@ -37,7 +37,7 @@ The default provider is Zeta, ZZZ's open-source model trained on open data. You 
 - [Configuration](./configuration.md): Connect to Anthropic, OpenAI, Ollama, Google AI, or other LLM providers.
 - [Parallel Agents](./parallel-agents.md): Run multiple threads at once with the Threads Sidebar.
 - [External Agents](./external-agents.md): Run Claude Agent, Codex, Aider, or other external agents inside ZZZ.
-- [Subscription](./subscription.md): ZZZ-hosted models and billing.
+- [Models](./models.md): Choose models from local or explicitly configured providers.
 - [Privacy and Security](./privacy-and-security.md): How ZZZ handles data when using AI features.
 
-New to ZZZ? Start with [Getting Started](../getting-started.md), then come back here to set up AI. For a higher-level overview, see [zed.dev/ai](https://zed.dev/ai).
+New to ZZZ? Start with [Getting Started](../getting-started.md), then come back here to set up AI.

@@ -11,14 +11,14 @@ Settings for ZZZ's Agent Panel, including model selection, UI preferences, and t
 
 ### Default Model {#default-model}
 
-If you're using [ZZZ's hosted LLM service](./subscription.md), it sets `claude-sonnet-4-5` as the default model for agentic work (agent panel, inline assistant) and `gpt-5-nano` as the default "fast" model (thread summarization, git commit messages). If you're not subscribed or want to change these defaults, you can manually edit the `default_model` object in your settings:
+ZZZ does not select a hosted model by default. Local Ollama models are preferred, followed by llama.cpp; configure a provider manually in your settings:
 
 ```json [settings]
 {
   "agent": {
     "default_model": {
-      "provider": "openai",
-      "model": "gpt-4o"
+      "provider": "ollama",
+      "model": "your-installed-model"
     }
   }
 }
@@ -37,8 +37,8 @@ You can assign distinct and specific models for the following AI-powered feature
 {
   "agent": {
     "default_model": {
-      "provider": "zed.dev",
-      "model": "claude-sonnet-4-5"
+      "provider": "ollama",
+      "model": "your-installed-model"
     },
     "inline_assistant_model": {
       "provider": "anthropic",
@@ -53,8 +53,8 @@ You can assign distinct and specific models for the following AI-powered feature
       "model": "gemini-2.0-flash"
     },
     "subagent_model": {
-      "provider": "zed.dev",
-      "model": "gpt-5-mini"
+      "provider": "llama_cpp",
+      "model": "your-local-model"
     }
   }
 }
@@ -72,13 +72,13 @@ Here's how you can customize your settings file ([how to edit](../configuring-ze
 {
   "agent": {
     "default_model": {
-      "provider": "zed.dev",
-      "model": "claude-sonnet-4-5"
+      "provider": "ollama",
+      "model": "your-installed-model"
     },
     "inline_alternatives": [
       {
-        "provider": "zed.dev",
-        "model": "gpt-5-mini"
+        "provider": "llama_cpp",
+        "model": "your-local-model"
       }
     ]
   }
@@ -90,23 +90,24 @@ When multiple models are configured, you'll see in the Inline Assistant UI butto
 The models you specify here are always used in _addition_ to your [default model](#default-model).
 
 For example, the following configuration will generate three outputs for every assist.
-One with Claude Sonnet 4.5 (the default model), another with GPT-5-mini, and another one with Gemini 3 Flash.
+One with your installed Ollama model (the default model), another with a local
+llama.cpp model, and another with a second installed Ollama model.
 
 ```json [settings]
 {
   "agent": {
     "default_model": {
-      "provider": "zed.dev",
-      "model": "claude-sonnet-4-5"
+      "provider": "ollama",
+      "model": "your-installed-model"
     },
     "inline_alternatives": [
       {
-        "provider": "zed.dev",
-        "model": "gpt-5-mini"
+        "provider": "llama_cpp",
+        "model": "your-local-model"
       },
       {
-        "provider": "zed.dev",
-        "model": "gemini-3-flash"
+        "provider": "ollama",
+        "model": "another-installed-model"
       }
     ]
   }
@@ -132,8 +133,8 @@ Specify a custom temperature for a provider and/or model:
       },
       // To set parameters for a specific provider and model:
       {
-        "provider": "zed.dev",
-        "model": "claude-sonnet-4-5",
+        "provider": "ollama",
+        "model": "your-installed-model",
         "temperature": 1.0
       }
     ]

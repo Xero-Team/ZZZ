@@ -1,6 +1,6 @@
 ---
 title: Install ZZZ - macOS, Linux, Windows
-description: Download and install ZZZ on macOS, Linux, or Windows. Includes Homebrew, direct download, and package manager options.
+description: Build and install ZZZ on macOS, Linux, or Windows using local instructions.
 ---
 
 # Installing ZZZ
@@ -9,22 +9,22 @@ description: Download and install ZZZ on macOS, Linux, or Windows. Includes Home
 
 ### macOS
 
-Get the latest stable builds via [the download page](https://zed.dev/download). After the first manual installation, ZZZ will periodically check for install updates.
+Build and install ZZZ locally from this repository. Automatic updates are disabled by default.
 
-You can also install ZZZ stable via Homebrew:
+If a local package is available for your platform, install the ZZZ package:
 
 ```sh
-brew install --cask zed
+brew install --cask zzz
 ```
 
 ### Windows
 
-Get the latest stable builds via [the download page](https://zed.dev/download). After the first manual installation, ZZZ will periodically check for install updates.
+Use the platform-specific build instructions below; no hosted download or update check is required.
 
 Additionally, you can install ZZZ using winget:
 
 ```sh
-winget install -e --id ZedIndustries.ZZZ
+winget install -e --id ZZZEditor.ZZZ
 ```
 
 ### Linux
@@ -32,17 +32,17 @@ winget install -e --id ZedIndustries.ZZZ
 For most Linux users, the easiest way to install ZZZ is through our installation script:
 
 ```sh
-curl -f https://zed.dev/install.sh | sh
+./script/install.sh
 ```
 
 You can now optionally specify a **version** of ZZZ to install using the `ZED_VERSION` environment variable:
 
 ```sh
 # Install the latest stable version (default)
-curl -f https://zed.dev/install.sh | sh
+./script/install.sh
 
-# Install a specific version
-curl -f https://ZED_VERSION/install.sh | ZED_VERSION=0.216.0 sh
+# Install a specific version from a locally checked-out source tree
+ZED_VERSION=0.216.0 ./script/install.sh
 ```
 
 This script supports `x86_64` and `AArch64`, as well as common Linux distributions: Ubuntu, Arch, Debian, RedHat, CentOS, Fedora, and more.
@@ -95,10 +95,11 @@ ZZZ requires a Vulkan 1.3 driver and the following desktop portals:
 ### Windows
 
 ZZZ supports the following Windows releases:
-| Version | ZZZ Status |
-| ------------------------- | ------------------- |
-| Windows 11, version 22H2 and later | Supported |
-| Windows 10, version 1903 and later | Supported |
+
+| Version                            | ZZZ Status |
+| ---------------------------------- | ---------- |
+| Windows 11, version 22H2 and later | Supported  |
+| Windows 10, version 1903 and later | Supported  |
 
 A 64-bit operating system is required to run ZZZ.
 

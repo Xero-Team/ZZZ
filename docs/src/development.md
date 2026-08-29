@@ -109,6 +109,5 @@ While a trace is recording, open the command palette and run one of the followin
 
 ## Contributor links
 
-- [CONTRIBUTING.md](https://github.com/zed-industries/zed/blob/main/CONTRIBUTING.md)
-- [Code of Conduct](https://zed.dev/code-of-conduct)
-- [ZZZ Contributor License](https://zed.dev/cla)
+- [CONTRIBUTING.md](https://codeberg.org/ZZZEditor/ZZZ/src/branch/main/CONTRIBUTING.md)
+- [Code of Conduct](https://codeberg.org/ZZZEditor/ZZZ/src/branch/main/CODE_OF_CONDUCT.md)

@@ -7,7 +7,7 @@ description: Bring your own API keys to ZZZ. Set up Anthropic, OpenAI, Google AI
 
 To use AI in ZZZ, you need to have at least one large language model provider set up. Once configured, providers are available in the [Agent Panel](./agent-panel.md) and [Inline Assistant](./inline-assistant.md).
 
-You can do that by either subscribing to [one of ZZZ's plans](./plans-and-usage.md), or by using API keys you already have for the supported providers. For general AI setup, see [Configuration](./configuration.md).
+You configure providers explicitly; ZZZ has no account or subscription requirement. For general AI setup, see [Configuration](./configuration.md).
 
 ## Use Your Own Keys {#use-your-own-keys}
 
@@ -23,7 +23,6 @@ ZZZ supports these providers with your own API keys:
 
 - [Amazon Bedrock](#amazon-bedrock)
 - [Anthropic](#anthropic)
-- [ChatGPT Subscription](#chatgpt-subscription)
 - [DeepSeek](#deepseek)
 - [GitHub Copilot Chat](#github-copilot-chat)
 - [Google AI](#google-ai)
@@ -32,7 +31,7 @@ ZZZ supports these providers with your own API keys:
 - [Ollama](#ollama)
 - [OpenAI](#openai)
 - [OpenAI API Compatible](#openai-api-compatible)
-- [OpenCode](#opencode)
+- [OpenCode](#opencode) (manual configuration only)
 - [OpenRouter](#openrouter)
 - [Vercel AI Gateway](#vercel-ai-gateway)
 - [xAI](#xai)
@@ -225,18 +224,6 @@ You can configure a model to use [extended thinking](https://docs.anthropic.com/
   }
 }
 ```
-
-### ChatGPT Subscription {#chatgpt-subscription}
-
-Use your existing ChatGPT Plus or Pro subscription to access OpenAI models directly in ZZZ — no separate API key required.
-
-1. Open the settings view ({#action agent::OpenSettings}) and go to the ChatGPT Subscription section
-2. Click **Sign in** and complete the OpenAI authentication in your browser
-3. Once signed in, models appear in the model dropdown, including GPT-5.5 and GPT-5.3 Codex
-
-To sign out, click **Sign Out** in the ChatGPT Subscription settings.
-
-> **Note:** Model availability depends on your ChatGPT subscription tier. Some models may require ChatGPT Pro.
 
 ### DeepSeek {#deepseek}
 
@@ -503,19 +490,11 @@ If the model is tagged with `thinking` in the Ollama catalog, set this option an
 The `supports_images` option enables the model's vision capabilities, allowing it to process images included in the conversation context.
 If the model is tagged with `vision` in the Ollama catalog, set this option and you can use it in ZZZ.
 
-#### Ollama Authentication
+#### Remote Ollama (optional)
 
-In addition to running Ollama on your own hardware, which generally does not require authentication, ZZZ also supports connecting to remote Ollama instances. API keys are required for authentication.
-
-One such service is [Ollama Turbo](https://ollama.com/turbo). To configure ZZZ to use Ollama Turbo:
-
-1. Sign in to your Ollama account and subscribe to Ollama Turbo
-2. Visit [ollama.com/settings/keys](https://ollama.com/settings/keys) and create an API key
-3. Open the settings view (`agent: open settings`) and go to the Ollama section
-4. Paste your API key and press enter.
-5. For the API URL enter `https://ollama.com`
-
-ZZZ will also use the `OLLAMA_API_KEY` environment variables if defined.
+Ollama normally runs locally and requires no account. If you explicitly use a
+remote Ollama-compatible endpoint, set its URL and credentials in the Ollama
+provider settings. ZZZ does not select a remote endpoint automatically.
 
 ### OpenAI {#openai}
 
@@ -626,30 +605,15 @@ So, ensure you have it set in your environment variables (`<PROVIDER_NAME>_API_K
 
 ### OpenCode {#opencode}
 
-OpenCode can expose different model groups through one provider. You can
-configure it manually and choose which model groups to show.
+OpenCode is available only as a manually configured provider or ACP proxy. It
+is never selected as the default cloud API.
 
-To use it, add your API key in the settings UI or provide it through the
-`OPENCODE_API_KEY` environment variable.
+To use it, set an explicit API URL and optional key in the settings UI or via
+the `OPENCODE_API_KEY` environment variable.
 
 The OpenCode API key will be saved in your keychain.
 
 ZZZ will also use the `OPENCODE_API_KEY` environment variable if it's defined.
-
-By default, models from all configured groups are shown. You can hide groups
-that are not relevant to your setup:
-
-```json [settings]
-{
-  "language_models": {
-    "opencode": {
-      "show_zen_models": true,
-      "show_go_models": false,
-      "show_free_models": false
-    }
-  }
-}
-```
 
 #### Custom Models {#opencode-custom-models}
 
@@ -667,8 +631,7 @@ You can add custom OpenCode models and custom endpoints in your settings file:
           "max_output_tokens": 98765,
           "protocol": "openai_chat",
           "reasoning_effort_levels": ["low", "medium", "high"],
-          "subscription": "go",
-          "custom_model_api_url": "https://example.com/zen"
+          "custom_model_api_url": "https://example.invalid/opencode"
         }
       ]
     }
@@ -686,7 +649,6 @@ The available configuration options for custom models are:
   `"openai_chat"`, or `"google"`
 - `reasoning_effort_levels` (optional): list of supported reasoning effort
   levels. The latest value in the list is used as the default
-- `subscription` (optional): `"zen"`, `"go"`, or `"free"`
 - `custom_model_api_url` (optional): custom API base URL to use instead of the
   default OpenCode API
 

@@ -230,7 +230,7 @@ It's also possible to customize environment variables for registry-installed age
 When using external agents in ZZZ, you can access the debug view with `dev: open acp logs` from the Command Palette.
 This lets you see the messages being sent and received between ZZZ and the agent.
 
-![The debug view for ACP logs.](https://zed.dev/img/acp/acp-logs.webp)
+ACP logs are available in the local debug view.
 
 It's helpful to attach data from this view if you're opening issues about
 problems with external agents.
@@ -309,7 +309,7 @@ You can also pass environment variables through ZZZ settings:
 MCP servers configured in ZZZ's `context_servers` are forwarded to Claude Agent and Codex via the ACP protocol.
 
 - **Local stdio-based MCP servers:** Work reliably
-- **Remote MCP servers with OAuth:** May have issues ([#54410](https://github.com/zed-industries/zed/issues/54410))
+- **Remote MCP servers with OAuth:** May have issues; prefer local stdio-based servers when possible.
 
 External agents can access MCP servers from two sources: ZZZ's `context_servers` (forwarded via ACP) and their own native configuration files (`~/.claude/`, `~/.codex/config.toml`).
 
@@ -320,7 +320,7 @@ For more on configuring MCP servers, see [Model Context Protocol](./mcp.md).
 **"I enabled MCP tools in ZZZ but the agent can't see them"**
 
 1. Verify the MCP server is enabled in `context_servers` settings
-2. For remote MCP servers with OAuth, this is a [known issue](https://github.com/zed-industries/zed/issues/54410) — try local stdio-based servers instead
+2. For remote MCP servers with OAuth, try local stdio-based servers instead.
 3. Open `dev: open acp logs` from the Command Palette to debug
 
 **"My existing Claude Code / Codex setup isn't working in ZZZ"**

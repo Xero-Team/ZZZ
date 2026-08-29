@@ -8,12 +8,15 @@ description: Set up AI code completions in ZZZ with Zeta (built-in), GitHub Copi
 Edit Prediction is how ZZZ's AI code completions work: an LLM predicts the code you want to write.
 Each keystroke sends a new request to the edit prediction provider, which returns individual or multi-line suggestions you accept by pressing `tab`.
 
-The default provider is [Zeta, an open source model developed by ZZZ](https://zed.dev/blog/zeta2), but you can also use [other providers](#other-providers) like GitHub Copilot, Mercury Coder, and Codestral.
+The default preference is a local provider such as Ollama or llama.cpp. You can
+also use [other providers](#other-providers) like GitHub Copilot, Mercury Coder,
+and Codestral when you configure them explicitly.
 
 ## Configuring Zeta
 
-To use Zeta, [sign in](../authentication.md#what-features-require-signing-in).
-Once signed in, predictions appear as you type.
+Configure an edit-prediction provider in Settings. Local providers require no
+account; remote providers use credentials that you enter explicitly. Once a
+provider is configured, predictions appear as you type.
 
 You can confirm that Zeta is properly configured by opening the [Settings Editor](zzz://settings/edit_predictions.providers) (`Cmd+,` on macOS or `Ctrl+,` on Linux/Windows) and searching for `edit_predictions`. The `provider` field should be set to `zzz://`.
 
@@ -29,9 +32,10 @@ Or verify this in your settings.json:
 
 The Z icon in the status bar also indicates Zeta is active.
 
-### Pricing and Plans
+### Limits
 
-The free plan includes 2,000 Zeta predictions per month. The [Pro plan](../ai/plans-and-usage.md) removes this limit. See [ZZZ's pricing page](https://zed.dev/pricing) for details.
+ZZZ has no hosted prediction plan or usage meter. Limits are determined by the
+provider you configure and by the resources available on your machine.
 
 ### Switching Modes {#switching-modes}
 
@@ -49,8 +53,6 @@ Toggle between them via the `mode` key:
 ```
 
 Or directly via the UI through the status bar menu:
-
-![Edit Prediction status bar menu, with the modes toggle.](https://zed.dev/img/edit-prediction/status-bar-menu.webp)
 
 > Note that edit prediction modes work with any prediction provider.
 

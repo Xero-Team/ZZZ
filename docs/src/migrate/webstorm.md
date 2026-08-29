@@ -351,8 +351,8 @@ Once signed in, just start typing. ZZZ will offer suggestions inline for you to 
 
 To use other AI models in ZZZ, you have several options:
 
-- Use ZZZ-hosted models, with higher rate limits. Requires [authentication](https://zed.dev/docs/authentication) and subscription to [ZZZ Pro](https://zed.dev/docs/ai/subscription.html).
-- Bring your own [API keys](https://zed.dev/docs/ai/llm-providers.html), no authentication needed
+- Use local Ollama or llama.cpp models by configuring a provider in ZZZ.
+- Bring your own [API keys](../ai/llm-providers.md), no ZZZ account required
 - Use [external agents like Claude Agent](https://zed.dev/docs/ai/external-agents.html)
 
 ## Advanced Config and Productivity Tweaks

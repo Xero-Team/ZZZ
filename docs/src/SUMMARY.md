@@ -24,10 +24,7 @@
 - [Configuration](./ai/configuration.md)
   - [LLM Providers](./ai/llm-providers.md)
   - [Agent Settings](./ai/agent-settings.md)
-- [Subscription](./ai/subscription.md)
   - [Models](./ai/models.md)
-  - [Plans and Usage](./ai/plans-and-usage.md)
-  - [Billing](./ai/billing.md)
 
 # Working with Code
 
@@ -177,11 +174,10 @@
 - [All Actions](./all-actions.md)
 - [CLI Reference](./reference/cli.md)
 
-# Account & Privacy
+# Privacy
 
-- [Authenticate](./authentication.md)
-- [Roles](./roles.md)
 - [Privacy and Security](./ai/privacy-and-security.md)
+  - [Privacy and Network Boundary](./development/privacy-boundary.md)
   - [Worktree Trust](./worktree-trust.md)
   - [AI Improvement](./ai/ai-improvement.md)
 

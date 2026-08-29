@@ -23,11 +23,7 @@ ZZZ collects minimal data necessary to serve and improve our product. Features t
 
 - [ZZZ AI Features and Privacy](./ai-improvement.md): An overview of ZZZ's AI features, your data when using AI in ZZZ, and how to opt-in and help ZZZ improve these features.
 
-- [Accounts](../authentication.md): When and why you'd need to authenticate into ZZZ, how to do so, and what scope we need from you.
+- [Privacy boundary](../development/privacy-boundary.md): Default network behavior and explicit opt-ins.
 
-## Legal Links
-
-- [Terms of Service](https://zed.dev/terms)
-- [Privacy Policy](https://zed.dev/privacy-policy)
-- [ZZZ's Contributor License and Feedback Agreement](https://zed.dev/cla)
-- [Subprocessors](https://zed.dev/subprocessors)
+ZZZ does not require an account or subscription. See the repository's local
+privacy and contribution documents for project policies.

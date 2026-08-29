@@ -9,7 +9,7 @@ ZZZ is developed primarily on macOS, making it a first-class platform with full 
 
 ## Installing ZZZ
 
-Download ZZZ from the [download page](https://zed.dev/download). The download is a `.dmg` file—open it and drag ZZZ to your Applications folder.
+Build ZZZ locally using the [macOS development guide](./development/macos.md), then open the generated `.dmg` and drag ZZZ to your Applications folder.
 
 After installation, ZZZ checks for updates automatically and prompts you when a new version is available.
 

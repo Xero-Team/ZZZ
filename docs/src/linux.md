@@ -1,16 +1,16 @@
 ---
 title: ZZZ on Linux
-description: "The installation script on the download page is the fastest way to install ZZZ:"
+description: "Build and install ZZZ locally on Linux."
 ---
 
 # ZZZ on Linux
 
 ## Standard Installation
 
-The installation script on the [download](https://zed.dev/download) page is the fastest way to install ZZZ:
+The repository installation script is the fastest way to install ZZZ locally:
 
 ```sh
-curl -f https://zed.dev/install.sh | sh
+./script/install.sh
 ```
 
 The ZZZ installed by the script works best on systems that:
@@ -66,16 +66,12 @@ ZZZ is available in [this community-maintained repository](https://deb.griffo.io
 Instructions for each version are available in the README of the repository where packages are built.
 Build, packaging and instructions for each version are available in the README of the [repository](https://github.com/dariogriffo/zed-debian)
 
-### Downloading manually
+### Installing a local archive
 
-If you'd prefer, you can install ZZZ by downloading our pre-built .tar.gz. This is the same artifact that our install script uses, but you can customize the location of your installation by modifying the instructions below:
+If you build a local `.tar.gz` artifact, you can customize its installation
+location with the following commands:
 
-Download the `.tar.gz` file:
-
-- [zzz-linux-x86_64.tar.gz](https://cloud.zed.dev/releases/stable/latest/download?asset=zed&arch=x86_64&os=linux&source=docs)
-  ([preview](https://cloud.zed.dev/releases/preview/latest/download?asset=zed&arch=x86_64&os=linux&source=docs))
-- [zzz-linux-aarch64.tar.gz](https://cloud.zed.dev/releases/stable/latest/download?asset=zed&arch=aarch64&os=linux&source=docs)
-  ([preview](https://cloud.zed.dev/releases/preview/latest/download?asset=zed&arch=aarch64&os=linux&source=docs))
+Use the archive produced by your local build:
 
 Then ensure that the `zzz` binary in the tarball is on your path. The easiest way is to unpack the tarball and create a symlink:
 

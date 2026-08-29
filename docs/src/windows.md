@@ -1,22 +1,22 @@
 ---
 title: ZZZ on Windows
-description: "Get the latest stable builds via the download page and install ZZZ on Windows."
+description: "Build and install ZZZ locally on Windows."
 ---
 
 # ZZZ on Windows
 
 ## Installing ZZZ
 
-Get the latest stable builds via [the download page](https://zed.dev/download). After the first manual installation, ZZZ will periodically check for install updates.
+Build and install ZZZ locally using the instructions in this repository. Automatic updates are disabled by default.
 
-You can also build zed from source, see [these docs](https://zed.dev/docs/development/windows) for instructions.
+You can also build ZZZ from source; see [the Windows development guide](./development/windows.md).
 
 ### Package managers
 
 Additionally, you can install ZZZ using winget:
 
 ```sh
-winget install -e --id ZedIndustries.ZZZ
+winget install -e --id ZZZEditor.ZZZ
 ```
 
 ## Uninstall
