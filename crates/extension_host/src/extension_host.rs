@@ -45,7 +45,7 @@ use release_channel::ReleaseChannel;
 use remote::RemoteClient;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use settings::{SemanticTokenRules, Settings, SettingsStore};
+use settings::{SemanticTokenRules, SettingsStore};
 use std::ops::RangeInclusive;
 use std::str::FromStr;
 use std::{
@@ -315,19 +315,13 @@ impl ExtensionStore {
         // Immediately load all of the extensions in the initial manifest. If the
         // index needs to be rebuild, then enqueue
         let load_initial_extensions = this.extensions_updated(extension_index, cx);
-        let mut reload_future = None;
         if extension_index_needs_rebuild {
-            reload_future = Some(this.reload(None, cx));
+            let reload_future = this.reload(None, cx);
+            cx.spawn(async move |_, _| {
+                reload_future.await;
+            })
+            .detach();
         }
-
-        cx.spawn(async move |_this, _cx| {
-            if let Some(future) = reload_future {
-                future.await;
-            }
-            // Extensions are strictly opt-in. The store is initialized from disk,
-            // but never reaches the network during startup.
-        })
-        .detach();
 
         // Perform all extension loading in a single task to ensure that we
         // never attempt to simultaneously load/unload extensions from multiple
@@ -528,53 +522,6 @@ impl ExtensionStore {
         self.fetch_extensions_from_api("/extensions", &query, cx)
     }
 
-    pub fn fetch_extensions_with_update_available(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Vec<ExtensionMetadata>>> {
-        let schema_versions = schema_version_range();
-        let wasm_api_versions = wasm_api_version_range(ReleaseChannel::global(cx));
-        let extension_settings = ExtensionSettings::get_global(cx);
-        let extension_ids = self
-            .extension_index
-            .extensions
-            .iter()
-            .filter(|(id, entry)| !entry.dev && extension_settings.should_auto_update(id))
-            .map(|(id, _)| id.as_ref())
-            .collect::<Vec<_>>()
-            .join(",");
-        let task = self.fetch_extensions_from_api(
-            "/extensions/updates",
-            &[
-                ("min_schema_version", &schema_versions.start().to_string()),
-                ("max_schema_version", &schema_versions.end().to_string()),
-                (
-                    "min_wasm_api_version",
-                    &wasm_api_versions.start().to_string(),
-                ),
-                ("max_wasm_api_version", &wasm_api_versions.end().to_string()),
-                ("ids", &extension_ids),
-            ],
-            cx,
-        );
-        cx.spawn(async move |this, cx| {
-            let extensions = task.await?;
-            this.update(cx, |this, _cx| {
-                extensions
-                    .into_iter()
-                    .filter(|extension| {
-                        this.extension_index
-                            .extensions
-                            .get(&extension.id)
-                            .is_none_or(|installed_extension| {
-                                installed_extension.manifest.version != extension.manifest.version
-                            })
-                    })
-                    .collect()
-            })
-        })
-    }
-
     pub fn fetch_extension_versions(
         &self,
         extension_id: &str,
@@ -583,84 +530,15 @@ impl ExtensionStore {
         self.fetch_extensions_from_api(&format!("/extensions/{extension_id}"), &[], cx)
     }
 
-    /// Installs any extensions that should be included with Zed by default.
-    ///
-    /// This can be used to make certain functionality provided by extensions
-    /// available out-of-the-box.
-    pub fn auto_install_extensions(&mut self, cx: &mut Context<Self>) {
-        if cfg!(test) {
-            return;
-        }
-
-        let extension_settings = ExtensionSettings::get_global(cx);
-
-        let extensions_to_install = extension_settings
-            .auto_install_extensions
-            .keys()
-            .filter(|extension_id| extension_settings.should_auto_install(extension_id))
-            .filter(|extension_id| {
-                let is_already_installed = self
-                    .extension_index
-                    .extensions
-                    .contains_key(extension_id.as_ref());
-                !is_already_installed && !SUPPRESSED_EXTENSIONS.contains(&extension_id.as_ref())
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-
-        cx.spawn(async move |this, cx| {
-            for extension_id in extensions_to_install {
-                this.update(cx, |this, cx| {
-                    this.install_latest_extension(extension_id.clone(), cx);
-                })
-                .ok();
-            }
-        })
-        .detach();
-    }
-
-    pub fn check_for_updates(&mut self, cx: &mut Context<Self>) {
-        let task = self.fetch_extensions_with_update_available(cx);
-        cx.spawn(async move |this, cx| Self::upgrade_extensions(this, task.await?, cx).await)
-            .detach();
-    }
-
-    async fn upgrade_extensions(
-        this: WeakEntity<Self>,
-        extensions: Vec<ExtensionMetadata>,
-        cx: &mut AsyncApp,
-    ) -> Result<()> {
-        for extension in extensions {
-            let task = this.update(cx, |this, cx| {
-                if let Some(installed_extension) =
-                    this.extension_index.extensions.get(&extension.id)
-                {
-                    let installed_version =
-                        Version::from_str(&installed_extension.manifest.version).ok()?;
-                    let latest_version = Version::from_str(&extension.manifest.version).ok()?;
-
-                    if installed_version >= latest_version {
-                        return None;
-                    }
-                }
-
-                Some(this.upgrade_extension(extension.id, extension.manifest.version, cx))
-            })?;
-
-            if let Some(task) = task {
-                task.await.log_err();
-            }
-        }
-        anyhow::Ok(())
-    }
-
     fn fetch_extensions_from_api(
         &self,
         path: &str,
         query: &[(&str, &str)],
         cx: &mut Context<ExtensionStore>,
     ) -> Task<Result<Vec<ExtensionMetadata>>> {
-        let url = self.http_client.build_zed_api_url(path, query);
+        let url = self
+            .http_client
+            .build_zed_extension_marketplace_url(path, query);
         let http_client = self.http_client.clone();
         cx.spawn(async move |_, _| {
             let mut response = http_client
@@ -824,7 +702,7 @@ impl ExtensionStore {
 
         let Some(url) = self
             .http_client
-            .build_zed_api_url(
+            .build_zed_extension_marketplace_url(
                 &format!("/extensions/{extension_id}/download"),
                 &[
                     ("min_schema_version", &schema_versions.start().to_string()),
@@ -869,7 +747,7 @@ impl ExtensionStore {
         log::info!("installing extension {extension_id} {version}");
         let Some(url) = self
             .http_client
-            .build_zed_api_url(
+            .build_zed_extension_marketplace_url(
                 &format!("/extensions/{extension_id}/{version}/download"),
                 &[],
             )

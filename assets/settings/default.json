@@ -2111,9 +2111,6 @@
     "path": null,
     "npm_path": null,
   },
-  // Extensions are never installed automatically on startup. Add an extension
-  // with `true` explicitly when you want to opt in to automatic installation.
-  "auto_install_extensions": {},
   // The capabilities granted to extensions.
   //
   // This list can be customized to restrict what extensions are able to do.

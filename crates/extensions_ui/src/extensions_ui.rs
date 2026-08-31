@@ -1187,10 +1187,8 @@ impl ExtensionsPage {
             let extension_versions = extension_versions_task.await?;
 
             workspace.update_in(cx, |workspace, window, cx| {
-                let fs = workspace.project().read(cx).fs().clone();
                 workspace.toggle_modal(window, cx, |window, cx| {
                     let delegate = ExtensionVersionSelectorDelegate::new(
-                        fs,
                         cx.entity().downgrade(),
                         extension_versions,
                     );

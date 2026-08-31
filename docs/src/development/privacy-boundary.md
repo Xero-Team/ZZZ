@@ -14,6 +14,8 @@ from the network.
 - Loopback connections used by local Ollama (`localhost:11434`), llama.cpp
   (`localhost:8080`), LM Studio, and user-configured local tools.
 - User-initiated Git, LSP, MCP, and browser actions.
+- User-initiated Extension Gallery browse, install, and upgrade requests to the
+  public Zed marketplace (`https://api.zed.dev`).
 - Providers configured explicitly by the user, including OpenAI-compatible
   endpoints.
 
@@ -22,8 +24,8 @@ from the network.
 - Hosted collaboration, cloud AI, account, subscription, billing, and trial
   requests.
 - Telemetry, Anthropic behavior logging, Sentry uploads, and crash reporting.
-- Automatic application updates and extension installation or updates.
-- Extension index and market requests during startup.
+- Automatic application updates.
+- Automatic extension installation or updates.
 
 ## Explicit opt-in
 

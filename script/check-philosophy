@@ -18,8 +18,24 @@ check_default_settings() {
     rg -q '"auto_update": false' "$root/assets/settings/default.json" \
         && rg -q '"server_url": "http://127\.0\.0\.1:7331"' "$root/assets/settings/default.json" \
         && rg -q '"show_zen_models": false' "$root/assets/settings/default.json" \
-        && rg -q '"auto_install_extensions": \{\}' "$root/assets/settings/default.json" \
-        && ! rg -n '"auto_update_extensions"\s*:\s*\{[^}]*:\s*true' "$root/assets/settings/default.json"
+        && ! rg -q '"auto_install_extensions"' "$root/assets/settings/default.json" \
+        && ! rg -q '"auto_update_extensions"' "$root/assets/settings/default.json"
+}
+
+check_no_automatic_extension_network() {
+    ! rg -n 'fn auto_install_extensions|fn check_for_updates|fn fetch_extensions_with_update_available' \
+        "$root/crates/extension_host/src"
+}
+
+# User-initiated Extension Gallery traffic (extensions, themes, icon themes,
+# languages) may contact the public Zed marketplace. Collab server_url stays
+# local and must not be reused for that gallery.
+check_extension_marketplace_uses_upstream() {
+    rg -q 'ZED_EXTENSION_MARKETPLACE_API: .*"https://api\.zed\.dev"' \
+        "$root/crates/http_client/src/http_client.rs" \
+        && rg -q 'build_zed_extension_marketplace_url' \
+            "$root/crates/extension_host/src/extension_host.rs" \
+        && ! rg -n 'build_zed_api_url' "$root/crates/extension_host/src/extension_host.rs"
 }
 
 check_no_telemetry_endpoint() {
@@ -100,6 +116,8 @@ check_allowlisted_hosts() {
 }
 
 check "default settings are local-first" check_default_settings
+check "extensions are not installed or updated automatically" check_no_automatic_extension_network
+check "extension gallery uses the upstream marketplace" check_extension_marketplace_uses_upstream
 check "telemetry endpoint is absent" check_no_telemetry_endpoint
 check "Sentry uploads require explicit opt-in" check_sentry_opt_in
 check "commercial entry points are absent" check_no_commercial_entrypoints

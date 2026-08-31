@@ -219,6 +219,11 @@ pub struct HttpClientWithUrl {
 }
 
 impl HttpClientWithUrl {
+    /// Public Zed extension marketplace. User-initiated gallery traffic only:
+    /// extensions, themes, icon themes, languages, and other gallery items.
+    /// Independent of collab `server_url`.
+    pub const ZED_EXTENSION_MARKETPLACE_API: &'static str = "https://api.zed.dev";
+
     /// Returns a new [`HttpClientWithUrl`] with the given base URL.
     pub fn new(
         client: Arc<dyn HttpClient>,
@@ -274,6 +279,21 @@ impl HttpClientWithUrl {
 
         Ok(Url::parse_with_params(
             &format!("{}{}", base_api_url, path),
+            query,
+        )?)
+    }
+
+    /// Builds a URL against the public Zed extension marketplace.
+    ///
+    /// This is independent of collab `server_url`, so a local-first default
+    /// still lists and downloads extensions from the upstream gallery.
+    pub fn build_zed_extension_marketplace_url(
+        &self,
+        path: &str,
+        query: &[(&str, &str)],
+    ) -> Result<Url> {
+        Ok(Url::parse_with_params(
+            &format!("{}{path}", Self::ZED_EXTENSION_MARKETPLACE_API),
             query,
         )?)
     }
@@ -615,6 +635,30 @@ mod tests {
         assert_eq!(
             staging.build_zed_llm_url("/v1/chat", &[]).unwrap().as_str(),
             "https://llm-staging.zed.dev/v1/chat?"
+        );
+    }
+
+    #[test]
+    fn extension_marketplace_ignores_local_server_url() {
+        let local = HttpClientWithUrl::new(
+            Arc::new(BlockedHttpClient::new()),
+            "http://127.0.0.1:7331",
+            None,
+        );
+
+        assert_eq!(
+            local
+                .build_zed_extension_marketplace_url("/extensions", &[("max_schema_version", "1")])
+                .unwrap()
+                .as_str(),
+            "https://api.zed.dev/extensions?max_schema_version=1"
+        );
+        assert_eq!(
+            local
+                .build_zed_extension_marketplace_url("/extensions/html/1.0.0/download", &[])
+                .unwrap()
+                .as_str(),
+            "https://api.zed.dev/extensions/html/1.0.0/download?"
         );
     }
 }

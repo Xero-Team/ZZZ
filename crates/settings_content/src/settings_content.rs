@@ -1326,8 +1326,7 @@ pub struct WhichKeySettingsContent {
 // to allow new values to be added.
 //
 // Consider using a HashMap<String, bool> instead of this type
-// (like auto_install_extensions) so that user settings files can both add
-// and remove values from the set.
+// so that user settings files can both add and remove values from the set.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ExtendingVec<T>(pub Vec<T>);
 

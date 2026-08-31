@@ -21,12 +21,15 @@ github.com
 codeberg.org
 # Diagnostics upload (requires ZZZ_ENABLE_SENTRY_UPLOAD=1 and SENTRY_AUTH_TOKEN).
 sentry.io
+# Public Zed extension marketplace. User-initiated Extension Gallery only:
+# extensions, themes, icon themes, languages, and other gallery items.
+# Must not be used for collab, accounts, telemetry, or automatic install/update.
+api.zed.dev
 # Legacy hosted ZZZ compatibility mapping. These hosts must never be selected
 # by defaults; they are retained for explicitly configured remote server URLs
 # and protocol fixtures.
 zed.dev
 cloud.zed.dev
-api.zed.dev
 collab.zed.dev
 staging.zed.dev
 staging-collab.zed.dev
