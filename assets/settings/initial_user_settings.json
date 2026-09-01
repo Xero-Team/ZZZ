@@ -1,7 +1,7 @@
 // ZZZ settings
 //
 // For information on how to configure ZZZ, see the ZZZ
-// documentation: https://zed.dev/docs/configuring-zed
+// documentation: docs/src/configuring-zed.md
 //
 // To see all of ZZZ's default settings without changing your
 // custom settings, run `zzz: open default settings` from the

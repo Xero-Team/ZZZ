@@ -1737,24 +1737,6 @@
     // 2. Display predictions inline only when holding a modifier key (alt by default).
     //     "mode": "subtle"
     "mode": "eager",
-    // Copilot-specific settings
-    // "copilot": {
-    //   "enterprise_uri": "",
-    //   "proxy": "",
-    //   "proxy_no_verify": false
-    //   "enable_next_edit_suggestions": true
-    // },
-    "copilot": {
-      "enterprise_uri": null,
-      "proxy": null,
-      "proxy_no_verify": null,
-      "enable_next_edit_suggestions": true,
-    },
-    "codestral": {
-      "api_url": "https://codestral.mistral.ai",
-      "model": "codestral-latest",
-      "max_tokens": 150,
-    },
     "ollama": {
       "api_url": "http://localhost:11434",
       "model": "qwen2.5-coder:7b-base",
@@ -1773,14 +1755,8 @@
       // Set to 0 to request predictions immediately.
       "prediction_debounce": 0,
     },
-    // Controls whether ZZZ may collect training data when using ZZZ's Edit Predictions.
-    // Data is only captured when the project is detected as open source.
-    // Possible values:
-    //   - "default": use the preference previously set via the status-bar toggle,
-    //     or false if no preference has been stored.
-    //   - "yes": allow data collection for files in open-source projects.
-    //   - "no": never allow data collection.
-    "allow_data_collection": "default",
+    // ZZZ never collects edit-prediction training data.
+    "allow_data_collection": "no",
   },
   // Settings specific to journaling
   "journal": {
@@ -2460,7 +2436,6 @@
     "x_ai": {
       "api_url": "https://api.x.ai/v1",
     },
-    "zed.dev": {},
   },
   "session": {
     // Whether or not to restore unsaved buffers on restart.
