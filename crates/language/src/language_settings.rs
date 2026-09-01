@@ -849,7 +849,7 @@ impl settings::Settings for AllLanguageSettings {
             .iter()
             .collect();
 
-        let copilot = edit_predictions.copilot.unwrap();
+        let copilot = edit_predictions.copilot.unwrap_or_default();
         let copilot_settings = CopilotSettings {
             proxy: copilot.proxy,
             proxy_no_verify: copilot.proxy_no_verify,
@@ -857,7 +857,7 @@ impl settings::Settings for AllLanguageSettings {
             enable_next_edit_suggestions: copilot.enable_next_edit_suggestions,
         };
 
-        let codestral = edit_predictions.codestral.unwrap();
+        let codestral = edit_predictions.codestral.unwrap_or_default();
         let codestral_settings = CodestralSettings {
             model: codestral.model,
             max_tokens: codestral.max_tokens,
