@@ -76,7 +76,7 @@ impl Item for AudioView {
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("Audio Viewer Opened")
+        None
     }
 
     fn for_each_project_item(

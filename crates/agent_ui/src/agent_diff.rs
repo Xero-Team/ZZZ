@@ -565,7 +565,7 @@ impl Item for AgentDiffPane {
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("Assistant Diff Opened")
+        None
     }
 
     fn as_searchable(&self, _: &Entity<Self>, _: &App) -> Option<Box<dyn SearchableItemHandle>> {

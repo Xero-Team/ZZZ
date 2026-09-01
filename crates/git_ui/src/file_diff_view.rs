@@ -307,7 +307,7 @@ impl Item for FileDiffView {
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("Diff View Opened")
+        None
     }
 
     fn deactivated(&mut self, window: &mut Window, cx: &mut Context<Self>) {

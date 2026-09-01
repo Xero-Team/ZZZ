@@ -1058,7 +1058,7 @@ impl Item for CommitView {
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("Commit View Opened")
+        None
     }
 
     fn deactivated(&mut self, window: &mut Window, cx: &mut Context<Self>) {

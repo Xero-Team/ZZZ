@@ -745,7 +745,7 @@ impl Item for ProjectSearchView {
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("Project Search Opened")
+        None
     }
 
     fn for_each_project_item(

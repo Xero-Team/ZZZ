@@ -351,7 +351,7 @@ impl Item for SvgPreviewView {
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("svg preview: open")
+        None
     }
 
     fn to_item_events(_event: &Self::Event, _f: &mut dyn FnMut(workspace::item::ItemEvent)) {}

@@ -189,7 +189,7 @@ impl Item for ReplSessionsPage {
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("REPL Session Started")
+        None
     }
 
     fn show_toolbar(&self) -> bool {

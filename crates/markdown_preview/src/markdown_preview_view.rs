@@ -1439,7 +1439,7 @@ impl Item for MarkdownPreviewView {
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("Markdown Preview Opened")
+        None
     }
 
     fn added_to_workspace(

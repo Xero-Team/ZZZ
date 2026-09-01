@@ -772,7 +772,7 @@ impl Item for AgentRegistryPage {
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("ACP Registry Page Opened")
+        None
     }
 
     fn show_toolbar(&self) -> bool {

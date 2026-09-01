@@ -1296,7 +1296,7 @@ impl Item for ProjectDiff {
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("Project Diff Opened")
+        None
     }
 
     fn as_searchable(&self, _: &Entity<Self>, _cx: &App) -> Option<Box<dyn SearchableItemHandle>> {

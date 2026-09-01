@@ -876,7 +876,7 @@ impl Item for BufferDiagnosticsEditor {
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("Buffer Diagnostics Opened")
+        None
     }
 
     fn to_item_events(event: &EditorEvent, f: &mut dyn FnMut(ItemEvent)) {

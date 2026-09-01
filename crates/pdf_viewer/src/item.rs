@@ -76,7 +76,7 @@ impl Item for PdfView {
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("PDF Viewer Opened")
+        None
     }
 
     fn for_each_project_item(
