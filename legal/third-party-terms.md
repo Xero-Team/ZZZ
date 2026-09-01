@@ -1,13 +1,17 @@
 ---
-title: Acceptable Use Policies
+title: Third-Party Terms
 slug: acceptable-use-policies
 ---
 
-**Last Updated:** March 2, 2026
+**Last Updated:** September 1, 2026
 
-Some third-party services accessible through Zed have their own acceptable use policies. These apply whether Zed hosts the service on your behalf or you connect your own account. The applicable policies are listed below and apply alongside the [Zed End User Terms](/terms) and [Zed Privacy Policy](/privacy-policy).
+ZZZ does not host third-party services on your behalf. If you configure
+a provider, that provider's terms apply to the requests you send it.
+Those terms sit alongside the [ZZZ Terms](./terms.md) and
+[Privacy Policy](./privacy-policy.md).
 
-These policies may be updated from time to time by the applicable provider.
+These links are for providers you may add yourself. They may change
+without notice from this project.
 
 ## Anthropic
 
@@ -22,6 +26,10 @@ These policies may be updated from time to time by the applicable provider.
 
 - [Google Generative AI Prohibited Use Policy](https://policies.google.com/terms/generative-ai/use-policy)
 
+## Mistral
+
+- [Mistral Legal](https://mistral.ai/terms)
+
 ## OpenAI
 
 - [OpenAI Usage Policies](https://openai.com/policies/usage-policies/)
@@ -29,10 +37,6 @@ These policies may be updated from time to time by the applicable provider.
 ## OpenRouter
 
 - [OpenRouter Terms of Service](https://openrouter.ai/terms)
-
-## Vercel
-
-- [Vercel Acceptable Use Policy](https://vercel.com/legal/acceptable-use-policy)
 
 ## xAI
 
