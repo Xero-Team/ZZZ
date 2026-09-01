@@ -3,24 +3,20 @@ mod agent_panel_onboarding_card;
 mod agent_panel_onboarding_content;
 mod edit_prediction_onboarding_content;
 mod plan_definitions;
-mod young_account_banner;
 
 pub use agent_api_keys_onboarding::{ApiKeysWithProviders, ApiKeysWithoutProviders};
 pub use agent_panel_onboarding_card::AgentPanelOnboardingCard;
 pub use agent_panel_onboarding_content::AgentPanelOnboarding;
-use cloud_api_types::Plan;
 pub use edit_prediction_onboarding_content::EditPredictionOnboarding;
 pub use plan_definitions::PlanDefinitions;
-pub use young_account_banner::YoungAccountBanner;
 
 use std::sync::Arc;
 
 use client::{Client, UserStore};
+use cloud_api_types::Plan;
 use gpui::{AnyElement, Entity, IntoElement, ParentElement};
 use i18n as app_i18n;
-use ui::{
-    Divider, List, ListBulletItem, RegisterComponent, Tooltip, Vector, VectorName, prelude::*,
-};
+use ui::{List, ListBulletItem, RegisterComponent, Tooltip, prelude::*};
 
 fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()
@@ -85,50 +81,6 @@ impl ZedAiOnboarding {
         self
     }
 
-    fn certified_user_stamp(cx: &App) -> impl IntoElement {
-        div().absolute().bottom_1().right_1().child(
-            Vector::new(
-                VectorName::ProUserStamp,
-                rems_from_px(156.),
-                rems_from_px(60.),
-            )
-            .color(Color::Custom(cx.theme().colors().text_accent.alpha(0.8))),
-        )
-    }
-
-    fn pro_trial_stamp(cx: &App) -> impl IntoElement {
-        div().absolute().bottom_1().right_1().child(
-            Vector::new(
-                VectorName::ProTrialStamp,
-                rems_from_px(156.),
-                rems_from_px(60.),
-            )
-            .color(Color::Custom(cx.theme().colors().text.alpha(0.8))),
-        )
-    }
-
-    fn business_stamp(cx: &App) -> impl IntoElement {
-        div().absolute().bottom_1().right_1().child(
-            Vector::new(
-                VectorName::BusinessStamp,
-                rems_from_px(156.),
-                rems_from_px(60.),
-            )
-            .color(Color::Custom(cx.theme().colors().text_accent.alpha(0.8))),
-        )
-    }
-
-    fn student_stamp(cx: &App) -> impl IntoElement {
-        div().absolute().bottom_1().right_1().child(
-            Vector::new(
-                VectorName::StudentStamp,
-                rems_from_px(156.),
-                rems_from_px(60.),
-            )
-            .color(Color::Custom(cx.theme().colors().text.alpha(0.8))),
-        )
-    }
-
     fn render_dismiss_button(&self, cx: &App) -> Option<AnyElement> {
         self.dismiss_onboarding.as_ref().map(|dismiss_callback| {
             let callback = dismiss_callback.clone();
@@ -148,17 +100,15 @@ impl ZedAiOnboarding {
         })
     }
 
-    fn render_sign_in_disclaimer(&self, cx: &mut App) -> AnyElement {
-        let signing_in = matches!(self.sign_in_status, SignInStatus::SigningIn);
-
+    fn render_configure_local_provider(&self, cx: &mut App) -> AnyElement {
         v_flex()
             .w_full()
             .relative()
             .gap_1()
             .child(Headline::new(tr(
                 cx,
-                "ai_onboarding.welcome_zed_ai",
-                "Welcome to Zed AI",
+                "ai_onboarding.configure_local_provider",
+                "Configure a local provider",
             )))
             .child(
                 Label::new(tr(
@@ -169,223 +119,7 @@ impl ZedAiOnboarding {
                 .color(Color::Muted)
                 .mb_2(),
             )
-            .child(PlanDefinitions.sign_in_upsell())
-            .child(
-                Button::new(
-                    "sign_in",
-                    tr(
-                        cx,
-                        "ai_onboarding.try_zed_pro_for_free",
-                        "Configure Provider",
-                    ),
-                )
-                .disabled(signing_in)
-                .full_width()
-                .style(ButtonStyle::Tinted(ui::TintColor::Accent))
-                .on_click({
-                    let callback = self.sign_in.clone();
-                    move |_, window, cx| callback(window, cx)
-                }),
-            )
-            .children(self.render_dismiss_button(cx))
-            .into_any_element()
-    }
-
-    fn render_free_plan_state(&self, cx: &mut App) -> AnyElement {
-        if self.account_too_young {
-            v_flex()
-                .relative()
-                .min_w_0()
-                .gap_1()
-                .child(Headline::new(tr(
-                    cx,
-                    "ai_onboarding.welcome_zed_ai",
-                    "Welcome to Zed AI",
-                )))
-                .child(YoungAccountBanner)
-                .child(
-                    v_flex()
-                        .mt_2()
-                        .gap_1()
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .child(
-                                    Label::new(tr(cx, "ai_onboarding.plan.pro", "Pro"))
-                                        .size(LabelSize::Small)
-                                        .color(Color::Accent)
-                                        .buffer_font(cx),
-                                )
-                                .child(Divider::horizontal()),
-                        )
-                        .child(PlanDefinitions.pro_plan())
-                        .child(
-                            Button::new("pro", tr(cx, "ai_onboarding.get_started", "Get Started"))
-                                .full_width()
-                                .style(ButtonStyle::Tinted(ui::TintColor::Accent))
-                                .on_click(move |_, _window, _cx| {}),
-                        ),
-                )
-                .children(self.render_dismiss_button(cx))
-                .into_any_element()
-        } else {
-            v_flex()
-                .w_full()
-                .relative()
-                .gap_1()
-                .child(Headline::new(tr(
-                    cx,
-                    "ai_onboarding.welcome_zed_ai",
-                    "Welcome to Zed AI",
-                )))
-                .child(
-                    v_flex()
-                        .mt_2()
-                        .gap_1()
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .child(
-                                    Label::new(tr(cx, "ai_onboarding.plan.free", "Free"))
-                                        .size(LabelSize::Small)
-                                        .color(Color::Muted)
-                                        .buffer_font(cx),
-                                )
-                                .child(
-                                    Label::new(tr(
-                                        cx,
-                                        "ai_onboarding.current_plan",
-                                        "(Current Plan)",
-                                    ))
-                                    .size(LabelSize::Small)
-                                    .color(Color::Custom(
-                                        cx.theme().colors().text_muted.opacity(0.6),
-                                    ))
-                                    .buffer_font(cx),
-                                )
-                                .child(Divider::horizontal()),
-                        )
-                        .child(PlanDefinitions.free_plan()),
-                )
-                .children(self.render_dismiss_button(cx))
-                .child(
-                    v_flex()
-                        .mt_2()
-                        .gap_1()
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .child(
-                                    Label::new(tr(
-                                        cx,
-                                        "ai_onboarding.plan.pro_trial",
-                                        "Configured",
-                                    ))
-                                    .size(LabelSize::Small)
-                                    .color(Color::Accent)
-                                    .buffer_font(cx),
-                                )
-                                .child(Divider::horizontal()),
-                        )
-                        .child(PlanDefinitions.pro_trial(true))
-                        .child(
-                            Button::new(
-                                "pro",
-                                tr(cx, "ai_onboarding.configure_provider", "Configure Provider"),
-                            )
-                            .full_width()
-                            .style(ButtonStyle::Tinted(ui::TintColor::Accent))
-                            .on_click(move |_, _window, _cx| {}),
-                        ),
-                )
-                .into_any_element()
-        }
-    }
-
-    fn render_trial_state(&self, cx: &mut App) -> AnyElement {
-        v_flex()
-            .w_full()
-            .relative()
-            .gap_1()
-            .child(Self::pro_trial_stamp(cx))
-            .child(Headline::new(tr(
-                cx,
-                "ai_onboarding.welcome_zed_pro_trial",
-                "Local provider mode",
-            )))
-            .child(
-                Label::new(tr(
-                    cx,
-                    "ai_onboarding.what_you_get_next_14_days",
-                    "Here's what you get for the next 14 days:",
-                ))
-                .color(Color::Muted)
-                .mb_2(),
-            )
-            .child(PlanDefinitions.pro_trial(false))
-            .children(self.render_dismiss_button(cx))
-            .into_any_element()
-    }
-
-    fn render_pro_plan_state(&self, cx: &mut App) -> AnyElement {
-        v_flex()
-            .w_full()
-            .relative()
-            .gap_1()
-            .child(Self::certified_user_stamp(cx))
-            .child(Headline::new(tr(
-                cx,
-                "ai_onboarding.welcome_zed_pro",
-                "Local provider mode",
-            )))
-            .child(
-                Label::new(tr(cx, "ai_onboarding.what_you_get", "Here's what you get:"))
-                    .color(Color::Muted)
-                    .mb_2(),
-            )
-            .child(PlanDefinitions.pro_plan())
-            .children(self.render_dismiss_button(cx))
-            .into_any_element()
-    }
-
-    fn render_business_plan_state(&self, cx: &mut App) -> AnyElement {
-        v_flex()
-            .w_full()
-            .relative()
-            .gap_1()
-            .child(Self::business_stamp(cx))
-            .child(Headline::new(tr(
-                cx,
-                "ai_onboarding.welcome_zed_business",
-                "Welcome to Zed Business",
-            )))
-            .child(
-                Label::new(tr(cx, "ai_onboarding.what_you_get", "Here's what you get:"))
-                    .color(Color::Muted)
-                    .mb_2(),
-            )
-            .child(PlanDefinitions.business_plan())
-            .children(self.render_dismiss_button(cx))
-            .into_any_element()
-    }
-
-    fn render_student_plan_state(&self, cx: &mut App) -> AnyElement {
-        v_flex()
-            .w_full()
-            .relative()
-            .gap_1()
-            .child(Self::student_stamp(cx))
-            .child(Headline::new(tr(
-                cx,
-                "ai_onboarding.welcome_zed_student",
-                "Welcome to Zed Student",
-            )))
-            .child(
-                Label::new(tr(cx, "ai_onboarding.what_you_get", "Here's what you get:"))
-                    .color(Color::Muted)
-                    .mb_2(),
-            )
-            .child(PlanDefinitions.student_plan())
+            .child(PlanDefinitions.configure_local_provider())
             .children(self.render_dismiss_button(cx))
             .into_any_element()
     }
@@ -393,18 +127,7 @@ impl ZedAiOnboarding {
 
 impl RenderOnce for ZedAiOnboarding {
     fn render(self, _window: &mut ui::Window, cx: &mut App) -> impl IntoElement {
-        if matches!(self.sign_in_status, SignInStatus::SignedIn) {
-            match self.plan {
-                None => self.render_free_plan_state(cx),
-                Some(Plan::ZedFree) => self.render_free_plan_state(cx),
-                Some(Plan::ZedProTrial) => self.render_trial_state(cx),
-                Some(Plan::ZedPro) => self.render_pro_plan_state(cx),
-                Some(Plan::ZedBusiness) => self.render_business_plan_state(cx),
-                Some(Plan::ZedStudent) => self.render_student_plan_state(cx),
-            }
-        } else {
-            self.render_sign_in_disclaimer(cx)
-        }
+        self.render_configure_local_provider(cx)
     }
 }
 
@@ -418,11 +141,7 @@ impl Component for ZedAiOnboarding {
     }
 
     fn preview(_window: &mut Window, _cx: &mut App) -> Option<AnyElement> {
-        fn onboarding(
-            sign_in_status: SignInStatus,
-            plan: Option<Plan>,
-            account_too_young: bool,
-        ) -> AnyElement {
+        fn onboarding() -> AnyElement {
             div()
                 .w_full()
                 .min_w_40()
@@ -430,9 +149,9 @@ impl Component for ZedAiOnboarding {
                 .child(
                     AgentPanelOnboardingCard::new().child(
                         ZedAiOnboarding {
-                            sign_in_status,
-                            plan,
-                            account_too_young,
+                            sign_in_status: SignInStatus::SignedOut,
+                            plan: None,
+                            account_too_young: false,
                             continue_with_zed_ai: Arc::new(|_, _| {}),
                             sign_in: Arc::new(|_, _| {}),
                             dismiss_onboarding: None,
@@ -447,36 +166,10 @@ impl Component for ZedAiOnboarding {
             v_flex()
                 .min_w_0()
                 .gap_4()
-                .children(vec![
-                    single_example(
-                        "Not Signed-in",
-                        onboarding(SignInStatus::SignedOut, None, false),
-                    ),
-                    single_example(
-                        "Young Account",
-                        onboarding(SignInStatus::SignedIn, None, true),
-                    ),
-                    single_example(
-                        "Free Plan",
-                        onboarding(SignInStatus::SignedIn, Some(Plan::ZedFree), false),
-                    ),
-                    single_example(
-                        "Configured",
-                        onboarding(SignInStatus::SignedIn, Some(Plan::ZedProTrial), false),
-                    ),
-                    single_example(
-                        "Pro Plan",
-                        onboarding(SignInStatus::SignedIn, Some(Plan::ZedPro), false),
-                    ),
-                    single_example(
-                        "Business Plan",
-                        onboarding(SignInStatus::SignedIn, Some(Plan::ZedBusiness), false),
-                    ),
-                    single_example(
-                        "Student Plan",
-                        onboarding(SignInStatus::SignedIn, Some(Plan::ZedStudent), false),
-                    ),
-                ])
+                .children(vec![single_example(
+                    "Configure a local provider",
+                    onboarding(),
+                )])
                 .into_any_element(),
         )
     }

@@ -59,8 +59,8 @@ actions!(
     [
         /// Finish the onboarding process.
         Finish,
-        /// Configure a provider while in the onboarding flow.
-        SignIn,
+        /// Continue the onboarding flow without creating an account.
+        Continue,
         /// Resets the welcome screen hints to their initial state.
         ResetHints
     ]
@@ -237,7 +237,7 @@ impl Onboarding {
         go_to_welcome_page(cx);
     }
 
-    fn handle_sign_in(&mut self, _: &SignIn, window: &mut Window, cx: &mut Context<Self>) {
+    fn handle_continue(&mut self, _: &Continue, window: &mut Window, cx: &mut Context<Self>) {
         let _ = (window, cx);
     }
 
@@ -260,7 +260,7 @@ impl Render for Onboarding {
             .size_full()
             .bg(cx.theme().colors().editor_background)
             .on_action(Self::on_finish)
-            .on_action(cx.listener(Self::handle_sign_in))
+            .on_action(cx.listener(Self::handle_continue))
             .on_action(cx.listener(|_, _: &menu::SelectNext, window, cx| {
                 window.focus_next(cx);
                 cx.notify();
@@ -358,7 +358,7 @@ impl Item for Onboarding {
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("Onboarding Page Opened")
+        None
     }
 
     fn show_toolbar(&self) -> bool {

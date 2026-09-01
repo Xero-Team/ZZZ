@@ -135,7 +135,7 @@ impl EditPredictionProvider {
 
     pub fn display_name(&self) -> Option<&'static str> {
         match self {
-            EditPredictionProvider::Zed => Some("Zed AI"),
+            EditPredictionProvider::Zed => Some("Zeta format"),
             EditPredictionProvider::Copilot => Some("GitHub Copilot"),
             EditPredictionProvider::Codestral => Some("Codestral"),
             EditPredictionProvider::Mercury => Some("Mercury"),
@@ -169,12 +169,10 @@ pub struct EditPredictionSettingsContent {
     pub open_ai_compatible_api: Option<CustomEditPredictionProviderSettingsContent>,
     /// The directory where manually captured edit prediction examples are stored.
     pub examples_dir: Option<Arc<Path>>,
-    /// Controls whether Zed may collect training data when using Zed's Edit Predictions.
-    /// Data is only ever captured for files in projects that are detected as open source.
+    /// Controls whether training data may be collected. ZZZ never collects.
     ///
-    /// - `"default"`: use the preference previously set via the status-bar toggle,
-    ///   or false if no preference has been stored.
-    /// - `"yes"`: allow data collection for files in open-source projects.
+    /// - `"default"`: never collect.
+    /// - `"yes"`: ignored; collection stays off.
     /// - `"no"`: never allow data collection.
     pub allow_data_collection: Option<EditPredictionDataCollectionChoice>,
 }
@@ -341,13 +339,12 @@ pub struct OllamaEditPredictionSettingsContent {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum EditPredictionDataCollectionChoice {
-    /// Use the preference previously set via the status-bar toggle, or false
-    /// if no preference has been stored.
-    #[default]
+    /// Never collect training data.
     Default,
-    /// Allow Zed to collect training data from open-source projects.
+    /// Ignored; collection stays off.
     Yes,
     /// Never allow training data collection.
+    #[default]
     No,
 }
 

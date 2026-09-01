@@ -11474,7 +11474,7 @@ fn non_editor_language_settings_data() -> Box<[SettingsPageItem]> {
     )
 }
 
-fn edit_prediction_language_settings_section() -> [SettingsPageItem; 5] {
+fn edit_prediction_language_settings_section() -> [SettingsPageItem; 4] {
     [
         SettingsPageItem::SectionHeader(lt(
             "settings_ui.page_data.section.edit.predictions",
@@ -11490,43 +11490,11 @@ fn edit_prediction_language_settings_section() -> [SettingsPageItem; 5] {
             json_path: Some("edit_predictions.providers"),
             description: Some(lt(
                 "settings_ui.page_data.description.set.up.different.edit.prediction.providers.in.complement.to.zed.s.built.in.zeta.model",
-                "Set up different edit prediction providers in complement to Zed's built-in Zeta model.",
+                "Set up local or optional remote edit prediction providers. Prefer Ollama or llama.cpp.",
             )),
             in_json: false,
             files: USER,
             render: render_edit_prediction_setup_page,
-        }),
-        SettingsPageItem::SettingItem(SettingItem {
-            title: lt(
-                "settings_ui.page_data.title.data.collection",
-                "Data Collection",
-            ),
-            description: lt(
-                "settings_ui.page_data.description.controls.whether.zed.may.collect.training.data.when.using.zed.s.edit.predictions.data.is.only.collected.for.files.in.projects.detected.as.open.source.the.default.value.uses.the.preference.previously.set.via.the.status.bar.toggle.or.false.if.no.preference.has.been.stored",
-                "Controls whether Zed may collect training data when using Zed's Edit Predictions. Data is only collected for files in projects detected as open source. The default value uses the preference previously set via the status-bar toggle, or false if no preference has been stored.",
-            ),
-            field: Box::new(SettingField {
-                json_path: Some("edit_predictions.allow_data_collection"),
-                pick: |settings_content| {
-                    settings_content
-                        .project
-                        .all_languages
-                        .edit_predictions
-                        .as_ref()?
-                        .allow_data_collection
-                        .as_ref()
-                },
-                write: |settings_content, value, _app| {
-                    settings_content
-                        .project
-                        .all_languages
-                        .edit_predictions
-                        .get_or_insert_default()
-                        .allow_data_collection = value;
-                },
-            }),
-            metadata: None,
-            files: USER,
         }),
         SettingsPageItem::SettingItem(SettingItem {
             title: lt(

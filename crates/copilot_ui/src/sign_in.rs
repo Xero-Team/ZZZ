@@ -85,7 +85,7 @@ fn open_copilot_code_verification_window(copilot: &Entity<Copilot>, window: &Win
             is_resizable: false,
             is_movable: true,
             titlebar: Some(gpui::TitlebarOptions {
-                title: Some("Use GitHub Copilot in ZZZ".into()),
+                title: Some("Connect GitHub Copilot".into()),
                 appears_transparent: true,
                 ..Default::default()
             }),
@@ -298,7 +298,7 @@ impl CopilotCodeVerification {
                 Headline::new(tr(
                     cx,
                     "copilot_ui.sign_in.use_github_copilot_in_zzz",
-                    "Use GitHub Copilot in ZZZ",
+                    "Connect GitHub Copilot",
                 ))
                 .size(HeadlineSize::Large),
             )
@@ -306,7 +306,7 @@ impl CopilotCodeVerification {
                 Label::new(tr(
                     cx,
                     "copilot_ui.sign_in.active_subscription_required",
-                    "Using Copilot requires an active subscription on GitHub.",
+                    "Authenticate with GitHub to use Copilot as an optional provider.",
                 ))
                 .color(Color::Muted),
             )
@@ -433,7 +433,7 @@ impl CopilotCodeVerification {
         let description = tr(
             cx,
             "copilot_ui.sign_in.enable_existing_license",
-            "Enable Copilot by connecting your existing license once you have subscribed or renewed your subscription.",
+            "GitHub did not authorize Copilot for this account. Open GitHub to review access, or choose a different provider.",
         );
 
         v_flex()
@@ -444,7 +444,7 @@ impl CopilotCodeVerification {
                 Headline::new(tr(
                     cx,
                     "copilot_ui.sign_in.active_subscription_needed",
-                    "You must have an active GitHub Copilot subscription.",
+                    "GitHub Copilot is not authorized for this account.",
                 ))
                 .size(HeadlineSize::Large),
             )
@@ -452,11 +452,7 @@ impl CopilotCodeVerification {
             .child(
                 Button::new(
                     "copilot-subscribe-button",
-                    tr(
-                        cx,
-                        "copilot_ui.sign_in.subscribe_on_github",
-                        "Subscribe on GitHub",
-                    ),
+                    tr(cx, "copilot_ui.sign_in.subscribe_on_github", "Open GitHub"),
                 )
                 .full_width()
                 .style(ButtonStyle::Outlined)
@@ -690,7 +686,7 @@ impl ConfigurationView {
             tr(
                 cx,
                 "copilot_ui.sign_in.sign_in_to_use_copilot",
-                "Sign in to use GitHub Copilot",
+                "Authenticate with GitHub",
             )
         };
 
@@ -781,13 +777,13 @@ impl ConfigurationView {
         let start_label: SharedString = tr(
             cx,
             "copilot_ui.sign_in.edit_prediction_start",
-            "To use Copilot for edit predictions, you need to be logged in to GitHub. Note that your GitHub account must have an active Copilot subscription.",
+            "To use Copilot for edit predictions, authenticate with GitHub. Copilot is optional and is not selected by default.",
         )
         .into();
         let no_status_label: SharedString = tr(
             cx,
             "copilot_ui.sign_in.edit_prediction_no_status",
-            "Copilot requires an active GitHub Copilot subscription. Please ensure Copilot is configured and try again, or use a different edit predictions provider.",
+            "Copilot is not ready. Authenticate with GitHub, or use a different edit prediction provider.",
         )
         .into();
 
@@ -822,12 +818,12 @@ impl ConfigurationView {
         let start_label = tr(
             cx,
             "copilot_ui.sign_in.chat_start",
-            "To use ZZZ's agent with GitHub Copilot, you need to be logged in to GitHub. Note that your GitHub account must have an active Copilot Chat subscription.",
+            "To use the agent with GitHub Copilot Chat, authenticate with GitHub. Copilot Chat is optional and silent until you select it.",
         );
         let no_status_label = tr(
             cx,
             "copilot_ui.sign_in.chat_no_status",
-            "Copilot Chat requires an active GitHub Copilot subscription. Please ensure Copilot is configured and try again, or use a different LLM provider.",
+            "Copilot Chat is not ready. Authenticate with GitHub, or use a different LLM provider.",
         );
 
         if let Some(msg) = self.loading_message(cx) {

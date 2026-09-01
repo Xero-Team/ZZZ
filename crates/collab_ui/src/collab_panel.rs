@@ -2801,32 +2801,9 @@ impl CollabPanel {
     }
 
     fn render_signed_out(&mut self, cx: &mut Context<Self>) -> Div {
-        let collab_blurb = "Work with your team in realtime with collaborative editing, voice, shared notes and more.";
-
-        // Two distinct "not connected" states:
-        //   - Authenticated (has credentials): user just needs to connect.
-        //   - Unauthenticated (no credentials): user needs to sign in via GitHub.
-        let is_authenticated = self.client.user_id().is_some();
         let status = *self.client.status().borrow();
         let is_busy = status.is_signing_in();
-
-        let (button_id, button_label, button_icon) = if is_authenticated {
-            (
-                "connect",
-                if is_busy { "Connecting..." } else { "Connect" },
-                IconName::Public,
-            )
-        } else {
-            (
-                "sign_in",
-                if is_busy {
-                    "Signing in..."
-                } else {
-                    "Sign In with GitHub"
-                },
-                IconName::Github,
-            )
-        };
+        let button_label = if is_busy { "Connecting..." } else { "Connect" };
 
         v_flex()
             .p_4()
@@ -2834,11 +2811,10 @@ impl CollabPanel {
             .size_full()
             .text_center()
             .justify_center()
-            .child(Label::new(collab_blurb))
             .child(
-                Button::new(button_id, button_label)
+                Button::new("connect", button_label)
                     .full_width()
-                    .start_icon(Icon::new(button_icon).color(Color::Muted))
+                    .start_icon(Icon::new(IconName::Public).color(Color::Muted))
                     .style(ButtonStyle::Outlined)
                     .disabled(is_busy)
                     .on_click(cx.listener(|this, _, window, cx| {
