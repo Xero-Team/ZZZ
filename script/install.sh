@@ -1,171 +1,22 @@
 #!/usr/bin/env sh
 set -eu
 
-# Downloads a tarball from https://zed.dev/releases and unpacks it
-# into ~/.local/. If you'd prefer to do this manually, instructions are at
-# https://zed.dev/docs/linux.
+# ZZZ does not ship hosted binaries. This script must not download a
+# remote release tarball.
 
-main() {
-    platform="$(uname -s)"
-    arch="$(uname -m)"
-    channel="${ZED_CHANNEL:-stable}"
-    ZED_VERSION="${ZED_VERSION:-latest}"
-    # Use TMPDIR if available (for environments with non-standard temp directories)
-    if [ -n "${TMPDIR:-}" ] && [ -d "${TMPDIR}" ]; then
-        temp="$(mktemp -d "$TMPDIR/zed-XXXXXX")"
-    else
-        temp="$(mktemp -d "/tmp/zed-XXXXXX")"
-    fi
+cat <<'EOF'
+ZZZ has no hosted binaries.
 
-    if [ "$platform" = "Darwin" ]; then
-        platform="macos"
-    elif [ "$platform" = "Linux" ]; then
-        platform="linux"
-    else
-        echo "Unsupported platform $platform"
-        exit 1
-    fi
+Build from this repository:
 
-    case "$platform-$arch" in
-        macos-arm64* | linux-arm64* | linux-aarch64)
-            arch="aarch64"
-            ;;
-        macos-x86* | linux-x86*)
-            arch="x86_64"
-            ;;
-        *)
-            echo "Unsupported platform or architecture"
-            exit 1
-            ;;
-    esac
+    cargo run
 
-    if command -v curl >/dev/null 2>&1; then
-        curl () {
-            command curl -fL "$@"
-        }
-    elif command -v wget >/dev/null 2>&1; then
-        curl () {
-            wget -O- "$@"
-        }
-    else
-        echo "Could not find 'curl' or 'wget' in your path"
-        exit 1
-    fi
+See the local build guides:
 
-    "$platform" "$@"
+    docs/src/development/macos.md
+    docs/src/development/linux.md
+    docs/src/development/windows.md
+    docs/src/installation.md
+EOF
 
-    if [ "$(command -v zzz)" = "$HOME/.local/bin/zzz" ]; then
-        echo "ZZZ has been installed. Run with 'zzz'"
-    else
-        echo "To run ZZZ from your terminal, you must add ~/.local/bin to your PATH"
-        echo "Run:"
-
-        case "$SHELL" in
-            *zsh)
-                echo "   echo 'export PATH=\$HOME/.local/bin:\$PATH' >> ~/.zshrc"
-                echo "   source ~/.zshrc"
-                ;;
-            *fish)
-                echo "   fish_add_path -U $HOME/.local/bin"
-                ;;
-            *)
-                echo "   echo 'export PATH=\$HOME/.local/bin:\$PATH' >> ~/.bashrc"
-                echo "   source ~/.bashrc"
-                ;;
-        esac
-
-        echo "To run ZZZ now, '~/.local/bin/zzz'"
-    fi
-}
-
-linux() {
-    if [ -n "${ZED_BUNDLE_PATH:-}" ]; then
-        cp "$ZED_BUNDLE_PATH" "$temp/zzz-linux-$arch.tar.gz"
-    else
-        echo "Downloading Zed version: $ZED_VERSION"
-        curl "https://cloud.zed.dev/releases/$channel/$ZED_VERSION/download?asset=zed&arch=$arch&os=linux&source=install.sh" > "$temp/zzz-linux-$arch.tar.gz"
-    fi
-
-    suffix=""
-    if [ "$channel" != "stable" ]; then
-        suffix="-$channel"
-    fi
-
-    appid=""
-    case "$channel" in
-      stable)
-        appid="dev.zzz.ZZZ"
-        ;;
-      nightly)
-        appid="dev.zzz.ZZZ-Nightly"
-        ;;
-      preview)
-        appid="dev.zzz.ZZZ-Preview"
-        ;;
-      dev)
-        appid="dev.zzz.ZZZ-Dev"
-        ;;
-      *)
-        echo "Unknown release channel: ${channel}. Using stable app ID."
-        appid="dev.zzz.ZZZ"
-        ;;
-    esac
-
-    # Unpack
-    rm -rf "$HOME/.local/zzz$suffix.app"
-    mkdir -p "$HOME/.local/zzz$suffix.app"
-    tar -xzf "$temp/zzz-linux-$arch.tar.gz" -C "$HOME/.local/"
-
-    zzz_editor="$HOME/.local/zzz$suffix.app/libexec/zzz-editor"
-    if [ -f "$zzz_editor" ] && command -v ldd >/dev/null 2>&1; then
-        missing="$(ldd "$zzz_editor" 2>/dev/null | sed -n 's/^[[:space:]]*\(.*\) => not found$/\1/p')"
-        if [ -n "$missing" ]; then
-            echo "Warning: your system is missing libraries that ZZZ needs:"
-            echo "$missing" | sed 's/^/    /'
-            echo "Install them with your package manager, or ZZZ will fail to start."
-        fi
-    fi
-
-    # Setup ~/.local directories
-    mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications"
-
-    # Link the binary
-    if [ -f "$HOME/.local/zzz$suffix.app/bin/zzz" ]; then
-        ln -sf "$HOME/.local/zzz$suffix.app/bin/zzz" "$HOME/.local/bin/zzz"
-    else
-        # support for versions before 0.139.x.
-        ln -sf "$HOME/.local/zzz$suffix.app/bin/cli" "$HOME/.local/bin/zzz"
-    fi
-
-    # Copy .desktop file
-    desktop_file_path="$HOME/.local/share/applications/${appid}.desktop"
-    src_dir="$HOME/.local/zzz$suffix.app/share/applications"
-    if [ -f "$src_dir/${appid}.desktop" ]; then
-        cp "$src_dir/${appid}.desktop" "${desktop_file_path}"
-    else
-        # Fallback for older tarballs
-        cp "$src_dir/zed$suffix.desktop" "${desktop_file_path}"
-    fi
-    sed -i "s|Icon=zzz|Icon=$HOME/.local/zzz$suffix.app/share/icons/hicolor/512x512/apps/zzz.png|g" "${desktop_file_path}"
-    sed -i "s|Exec=zzz|Exec=$HOME/.local/zzz$suffix.app/bin/zzz|g" "${desktop_file_path}"
-}
-
-macos() {
-    echo "Downloading ZZZ version: $ZED_VERSION"
-    curl "https://cloud.zed.dev/releases/$channel/$ZED_VERSION/download?asset=zed&os=macos&arch=$arch&source=install.sh" > "$temp/ZZZ-$arch.dmg"
-    hdiutil attach -quiet "$temp/ZZZ-$arch.dmg" -mountpoint "$temp/mount"
-    app="$(cd "$temp/mount/"; echo *.app)"
-    echo "Installing $app"
-    if [ -d "/Applications/$app" ]; then
-        echo "Removing existing $app"
-        rm -rf "/Applications/$app"
-    fi
-    ditto "$temp/mount/$app" "/Applications/$app"
-    hdiutil detach -quiet "$temp/mount"
-
-    mkdir -p "$HOME/.local/bin"
-    # Link the binary
-    ln -sf "/Applications/$app/Contents/MacOS/cli" "$HOME/.local/bin/zzz"
-}
-
-main "$@"
+exit 1

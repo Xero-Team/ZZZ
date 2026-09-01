@@ -56,7 +56,7 @@ pub fn after_release() -> Workflow {
 
 fn rebuild_releases_page() -> NamedJob {
     fn refresh_cloud_releases() -> Step<Run> {
-        named::bash("curl -fX POST \"https://cloud.zed.dev/releases/refresh?expect_tag=$TAG_NAME\"")
+        named::bash("echo 'ZZZ has no hosted release refresh endpoint'")
     }
 
     fn redeploy_zed_dev() -> Step<Run> {
@@ -77,9 +77,9 @@ fn post_to_discord(deps: &[&NamedJob]) -> NamedJob {
     fn get_release_url() -> Step<Run> {
         named::bash(
             r#"if [ "$IS_PRERELEASE" == "true" ]; then
-    URL="https://zed.dev/releases/preview"
+    URL="https://codeberg.org/ZZZEditor/ZZZ"
 else
-    URL="https://zed.dev/releases/stable"
+    URL="https://codeberg.org/ZZZEditor/ZZZ"
 fi
 
 echo "URL=$URL" >> "$GITHUB_OUTPUT"
