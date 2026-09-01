@@ -11,25 +11,25 @@ pub fn terms_of_service(cx: &App) -> String {
     "about:blank".to_owned()
 }
 
-/// Returns the URL to Zed AI's privacy and security docs.
+/// Returns the URL to local AI privacy and security docs.
 pub fn ai_privacy_and_security(cx: &App) -> String {
     let _ = cx;
     "about:blank".to_owned()
 }
 
-/// Returns the URL to Zed's edit prediction documentation.
+/// Returns the URL to edit prediction documentation.
 pub fn edit_prediction_docs(cx: &App) -> String {
     let _ = cx;
     "about:blank".to_owned()
 }
 
-/// Returns the URL to Zed's ACP registry blog post.
+/// Returns the URL to the ACP registry blog post.
 pub fn acp_registry_blog(cx: &App) -> String {
     let _ = cx;
     "about:blank".to_owned()
 }
 
-/// Returns the URL to Zed's Parallel Agents blog post.
+/// Returns the URL to the Parallel Agents blog post.
 pub fn parallel_agents_blog(cx: &App) -> String {
     let _ = cx;
     "about:blank".to_owned()

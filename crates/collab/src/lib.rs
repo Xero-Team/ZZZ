@@ -155,11 +155,11 @@ impl Config {
         }
     }
 
-    /// Returns the base Zed Cloud URL.
+    /// Returns the base cloud URL for the configured environment.
     pub fn zed_cloud_url(&self) -> &str {
         match self.zed_environment.as_ref() {
             "development" => "http://localhost:8787",
-            _ => "https://cloud.zed.dev",
+            _ => "http://127.0.0.1:7331",
         }
     }
 

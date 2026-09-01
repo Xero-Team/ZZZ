@@ -11,7 +11,7 @@ use gpui::{App, Task};
 use gpui_tokio::Tokio;
 use http_client::http::request;
 use http_client::{
-    AsyncBody, HttpClientWithUrl, HttpRequestExt, Json, Method, Request, StatusCode,
+    AsyncBody, HttpClientWithUrl, HttpRequestExt, Json, Method, Request, StatusCode, Url,
 };
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -91,7 +91,12 @@ impl CloudApiClient {
             .build_zed_cloud_url("/")
             .ok()
             .and_then(|url| url.host_str().map(String::from))
-            .unwrap_or_else(|| "cloud.zed.dev".into())
+            .unwrap_or_else(|| {
+                Url::parse(&self.http_client.base_url())
+                    .ok()
+                    .and_then(|url| url.host_str().map(String::from))
+                    .unwrap_or_else(|| "127.0.0.1".into())
+            })
     }
 
     fn build_request(
