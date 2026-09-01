@@ -3,10 +3,7 @@ use crate::udiff::apply_diff_to_string;
 use client::{RefreshLlmTokenListener, UserStore, test::FakeServer};
 use clock::FakeSystemClock;
 use clock::ReplicaId;
-use cloud_api_types::{
-    CreateLlmTokenResponse, LlmToken, Organization, OrganizationConfiguration,
-    OrganizationEditPredictionConfiguration, OrganizationId,
-};
+use cloud_api_types::{CreateLlmTokenResponse, LlmToken};
 use cloud_llm_client::{
     EditPredictionRejectReason, EditPredictionRejection, RejectEditPredictionsBody,
     predict_edits_v3::{PredictEditsV3Request, PredictEditsV3Response},
@@ -3590,62 +3587,6 @@ async fn test_data_collection_disabled_by_default(cx: &mut TestAppContext) {
     cx.update(|cx| {
         assert!(!ep_store.read(cx).is_data_collection_enabled(cx));
     });
-}
-
-#[gpui::test]
-async fn test_data_collection_enabled_via_legacy_kv_store(cx: &mut TestAppContext) {
-    let (ep_store, _channels) =
-        init_test_with_fake_client_and_legacy_data_collection(cx, Some("true"));
-
-    cx.update(|cx| {
-        assert!(ep_store.read(cx).is_data_collection_enabled(cx));
-    });
-}
-
-#[gpui::test]
-async fn test_data_collection_default_uses_cached_legacy_value(cx: &mut TestAppContext) {
-    let (ep_store, _channels) =
-        init_test_with_fake_client_and_legacy_data_collection(cx, Some("true"));
-
-    cx.update(|cx| {
-        assert!(ep_store.read(cx).is_data_collection_enabled(cx));
-    });
-
-    cx.update(|cx| KeyValueStore::global(cx))
-        .delete_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE.into())
-        .await
-        .unwrap();
-
-    cx.update(|cx| {
-        assert!(ep_store.read(cx).is_data_collection_enabled(cx));
-    });
-}
-
-#[gpui::test]
-async fn test_data_collection_setting_overrides_kv_store(cx: &mut TestAppContext) {
-    let (ep_store, _channels) =
-        init_test_with_fake_client_and_legacy_data_collection(cx, Some("true"));
-
-    // An explicit false in settings.json wins over the KV store.
-    cx.update_global::<SettingsStore, _>(|settings, cx| {
-        settings.update_user_settings(cx, |content| {
-            content
-                .project
-                .all_languages
-                .edit_predictions
-                .get_or_insert_default()
-                .allow_data_collection = Some(EditPredictionDataCollectionChoice::No);
-        });
-    });
-
-    cx.update(|cx| {
-        assert!(!ep_store.read(cx).is_data_collection_enabled(cx));
-    });
-}
-
-#[gpui::test]
-async fn test_data_collection_enabled_via_setting(cx: &mut TestAppContext) {
-    let (ep_store, _channels) = init_test_with_fake_client(cx);
 
     cx.update_global::<SettingsStore, _>(|settings, cx| {
         settings.update_user_settings(cx, |content| {
@@ -3659,99 +3600,7 @@ async fn test_data_collection_enabled_via_setting(cx: &mut TestAppContext) {
     });
 
     cx.update(|cx| {
-        assert!(ep_store.read(cx).is_data_collection_enabled(cx));
-    });
-}
-
-#[gpui::test]
-async fn test_data_collection_always_enabled_for_staff(cx: &mut TestAppContext) {
-    let (ep_store, _channels) = init_test_with_fake_client(cx);
-
-    cx.update(|cx| {
-        cx.set_staff(true);
-        assert!(ep_store.read(cx).is_data_collection_enabled(cx));
-    });
-}
-
-#[gpui::test]
-async fn test_data_collection_disabled_by_organization_configuration(cx: &mut TestAppContext) {
-    let (ep_store, _channels) = init_test_with_fake_client(cx);
-
-    cx.update_global::<SettingsStore, _>(|settings, cx| {
-        settings.update_user_settings(cx, |content| {
-            content
-                .project
-                .all_languages
-                .edit_predictions
-                .get_or_insert_default()
-                .allow_data_collection = Some(EditPredictionDataCollectionChoice::Yes);
-        });
-    });
-
-    let user_store = cx.update(|cx| ep_store.read(cx).user_store.clone());
-    cx.update(|cx| {
-        user_store.update(cx, |user_store, cx| {
-            user_store.set_current_organization_configuration_for_test(
-                Arc::new(Organization {
-                    id: OrganizationId("org-1".into()),
-                    name: "Org 1".into(),
-                    is_personal: false,
-                }),
-                OrganizationConfiguration {
-                    is_zed_model_provider_enabled: true,
-                    is_agent_thread_feedback_enabled: true,
-                    is_collaboration_enabled: true,
-                    edit_prediction: OrganizationEditPredictionConfiguration {
-                        is_enabled: true,
-                        is_feedback_enabled: false,
-                    },
-                },
-                cx,
-            );
-        });
-
         assert!(!ep_store.read(cx).is_data_collection_enabled(cx));
-    });
-}
-
-// When a user had data collection enabled via the legacy KV store (with no explicit
-// setting in settings.json), toggle_data_collection must read the *resolved* state
-// (true) and write Some(false).
-#[gpui::test]
-async fn test_toggle_data_collection_from_kv_enabled_state(cx: &mut TestAppContext) {
-    let (ep_store, _channels) =
-        init_test_with_fake_client_and_legacy_data_collection(cx, Some("true"));
-
-    cx.update(|cx| {
-        assert!(
-            ep_store.read(cx).is_data_collection_enabled(cx),
-            "data collection should be enabled via KV store before toggle"
-        );
-    });
-
-    // Simulate what toggle_data_collection does: capture the resolved current
-    // state, then write its inverse.
-    let is_currently_enabled = cx.update(|cx| ep_store.read(cx).is_data_collection_enabled(cx));
-    cx.update_global::<SettingsStore, _>(|settings, cx| {
-        settings.update_user_settings(cx, |content| {
-            content
-                .project
-                .all_languages
-                .edit_predictions
-                .get_or_insert_default()
-                .allow_data_collection = Some(if is_currently_enabled {
-                EditPredictionDataCollectionChoice::No
-            } else {
-                EditPredictionDataCollectionChoice::Yes
-            });
-        });
-    });
-
-    cx.update(|cx| {
-        assert!(
-            !ep_store.read(cx).is_data_collection_enabled(cx),
-            "data collection should be disabled after toggling off from KV-enabled state"
-        );
     });
 }
 

@@ -41,10 +41,6 @@ use workspace::{
 };
 use zed_actions::{OpenBrowser, OpenSettingsAt};
 
-use crate::{
-    CaptureExample, RatePredictions, rate_prediction_modal::PredictEditsRatePredictionsFeatureFlag,
-};
-
 fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()
 }
@@ -395,7 +391,7 @@ impl Render for EditPredictionButton {
                         tooltip_meta = tr(
                             cx,
                             "edit_prediction_ui.button.powered_by_zeta",
-                            "Powered by Zeta",
+                            "Edit predictions",
                         )
                     }
                 };
@@ -528,15 +524,32 @@ impl EditPredictionButton {
         project: Entity<Project>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let copilot = EditPredictionStore::try_global(cx).and_then(|store| {
-            store.update(cx, |this, cx| this.start_copilot_for_project(&project, cx))
-        });
-        if let Some(copilot) = copilot {
-            cx.observe(&copilot, |_, _, cx| cx.notify()).detach()
+        if all_language_settings(None, cx).edit_predictions.provider
+            == EditPredictionProvider::Copilot
+        {
+            let copilot = EditPredictionStore::try_global(cx).and_then(|store| {
+                store.update(cx, |this, cx| this.start_copilot_for_project(&project, cx))
+            });
+            if let Some(copilot) = copilot {
+                cx.observe(&copilot, |_, _, cx| cx.notify()).detach()
+            }
         }
 
-        cx.observe_global::<SettingsStore>(move |_, cx| cx.notify())
-            .detach();
+        cx.observe_global::<SettingsStore>(move |this, cx| {
+            if all_language_settings(None, cx).edit_predictions.provider
+                == EditPredictionProvider::Copilot
+            {
+                if let Some(project) = this.project.upgrade() {
+                    EditPredictionStore::try_global(cx).and_then(|store| {
+                        store.update(cx, |store, cx| {
+                            store.start_copilot_for_project(&project, cx)
+                        })
+                    });
+                }
+            }
+            cx.notify();
+        })
+        .detach();
 
         cx.observe_global::<EditPredictionStore>(move |_, cx| cx.notify())
             .detach();
@@ -708,7 +721,7 @@ impl EditPredictionButton {
         cx: &mut App,
     ) -> ContextMenu {
         let fs = self.fs.clone();
-        let line_height = window.line_height();
+        let _line_height = window.line_height();
 
         menu = menu.header(tr(
             cx,
@@ -791,7 +804,7 @@ impl EditPredictionButton {
                 });
         menu = menu.item(entry);
 
-        let provider = settings.edit_predictions.provider;
+        let _provider = settings.edit_predictions.provider;
         let current_mode = settings.edit_predictions_mode();
         let subtle_mode = matches!(current_mode, EditPredictionsMode::Subtle);
         let eager_mode = matches!(current_mode, EditPredictionsMode::Eager);
@@ -851,118 +864,6 @@ impl EditPredictionButton {
         menu = menu
             .separator()
             .header(tr(cx, "edit_prediction_ui.button.privacy", "Privacy"));
-
-        if matches!(provider, EditPredictionProvider::Zed) {
-            if let Some(provider) = &self.edit_prediction_provider {
-                let data_collection = provider.data_collection_state(cx);
-
-                if data_collection.is_supported() {
-                    let provider = provider.clone();
-                    let is_open_source = data_collection.is_project_open_source();
-                    let is_collecting = data_collection.is_enabled();
-                    let (icon_name, icon_color) = if is_open_source && is_collecting {
-                        (IconName::Check, Color::Success)
-                    } else {
-                        (IconName::Check, Color::Accent)
-                    };
-
-                    menu = menu.item(
-                        ContextMenuEntry::new(tr(
-                            cx,
-                            "edit_prediction_ui.button.training_data_collection",
-                            "Training Data Collection",
-                        ))
-                            .toggleable(IconPosition::Start, data_collection.is_enabled())
-                            .icon(icon_name)
-                            .icon_color(icon_color)
-                            .disabled(!provider.can_toggle_data_collection(cx))
-                            .documentation_aside(DocumentationSide::Left, move |cx| {
-                                let (msg, label_color, icon_name, icon_color) = match (is_open_source, is_collecting) {
-                                    (true, true) => (
-                                        tr(
-                                            cx,
-                                            "edit_prediction_ui.button.data_collection_status.open_source_sharing",
-                                            "Project identified as open source, and you're sharing data.",
-                                        ),
-                                        Color::Default,
-                                        IconName::Check,
-                                        Color::Success,
-                                    ),
-                                    (true, false) => (
-                                        tr(
-                                            cx,
-                                            "edit_prediction_ui.button.data_collection_status.open_source_not_sharing",
-                                            "Project identified as open source, but you're not sharing data.",
-                                        ),
-                                        Color::Muted,
-                                        IconName::Close,
-                                        Color::Muted,
-                                    ),
-                                    (false, true) => (
-                                        tr(
-                                            cx,
-                                            "edit_prediction_ui.button.data_collection_status.not_open_source_no_data",
-                                            "Project not identified as open source. No data captured.",
-                                        ),
-                                        Color::Muted,
-                                        IconName::Close,
-                                        Color::Muted,
-                                    ),
-                                    (false, false) => (
-                                        tr(
-                                            cx,
-                                            "edit_prediction_ui.button.data_collection_status.not_open_source_turned_off",
-                                            "Project not identified as open source, and setting turned off.",
-                                        ),
-                                        Color::Muted,
-                                        IconName::Close,
-                                        Color::Muted,
-                                    ),
-                                };
-                                v_flex()
-                                    .gap_2()
-                                    .child(
-                                        Label::new(tr(
-                                            cx,
-                                            "edit_prediction_ui.button.training_data_description",
-                                            "Help us improve our open dataset model by sharing data from open source repositories. Zed must detect a license file in your repo for this setting to take effect. Files with sensitive data and secrets are excluded by default.",
-                                        ))
-                                    )
-                                    .child(
-                                        h_flex()
-                                            .items_start()
-                                            .pt_2()
-                                            .pr_1()
-                                            .flex_1()
-                                            .gap_1p5()
-                                            .border_t_1()
-                                            .border_color(cx.theme().colors().border_variant)
-                                            .child(h_flex().flex_shrink_0().h(line_height).child(Icon::new(icon_name).size(IconSize::XSmall).color(icon_color)))
-                                            .child(div().child(msg).w_full().text_sm().text_color(label_color.color(cx)))
-                                    )
-                                    .into_any_element()
-                            })
-                            .handler(move |_, cx| {
-                                provider.toggle_data_collection(cx);
-                            })
-                    );
-
-                    if is_collecting && !is_open_source {
-                        menu = menu.item(
-                            ContextMenuEntry::new(tr(
-                                cx,
-                                "edit_prediction_ui.button.no_data_captured",
-                                "No data captured.",
-                            ))
-                            .disabled(true)
-                            .icon(IconName::Close)
-                            .icon_color(Color::Error)
-                            .icon_size(IconSize::Small),
-                        );
-                    }
-                }
-            }
-        }
 
         menu = menu.item(
             ContextMenuEntry::new(tr(
@@ -1044,28 +945,7 @@ impl EditPredictionButton {
                         }
                     },
                 )
-                .context(editor_focus_handle)
-                .when(
-                    cx.has_flag::<PredictEditsRatePredictionsFeatureFlag>(),
-                    |this| {
-                        this.action(
-                            tr(
-                                cx,
-                                "edit_prediction_ui.button.capture_prediction_example",
-                                "Capture Prediction Example",
-                            ),
-                            CaptureExample.boxed_clone(),
-                        )
-                        .action(
-                            tr(
-                                cx,
-                                "edit_prediction_ui.button.rate_predictions",
-                                "Rate Predictions",
-                            ),
-                            RatePredictions.boxed_clone(),
-                        )
-                    },
-                );
+                .context(editor_focus_handle);
         }
 
         menu
@@ -1472,14 +1352,11 @@ pub fn set_completion_provider(fs: Arc<dyn Fs>, cx: &mut App, provider: EditPred
 pub fn get_available_providers(cx: &mut App) -> Vec<EditPredictionProvider> {
     let mut providers = Vec::new();
 
-    providers.push(EditPredictionProvider::Zed);
-
-    let app_state = workspace::AppState::global(cx);
-    if copilot::GlobalCopilotAuth::try_get_or_init(app_state, cx)
-        .is_some_and(|copilot| copilot.0.read(cx).is_authenticated())
+    if let Some(copilot) = copilot::GlobalCopilotAuth::try_global(cx).cloned()
+        && copilot.0.read(cx).is_authenticated()
     {
         providers.push(EditPredictionProvider::Copilot);
-    };
+    }
 
     if codestral::codestral_api_key(cx).is_some() {
         providers.push(EditPredictionProvider::Codestral);

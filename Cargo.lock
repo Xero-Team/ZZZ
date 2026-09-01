@@ -5550,7 +5550,6 @@ name = "edit_prediction_ui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "buffer_diff",
  "client",
  "cloud_llm_client",
  "codestral",
@@ -5569,8 +5568,6 @@ dependencies = [
  "i18n",
  "indoc",
  "language",
- "markdown",
- "menu",
  "multi_buffer",
  "paths",
  "project",
@@ -5578,13 +5575,11 @@ dependencies = [
  "settings",
  "text",
  "theme",
- "theme_settings",
  "time",
  "ui",
  "util",
  "workspace",
  "zed_actions",
- "zeta_prompt",
 ]
 
 [[package]]

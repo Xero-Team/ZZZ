@@ -41,9 +41,7 @@ use project::{DisableAiSettings, Project, ProjectPath, WorktreeId};
 use release_channel::AppVersion;
 use semver::Version;
 use serde::de::DeserializeOwned;
-use settings::{
-    EditPredictionDataCollectionChoice, EditPredictionProvider, Settings as _, update_settings_file,
-};
+use settings::{EditPredictionProvider, Settings as _, update_settings_file};
 use std::collections::{VecDeque, hash_map};
 use std::env;
 use text::{AnchorRangeExt, Edit};
@@ -159,6 +157,7 @@ pub struct EditPredictionStore {
     preferred_experiment: Option<String>,
     available_experiments: Vec<String>,
     pub mercury: Mercury,
+    #[allow(dead_code)]
     legacy_data_collection_enabled: bool,
     reject_predictions_tx: mpsc::UnboundedSender<EditPredictionRejectionPayload>,
     settled_predictions_tx: mpsc::UnboundedSender<Instant>,
@@ -2329,10 +2328,7 @@ impl EditPredictionStore {
             && events.iter().all(|event| event.in_open_source_repo())
             && related_files.iter().all(|file| file.in_open_source_repo);
 
-        let can_collect_data = !cfg!(test)
-            && is_open_source
-            && self.is_data_collection_enabled(cx)
-            && matches!(self.edit_prediction_model, EditPredictionModel::Zeta);
+        let can_collect_data = false;
         let inputs = EditPredictionModelInput {
             project: project.clone(),
             buffer: active_buffer,
@@ -2348,7 +2344,7 @@ impl EditPredictionStore {
             is_open_source,
         };
 
-        let capture_data = (can_collect_data && rand::random_ratio(1, 1000)).then(|| stored_events);
+        let capture_data = None;
 
         let task = match self.edit_prediction_model {
             EditPredictionModel::Zeta => {
@@ -2718,25 +2714,8 @@ impl EditPredictionStore {
     }
 
     pub(crate) fn is_data_collection_enabled(&self, cx: &App) -> bool {
-        if !self.is_data_collection_allowed_by_organization(cx) {
-            return false;
-        }
-
-        if cx.is_staff() {
-            return true;
-        }
-
-        match all_language_settings(None, cx)
-            .edit_predictions
-            .allow_data_collection
-        {
-            EditPredictionDataCollectionChoice::Yes => true,
-            EditPredictionDataCollectionChoice::No => false,
-            // Fall back to the legacy KV entry captured when the store was
-            // created, preserving existing users' choices without per-request
-            // database reads.
-            EditPredictionDataCollectionChoice::Default => self.legacy_data_collection_enabled,
-        }
+        let _ = cx;
+        false
     }
 
     fn load_legacy_data_collection_enabled(cx: &App) -> bool {
@@ -2748,6 +2727,7 @@ impl EditPredictionStore {
             == Some("true")
     }
 
+    #[allow(dead_code)]
     pub(crate) fn is_data_collection_allowed_by_organization(&self, cx: &App) -> bool {
         self.user_store
             .read(cx)
