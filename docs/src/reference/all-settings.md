@@ -230,9 +230,9 @@ Note that a save will be triggered when an unsaved tab is closed, even if this i
 
 ## Auto Update
 
-- Description: Whether or not to automatically check for updates.
+- Description: Whether or not to automatically check for updates. ZZZ has no hosted updater; leave this off and rebuild from source.
 - Setting: `auto_update`
-- Default: `true`
+- Default: `false`
 
 **Options**
 
@@ -1802,7 +1802,7 @@ While other options may be changed at a runtime and should be placed under `sett
 ```json [settings]
 {
   "edit_predictions": {
-    "provider": "zed"
+    "provider": "none"
   }
 }
 ```
@@ -1811,21 +1811,21 @@ While other options may be changed at a runtime and should be placed under `sett
 
 - Description: Which edit prediction provider to use
 - Setting: `edit_prediction_provider`
-- Default: `"zed"`
+- Default: omitted / `"none"`
 
 **Options**
 
-1. Use Zeta as the edit prediction provider:
+1. Use a local Ollama provider:
 
 ```json [settings]
 {
   "edit_predictions": {
-    "provider": "zed"
+    "provider": "ollama"
   }
 }
 ```
 
-2. Use Copilot as the edit prediction provider:
+2. Use Copilot as the edit prediction provider after you configure it:
 
 ```json [settings]
 {

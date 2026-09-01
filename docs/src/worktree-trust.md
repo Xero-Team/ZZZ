@@ -13,7 +13,10 @@ ZZZ opens a worktree each time you run `zed some/path`, drag a file or directory
 Every worktree opened may contain a `.ZZZ/settings.json` file with extra configuration options that may require installing and spawning language servers or MCP servers.
 To let users choose based on their own threat model and risk tolerance, all worktrees start in Restricted Mode. Restricted Mode prevents downloading and running related items from `.ZZZ/settings.json`. Until a worktree is trusted, ZZZ does not run related untrusted actions and waits for user confirmation. This gives users a chance to review project settings, MCP servers, and language servers.
 
-ZZZ still trusts tools it installs globally. Global MCP servers and global language servers such as Prettier and Copilot are installed and started as usual, independent of worktree trust.
+ZZZ still trusts tools it installs globally. Global MCP servers and global
+language servers such as Prettier are installed and started as usual,
+independent of worktree trust. Copilot is not installed by default; it
+starts only after you select it as a provider.
 
 If a worktree is not trusted, ZZZ will indicate this with an exclamation mark icon in the title bar. Clicking this icon or using `workspace::ToggleWorktreeSecurity` action will bring up the security modal that allows the user to trust the worktree.
 

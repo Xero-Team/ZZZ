@@ -14,18 +14,16 @@ For day-to-day workflows, pair remote development with [Tasks](./tasks.md),
 
 Remote development requires two computers, your local machine that runs the ZZZ UI and the remote server which runs a ZZZ headless server. The two communicate over SSH, so you will need to be able to SSH from your local machine into the remote server to use this feature.
 
-![Architectural overview of ZZZ Remote Development](https://zed.dev/img/remote-development/diagram.png)
-
 On your local machine, ZZZ runs its UI, talks to language models, uses Tree-sitter to parse and syntax-highlight code, and store unsaved changes and recent projects. The source code, language servers, tasks, and the terminal all run on the remote server. [AI features](./ai/overview.md) work in remote sessions, including the Agent Panel and Inline Assistant.
 
-> **Note:** The original version of remote development sent traffic via ZZZ's servers. As of ZZZ v0.157 you can no-longer use that mode.
+> **Note:** Remote development talks to the remote host over SSH. ZZZ does not route that traffic through a hosted collaboration service.
 
 ## Setup
 
-1. Download and install the latest [ZZZ](https://zed.dev/releases). You need at least ZZZ v0.159.
+1. Build ZZZ from source. See [Installation](./installation.md).
 1. Use {#kb projects::OpenRemote} to open the "Remote Projects" dialog.
 1. Click "Connect New Server" and enter the command you use to SSH into the server. See [Supported SSH options](#supported-ssh-options) for options you can pass.
-1. Your local machine will attempt to connect to the remote server using the `ssh` binary on your path. Assuming the connection is successful, ZZZ will download the server on the remote host and start it.
+1. Your local machine will attempt to connect to the remote server using the `ssh` binary on your path. Assuming the connection is successful, ZZZ starts the embedded `remote_server` on the remote host.
 1. Once the ZZZ server is running, you will be prompted to choose a path to open on the remote server.
    > **Note:** ZZZ does not currently handle opening very large directories (for example, `/` or `~` that may have >100,000 files) very well. We are working on improving this, but suggest in the meantime opening only specific projects, or subfolders of very large mono-repos.
 
@@ -281,5 +279,3 @@ Note that we deliberately disallow some options (for example `-t` or `-T`) that 
 - [Configuring ZZZ](./configuring-zed.md): Manage shared and project settings,
   including `.ZZZ/settings.json`.
 - [Agent Panel](./ai/agent-panel.md): Use AI workflows in remote projects.
-- [Remote Development on zed.dev](https://zed.dev/remote-development): Product
-  overview and release updates.

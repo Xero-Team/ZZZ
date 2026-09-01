@@ -1,6 +1,6 @@
 ---
-title: AI Code Completion in ZZZ - Zeta, Copilot, Codestral, Mercury Coder
-description: Set up AI code completions in ZZZ with Zeta (built-in), GitHub Copilot, Codestral, or Mercury Coder. Multi-line predictions on every keystroke.
+title: AI Code Completion in ZZZ - Local Providers, Copilot, Codestral
+description: Set up AI code completions in ZZZ with a local Ollama or llama.cpp provider. Copilot, Codestral, and Mercury Coder are optional.
 ---
 
 # Edit Prediction
@@ -12,25 +12,32 @@ The default preference is a local provider such as Ollama or llama.cpp. You can
 also use [other providers](#other-providers) like GitHub Copilot, Mercury Coder,
 and Codestral when you configure them explicitly.
 
-## Configuring Zeta
+## Configuring a local provider
 
 Configure an edit-prediction provider in Settings. Local providers require no
 account; remote providers use credentials that you enter explicitly. Once a
 provider is configured, predictions appear as you type.
 
-You can confirm that Zeta is properly configured by opening the [Settings Editor](zzz://settings/edit_predictions.providers) (`Cmd+,` on macOS or `Ctrl+,` on Linux/Windows) and searching for `edit_predictions`. The `provider` field should be set to `zzz://`.
+Open the [Settings Editor](zzz://settings/edit_predictions.providers)
+({#kb zed::OpenSettings}) and search for `edit_predictions`. Prefer
+`ollama` or `open_ai_compatible_api` pointed at a local server. The default
+is no hosted provider.
 
-Or verify this in your settings.json:
+Or set a local provider in your settings.json:
 
 ```json [settings]
 {
   "edit_predictions": {
-    "provider": "zed"
+    "provider": "ollama",
+    "ollama": {
+      "api_url": "http://localhost:11434",
+      "model": "qwen2.5-coder:7b-base"
+    }
   }
 }
 ```
 
-The Z icon in the status bar also indicates Zeta is active.
+The status bar icon shows the active provider after you select one.
 
 ### Limits
 
@@ -207,7 +214,11 @@ Edit Prediction also works with other providers.
 
 ### GitHub Copilot {#github-copilot}
 
-To use GitHub Copilot as your provider, set this in your settings file ([how to edit](../configuring-zed.md#settings-files)):
+GitHub Copilot is optional. Select it only after you decide to use a
+Copilot subscription. It is not a getting-started path.
+
+To use GitHub Copilot as your provider, set this in your settings file
+([how to edit](../configuring-zed.md#settings-files)):
 
 ```json [settings]
 {

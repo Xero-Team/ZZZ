@@ -11,17 +11,19 @@ It covers which settings import automatically, which shortcuts map cleanly, and 
 
 ## Install ZZZ
 
-ZZZ is available on macOS, Windows, and Linux.
+ZZZ does not provide pre-built binaries. Build from this repository:
 
-For macOS, you can download it from zed.dev/download, or install via Homebrew:
-`brew install zed-editor/zed/zed`
+```sh
+cargo run
+```
 
-For most Linux users, the easiest way to install ZZZ is through our installation script:
-`curl -f https://zed.dev/install.sh | sh`
+See [Installation](../installation.md) and the local build guides for
+[macOS](../development/macos.md), [Linux](../development/linux.md), and
+[Windows](../development/windows.md).
 
-After installation, you can launch ZZZ from your Applications folder (macOS) or directly from the terminal (Linux) using:
-`zzz .`
-This opens the current directory in ZZZ.
+After you build, you can launch ZZZ from the source tree or from the
+terminal using `zzz .` if you installed a local binary. This opens the
+current directory in ZZZ.
 
 ## Import Settings from VS Code
 
@@ -302,16 +304,18 @@ You won’t find one-to-one replacements for every VS Code extension, especially
 
 ### Using AI in ZZZ
 
-If you’re used to GitHub Copilot in VS Code, you can do the same in ZZZ. You can also explore other agents through ZZZ Pro, or bring your own keys and connect without authentication. You can disable AI features entirely if you prefer.
+Prefer a local provider such as Ollama or llama.cpp. GitHub Copilot is
+optional after you configure it. There is no ZZZ Pro plan. You can
+disable AI features entirely if you prefer.
 
-#### Configuring GitHub Copilot
+#### Configuring a local provider
 
 1. Open Settings with `Cmd+,` (macOS) or `Ctrl+,` (Linux/Windows)
 2. Navigate to **AI → Edit Predictions**
 3. Click **Configure** next to "Configure Providers"
-4. Under **GitHub Copilot**, click **Sign in to GitHub**
+4. Point the provider at a local Ollama or llama.cpp endpoint
 
-Once signed in, just start typing. ZZZ will offer suggestions inline for you to accept.
+See [Edit Prediction](../ai/edit-prediction.md) for JSON examples.
 
 #### Additional AI Options
 
@@ -319,7 +323,7 @@ To use other AI models in ZZZ, you have several options:
 
 - Use local Ollama or llama.cpp models by configuring a provider in ZZZ.
 - Bring your own [API keys](../ai/llm-providers.md), no ZZZ account required
-- Use [external agents like Claude Agent](https://zed.dev/docs/ai/external-agents.html).
+- Use [external agents like Claude Agent](../ai/external-agents.md).
 
 ### Advanced Config and Productivity Tweaks
 

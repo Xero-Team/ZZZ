@@ -88,8 +88,11 @@ If you'd like to bind this to a keyboard shortcut, you can do so by editing your
 Authentication to ZZZ's Claude Agent installation is decoupled from ZZZ's built-in agent.
 That is to say, an Anthropic API key added via the built-in agent settings will _not_ be utilized by Claude Agent for authentication and billing.
 
-To ensure you're using your billing method of choice, [open a new Claude Agent thread](./agent-panel.md#new-thread).
-Then, run `/login`, and authenticate either via API key, or via `Log in with Claude Code` to use a Claude Pro/Max subscription.
+Claude or ChatGPT login belongs to the external agent, not to ZZZ.
+[Open a new Claude Agent thread](./agent-panel.md#new-thread), then run
+`/login` in that agent if it asks you to authenticate. Use an API key or
+the agent's own subscription login. ZZZ does not create or bill that
+account.
 
 #### Installation
 

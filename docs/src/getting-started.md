@@ -90,8 +90,6 @@ You can also enable familiar keybindings:
 
 ## Join the Community
 
-ZZZ is open source. Join us on GitHub or in Discord to contribute code, report bugs, or suggest features.
+ZZZ is open source. Report bugs and suggest features in this repository.
 
-- [Discord](https://discord.com/invite/zedindustries)
-- [GitHub Discussions](https://github.com/zed-industries/zed/discussions)
-- [ZZZ Reddit](https://www.reddit.com/r/ZedEditor)
+- [Codeberg issues](https://codeberg.org/ZZZEditor/ZZZ/issues)

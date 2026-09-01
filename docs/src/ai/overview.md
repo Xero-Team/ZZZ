@@ -1,20 +1,32 @@
 ---
 title: AI Code Editor Documentation - ZZZ
-description: Docs for AI in ZZZ, the open-source AI code editor. Agentic coding, inline edits, AI code completion, and multi-model support.
+description: Docs for AI in ZZZ. Local Ollama and llama.cpp first, then optional remote providers, agentic coding, inline edits, and completions.
 ---
 
 # AI
 
-ZZZ is an open-source AI code editor. AI runs throughout the editing experience: agents that read and write your code, inline transformations, code completions on every keystroke, and conversations with models in any buffer.
+ZZZ is an open-source code editor with optional AI features. Agents can read
+and write your code, transform selections inline, and talk to a model you
+configure. Completions run only after you choose a provider.
 
 ## How ZZZ approaches AI
 
-ZZZ's AI features run inside a native, GPU-accelerated application built in Rust. There is no Electron layer between you and the model output.
+ZZZ's AI features run inside a native, GPU-accelerated application built in
+Rust. There is no Electron layer between you and the model output.
 
-- **Open source.** The editor and all AI features are available in this repository. You can inspect how AI is implemented, how data flows to providers, and how tool calls execute.
-- **Multi-model.** [Bring your own API keys](./llm-providers.md) or run local Ollama and llama.cpp models. Remote APIs are explicit opt-in choices.
-- **External agents.** Run Claude Agent, Gemini CLI, Codex, and other CLI-based agents directly in ZZZ through the Agent Client Protocol. See [External Agents](./external-agents.md).
-- **Privacy by default.** AI data sharing is opt-in. When you use your own API keys, ZZZ maintains zero-data retention agreements with providers. See [Privacy and Security](./privacy-and-security.md).
+- **Local first.** Point the agent at Ollama (`localhost:11434`) or
+  llama.cpp (`localhost:8080`). Remote APIs are silent until you add them.
+- **Open source.** The editor and all AI features are available in this
+  repository. You can inspect how AI is implemented, how data flows to
+  providers, and how tool calls execute.
+- **Multi-model.** [Bring your own API keys](./llm-providers.md) or run
+  local models. Remote APIs are explicit opt-in choices.
+- **External agents.** Run Claude Agent, Gemini CLI, Codex, and other
+  CLI-based agents directly in ZZZ through the Agent Client Protocol. See
+  [External Agents](./external-agents.md).
+- **Privacy by default.** ZZZ does not collect training data. Requests go
+  to the provider you configure. See
+  [Privacy and Security](./privacy-and-security.md).
 
 ## Agentic editing
 
@@ -30,7 +42,9 @@ The [Inline Assistant](./inline-assistant.md) works differently: select code or 
 
 [Edit Prediction](./edit-prediction.md) provides AI code completions on every keystroke. Each keypress sends a request to the prediction provider, which returns single or multi-line suggestions you accept with `tab`.
 
-The default provider is Zeta, ZZZ's open-source model trained on open data. You can also use GitHub Copilot, or Codestral.
+There is no default hosted prediction model. Prefer a local provider such
+as Ollama or llama.cpp. GitHub Copilot and Codestral are optional and only
+used after you select them.
 
 ## Getting started
 

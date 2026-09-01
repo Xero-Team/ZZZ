@@ -179,7 +179,6 @@
 - [Privacy and Security](./ai/privacy-and-security.md)
   - [Privacy and Network Boundary](./development/privacy-boundary.md)
   - [Worktree Trust](./worktree-trust.md)
-  - [AI Improvement](./ai/ai-improvement.md)
 
 # Developing ZZZ
 

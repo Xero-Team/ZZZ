@@ -11,7 +11,7 @@ This guide covers how to uninstall ZZZ on different operating systems.
 
 ### Standard Installation
 
-If you installed ZZZ by downloading it from the website:
+If you installed a local ZZZ.app build into Applications:
 
 1. Quit ZZZ if it's running
 2. Open Finder and go to your Applications folder
@@ -112,4 +112,6 @@ If you encounter issues during uninstallation:
 - **Linux**: If the uninstall script fails, check the error message and consider manual removal of the directories listed above.
 - **All platforms**: If you want to start fresh while keeping ZZZ installed, you can delete the configuration directories instead of uninstalling the application entirely.
 
-For additional help, see our [Linux-specific documentation](./linux.md) or visit the [ZZZ community](https://zed.dev/community-links).
+For additional help, see our [Linux-specific documentation](./linux.md)
+or open an issue at
+[https://codeberg.org/ZZZEditor/ZZZ](https://codeberg.org/ZZZEditor/ZZZ).

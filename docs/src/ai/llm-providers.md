@@ -269,10 +269,16 @@ You can also modify the `api_url` to use a custom endpoint if needed.
 
 ### GitHub Copilot Chat {#github-copilot-chat}
 
-You can use GitHub Copilot Chat with the ZZZ agent by choosing it via the model dropdown in the Agent Panel.
+GitHub Copilot Chat is optional and silent until you select it. It is not
+required to use the Agent Panel.
 
-1. Open the settings view (`agent: open settings`) and go to the GitHub Copilot Chat section
-2. Click on `Sign in to use GitHub Copilot`, follow the steps shown in the modal.
+You can use GitHub Copilot Chat with the ZZZ agent by choosing it via the
+model dropdown in the Agent Panel.
+
+1. Open the settings view (`agent: open settings`) and go to the GitHub
+   Copilot Chat section
+2. Authenticate with GitHub if you have already chosen Copilot as a
+   provider. Follow the steps shown in the modal.
 
 Alternatively, you can provide an OAuth token via the `GH_COPILOT_TOKEN` environment variable.
 

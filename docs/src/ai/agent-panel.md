@@ -272,7 +272,7 @@ or through an explicitly configured remote endpoint—you can switch between the
 models by clicking on the model selector on the message editor or by using the
 {#kb agent::ToggleModelSelector} keybinding.
 
-> The same model can be offered via multiple providers - for example, Claude Sonnet 4.5 is available via ZZZ Pro, OpenRouter, Anthropic directly, and more.
+> The same model can be offered via multiple providers - for example, Claude Sonnet 4.5 is available via OpenRouter, Anthropic directly, and more.
 > Make sure you've selected the correct model **_provider_** for the model you'd like to use, delineated by the logo to the left of the model in the model selector.
 
 ### Favoriting Models
@@ -362,14 +362,7 @@ You can also open threads as Markdown by clicking on the file icon button, to th
 
 ## Feedback {#feedback}
 
-You can rate agent responses to help improve ZZZ's system prompt and tools.
-
-> Note that rating responses will send your data related to that response to ZZZ's servers.
-> See [AI Improvement](./ai-improvement.md) and [Privacy and Security](./privacy-and-security.md) for more information about ZZZ's approach to AI improvement, privacy, and security.
-> **_If you don't want data persisted on ZZZ's servers, don't rate_**.
-> We will not collect data for improving our Agentic offering without you explicitly rating responses.
-
-To help improve ZZZ's system prompt and tools, rate responses with the thumbs up/down controls at the end of each response.
-In case of a thumbs down, a new text area will show up where you can add more specifics about what happened.
+ZZZ does not collect agent ratings or conversation threads for training.
+See [Privacy and Security](./privacy-and-security.md).
 
 You can provide feedback on the thread at any point after the agent responds, and multiple times within the same thread.

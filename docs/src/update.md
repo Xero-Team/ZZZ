@@ -1,26 +1,51 @@
 ---
 title: Update ZZZ
-description: "ZZZ is designed to keep itself up to date automatically. You can always update this behavior in your settings."
+description: "ZZZ does not auto-update. Rebuild from source when you want a newer revision."
 ---
 
 # Update ZZZ
 
-ZZZ is designed to keep itself up to date automatically. You can always update this behavior in your settings.
+ZZZ does not ship a hosted updater. Auto-update is off by default, and there
+is no download channel that installs a newer binary for you.
 
 ## Auto-updates
 
-By default, ZZZ checks for updates and installs them automatically the next time you restart the app. You’ll always be running the latest version with no extra steps.
+`auto_update` defaults to `false`. ZZZ does not check a remote host for
+updates or install them in the background.
 
-If an update is available, ZZZ will download it in the background and apply it on restart.
+If you enable `auto_update` in settings, there is still no hosted ZZZ
+release service. Prefer rebuilding from the source tree you already have.
 
 ## How to check your current version
 
-To check which version of ZZZ you're using:
+To check which version of ZZZ you are using:
 
-Open the Command Palette (Cmd+Shift+P on macOS, Ctrl+Shift+P on Linux/Windows).
+1. Open the Command Palette ({#kb command_palette::Toggle}).
+2. Type and select `zzz: about`. A modal appears with your version
+   information.
 
-Type and select `zzz: about`. A modal will appear with your version information.
+## How to get a newer build
 
-## How to control update behavior
+Build from this repository:
 
-If you want to turn off auto-updates, open the Settings Editor (Cmd ,) and find `Auto Update` under General Settings.
+```sh
+cargo run
+```
+
+See the local build guides for system dependencies:
+
+- [macOS](./development/macos.md)
+- [Linux](./development/linux.md)
+- [Windows](./development/windows.md)
+
+To confirm auto-update stays off, open the Settings Editor
+({#kb zed::OpenSettings}) and search for `Auto Update` under General
+Settings.
+
+Or add this to your settings.json:
+
+```json [settings]
+{
+  "auto_update": false
+}
+```

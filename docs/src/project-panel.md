@@ -10,8 +10,6 @@ Toggle it with {#action project_panel::ToggleFocus} ({#kb
 project_panel::ToggleFocus}), or click the **Project Panel** button in the
 status bar.
 
-![Project Panel](https://images.zed.dev/docs/project-panel/panel.png)
-
 ## Navigating
 
 Use the arrow keys to move through entries. {#kb
@@ -35,10 +33,6 @@ project panel and scroll it into view. This can be disabled with the
 When `project_panel.sticky_scroll` is enabled (the default), ancestor directories pin themselves to the top
 of the panel as you scroll, so you always know which directory you're on.
 
-![Project Panel: Sticky Scroll Enabled](https://images.zed.dev/docs/project-panel/sticky-scroll-true.png)
-
-![Project Panel: Sticky Scroll Disabled](https://images.zed.dev/docs/project-panel/sticky-scroll-false.png)
-
 ### Directory Folding
 
 When `project_panel.auto_fold_dirs` is enabled (the default), chains of directories that each contain a
@@ -46,10 +40,6 @@ single child directory are collapsed into one row (for example,
 `src/utils/helpers` instead of three separate levels). Right-click a folded
 directory and choose **Unfold Directory** to expand the chain, or **Fold
 Directory** to collapse it again.
-
-![Project Panel: Auto Fold Directories Enabled](https://images.zed.dev/docs/project-panel/auto-fold-dirs-true.png)
-
-![Project Panel: Auto Fold Directories Disabled](https://images.zed.dev/docs/project-panel/auto-fold-dirs-false.png)
 
 ## Selecting Multiple Entries
 
@@ -59,8 +49,6 @@ set of marked entries.
 
 When exactly two files are marked, {#action project_panel::CompareMarkedFiles}
 ({#kb project_panel::CompareMarkedFiles}) opens a diff view comparing them.
-
-![Project Panel: Compare Marked Files](https://images.zed.dev/docs/project-panel/compare-marked-files.png)
 
 ## File Operations
 
@@ -127,8 +115,6 @@ to reflect their git status—modified, added, deleted, untracked, or conflictin
 Setting `project_panel.git_status_indicator` to `true` (disabled by default) adds a letter badge next
 to each name: **M** (modified), **A** (added), **D** (deleted), **U**
 (untracked) or **!** (conflict).
-
-![Project Panel: Git Integration](https://images.zed.dev/docs/project-panel/git-status.png)
 
 Use {#action project_panel::SelectNextGitEntry} and {#action
 project_panel::SelectPrevGitEntry} to jump between tracked files with

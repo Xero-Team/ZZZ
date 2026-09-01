@@ -5,8 +5,10 @@ description: "Configure TOML language support in ZZZ, including language servers
 
 # TOML
 
-TOML support is available through the [TOML extension](https://zed.dev/extensions/toml).
+TOML support is available through the TOML extension. Install it from
+the gallery with `zzz: extensions`.
 
 - Tree-sitter: [tree-sitter/tree-sitter-toml](https://github.com/tree-sitter/tree-sitter-toml)
 
-A TOML language server is available in the [Tombi extension](https://zed.dev/extensions/tombi).
+A TOML language server is available in the Tombi extension. Install it
+from the gallery with `zzz: extensions`.

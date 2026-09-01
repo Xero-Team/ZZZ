@@ -7,22 +7,30 @@ description: ZZZ's code completions from language servers and edit predictions. 
 
 ZZZ supports two sources for completions:
 
-1. "Code Completions" provided by Language Servers (LSPs) automatically installed by ZZZ or via [ZZZ Language Extensions](languages.md).
-2. "Edit Predictions" provided by ZZZ's own Zeta model or by external providers like [GitHub Copilot](#github-copilot).
+1. "Code Completions" provided by Language Servers (LSPs) automatically
+   installed by ZZZ or via [ZZZ Language Extensions](languages.md).
+2. "Edit Predictions" from a provider you configure. Prefer a local
+   endpoint such as Ollama or llama.cpp. GitHub Copilot and Codestral are
+   optional and only used after you select them.
 
 ## Language Server Code Completions {#code-completions}
 
-When there is an appropriate language server available, ZZZ will provide completions of variable names, functions, and other symbols in the current file. You can disable these by adding the following to your ZZZ `settings.json` file:
+When there is an appropriate language server available, ZZZ will provide
+completions of variable names, functions, and other symbols in the current
+file. You can disable these by adding the following to your ZZZ
+`settings.json` file:
 
 ```json [settings]
 "show_completions_on_input": false
 ```
 
-You can manually trigger completions with `ctrl-space` or by triggering the `editor::ShowCompletions` action from the command palette.
+You can manually trigger completions with `ctrl-space` or by triggering the
+`editor::ShowCompletions` action from the command palette.
 
-> Note: Using `ctrl-space` in ZZZ requires disabling the macOS global shortcut.
-> Open **System Settings** > **Keyboard** > **Keyboard Shortcut**s >
-> **Input Sources** and uncheck **Select the previous input source**.
+> Note: Using `ctrl-space` in ZZZ requires disabling the macOS global
+> shortcut. Open **System Settings** > **Keyboard** > **Keyboard
+> Shortcut**s > **Input Sources** and uncheck **Select the previous input
+> source**.
 
 For more information, see:
 
@@ -31,7 +39,8 @@ For more information, see:
 
 ## Edit Predictions {#edit-predictions}
 
-ZZZ has built-in support for predicting multiple edits at a time [via Zeta](https://huggingface.co/zed-industries/zeta), ZZZ's open-source and open-data model.
-Edit predictions appear as you type, and most of the time, you can accept them by pressing `tab`.
+Edit predictions appear as you type once you configure a provider. Most of
+the time, you can accept them by pressing `tab`.
 
-See the [edit predictions documentation](./ai/edit-prediction.md) for more information on how to setup and configure ZZZ's edit predictions.
+See the [edit predictions documentation](./ai/edit-prediction.md) for how
+to set up a local provider and optional remote providers.

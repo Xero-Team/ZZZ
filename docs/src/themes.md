@@ -15,16 +15,15 @@ Navigating through the theme list by moving up and down will change the theme in
 
 ## Installing New Themes
 
-You can find hundreds of different theme options in ZZZ's extensions store, which you can access via the command palette with `zzz: extensions` or the [ZZZ website](https://zed.dev/extensions?filter=themes).
+You can find hundreds of different theme options in ZZZ's extensions store, which you can access via the command palette with `zzz: extensions`. The gallery contacts `https://api.zed.dev` when you request an install.
 
 Many popular themes have been ported to ZZZ, and if you're struggling to choose one, visit [zed-themes.com](https://zed-themes.com), a third-party gallery with visible previews for many of them.
 
 ## Build Your Theme
 
-You can use [ZZZ's Theme Builder](https://zed.dev/theme-builder) to design your own custom theme based on an existing one.
-
-This tool lets you fine-tune and preview how every surface in the ZZZ app will look.
-You can then export the JSON for [local use](./themes.md#local-themes) or for [publishing in ZZZ's extension store](./extensions/themes.md).
+Create a theme JSON file for [local use](./themes.md#local-themes) or for
+[publishing in ZZZ's extension store](./extensions/themes.md). See the
+[theme schema](https://zed.dev/schema/themes/v0.2.0.json).
 
 ## Configuring a Theme
 

@@ -2,14 +2,19 @@
 
 This is for moderate-to-large features — new UI, behavior changes, or work that cuts across multiple parts of ZZZ. Small keybindings or settings tweaks don't need all of this.
 
-> **Before you start:** If you're an external contributor, make sure the feature is something the team wants before investing significant effort. Please read the [Contributing Guide](../../../CONTRIBUTING.md) and our [Feature Request Guidelines](https://github.com/zed-industries/zed/discussions/51422) — if there isn't already a GitHub issue with clear staff confirmation, start with a GitHub Discussion. Feature request PRs that skip this process have a _very_ low merge rate. Taking the time to follow our process significantly increases the chances your idea gets picked up and built.
+> **Before you start:** If you're an external contributor, make sure the
+> feature is something the project wants before investing significant
+> effort. Please read the [Contributing Guide](../../../CONTRIBUTING.md).
+> Open a feature request in this repository's
+> [issue tracker](https://codeberg.org/ZZZEditor/ZZZ/issues) if there
+> isn't already an issue with clear confirmation.
 
 ## 1. Why does this matter?
 
 Every feature starts as an idea. Before writing any code, ground it:
 
 - **What problem does this solve?**
-- **What's the evidence?** GitHub issues, Discord requests, thumbs-up counts, blog posts.
+- **What's the evidence?** Issues in this repository, thumbs-up counts, blog posts.
 - **Is there prior art?** If it's in VS Code, JetBrains, Neovim, or a wildly popular plugin, that's a strong signal. If the idea is more novel, name what it's based on — "This is X, adapted for ZZZ's multi-buffers" is far more useful than "I think this would be cool."
 
 ## 2. What is it?

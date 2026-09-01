@@ -9,29 +9,19 @@ This guide covers how to set up ZZZ if you're coming from IntelliJ IDEA, includi
 
 ## Install ZZZ
 
-ZZZ is available on macOS, Windows, and Linux.
-
-For macOS, you can download it from zed.dev/download, or install via Homebrew:
+ZZZ does not provide pre-built binaries. Build from this repository:
 
 ```sh
-brew install --cask zed
+cargo run
 ```
 
-For Windows, download the installer from zed.dev/download, or install via winget:
+See [Installation](../installation.md) and the local build guides for
+[macOS](../development/macos.md), [Linux](../development/linux.md), and
+[Windows](../development/windows.md).
 
-```sh
-winget install ZZZ.ZZZ
-```
-
-For most Linux users, the easiest way to install ZZZ is through our installation script:
-
-```sh
-curl -f https://zed.dev/install.sh | sh
-```
-
-After installation, you can launch ZZZ from your Applications folder (macOS), Start menu (Windows), or directly from the terminal using:
-`zzz .`
-This opens the current directory in ZZZ.
+After you build, you can launch ZZZ from the source tree or from the
+terminal using `zzz .` if you installed a local binary. This opens the
+current directory in ZZZ.
 
 ## Set Up the JetBrains Keymap
 
@@ -274,16 +264,17 @@ You won't find one-to-one replacements for every IntelliJ plugin, especially for
 
 ## Using AI in ZZZ
 
-If you're used to AI assistants in IntelliJ (like GitHub Copilot or JetBrains AI), ZZZ offers similar capabilities with more flexibility.
+Prefer a local provider such as Ollama or llama.cpp. GitHub Copilot is
+optional after you configure it. There is no ZZZ Pro plan.
 
-### Configuring GitHub Copilot
+### Configuring a local provider
 
 1. Open Settings with `Cmd+,` (macOS) or `Ctrl+,` (Linux/Windows)
 2. Navigate to **AI → Edit Predictions**
 3. Click **Configure** next to "Configure Providers"
-4. Under **GitHub Copilot**, click **Sign in to GitHub**
+4. Point the provider at a local Ollama or llama.cpp endpoint
 
-Once signed in, just start typing. ZZZ will offer suggestions inline for you to accept.
+See [Edit Prediction](../ai/edit-prediction.md) for JSON examples.
 
 ### Additional AI Options
 
@@ -291,7 +282,7 @@ To use other AI models in ZZZ, you have several options:
 
 - Use local Ollama or llama.cpp models by configuring a provider in ZZZ.
 - Bring your own [API keys](../ai/llm-providers.md), no ZZZ account required
-- Use [external agents like Claude Agent](https://zed.dev/docs/ai/external-agents.html)
+- Use [external agents like Claude Agent](../ai/external-agents.md)
 
 ## Advanced Config and Productivity Tweaks
 

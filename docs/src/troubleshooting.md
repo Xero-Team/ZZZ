@@ -34,7 +34,7 @@ You'll find the ZZZ log in the respective location on each operating system:
 > **Note:** In some cases, it might be useful to monitor the log live, such as when [developing a ZZZ extension](./extensions/developing-extensions.md).
 > Example: `tail -f ~/Library/Logs/Zed/Zed.log`
 
-The log may contain enough context to help you debug the issue yourself, or you may find specific errors that are useful when filing a [GitHub issue](https://github.com/zed-industries/zed/issues/new/choose) or when talking to ZZZ staff in our [Discord server](https://zed.dev/community-links#forums-and-discussions).
+The log may contain enough context to help you debug the issue yourself, or you may find specific errors that are useful when filing an [issue](https://codeberg.org/ZZZEditor/ZZZ/issues/new).
 
 ## Performance Issues (Profiling)
 
@@ -46,16 +46,13 @@ Xcode Instruments (which comes bundled with your [Xcode](https://apps.apple.com/
 
 1. With ZZZ running, open Instruments
 1. Select `Time Profiler` as the profiling template
-   ![Instruments template picker with Time Profiler selected](https://images.zed.dev/docs/troubleshooting/instruments-template-picker.webp)
 1. In the `Time Profiler` configuration, set the target to the running ZZZ process
 1. Start recording
-   ![Time Profiler configuration showing the target dropdown and record button](https://images.zed.dev/docs/troubleshooting/instruments-target-and-record.webp)
 1. Perform the action in ZZZ that causes performance issues
 1. Stop recording
-   ![A completed Time Profiler recording in Instruments](https://images.zed.dev/docs/troubleshooting/instruments-recording.webp)
 1. Save the trace file
 1. Compress the trace file into a zip archive
-1. File a [GitHub issue](https://github.com/zed-industries/zed/issues/new/choose) with the trace zip attached
+1. File an [issue](https://codeberg.org/ZZZEditor/ZZZ/issues/new) with the trace zip attached
 
 <!--### Windows-->
 
@@ -82,7 +79,7 @@ If you're experiencing startup issues, you can test whether it's workspace-relat
 > **Note**: Moving the workspace database will cause ZZZ to create a fresh one.
 > Your recent projects, open tabs, etc. will be reset to "factory".
 
-If your issue persists after regenerating the database, please [file an issue](https://github.com/zed-industries/zed/issues/new/choose).
+If your issue persists after regenerating the database, please [file an issue](https://codeberg.org/ZZZEditor/ZZZ/issues/new).
 
 ## Language Server Issues
 
