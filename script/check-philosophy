@@ -102,6 +102,54 @@ check_privacy_documented() {
     rg -q '\./development/privacy-boundary\.md' "$root/docs/src/SUMMARY.md"
 }
 
+check_docs_auto_update_off() {
+    ! rg -ni 'auto-update is on by default|By default, ZZZ checks for updates' \
+        "$root/docs/src/update.md" \
+        && ! rg -n 'Setting: `auto_update`' -A 3 "$root/docs/src/reference/all-settings.md" \
+            | rg -q 'Default: `true`'
+}
+
+check_docs_no_zed_edit_prediction_default() {
+    ! rg -n 'Default: `"zed"`' "$root/docs/src/reference/all-settings.md" \
+        && ! rg -n '"provider": "zed"' "$root/docs/src/reference/all-settings.md"
+}
+
+check_docs_zeta_not_default_provider() {
+    ! rg -ni 'default provider is Zeta|Zeta, ZZZ.?s (own|open-source) model|Zeta as the (default|edit prediction) provider|built-in Zeta' \
+        "$root/docs/src/ai/overview.md" \
+        "$root/docs/src/completions.md" \
+        "$root/docs/src/ai/edit-prediction.md"
+}
+
+check_install_script_no_hosted_binaries() {
+    ! rg -n 'cloud\.zed\.dev|zed\.dev/releases' "$root/script/install.sh"
+}
+
+check_privacy_policy_no_zed_industries() {
+    ! rg -n 'privacy@zed\.dev|Zed Industries|opt out of Software telemetry' \
+        "$root/legal/privacy-policy.md"
+}
+
+check_default_settings_no_hosted_ai() {
+    ! rg -n '"zed\.dev"' "$root/assets/settings/default.json" \
+        && ! rg -n 'codestral\.mistral\.ai' "$root/assets/settings/default.json" \
+        && ! rg -n '"allow_data_collection": "yes"' "$root/assets/settings/default.json"
+}
+
+check_oauth_cimd_not_hosted() {
+    ! rg -n 'https://zed\.dev/oauth/client-metadata\.json' \
+        "$root/crates/context_server/src/oauth.rs"
+}
+
+check_no_plan_chips() {
+    ! rg -n 'fn render_zed_plan_info|PlanDefinitions\.pro_plan' \
+        "$root/crates/ai_onboarding" "$root/crates/agent_ui"
+}
+
+check_collab_signed_out_no_github() {
+    ! rg -n 'Sign In with GitHub' "$root/crates/collab_ui"
+}
+
 check_allowlisted_hosts() {
     local urls
     urls=$(rg --no-filename -o 'https?://[^"` )]+' "$root/assets/settings/default.json" "$root/crates/client/src/client.rs" \
@@ -129,6 +177,15 @@ check "default cloud hosts are absent" check_no_default_cloud_hosts
 check "product defaults do not reference hosted ZZZ hosts" check_product_defaults_no_zed_host
 check "product surfaces have no hosted documentation links" check_product_surfaces_no_hosted_docs
 check "privacy boundary is linked from documentation summary" check_privacy_documented
+check "docs do not say auto-update is on by default" check_docs_auto_update_off
+check "docs do not default edit prediction provider to zed" check_docs_no_zed_edit_prediction_default
+check "docs do not call Zeta the default provider" check_docs_zeta_not_default_provider
+check "install script does not download hosted binaries" check_install_script_no_hosted_binaries
+check "privacy policy has no Zed Industries telemetry opt-out" check_privacy_policy_no_zed_industries
+check "default settings have no hosted AI collection" check_default_settings_no_hosted_ai
+check "MCP OAuth CIMD is not a hosted zed.dev URL" check_oauth_cimd_not_hosted
+check "plan chips are absent from onboarding and agent UI" check_no_plan_chips
+check "collab signed-out panel has no GitHub sign-in" check_collab_signed_out_no_github
 check "network hosts are allowlisted" check_allowlisted_hosts
 
 if (( failures > 0 )); then
