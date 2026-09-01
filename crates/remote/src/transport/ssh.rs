@@ -1303,9 +1303,7 @@ impl SshSocket {
             arch: match output.trim() {
                 "AMD64" => RemoteArch::X86_64,
                 "ARM64" => RemoteArch::Aarch64,
-                arch => anyhow::bail!(
-                    "unsupported remote Windows architecture {arch}"
-                ),
+                arch => anyhow::bail!("unsupported remote Windows architecture {arch}"),
             },
         })
     }
