@@ -370,12 +370,12 @@ pub mod assets {
     pub const WINDOWS_X86_64: &str = "ZZZ-x86_64.exe";
     pub const WINDOWS_AARCH64: &str = "ZZZ-aarch64.exe";
 
-    pub const REMOTE_SERVER_MAC_AARCH64: &str = "zed-remote-server-macos-aarch64.gz";
-    pub const REMOTE_SERVER_MAC_X86_64: &str = "zed-remote-server-macos-x86_64.gz";
-    pub const REMOTE_SERVER_LINUX_AARCH64: &str = "zed-remote-server-linux-aarch64.gz";
-    pub const REMOTE_SERVER_LINUX_X86_64: &str = "zed-remote-server-linux-x86_64.gz";
-    pub const REMOTE_SERVER_WINDOWS_AARCH64: &str = "zed-remote-server-windows-aarch64.zip";
-    pub const REMOTE_SERVER_WINDOWS_X86_64: &str = "zed-remote-server-windows-x86_64.zip";
+    pub const REMOTE_SERVER_MAC_AARCH64: &str = "zzz-remote-server-macos-aarch64.gz";
+    pub const REMOTE_SERVER_MAC_X86_64: &str = "zzz-remote-server-macos-x86_64.gz";
+    pub const REMOTE_SERVER_LINUX_AARCH64: &str = "zzz-remote-server-linux-aarch64.gz";
+    pub const REMOTE_SERVER_LINUX_X86_64: &str = "zzz-remote-server-linux-x86_64.gz";
+    pub const REMOTE_SERVER_WINDOWS_AARCH64: &str = "zzz-remote-server-windows-aarch64.zip";
+    pub const REMOTE_SERVER_WINDOWS_X86_64: &str = "zzz-remote-server-windows-x86_64.zip";
 
     pub fn all() -> Vec<&'static str> {
         vec![

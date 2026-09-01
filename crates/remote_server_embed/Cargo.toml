@@ -1,0 +1,18 @@
+[package]
+name = "remote_server_embed"
+description = "Embedded ZZZ remote server archives for SSH/WSL/Docker uploads"
+edition.workspace = true
+version = "0.1.0"
+publish.workspace = true
+license = "GPL-3.0-or-later"
+
+[lib]
+path = "src/remote_server_embed.rs"
+doctest = false
+
+[lints]
+workspace = true
+
+[build-dependencies]
+flate2 = "1.1.9"
+zip = { version = "0.6.6", default-features = false, features = ["deflate"] }

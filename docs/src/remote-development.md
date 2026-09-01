@@ -72,7 +72,7 @@ ZZZ shells out to the `ssh` on your path, and so it will inherit any configurati
 }
 ```
 
-There are two additional ZZZ-specific options per connection, `upload_binary_over_ssh` and `nickname`:
+There is one additional ZZZ-specific option per connection, `nickname`:
 
 ```json [settings]
 {
@@ -80,10 +80,6 @@ There are two additional ZZZ-specific options per connection, `upload_binary_ove
     {
       "host": "192.168.1.10",
       "projects": [{ "paths": ["~/code/zed/zed"] }],
-      // by default ZZZ will download the server binary from the internet on the remote.
-      // When this is true, it'll be downloaded to your laptop and uploaded over SSH.
-      // This is useful when your remote server has restricted internet access.
-      "upload_binary_over_ssh": true,
       // Shown in the ZZZ UI to help distinguish multiple hosts.
       "nickname": "lil-linux"
     }
@@ -220,11 +216,28 @@ Once you provide the SSH options, ZZZ shells out to `ssh` on your local machine 
 
 Any prompts that SSH needs will be shown in the UI, so you can verify host keys, type key passwords, etc.
 
-Once the master connection is established, ZZZ will check to see if the remote server binary is present in `~/.zed_server` on the remote, and that its version matches the current version of ZZZ that you're using.
+Once the master connection is established, ZZZ will check to see if the remote
+server binary is present in `~/.zzz_server` on the remote, and that its version
+matches the current version of ZZZ that you're using.
 
-If it is not there or the version mismatches, ZZZ will try to download the latest version. By default, it will download from `https://zed.dev` directly, but if you set: `{"upload_binary_over_ssh":true}` in your settings for that server, it will download the binary to your local machine and then upload it to the remote server.
+If it is not there or the version mismatches, a non-debug ZZZ build uploads an
+embedded `remote_server` archive over SSH for the remote OS and architecture.
+Linux x86_64 is always embedded when the host can build it; Linux aarch64,
+macOS, and Windows archives are embedded when that target can be compiled on
+the build machine.
 
-If you'd like to maintain the server binary yourself you can. You can either download our prebuilt versions from [GitHub](`~/.zed_server/zed-remote-server-stable-0.217.3+stable.105.80433cb239e868271457ac376673a5f75bc4adb1`), or [build your own](`~/.zed_server/zed-remote-server-stable-0.217.3+stable.105.80433cb239e868271457ac376673a5f75bc4adb1`) with `cargo build -p remote_server --release`. If you do this, you must upload it to `~/.zed_server/zed-remote-server-stable-0.217.3+stable.105.80433cb239e868271457ac376673a5f75bc4adb1` on the server, for example `~/.zed_server/zed-remote-server-stable-0.217.3+stable.105.80433cb239e868271457ac376673a5f75bc4adb1`. The version must exactly match the version of ZZZ itself you are using.
+If no matching archive is embedded, ZZZ errors unless the binary is already on
+the remote, or a debug `cargo run` compiles `remote_server` from source
+(`ZED_BUILD_REMOTE_SERVER`, default `nocompress`). Force embedding in a debug
+or Dev build with `ZZZ_EMBED_REMOTE_SERVERS=1`.
+
+Debug `cargo run` builds do not embed archives.
+
+If you'd like to maintain the server binary yourself, build it with
+`cargo build -p remote_server --release` and upload it to `~/.zzz_server` on
+the server. The filename must match the ZZZ version you are using, for example
+`~/.zzz_server/zzz-remote-server-dev-build` for Dev or
+`~/.zzz_server/zzz-remote-server-stable-1.19.0` for Stable.
 
 ## Maintaining the SSH connection
 

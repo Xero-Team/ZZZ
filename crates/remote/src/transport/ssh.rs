@@ -817,15 +817,10 @@ impl SshRemoteConnection {
             ReleaseChannel::Dev => "build".to_owned(),
             _ => version.to_string(),
         };
-        let binary_name = format!(
-            "zed-remote-server-{}-{}{}",
+        let binary_name = paths::remote_server_binary_name(
             release_channel.dev_name(),
-            version_str,
-            if self.ssh_platform.os.is_windows() {
-                ".exe"
-            } else {
-                ""
-            }
+            &version_str,
+            self.ssh_platform.os.is_windows(),
         );
         let dst_path =
             paths::remote_server_dir_relative().join(RelPath::unix(&binary_name).unwrap());
@@ -869,172 +864,36 @@ impl SshRemoteConnection {
             return Ok(dst_path);
         }
 
-        let wanted_version = cx.update(|cx| match release_channel {
-            ReleaseChannel::Dev => {
-                anyhow::bail!(
-                    "ZED_BUILD_REMOTE_SERVER is not set and no remote server exists at ({:?})",
-                    dst_path
-                )
-            }
-            ReleaseChannel::Stable => Ok(Some(AppVersion::global(cx))),
-        })?;
-
-        let tmp_path_compressed = remote_server_dir_relative().join(
-            RelPath::unix(&format!(
-                "{}-download-{}.{}",
-                binary_name,
-                std::process::id(),
-                if self.ssh_platform.os.is_windows() {
+        if let Some(embedded) = super::materialize_embedded_remote_server(self.ssh_platform)? {
+            let archive_extension = super::embedded_remote_server_extension(self.ssh_platform)
+                .unwrap_or(if self.ssh_platform.os.is_windows() {
                     "zip"
                 } else {
                     "gz"
-                }
-            ))
-            .unwrap(),
-        );
-        if !self.socket.connection_options.upload_binary_over_ssh
-            && let Some(url) = delegate
-                .get_download_url(
-                    self.ssh_platform,
-                    release_channel,
-                    wanted_version.clone(),
-                    cx,
-                )
-                .await?
-        {
-            match self
-                .download_binary_on_server(&url, &tmp_path_compressed, delegate, cx)
+                });
+            let tmp_path_compressed = remote_server_dir_relative().join(
+                RelPath::unix(&format!(
+                    "{}-download-{}.{archive_extension}",
+                    binary_name,
+                    std::process::id(),
+                ))
+                .unwrap(),
+            );
+            self.upload_local_server_binary(embedded.path(), &tmp_path_compressed, delegate, cx)
                 .await
-            {
-                Ok(_) => {
-                    self.extract_server_binary(&dst_path, &tmp_path_compressed, delegate, cx)
-                        .await
-                        .context("extracting server binary")?;
-                    return Ok(dst_path);
-                }
-                Err(e) => {
-                    log::error!(
-                        "Failed to download binary on server, attempting to download locally and then upload it the server: {e:#}",
-                    )
-                }
-            }
+                .context("uploading embedded server binary")?;
+            self.extract_server_binary(&dst_path, &tmp_path_compressed, delegate, cx)
+                .await
+                .context("extracting embedded server binary")?;
+            return Ok(dst_path);
         }
 
-        let src_path = delegate
-            .download_server_binary_locally(
-                self.ssh_platform,
-                release_channel,
-                wanted_version.clone(),
-                cx,
-            )
-            .await
-            .context("downloading server binary locally")?;
-        self.upload_local_server_binary(&src_path, &tmp_path_compressed, delegate, cx)
-            .await
-            .context("uploading server binary")?;
-        self.extract_server_binary(&dst_path, &tmp_path_compressed, delegate, cx)
-            .await
-            .context("extracting server binary")?;
-        Ok(dst_path)
-    }
-
-    async fn download_binary_on_server(
-        &self,
-        url: &str,
-        tmp_path: &RelPath,
-        delegate: &Arc<dyn RemoteClientDelegate>,
-        cx: &mut AsyncApp,
-    ) -> Result<()> {
-        if let Some(parent) = tmp_path.parent() {
-            let res = self
-                .socket
-                .run_command(
-                    self.ssh_shell_kind,
-                    "mkdir",
-                    &["-p", parent.display(self.path_style()).as_ref()],
-                    true,
-                )
-                .await;
-            if !self.ssh_platform.os.is_windows() {
-                // mkdir fails on windows if the path already exists ...
-                res?;
-            }
-        }
-
-        delegate.set_status(Some("Downloading remote development server on host"), cx);
-
-        let connection_timeout = self
-            .socket
-            .connection_options
-            .connection_timeout
-            .unwrap_or(10)
-            .to_string();
-
-        match self
-            .socket
-            .run_command(
-                self.ssh_shell_kind,
-                "curl",
-                &[
-                    "-f",
-                    "-L",
-                    "--connect-timeout",
-                    &connection_timeout,
-                    url,
-                    "-o",
-                    &tmp_path.display(self.path_style()),
-                ],
-                true,
-            )
-            .await
-        {
-            Ok(_) => {}
-            Err(e) => {
-                if self
-                    .socket
-                    .run_command(self.ssh_shell_kind, "which", &["curl"], true)
-                    .await
-                    .is_ok()
-                {
-                    return Err(e);
-                }
-
-                log::info!("curl is not available, trying wget");
-                match self
-                    .socket
-                    .run_command(
-                        self.ssh_shell_kind,
-                        "wget",
-                        &[
-                            "--connect-timeout",
-                            &connection_timeout,
-                            "--tries",
-                            "1",
-                            url,
-                            "-O",
-                            &tmp_path.display(self.path_style()),
-                        ],
-                        true,
-                    )
-                    .await
-                {
-                    Ok(_) => {}
-                    Err(e) => {
-                        if self
-                            .socket
-                            .run_command(self.ssh_shell_kind, "which", &["wget"], true)
-                            .await
-                            .is_ok()
-                        {
-                            return Err(e);
-                        }
-                        anyhow::bail!("Neither curl nor wget is available");
-                    }
-                }
-            }
-        }
-
-        Ok(())
+        anyhow::bail!(
+            "no embedded remote server for {}-{} and no remote server exists at ({:?})",
+            self.ssh_platform.os,
+            self.ssh_platform.arch,
+            dst_path
+        )
     }
 
     async fn upload_local_server_binary(
@@ -1445,7 +1304,7 @@ impl SshSocket {
                 "AMD64" => RemoteArch::X86_64,
                 "ARM64" => RemoteArch::Aarch64,
                 arch => anyhow::bail!(
-                    "Prebuilt remote servers are not yet available for windows-{arch}. See https://zed.dev/docs/remote-development"
+                    "unsupported remote Windows architecture {arch}"
                 ),
             },
         })
@@ -2145,9 +2004,9 @@ mod tests {
         assert_eq!(
             sftp_put_command(
                 "/tmp/Zed Repro/remote_server",
-                ".zed_server/downloaded server",
+                ".zzz_server/downloaded server",
             ),
-            "put \"/tmp/Zed Repro/remote_server\" \".zed_server/downloaded server\"\n"
+            "put \"/tmp/Zed Repro/remote_server\" \".zzz_server/downloaded server\"\n"
         );
     }
 
@@ -2156,9 +2015,9 @@ mod tests {
         assert_eq!(
             sftp_put_command(
                 r#"/tmp/Zed "Nightly"/remote_server"#,
-                ".zed_server/remote_server",
+                ".zzz_server/remote_server",
             ),
-            "put \"/tmp/Zed \\\"Nightly\\\"/remote_server\" \".zed_server/remote_server\"\n"
+            "put \"/tmp/Zed \\\"Nightly\\\"/remote_server\" \".zzz_server/remote_server\"\n"
         );
     }
 
@@ -2175,9 +2034,9 @@ mod tests {
         assert_eq!(
             sftp_put_command(
                 r"/tmp/zed\server/remote_server",
-                ".zed_server/remote_server",
+                ".zzz_server/remote_server",
             ),
-            "put \"/tmp/zed\\\\server/remote_server\" \".zed_server/remote_server\"\n"
+            "put \"/tmp/zed\\\\server/remote_server\" \".zzz_server/remote_server\"\n"
         );
     }
 
@@ -2186,9 +2045,9 @@ mod tests {
         assert_eq!(
             sftp_put_command(
                 r"C:\Users\Smit\Zed Repro\remote_server",
-                ".zed_server/remote_server",
+                ".zzz_server/remote_server",
             ),
-            "put \"C:\\\\Users\\\\Smit\\\\Zed Repro\\\\remote_server\" \".zed_server/remote_server\"\n"
+            "put \"C:\\\\Users\\\\Smit\\\\Zed Repro\\\\remote_server\" \".zzz_server/remote_server\"\n"
         );
     }
 

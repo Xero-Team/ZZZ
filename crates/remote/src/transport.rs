@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::path::Path;
 
 use crate::{
     RemoteArch, RemoteOs, RemotePlatform,
@@ -20,6 +21,42 @@ pub mod mock;
 pub mod ssh;
 pub mod wsl;
 
+pub(crate) struct EmbeddedRemoteServerFile {
+    _file: tempfile::NamedTempFile,
+}
+
+impl EmbeddedRemoteServerFile {
+    pub(crate) fn path(&self) -> &Path {
+        self._file.path()
+    }
+}
+
+pub(crate) fn materialize_embedded_remote_server(
+    platform: RemotePlatform,
+) -> Result<Option<EmbeddedRemoteServerFile>> {
+    let Some((bytes, extension)) =
+        remote_server_embed::compressed_archive(platform.os.as_str(), platform.arch.as_str())
+    else {
+        return Ok(None);
+    };
+
+    let mut file = tempfile::Builder::new()
+        .prefix("zzz-remote-server-")
+        .suffix(&format!(".{extension}"))
+        .tempfile()
+        .context("creating temp file for embedded remote server")?;
+    file.write_all(bytes)
+        .context("writing embedded remote server archive")?;
+    file.flush()
+        .context("flushing embedded remote server archive")?;
+    Ok(Some(EmbeddedRemoteServerFile { _file: file }))
+}
+
+pub(crate) fn embedded_remote_server_extension(platform: RemotePlatform) -> Option<&'static str> {
+    remote_server_embed::compressed_archive(platform.os.as_str(), platform.arch.as_str())
+        .map(|(_, extension)| extension)
+}
+
 /// Parses the output of `uname -sm` to determine the remote platform.
 /// Takes the last line to skip possible shell initialization output.
 fn parse_platform(output: &str) -> Result<RemotePlatform> {
@@ -32,9 +69,7 @@ fn parse_platform(output: &str) -> Result<RemotePlatform> {
     let os = match os {
         "Darwin" => RemoteOs::MacOs,
         "Linux" => RemoteOs::Linux,
-        _ => anyhow::bail!(
-            "Prebuilt remote servers are not yet available for {os:?}. See https://zed.dev/docs/remote-development"
-        ),
+        _ => anyhow::bail!("unsupported remote OS {os:?}"),
     };
 
     // exclude armv5,6,7 as they are 32-bit.
@@ -47,9 +82,7 @@ fn parse_platform(output: &str) -> Result<RemotePlatform> {
     } else if arch.starts_with("x86") {
         RemoteArch::X86_64
     } else {
-        anyhow::bail!(
-            "Prebuilt remote servers are not yet available for {arch:?}. See https://zed.dev/docs/remote-development"
-        )
+        anyhow::bail!("unsupported remote architecture {arch:?}")
     };
 
     Ok(RemotePlatform { os, arch })

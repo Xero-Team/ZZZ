@@ -164,6 +164,9 @@ impl From<RemoteConnectionOptions> for RemoteHostLocation {
             RemoteConnectionOptions::Mock(mock) => {
                 (None, SharedString::new(format!("mock-{}", mock.id)))
             }
+            #[cfg(not(any(test, feature = "test-support")))]
+            #[allow(unreachable_patterns)]
+            _ => (None, SharedString::new("mock")),
         };
         Self {
             user_name,

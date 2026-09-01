@@ -71,19 +71,34 @@ static CURRENT_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// On Windows, this is `%APPDATA%\ZZZ`.
 static CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-/// Returns the relative path to the zed_server directory on the ssh host.
+/// Directory on the SSH host that stores the headless server binary.
+pub const REMOTE_SERVER_DIR_NAME: &str = ".zzz_server";
+
+/// Legacy WSL-only directory; new installs share [`REMOTE_SERVER_DIR_NAME`].
+pub const REMOTE_WSL_SERVER_DIR_NAME: &str = ".zzz_wsl_server";
+
+/// Filename prefix for the headless server binary on the remote host.
+pub const REMOTE_SERVER_BINARY_PREFIX: &str = "zzz-remote-server";
+
+/// Returns the relative path to the remote server directory on the SSH host.
 pub fn remote_server_dir_relative() -> &'static RelPath {
     static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(".zed_server").unwrap());
+        LazyLock::new(|| RelPath::unix(REMOTE_SERVER_DIR_NAME).unwrap());
     *CACHED
 }
 
 // Remove this once 223 goes stable
-/// Returns the relative path to the zed_wsl_server directory on the wsl host.
+/// Returns the relative path to the legacy WSL server directory on the WSL host.
 pub fn remote_wsl_server_dir_relative() -> &'static RelPath {
     static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(".zed_wsl_server").unwrap());
+        LazyLock::new(|| RelPath::unix(REMOTE_WSL_SERVER_DIR_NAME).unwrap());
     *CACHED
+}
+
+/// Returns the remote server binary filename for a release channel and version.
+pub fn remote_server_binary_name(channel: &str, version: &str, windows: bool) -> String {
+    let ext = if windows { ".exe" } else { "" };
+    format!("{REMOTE_SERVER_BINARY_PREFIX}-{channel}-{version}{ext}")
 }
 
 /// Sets a custom directory for all user data, overriding the default data directory.
@@ -643,10 +658,18 @@ mod tests {
 
     #[test]
     fn relative_names_and_paths_match_workspace_conventions() {
-        assert_eq!(remote_server_dir_relative().as_unix_str(), ".zed_server");
+        assert_eq!(remote_server_dir_relative().as_unix_str(), ".zzz_server");
         assert_eq!(
             remote_wsl_server_dir_relative().as_unix_str(),
-            ".zed_wsl_server"
+            ".zzz_wsl_server"
+        );
+        assert_eq!(
+            remote_server_binary_name("dev", "build", false),
+            "zzz-remote-server-dev-build"
+        );
+        assert_eq!(
+            remote_server_binary_name("stable", "1.19.0", true),
+            "zzz-remote-server-stable-1.19.0.exe"
         );
         assert_eq!(local_settings_folder_name(), ".ZZZ");
         assert_eq!(local_vscode_folder_name(), ".vscode");

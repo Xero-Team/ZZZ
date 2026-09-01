@@ -101,7 +101,8 @@ linux() {
         prompt_remove_preferences
     fi
 
-    rm -rf $HOME/.zed_server
+    rm -rf $HOME/.zzz_server
+    rm -rf $HOME/.zzz_wsl_server
 }
 
 macos() {
@@ -152,7 +153,8 @@ macos() {
         prompt_remove_preferences
     fi
 
-    rm -rf $HOME/.zed_server
+    rm -rf $HOME/.zzz_server
+    rm -rf $HOME/.zzz_wsl_server
 }
 
 main "$@"

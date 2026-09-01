@@ -34,7 +34,6 @@ use rpc::{
     AnyProtoClient, ErrorExt, ProtoClient, ProtoMessageHandlerSet, RpcError,
     proto::{self, Envelope, EnvelopedMessage, PeerId, RequestMessage, build_typed_envelope},
 };
-use semver::Version;
 use std::{
     collections::VecDeque,
     fmt,
@@ -128,20 +127,6 @@ pub trait RemoteClientDelegate: Send + Sync {
         tx: oneshot::Sender<EncryptedPassword>,
         cx: &mut AsyncApp,
     );
-    fn get_download_url(
-        &self,
-        platform: RemotePlatform,
-        release_channel: ReleaseChannel,
-        version: Option<Version>,
-        cx: &mut AsyncApp,
-    ) -> Task<Result<Option<String>>>;
-    fn download_server_binary_locally(
-        &self,
-        platform: RemotePlatform,
-        release_channel: ReleaseChannel,
-        version: Option<Version>,
-        cx: &mut AsyncApp,
-    ) -> Task<Result<PathBuf>>;
     fn set_status(&self, status: Option<&str>, cx: &mut AsyncApp);
 }
 

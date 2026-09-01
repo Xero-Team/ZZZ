@@ -178,11 +178,8 @@ impl WslRemoteConnection {
             _ => version.to_string(),
         };
 
-        let binary_name = format!(
-            "zed-remote-server-{}-{}",
-            release_channel.dev_name(),
-            version_str
-        );
+        let binary_name =
+            paths::remote_server_binary_name(release_channel.dev_name(), &version_str, false);
 
         let dst_path =
             paths::remote_server_dir_relative().join(RelPath::unix(&binary_name).unwrap());
@@ -228,27 +225,26 @@ impl WslRemoteConnection {
             return Ok(dst_path);
         }
 
-        let wanted_version = match release_channel {
-            ReleaseChannel::Dev => None,
-            ReleaseChannel::Stable => Some(cx.update(|cx| AppVersion::global(cx))),
-        };
+        if let Some(embedded) = super::materialize_embedded_remote_server(self.platform)? {
+            let tmp_path = format!(
+                "{}.{}.gz",
+                dst_path.display(PathStyle::Posix),
+                std::process::id()
+            );
+            let tmp_path = RelPath::unix(&tmp_path).unwrap();
+            self.upload_file(embedded.path(), &tmp_path, delegate, cx)
+                .await?;
+            self.extract_and_install(&tmp_path, &dst_path, delegate, cx)
+                .await?;
+            return Ok(dst_path);
+        }
 
-        let src_path = delegate
-            .download_server_binary_locally(self.platform, release_channel, wanted_version, cx)
-            .await?;
-
-        let tmp_path = format!(
-            "{}.{}.gz",
-            dst_path.display(PathStyle::Posix),
-            std::process::id()
-        );
-        let tmp_path = RelPath::unix(&tmp_path).unwrap();
-
-        self.upload_file(&src_path, &tmp_path, delegate, cx).await?;
-        self.extract_and_install(&tmp_path, &dst_path, delegate, cx)
-            .await?;
-
-        Ok(dst_path)
+        anyhow::bail!(
+            "no embedded remote server for {}-{} and no remote server exists at ({:?})",
+            self.platform.os,
+            self.platform.arch,
+            dst_path
+        )
     }
 
     async fn upload_file(

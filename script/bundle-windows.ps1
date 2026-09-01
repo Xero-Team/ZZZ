@@ -255,7 +255,8 @@ function GenerateLicenses {
 
 function BuildZedAndItsFriends {
     Write-Output "Building Zed and its friends, for channel: $channel"
-    # Build zzz.exe and cli.exe
+    # Build zzz.exe and cli.exe after remote_server so the archive can be embedded.
+    $env:ZZZ_EMBED_REMOTE_SERVER_DIR = Join-Path $env:ZED_WORKSPACE 'target'
     Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'zzz', '--package', 'cli', '--target', $target)) -Description "Build zzz and cli for $target"
     Copy-Item -Path ".\$CargoOutDir\zzz.exe" -Destination "$innoDir\ZZZ.exe" -Force
     Copy-Item -Path ".\$CargoOutDir\cli.exe" -Destination "$innoDir\cli.exe" -Force
@@ -276,7 +277,13 @@ function BuildZedAndItsFriends {
 
 function BuildRemoteServer {
     Write-Output "Building remote_server for $target"
-    Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'remote_server', '--target', $target)) -Description "Build remote_server for $target"
+    $env:ZZZ_BUILDING_REMOTE_SERVER = '1'
+    try {
+        Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'remote_server', '--target', $target)) -Description "Build remote_server for $target"
+    }
+    finally {
+        Remove-Item Env:ZZZ_BUILDING_REMOTE_SERVER -ErrorAction SilentlyContinue
+    }
 
     # Create zipped remote server binary
     $remoteServerSrc = (Resolve-Path ".\$CargoOutDir\remote_server.exe").Path
@@ -286,7 +293,7 @@ function BuildRemoteServer {
         & "$innoDir\sign.ps1" $remoteServerSrc
     }
 
-    $remoteServerDst = "$env:ZED_WORKSPACE\target\zed-remote-server-windows-$Architecture.zip"
+    $remoteServerDst = "$env:ZED_WORKSPACE\target\zzz-remote-server-windows-$Architecture.zip"
     Write-Output "Compressing remote_server to $remoteServerDst"
     Compress-Archive -Path $remoteServerSrc -DestinationPath $remoteServerDst -Force
 
@@ -524,8 +531,8 @@ $debugStoreKey = "$env:ZED_RELEASE_CHANNEL/zed-$env:RELEASE_VERSION-$env:ZED_REL
 CheckEnvironmentVariables
 PrepareForBundle
 GenerateLicenses
-BuildZedAndItsFriends
 BuildRemoteServer
+BuildZedAndItsFriends
 MakeAppx
 SignZedAndItsFriends
 ZipZedAndItsFriendsDebug

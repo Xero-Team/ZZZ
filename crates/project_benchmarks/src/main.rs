@@ -15,7 +15,6 @@ use project::{
 };
 use release_channel::ReleaseChannel;
 use remote::{ConnectionIdentifier, RemoteClientDelegate, SshConnectionOptions};
-use semver::Version;
 
 #[derive(Parser)]
 struct Args {
@@ -62,26 +61,6 @@ impl RemoteClientDelegate for BenchmarkRemoteClient {
             },
             Err(e) => eprintln!("Failed to read password: {e}"),
         }
-    }
-
-    fn get_download_url(
-        &self,
-        _platform: remote::RemotePlatform,
-        _release_channel: ReleaseChannel,
-        _version: Option<Version>,
-        _cx: &mut gpui::AsyncApp,
-    ) -> gpui::Task<gpui::Result<Option<String>>> {
-        unimplemented!()
-    }
-
-    fn download_server_binary_locally(
-        &self,
-        _platform: remote::RemotePlatform,
-        _release_channel: ReleaseChannel,
-        _version: Option<Version>,
-        _cx: &mut gpui::AsyncApp,
-    ) -> gpui::Task<gpui::Result<std::path::PathBuf>> {
-        unimplemented!()
     }
 
     fn set_status(&self, status: Option<&str>, _: &mut gpui::AsyncApp) {

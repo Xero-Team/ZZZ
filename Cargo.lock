@@ -14885,6 +14885,7 @@ dependencies = [
  "paths",
  "prost 0.14.3",
  "release_channel",
+ "remote_server_embed",
  "rpc",
  "schemars 1.2.1",
  "semver",
@@ -14905,23 +14906,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "askpass",
- "client",
  "futures 0.3.32",
  "gpui",
- "http_client",
  "i18n",
  "log",
  "markdown",
  "menu",
- "paths",
- "release_channel",
  "remote",
- "semver",
- "serde",
- "serde_json",
  "settings",
- "smol",
- "tempfile",
  "theme_settings",
  "ui",
  "ui_input",
@@ -14999,6 +14991,14 @@ dependencies = [
  "windows 0.62.2",
  "worktree",
  "zlog",
+]
+
+[[package]]
+name = "remote_server_embed"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "zip",
 ]
 
 [[package]]

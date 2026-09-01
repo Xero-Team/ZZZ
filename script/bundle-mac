@@ -87,10 +87,14 @@ script/generate-licenses
 rustup target add $target_triple
 
 echo "Compiling zed binaries"
-cargo build ${build_flag} --package zzz --package cli --target $target_triple
-# Build remote_server in separate invocation to prevent feature unification from other crates
-# from influencing dynamic libraries required by it.
+# Build remote_server first so the editor can embed the archive.
+export ZZZ_BUILDING_REMOTE_SERVER=1
 cargo build ${build_flag} --package remote_server --target $target_triple
+unset ZZZ_BUILDING_REMOTE_SERVER
+gzip -f --stdout --best "target/${target_triple}/${target_dir}/remote_server" \
+    > "target/zzz-remote-server-macos-${arch_suffix}.gz"
+export ZZZ_EMBED_REMOTE_SERVER_DIR="$(cd target && pwd)"
+cargo build ${build_flag} --package zzz --package cli --target $target_triple
 
 echo "Creating application bundle"
 pushd crates/zed
@@ -349,4 +353,4 @@ cp target/${target_triple}/${target_dir}/cli "${app_path}/Contents/MacOS/cli"
 sign_app_binaries
 
 sign_binary "target/$target_triple/release/remote_server"
-gzip -f --stdout --best target/$target_triple/release/remote_server > target/zed-remote-server-macos-$arch_suffix.gz
+gzip -f --stdout --best target/$target_triple/release/remote_server > target/zzz-remote-server-macos-$arch_suffix.gz
