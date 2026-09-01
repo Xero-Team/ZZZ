@@ -1,0 +1,643 @@
+use std::{path::PathBuf, sync::Arc, time::Duration};
+
+use anyhow::Context as _;
+use audio::PlaybackHandle;
+use editor::RevealInFileManager;
+use gpui::{
+    App, AppContext, Bounds, Context, Entity, EventEmitter, FocusHandle, Focusable, Pixels,
+    SharedString, Task, WeakEntity, Window,
+};
+use i18n::tr;
+use project::{Project, ProjectPath};
+use util::rel_path::RelPath;
+
+use crate::{
+    AudioItem, SeekBackward, SeekForward, SeekToEnd, SeekToStart, Stop, ToggleMute, TogglePlay,
+    player::{self, AudioMetadata},
+    waveform::{self, WAVEFORM_ANALYSIS_LIMIT, WAVEFORM_BUCKETS},
+};
+
+const SEEK_STEP: Duration = Duration::from_secs(5);
+const POSITION_TICK: Duration = Duration::from_millis(50);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PlaybackStatus {
+    Stopped,
+    Playing,
+    Paused,
+}
+
+pub(crate) enum LoadState {
+    Loading,
+    Loaded(Box<LoadedAudio>),
+    Error(SharedString),
+}
+
+pub(crate) struct LoadedAudio {
+    pub bytes: Arc<[u8]>,
+    pub format_hint: String,
+    pub metadata: AudioMetadata,
+    pub peaks: Option<Arc<[(f32, f32)]>>,
+    pub analyzing: bool,
+}
+
+pub struct AudioView {
+    pub(crate) audio_item: Entity<AudioItem>,
+    pub(crate) project: Entity<Project>,
+    pub(crate) focus_handle: FocusHandle,
+    pub(crate) load_state: LoadState,
+    pub(crate) playback: PlaybackStatus,
+    pub(crate) position: Duration,
+    pub(crate) volume: f32,
+    pub(crate) muted: bool,
+    pub(crate) volume_before_mute: f32,
+    pub(crate) handle: Option<PlaybackHandle>,
+    pub(crate) playback_error: Option<SharedString>,
+    pub(crate) waveform_bounds: Option<Bounds<Pixels>>,
+    pub(crate) seek_track_bounds: Option<Bounds<Pixels>>,
+    pub(crate) volume_track_bounds: Option<Bounds<Pixels>>,
+    pub(crate) dragging_seek: bool,
+    pub(crate) dragging_volume: bool,
+    _load_task: Task<()>,
+    _waveform_task: Option<Task<()>>,
+    _position_task: Option<Task<()>>,
+}
+
+pub enum AudioViewEvent {
+    TitleChanged,
+}
+
+impl EventEmitter<AudioViewEvent> for AudioView {}
+impl EventEmitter<()> for AudioView {}
+
+impl Focusable for AudioView {
+    fn focus_handle(&self, _cx: &App) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+}
+
+impl AudioView {
+    pub fn new(
+        audio_item: Entity<AudioItem>,
+        project: Entity<Project>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        cx.on_release(|this, _cx| {
+            if let Some(handle) = this.handle.take() {
+                handle.stop();
+            }
+        })
+        .detach();
+
+        let load_task = Self::start_load(cx);
+
+        Self {
+            audio_item,
+            project,
+            focus_handle: cx.focus_handle(),
+            load_state: LoadState::Loading,
+            playback: PlaybackStatus::Stopped,
+            position: Duration::ZERO,
+            volume: 1.0,
+            muted: false,
+            volume_before_mute: 1.0,
+            handle: None,
+            playback_error: None,
+            waveform_bounds: None,
+            seek_track_bounds: None,
+            volume_track_bounds: None,
+            dragging_seek: false,
+            dragging_volume: false,
+            _load_task: load_task,
+            _waveform_task: None,
+            _position_task: None,
+        }
+    }
+
+    fn start_load(cx: &mut Context<Self>) -> Task<()> {
+        cx.spawn(async move |this, cx| {
+            let load_task = this.update(cx, |view, cx| {
+                let item = view.audio_item.read(cx);
+                let path = item.path.clone();
+                let worktree_id = item.worktree_id;
+                let worktree = view
+                    .project
+                    .read(cx)
+                    .worktree_for_id(worktree_id, cx)
+                    .with_context(|| format!("worktree {worktree_id:?} not found"))?;
+                anyhow::Ok(worktree.update(cx, |worktree, cx| {
+                    worktree.load_binary_file(path.as_ref(), cx)
+                }))
+            });
+
+            let load_task = match load_task {
+                Ok(Ok(task)) => task,
+                Ok(Err(error)) | Err(error) => {
+                    Self::set_error(&this, error.to_string(), cx);
+                    return;
+                }
+            };
+
+            let loaded = match load_task.await {
+                Ok(loaded) => loaded,
+                Err(error) => {
+                    Self::set_error(&this, error.to_string(), cx);
+                    return;
+                }
+            };
+
+            let bytes: Arc<[u8]> = Arc::from(loaded.content);
+            let format_hint = match this.update(cx, |view, cx| {
+                view.audio_item
+                    .read(cx)
+                    .path
+                    .extension()
+                    .map(ToOwned::to_owned)
+            }) {
+                Ok(Some(extension)) => extension,
+                Ok(None) => {
+                    this.update(cx, |view, cx| {
+                        view.load_state = LoadState::Error(
+                            tr(
+                                cx,
+                                "audio_viewer.error.missing_extension",
+                                "Audio file has no extension",
+                            )
+                            .into(),
+                        );
+                        cx.notify();
+                    })
+                    .ok();
+                    return;
+                }
+                Err(error) => {
+                    Self::set_error(&this, error.to_string(), cx);
+                    return;
+                }
+            };
+
+            let decode_bytes = bytes.clone();
+            let hint = format_hint.clone();
+            let metadata_result = cx
+                .background_spawn(async move { player::decode_metadata(decode_bytes, &hint) })
+                .await;
+
+            let metadata = match metadata_result {
+                Ok(metadata) => metadata,
+                Err(error) => {
+                    Self::set_error(&this, error.to_string(), cx);
+                    return;
+                }
+            };
+
+            this.update(cx, |view, cx| {
+                view.load_state = LoadState::Loaded(Box::new(LoadedAudio {
+                    bytes,
+                    format_hint,
+                    metadata,
+                    peaks: None,
+                    analyzing: true,
+                }));
+                view.start_waveform(cx);
+                cx.emit(AudioViewEvent::TitleChanged);
+                cx.notify();
+            })
+            .ok();
+        })
+    }
+
+    fn set_error(
+        this: &WeakEntity<Self>,
+        message: impl Into<SharedString>,
+        cx: &mut gpui::AsyncApp,
+    ) {
+        let message = message.into();
+        this.update(cx, |view, cx| {
+            view.load_state = LoadState::Error(message);
+            cx.notify();
+        })
+        .ok();
+    }
+
+    fn start_waveform(&mut self, cx: &mut Context<Self>) {
+        let LoadState::Loaded(loaded) = &self.load_state else {
+            return;
+        };
+        let bytes = loaded.bytes.clone();
+        let format_hint = loaded.format_hint.clone();
+
+        self._waveform_task = Some(cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let decoder = player::open_decoder(bytes, &format_hint)?;
+                    anyhow::Ok(waveform::extract_waveform_peaks(
+                        decoder,
+                        WAVEFORM_BUCKETS,
+                        WAVEFORM_ANALYSIS_LIMIT,
+                    ))
+                })
+                .await;
+
+            this.update(cx, |view, cx| {
+                if let LoadState::Loaded(loaded) = &mut view.load_state {
+                    loaded.analyzing = false;
+                    match result {
+                        Ok(waveform) => {
+                            loaded.peaks = Some(Arc::from(waveform.peaks));
+                            let sample_rate = loaded.metadata.sample_rate as f64;
+                            let channels = loaded.metadata.channels.max(1) as f64;
+                            if sample_rate > 0.0 && waveform.sample_count > 0 {
+                                let analyzed = Duration::from_secs_f64(
+                                    waveform.sample_count as f64 / sample_rate / channels,
+                                );
+                                if waveform.reached_end || loaded.metadata.duration.is_none() {
+                                    loaded.metadata.duration = Some(analyzed);
+                                }
+                            }
+                        }
+                        Err(error) => log::error!("analyzing audio waveform: {error:#}"),
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
+        }));
+    }
+
+    pub(crate) fn loaded(&self) -> Option<&LoadedAudio> {
+        match &self.load_state {
+            LoadState::Loaded(state) => Some(state),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn duration(&self) -> Option<Duration> {
+        self.loaded().and_then(|loaded| loaded.metadata.duration)
+    }
+
+    pub(crate) fn is_playing(&self) -> bool {
+        self.playback == PlaybackStatus::Playing
+    }
+
+    pub(crate) fn effective_volume(&self) -> f32 {
+        if self.muted { 0.0 } else { self.volume }
+    }
+
+    pub(crate) fn playhead_ratio(&self) -> f32 {
+        let Some(duration) = self.duration() else {
+            return 0.0;
+        };
+        let total = duration.as_secs_f32();
+        if total <= 0.0 {
+            0.0
+        } else {
+            (self.position.as_secs_f32() / total).clamp(0.0, 1.0)
+        }
+    }
+
+    pub(crate) fn file_name(&self, cx: &App) -> String {
+        self.audio_item
+            .read(cx)
+            .path
+            .file_name()
+            .map(|name| name.to_owned())
+            .unwrap_or_else(|| tr(cx, "audio_viewer.file_name.fallback", "Audio"))
+    }
+
+    pub(crate) fn abs_path(&self, cx: &App) -> Option<PathBuf> {
+        let item = self.audio_item.read(cx);
+        let worktree = self
+            .project
+            .read(cx)
+            .worktree_for_id(item.worktree_id, cx)?;
+        let local = worktree.read(cx).as_local()?;
+        Some(local.abs_path().join(item.path.as_std_path()))
+    }
+
+    pub(crate) fn project_path(&self, cx: &App) -> ProjectPath {
+        self.audio_item.read(cx).project_path()
+    }
+
+    pub(crate) fn relative_path(&self, cx: &App) -> Arc<RelPath> {
+        self.audio_item.read(cx).path.clone()
+    }
+
+    pub(crate) fn metadata_tooltip(&self, cx: &App) -> String {
+        let path_style = self.project.read(cx).path_style(cx);
+        let mut lines = vec![self.relative_path(cx).display(path_style).into_owned()];
+        if let Some(parts) = self.metadata_parts(cx) {
+            lines.push(parts.join(" • "));
+        }
+        lines.join("\n")
+    }
+
+    pub(crate) fn metadata_parts(&self, cx: &App) -> Option<Vec<String>> {
+        let loaded = self.loaded()?;
+        let mut parts = Vec::new();
+        parts.push(format_sample_rate(loaded.metadata.sample_rate));
+        parts.push(format_channels(loaded.metadata.channels, cx));
+        parts.push(loaded.metadata.format_label.to_string());
+        if let Some(duration) = loaded.metadata.duration {
+            parts.push(format_timestamp(duration));
+        }
+        parts.push(util::size::format_file_size(
+            loaded.metadata.file_size,
+            false,
+        ));
+        Some(parts)
+    }
+
+    pub(crate) fn current_time_label(&self) -> String {
+        let current = format_timestamp(self.position);
+        match self.duration() {
+            Some(duration) => format!("{current} / {}", format_timestamp(duration)),
+            None => current,
+        }
+    }
+
+    fn output_volume(&self) -> f32 {
+        self.effective_volume()
+    }
+
+    fn start_position_tick(&mut self, cx: &mut Context<Self>) {
+        self._position_task = Some(cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(POSITION_TICK).await;
+                if this
+                    .update(cx, |view, cx| {
+                        view.sync_playback_position(cx);
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        }));
+    }
+
+    fn sync_playback_position(&mut self, cx: &mut Context<Self>) {
+        let Some(handle) = &self.handle else {
+            return;
+        };
+        self.position = handle.position();
+        if handle.is_finished() {
+            self.handle = None;
+            self.playback = PlaybackStatus::Stopped;
+            if let Some(duration) = self.duration() {
+                self.position = duration;
+            }
+            self._position_task = None;
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn stop_playback(&mut self, cx: &mut Context<Self>) {
+        if let Some(handle) = self.handle.take() {
+            handle.stop();
+        }
+        self.playback = PlaybackStatus::Stopped;
+        self.position = Duration::ZERO;
+        self._position_task = None;
+        cx.notify();
+    }
+
+    fn clamp_position(&self, position: Duration) -> Duration {
+        match self.duration() {
+            Some(duration) => position.min(duration),
+            None => position,
+        }
+    }
+
+    fn seek_to(&mut self, position: Duration, cx: &mut Context<Self>) {
+        let position = self.clamp_position(position);
+        self.position = position;
+        if let Some(handle) = &self.handle
+            && let Err(error) = handle.try_seek(position)
+        {
+            log::warn!("seeking audio preview: {error:#}");
+        }
+        cx.notify();
+    }
+
+    fn start_playback(&mut self, cx: &mut Context<Self>) {
+        let Some(loaded) = self.loaded() else {
+            return;
+        };
+        let bytes = loaded.bytes.clone();
+        let format_hint = loaded.format_hint.clone();
+        let duration = loaded.metadata.duration;
+        if let Some(duration) = duration
+            && self.position >= duration
+        {
+            self.position = Duration::ZERO;
+        }
+
+        let start = self.position;
+        let volume = self.output_volume();
+
+        match player::play_bytes(bytes, &format_hint, start, volume, cx) {
+            Ok(handle) => {
+                self.handle = Some(handle);
+                self.playback = PlaybackStatus::Playing;
+                self.playback_error = None;
+                self.start_position_tick(cx);
+            }
+            Err(error) => {
+                log::error!("playing audio preview: {error:#}");
+                self.playback = PlaybackStatus::Stopped;
+                self.playback_error = Some(
+                    tr(
+                        cx,
+                        "audio_viewer.error.playback",
+                        "Could not open audio output",
+                    )
+                    .into(),
+                );
+            }
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_play(
+        &mut self,
+        _: &TogglePlay,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match self.playback {
+            PlaybackStatus::Playing => {
+                if let Some(handle) = &self.handle {
+                    handle.pause();
+                }
+                self.playback = PlaybackStatus::Paused;
+                cx.notify();
+            }
+            PlaybackStatus::Paused => {
+                if let Some(handle) = &self.handle
+                    && !handle.is_finished()
+                {
+                    handle.set_volume(self.output_volume());
+                    handle.resume();
+                    self.playback = PlaybackStatus::Playing;
+                    self.start_position_tick(cx);
+                    cx.notify();
+                    return;
+                }
+                self.start_playback(cx);
+            }
+            PlaybackStatus::Stopped => self.start_playback(cx),
+        }
+    }
+
+    pub(crate) fn stop(&mut self, _: &Stop, _window: &mut Window, cx: &mut Context<Self>) {
+        self.stop_playback(cx);
+    }
+
+    pub(crate) fn seek_forward(
+        &mut self,
+        _: &SeekForward,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.seek_to(self.position.saturating_add(SEEK_STEP), cx);
+    }
+
+    pub(crate) fn seek_backward(
+        &mut self,
+        _: &SeekBackward,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.seek_to(self.position.saturating_sub(SEEK_STEP), cx);
+    }
+
+    pub(crate) fn seek_to_start(
+        &mut self,
+        _: &SeekToStart,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.seek_to(Duration::ZERO, cx);
+    }
+
+    pub(crate) fn seek_to_end(
+        &mut self,
+        _: &SeekToEnd,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(duration) = self.duration() {
+            self.seek_to(duration, cx);
+        }
+    }
+
+    pub(crate) fn toggle_mute(
+        &mut self,
+        _: &ToggleMute,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.muted {
+            self.muted = false;
+            self.volume = self.volume_before_mute;
+        } else {
+            self.volume_before_mute = self.volume.max(0.01);
+            self.muted = true;
+        }
+        if let Some(handle) = &self.handle {
+            handle.set_volume(self.output_volume());
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn reveal_in_file_manager(
+        &mut self,
+        _: &RevealInFileManager,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(path) = self.abs_path(cx) {
+            self.project
+                .update(cx, |project, cx| project.reveal_path(&path, cx));
+        }
+    }
+
+    pub(crate) fn seek_from_ratio(&mut self, ratio: f32, cx: &mut Context<Self>) {
+        let Some(duration) = self.duration() else {
+            return;
+        };
+        let nanos = (duration.as_secs_f64() * ratio.clamp(0.0, 1.0) as f64) as u64;
+        self.seek_to(Duration::from_nanos(nanos), cx);
+    }
+
+    pub(crate) fn set_volume_from_ratio(&mut self, ratio: f32, cx: &mut Context<Self>) {
+        self.volume = ratio.clamp(0.0, 1.0);
+        self.muted = false;
+        if let Some(handle) = &self.handle {
+            handle.set_volume(self.output_volume());
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn ratio_from_position(
+        position: gpui::Point<Pixels>,
+        bounds: Bounds<Pixels>,
+    ) -> f32 {
+        let x = f32::from(position.x - bounds.origin.x);
+        let width = f32::from(bounds.size.width).max(1.0);
+        (x / width).clamp(0.0, 1.0)
+    }
+}
+
+pub(crate) fn format_timestamp(duration: Duration) -> String {
+    let total_seconds = duration.as_secs();
+    let hours = total_seconds / 3600;
+    let minutes = (total_seconds % 3600) / 60;
+    let seconds = total_seconds % 60;
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{seconds:02}")
+    } else {
+        format!("{minutes}:{seconds:02}")
+    }
+}
+
+fn format_sample_rate(sample_rate: u32) -> String {
+    if sample_rate.is_multiple_of(1000) {
+        format!("{} kHz", sample_rate / 1000)
+    } else {
+        format!("{:.1} kHz", sample_rate as f64 / 1000.0)
+    }
+}
+
+fn format_channels(channels: u16, cx: &App) -> String {
+    match channels {
+        1 => tr(cx, "audio_viewer.channels.mono", "Mono"),
+        2 => tr(cx, "audio_viewer.channels.stereo", "Stereo"),
+        count => tr(cx, "audio_viewer.channels.count", "{} channels").replacen(
+            "{}",
+            &count.to_string(),
+            1,
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_timestamp;
+    use std::time::Duration;
+
+    #[test]
+    fn format_timestamp_minutes_and_seconds() {
+        assert_eq!(format_timestamp(Duration::from_secs(0)), "0:00");
+        assert_eq!(format_timestamp(Duration::from_secs(5)), "0:05");
+        assert_eq!(format_timestamp(Duration::from_secs(65)), "1:05");
+        assert_eq!(format_timestamp(Duration::from_secs(3599)), "59:59");
+    }
+
+    #[test]
+    fn format_timestamp_hours() {
+        assert_eq!(format_timestamp(Duration::from_secs(3600)), "1:00:00");
+        assert_eq!(format_timestamp(Duration::from_secs(3661)), "1:01:01");
+    }
+}

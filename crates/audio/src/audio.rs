@@ -12,6 +12,7 @@ pub use audio_settings::LIVE_SETTINGS;
 
 mod audio_pipeline;
 pub use audio_pipeline::Audio;
+pub use audio_pipeline::PlaybackHandle;
 pub use audio_pipeline::{AudioDeviceInfo, AvailableAudioDevices};
 pub use audio_pipeline::{ensure_devices_initialized, resolve_device};
 // TODO(audio) replace with input test functionality in the audio crate

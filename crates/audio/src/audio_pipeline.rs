@@ -5,12 +5,23 @@ use cpal::{
     traits::{DeviceTrait, HostTrait},
 };
 use gpui::{App, AsyncApp, BorrowAppContext, Global};
+use parking_lot::Mutex;
 
 pub(super) use cpal::Sample;
 
-use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Source, mixer::Mixer, source::Buffered};
+use rodio::{
+    Decoder, DeviceSinkBuilder, MixerDeviceSink, Sample as RodioSample, Source, mixer::Mixer,
+    source::Buffered,
+};
 use settings::Settings;
-use std::io::Cursor;
+use std::{
+    io::Cursor,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
+    },
+    time::Duration,
+};
 use util::ResultExt;
 
 mod echo_canceller;
@@ -53,6 +64,7 @@ pub struct Audio {
     output: Option<(MixerDeviceSink, Mixer)>,
     pub echo_canceller: EchoCanceller,
     source_cache: HashMap<Sound, Buffered<Decoder<Cursor<Vec<u8>>>>>,
+    preview: Option<PlaybackHandle>,
 }
 
 impl Global for Audio {}
@@ -93,8 +105,49 @@ impl Audio {
 
     pub fn end_call(cx: &mut App) {
         cx.update_default_global(|this: &mut Self, _cx| {
+            if let Some(preview) = this.preview.take() {
+                preview.stop();
+            }
             this.output.take();
         });
+    }
+
+    pub fn play_source<S>(source: S, cx: &mut App) -> Result<PlaybackHandle>
+    where
+        S: Source + Send + 'static,
+    {
+        let output_audio_device = AudioSettings::get_global(cx).output_audio_device.clone();
+        cx.update_default_global(|this: &mut Self, _cx| {
+            this.start_preview(source, output_audio_device)
+        })
+    }
+
+    pub fn stop_preview(cx: &mut App) {
+        cx.update_default_global(|this: &mut Self, _cx| {
+            if let Some(preview) = this.preview.take() {
+                preview.stop();
+            }
+        });
+    }
+
+    fn start_preview<S>(
+        &mut self,
+        source: S,
+        output_audio_device: Option<DeviceId>,
+    ) -> Result<PlaybackHandle>
+    where
+        S: Source + Send + 'static,
+    {
+        if let Some(previous) = self.preview.take() {
+            previous.stop();
+        }
+
+        let handle = PlaybackHandle::new();
+        let control = handle.control.clone();
+        let mixer = self.ensure_output_exists(output_audio_device)?.clone();
+        mixer.add(wrap_preview_source(source, control));
+        self.preview = Some(handle.clone());
+        Ok(handle)
     }
 
     fn sound_source(&mut self, sound: Sound, cx: &App) -> Result<impl Source + use<>> {
@@ -115,6 +168,217 @@ impl Audio {
         self.source_cache.insert(sound, source.clone());
 
         Ok(source)
+    }
+}
+
+struct PlaybackControl {
+    paused: AtomicBool,
+    stopped: AtomicBool,
+    finished: AtomicBool,
+    volume: AtomicU32,
+    sample_position: AtomicU64,
+    seek_to_nanos: Mutex<Option<u64>>,
+}
+
+impl PlaybackControl {
+    fn new() -> Self {
+        Self {
+            paused: AtomicBool::new(false),
+            stopped: AtomicBool::new(false),
+            finished: AtomicBool::new(false),
+            volume: AtomicU32::new(1.0f32.to_bits()),
+            sample_position: AtomicU64::new(0),
+            seek_to_nanos: Mutex::new(None),
+        }
+    }
+
+    fn volume_factor(&self) -> f32 {
+        f32::from_bits(self.volume.load(Ordering::Relaxed))
+    }
+}
+
+#[derive(Clone)]
+pub struct PlaybackHandle {
+    control: Arc<PlaybackControl>,
+}
+
+impl PlaybackHandle {
+    fn new() -> Self {
+        Self {
+            control: Arc::new(PlaybackControl::new()),
+        }
+    }
+
+    pub fn pause(&self) {
+        self.control.paused.store(true, Ordering::Relaxed);
+    }
+
+    pub fn resume(&self) {
+        if self.is_finished() {
+            return;
+        }
+        self.control.paused.store(false, Ordering::Relaxed);
+    }
+
+    pub fn stop(&self) {
+        self.control.stopped.store(true, Ordering::Relaxed);
+        self.control.finished.store(true, Ordering::Relaxed);
+    }
+
+    pub fn set_volume(&self, volume: f32) {
+        self.control
+            .volume
+            .store(volume.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+    }
+
+    pub fn try_seek(&self, position: Duration) -> Result<()> {
+        if self.control.stopped.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+        *self.control.seek_to_nanos.lock() = Some(position.as_nanos() as u64);
+        Ok(())
+    }
+
+    pub fn position(&self) -> Duration {
+        let samples = self.control.sample_position.load(Ordering::Relaxed);
+        let denominator = SAMPLE_RATE.get() as f64 * CHANNEL_COUNT.get() as f64;
+        if denominator <= 0.0 {
+            Duration::ZERO
+        } else {
+            Duration::from_secs_f64(samples as f64 / denominator)
+        }
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.control.paused.load(Ordering::Relaxed)
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.control.finished.load(Ordering::Relaxed)
+    }
+}
+
+struct SampleCountingSource<S> {
+    inner: S,
+    control: Arc<PlaybackControl>,
+}
+
+impl<S: Source> Iterator for SampleCountingSource<S> {
+    type Item = RodioSample;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.inner.next() {
+            Some(sample) => {
+                self.control.sample_position.fetch_add(1, Ordering::Relaxed);
+                Some(sample)
+            }
+            None => {
+                self.control.finished.store(true, Ordering::Relaxed);
+                None
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl<S: Source> Source for SampleCountingSource<S> {
+    fn current_span_len(&self) -> Option<usize> {
+        self.inner.current_span_len()
+    }
+
+    fn channels(&self) -> rodio::ChannelCount {
+        self.inner.channels()
+    }
+
+    fn sample_rate(&self) -> rodio::SampleRate {
+        self.inner.sample_rate()
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        self.inner.total_duration()
+    }
+
+    fn try_seek(&mut self, position: Duration) -> Result<(), rodio::source::SeekError> {
+        self.inner.try_seek(position)?;
+        let sample_count = (position.as_secs_f64()
+            * self.inner.sample_rate().get() as f64
+            * self.inner.channels().get() as f64)
+            .round() as u64;
+        self.control
+            .sample_position
+            .store(sample_count, Ordering::Relaxed);
+        Ok(())
+    }
+}
+
+fn wrap_preview_source<S>(source: S, control: Arc<PlaybackControl>) -> impl Source + Send
+where
+    S: Source + Send + 'static,
+{
+    let converted = rodio::source::UniformSourceIterator::new(source, CHANNEL_COUNT, SAMPLE_RATE);
+    let counted = SampleCountingSource {
+        inner: converted,
+        control: control.clone(),
+    };
+    counted
+        .amplify(control.volume_factor())
+        .pausable(control.paused.load(Ordering::Relaxed))
+        .stoppable()
+        .periodic_access(Duration::from_millis(20), move |stoppable| {
+            apply_playback_control(stoppable, &control);
+        })
+}
+
+fn apply_playback_control<S: Source>(
+    stoppable: &mut rodio::source::Stoppable<
+        rodio::source::Pausable<rodio::source::Amplify<SampleCountingSource<S>>>,
+    >,
+    control: &PlaybackControl,
+) {
+    if control.stopped.load(Ordering::Relaxed) {
+        stoppable.stop();
+        return;
+    }
+
+    {
+        let pausable = stoppable.inner_mut();
+        pausable.set_paused(control.paused.load(Ordering::Relaxed));
+        pausable.inner_mut().set_factor(control.volume_factor());
+    }
+
+    let Some(seek_nanos) = control.seek_to_nanos.lock().take() else {
+        return;
+    };
+    let position = Duration::from_nanos(seek_nanos);
+    if let Err(error) = stoppable.try_seek(position) {
+        log::warn!("audio preview seek failed: {error}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rodio::{nz, static_buffer::StaticSamplesBuffer};
+
+    #[test]
+    fn sample_counting_source_counts_and_marks_finished() {
+        const SAMPLES: [RodioSample; 4] = [0.0, 0.5, -0.5, 1.0];
+        let buffer = StaticSamplesBuffer::new(nz!(1), nz!(8), &SAMPLES);
+        let control = Arc::new(PlaybackControl::new());
+        let counted = SampleCountingSource {
+            inner: buffer,
+            control: control.clone(),
+        };
+        let yielded = counted.count();
+        assert_eq!(yielded, SAMPLES.len());
+        assert_eq!(
+            control.sample_position.load(Ordering::Relaxed),
+            SAMPLES.len() as u64
+        );
+        assert!(control.finished.load(Ordering::Relaxed));
     }
 }
 

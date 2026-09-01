@@ -1573,6 +1573,21 @@
     },
   },
   {
+    "context": "AudioViewer",
+    "use_key_equivalents": true,
+    "bindings": {
+      "space": "audio_viewer::TogglePlay",
+      "k": "audio_viewer::TogglePlay",
+      "s": "audio_viewer::Stop",
+      "left": "audio_viewer::SeekBackward",
+      "right": "audio_viewer::SeekForward",
+      "home": "audio_viewer::SeekToStart",
+      "end": "audio_viewer::SeekToEnd",
+      "m": "audio_viewer::ToggleMute",
+      "cmd-k r": "editor::RevealInFileManager",
+    },
+  },
+  {
     "context": "RunModal",
     "bindings": {
       "cmd-1": "new_process_modal::ActivateTaskTab",

@@ -19,6 +19,7 @@ use anyhow::Context as _;
 pub use app_menus::*;
 use assets::Assets;
 
+use audio_viewer::AudioInfo;
 use breadcrumbs::Breadcrumbs;
 use collections::VecDeque;
 use debugger_ui::debugger_panel::DebugPanel;
@@ -574,6 +575,7 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             cx.new(|cx| toolchain_selector::ActiveToolchain::new(workspace, window, cx));
         let vim_mode_indicator = cx.new(|cx| vim::ModeIndicator::new(window, cx));
         let image_info = cx.new(|_cx| ImageInfo::new(workspace));
+        let audio_info = cx.new(|_cx| AudioInfo::new(workspace));
         let activity_indicator = activity_indicator::ActivityIndicator::new(
             workspace,
             app_state.languages.clone(),
@@ -611,6 +613,7 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             status_bar.add_right_item(vim_mode_indicator, window, cx);
             status_bar.add_right_item(cursor_position, window, cx);
             status_bar.add_right_item(image_info, window, cx);
+            status_bar.add_right_item(audio_info, window, cx);
         });
 
         let panels_task = initialize_panels(window, cx);
@@ -1352,6 +1355,8 @@ fn initialize_pane(
             toolbar.add_item(image_view_toolbar, window, cx);
             let pdf_view_toolbar = cx.new(|_| pdf_viewer::PdfToolbarControls::new());
             toolbar.add_item(pdf_view_toolbar, window, cx);
+            let audio_view_toolbar = cx.new(|_| audio_viewer::AudioToolbarControls::new());
+            toolbar.add_item(audio_view_toolbar, window, cx);
         })
     });
 }
@@ -5399,6 +5404,7 @@ mod tests {
                 "app_menu",
                 "assistant",
                 "assistant2",
+                "audio_viewer",
                 "branch_picker",
                 "bedrock",
                 "branches",
@@ -5673,6 +5679,7 @@ mod tests {
             );
             image_viewer::init(cx);
             pdf_viewer::init(cx);
+            audio_viewer::init(cx);
             language_model::init(cx);
             client::RefreshLlmTokenListener::register(
                 app_state.client.clone(),
