@@ -41,17 +41,13 @@ pub async fn fetch_models_from_server(
     http_client: Arc<dyn HttpClient>,
     api_url: &str,
 ) -> Result<Vec<SharedString>> {
-    let mut models: Vec<SharedString> = get_models(
-        http_client.as_ref(),
-        api_url,
-        None,
-        &Default::default(),
-    )
-    .await?
-    .into_iter()
-    .filter(|model| crate::fim::infer_prompt_format(&model.name).is_some())
-    .map(|model| SharedString::new(model.name))
-    .collect();
+    let mut models: Vec<SharedString> =
+        get_models(http_client.as_ref(), api_url, None, &Default::default())
+            .await?
+            .into_iter()
+            .filter(|model| crate::fim::infer_prompt_format(&model.name).is_some())
+            .map(|model| SharedString::new(model.name))
+            .collect();
     models.sort();
     Ok(models)
 }

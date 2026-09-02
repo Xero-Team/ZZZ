@@ -296,11 +296,9 @@ pub fn into_anthropic(
                 }
                 AnthropicModelMode::AdaptiveThinking => Some(Thinking::Adaptive {
                     display: Some(AdaptiveThinkingDisplay::Summarized),
-                    block_binding: binds_thinking_blocks.then_some(
-                        ThinkingBlockBinding {
-                            prefix_mismatch_behavior: PrefixMismatchBehavior::DropBlock,
-                        },
-                    ),
+                    block_binding: binds_thinking_blocks.then_some(ThinkingBlockBinding {
+                        prefix_mismatch_behavior: PrefixMismatchBehavior::DropBlock,
+                    }),
                 }),
                 AnthropicModelMode::Default => None,
             }

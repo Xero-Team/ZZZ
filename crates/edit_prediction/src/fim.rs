@@ -6,8 +6,8 @@ use crate::{
 use anyhow::{Context as _, Result, anyhow};
 use gpui::{App, AppContext as _, Entity, Task};
 use language::{
-    Anchor, Buffer, BufferSnapshot, EditPredictionPromptFormat, ToOffset, ToPoint as _, ZetaVersion,
-    language_settings::all_language_settings,
+    Anchor, Buffer, BufferSnapshot, EditPredictionPromptFormat, ToOffset, ToPoint as _,
+    ZetaVersion, language_settings::all_language_settings,
 };
 use std::{path::Path, sync::Arc, time::Instant};
 use zeta_prompt::{ZetaPromptInput, compute_editable_and_context_ranges};
@@ -31,8 +31,8 @@ pub fn infer_prompt_format(model: &str) -> Option<EditPredictionPromptFormat> {
         | "qwen3-coder-next" => EditPredictionPromptFormat::Qwen,
         "codegemma" | "gemma3" | "gemma3n" => EditPredictionPromptFormat::CodeGemma,
         "codestral" | "mistral" => EditPredictionPromptFormat::Codestral,
-        "glm" | "glm-4" | "glm-4.5" | "glm-4.5-air" | "glm-4.6" | "glm-4.7"
-        | "glm-4.7-flash" | "glm-5" | "glm-5.1" => EditPredictionPromptFormat::Glm,
+        "glm" | "glm-4" | "glm-4.5" | "glm-4.5-air" | "glm-4.6" | "glm-4.7" | "glm-4.7-flash"
+        | "glm-5" | "glm-5.1" => EditPredictionPromptFormat::Glm,
         _ => return None,
     })
 }

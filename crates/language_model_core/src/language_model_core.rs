@@ -234,17 +234,15 @@ impl LanguageModelCompletionError {
         retry_after: Option<Duration>,
     ) -> Self {
         match status_code {
-            StatusCode::BAD_REQUEST => {
-                match parse_prompt_too_long(&message) {
-                    Some(tokens) => Self::PromptTooLarge {
-                        tokens: Some(tokens),
-                    },
-                    None if is_context_window_exceeded_message(&message) => {
-                        Self::PromptTooLarge { tokens: None }
-                    }
-                    None => Self::BadRequestFormat { provider, message },
+            StatusCode::BAD_REQUEST => match parse_prompt_too_long(&message) {
+                Some(tokens) => Self::PromptTooLarge {
+                    tokens: Some(tokens),
+                },
+                None if is_context_window_exceeded_message(&message) => {
+                    Self::PromptTooLarge { tokens: None }
                 }
-            }
+                None => Self::BadRequestFormat { provider, message },
+            },
             StatusCode::UNAUTHORIZED => Self::AuthenticationError { provider, message },
             StatusCode::FORBIDDEN => Self::PermissionError { provider, message },
             StatusCode::NOT_FOUND => Self::ApiEndpointNotFound { provider },
