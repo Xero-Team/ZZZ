@@ -6,9 +6,9 @@ use scheduler::Instant;
 use scheduler::{Clock, Priority, Scheduler, SessionId, TestScheduler, Timer};
 #[cfg(not(target_family = "wasm"))]
 use std::task::{Context, Poll};
+#[cfg(not(target_family = "wasm"))]
+use std::{future::Future, pin::Pin};
 use std::{
-    future::Future,
-    pin::Pin,
     sync::{
         Arc,
         atomic::{AtomicU16, Ordering},
