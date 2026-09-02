@@ -41,6 +41,7 @@ impl PlatformScheduler {
 }
 
 impl Scheduler for PlatformScheduler {
+    #[cfg(not(target_family = "wasm"))]
     fn block(
         &self,
         _session_id: Option<SessionId>,

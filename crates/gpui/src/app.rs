@@ -938,6 +938,7 @@ impl App {
         self.quitting = true;
 
         let futures = futures::future::join_all(futures);
+        #[cfg(not(target_family = "wasm"))]
         if self
             .foreground_executor
             .block_with_timeout(SHUTDOWN_TIMEOUT, futures)
@@ -945,6 +946,8 @@ impl App {
         {
             log::error!("timed out waiting on app_will_quit");
         }
+        #[cfg(target_family = "wasm")]
+        self.foreground_executor.spawn(futures).detach();
 
         self.quitting = false;
     }
