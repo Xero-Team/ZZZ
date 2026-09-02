@@ -193,6 +193,25 @@ fn general_page(cx: &App) -> SettingsPage {
             }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: lt(
+                    "settings_ui.page_data.title.on.new.window",
+                    "On New Window",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.what.to.show.when.opening.a.new.window",
+                    "What to show when opening a new window.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("on_new_window"),
+                    pick: |settings_content| settings_content.workspace.on_new_window.as_ref(),
+                    write: |settings_content, value, _| {
+                        settings_content.workspace.on_new_window = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
                     "settings_ui.page_data.title.on.last.window.closed",
                     "On Last Window Closed",
                 ),
