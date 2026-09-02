@@ -86,3 +86,66 @@ NOT RUN cargo fmt --check (known edition-2024 formatting drift on this host)
 
 The reviewed baseline is `bce0c5785bfd9172c939aca4083fd70bc4930927`.
 Work remains on `sync/upstream-2026-09-02` and has not been merged to `main`.
+
+## Continuation Run
+
+- Target branch: `sync/upstream-2026-09-02` (continued from the prior run)
+- Previously reviewed baseline: `bce0c5785bfd9172c939aca4083fd70bc4930927`
+- Reviewed upstream head: `5e28272c1407ced4bae4a90deaea25352a1fbc96`
+- Live upstream head queried: `b3326e13c142fc8f313aca67a93dd6855a1e7e32`
+- Query time: `2026-09-02T23:11:35+02:00`
+- Reviewed range: `bce0c578..5e28272c`
+
+This continuation reviewed the next 20 commits. Counts: 1 A, 5 B, and
+14 C. The reviewed baseline is now `5e28272c1407ced4bae4a90deaea25352a1fbc96`;
+36 commits remain through the queried live head.
+
+### Decisions
+
+| Upstream | Class | Local commit                 | Disposition                                                                                                                                              |
+| -------- | ----- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6840b8d2 | C     | --                           | Repository Danger CI and mixed upstream documentation; the documentation also retains hosted-service and telemetry guidance outside ZZZ's boundary.      |
+| ded896cc | C     | --                           | Depends on an unabsorbed incremental-search architecture and divergent editor APIs; not isolatable onto the current search implementation.               |
+| e6690f38 | C     | --                           | Targets the deleted `tabular_data_preview` crate and cannot land without restoring an absent product surface.                                            |
+| 24254879 | B     | 2fd39ac4                     | Filter editorconfig resolution to the keys ZZZ consumes and return `None` when no config exists; omit the divergent buffer cache and benchmark plumbing. |
+| 7aa903ef | C     | --                           | Adds keybindings for the deleted `tabular_data_preview` product surface.                                                                                 |
+| adc72a5a | C     | --                           | CSV preview support requires the absent tabular preview crate and related project-less architecture.                                                     |
+| ef075910 | C     | --                           | Web font ownership rewrite is coupled to upstream examples and has no independent ZZZ web caller; local examples are intentionally removed.              |
+| 98c6c140 | B     | fb360c11                     | Gate synchronous blocking APIs on wasm and run quit handlers asynchronously; adapt to ZZZ's scheduler naming.                                            |
+| a60addb9 | C     | --                           | objc2 prompt migration conflicts with ZZZ's macOS platform layout and dependency feature set; no safe isolated port was established on this Linux host.  |
+| e8fbacb6 | C     | --                           | Large outline-panel rewrite is not isolatable from ZZZ's divergent panel implementation.                                                                 |
+| ff020dd0 | B     | 453b18f3                     | Batch ordered conflict-anchor conversion and use it for conflict highlighting; omit upstream benchmark-generator tooling and duplicate tests.            |
+| 81df6f4a | C     | --                           | Replaces crash user data with Sentry tags, which is telemetry machinery rejected by ZZZ.                                                                 |
+| 3f00b5d7 | B     | 6056ffda, c8a46208, 528970b4 | Restrict row-highlight expansion to the viewport and skip header rows; adapt stored-color and block visibility APIs.                                     |
+| 76b1096c | C     | --                           | Requires an unabsorbed gesture/prediction architecture and divergent GPUI web input APIs.                                                                |
+| ee6badf4 | C     | --                           | Corgi build support is upstream build/release infrastructure with no ZZZ product behavior.                                                               |
+| 9785475c | C     | --                           | Terminal Threads title editing belongs to the rejected native-agent/thread surface.                                                                      |
+| ce48461e | A     | cc87f2bd                     | Cherry-picked with `-x -s`; malformed shell-variable references now pass through without panicking.                                                      |
+| a66fb6ae | C     | --                           | Depends on unabsorbed touch/IME gesture state and cannot be isolated from the current web event path.                                                    |
+| f8c27835 | C     | --                           | Large git-panel multi-select rewrite conflicts with ZZZ's divergent panel and is not safely isolatable in this batch.                                    |
+| 5e28272c | C     | --                           | Touch-axis locking depends on the unabsorbed gesture physics rewrite.                                                                                    |
+
+### Applied work
+
+- `24254879`: retained relevant-key editorconfig filtering and the no-config fast path. Omitted the buffer-level `LanguageSettings` cache, benchmark fixture, lockfile/dependency churn, and broad constructor migration.
+- `98c6c140`: retained wasm-safe shutdown and API gating for GPUI and scheduler blocking calls; adapted `schedule_foreground` and `ForegroundExecutor` names used by ZZZ.
+- `ff020dd0`: retained a single ordered multibuffer excerpt sweep for conflict anchors; omitted the upstream synthetic benchmark script and test-only additions.
+- `3f00b5d7`: retained viewport-pruned row highlighting and header-row exclusion; added small visibility adaptations for ZZZ's block-map boundaries.
+- `ce48461e`: direct A absorption with `git cherry-pick -x -s`.
+
+### Verification
+
+```text
+PASS cargo check --locked -p settings -p scheduler -p gpui -p multi_buffer -p git_ui -p editor -p util
+PASS cargo check --locked -p settings
+PASS cargo check --locked -p scheduler -p gpui
+PASS cargo test --locked -p editor test_highlighted_display_rows_in_range
+PASS cargo test --locked -p util test_to_shell_variable_malformed_is_passed_through
+PASS cargo test --locked -p git_ui conflict
+PASS git diff --check
+NOT RUN macOS / Windows / wasm32 runtime tests
+NOT RUN cargo test --workspace
+```
+
+The reviewed baseline is `5e28272c1407ced4bae4a90deaea25352a1fbc96`.
+Work remains on `sync/upstream-2026-09-02` and has not been merged to `main`.
