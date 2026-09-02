@@ -22081,7 +22081,7 @@ impl Editor {
         anchor_range: Range<Anchor>,
         display_row_range: Range<DisplayRow>,
         snapshot: &DisplaySnapshot,
-        cx: &App,
+        _cx: &App,
     ) -> BTreeMap<DisplayRow, LineHighlight> {
         if display_row_range.is_empty() {
             return BTreeMap::default();
