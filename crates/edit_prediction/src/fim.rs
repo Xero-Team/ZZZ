@@ -6,13 +6,36 @@ use crate::{
 use anyhow::{Context as _, Result, anyhow};
 use gpui::{App, AppContext as _, Entity, Task};
 use language::{
-    Anchor, Buffer, BufferSnapshot, EditPredictionPromptFormat, ToOffset, ToPoint as _,
+    Anchor, Buffer, BufferSnapshot, EditPredictionPromptFormat, ToOffset, ToPoint as _, ZetaVersion,
     language_settings::all_language_settings,
 };
 use std::{path::Path, sync::Arc, time::Instant};
 use zeta_prompt::{ZetaPromptInput, compute_editable_and_context_ranges};
 
 const FIM_CONTEXT_TOKENS: usize = 512;
+
+/// Infers the FIM prompt format from an Ollama/OpenAI-compatible model name.
+/// Returns `None` if the model isn't a known FIM-capable model.
+pub fn infer_prompt_format(model: &str) -> Option<EditPredictionPromptFormat> {
+    let model_base = model.split(':').next().unwrap_or(model);
+
+    Some(match model_base {
+        "zeta2" => EditPredictionPromptFormat::Zeta(ZetaVersion::Zeta2),
+        "zeta2.1" => EditPredictionPromptFormat::Zeta(ZetaVersion::Zeta2_1),
+        "codellama" | "code-llama" => EditPredictionPromptFormat::CodeLlama,
+        "starcoder" | "starcoder2" | "starcoderbase" => EditPredictionPromptFormat::StarCoder,
+        "deepseek-coder" | "deepseek-coder-v2" | "deepseek-v3" | "deepseek-v3-0324" => {
+            EditPredictionPromptFormat::DeepseekCoder
+        }
+        "qwen2.5-coder" | "qwen-coder" | "qwen" | "qwen2.5" | "qwen3" | "qwen3-coder"
+        | "qwen3-coder-next" => EditPredictionPromptFormat::Qwen,
+        "codegemma" | "gemma3" | "gemma3n" => EditPredictionPromptFormat::CodeGemma,
+        "codestral" | "mistral" => EditPredictionPromptFormat::Codestral,
+        "glm" | "glm-4" | "glm-4.5" | "glm-4.5-air" | "glm-4.6" | "glm-4.7"
+        | "glm-4.7-flash" | "glm-5" | "glm-5.1" => EditPredictionPromptFormat::Glm,
+        _ => return None,
+    })
+}
 
 struct FimRequestOutput {
     request_id: String,

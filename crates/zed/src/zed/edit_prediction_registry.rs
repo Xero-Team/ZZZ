@@ -2,14 +2,11 @@ use client::{Client, UserStore};
 use codestral::{CodestralEditPredictionDelegate, load_codestral_api_key};
 use collections::HashMap;
 use copilot::CopilotEditPredictionDelegate;
-use edit_prediction::{EditPredictionModel, ZedEditPredictionDelegate};
+use edit_prediction::{EditPredictionModel, ZedEditPredictionDelegate, fim};
 use editor::Editor;
 use gpui::{AnyWindowHandle, App, AppContext as _, Context, Entity, WeakEntity};
-use language::{
-    ZetaVersion,
-    language_settings::{
-        EditPredictionPromptFormat, EditPredictionProvider, all_language_settings,
-    },
+use language::language_settings::{
+    EditPredictionPromptFormat, EditPredictionProvider, all_language_settings,
 };
 
 use settings::SettingsStore;
@@ -123,7 +120,7 @@ fn edit_prediction_provider_config_for_settings(cx: &App) -> Option<EditPredicti
 
             let mut format = custom_settings.prompt_format;
             if format == EditPredictionPromptFormat::Infer {
-                if let Some(inferred_format) = infer_prompt_format(&custom_settings.model) {
+                if let Some(inferred_format) = fim::infer_prompt_format(&custom_settings.model) {
                     format = inferred_format;
                 } else {
                     // todo: notify user that prompt format inference failed
@@ -146,28 +143,6 @@ fn edit_prediction_provider_config_for_settings(cx: &App) -> Option<EditPredicti
     }
 }
 
-fn infer_prompt_format(model: &str) -> Option<EditPredictionPromptFormat> {
-    let model_base = model.split(':').next().unwrap_or(model);
-
-    Some(match model_base {
-        "zeta2" => EditPredictionPromptFormat::Zeta(ZetaVersion::Zeta2),
-        "zeta2.1" => EditPredictionPromptFormat::Zeta(ZetaVersion::Zeta2_1),
-        "codellama" | "code-llama" => EditPredictionPromptFormat::CodeLlama,
-        "starcoder" | "starcoder2" | "starcoderbase" => EditPredictionPromptFormat::StarCoder,
-        "deepseek-coder" | "deepseek-coder-v2" | "deepseek-v3" | "deepseek-v3-0324" => {
-            EditPredictionPromptFormat::DeepseekCoder
-        }
-        "qwen2.5-coder" | "qwen-coder" | "qwen" | "qwen2.5" | "qwen3" | "qwen3-coder"
-        | "qwen3-coder-next" => EditPredictionPromptFormat::Qwen,
-        "codegemma" | "gemma3" | "gemma3n" => EditPredictionPromptFormat::CodeGemma,
-        "codestral" | "mistral" => EditPredictionPromptFormat::Codestral,
-        "glm" | "glm-4" | "glm-4.5" | "glm-4.5-air" | "glm-4.6" | "glm-4.7" | "glm-4.7-flash"
-        | "glm-5" | "glm-5.1" => EditPredictionPromptFormat::Glm,
-        _ => {
-            return None;
-        }
-    })
-}
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum EditPredictionProviderConfig {

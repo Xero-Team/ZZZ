@@ -5401,6 +5401,7 @@ dependencies = [
  "lsp",
  "menu",
  "node_runtime",
+ "ollama",
  "open_ai",
  "parking_lot",
  "postage",

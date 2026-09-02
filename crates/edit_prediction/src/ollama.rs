@@ -1,11 +1,11 @@
 use anyhow::{Context as _, Result};
 use futures::AsyncReadExt as _;
 use gpui::{
-    App, SharedString,
+    SharedString,
     http_client::{self, HttpClient},
 };
 use language::language_settings::OpenAiCompatibleEditPredictionSettings;
-use language_model::{LanguageModelProviderId, LanguageModelRegistry};
+use ollama::get_models;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -35,32 +35,25 @@ pub(crate) struct OllamaGenerateResponse {
     pub response: String,
 }
 
-const PROVIDER_ID: LanguageModelProviderId = LanguageModelProviderId::new("ollama");
-
-pub fn is_available(cx: &App) -> bool {
-    LanguageModelRegistry::read_global(cx)
-        .provider(&PROVIDER_ID)
-        .is_some_and(|provider| provider.is_authenticated(cx))
-}
-
-pub fn ensure_authenticated(cx: &mut App) {
-    if let Some(provider) = LanguageModelRegistry::read_global(cx).provider(&PROVIDER_ID) {
-        provider.authenticate(cx).detach_and_log_err(cx);
-    }
-}
-
-pub fn fetch_models(cx: &mut App) -> Vec<SharedString> {
-    let Some(provider) = LanguageModelRegistry::read_global(cx).provider(&PROVIDER_ID) else {
-        return Vec::new();
-    };
-    provider.authenticate(cx).detach_and_log_err(cx);
-    let mut models: Vec<SharedString> = provider
-        .provided_models(cx)
-        .into_iter()
-        .map(|model| model.id().0)
-        .collect();
+/// Fetches models directly from the configured Ollama server and keeps only
+/// models with a known FIM prompt format.
+pub async fn fetch_models_from_server(
+    http_client: Arc<dyn HttpClient>,
+    api_url: &str,
+) -> Result<Vec<SharedString>> {
+    let mut models: Vec<SharedString> = get_models(
+        http_client.as_ref(),
+        api_url,
+        None,
+        &Default::default(),
+    )
+    .await?
+    .into_iter()
+    .filter(|model| crate::fim::infer_prompt_format(&model.name).is_some())
+    .map(|model| SharedString::new(model.name))
+    .collect();
     models.sort();
-    models
+    Ok(models)
 }
 
 pub(crate) async fn make_request(
