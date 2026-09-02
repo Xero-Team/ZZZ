@@ -280,3 +280,40 @@ NOT RUN cargo test --workspace
 
 The reviewed baseline is `003826320f320dace212a67e82b0db92cb457081`.
 Work remains on `sync/upstream-2026-09-02` and has not been merged to `main`.
+
+## Continuation Run 4
+
+- Target branch: `sync/upstream-2026-09-02`
+- Previously reviewed baseline: `003826320f320dace212a67e82b0db92cb457081`
+- Reviewed upstream head: `5f2d7ad735c266854503c1f40e9b490a8fd0e3a0`
+- Live upstream head queried: `5f2d7ad735c266854503c1f40e9b490a8fd0e3a0`
+- Query time: `2026-09-03T01:04:49+02:00`
+- Reviewed range: `00382632..5f2d7ad7`
+
+This short continuation reviewed one newly published commit. Counts: 0 A,
+0 B, and 1 C. The reviewed baseline is now
+`5f2d7ad735c266854503c1f40e9b490a8fd0e3a0`; no upstream commits remain in
+the queried range.
+
+### Decisions
+
+| Upstream | Class | Local commit | Disposition                                                                                                                                             |
+| -------- | ----- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5f2d7ad7 | C     | --           | Extension CLI validation depends on the unabsorbed `language::QueryFile` parser; no safe isolated equivalent exists in ZZZ's current extension tooling. |
+
+### Applied work
+
+No product changes were applied.
+
+### Verification
+
+```text
+PASS git merge-base --is-ancestor 00382632 FETCH_HEAD
+PASS git diff --check
+NOT RUN cargo check (no product changes)
+NOT RUN macOS / Windows / wasm32 runtime tests
+NOT RUN cargo test --workspace
+```
+
+The reviewed baseline is `5f2d7ad735c266854503c1f40e9b490a8fd0e3a0`.
+Work remains on `sync/upstream-2026-09-02` and has not been merged to `main`.
