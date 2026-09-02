@@ -20,12 +20,21 @@ pub mod completion;
 
 pub const ANTHROPIC_API_URL: &str = "https://api.anthropic.com";
 pub const FAST_MODE_BETA_HEADER: &str = "fast-mode-2026-02-01";
+pub const THINKING_BINDING_CONTROLS_BETA_HEADER: &str = "thinking-binding-controls-2026-08-01";
 
 pub fn supports_fast_mode(model_id: &str) -> bool {
     matches!(
         model_id,
         "claude-opus-4-6" | "claude-opus-4-7" | "claude-opus-4-8"
     )
+}
+
+pub fn binds_thinking_blocks_to_prefix(model_id: &str) -> bool {
+    matches!(model_id, "claude-fable-5-1")
+}
+
+pub fn supports_forced_tool_use(model_id: &str) -> bool {
+    !matches!(model_id, "claude-fable-5-1" | "claude-mythos-5-1")
 }
 
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
@@ -161,6 +170,9 @@ impl Model {
         let mut extra_beta_headers = Vec::new();
         if supports_speed {
             extra_beta_headers.push(FAST_MODE_BETA_HEADER.to_owned());
+        }
+        if binds_thinking_blocks_to_prefix(&entry.id) {
+            extra_beta_headers.push(THINKING_BINDING_CONTROLS_BETA_HEADER.to_owned());
         }
 
         Self {
@@ -754,7 +766,20 @@ pub enum Thinking {
     Adaptive {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         display: Option<AdaptiveThinkingDisplay>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        block_binding: Option<ThinkingBlockBinding>,
     },
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ThinkingBlockBinding {
+    pub prefix_mismatch_behavior: PrefixMismatchBehavior,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PrefixMismatchBehavior {
+    DropBlock,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

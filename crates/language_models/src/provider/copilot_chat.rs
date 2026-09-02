@@ -368,6 +368,7 @@ impl LanguageModel for CopilotChatLanguageModel {
                     if anthropic_request.thinking.is_some() {
                         anthropic_request.thinking = Some(anthropic::Thinking::Adaptive {
                             display: Some(anthropic::AdaptiveThinkingDisplay::Summarized),
+                            block_binding: None,
                         });
                         anthropic_request.output_config =
                             effort.map(|effort| anthropic::OutputConfig {

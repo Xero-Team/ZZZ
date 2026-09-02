@@ -506,9 +506,8 @@ impl LanguageModel for AnthropicModel {
 
     fn supports_tool_choice(&self, choice: LanguageModelToolChoice) -> bool {
         match choice {
-            LanguageModelToolChoice::Auto
-            | LanguageModelToolChoice::Any
-            | LanguageModelToolChoice::None => true,
+            LanguageModelToolChoice::Auto | LanguageModelToolChoice::None => true,
+            LanguageModelToolChoice::Any => anthropic::supports_forced_tool_use(&self.model.id),
         }
     }
 

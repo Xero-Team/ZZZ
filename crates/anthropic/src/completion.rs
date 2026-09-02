@@ -13,8 +13,9 @@ use std::str::FromStr;
 use crate::{
     AdaptiveThinkingDisplay, AnthropicError, AnthropicModelMode, CacheControl, CacheControlType,
     CacheTtl, CompactionTrigger, ContentDelta, ContextManagement, ContextManagementEdit, Event,
-    ImageSource, Message, RequestContent, ResponseContent, StringOrContents, Thinking, Tool,
-    ToolChoice, ToolResultContent, ToolResultPart, Usage,
+    ImageSource, Message, PrefixMismatchBehavior, RequestContent, ResponseContent,
+    StringOrContents, Thinking, ThinkingBlockBinding, Tool, ToolChoice, ToolResultContent,
+    ToolResultPart, Usage,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -271,6 +272,8 @@ pub fn into_anthropic(
         last_tool.cache_control = Some(cache_control);
     }
 
+    let binds_thinking_blocks = crate::binds_thinking_blocks_to_prefix(&model);
+
     crate::Request {
         model,
         messages: new_messages,
@@ -293,6 +296,11 @@ pub fn into_anthropic(
                 }
                 AnthropicModelMode::AdaptiveThinking => Some(Thinking::Adaptive {
                     display: Some(AdaptiveThinkingDisplay::Summarized),
+                    block_binding: binds_thinking_blocks.then_some(
+                        ThinkingBlockBinding {
+                            prefix_mismatch_behavior: PrefixMismatchBehavior::DropBlock,
+                        },
+                    ),
                 }),
                 AnthropicModelMode::Default => None,
             }
