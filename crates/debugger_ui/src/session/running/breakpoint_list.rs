@@ -720,7 +720,11 @@ impl Render for BreakpointList {
                 .and_then(|(worktree, relative_path)| {
                     worktree.read(cx).is_visible().then(|| {
                         if multiple_worktrees {
-                            worktree.read(cx).root_name().join(&relative_path)
+                            worktree
+                                .read(cx)
+                                .root_name()
+                                .join(&relative_path)
+                                .to_rel_path_buf()
                         } else {
                             relative_path.to_rel_path_buf()
                         }
