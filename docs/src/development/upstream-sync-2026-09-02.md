@@ -143,6 +143,7 @@ PASS cargo check --locked -p gpui --target wasm32-unknown-unknown
 PASS cargo test --locked -p editor test_highlighted_display_rows_in_range
 PASS cargo test --locked -p util test_to_shell_variable_malformed_is_passed_through
 PASS cargo test --locked -p git_ui conflict
+PASS cargo test --locked -p scheduler
 PASS git diff --check
 NOT RUN macOS / Windows / wasm32 runtime tests
 NOT RUN cargo test --workspace
