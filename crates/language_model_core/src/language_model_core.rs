@@ -235,10 +235,14 @@ impl LanguageModelCompletionError {
     ) -> Self {
         match status_code {
             StatusCode::BAD_REQUEST => {
-                if is_context_window_exceeded_message(&message) {
-                    Self::PromptTooLarge { tokens: None }
-                } else {
-                    Self::BadRequestFormat { provider, message }
+                match parse_prompt_too_long(&message) {
+                    Some(tokens) => Self::PromptTooLarge {
+                        tokens: Some(tokens),
+                    },
+                    None if is_context_window_exceeded_message(&message) => {
+                        Self::PromptTooLarge { tokens: None }
+                    }
+                    None => Self::BadRequestFormat { provider, message },
                 }
             }
             StatusCode::UNAUTHORIZED => Self::AuthenticationError { provider, message },
