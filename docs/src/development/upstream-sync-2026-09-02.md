@@ -139,6 +139,7 @@ This continuation reviewed the next 20 commits. Counts: 1 A, 5 B, and
 PASS cargo check --locked -p settings -p scheduler -p gpui -p multi_buffer -p git_ui -p editor -p util
 PASS cargo check --locked -p settings
 PASS cargo check --locked -p scheduler -p gpui
+PASS cargo check --locked -p gpui --target wasm32-unknown-unknown
 PASS cargo test --locked -p editor test_highlighted_display_rows_in_range
 PASS cargo test --locked -p util test_to_shell_variable_malformed_is_passed_through
 PASS cargo test --locked -p git_ui conflict
