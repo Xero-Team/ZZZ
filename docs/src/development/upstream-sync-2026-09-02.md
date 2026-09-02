@@ -102,28 +102,28 @@ This continuation reviewed the next 20 commits. Counts: 1 A, 5 B, and
 
 ### Decisions
 
-| Upstream | Class | Local commit                 | Disposition                                                                                                                                              |
-| -------- | ----- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 6840b8d2 | C     | --                           | Repository Danger CI and mixed upstream documentation; the documentation also retains hosted-service and telemetry guidance outside ZZZ's boundary.      |
-| ded896cc | C     | --                           | Depends on an unabsorbed incremental-search architecture and divergent editor APIs; not isolatable onto the current search implementation.               |
-| e6690f38 | C     | --                           | Targets the deleted `tabular_data_preview` crate and cannot land without restoring an absent product surface.                                            |
-| 24254879 | B     | 2fd39ac4                     | Filter editorconfig resolution to the keys ZZZ consumes and return `None` when no config exists; omit the divergent buffer cache and benchmark plumbing. |
-| 7aa903ef | C     | --                           | Adds keybindings for the deleted `tabular_data_preview` product surface.                                                                                 |
-| adc72a5a | C     | --                           | CSV preview support requires the absent tabular preview crate and related project-less architecture.                                                     |
-| ef075910 | C     | --                           | Web font ownership rewrite is coupled to upstream examples and has no independent ZZZ web caller; local examples are intentionally removed.              |
-| 98c6c140 | B     | fb360c11                     | Gate synchronous blocking APIs on wasm and run quit handlers asynchronously; adapt to ZZZ's scheduler naming.                                            |
-| a60addb9 | C     | --                           | objc2 prompt migration conflicts with ZZZ's macOS platform layout and dependency feature set; no safe isolated port was established on this Linux host.  |
-| e8fbacb6 | C     | --                           | Large outline-panel rewrite is not isolatable from ZZZ's divergent panel implementation.                                                                 |
-| ff020dd0 | B     | 453b18f3                     | Batch ordered conflict-anchor conversion and use it for conflict highlighting; omit upstream benchmark-generator tooling and duplicate tests.            |
-| 81df6f4a | C     | --                           | Replaces crash user data with Sentry tags, which is telemetry machinery rejected by ZZZ.                                                                 |
-| 3f00b5d7 | B     | 6056ffda, c8a46208, 528970b4 | Restrict row-highlight expansion to the viewport and skip header rows; adapt stored-color and block visibility APIs.                                     |
-| 76b1096c | C     | --                           | Requires an unabsorbed gesture/prediction architecture and divergent GPUI web input APIs.                                                                |
-| ee6badf4 | C     | --                           | Corgi build support is upstream build/release infrastructure with no ZZZ product behavior.                                                               |
-| 9785475c | C     | --                           | Terminal Threads title editing belongs to the rejected native-agent/thread surface.                                                                      |
-| ce48461e | A     | cc87f2bd                     | Cherry-picked with `-x -s`; malformed shell-variable references now pass through without panicking.                                                      |
-| a66fb6ae | C     | --                           | Depends on unabsorbed touch/IME gesture state and cannot be isolated from the current web event path.                                                    |
-| f8c27835 | C     | --                           | Large git-panel multi-select rewrite conflicts with ZZZ's divergent panel and is not safely isolatable in this batch.                                    |
-| 5e28272c | C     | --                           | Touch-axis locking depends on the unabsorbed gesture physics rewrite.                                                                                    |
+| Upstream | Class | Local commit                           | Disposition                                                                                                                                              |
+| -------- | ----- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6840b8d2 | C     | --                                     | Repository Danger CI and mixed upstream documentation; the documentation also retains hosted-service and telemetry guidance outside ZZZ's boundary.      |
+| ded896cc | C     | --                                     | Depends on an unabsorbed incremental-search architecture and divergent editor APIs; not isolatable onto the current search implementation.               |
+| e6690f38 | C     | --                                     | Targets the deleted `tabular_data_preview` crate and cannot land without restoring an absent product surface.                                            |
+| 24254879 | B     | 2fd39ac4                               | Filter editorconfig resolution to the keys ZZZ consumes and return `None` when no config exists; omit the divergent buffer cache and benchmark plumbing. |
+| 7aa903ef | C     | --                                     | Adds keybindings for the deleted `tabular_data_preview` product surface.                                                                                 |
+| adc72a5a | C     | --                                     | CSV preview support requires the absent tabular preview crate and related project-less architecture.                                                     |
+| ef075910 | C     | --                                     | Web font ownership rewrite is coupled to upstream examples and has no independent ZZZ web caller; local examples are intentionally removed.              |
+| 98c6c140 | B     | fb360c11, dd1df8d4                     | Gate synchronous blocking APIs on wasm and run quit handlers asynchronously; adapt to ZZZ's scheduler naming.                                            |
+| a60addb9 | C     | --                                     | objc2 prompt migration conflicts with ZZZ's macOS platform layout and dependency feature set; no safe isolated port was established on this Linux host.  |
+| e8fbacb6 | C     | --                                     | Large outline-panel rewrite is not isolatable from ZZZ's divergent panel implementation.                                                                 |
+| ff020dd0 | B     | 453b18f3                               | Batch ordered conflict-anchor conversion and use it for conflict highlighting; omit upstream benchmark-generator tooling and duplicate tests.            |
+| 81df6f4a | C     | --                                     | Replaces crash user data with Sentry tags, which is telemetry machinery rejected by ZZZ.                                                                 |
+| 3f00b5d7 | B     | 6056ffda, c8a46208, 528970b4, d3af7201 | Restrict row-highlight expansion to the viewport and skip header rows; adapt stored-color and block visibility APIs.                                     |
+| 76b1096c | C     | --                                     | Requires an unabsorbed gesture/prediction architecture and divergent GPUI web input APIs.                                                                |
+| ee6badf4 | C     | --                                     | Corgi build support is upstream build/release infrastructure with no ZZZ product behavior.                                                               |
+| 9785475c | C     | --                                     | Terminal Threads title editing belongs to the rejected native-agent/thread surface.                                                                      |
+| ce48461e | A     | cc87f2bd                               | Cherry-picked with `-x -s`; malformed shell-variable references now pass through without panicking.                                                      |
+| a66fb6ae | C     | --                                     | Depends on unabsorbed touch/IME gesture state and cannot be isolated from the current web event path.                                                    |
+| f8c27835 | C     | --                                     | Large git-panel multi-select rewrite conflicts with ZZZ's divergent panel and is not safely isolatable in this batch.                                    |
+| 5e28272c | C     | --                                     | Touch-axis locking depends on the unabsorbed gesture physics rewrite.                                                                                    |
 
 ### Applied work
 
