@@ -7,26 +7,31 @@ description: "Build and install ZZZ locally on Linux."
 
 ## Standard Installation
 
-The repository installation script is the fastest way to install ZZZ locally:
+ZZZ does not ship hosted binaries. Build and install from this
+repository:
 
 ```sh
-./script/install.sh
+./script/install-linux
 ```
 
-The ZZZ installed by the script works best on systems that:
+That script builds a release tarball and unpacks it into `~/.local`,
+making `~/.local/bin/zzz` available. For a CPU-native build:
 
-- have a Vulkan compatible GPU available (for example Linux on an M-series macBook)
+```sh
+./script/install-linux --native
+```
+
+See [Building ZZZ for Linux](./development/linux.md) for dependencies.
+
+The resulting binary works best on systems that:
+
+- have a Vulkan compatible GPU available (for example Linux on an
+  M-series MacBook)
 - have a system-wide glibc (NixOS and Alpine do not by default)
-  - x86_64 (Intel/AMD): glibc version >= 2.31 (Ubuntu 20 and newer)
-  - aarch64 (ARM): glibc version >= 2.35 (Ubuntu 22 and newer)
 
-Both Nix and Alpine have third-party ZZZ packages available (though they are currently a few weeks out of date). If you'd like to use our builds they do work if you install a glibc compatibility layer. On NixOS you can try [nix-ld](https://github.com/Mic92/nix-ld), and on Alpine [gcompat](https://wiki.alpinelinux.org/wiki/Running_glibc_programs).
-
-You will need to build from source for:
-
-- architectures other than 64-bit Intel or 64-bit ARM (for example a 32-bit or RISC-V machine)
-- Redhat Enterprise Linux 8.x, Rocky Linux 8, AlmaLinux 8, Amazon Linux 2 on all architectures
-- Redhat Enterprise Linux 9.x, Rocky Linux 9.3, AlmaLinux 8, Amazon Linux 2023 on aarch64 (x86_x64 OK)
+On NixOS you can try
+[nix-ld](https://github.com/Mic92/nix-ld), and on Alpine
+[gcompat](https://wiki.alpinelinux.org/wiki/Running_glibc_programs).
 
 ## Other ways to install ZZZ on Linux
 
@@ -68,17 +73,13 @@ Build, packaging and instructions for each version are available in the README o
 
 ### Installing a local archive
 
-If you build a local `.tar.gz` artifact, you can customize its installation
-location with the following commands:
-
-Use the archive produced by your local build:
-
-Then ensure that the `zzz` binary in the tarball is on your path. The easiest way is to unpack the tarball and create a symlink:
+If you already have a local `.tar.gz` from `./script/bundle-linux` or
+`./script/install-linux`, you can unpack it yourself:
 
 ```sh
 mkdir -p ~/.local
-# extract zzz to ~/.local/zzz.app/
-tar -xvf <path/to/download>.tar.gz -C ~/.local
+# extract zzz to ~/.local/zzz.app/ (or zzz-dev.app on the dev channel)
+tar -xvf target/linux-native/zzz-linux-$(uname -m).tar.gz -C ~/.local
 # link the zzz binary to ~/.local/bin (or another directory in your $PATH)
 ln -sf ~/.local/zzz.app/bin/zzz ~/.local/bin/zzz
 ```
