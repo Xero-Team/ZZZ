@@ -1,13 +1,18 @@
 use anyhow::{Context as _, Result};
 use collections::{BTreeMap, BTreeSet, HashSet};
-use ec4rs::{ConfigParser, PropertiesSource, Section};
+use ec4rs::{
+    ConfigParser, PropertyKey as _, Section,
+    property::{
+        EndOfLine, FinalNewline, IndentSize, IndentStyle, MaxLineLen, TabWidth, TrimTrailingWs,
+    },
+};
 use fs::Fs;
 use futures::StreamExt;
 use gpui::{Context, EventEmitter, Task};
 use paths::EDITORCONFIG_NAME;
 use smallvec::SmallVec;
 use std::{path::Path, str::FromStr, sync::Arc};
-use util::{ResultExt as _, rel_path::RelPath};
+use util::rel_path::RelPath;
 
 use crate::{InvalidSettingsError, LocalSettingsPath, WorktreeId, watch_config_file};
 
@@ -321,8 +326,14 @@ impl EditorconfigStore {
         for_worktree: WorktreeId,
         for_path: &RelPath,
     ) -> Option<EditorconfigProperties> {
-        let mut properties = EditorconfigProperties::new();
         let state = self.worktree_state.get(&for_worktree);
+        let has_internal_configs = state.is_some_and(|state| !state.internal_configs.is_empty());
+        let has_external_configs = self.external_configs(for_worktree).next().is_some();
+        if !has_internal_configs && !has_external_configs {
+            return None;
+        }
+
+        let mut properties = EditorconfigProperties::new();
         let internal_root_config_is_root = state
             .and_then(|state| state.internal_configs.get(RelPath::empty()))
             .and_then(|data| data.1.as_ref())
@@ -337,7 +348,7 @@ impl EditorconfigStore {
                         properties = EditorconfigProperties::new();
                     }
                     for section in &parsed_editorconfig.sections {
-                        section.apply_to(&mut properties, std_path).log_err()?;
+                        apply_relevant_properties(section, std_path, &mut properties);
                     }
                 }
             }
@@ -361,13 +372,37 @@ impl EditorconfigStore {
                     properties = EditorconfigProperties::new();
                 }
                 for section in &config.sections {
-                    section.apply_to(&mut properties, std_path).log_err()?;
+                    apply_relevant_properties(section, std_path, &mut properties);
                 }
             }
         }
 
         properties.use_fallbacks();
         Some(properties)
+    }
+}
+
+fn apply_relevant_properties(
+    section: &Section,
+    std_path: &Path,
+    properties: &mut EditorconfigProperties,
+) {
+    if !section.applies_to(std_path) {
+        return;
+    }
+    let relevant_keys = [
+        IndentStyle::key(),
+        IndentSize::key(),
+        TabWidth::key(),
+        EndOfLine::key(),
+        MaxLineLen::key(),
+        FinalNewline::key(),
+        TrimTrailingWs::key(),
+    ];
+    for (key, value) in section.props().iter() {
+        if relevant_keys.contains(&key) {
+            properties.insert_raw_for_key(key, value.clone());
+        }
     }
 }
 
