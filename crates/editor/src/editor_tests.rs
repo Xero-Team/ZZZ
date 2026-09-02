@@ -96,25 +96,25 @@ fn test_highlighted_display_rows_in_range(cx: &mut TestAppContext) {
                 let buffer = editor.buffer().read(cx).snapshot(cx);
                 editor.highlight_rows::<FirstHighlight>(
                     buffer.anchor_before(Point::new(0, 0))..buffer.anchor_before(Point::new(6, 0)),
-                    |cx| cx.theme().colors().editor_background,
+                    cx.theme().colors().editor_background,
                     RowHighlightOptions::default(),
                     cx,
                 );
                 editor.highlight_rows::<SecondHighlight>(
                     buffer.anchor_before(Point::new(0, 0))..buffer.anchor_before(Point::new(1, 0)),
-                    |cx| cx.theme().colors().editor_highlighted_line_background,
+                    cx.theme().colors().editor_highlighted_line_background,
                     RowHighlightOptions::default(),
                     cx,
                 );
                 editor.highlight_rows::<SecondHighlight>(
                     buffer.anchor_before(Point::new(3, 0))..buffer.anchor_before(Point::new(4, 0)),
-                    |cx| cx.theme().colors().editor_highlighted_line_background,
+                    cx.theme().colors().editor_highlighted_line_background,
                     RowHighlightOptions::default(),
                     cx,
                 );
                 editor.highlight_rows::<SecondHighlight>(
                     buffer.anchor_before(Point::new(6, 0))..buffer.anchor_before(Point::new(7, 0)),
-                    |cx| cx.theme().colors().editor_highlighted_line_background,
+                    cx.theme().colors().editor_highlighted_line_background,
                     RowHighlightOptions::default(),
                     cx,
                 );
@@ -155,7 +155,7 @@ fn test_highlighted_display_rows_in_range(cx: &mut TestAppContext) {
                 };
                 editor.highlight_rows::<SecondHighlight>(
                     highlight_start..buffer.anchor_before(Point::new(4, 0)),
-                    |cx| cx.theme().colors().editor_highlighted_line_background,
+                    cx.theme().colors().editor_highlighted_line_background,
                     RowHighlightOptions::default(),
                     cx,
                 );
