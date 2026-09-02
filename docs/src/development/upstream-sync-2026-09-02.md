@@ -152,3 +152,71 @@ NOT RUN cargo test --workspace
 
 The reviewed baseline is `5e28272c1407ced4bae4a90deaea25352a1fbc96`.
 Work remains on `sync/upstream-2026-09-02` and has not been merged to `main`.
+
+## Continuation Run 2
+
+- Target branch: `sync/upstream-2026-09-02`
+- Previously reviewed baseline: `5e28272c1407ced4bae4a90deaea25352a1fbc96`
+- Reviewed upstream head: `c3cf80c0d1be43f3b84e21ef2c82e91b0d78e788`
+- Live upstream head queried: `003826320f320dace212a67e82b0db92cb457081`
+- Query time: `2026-09-02T23:45:53+02:00`
+- Reviewed range: `5e28272c..c3cf80c`
+
+This continuation reviewed the next 20 commits. Counts: 3 A, 7 B, and
+10 C. The reviewed baseline is now `c3cf80c0d1be43f3b84e21ef2c82e91b0d78e788`;
+16 commits remain through the queried live head.
+
+### Decisions
+
+| Upstream | Class | Local commit       | Disposition                                                                                                                                              |
+| -------- | ----- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| c4bc69e5 | C     | --                 | Corgi sandbox/glob and bootstrap configuration is upstream build infrastructure without independent ZZZ product behavior.                                |
+| 22945084 | C     | --                 | Broad BufferDiff/GitStore/editor hunk-operation refactor is not isolatable onto ZZZ's divergent diff architecture.                                       |
+| a49de953 | B     | b9525da4           | Enabled Wayland backend logging while retaining ZZZ's newer dependency versions; the upstream lockfile conflicted.                                       |
+| 8ce383f2 | B     | 4c8274ac, 947302e0 | Added and documented `close_panel_on_toggle`, adapting the settings UI to ZZZ's `UiText` and field shape.                                                |
+| d1446d66 | B     | 06d2f0db, ef448f25 | Queried the configured Ollama server for FIM-capable models and gated the provider on edit-prediction settings; omitted Sweep support absent from ZZZ.   |
+| 0855410c | C     | --                 | Long-press gesture recognition is coupled to the unabsorbed touch/IME gesture architecture.                                                              |
+| 283460f5 | B     | 120ef38f, ef448f25 | Added Anthropic Fable 5.1 thinking-binding controls and forced-tool gating; omitted unavailable compaction metadata and deleted Copilot product changes. |
+| d3e54c97 | C     | --                 | Requires the absent `fs_embed!` architecture; ZZZ uses direct rust-embed paths.                                                                          |
+| 239d0aa1 | C     | --                 | Release/test workflow changes are upstream CI and SDK bootstrap infrastructure.                                                                          |
+| ac5af8b9 | C     | --                 | License-manifest and symlink relicensing has no independent ZZZ product behavior and conflicts with current package metadata.                            |
+| 2551721a | C     | --                 | Follow-up `fs_embed!` debug embedding depends on the absent upstream macro surface.                                                                      |
+| 520d8bda | A     | 2dc02412           | Cherry-picked with `-x -s`; corrected fractional-scale avatar borders.                                                                                   |
+| 97b1e64a | C     | --                 | Adds hang-trigger telemetry and release telemetry plumbing, rejected by ZZZ's no-telemetry boundary.                                                     |
+| d56dca80 | C     | --                 | GitHub issue-triage workflow only; no product behavior.                                                                                                  |
+| 83726412 | A     | 571896b8           | Cherry-picked with `-x -s`; preserves the correct pre-modal focus handle.                                                                                |
+| a24cafa9 | B     | 2c2ba4fc           | Removed the completion-row shrink flag using ZZZ's existing flex API spelling.                                                                           |
+| 480d81bf | C     | --                 | ChatGPT Subscription setup/cancellation is an explicitly rejected account-bound surface.                                                                 |
+| dbfeae77 | B     | 11347dec           | Avoided persisting commit-template text as a user draft; adapted the logic to ZZZ's git panel.                                                           |
+| 6309c722 | B     | 4fbc921b, ef448f25 | Classified Anthropic prompt-too-long HTTP 400s using ZZZ's existing completion error model.                                                              |
+| c3cf80c0 | A     | 276a4e51           | Cherry-picked with `-x -s`; Git Graph now participates in pane navigation history.                                                                       |
+
+### Applied work
+
+- Direct A commits `520d8bda`, `83726412`, and `c3cf80c0` were absorbed with
+  `git cherry-pick -x -s`.
+- B ports retain `Upstream`, `Retained`, and `Omitted` trailers. The Ollama,
+  Anthropic, modal-focus, completion-layout, Git-template, and prompt-error
+  ports each preserve the local behavior without importing rejected account,
+  telemetry, Sweep, or absent `fs_embed!` machinery.
+- `ef448f25` is a formatting-only cleanup for the local B ports.
+
+### Verification
+
+```text
+PASS cargo check --locked -p gpui_linux
+PASS cargo check --locked -p edit_prediction -p settings_ui -p edit_prediction_ui -p zzz
+PASS cargo check --locked -p anthropic -p language_models -p language_models_cloud
+PASS cargo check --locked -p editor
+PASS cargo check --locked -p git_ui
+PASS cargo check --locked -p language_model_core
+PASS cargo test --locked -p language_model_core
+PASS cargo test --locked -p git_graph test_go_back_from_commit_view_returns_to_git_graph
+PASS git diff --check
+NOT RUN macOS / Windows / wasm32 runtime tests
+NOT RUN cargo test --workspace
+NOT RUN full cargo fmt check (known unrelated formatting drift remains outside this run)
+```
+
+The reviewed baseline is `c3cf80c0d1be43f3b84e21ef2c82e91b0d78e788`.
+Work remains on `sync/upstream-2026-09-02` and has not been merged to `main`.
