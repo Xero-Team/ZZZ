@@ -164,7 +164,7 @@ Work remains on `sync/upstream-2026-09-02` and has not been merged to `main`.
 
 This continuation reviewed the next 20 commits. Counts: 3 A, 7 B, and
 10 C. The reviewed baseline is now `c3cf80c0d1be43f3b84e21ef2c82e91b0d78e788`;
-16 commits remain through the queried live head.
+17 commits remain through the queried live head.
 
 ### Decisions
 
