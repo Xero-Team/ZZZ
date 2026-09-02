@@ -220,3 +220,63 @@ NOT RUN full cargo fmt check (known unrelated formatting drift remains outside t
 
 The reviewed baseline is `c3cf80c0d1be43f3b84e21ef2c82e91b0d78e788`.
 Work remains on `sync/upstream-2026-09-02` and has not been merged to `main`.
+
+## Continuation Run 3
+
+- Target branch: `sync/upstream-2026-09-02`
+- Previously reviewed baseline: `c3cf80c0d1be43f3b84e21ef2c82e91b0d78e788`
+- Reviewed upstream head: `003826320f320dace212a67e82b0db92cb457081`
+- Live upstream head queried: `003826320f320dace212a67e82b0db92cb457081`
+- Query time: `2026-09-03T00:56:23+02:00`
+- Reviewed range: `c3cf80c0..00382632`
+
+This continuation reviewed the remaining 17 commits from the previous
+baseline. Counts: 1 A, 3 B, and 13 C. The reviewed baseline is now
+`003826320f320dace212a67e82b0db92cb457081`; no upstream commits remain in
+the queried range.
+
+### Decisions
+
+| Upstream | Class | Local commit | Disposition                                                                                                                                             |
+| -------- | ----- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 8514ce3b | C     | --           | Broad language-model stream/schema rewrite conflicts across ZZZ's provider APIs and deleted test surfaces; not isolatable in this batch.                |
+| 2b0562a8 | A     | 04ec646d     | Cherry-picked with `-x -s`; keybinding labels can be hidden while bindings remain active.                                                               |
+| ff68a64c | C     | --           | Upstream release-version metadata and lockfile churn only.                                                                                              |
+| cff4edce | C     | --           | Nix/Corgi build-source plumbing with no independent ZZZ product behavior.                                                                               |
+| 810c6a04 | B     | 2c51323b     | Added the `on_new_window` setting and launchpad behavior, adapting the settings UI to ZZZ's localized page-data API.                                    |
+| 769d0bef | C     | --           | Emmet wrap-with-abbreviation requires a large new inline-input/protocol architecture and collab changes absent from ZZZ.                                |
+| 6b5e15ed | C     | --           | Dependency, lockfile, and build compatibility churn without an independent ZZZ behavior.                                                                |
+| 9decdcc1 | C     | --           | GPUI web IME mirror-focus rewrite depends on the divergent touch/IME architecture.                                                                      |
+| 60bf47b9 | C     | --           | Project-scoped LSP log identity requires a broad `LogStore`/extension API rewrite not isolatable onto ZZZ's current model.                              |
+| a85cf449 | C     | --           | Touch prediction jitter fix targets upstream `gpui/src/gestures.rs`, which ZZZ has deleted.                                                             |
+| f8000a30 | B     | 127f4ef5     | Cleared stale per-server diagnostics and inlay state, resolving the closed-buffer sweep against ZZZ's existing cleanup path.                            |
+| ad251e0a | B     | 8c087937     | Documented `focus_follows_mouse`, adapting placement and preserving ZZZ's existing format-on-save anchor.                                               |
+| ab7d21d4 | C     | --           | Workspace-diagnostics polling overhaul conflicts with ZZZ's local diagnostics implementation and requires a large unisolated LSP error/request rewrite. |
+| 8a4bd132 | C     | --           | Release-bundle symbol stripping and Sentry/debug-file packaging are upstream release infrastructure.                                                    |
+| 23aca989 | C     | --           | Dynamic LSP document-selector support is a broad capability/protocol rewrite across divergent ZZZ APIs.                                                 |
+| b3326e13 | C     | --           | `TouchDragEvent` depends on the absent upstream touch-gesture API.                                                                                      |
+| 00382632 | C     | --           | Manage-skills command filtering targets an action surface absent from ZZZ's ACP-only agent UI.                                                          |
+
+### Applied work
+
+- `2b0562a8` was absorbed directly with `git cherry-pick -x -s`.
+- `810c6a04`, `f8000a30`, and `ad251e0a` were ported as B commits with
+  `Upstream`, `Retained`, and `Omitted` trailers. The settings UI, diagnostics
+  cleanup, and documentation hunks were adapted to ZZZ's existing APIs.
+  The incompatible inlay-hints fixture was omitted in follow-up commit
+  `827d2933`.
+
+### Verification
+
+```text
+PASS cargo check --locked -p ui -p settings -p settings_ui -p workspace -p zzz -p project -p editor -p lsp
+PASS cargo test --locked -p ui --lib (68 passed)
+PASS cargo test --locked -p editor test_no_hint_updates_for_unrelated_language_files
+BLOCKED cargo test --locked -p project diagnostic (existing integration fixtures use unavailable DiagnosticMessage/DiagnosticEntry::new and mismatched LanguageMatcher types)
+PASS git diff --check
+NOT RUN macOS / Windows / wasm32 runtime tests
+NOT RUN cargo test --workspace
+```
+
+The reviewed baseline is `003826320f320dace212a67e82b0db92cb457081`.
+Work remains on `sync/upstream-2026-09-02` and has not been merged to `main`.
