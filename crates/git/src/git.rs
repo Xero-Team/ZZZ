@@ -155,6 +155,7 @@ pub struct RestoreFile {
 
 /// The length of a Git short SHA.
 pub const SHORT_SHA_LENGTH: usize = 7;
+pub const SHA256_HEX_LENGTH: usize = 64;
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct Oid(libgit::Oid);
