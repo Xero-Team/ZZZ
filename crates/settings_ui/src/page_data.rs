@@ -5526,10 +5526,9 @@ fn window_and_layout_page() -> SettingsPage {
                 files: USER,
             }),
             SettingsPageItem::SettingItem(SettingItem {
-                title: "Close Panel on Toggle",
-                description: "Whether invoking a panel's ToggleFocus action while it's already focused closes the panel, instead of just moving focus back to the editor.",
+                title: "Close Panel on Toggle".into(),
+                description: "Whether invoking a panel's ToggleFocus action while it's already focused closes the panel, instead of just moving focus back to the editor.".into(),
                 field: Box::new(SettingField {
-                    organization_override: None,
                     json_path: Some("close_panel_on_toggle"),
                     pick: |settings_content| {
                         settings_content.workspace.close_panel_on_toggle.as_ref()
