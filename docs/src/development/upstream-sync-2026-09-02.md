@@ -140,6 +140,7 @@ PASS cargo check --locked -p settings -p scheduler -p gpui -p multi_buffer -p gi
 PASS cargo check --locked -p settings
 PASS cargo check --locked -p scheduler -p gpui
 PASS cargo check --locked -p gpui --target wasm32-unknown-unknown
+BLOCKED cargo check --locked -p scheduler --target wasm32-unknown-unknown (the workspace's `getrandom` configuration rejects `wasm32-unknown-unknown` without the `wasm_js` feature)
 PASS cargo test --locked -p editor test_highlighted_display_rows_in_range
 PASS cargo test --locked -p util test_to_shell_variable_malformed_is_passed_through
 PASS cargo test --locked -p git_ui conflict
