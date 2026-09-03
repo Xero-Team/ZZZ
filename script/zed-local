@@ -5,15 +5,9 @@ USAGE
   zed-local  [options]  [zzz args]
 
 SUMMARY
-  Runs 1-6 instances of ZZZ using a locally-running collaboration server.
-  Each instance of ZZZ will be signed in as a different user specified in
-  either \`.admins.json\` or \`.admins.default.json\`.
-
-  All arguments after the initial options will be passed through to the first
-  instance of ZZZ. This can be used to test SSH remoting along with collab, like
-  so:
-
-  $ script/zed-local -2 ssh://your-ssh-uri-here
+  Runs 1-6 instances of ZZZ. Each instance is launched with a distinct
+  impersonation user name. All arguments after the initial options are passed
+  through to the first instance.
 
 OPTIONS
   --help            Print this help message
@@ -27,20 +21,7 @@ OPTIONS
 const { spawn, execSync, execFileSync } = require("child_process");
 const assert = require("assert");
 
-let users;
-if (process.env.SEED_PATH) {
-  users = require(process.env.SEED_PATH).admins;
-} else {
-  users = require("../crates/collab/seed.default.json").admins;
-  try {
-    const defaultUsers = users;
-    const customUsers = require("../crates/collab/seed.json").admins;
-    assert(customUsers.length > 0);
-    users = customUsers.concat(
-      defaultUsers.filter((user) => !customUsers.includes(user)),
-    );
-  } catch (_) {}
-}
+let users = ["user-1", "user-2", "user-3", "user-4", "user-5", "user-6"];
 
 const RESOLUTION_REGEX = /(\d+) x (\d+)/;
 const DIGIT_FLAG_REGEX = /^--?(\d+)$/;

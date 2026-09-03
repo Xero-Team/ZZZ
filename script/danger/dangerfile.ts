@@ -61,10 +61,7 @@ if (includesIssueUrl) {
   );
 }
 
-const MIGRATION_SCHEMA_FILES = [
-  "crates/collab/migrations/20251208000000_test_schema.sql",
-  "crates/collab/migrations.sqlite/20221109000000_test_schema.sql",
-];
+const MIGRATION_SCHEMA_FILES: string[] = [];
 
 const modifiedSchemaFiles = danger.git.modified_files.filter((file) =>
   MIGRATION_SCHEMA_FILES.some((schemaFilePath) => file.endsWith(schemaFilePath)),

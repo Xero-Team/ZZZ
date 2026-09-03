@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-AGPL_CRATES=("collab")
+AGPL_CRATES=()
 RELEASE_CRATES=("cli" "remote_server" "zed")
 
 check_symlink_target () {
@@ -35,12 +35,14 @@ check_license () {
     local allowed_licenses=()
 
     local is_agpl=false
-    for agpl_crate in "${AGPL_CRATES[@]}"; do
-        if [[ "$dir" == "crates/$agpl_crate" ]]; then
-            is_agpl=true
-            break
-        fi
-    done
+    if ((${#AGPL_CRATES[@]} > 0)); then
+        for agpl_crate in "${AGPL_CRATES[@]}"; do
+            if [[ "$dir" == "crates/$agpl_crate" ]]; then
+                is_agpl=true
+                break
+            fi
+        done
+    fi
 
     if [[ "$is_agpl" == true ]]; then
         allowed_licenses=("LICENSE-AGPL")
@@ -74,6 +76,9 @@ done
 # Make sure the AGPL server crates are included in the release tarball.
 for release_crate in "${RELEASE_CRATES[@]}"; do
     tree_output=$(cargo tree --package "$release_crate")
+    if ((${#AGPL_CRATES[@]} == 0)); then
+        continue
+    fi
     for agpl_crate in "${AGPL_CRATES[@]}"; do
         # Look for lines that contain the crate name followed by " v" (version)
         # This matches patterns like "├── collab v0.44.0"

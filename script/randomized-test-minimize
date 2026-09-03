@@ -5,7 +5,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const FAILING_SEED_REGEX = /failing seed: (\d+)/gi;
-const CARGO_TEST_ARGS = ["--release", "--lib", "--package", "collab"];
+const CARGO_TEST_ARGS = ["--release", "--lib", "--package", "project"];
 
 if (require.main === module) {
   if (process.argv.length < 4) {
@@ -100,7 +100,7 @@ function buildTests() {
 function runTests(env) {
   const { status, stdout } = spawnSync(
     "cargo",
-    ["test", ...CARGO_TEST_ARGS, "random_project_collaboration"],
+    ["test", ...CARGO_TEST_ARGS],
     {
       stdio: "pipe",
       encoding: "utf8",
