@@ -146,8 +146,13 @@ check_no_plan_chips() {
         "$root/crates/ai_onboarding" "$root/crates/agent_ui"
 }
 
-check_collab_signed_out_no_github() {
-    ! rg -n 'Sign In with GitHub' "$root/crates/collab_ui"
+check_collab_absent() {
+    ! test -d "$root/crates/collab" \
+        && ! test -d "$root/crates/collab_ui" \
+        && ! test -d "$root/crates/call" \
+        && ! test -d "$root/crates/channel" \
+        && ! test -d "$root/crates/livekit_client" \
+        && ! test -d "$root/crates/livekit_api"
 }
 
 check_allowlisted_hosts() {
@@ -185,7 +190,7 @@ check "privacy policy has no Zed Industries telemetry opt-out" check_privacy_pol
 check "default settings have no hosted AI collection" check_default_settings_no_hosted_ai
 check "MCP OAuth CIMD is not a hosted zed.dev URL" check_oauth_cimd_not_hosted
 check "plan chips are absent from onboarding and agent UI" check_no_plan_chips
-check "collab signed-out panel has no GitHub sign-in" check_collab_signed_out_no_github
+check "multi-user collab crates are absent" check_collab_absent
 check "network hosts are allowlisted" check_allowlisted_hosts
 
 if (( failures > 0 )); then

@@ -54,9 +54,8 @@ ordinary editor features.
   defaults and from first-run / status-bar upsell.
 - Keep Zeta *prompt formats* for local models. Remove hosted
   `EditPredictionProvider::Zed` from product defaults and collection UX.
-- Keep local collab at the loopback `server_url`. Remove GitHub sign-in
-  and hosted-collab marketing from the panel.
-- Do not delete the `collab`, `copilot`, `cloud_api_*`, or
+- Multi-user collab, LiveKit, and channel chat are absent (Plan B).
+- Do not delete the `copilot`, `cloud_api_*`, or
   `language_models_cloud` crates in this pass.
 - Do not absorb upstream, add remotes, push, open a PR, or commit unless
   the user explicitly asks.

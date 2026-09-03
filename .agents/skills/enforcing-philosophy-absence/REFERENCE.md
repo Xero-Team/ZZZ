@@ -184,13 +184,11 @@ type, revert and cut a smaller surface.
 Do not keep `Plan` chips with neutralized copy. Absence means the chip
 is gone.
 
-**Collab sign-in**
+**Collab**
 
-- `crates/collab_ui/src/collab_panel.rs` `render_signed_out`: no
-  "Sign In with GitHub", no realtime-collab marketing blurb. Unauthenticated
-  local users may connect to the configured `server_url` without an
-  account CTA.
-- Do not strip loopback collab or SSH remote development.
+- Multi-user collab crates are absent: `call`, `channel`, `collab`,
+  `collab_ui`, `livekit_client`, `livekit_api`.
+- Keep SSH/WSL/Docker remote development (`Project::remote`).
 
 **Copilot**
 
@@ -231,8 +229,6 @@ is gone.
   `build_zed_extension_marketplace_url` → `api.zed.dev`. Cloud/LLM URL
   builders must not map an unset local `server_url` onto
   `cloud.zed.dev`.
-- `crates/collab/src/lib.rs`: do not default production to
-  `https://cloud.zed.dev`.
 - `crates/client/src/zed_urls.rs`: keep `about:blank`; fix comments that
   still say "Zed AI".
 
@@ -329,7 +325,8 @@ Required new assertions:
   `https://zed.dev/oauth/client-metadata.json`.
 - `crates/ai_onboarding` and `crates/agent_ui` have no
   `render_zed_plan_info` / `PlanDefinitions.pro_plan` product chips.
-- `crates/collab_ui` signed-out panel has no `Sign In with GitHub`.
+- Multi-user collab crates (`call`, `channel`, `collab`, `collab_ui`,
+  `livekit_client`, `livekit_api`) are absent.
 
 Do not weaken existing checks.
 
@@ -350,7 +347,7 @@ cargo test --locked -p <crate> <test_filter>
 ```
 
 Typical crates for group 4: `zzz`, `ai_onboarding`, `agent_ui`,
-`collab_ui`, `edit_prediction`, `edit_prediction_ui`, `settings_ui`,
+`edit_prediction`, `edit_prediction_ui`, `settings_ui`,
 `settings_content`, `context_server`, `cloud_api_client`, `http_client`,
 `client`, `language_models`.
 
