@@ -17,7 +17,6 @@ mod cherry_pick;
 mod compare_perf;
 mod compliance_check;
 mod danger;
-mod deploy_collab;
 mod deploy_docs;
 mod extension_auto_bump;
 mod extension_bump;
