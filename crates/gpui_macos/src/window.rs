@@ -9,7 +9,7 @@ use anyhow::Result;
 use block::ConcreteBlock;
 use cocoa::{
     appkit::{
-        NSApplication, NSBackingStoreBuffered, NSColor, NSEvent, NSEventModifierFlags,
+        NSApplication, NSBackingStoreBuffered, NSColor, NSEventModifierFlags,
         NSFilenamesPboardType, NSPasteboard, NSRequestUserAttentionType, NSScreen, NSView,
         NSViewHeightSizable, NSViewWidthSizable, NSVisualEffectMaterial, NSVisualEffectState,
         NSVisualEffectView, NSWindow, NSWindowCollectionBehavior, NSWindowOcclusionState,
@@ -275,12 +275,6 @@ unsafe fn build_classes() {
             decl.add_method(
                 sel!(acceptsFirstMouse:),
                 accepts_first_mouse as extern "C" fn(&Object, Sel, id) -> BOOL,
-            );
-
-            decl.add_method(
-                sel!(_opaqueRectForWindowMoveWhenInTitlebar),
-                opaque_rect_for_window_move_when_in_titlebar
-                    as extern "C" fn(&Object, Sel) -> NSRect,
             );
 
             decl.add_method(
