@@ -65,6 +65,7 @@ enum BufferStoreState {
 }
 
 struct RemoteBufferStore {
+    #[allow(dead_code)]
     shared_with_me: HashSet<Entity<Buffer>>,
     upstream_client: AnyProtoClient,
     project_id: u64,
@@ -236,11 +237,6 @@ impl RemoteBufferStore {
                     }
                 } else if chunk.is_last {
                     self.loading_remote_buffers_by_id.remove(&buffer_id);
-                    if self.upstream_client.is_via_collab() {
-                        // retain buffers sent by peers to avoid races.
-                        self.shared_with_me.insert(buffer.clone());
-                    }
-
                     if let Some(senders) = self.remote_buffer_listeners.remove(&buffer_id) {
                         for sender in senders {
                             sender.send(Ok(buffer.clone())).ok();

@@ -3361,11 +3361,11 @@ async fn test_history_items_vs_very_good_external_match(cx: &mut gpui::TestAppCo
         .insert_tree(
             path!("/src"),
             json!({
-                "collab_ui": {
+                "panel_ui": {
                     "first.rs": "// First Rust file",
                     "second.rs": "// Second Rust file",
                     "third.rs": "// Third Rust file",
-                    "collab_ui.rs": "// Fourth Rust file",
+                    "panel_ui.rs": "// Fourth Rust file",
                 }
             }),
         )
@@ -3382,17 +3382,17 @@ async fn test_history_items_vs_very_good_external_match(cx: &mut gpui::TestAppCo
     open_close_queried_buffer("sec", 1, "second.rs", &workspace, cx).await;
 
     let finder = open_file_picker(&workspace, cx);
-    let query = "collab_ui";
+    let query = "panel_ui";
     cx.simulate_input(query);
     finder.update(cx, |picker, _| {
             let search_entries = collect_search_matches(picker).search_paths_only();
             assert_eq!(
                 search_entries,
                 vec![
-                    rel_path("collab_ui/collab_ui.rs").into(),
-                    rel_path("collab_ui/first.rs").into(),
-                    rel_path("collab_ui/third.rs").into(),
-                    rel_path("collab_ui/second.rs").into(),
+                    rel_path("panel_ui/panel_ui.rs").into(),
+                    rel_path("panel_ui/first.rs").into(),
+                    rel_path("panel_ui/third.rs").into(),
+                    rel_path("panel_ui/second.rs").into(),
                 ],
                 "Despite all search results having the same directory name, the most matching one should be on top"
             );
@@ -4570,7 +4570,6 @@ fn collect_search_matches(picker: &Picker<FileFinderDelegate>) -> SearchEntries 
                 search_entries.search_matches.push(path_match.0.clone());
             }
             Match::CreateNew(_) => {}
-            Match::Channel { .. } => {}
         }
     }
     search_entries
@@ -4605,7 +4604,6 @@ fn assert_match_at_position(
         Match::History { path, .. } => path.absolute.file_name().and_then(|s| s.to_str()),
         Match::Search(path_match) => path_match.0.path.file_name(),
         Match::CreateNew(project_path) => project_path.path.file_name(),
-        Match::Channel { channel_name, .. } => Some(channel_name.as_str()),
     }
     .unwrap();
     assert_eq!(match_file_name, expected_file_name);
@@ -4929,9 +4927,9 @@ async fn test_start_of_word_preferred_over_scattered_match(cx: &mut TestAppConte
             "/src",
             json!({
                 "crates": {
-                    "livekit_client": {
+                    "audio_client": {
                         "src": {
-                            "livekit_client": {
+                            "audio_client": {
                                 "playback.rs": "",
                             }
                         }
@@ -4952,7 +4950,7 @@ async fn test_start_of_word_preferred_over_scattered_match(cx: &mut TestAppConte
         .update_in(cx, |picker, window, cx| {
             picker
                 .delegate
-                .spawn_search(test_path_position("live pla"), window, cx)
+                .spawn_search(test_path_position("audio pla"), window, cx)
         })
         .await;
     picker.update(cx, |picker, _| {
@@ -4960,7 +4958,7 @@ async fn test_start_of_word_preferred_over_scattered_match(cx: &mut TestAppConte
         assert!(!matches.is_empty(),);
         assert_eq!(
             matches[0].path.as_unix_str(),
-            "crates/livekit_client/src/livekit_client/playback.rs",
+            "crates/audio_client/src/audio_client/playback.rs",
         );
     });
 }

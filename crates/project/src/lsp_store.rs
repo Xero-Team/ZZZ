@@ -2890,8 +2890,7 @@ impl LocalLspStore {
                     range.end = line_end;
                     if range.start.column > 0 {
                         range.start.column -= 1;
-                        range.start =
-                            snapshot.clip_point_utf16(Unclipped(range.start), Bias::Left);
+                        range.start = snapshot.clip_point_utf16(Unclipped(range.start), Bias::Left);
                     }
                 }
             }
@@ -8924,6 +8923,7 @@ impl LspStore {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn set_language_server_statuses_from_proto(
         &mut self,
         project: WeakEntity<Project>,

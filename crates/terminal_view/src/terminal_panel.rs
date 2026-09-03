@@ -578,10 +578,6 @@ impl TerminalPanel {
 
         let project = workspace.read(cx).project().read(cx);
 
-        if project.is_via_collab() {
-            return Task::ready(Err(anyhow!("cannot spawn tasks as a guest")));
-        }
-
         let remote_client = project.remote_client();
         let is_windows = project.path_style(cx).is_windows();
         let remote_shell = remote_client
@@ -1425,7 +1421,6 @@ impl Render for TerminalPanel {
                         None,
                         &workspace::PaneRenderContext {
                             follower_states: &HashMap::default(),
-                            active_call: workspace.active_call(),
                             active_pane: &self.active_pane,
                             app_state: workspace.app_state(),
                             project: workspace.project(),

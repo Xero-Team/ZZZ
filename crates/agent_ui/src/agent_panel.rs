@@ -893,12 +893,8 @@ impl AgentPanel {
                 let panel = cx.new(|cx| Self::new(workspace, prompt_store, window, cx));
 
                 panel.update(cx, |panel, cx| {
-                    let is_via_collab = panel.project.read(cx).is_via_collab();
-
-                    // For collab projects don't restore a custom external agent since
-                    // external agents are not supported in shared projects.
                     let global_fallback = global_last_used_agent.filter(|agent| {
-                        !is_via_collab && panel.should_restore_agent(agent, cx)
+                        panel.should_restore_agent(agent, cx)
                     });
 
                     if let Some(serialized_panel) = &serialized_panel {
@@ -945,11 +941,6 @@ impl AgentPanel {
 
                 if draft_prompt.is_some() || was_draft_active {
                     panel.update(cx, |panel, cx| {
-                        // For collab projects, skip creating a draft since external agents
-                        // are not supported in shared projects and the native agent was removed.
-                        if panel.project.read(cx).is_via_collab() {
-                            return;
-                        }
                         let agent = panel.selected_agent.clone();
                         let initial_content = draft_prompt.map(|blocks| {
                             AgentInitialContent::ContentBlock {
@@ -2028,10 +2019,6 @@ impl AgentPanel {
             });
         }
 
-        if self.project.read(cx).is_via_collab() {
-            return;
-        }
-
         // Update metadata store so threads' path lists stay in sync with
         // the project's current worktrees. Without this, threads saved
         // before a worktree was added would have stale paths and not
@@ -2989,11 +2976,6 @@ impl AgentPanel {
             let is_agent_selected = move |agent: Agent| selected_agent == agent;
 
             let workspace = self.workspace.clone();
-            let is_via_collab = workspace
-                .update(cx, |workspace, cx| {
-                    workspace.project().read(cx).is_via_collab()
-                })
-                .unwrap_or_default();
 
             let focus_handle = focus_handle.clone();
             let agent_server_store = agent_server_store;
@@ -3067,7 +3049,6 @@ impl AgentPanel {
                                         },
                                     )
                                     .icon_color(Color::Muted)
-                                    .disabled(is_via_collab)
                                     .handler({
                                         let workspace = workspace.clone();
                                         let agent_id = item.id.clone();

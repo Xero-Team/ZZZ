@@ -694,9 +694,6 @@ impl Sidebar {
         cx: &mut Context<Self>,
     ) {
         let project = workspace.read(cx).project().clone();
-        if project.read(cx).is_via_collab() {
-            return;
-        }
 
         cx.subscribe_in(
             &project,
@@ -763,10 +760,6 @@ impl Sidebar {
         old_paths: &WorktreePaths,
         cx: &mut Context<Self>,
     ) {
-        if project.read(cx).is_via_collab() {
-            return;
-        }
-
         let new_paths = project.read(cx).worktree_paths(cx);
         let old_folder_paths = old_paths.folder_path_list().clone();
 
@@ -2089,7 +2082,7 @@ impl Sidebar {
                         .or_else(|| open_workspaces.first().cloned());
                     let creation_blocked = base_workspace.as_ref().is_none_or(|base_workspace| {
                         let project = base_workspace.read(cx).project().read(cx);
-                        project.is_via_collab() || project.repositories(cx).is_empty()
+                        project.repositories(cx).is_empty()
                     });
 
                     if let Some(base_workspace) = base_workspace.filter(|_| !creation_blocked) {

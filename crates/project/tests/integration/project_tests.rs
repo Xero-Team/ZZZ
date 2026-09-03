@@ -3518,7 +3518,7 @@ async fn test_selecting_a_language_clears_the_old_servers_diagnostics(
         diagnostics: vec![lsp::Diagnostic {
             range: lsp::Range::new(lsp::Position::new(0, 6), lsp::Position::new(0, 7)),
             severity: Some(lsp::DiagnosticSeverity::ERROR),
-            message: lsp::DiagnosticMessage::String("unused constant".to_string()),
+            message: "unused constant".to_string(),
             ..Default::default()
         }],
     });
@@ -3599,7 +3599,7 @@ async fn test_selecting_a_language_clears_diagnostics_when_the_server_keeps_othe
                 diagnostics: vec![lsp::Diagnostic {
                     range: lsp::Range::new(lsp::Position::new(0, 6), lsp::Position::new(0, 7)),
                     severity: Some(lsp::DiagnosticSeverity::ERROR),
-                    message: lsp::DiagnosticMessage::String(message.to_string()),
+                    message: message.to_string(),
                     ..Default::default()
                 }],
             },
@@ -3657,10 +3657,10 @@ async fn test_registry_reload_detaches_buffers_from_language_servers(
 
     language_registry.register_test_language(LanguageConfig {
         name: "Rust".into(),
-        matcher: Arc::new(LanguageMatcher {
+        matcher: LanguageMatcher {
             path_suffixes: vec!["rs".to_string()],
             ..LanguageMatcher::default()
-        }),
+        },
         ..LanguageConfig::default()
     });
     let mut fake_servers = language_registry.register_fake_lsp("Rust", FakeLspAdapter::default());
@@ -4355,8 +4355,7 @@ async fn test_diagnostic_range_spanning_line_terminator(cx: &mut gpui::TestAppCo
                     None,
                     None,
                     vec![DiagnosticEntry {
-                        range: Unclipped(PointUtf16::new(0, 11))
-                            ..Unclipped(PointUtf16::new(1, 0)),
+                        range: Unclipped(PointUtf16::new(0, 11))..Unclipped(PointUtf16::new(1, 0)),
                         diagnostic: Diagnostic {
                             severity: DiagnosticSeverity::ERROR,
                             message: "Expected `:`".into(),
@@ -4546,16 +4545,16 @@ async fn test_stored_diagnostics_not_replayed_after_entry_removal(cx: &mut gpui:
                 Path::new(path!("/dir/a.rs")).to_owned(),
                 None,
                 None,
-                vec![DiagnosticEntry::new(
-                    Unclipped(PointUtf16::new(0, 0))..Unclipped(PointUtf16::new(0, 3)),
-                    Diagnostic {
+                vec![DiagnosticEntry {
+                    range: Unclipped(PointUtf16::new(0, 0))..Unclipped(PointUtf16::new(0, 3)),
+                    diagnostic: Diagnostic {
                         severity: DiagnosticSeverity::ERROR,
                         is_primary: true,
                         message: "error in a".into(),
                         source_kind: DiagnosticSourceKind::Pushed,
                         ..Diagnostic::default()
                     },
-                )],
+                }],
                 cx,
             )
             .unwrap();

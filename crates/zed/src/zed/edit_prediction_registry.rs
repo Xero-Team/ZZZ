@@ -143,7 +143,6 @@ fn edit_prediction_provider_config_for_settings(cx: &App) -> Option<EditPredicti
     }
 }
 
-
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum EditPredictionProviderConfig {
     Copilot,

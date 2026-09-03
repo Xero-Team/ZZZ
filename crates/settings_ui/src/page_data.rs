@@ -192,10 +192,7 @@ fn general_page(cx: &App) -> SettingsPage {
                 files: USER,
             }),
             SettingsPageItem::SettingItem(SettingItem {
-                title: lt(
-                    "settings_ui.page_data.title.on.new.window",
-                    "On New Window",
-                ),
+                title: lt("settings_ui.page_data.title.on.new.window", "On New Window"),
                 description: lt(
                     "settings_ui.page_data.description.what.to.show.when.opening.a.new.window",
                     "What to show when opening a new window.",

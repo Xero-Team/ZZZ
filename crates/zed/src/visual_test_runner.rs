@@ -184,15 +184,11 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
         release_channel::init(semver::Version::new(0, 0, 0), cx);
         command_palette::init(cx);
         editor::init(cx);
-        call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         title_bar::init(cx);
         project_panel::init(cx);
         outline_panel::init(cx);
         terminal_view::init(cx);
-        channel::init(&app_state.client.clone(), app_state.user_store.clone(), cx);
-        call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         notifications::init(app_state.client.clone(), app_state.user_store.clone(), cx);
-        collab_ui::init(&app_state, cx);
         image_viewer::init(cx);
         audio_viewer::init(cx);
         search::init(cx);

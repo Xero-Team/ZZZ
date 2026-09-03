@@ -202,6 +202,7 @@ impl BreakpointStore {
         self.downstream_client = Some((downstream_client, project_id));
     }
 
+    #[allow(dead_code)]
     pub(crate) fn unshared(&mut self, cx: &mut Context<Self>) {
         self.downstream_client.take();
 
@@ -314,6 +315,7 @@ impl BreakpointStore {
         Ok(proto::Ack {})
     }
 
+    #[allow(dead_code)]
     pub(crate) fn broadcast(&self) {
         if let Some((client, project_id)) = &self.downstream_client {
             for (path, breakpoint_set) in &self.breakpoints {
