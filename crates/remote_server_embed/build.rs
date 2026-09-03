@@ -65,6 +65,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=ZZZ_EMBED_REMOTE_SERVERS");
     println!("cargo:rerun-if-env-changed=ZZZ_EMBED_REMOTE_SERVER_DIR");
     println!("cargo:rerun-if-env-changed=ZZZ_BUILDING_REMOTE_SERVER");
+    println!("cargo:rerun-if-env-changed=SDKROOT");
     println!("cargo:rerun-if-env-changed=PROFILE");
     println!("cargo:rerun-if-env-changed=CLIPPY_ARGS");
     println!("cargo:rerun-if-env-changed=RUSTC_WORKSPACE_WRAPPER");
@@ -201,6 +202,9 @@ fn build_target(workspace: &Path, target: &RemoteTarget, host: &str) -> Result<P
     {
         command.env(format!("CC_{}", target.triple.replace('-', "_")), cc);
     }
+    if target.os == "macos" {
+        command.env("SDKROOT", ensure_macos_sdk(workspace)?);
+    }
 
     let status = command
         .status()
@@ -286,6 +290,28 @@ fn copy_archive(
         ext,
         path: dest,
     })
+}
+
+fn ensure_macos_sdk(workspace: &Path) -> Result<PathBuf, String> {
+    let script = workspace.join("script/ensure-macos-sdk");
+    let output = Command::new(&script)
+        .output()
+        .map_err(|error| format!("failed to spawn {}: {error}", script.display()))?;
+    if !output.status.success() {
+        return Err(format!(
+            "{} failed: {}",
+            script.display(),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    let path = String::from_utf8(output.stdout)
+        .map_err(|error| error.to_string())?
+        .trim()
+        .to_string();
+    if path.is_empty() {
+        return Err("ensure-macos-sdk printed no path".into());
+    }
+    Ok(PathBuf::from(path))
 }
 
 fn rustup_target_add(triple: &str) {

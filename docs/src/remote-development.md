@@ -222,7 +222,9 @@ If it is not there or the version mismatches, a non-debug ZZZ build uploads an
 embedded `remote_server` archive over SSH for the remote OS and architecture.
 Linux x86_64 is always embedded when the host can build it; Linux aarch64,
 macOS, and Windows archives are embedded when that target can be compiled on
-the build machine.
+the build machine. Cross-compiling macOS `remote_server` from Linux downloads
+a macOS SDK into a temporary directory when `zig` and `cargo-zigbuild` are
+available.
 
 If no matching archive is embedded, ZZZ errors unless the binary is already on
 the remote, or a debug `cargo run` compiles `remote_server` from source

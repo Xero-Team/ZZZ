@@ -1,26 +1,29 @@
 #![allow(clippy::disallowed_methods, reason = "build scripts are exempt")]
 
 fn main() {
-    #[cfg(target_os = "macos")]
-    macos_build::run();
+    println!("cargo::rustc-check-cfg=cfg(gpui_cross_runtime_shaders)");
+    if std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default() == "macos" {
+        macos_build::run();
+    }
 }
 
-#[cfg(target_os = "macos")]
 mod macos_build {
     use std::{
         env,
         path::{Path, PathBuf},
+        process::{self, Command},
     };
 
     use cbindgen::Config;
 
     pub fn run() {
         let header_path = generate_shader_bindings();
-
-        #[cfg(feature = "runtime_shaders")]
-        emit_stitched_shaders(&header_path);
-        #[cfg(not(feature = "runtime_shaders"))]
-        compile_metal_shaders(&header_path);
+        if metal_compiler_available() {
+            compile_metal_shaders(&header_path);
+        } else {
+            emit_stitched_shaders(&header_path);
+            println!("cargo:rustc-cfg=gpui_cross_runtime_shaders");
+        }
     }
 
     fn generate_shader_bindings() -> PathBuf {
@@ -70,7 +73,6 @@ mod macos_build {
 
         let crate_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
 
-        // Source files from gpui that define types used in shaders
         let gpui_src_paths = [
             gpui_dir.join("src/scene.rs"),
             gpui_dir.join("src/geometry.rs"),
@@ -79,7 +81,6 @@ mod macos_build {
             gpui_dir.join("src/platform.rs"),
         ];
 
-        // Source files from this crate
         let local_src_paths = [crate_dir.join("src/metal_renderer.rs")];
 
         for src_path in gpui_src_paths.iter().chain(local_src_paths.iter()) {
@@ -96,33 +97,28 @@ mod macos_build {
         output_path
     }
 
-    /// Locate the gpui crate directory relative to this crate.
     fn find_gpui_crate_dir() -> PathBuf {
-        gpui::GPUI_MANIFEST_DIR.into()
+        PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("../gpui")
     }
 
-    /// To enable runtime compilation, we need to "stitch" the shaders file with the generated header
-    /// so that it is self-contained.
-    #[cfg(feature = "runtime_shaders")]
+    fn metal_compiler_available() -> bool {
+        Command::new("xcrun")
+            .args(["-sdk", "macosx", "-f", "metal"])
+            .output()
+            .is_ok_and(|output| output.status.success())
+    }
+
     fn emit_stitched_shaders(header_path: &Path) {
-        fn stitch_header(header: &Path, shader_path: &Path) -> std::io::Result<PathBuf> {
-            let header_contents = std::fs::read_to_string(header)?;
-            let shader_contents = std::fs::read_to_string(shader_path)?;
-            let stitched_contents = format!("{header_contents}\n{shader_contents}");
-            let out_path =
-                PathBuf::from(env::var("OUT_DIR").unwrap()).join("stitched_shaders.metal");
-            std::fs::write(&out_path, stitched_contents)?;
-            Ok(out_path)
-        }
         let shader_source_path = "./src/shaders.metal";
-        let shader_path = PathBuf::from(shader_source_path);
-        stitch_header(header_path, &shader_path).unwrap();
-        println!("cargo:rerun-if-changed={}", &shader_source_path);
+        let header_contents = std::fs::read_to_string(header_path).unwrap();
+        let shader_contents = std::fs::read_to_string(shader_source_path).unwrap();
+        let stitched_contents = format!("{header_contents}\n{shader_contents}");
+        let out_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("stitched_shaders.metal");
+        std::fs::write(&out_path, stitched_contents).unwrap();
+        println!("cargo:rerun-if-changed={shader_source_path}");
     }
 
-    #[cfg(not(feature = "runtime_shaders"))]
     fn compile_metal_shaders(header_path: &Path) {
-        use std::process::{self, Command};
         let shader_path = "./src/shaders.metal";
         let air_output_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("shaders.air");
         let metallib_output_path =

@@ -61,9 +61,8 @@ strum.workspace = true
 util.workspace = true
 uuid.workspace = true
 
-[target.'cfg(target_os = "macos")'.build-dependencies]
+[build-dependencies]
 cbindgen = { version = "0.29.2", default-features = false }
-gpui.workspace = true
 
 # When this crate is itself being tested (cargo test -p gpui_macos), its own
 # cfg(test) flag enables impls of test-only traits like PlatformHeadlessRenderer

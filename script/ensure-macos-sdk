@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+sdk_ok() {
+  [[ -n "${1:-}" && -f "$1/System/Library/Frameworks/CoreServices.framework/Headers/CoreServices.h" ]]
+}
+
+if sdk_ok "${SDKROOT:-}"; then
+  printf '%s\n' "$SDKROOT"
+  exit 0
+fi
+
+if [[ "$(uname -s)" == Darwin ]]; then
+  path="$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)"
+  if sdk_ok "$path"; then
+    printf '%s\n' "$path"
+    exit 0
+  fi
+fi
+
+tmp="${TMPDIR:-/tmp}"
+sdk_root="$tmp/zzz-macos-sdk"
+sdk_path="$sdk_root/MacOSX11.3.sdk"
+if sdk_ok "$sdk_path"; then
+  printf '%s\n' "$sdk_path"
+  exit 0
+fi
+
+mkdir -p "$sdk_root"
+tarball="$tmp/zzz-MacOSX11.3.sdk.tar.xz.$$"
+curl -fL --retry 3 -o "$tarball" \
+  "https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz"
+tar -xJf "$tarball" -C "$sdk_root"
+rm -f "$tarball"
+sdk_ok "$sdk_path"
+printf '%s\n' "$sdk_path"

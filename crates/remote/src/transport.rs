@@ -295,28 +295,53 @@ async fn build_remote_server_from_source(
             rust_flags.push_str(&format!(" -C link-arg=-L{path}"));
         }
     }
+    let macos_sdkroot = if platform.os == RemoteOs::MacOs {
+        delegate.set_status(Some("Preparing macOS SDK"), cx);
+        let output = new_command(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../script/ensure-macos-sdk"
+        ))
+        .kill_on_drop(true)
+        .output()
+        .await?;
+        anyhow::ensure!(
+            output.status.success(),
+            "ensure-macos-sdk failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        Some(
+            String::from_utf8(output.stdout)
+                .context("ensure-macos-sdk output was not utf-8")?
+                .trim()
+                .to_string(),
+        )
+    } else {
+        None
+    };
     if platform.arch.as_str() == std::env::consts::ARCH
         && platform.os.as_str() == std::env::consts::OS
     {
         delegate.set_status(Some("Building remote server binary from source"), cx);
         log::info!("building remote server binary from source");
-        run_cmd(
-            new_command("cargo")
-                .current_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
-                .args([
-                    "build",
-                    "--package",
-                    "remote_server",
-                    "--features",
-                    "debug-embed",
-                    "--target-dir",
-                    "target/remote_server",
-                    "--target",
-                    &triple,
-                ])
-                .env("RUSTFLAGS", &rust_flags),
-        )
-        .await?;
+        let mut command = new_command("cargo");
+        command
+            .current_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
+            .args([
+                "build",
+                "--package",
+                "remote_server",
+                "--features",
+                "debug-embed",
+                "--target-dir",
+                "target/remote_server",
+                "--target",
+                &triple,
+            ])
+            .env("RUSTFLAGS", &rust_flags);
+        if let Some(sdkroot) = &macos_sdkroot {
+            command.env("SDKROOT", sdkroot);
+        }
+        run_cmd(&mut command).await?;
     } else {
         if which("zig", cx).await?.is_none() {
             anyhow::bail!(if cfg!(not(windows)) {
@@ -346,23 +371,25 @@ async fn build_remote_server_from_source(
             cx,
         );
         log::info!("building remote binary from source for {triple} with Zig");
-        run_cmd(
-            new_command("cargo")
-                .current_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
-                .args([
-                    "zigbuild",
-                    "--package",
-                    "remote_server",
-                    "--features",
-                    "debug-embed",
-                    "--target-dir",
-                    "target/remote_server",
-                    "--target",
-                    &triple,
-                ])
-                .env("RUSTFLAGS", &rust_flags),
-        )
-        .await?;
+        let mut command = new_command("cargo");
+        command
+            .current_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
+            .args([
+                "zigbuild",
+                "--package",
+                "remote_server",
+                "--features",
+                "debug-embed",
+                "--target-dir",
+                "target/remote_server",
+                "--target",
+                &triple,
+            ])
+            .env("RUSTFLAGS", &rust_flags);
+        if let Some(sdkroot) = &macos_sdkroot {
+            command.env("SDKROOT", sdkroot);
+        }
+        run_cmd(&mut command).await?;
     };
     let bin_path = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
         .join("target")
