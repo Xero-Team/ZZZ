@@ -276,7 +276,23 @@ osx_minimum_system_version = "10.15.7"
 osx_info_plist_exts = ["resources/info/*"]
 osx_url_schemes = ["zzz"]
 
+[package.metadata.bundle.bin.zzz]
+icon = ["resources/app-icon-dev@2x.png", "resources/app-icon-dev.png"]
+identifier = "dev.zzz.ZZZ-Dev"
+name = "ZZZ Dev"
+osx_minimum_system_version = "10.15.7"
+osx_info_plist_exts = ["resources/info/*"]
+osx_url_schemes = ["zzz"]
+
 [package.metadata.bundle-nightly]
+icon = ["resources/app-icon-nightly@2x.png", "resources/app-icon-nightly.png"]
+identifier = "dev.zzz.ZZZ-Nightly"
+name = "ZZZ Nightly"
+osx_minimum_system_version = "10.15.7"
+osx_info_plist_exts = ["resources/info/*"]
+osx_url_schemes = ["zzz"]
+
+[package.metadata.bundle-nightly.bin.zzz]
 icon = ["resources/app-icon-nightly@2x.png", "resources/app-icon-nightly.png"]
 identifier = "dev.zzz.ZZZ-Nightly"
 name = "ZZZ Nightly"
@@ -292,7 +308,23 @@ osx_minimum_system_version = "10.15.7"
 osx_info_plist_exts = ["resources/info/*"]
 osx_url_schemes = ["zzz"]
 
+[package.metadata.bundle-preview.bin.zzz]
+icon = ["resources/app-icon-preview@2x.png", "resources/app-icon-preview.png"]
+identifier = "dev.zzz.ZZZ-Preview"
+name = "ZZZ Preview"
+osx_minimum_system_version = "10.15.7"
+osx_info_plist_exts = ["resources/info/*"]
+osx_url_schemes = ["zzz"]
+
 [package.metadata.bundle-stable]
+icon = ["resources/app-icon@2x.png", "resources/app-icon.png"]
+identifier = "dev.zzz.ZZZ"
+name = "ZZZ"
+osx_minimum_system_version = "10.15.7"
+osx_info_plist_exts = ["resources/info/*"]
+osx_url_schemes = ["zzz"]
+
+[package.metadata.bundle-stable.bin.zzz]
 icon = ["resources/app-icon@2x.png", "resources/app-icon.png"]
 identifier = "dev.zzz.ZZZ"
 name = "ZZZ"
