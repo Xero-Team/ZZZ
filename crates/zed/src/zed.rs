@@ -2135,6 +2135,7 @@ fn show_markdown_app_notification<F>(
 }
 
 fn reload_keymaps(cx: &mut App, mut user_key_bindings: Vec<KeyBinding>) {
+    log::info!("reload_keymaps (will rebuild macOS menu bar)");
     cx.clear_key_bindings();
     load_default_keymap(cx);
 

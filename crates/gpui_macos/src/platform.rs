@@ -137,6 +137,18 @@ unsafe fn build_classes() {
                 menu_will_open as extern "C" fn(&mut Object, Sel, id),
             );
             decl.add_method(
+                sel!(menuDidClose:),
+                menu_did_close as extern "C" fn(&mut Object, Sel, id),
+            );
+            decl.add_method(
+                sel!(menuDidBeginTracking:),
+                menu_did_begin_tracking as extern "C" fn(&mut Object, Sel, id),
+            );
+            decl.add_method(
+                sel!(menuDidEndTracking:),
+                menu_did_end_tracking as extern "C" fn(&mut Object, Sel, id),
+            );
+            decl.add_method(
                 sel!(applicationDockMenu:),
                 handle_dock_menu as extern "C" fn(&mut Object, Sel, id) -> id,
             );
@@ -177,6 +189,9 @@ pub(crate) struct MacPlatformState {
     menu_command: Option<Box<dyn FnMut(&dyn Action)>>,
     validate_menu_command: Option<Box<dyn FnMut(&dyn Action) -> bool>>,
     will_open_menu: Option<Box<dyn FnMut()>>,
+    menu_tracking_count: usize,
+    pending_main_menu: Option<id>,
+    pending_appearance: Option<Option<WindowAppearance>>,
     menu_actions: Vec<Box<dyn Action>>,
     open_urls: Option<Box<dyn FnMut(Vec<String>)>>,
     finish_launching: Option<Box<dyn FnOnce()>>,
@@ -220,6 +235,9 @@ impl MacPlatform {
             menu_command: None,
             validate_menu_command: None,
             will_open_menu: None,
+            menu_tracking_count: 0,
+            pending_main_menu: None,
+            pending_appearance: None,
             menu_actions: Default::default(),
             open_urls: None,
             finish_launching: None,
@@ -672,23 +690,17 @@ impl Platform for MacPlatform {
 
     fn set_window_appearance(&self, appearance: Option<WindowAppearance>) {
         unsafe {
-            let app: id = msg_send![APP_CLASS, sharedApplication];
-            let ns_appearance: id = match appearance {
-                None => nil,
-                Some(WindowAppearance::Light) => {
-                    msg_send![class!(NSAppearance), appearanceNamed: crate::window_appearance::NSAppearanceNameAqua]
-                }
-                Some(WindowAppearance::Dark) => {
-                    msg_send![class!(NSAppearance), appearanceNamed: crate::window_appearance::NSAppearanceNameDarkAqua]
-                }
-                Some(WindowAppearance::VibrantLight) => {
-                    msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantLight]
-                }
-                Some(WindowAppearance::VibrantDark) => {
-                    msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantDark]
-                }
-            };
-            let _: () = msg_send![app, setAppearance: ns_appearance];
+            let mut state = self.0.lock();
+            if state.menu_tracking_count > 0 {
+                log::info!(
+                    "deferring setAppearance while menu tracking (count={})",
+                    state.menu_tracking_count
+                );
+                state.pending_appearance = Some(appearance);
+                return;
+            }
+            drop(state);
+            apply_window_appearance(appearance);
         }
     }
 
@@ -985,10 +997,24 @@ impl Platform for MacPlatform {
         unsafe {
             let app: id = msg_send![APP_CLASS, sharedApplication];
             let mut state = self.0.lock();
+            let tracking = state.menu_tracking_count;
             let actions = &mut state.menu_actions;
             let menu = self.create_menu_bar(&menus, NSWindow::delegate(app), actions, keymap);
-            drop(state);
-            app.setMainMenu_(menu);
+            if tracking > 0 {
+                log::info!(
+                    "deferring setMainMenu while menu tracking (count={})",
+                    tracking
+                );
+                if let Some(old) = state.pending_main_menu.replace(menu) {
+                    let _: () = msg_send![old, release];
+                }
+                let _: () = msg_send![menu, retain];
+                drop(state);
+            } else {
+                drop(state);
+                log::debug!("setMainMenu");
+                app.setMainMenu_(menu);
+            }
         }
         self.0.lock().menus = Some(menus.into_iter().map(|menu| menu.owned()).collect());
     }
@@ -1189,6 +1215,28 @@ impl Platform for MacPlatform {
     }
 }
 
+unsafe fn apply_window_appearance(appearance: Option<WindowAppearance>) {
+    unsafe {
+        let app: id = msg_send![APP_CLASS, sharedApplication];
+        let ns_appearance: id = match appearance {
+            None => nil,
+            Some(WindowAppearance::Light) => {
+                msg_send![class!(NSAppearance), appearanceNamed: crate::window_appearance::NSAppearanceNameAqua]
+            }
+            Some(WindowAppearance::Dark) => {
+                msg_send![class!(NSAppearance), appearanceNamed: crate::window_appearance::NSAppearanceNameDarkAqua]
+            }
+            Some(WindowAppearance::VibrantLight) => {
+                msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantLight]
+            }
+            Some(WindowAppearance::VibrantDark) => {
+                msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantDark]
+            }
+        };
+        let _: () = msg_send![app, setAppearance: ns_appearance];
+    }
+}
+
 unsafe fn path_from_objc(path: id) -> PathBuf {
     let len = msg_send![path, lengthOfBytesUsingEncoding: NSUTF8StringEncoding];
     let bytes = unsafe { path.UTF8String() as *const u8 };
@@ -1243,6 +1291,19 @@ extern "C" fn did_finish_launching(this: &mut Object, _: Sel, _: id) {
             object: process_info
         ];
 
+        let menu_begin = ns_string("NSMenuDidBeginTrackingNotification");
+        let _: () = msg_send![notification_center, addObserver: this as id
+            selector: sel!(menuDidBeginTracking:)
+            name: menu_begin
+            object: nil
+        ];
+        let menu_end = ns_string("NSMenuDidEndTrackingNotification");
+        let _: () = msg_send![notification_center, addObserver: this as id
+            selector: sel!(menuDidEndTracking:)
+            name: menu_end
+            object: nil
+        ];
+
         let platform = get_mac_platform(this);
         let callback = platform.0.lock().finish_launching.take();
         if let Some(callback) = callback {
@@ -1276,6 +1337,10 @@ extern "C" fn will_terminate(this: &mut Object, _: Sel, _: id) {
 extern "C" fn on_keyboard_layout_change(this: &mut Object, _: Sel, _: id) {
     let platform = unsafe { get_mac_platform(this) };
     let mut lock = platform.0.lock();
+    log::info!(
+        "keyboard layout change while menu tracking={}",
+        lock.menu_tracking_count
+    );
     let keyboard_layout = MacKeyboardLayout::new();
     lock.keyboard_mapper = Rc::new(MacKeyboardMapper::new(keyboard_layout.id()));
     if let Some(mut callback) = lock.on_keyboard_layout_change.take() {
@@ -1378,14 +1443,95 @@ extern "C" fn validate_menu_item(this: &mut Object, _: Sel, item: id) -> bool {
     }
 }
 
-extern "C" fn menu_will_open(this: &mut Object, _: Sel, _: id) {
+unsafe fn ns_menu_title(menu: id) -> String {
+    if menu.is_null() {
+        return String::new();
+    }
+    let title: id = unsafe { msg_send![menu, title] };
+    if title.is_null() {
+        String::new()
+    } else {
+        unsafe { CStr::from_ptr(title.UTF8String()) }
+            .to_string_lossy()
+            .into_owned()
+    }
+}
+
+extern "C" fn menu_will_open(this: &mut Object, _: Sel, menu: id) {
     unsafe {
         let platform = get_mac_platform(this);
         let mut lock = platform.0.lock();
+        log::info!(
+            "menuWillOpen title={:?} tracking={}",
+            ns_menu_title(menu),
+            lock.menu_tracking_count
+        );
         if let Some(mut callback) = lock.will_open_menu.take() {
             drop(lock);
             callback();
             platform.0.lock().will_open_menu.get_or_insert(callback);
+        }
+    }
+}
+
+extern "C" fn menu_did_close(this: &mut Object, _: Sel, menu: id) {
+    let platform = unsafe { get_mac_platform(this) };
+    let lock = platform.0.lock();
+    log::info!(
+        "menuDidClose title={:?} tracking={}",
+        unsafe { ns_menu_title(menu) },
+        lock.menu_tracking_count
+    );
+}
+
+extern "C" fn menu_did_begin_tracking(this: &mut Object, _: Sel, notification: id) {
+    unsafe {
+        let platform = get_mac_platform(this);
+        let mut lock = platform.0.lock();
+        lock.menu_tracking_count = lock.menu_tracking_count.saturating_add(1);
+        let menu: id = if notification.is_null() {
+            nil
+        } else {
+            msg_send![notification, object]
+        };
+        log::info!(
+            "menuDidBeginTracking title={:?} tracking={}",
+            ns_menu_title(menu),
+            lock.menu_tracking_count
+        );
+    }
+}
+
+extern "C" fn menu_did_end_tracking(this: &mut Object, _: Sel, notification: id) {
+    unsafe {
+        let platform = get_mac_platform(this);
+        let mut lock = platform.0.lock();
+        lock.menu_tracking_count = lock.menu_tracking_count.saturating_sub(1);
+        let menu: id = if notification.is_null() {
+            nil
+        } else {
+            msg_send![notification, object]
+        };
+        log::info!(
+            "menuDidEndTracking title={:?} tracking={}",
+            ns_menu_title(menu),
+            lock.menu_tracking_count
+        );
+        if lock.menu_tracking_count > 0 {
+            return;
+        }
+        let pending_menu = lock.pending_main_menu.take();
+        let pending_appearance = lock.pending_appearance.take();
+        drop(lock);
+        if let Some(menu) = pending_menu {
+            let app: id = msg_send![APP_CLASS, sharedApplication];
+            log::info!("applying deferred setMainMenu");
+            app.setMainMenu_(menu);
+            let _: () = msg_send![menu, release];
+        }
+        if let Some(appearance) = pending_appearance {
+            log::info!("applying deferred setAppearance");
+            apply_window_appearance(appearance);
         }
     }
 }

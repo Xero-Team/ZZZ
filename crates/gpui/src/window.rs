@@ -1530,6 +1530,7 @@ impl Window {
         platform_window.on_active_status_change(Box::new({
             let mut cx = cx.to_async();
             move |active| {
+                log::info!("window active status changed: {active}");
                 handle
                     .update(&mut cx, |_, window, cx| {
                         window.active.set(active);
