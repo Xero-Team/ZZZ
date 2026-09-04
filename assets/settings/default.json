@@ -562,8 +562,6 @@
     "show_project_items": true,
     // Whether to show onboarding banners in the titlebar.
     "show_onboarding_banner": true,
-    // Whether to show user picture in the titlebar.
-    "show_user_picture": true,
     // Whether to show the user menu in the titlebar.
     "show_user_menu": true,
     // Whether to show the menus in the titlebar.
@@ -1746,8 +1744,6 @@
       // Set to 0 to request predictions immediately.
       "prediction_debounce": 0,
     },
-    // ZZZ never collects edit-prediction training data.
-    "allow_data_collection": "no",
   },
   // Settings specific to journaling
   "journal": {

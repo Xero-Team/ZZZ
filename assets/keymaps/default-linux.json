@@ -1254,12 +1254,6 @@
     },
   },
   {
-    "context": "ZedPredictModal",
-    "bindings": {
-      "escape": "menu::Cancel",
-    },
-  },
-  {
     "context": "ConfigureContextServerModal > Editor",
     "bindings": {
       "escape": "menu::Cancel",
