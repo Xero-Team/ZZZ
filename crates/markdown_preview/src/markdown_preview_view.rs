@@ -1438,10 +1438,6 @@ impl Item for MarkdownPreviewView {
             .unwrap_or_else(|| tr(cx, "markdown_preview.tab_title", "Markdown Preview").into())
     }
 
-    fn telemetry_event_text(&self) -> Option<&'static str> {
-        None
-    }
-
     fn added_to_workspace(
         &mut self,
         workspace: &mut Workspace,

@@ -2292,10 +2292,6 @@ impl Item for ExtensionsPage {
         tr(cx, "extensions_ui.page.title", "Extensions")
     }
 
-    fn telemetry_event_text(&self) -> Option<&'static str> {
-        None
-    }
-
     fn show_toolbar(&self) -> bool {
         false
     }

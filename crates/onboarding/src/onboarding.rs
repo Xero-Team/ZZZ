@@ -357,10 +357,6 @@ impl Item for Onboarding {
         tr(cx, "onboarding.tab_title", "Onboarding").into()
     }
 
-    fn telemetry_event_text(&self) -> Option<&'static str> {
-        None
-    }
-
     fn show_toolbar(&self) -> bool {
         false
     }

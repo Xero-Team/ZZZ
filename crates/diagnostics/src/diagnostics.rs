@@ -813,10 +813,6 @@ impl Item for ProjectDiagnosticsEditor {
             .into_any_element()
     }
 
-    fn telemetry_event_text(&self) -> Option<&'static str> {
-        None
-    }
-
     fn for_each_project_item(
         &self,
         cx: &App,

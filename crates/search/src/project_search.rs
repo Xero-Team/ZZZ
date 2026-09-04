@@ -744,10 +744,6 @@ impl Item for ProjectSearchView {
             .unwrap_or_else(|| app_i18n::tr(cx, "search.project.title", "Project Search").into())
     }
 
-    fn telemetry_event_text(&self) -> Option<&'static str> {
-        None
-    }
-
     fn for_each_project_item(
         &self,
         cx: &App,

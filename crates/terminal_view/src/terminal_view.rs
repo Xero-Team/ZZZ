@@ -1571,10 +1571,6 @@ impl Item for TerminalView {
         terminal.title(detail == 0).into()
     }
 
-    fn telemetry_event_text(&self) -> Option<&'static str> {
-        None
-    }
-
     fn handle_drop(
         &self,
         active_pane: &Pane,

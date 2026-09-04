@@ -350,9 +350,5 @@ impl Item for SvgPreviewView {
             .unwrap_or_else(|| tr(cx, "svg_preview.tab_title", "SVG Preview").into())
     }
 
-    fn telemetry_event_text(&self) -> Option<&'static str> {
-        None
-    }
-
     fn to_item_events(_event: &Self::Event, _f: &mut dyn FnMut(workspace::item::ItemEvent)) {}
 }

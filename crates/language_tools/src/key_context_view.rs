@@ -155,10 +155,6 @@ impl Item for KeyContextView {
         .into()
     }
 
-    fn telemetry_event_text(&self) -> Option<&'static str> {
-        None
-    }
-
     fn can_split(&self) -> bool {
         true
     }

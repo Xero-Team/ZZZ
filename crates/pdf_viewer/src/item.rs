@@ -75,10 +75,6 @@ impl Item for PdfView {
         Some(self.metadata_tooltip(cx).into())
     }
 
-    fn telemetry_event_text(&self) -> Option<&'static str> {
-        None
-    }
-
     fn for_each_project_item(
         &self,
         cx: &App,
