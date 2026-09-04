@@ -67,12 +67,45 @@ impl GoDebugAdapter {
             url: asset.browser_download_url.clone(),
         })
     }
+    async fn cached_shim_path(
+        delegate: &Arc<dyn DapDelegate>,
+        adapter_dir: &Path,
+    ) -> Option<PathBuf> {
+        let binary_name = format!("delve-shim-dap{}", consts::EXE_SUFFIX);
+        let mut cached = None;
+        if let Ok(mut entries) = delegate.fs().read_dir(adapter_dir).await {
+            while let Some(entry) = entries.next().await {
+                if let Ok(version_dir) = entry {
+                    let candidate = version_dir.join(&binary_name);
+                    if delegate
+                        .fs()
+                        .metadata(&candidate)
+                        .await
+                        .is_ok_and(|metadata| metadata.is_some())
+                    {
+                        cached = Some(candidate);
+                        break;
+                    }
+                }
+            }
+        }
+        cached
+    }
+
     async fn install_shim(&self, delegate: &Arc<dyn DapDelegate>) -> anyhow::Result<PathBuf> {
         if let Some(path) = self.shim_path.get().cloned() {
             return Ok(path);
         }
 
         let adapter_dir = paths::debug_adapters_dir().join("delve-shim-dap");
+
+        if !delegate.allow_binary_download() {
+            let path = Self::cached_shim_path(delegate, &adapter_dir)
+                .await
+                .context("delve-shim-dap is not installed. Use debugger::InstallDebugAdapter to download it.")?;
+            self.shim_path.set(path.clone()).ok();
+            return Ok(path);
+        }
 
         match Self::fetch_latest_adapter_version(delegate).await {
             Ok(asset) => {
@@ -97,26 +130,7 @@ impl GoDebugAdapter {
                 Ok(path)
             }
             Err(error) => {
-                let binary_name = format!("delve-shim-dap{}", consts::EXE_SUFFIX);
-                let mut cached = None;
-                if let Ok(mut entries) = delegate.fs().read_dir(&adapter_dir).await {
-                    while let Some(entry) = entries.next().await {
-                        if let Ok(version_dir) = entry {
-                            let candidate = version_dir.join(&binary_name);
-                            if delegate
-                                .fs()
-                                .metadata(&candidate)
-                                .await
-                                .is_ok_and(|m| m.is_some())
-                            {
-                                cached = Some(candidate);
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if let Some(path) = cached {
+                if let Some(path) = Self::cached_shim_path(delegate, &adapter_dir).await {
                     warn!("Failed to fetch latest delve-shim-dap, using cached version: {error:#}");
                     self.shim_path.set(path.clone()).ok();
                     Ok(path)
@@ -456,6 +470,11 @@ impl DebugAdapter for GoDebugAdapter {
         } else if delegate.fs().is_file(&dlv_path).await {
             dlv_path.to_string_lossy().into_owned()
         } else {
+            if !delegate.allow_binary_download() {
+                bail!(
+                    "dlv is not installed. Use debugger::InstallDebugAdapter to download it, or install dlv on PATH."
+                );
+            }
             let go = delegate
                 .which(OsStr::new("go"))
                 .await

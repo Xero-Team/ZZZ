@@ -47,6 +47,9 @@ pub trait DapDelegate: Send + Sync + 'static {
     async fn read_text_file(&self, path: &RelPath) -> Result<String>;
     async fn shell_env(&self) -> collections::HashMap<String, String>;
     fn is_headless(&self) -> bool;
+    fn allow_binary_download(&self) -> bool {
+        false
+    }
 }
 
 #[derive(
@@ -283,6 +286,22 @@ pub async fn download_adapter_from_github(
 
     if version_path.exists() {
         return Ok(version_path);
+    }
+
+    if !delegate.allow_binary_download() {
+        if adapter_path.exists()
+            && let Ok(entries) = std::fs::read_dir(&adapter_path)
+        {
+            if let Some(cached_path) = entries.filter_map(|entry| entry.ok()).find_map(|entry| {
+                let path = entry.path();
+                path.is_dir().then_some(path)
+            }) {
+                return Ok(cached_path);
+            }
+        }
+        anyhow::bail!(
+            "{adapter_name} debug adapter is not installed. Use debugger::InstallDebugAdapter to download it."
+        );
     }
 
     if !adapter_path.exists() {

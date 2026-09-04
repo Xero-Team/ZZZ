@@ -1,5 +1,6 @@
 use std::any::TypeId;
 
+use dap::{DapRegistry, adapters::DebugAdapterName};
 use debugger_panel::DebugPanel;
 use editor::{Editor, MultiBufferOffsetUtf16};
 use gpui::{Action, App, DispatchPhase, EntityInputHandler, actions};
@@ -84,8 +85,18 @@ actions!(
         /// When toggled on, only frames from the user's code are shown
         /// When toggled off, all frames are shown
         ToggleUserFrames,
+        /// Installs the JavaScript debug companion used for browser debugging.
+        InstallJsDebugCompanion,
     ]
 );
+
+/// Downloads a debug adapter binary. Omit `adapter` to install every built-in adapter.
+#[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
+#[action(namespace = debugger)]
+#[serde(deny_unknown_fields)]
+pub struct InstallDebugAdapter {
+    pub adapter: Option<String>,
+}
 
 /// Set a data breakpoint on the selected variable or memory region.
 #[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
@@ -125,6 +136,32 @@ pub fn init(cx: &mut App) {
             .register_action(|workspace: &mut Workspace, _: &Start, window, cx| {
                 NewProcessModal::show(workspace, window, NewProcessMode::Debug, None, cx);
             })
+            .register_action(
+                |workspace: &mut Workspace, action: &InstallDebugAdapter, _window, cx| {
+                    let adapter_names: Vec<DebugAdapterName> = match action.adapter.as_ref() {
+                        Some(adapter) => vec![DebugAdapterName(adapter.clone().into())],
+                        None => DapRegistry::global(cx).enumerate_adapters(),
+                    };
+                    workspace.project().update(cx, |project, cx| {
+                        project.dap_store().update(cx, |store, cx| {
+                            for adapter_name in adapter_names {
+                                store
+                                    .install_debug_adapter(adapter_name, cx)
+                                    .detach_and_log_err(cx);
+                            }
+                        });
+                    });
+                },
+            )
+            .register_action(
+                |workspace: &mut Workspace, _: &InstallJsDebugCompanion, _window, cx| {
+                    workspace.project().update(cx, |project, cx| {
+                        project.dap_store().update(cx, |store, cx| {
+                            store.install_js_debug_companion(cx).detach_and_log_err(cx);
+                        });
+                    });
+                },
+            )
             .register_action(|workspace: &mut Workspace, _: &Rerun, window, cx| {
                 let Some(debug_panel) = workspace.panel::<DebugPanel>(cx) else {
                     return;

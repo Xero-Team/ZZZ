@@ -20,6 +20,16 @@ pub fn init(cx: &mut App) {
     lsp_log_view::init(false, cx);
     syntax_tree_view::init(cx);
     key_context_view::init(cx);
+    cx.observe_new(|workspace: &mut Workspace, _, _| {
+        workspace.register_action(|workspace, _: &lsp_button::InstallDefaultPrettier, _, cx| {
+            workspace.project().update(cx, |project, cx| {
+                project.lsp_store().update(cx, |lsp_store, cx| {
+                    lsp_store.install_default_prettier(cx);
+                });
+            });
+        });
+    })
+    .detach();
 }
 
 fn get_or_create_tool<T>(

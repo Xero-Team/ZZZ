@@ -338,6 +338,32 @@ impl DebugAdapter for CodeLldbDebugAdapter {
             .or(self.path_to_codelldb.get().cloned());
 
         if command.is_none() {
+            let adapter_path = paths::debug_adapters_dir().join(&Self::ADAPTER_NAME);
+            if !delegate.allow_binary_download() {
+                delegate.output_to_console(format!(
+                    "Searching for cached {} adapter in: {}",
+                    self.name(),
+                    adapter_path.display()
+                ));
+                let mut paths = delegate.fs().read_dir(&adapter_path).await.context(
+                    "CodeLLDB is not installed. Use debugger::InstallDebugAdapter to download it.",
+                )?;
+                let version_path = paths
+                    .next()
+                    .await
+                    .context("CodeLLDB is not installed. Use debugger::InstallDebugAdapter to download it.")?
+                    .context("CodeLLDB is not installed. Use debugger::InstallDebugAdapter to download it.")?;
+                let adapter_dir = version_path.join("extension").join("adapter");
+                let path = adapter_dir
+                    .join(format!("codelldb{}", consts::EXE_SUFFIX))
+                    .to_string_lossy()
+                    .into_owned();
+                self.path_to_codelldb.set(path.clone()).ok();
+                command = Some(path);
+            }
+        }
+
+        if command.is_none() {
             delegate.output_to_console(format!("Checking latest version of {}...", self.name()));
             let adapter_path = paths::debug_adapters_dir().join(&Self::ADAPTER_NAME);
             let version_path = match self.fetch_latest_adapter_version(delegate).await {

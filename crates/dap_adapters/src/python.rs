@@ -163,6 +163,21 @@ impl PythonDebugAdapter {
         toolchain: Option<Toolchain>,
         delegate: &Arc<dyn DapDelegate>,
     ) -> Result<()> {
+        if !delegate.allow_binary_download() {
+            let adapter_path = debug_adapters_dir()
+                .join(Self::ADAPTER_NAME)
+                .join("debugpy")
+                .join("adapter");
+            if delegate
+                .fs()
+                .metadata(&adapter_path)
+                .await
+                .is_ok_and(|metadata| metadata.is_some())
+            {
+                return Ok(());
+            }
+            bail!("debugpy is not installed. Use debugger::InstallDebugAdapter to download it.");
+        }
         let latest_release = delegate
             .http_client()
             .get(

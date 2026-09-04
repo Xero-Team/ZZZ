@@ -42,6 +42,7 @@ use rpc::{
     proto::{self},
 };
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use settings::{Settings, SettingsLocation, WorktreeId};
 use std::{
     borrow::Borrow,
@@ -271,7 +272,7 @@ impl DapStore {
                 let user_args = dap_settings.and_then(|s| s.args.clone());
                 let user_env = dap_settings.and_then(|s| s.env.clone());
 
-                let delegate = self.delegate(worktree, console, cx);
+                let delegate = self.delegate(worktree, console, false, cx);
 
                 let worktree = worktree.clone();
                 cx.spawn(async move |this, cx| {
@@ -596,24 +597,75 @@ impl DapStore {
         &self,
         worktree: &Entity<Worktree>,
         console: UnboundedSender<String>,
+        allow_binary_download: bool,
         cx: &mut App,
     ) -> Arc<dyn DapDelegate> {
         let Some(local_store) = self.as_local() else {
             unimplemented!("Starting session on remote side");
         };
 
-        Arc::new(DapAdapterDelegate::new(
-            local_store.fs.clone(),
-            worktree.read(cx).snapshot(),
-            console,
-            local_store.node_runtime.clone(),
-            local_store.http_client.clone(),
-            local_store.toolchain_store.clone(),
-            local_store
-                .environment
-                .update(cx, |env, cx| env.worktree_environment(worktree.clone(), cx)),
-            local_store.is_headless,
-        ))
+        Arc::new(
+            DapAdapterDelegate::new(
+                local_store.fs.clone(),
+                worktree.read(cx).snapshot(),
+                console,
+                local_store.node_runtime.clone(),
+                local_store.http_client.clone(),
+                local_store.toolchain_store.clone(),
+                local_store
+                    .environment
+                    .update(cx, |env, cx| env.worktree_environment(worktree.clone(), cx)),
+                local_store.is_headless,
+            )
+            .with_allow_binary_download(allow_binary_download),
+        )
+    }
+
+    pub fn install_debug_adapter(
+        &mut self,
+        adapter_name: DebugAdapterName,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<()>> {
+        if self.as_local().is_none() {
+            return Task::ready(Err(anyhow!(
+                "debug adapter install is only available locally"
+            )));
+        }
+        let Some(adapter) = DapRegistry::global(cx).adapter(&adapter_name) else {
+            return Task::ready(Err(anyhow!("unknown debug adapter {adapter_name}")));
+        };
+        let Some(worktree) = self.worktree_store.read(cx).worktrees().next() else {
+            return Task::ready(Err(anyhow!(
+                "open a folder before downloading a debug adapter"
+            )));
+        };
+        let (console, _console_rx) = mpsc::unbounded();
+        let delegate = self.delegate(&worktree, console, true, cx);
+        let definition = DebugTaskDefinition {
+            label: "install".into(),
+            adapter: adapter_name,
+            config: json!({ "request": "launch" }),
+            tcp_connection: None,
+        };
+        cx.spawn(async move |_, cx| {
+            adapter
+                .get_binary(&delegate, &definition, None, None, None, cx)
+                .await?;
+            Ok(())
+        })
+    }
+
+    pub fn install_js_debug_companion(&self, cx: &mut Context<Self>) -> Task<Result<()>> {
+        let Some(local_store) = self.as_local() else {
+            return Task::ready(Err(anyhow!(
+                "js-debug-companion install is only available locally"
+            )));
+        };
+        let node_runtime = local_store.node_runtime.clone();
+        cx.spawn(async move |_, cx| {
+            session::install_js_debug_companion(node_runtime, cx).await?;
+            Ok(())
+        })
     }
 
     pub fn resolve_inline_value_locations(
@@ -944,6 +996,7 @@ pub struct DapAdapterDelegate {
     toolchain_store: Arc<dyn LanguageToolchainStore>,
     load_shell_env_task: Shared<Task<Option<HashMap<String, String>>>>,
     is_headless: bool,
+    allow_binary_download: bool,
 }
 
 impl DapAdapterDelegate {
@@ -966,7 +1019,13 @@ impl DapAdapterDelegate {
             toolchain_store,
             load_shell_env_task,
             is_headless,
+            allow_binary_download: false,
         }
+    }
+
+    pub fn with_allow_binary_download(mut self, allow_binary_download: bool) -> Self {
+        self.allow_binary_download = allow_binary_download;
+        self
     }
 }
 
@@ -1032,5 +1091,9 @@ impl dap::adapters::DapDelegate for DapAdapterDelegate {
 
     fn is_headless(&self) -> bool {
         self.is_headless
+    }
+
+    fn allow_binary_download(&self) -> bool {
+        self.allow_binary_download
     }
 }

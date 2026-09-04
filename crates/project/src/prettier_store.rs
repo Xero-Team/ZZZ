@@ -540,6 +540,7 @@ impl PrettierStore {
         &mut self,
         worktree: Option<WorktreeId>,
         plugins: impl Iterator<Item = Arc<str>>,
+        allow_network_install: bool,
         cx: &mut Context<Self>,
     ) {
         if cfg!(any(test, feature = "test-support")) {
@@ -584,7 +585,7 @@ impl PrettierStore {
         let plugins_to_install = new_plugins.clone();
         let fs = Arc::clone(&self.fs);
         let new_installation_task = cx
-            .spawn(async move  |prettier_store, cx| {
+            .spawn(async move |prettier_store, cx| {
                 cx.background_executor().timer(Duration::from_millis(30)).await;
                 let location_data = prettier_store.update(cx, |prettier_store, cx| {
                     worktree.and_then(|worktree_id| {
@@ -651,12 +652,11 @@ impl PrettierStore {
                             }
                             needs_install |= !new_plugins.is_empty();
                         })?;
-                        if needs_install {
+                        if needs_install && allow_network_install {
                             log::info!("Initializing default prettier with plugins {new_plugins:?}");
                             let installed_plugins = new_plugins.clone();
                             cx.background_spawn(async move {
                                 install_prettier_packages(fs.as_ref(), new_plugins, node).await?;
-                                // Save the server file last, so the reinstall need could be determined by the absence of the file.
                                 save_prettier_server_file(fs.as_ref()).await?;
                                 anyhow::Ok(())
                             })
@@ -674,6 +674,10 @@ impl PrettierStore {
                                     .installed_plugins
                                     .extend(installed_plugins);
                             })?;
+                        } else if needs_install {
+                            log::info!(
+                                "Skipping default prettier npm install. Use an explicit Install Default Prettier action, or a project node_modules/prettier."
+                            );
                         } else {
                             prettier_store.update(cx, |prettier_store, _| {
                                 if let PrettierInstallation::NotInstalled { .. } = &mut prettier_store.default_prettier.prettier {
@@ -717,6 +721,7 @@ impl PrettierStore {
             self.install_default_prettier(
                 worktree,
                 prettier_plugins.into_iter().map(Arc::from),
+                false,
                 cx,
             );
         }

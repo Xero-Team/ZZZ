@@ -3160,7 +3160,7 @@ async fn spawn_companion(
         .await
         .context("getting node path")?;
     let path = cx
-        .spawn(async move |cx| get_or_install_companion(node_runtime, cx).await)
+        .spawn(async move |cx| get_companion(node_runtime, cx).await)
         .await?;
     log::info!("will launch js-debug-companion version {path:?}");
 
@@ -3191,39 +3191,18 @@ async fn spawn_companion(
     Ok((port, child))
 }
 
-async fn get_or_install_companion(node: NodeRuntime, cx: &mut AsyncApp) -> Result<PathBuf> {
+async fn get_companion(node: NodeRuntime, cx: &mut AsyncApp) -> Result<PathBuf> {
     const PACKAGE_NAME: &str = "@zed-industries/js-debug-companion-cli";
-
-    async fn install_latest_version(dir: PathBuf, node: NodeRuntime) -> Result<PathBuf> {
-        let temp_dir = tempfile::tempdir().context("creating temporary directory")?;
-        node.npm_install_latest_packages(temp_dir.path(), &[PACKAGE_NAME])
-            .await
-            .context("installing latest companion package")?;
-        let version = node
-            .npm_package_installed_version(temp_dir.path(), PACKAGE_NAME)
-            .await
-            .context("getting installed companion version")?
-            .context("companion was not installed")?;
-        let version_folder = dir.join(version.to_string());
-        smol::fs::rename(temp_dir.path(), &version_folder)
-            .await
-            .context("moving companion package into place")?;
-        Ok(version_folder)
-    }
+    let _ = node;
 
     let dir = paths::debug_adapters_dir().join("js-debug-companion");
-    let (latest_installed_version, latest_version) = cx
+    let latest_installed_version = cx
         .background_spawn({
             let dir = dir.clone();
-            let node = node.clone();
             async move {
-                smol::fs::create_dir_all(&dir)
-                    .await
-                    .context("creating companion installation directory")?;
-
                 let children = smol::fs::read_dir(&dir)
                     .await
-                    .context("reading companion installation directory")?
+                    .context("js-debug-companion is not installed")?
                     .try_collect::<Vec<_>>()
                     .await
                     .context("reading companion installation directory entries")?;
@@ -3237,30 +3216,54 @@ async fn get_or_install_companion(node: NodeRuntime, cx: &mut AsyncApp) -> Resul
                         ))
                     })
                     .max_by_key(|(_, version)| version.clone());
-
-                let latest_version = node
-                    .npm_package_latest_version(PACKAGE_NAME)
-                    .await
-                    .log_err();
-                anyhow::Ok((latest_installed_version, latest_version))
+                anyhow::Ok(latest_installed_version)
             }
         })
         .await?;
 
-    let path = if let Some((installed_path, installed_version)) = latest_installed_version {
-        if let Some(latest_version) = latest_version
-            && latest_version != installed_version
-        {
-            cx.background_spawn(install_latest_version(dir.clone(), node.clone()))
-                .detach();
-        }
-        Ok(installed_path)
-    } else {
-        cx.background_spawn(install_latest_version(dir.clone(), node.clone()))
-            .await
+    let Some((installed_path, _)) = latest_installed_version else {
+        anyhow::bail!(
+            "js-debug-companion is not installed. Use install_js_debug_companion to download it."
+        );
     };
 
-    Ok(path?
+    Ok(installed_path
+        .join("node_modules")
+        .join(PACKAGE_NAME)
+        .join("out")
+        .join("cli.js"))
+}
+
+pub async fn install_js_debug_companion(node: NodeRuntime, cx: &mut AsyncApp) -> Result<PathBuf> {
+    const PACKAGE_NAME: &str = "@zed-industries/js-debug-companion-cli";
+    let dir = paths::debug_adapters_dir().join("js-debug-companion");
+    let version_folder = cx
+        .background_spawn({
+            let dir = dir.clone();
+            let node = node.clone();
+            async move {
+                smol::fs::create_dir_all(&dir)
+                    .await
+                    .context("creating companion installation directory")?;
+                let temp_dir = tempfile::tempdir().context("creating temporary directory")?;
+                node.npm_install_latest_packages(temp_dir.path(), &[PACKAGE_NAME])
+                    .await
+                    .context("installing latest companion package")?;
+                let version = node
+                    .npm_package_installed_version(temp_dir.path(), PACKAGE_NAME)
+                    .await
+                    .context("getting installed companion version")?
+                    .context("companion was not installed")?;
+                let version_folder = dir.join(version.to_string());
+                smol::fs::rename(temp_dir.path(), &version_folder)
+                    .await
+                    .context("moving companion package into place")?;
+                anyhow::Ok(version_folder)
+            }
+        })
+        .await?;
+
+    Ok(version_folder
         .join("node_modules")
         .join(PACKAGE_NAME)
         .join("out")

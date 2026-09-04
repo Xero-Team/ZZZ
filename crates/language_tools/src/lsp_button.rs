@@ -33,7 +33,9 @@ actions!(
     lsp_tool,
     [
         /// Toggles the language server tool menu.
-        ToggleMenu
+        ToggleMenu,
+        /// Installs the default Prettier formatter via npm.
+        InstallDefaultPrettier
     ]
 );
 
@@ -402,6 +404,11 @@ impl LanguageServerState {
                         "language_tools.lsp_button.restart_server",
                         "Restart Server",
                     );
+                    let download_server_label = tr(
+                        cx,
+                        "language_tools.lsp_button.download_server",
+                        "Download Server",
+                    );
                     let stop_server_label =
                         tr(cx, "language_tools.lsp_button.stop_server", "Stop Server");
                     let message_buffer_template = tr(
@@ -501,6 +508,69 @@ impl LanguageServerState {
                         let workspace_for_restart = workspace.clone();
                         let lsp_store_for_restart = lsp_store.clone();
                         let server_name_for_restart = submenu_server_name.clone();
+                        let state_for_download = state.clone();
+                        let workspace_for_download = workspace.clone();
+                        let lsp_store_for_download = lsp_store.clone();
+                        let server_name_for_download = submenu_server_name.clone();
+                        submenu = submenu.entry(
+                            download_server_label.clone(),
+                            None,
+                            move |_window, cx| {
+                                let Some(workspace) = workspace_for_download.upgrade() else {
+                                    return;
+                                };
+
+                                let project = workspace.read(cx).project().clone();
+                                let path_style = project.read(cx).path_style(cx);
+                                let buffer_store = project.read(cx).buffer_store().clone();
+
+                                let buffers = state_for_download
+                                    .update(cx, |state, cx| {
+                                        state
+                                            .language_servers
+                                            .servers_per_buffer_abs_path
+                                            .iter()
+                                            .filter_map(|(abs_path, servers)| {
+                                                let has_server =
+                                                    servers.servers.values().any(|name| {
+                                                        name.as_ref()
+                                                            == Some(&server_name_for_download)
+                                                    });
+                                                if !has_server {
+                                                    return None;
+                                                }
+                                                let worktree =
+                                                    servers.worktree.as_ref()?.upgrade()?;
+                                                let worktree_ref = worktree.read(cx);
+                                                let relative_path = abs_path
+                                                    .strip_prefix(&worktree_ref.abs_path())
+                                                    .ok()?;
+                                                let relative_path =
+                                                    RelPath::new(relative_path, path_style)
+                                                        .log_err()?;
+                                                let entry =
+                                                    worktree_ref.entry_for_path(&relative_path)?;
+                                                let project_path = project
+                                                    .read(cx)
+                                                    .path_for_entry(entry.id, cx)?;
+                                                buffer_store.read(cx).get_by_path(&project_path)
+                                            })
+                                            .collect::<Vec<_>>()
+                                    })
+                                    .unwrap_or_default();
+
+                                lsp_store_for_download
+                                    .update(cx, |lsp_store, cx| {
+                                        lsp_store.download_language_server(
+                                            server_name_for_download.clone(),
+                                            buffers,
+                                            cx,
+                                        );
+                                    })
+                                    .ok();
+                            },
+                        );
+
                         submenu = submenu.entry(
                             restart_server_label.clone(),
                             None,
