@@ -30,7 +30,6 @@ mod publish_extension_cli;
 mod run_bundling;
 
 mod release;
-mod run_agent_evals;
 mod runners;
 mod steps;
 mod ts_query;
