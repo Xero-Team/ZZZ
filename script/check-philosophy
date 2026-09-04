@@ -155,6 +155,122 @@ check_collab_absent() {
         && ! test -d "$root/crates/livekit_api"
 }
 
+check_no_mercury_provider() {
+    ! rg -n 'EditPredictionProvider::Mercury' \
+        "$root/crates/edit_prediction" "$root/crates/edit_prediction_ui" \
+        "$root/crates/settings_content" "$root/crates/settings_ui"
+}
+
+check_no_zed_edit_prediction_provider() {
+    ! rg -n 'EditPredictionProvider::Zed' \
+        "$root/crates/edit_prediction" "$root/crates/edit_prediction_ui" \
+        "$root/crates/settings_content" "$root/crates/settings_ui"
+}
+
+check_no_allow_data_collection_default() {
+    ! rg -n 'allow_data_collection' "$root/assets/settings/default.json"
+}
+
+check_no_cloud_web_search() {
+    ! rg -n 'CloudWebSearchProvider|ZED_WEB_SEARCH_PROVIDER_ID' \
+        "$root/crates/web_search_providers" \
+        && ! rg -n '"zed\.dev"' "$root/crates/web_search_providers"
+}
+
+check_no_client_signin_product_entry() {
+    ! rg -n 'client::SignIn' "$root/crates/title_bar" "$root/crates/zed/src/zed/app_menus.rs"
+}
+
+check_no_zed_agent_configuration_target() {
+    ! rg -n 'ConfigurationViewTargetAgent::ZedAgent' \
+        "$root/crates/agent_ui/src/agent_configuration.rs"
+}
+
+check_no_native_agent_production_ui() {
+    ! rg -n 'Agent::NativeAgent|RemovedNativeAgentServer' \
+        "$root/crates/agent_ui/src" \
+        --glob '!**/tests.rs' \
+        --glob '!**/*_tests.rs'
+}
+
+check_no_live_zed_agent_id() {
+    ! rg -n 'ZED_AGENT_ID' \
+        "$root/crates/agent_ui/src/agent_configuration.rs" \
+        && ! rg -n 'ZED_AGENT_ID' "$root/crates/agent_ui/src/agent_panel.rs"
+}
+
+check_registry_init_no_refresh() {
+    ! rg -n 'store\.refresh\(' "$root/crates/project/src/agent_registry_store.rs"
+}
+
+check_no_default_refresh_if_stale() {
+    ! rg -n 'refresh_if_stale' \
+        "$root/crates/agent_servers/src/custom.rs" \
+        "$root/crates/project/src/agent_server_store.rs"
+}
+
+check_allow_binary_download_off() {
+    rg -q 'allow_binary_download: false' "$root/crates/zed/src/main.rs" \
+        && ! rg -n 'allow_binary_download: true' "$root/crates/zed/src/main.rs" \
+        && ! rg -n 'allow_binary_download,\s*$' -A0 "$root/crates/project/src/lsp_store.rs" | rg -q 'true'
+}
+
+check_lsp_store_no_auto_download() {
+    ! rg -n 'delegate\.clone\(\),\s*$' -A1 "$root/crates/project/src/lsp_store.rs" \
+        | rg -q 'true,'
+}
+
+check_no_unconditional_copilot_chat_init() {
+    ! rg -n 'copilot_chat::init' "$root/crates/zed/src/main.rs"
+}
+
+check_no_unconditional_copilot_chat_register() {
+    ! rg -n 'register_provider\(Arc::new\(CopilotChatLanguageModelProvider' \
+        "$root/crates/language_models/src/language_models.rs"
+}
+
+check_no_js_debug_companion_session_install() {
+    ! rg -n 'get_or_install_companion' \
+        "$root/crates/project/src/debugger/session.rs"
+}
+
+check_eval_clis_absent() {
+    ! test -d "$root/crates/eval_cli" \
+        && ! test -d "$root/crates/edit_prediction_cli"
+}
+
+check_no_telemetry_event_text() {
+    ! rg -n 'fn telemetry_event_text' "$root/crates" --glob '*.rs'
+}
+
+check_no_danger_proxy() {
+    ! rg -n 'danger-proxy\.zed\.dev' "$root/tooling/xtask/src/tasks/workflows/danger.rs"
+}
+
+check_no_collab_lychee() {
+    ! rg -n 'collab\.zed\.dev|staging-collab\.zed\.dev' "$root/lychee.toml"
+}
+
+check_no_after_release_hosted_deploy() {
+    ! rg -n 'discord-webhook|redeploy-vercel|winget-releaser|VERCEL_TOKEN|DISCORD_WEBHOOK' \
+        "$root/tooling/xtask/src/tasks/workflows/after_release.rs"
+}
+
+check_dap_download_gated() {
+    rg -q 'fn allow_binary_download' "$root/crates/dap/src/adapters.rs" \
+        && rg -q 'allow_binary_download' "$root/crates/dap/src/adapters.rs"
+}
+
+check_prettier_language_detect_no_network() {
+    rg -n 'prettier_store.install_default_prettier' -A3 "$root/crates/project/src/lsp_store.rs" \
+        | rg -q 'false,'
+}
+
+check_dap_session_start_no_download() {
+    rg -q 'self\.delegate\(worktree, console, false, cx\)' \
+        "$root/crates/project/src/debugger/dap_store.rs"
+}
+
 check_allowlisted_hosts() {
     local urls
     urls=$(rg --no-filename -o 'https?://[^"` )]+' "$root/assets/settings/default.json" "$root/crates/client/src/client.rs" \
@@ -191,6 +307,29 @@ check "default settings have no hosted AI collection" check_default_settings_no_
 check "MCP OAuth CIMD is not a hosted zed.dev URL" check_oauth_cimd_not_hosted
 check "plan chips are absent from onboarding and agent UI" check_no_plan_chips
 check "multi-user collab crates are absent" check_collab_absent
+check "Mercury edit prediction provider is absent" check_no_mercury_provider
+check "hosted Zed edit prediction provider is absent" check_no_zed_edit_prediction_provider
+check "default settings have no allow_data_collection" check_no_allow_data_collection_default
+check "cloud web search provider is absent" check_no_cloud_web_search
+check "client SignIn is absent from title bar and app menus" check_no_client_signin_product_entry
+check "agent configuration does not default to ZedAgent" check_no_zed_agent_configuration_target
+check "NativeAgent is absent from production agent UI" check_no_native_agent_production_ui
+check "ZED_AGENT_ID is not a live selectable agent" check_no_live_zed_agent_id
+check "agent registry init does not refresh when empty" check_registry_init_no_refresh
+check "default agent registry paths do not refresh_if_stale" check_no_default_refresh_if_stale
+check "NodeBinaryOptions allow_binary_download is false" check_allow_binary_download_off
+check "lsp_store language-server start does not auto-download" check_lsp_store_no_auto_download
+check "copilot_chat::init is not unconditional in main.rs" check_no_unconditional_copilot_chat_init
+check "CopilotChatLanguageModelProvider is not registered at language_models init" check_no_unconditional_copilot_chat_register
+check "js-debug-companion is not installed on debugger session start" check_no_js_debug_companion_session_install
+check "eval_cli and edit_prediction_cli directories are absent" check_eval_clis_absent
+check "Item::telemetry_event_text is absent" check_no_telemetry_event_text
+check "Danger GitHub API proxy host is absent" check_no_danger_proxy
+check "lychee.toml has no collab hosts" check_no_collab_lychee
+check "after_release has no hosted Discord/Vercel/winget deploy" check_no_after_release_hosted_deploy
+check "DAP downloads require allow_binary_download" check_dap_download_gated
+check "language-detect does not npm-install default Prettier" check_prettier_language_detect_no_network
+check "debug session start does not auto-download adapters" check_dap_session_start_no_download
 check "network hosts are allowlisted" check_allowlisted_hosts
 
 if (( failures > 0 )); then
