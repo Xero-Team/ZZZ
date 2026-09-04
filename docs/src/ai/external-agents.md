@@ -9,7 +9,9 @@ ZZZ supports CLI-based external agents through the [Agent Client Protocol (ACP)]
 
 Supported examples include [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Claude Agent](https://platform.claude.com/docs/en/agent-sdk/overview), [Codex](https://developers.openai.com/codex), [GitHub Copilot](https://github.com/github/copilot-language-server-release), and [additional agents](#add-more-agents) you can configure.
 
-For ZZZ's built-in agent and its native tools, see [Agent Tools](./tools.md).
+ZZZ ships ACP only. There is no built-in native agent. See
+[Agent Tools](./tools.md) for tool permission rows that still apply to
+external agents.
 
 > **Note:** External agents are separate processes. Authentication, billing, terms, and data handling are between you and that agent provider.
 
@@ -39,8 +41,8 @@ If you'd like to bind this to a keyboard shortcut, you can do so by editing your
 
 #### Installation
 
-The first time you create a Gemini CLI thread, ZZZ will install [@google/gemini-cli](https://github.com/google-gemini/gemini-cli).
-This installation is scoped to ZZZ and is kept up to date as you use the agent.
+Install the Gemini CLI executable yourself, or use the Agent Registry
+**Install** button. Opening a thread does not download or install an agent.
 
 #### Authentication
 
@@ -55,7 +57,7 @@ For more information, see the [Gemini CLI docs](https://github.com/google-gemini
 
 ### Usage
 
-Gemini CLI supports the same workflows as ZZZ's first-party agent: code generation, refactoring, debugging, and Q&A. Add context by @-mentioning files, recent threads, or symbols.
+Gemini CLI supports code generation, refactoring, debugging, and Q&A. Add context by @-mentioning files, recent threads, or symbols.
 
 > Some agent panel features are not yet available with Gemini CLI: editing past messages, resuming threads from history, and checkpointing.
 
@@ -96,10 +98,9 @@ account.
 
 #### Installation
 
-The first time you create a Claude Agent thread, ZZZ will install [@zed-industries/claude-agent-acp](https://github.com/zed-industries/claude-agent-acp).
-This installation is scoped to ZZZ and is kept up to date as you use the agent.
-
-ZZZ will always use this managed version of the Claude Agent adapter, which includes a vendored version of the Claude Code CLI, even if you have it installed globally.
+Install the Claude Agent ACP adapter yourself, or use the Agent Registry
+**Install** button. Opening a thread does not download or install
+`claude-agent-acp` or `codex-acp`.
 
 If you want to override the executable used by the adapter, you can set the `CLAUDE_CODE_EXECUTABLE` environment variable in your settings to the path of your preferred executable.
 
@@ -118,7 +119,7 @@ If you want to override the executable used by the adapter, you can set the `CLA
 
 ### Usage
 
-Claude Agent supports the same workflows as ZZZ's first-party agent. Add context by @-mentioning files, recent threads, diagnostics, or symbols.
+Claude Agent supports code generation, refactoring, debugging, and Q&A. Add context by @-mentioning files, recent threads, diagnostics, or symbols.
 
 In complement to talking to it [over ACP](https://agentclientprotocol.com), ZZZ relies on the [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview) to support some of its specific features.
 However, the SDK doesn't yet expose everything needed to fully support all of them:
@@ -179,14 +180,12 @@ If you want to use a third-party provider with Codex, you can configure that wit
 
 #### Installation
 
-The first time you create a Codex thread, ZZZ will install [codex-acp](https://github.com/zed-industries/codex-acp).
-This installation is scoped to ZZZ and is kept up to date as you use the agent.
-
-ZZZ will always use this managed version of Codex even if you have it installed globally.
+Install `codex-acp` yourself, or use the Agent Registry **Install**
+button. Opening a thread does not download or install Codex.
 
 ### Usage
 
-Codex supports the same workflows as ZZZ's first-party agent. Add context by @-mentioning files or symbols.
+Codex supports code generation, refactoring, debugging, and Q&A. Add context by @-mentioning files or symbols.
 
 > Some agent panel features are not yet available with Codex: editing past messages, resuming threads from history, and checkpointing.
 

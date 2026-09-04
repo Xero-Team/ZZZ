@@ -26,6 +26,8 @@ from the network.
 - Telemetry, Anthropic behavior logging, Sentry uploads, and crash reporting.
 - Automatic application updates.
 - Automatic extension installation or updates.
+- Automatic language-server, DAP, Prettier, Node, and Agent Registry
+  downloads. Use an explicit Install or Download action.
 
 ## Explicit opt-in
 

@@ -1,6 +1,6 @@
 ---
-title: AI Code Completion in ZZZ - Local Providers, Copilot, Codestral
-description: Set up AI code completions in ZZZ with a local Ollama or llama.cpp provider. Copilot, Codestral, and Mercury Coder are optional.
+title: AI Code Completion in ZZZ - Local Providers
+description: Set up AI code completions in ZZZ with a local Ollama or llama.cpp provider. Copilot and Codestral are optional.
 ---
 
 # Edit Prediction
@@ -9,8 +9,8 @@ Edit Prediction is how ZZZ's AI code completions work: an LLM predicts the code 
 Each keystroke sends a new request to the edit prediction provider, which returns individual or multi-line suggestions you accept by pressing `tab`.
 
 The default preference is a local provider such as Ollama or llama.cpp. You can
-also use [other providers](#other-providers) like GitHub Copilot, Mercury Coder,
-and Codestral when you configure them explicitly.
+also use [other providers](#other-providers) like GitHub Copilot and Codestral
+when you configure them explicitly.
 
 ## Configuring a local provider
 
@@ -254,28 +254,6 @@ Copilot can provide multiple completion alternatives, and these can be navigated
 
 - {#action editor::NextEditPrediction} ({#kb editor::NextEditPrediction}): To cycle to the next edit prediction
 - {#action editor::PreviousEditPrediction} ({#kb editor::PreviousEditPrediction}): To cycle to the previous edit prediction
-
-### Mercury Coder {#mercury-coder}
-
-To use [Mercury Coder](https://www.inceptionlabs.ai/) by Inception Labs as your provider:
-
-1. Open the Settings Editor ({#kb zed::OpenSettings})
-2. Search for "Edit Predictions" and click **Configure Providers**
-3. Find the Mercury section and enter your API key from the
-   [Inception Labs dashboard](https://platform.inceptionlabs.ai/dashboard/api-keys)
-
-Alternatively, click the edit prediction icon in the status bar and select
-**Configure Providers** from the menu.
-
-After adding your API key, Mercury Coder will appear in the provider dropdown in the status bar menu, where you can select it. You can also set it directly in your settings file:
-
-```json [settings]
-{
-  "edit_predictions": {
-    "provider": "mercury"
-  }
-}
-```
 
 ### Codestral {#codestral}
 

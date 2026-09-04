@@ -1891,6 +1891,7 @@ While other options may be changed at a runtime and should be placed under `sett
 Non-negative `integer` values
 
 ## Format On Save {#format-on-save}
+
 ## Focus Follows Mouse
 
 - Description: Whether the focused panel follows the mouse location.
@@ -1925,7 +1926,6 @@ Non-negative `integer` values
 **Options**
 
 Non-negative `integer` values
-
 
 - Description: Whether or not to perform a buffer format before saving.
 - Setting: `format_on_save`
@@ -4882,7 +4882,6 @@ Run the {#action theme_selector::Toggle} action in the command palette to see a 
     "show_branch_name": true,
     "show_project_items": true,
     "show_onboarding_banner": true,
-    "show_user_picture": true,
     "show_user_menu": true,
     "show_menus": false,
     "button_layout": "platform_default"
@@ -4896,8 +4895,7 @@ Run the {#action theme_selector::Toggle} action in the command palette to see a 
 - `show_branch_name`: Whether to show the branch name button in the titlebar
 - `show_project_items`: Whether to show the project host and name in the titlebar
 - `show_onboarding_banner`: Whether to show onboarding banners in the titlebar
-- `show_user_picture`: Whether to show user picture in the titlebar
-- `show_user_menu`: Whether to show the user menu button in the titlebar (the one that displays your avatar by default and contains options like Settings, Keymap, Themes, etc.)
+- `show_user_menu`: Whether to show the user menu button in the titlebar (the one that contains options like Settings, Keymap, Themes, etc.)
 - `show_menus`: Whether to show the menus in the titlebar
 - `button_layout`: The layout of window control buttons in the title bar (Linux only). Can be set to `"platform_default"` to follow the system setting, `"standard"` to use ZZZ's built-in layout, or a custom format like `"close:minimize,maximize"`
 

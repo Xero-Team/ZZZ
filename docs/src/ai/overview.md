@@ -30,7 +30,7 @@ Rust. There is no Electron layer between you and the model output.
 
 ## Agentic editing
 
-The [Threads Sidebar](./parallel-agents.md#threads-sidebar) is where you organize agent work. Start a thread, give it a task, and the agent reads, edits, and runs code in your project. You can also open terminal threads directly in the sidebar alongside your agent threads. Run multiple agent threads and terminal threads at once, each using a different agent and working against different projects. See [Tools](./tools.md) for the capabilities available to ZZZ's built-in agent.
+The [Threads Sidebar](./parallel-agents.md#threads-sidebar) is where you organize agent work. Start a thread, give it a task, and the agent reads, edits, and runs code in your project. You can also open terminal threads directly in the sidebar alongside your agent threads. Run multiple agent threads and terminal threads at once, each using a different agent and working against different projects. See [Tools](./tools.md) for tool permissions that apply to ACP agents.
 
 The [Agent Panel](./agent-panel.md) is the conversation view for the active thread. Use it to send prompts, review changes, add context, and interact with the agent as it works.
 
