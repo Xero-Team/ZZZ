@@ -143,7 +143,7 @@ impl AgentConfiguration {
         cx: &mut Context<Self>,
     ) {
         let configuration_view = provider.configuration_view(
-            language_model::ConfigurationViewTargetAgent::ZedAgent,
+            language_model::ConfigurationViewTargetAgent::Other("agent".into()),
             window,
             cx,
         );

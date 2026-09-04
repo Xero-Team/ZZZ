@@ -244,7 +244,7 @@ fn open_thread(
     // (the removed-agent stub returns a clear error rather than crashing).
     panel.update(cx, |panel, cx| {
         panel.load_agent_thread(
-            Agent::NativeAgent,
+            Agent::Absent,
             id,
             None,
             Some(name.into()),

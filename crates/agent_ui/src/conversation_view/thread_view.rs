@@ -1600,9 +1600,6 @@ impl ThreadView {
                     None,
                     "Model reached its maximum output length.".into(),
                 ),
-                ThreadError::NoModelSelected => {
-                    ("no_model_selected", None, "No model selected.".into())
-                }
                 ThreadError::ApiError { provider } => (
                     "api_error",
                     None,
@@ -9182,21 +9179,6 @@ impl ThreadView {
                     cx,
                     "agent_ui.thread_view.output_limit_reached_message",
                     "The model stopped because it reached its maximum output length. You can ask it to continue where it left off.",
-                ),
-                false,
-                false,
-                cx,
-            ),
-            ThreadError::NoModelSelected => self.render_error_callout(
-                tr(
-                    cx,
-                    "agent_ui.thread_view.no_model_selected",
-                    "No Model Selected",
-                ),
-                tr(
-                    cx,
-                    "agent_ui.thread_view.no_model_selected_message",
-                    "Select a model from the model picker below to get started.",
                 ),
                 false,
                 false,

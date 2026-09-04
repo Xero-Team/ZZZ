@@ -854,12 +854,12 @@ impl Render for ConfigurationView {
                 .child(Label::new(tr(
                     cx,
                     "language_models.open_ai_compatible.setup_intro",
-                    "To use ZZZ's agent with an OpenAI-compatible provider, you need to add an API key.",
+                    "To use an OpenAI-compatible provider, you need to add an API key.",
                 )))
                 .child(
                     div()
                         .pt(DynamicSpacing::Base04.rems(cx))
-                        .child(self.api_key_editor.clone())
+                        .child(self.api_key_editor.clone()),
                 )
                 .child(
                     Label::new(
@@ -870,7 +870,8 @@ impl Render for ConfigurationView {
                         )
                         .replace("{}", env_var_name),
                     )
-                    .size(LabelSize::Small).color(Color::Muted),
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
                 )
                 .into_any()
         } else {

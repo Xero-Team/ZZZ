@@ -948,7 +948,7 @@ impl AgentPanel {
                                 auto_submit: false,
                             }
                         });
-                        let thread = panel.create_agent_thread(
+                        let Some(thread) = panel.create_agent_thread(
                             agent,
                             None,
                             None,
@@ -957,7 +957,9 @@ impl AgentPanel {
                             "agent_panel",
                             window,
                             cx,
-                        );
+                        ) else {
+                            return;
+                        };
                         panel.draft_thread = Some(thread.conversation_view.clone());
                         panel.observe_draft_editor(&thread.conversation_view, cx);
 
@@ -1153,7 +1155,7 @@ impl AgentPanel {
         if self.should_restore_agent(&agent, cx) {
             agent
         } else {
-            Agent::NativeAgent
+            Agent::Absent
         }
     }
 
@@ -1232,7 +1234,9 @@ impl AgentPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let draft = self.ensure_draft(source, window, cx);
+        let Some(draft) = self.ensure_draft(source, window, cx) else {
+            return;
+        };
         if let BaseView::AgentThread { conversation_view } = &self.base_view {
             if conversation_view.entity_id() == draft.entity_id() {
                 if focus {
@@ -1256,12 +1260,12 @@ impl AgentPanel {
         source: &'static str,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Entity<ConversationView> {
+    ) -> Option<Entity<ConversationView>> {
         let desired_agent = self.selected_agent(cx);
         if let Some(draft) = &self.draft_thread {
             let agent_matches = *draft.read(cx).agent_key() == desired_agent;
             if agent_matches {
-                return draft.clone();
+                return Some(draft.clone());
             }
             self.draft_thread = None;
             self._draft_editor_observation = None;
@@ -1276,10 +1280,10 @@ impl AgentPanel {
             source,
             window,
             cx,
-        );
+        )?;
         self.draft_thread = Some(thread.conversation_view.clone());
         self.observe_draft_editor(&thread.conversation_view, cx);
-        thread.conversation_view
+        Some(thread.conversation_view)
     }
 
     fn observe_draft_editor(
@@ -1388,7 +1392,7 @@ impl AgentPanel {
         cx: &mut Context<Self>,
     ) {
         let agent = agent_choice.unwrap_or_else(|| self.selected_agent(cx));
-        let thread = self.create_agent_thread(
+        let Some(thread) = self.create_agent_thread(
             agent,
             resume_session_id,
             work_dirs,
@@ -1397,7 +1401,9 @@ impl AgentPanel {
             source,
             window,
             cx,
-        );
+        ) else {
+            return;
+        };
         self.set_base_view(thread.into(), focus, window, cx);
     }
 
@@ -2333,7 +2339,7 @@ impl AgentPanel {
         source: &'static str,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> AgentThread {
+    ) -> Option<AgentThread> {
         self.create_agent_thread_with_server(
             agent,
             None,
@@ -2358,7 +2364,7 @@ impl AgentPanel {
         source: &'static str,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> AgentThread {
+    ) -> Option<AgentThread> {
         let existing_metadata = resume_session_id.as_ref().and_then(|sid| {
             ThreadMetadataStore::try_global(cx)
                 .and_then(|store| store.read(cx).entry_by_session(sid).cloned())
@@ -2383,8 +2389,8 @@ impl AgentPanel {
             }
         });
 
-        let server = server_override
-            .unwrap_or_else(|| agent.server(self.fs.clone(), self.thread_store.clone()));
+        let server =
+            server_override.or_else(|| agent.server(self.fs.clone(), self.thread_store.clone()))?;
         let thread_store = Some(self.thread_store.clone());
 
         let connection_store = self.connection_store.clone();
@@ -2423,7 +2429,7 @@ impl AgentPanel {
         })
         .detach();
 
-        AgentThread { conversation_view }
+        Some(AgentThread { conversation_view })
     }
 
     fn active_thread_has_messages(&self, cx: &App) -> bool {
@@ -2679,7 +2685,7 @@ impl AgentPanel {
             return false;
         };
 
-        let thread = self.create_agent_thread(
+        let Some(thread) = self.create_agent_thread(
             agent,
             None,
             None,
@@ -2688,7 +2694,9 @@ impl AgentPanel {
             "agent_panel",
             window,
             cx,
-        );
+        ) else {
+            return false;
+        };
         self.draft_thread = Some(thread.conversation_view.clone());
         self.observe_draft_editor(&thread.conversation_view, cx);
         self.set_base_view(thread.into(), false, window, cx);
@@ -3617,7 +3625,7 @@ impl AgentPanel {
             id: server.agent_id(),
         };
 
-        let thread = self.create_agent_thread_with_server(
+        let Some(thread) = self.create_agent_thread_with_server(
             ext_agent,
             Some(server),
             None,
@@ -3627,7 +3635,9 @@ impl AgentPanel {
             "agent_panel",
             window,
             cx,
-        );
+        ) else {
+            return;
+        };
         self.set_base_view(thread.into(), true, window, cx);
     }
 
@@ -3646,7 +3656,7 @@ impl AgentPanel {
             id: server.agent_id(),
         };
 
-        let thread = self.create_agent_thread_with_server(
+        let Some(thread) = self.create_agent_thread_with_server(
             ext_agent,
             Some(server),
             Some(resume_session_id),
@@ -3656,7 +3666,9 @@ impl AgentPanel {
             "agent_panel",
             window,
             cx,
-        );
+        ) else {
+            return;
+        };
         self.set_base_view(thread.into(), true, window, cx);
     }
 
@@ -3679,7 +3691,7 @@ impl AgentPanel {
         let ext_agent = Agent::Custom {
             id: server.agent_id(),
         };
-        let thread = self.create_agent_thread_with_server(
+        let Some(thread) = self.create_agent_thread_with_server(
             ext_agent,
             Some(server),
             None,
@@ -3689,7 +3701,9 @@ impl AgentPanel {
             "agent_panel",
             window,
             cx,
-        );
+        ) else {
+            return;
+        };
         self.draft_thread = Some(thread.conversation_view.clone());
         self.set_base_view(thread.into(), true, window, cx);
     }
@@ -3765,7 +3779,7 @@ mod tests {
 
     impl AgentConnection for SessionTrackingConnection {
         fn agent_id(&self) -> AgentId {
-            agent::ZED_AGENT_ID.clone()
+            AgentId::new("session-tracking-test")
         }
 
         fn telemetry_id(&self) -> SharedString {
@@ -5130,7 +5144,7 @@ mod tests {
         // PascalCase (legacy AgentType format, persisted in panel state)
         assert_eq!(
             serde_json::from_str::<Agent>(r#""NativeAgent""#).unwrap(),
-            Agent::NativeAgent,
+            Agent::Absent,
         );
         assert_eq!(
             serde_json::from_str::<Agent>(r#"{"Custom":{"name":"my-agent"}}"#).unwrap(),
@@ -5142,13 +5156,13 @@ mod tests {
         // Legacy TextThread variant deserializes to NativeAgent
         assert_eq!(
             serde_json::from_str::<Agent>(r#""TextThread""#).unwrap(),
-            Agent::NativeAgent,
+            Agent::Absent,
         );
 
         // snake_case (canonical format)
         assert_eq!(
             serde_json::from_str::<Agent>(r#""native_agent""#).unwrap(),
-            Agent::NativeAgent,
+            Agent::Absent,
         );
         assert_eq!(
             serde_json::from_str::<Agent>(r#"{"custom":{"name":"my-agent"}}"#).unwrap(),
@@ -5159,8 +5173,8 @@ mod tests {
 
         // Serialization uses snake_case
         assert_eq!(
-            serde_json::to_string(&Agent::NativeAgent).unwrap(),
-            r#""native_agent""#,
+            serde_json::to_string(&Agent::Absent).unwrap(),
+            r#""absent""#,
         );
         assert_eq!(
             serde_json::to_string(&Agent::Custom {
@@ -5625,9 +5639,9 @@ mod tests {
 
         let first_draft_id = panel.read_with(cx, |panel, cx| {
             assert!(panel.draft_thread.is_some());
-            assert_eq!(panel.selected_agent, Agent::NativeAgent);
+            assert_eq!(panel.selected_agent, Agent::Absent);
             let draft = panel.draft_thread.as_ref().unwrap();
-            assert_eq!(*draft.read(cx).agent_key(), Agent::NativeAgent);
+            assert_eq!(*draft.read(cx).agent_key(), Agent::Absent);
             draft.entity_id()
         });
 
@@ -6443,7 +6457,7 @@ mod tests {
 
     impl AgentConnection for DisassociationTrackingConnection {
         fn agent_id(&self) -> AgentId {
-            agent::ZED_AGENT_ID.clone()
+            AgentId::new("disassociation-tracking-test")
         }
 
         fn telemetry_id(&self) -> SharedString {

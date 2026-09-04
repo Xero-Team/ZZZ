@@ -250,7 +250,9 @@ impl AcpTools {
                 )
             };
             let agent = Agent::from(agent_id);
-            let server = agent.server(fs, thread_store);
+            let Some(server) = agent.server(fs, thread_store) else {
+                return;
+            };
             connection_store.update(cx, |store, cx| {
                 store.restart_connection(agent, server, cx);
             });

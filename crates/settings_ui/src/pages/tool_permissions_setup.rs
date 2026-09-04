@@ -1,4 +1,4 @@
-use agent::{AgentTool, TerminalTool, ToolPermissionDecision};
+use agent::{TerminalTool, ToolPermissionDecision};
 use agent_settings::AgentSettings;
 use gpui::{
     Focusable, HighlightStyle, ReadGlobal, ScrollHandle, SharedString, StyledText,
@@ -92,15 +92,6 @@ const TOOLS: &[ToolInfo] = &[
         description: "HTTP requests to URLs",
         regex_explanation_key: "settings_ui.tool_permissions.tool.fetch.regex_explanation",
         regex_explanation: "Patterns are matched against the URL being fetched.",
-    },
-    ToolInfo {
-        id: "search_web",
-        name_key: "settings_ui.tool_permissions.tool.search_web.name",
-        name: "Web Search",
-        description_key: "settings_ui.tool_permissions.tool.search_web.description",
-        description: "Web search queries",
-        regex_explanation_key: "settings_ui.tool_permissions.tool.search_web.regex_explanation",
-        regex_explanation: "Patterns are matched against the search query.",
     },
     ToolInfo {
         id: "skill",
@@ -486,7 +477,6 @@ fn get_tool_render_fn(
         "create_directory" => render_create_directory_tool_config,
         "save_file" => render_save_file_tool_config,
         "fetch" => render_fetch_tool_config,
-        "search_web" => render_web_search_tool_config,
         "skill" => render_skill_tool_config,
         "restore_file_from_disk" => render_restore_file_from_disk_tool_config,
         _ => render_terminal_tool_config, // fallback
@@ -1651,7 +1641,6 @@ tool_config_page_fn!(render_move_path_tool_config, "move_path");
 tool_config_page_fn!(render_create_directory_tool_config, "create_directory");
 tool_config_page_fn!(render_save_file_tool_config, "save_file");
 tool_config_page_fn!(render_fetch_tool_config, "fetch");
-tool_config_page_fn!(render_web_search_tool_config, "search_web");
 tool_config_page_fn!(render_skill_tool_config, "skill");
 tool_config_page_fn!(
     render_restore_file_from_disk_tool_config,

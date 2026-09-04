@@ -855,7 +855,7 @@ impl Render for ConfigurationView {
                 .child(Label::new(tr(
                     cx,
                     "language_models.mistral.setup_intro",
-                    "To use ZZZ's agent with Mistral, you need to add an API key. Follow these steps:",
+                    "To use Mistral, you need to add an API key. Follow these steps:",
                 )))
                 .child(
                     List::new()
@@ -866,22 +866,21 @@ impl Render for ConfigurationView {
                                     "language_models.common.create_one_by_visiting",
                                     "Create one by visiting",
                                 )))
-                                .child(ButtonLink::new("Mistral's console", "https://console.mistral.ai/api-keys"))
+                                .child(ButtonLink::new(
+                                    "Mistral's console",
+                                    "https://console.mistral.ai/api-keys",
+                                )),
                         )
-                        .child(
-                            ListBulletItem::new(tr(
-                                cx,
-                                "language_models.mistral.ensure_credits",
-                                "Ensure your Mistral account has credits",
-                            ))
-                        )
-                        .child(
-                            ListBulletItem::new(tr(
-                                cx,
-                                "language_models.common.paste_api_key_start_assistant",
-                                "Paste your API key below and hit enter to start using the assistant",
-                            ))
-                        ),
+                        .child(ListBulletItem::new(tr(
+                            cx,
+                            "language_models.mistral.ensure_credits",
+                            "Ensure your Mistral account has credits",
+                        )))
+                        .child(ListBulletItem::new(tr(
+                            cx,
+                            "language_models.common.paste_api_key_start_assistant",
+                            "Paste your API key below and hit enter to start using the assistant",
+                        ))),
                 )
                 .child(self.api_key_editor.clone())
                 .child(
@@ -893,7 +892,8 @@ impl Render for ConfigurationView {
                         )
                         .replace("{}", API_KEY_ENV_VAR_NAME),
                     )
-                    .size(LabelSize::Small).color(Color::Muted),
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
                 )
                 .into_any()
         } else {

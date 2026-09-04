@@ -722,7 +722,6 @@ impl Render for ConfigurationView {
                     .replace(
                         "{}",
                         match &self.target_agent {
-                            ConfigurationViewTargetAgent::ZedAgent => "ZZZ's agent with Anthropic",
                             ConfigurationViewTargetAgent::Other(agent) => agent.as_ref(),
                         },
                     ),

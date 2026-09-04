@@ -1029,7 +1029,7 @@ impl Render for ConfigurationView {
                 .child(Label::new(tr(
                     cx,
                     "language_models.open_router.setup_intro",
-                    "To use ZZZ's agent with OpenRouter, you need to add an API key. Follow these steps:",
+                    "To use OpenRouter, you need to add an API key. Follow these steps:",
                 )))
                 .child(
                     List::new()
@@ -1040,20 +1040,21 @@ impl Render for ConfigurationView {
                                     "language_models.open_router.create_api_key_by_visiting",
                                     "Create an API key by visiting",
                                 )))
-                                .child(ButtonLink::new("OpenRouter's console", "https://openrouter.ai/keys"))
+                                .child(ButtonLink::new(
+                                    "OpenRouter's console",
+                                    "https://openrouter.ai/keys",
+                                )),
                         )
                         .child(ListBulletItem::new(tr(
                             cx,
                             "language_models.open_router.ensure_credits",
                             "Ensure your OpenRouter account has credits",
-                        ))
-                        )
+                        )))
                         .child(ListBulletItem::new(tr(
                             cx,
                             "language_models.common.paste_api_key_start_assistant",
                             "Paste your API key below and hit enter to start using the assistant",
-                        ))
-                        ),
+                        ))),
                 )
                 .child(self.api_key_editor.clone())
                 .child(
@@ -1065,7 +1066,8 @@ impl Render for ConfigurationView {
                         )
                         .replace("{}", API_KEY_ENV_VAR_NAME),
                     )
-                    .size(LabelSize::Small).color(Color::Muted),
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
                 )
                 .into_any_element()
         } else {

@@ -2027,7 +2027,6 @@ fn run_agent_thread_view_test(
     cx: &mut VisualTestAppContext,
     update_baseline: bool,
 ) -> Result<TestResult> {
-    use agent::{AgentTool, ToolInput};
     use agent_ui::AgentPanel;
 
     // Create a temporary directory with the test image
@@ -2074,59 +2073,17 @@ fn run_agent_thread_view_test(
 
     let worktree_name = cx.read(|cx| worktree.read(cx).root_name_str().to_owned());
 
-    // Create the necessary entities for the ReadFileTool
-    let action_log = cx.update(|cx| cx.new(|_| action_log::ActionLog::new(project.clone())));
-
-    // Create the ReadFileTool
-    let tool = Arc::new(agent::ReadFileTool::new(project.clone(), action_log, true));
-
-    // Create a test event stream to capture tool output
-    let (event_stream, mut event_receiver) = agent::ToolCallEventStream::test();
-
-    // Run the real ReadFileTool to get the actual image content
-    let input = agent::ReadFileToolInput {
-        path: format!("{}/test-image.png", worktree_name),
-        start_line: None,
-        end_line: None,
-    };
-    let run_task = cx.update(|cx| {
-        tool.clone()
-            .run(ToolInput::resolved(input), event_stream, cx)
-    });
-
-    cx.background_executor.allow_parking();
-    let run_result = cx.foreground_executor.block_test(run_task);
-    cx.background_executor.forbid_parking();
-    run_result.map_err(|e| match e {
-        language_model::LanguageModelToolResultContent::Text(text) => {
-            anyhow::anyhow!("ReadFileTool failed: {text}")
-        }
-        other => anyhow::anyhow!("ReadFileTool failed: {other:?}"),
-    })?;
-
-    cx.run_until_parked();
-
-    // Collect the events from the tool execution
-    let mut tool_content: Vec<acp::ToolCallContent> = Vec::new();
-    let mut tool_locations: Vec<acp::ToolCallLocation> = Vec::new();
-
-    while let Ok(event) = event_receiver.try_recv() {
-        if let Ok(agent::ThreadEvent::ToolCallUpdate(acp_thread::ToolCallUpdate::UpdateFields(
-            update,
-        ))) = event
-        {
-            if let Some(content) = update.fields.content {
-                tool_content.extend(content);
-            }
-            if let Some(locations) = update.fields.locations {
-                tool_locations.extend(locations);
-            }
-        }
-    }
-
-    if tool_content.is_empty() {
-        return Err(anyhow::anyhow!("ReadFileTool did not produce any content"));
-    }
+    let image_data = base64::Engine::encode(
+        &base64::engine::general_purpose::STANDARD,
+        EMBEDDED_TEST_IMAGE,
+    );
+    let tool_content = vec![acp::ToolCallContent::Content(acp::Content::new(
+        acp::ContentBlock::Image(acp::ImageContent::new(image_data, "image/png")),
+    ))];
+    let tool_locations = vec![acp::ToolCallLocation::new(format!(
+        "{}/test-image.png",
+        worktree_name
+    ))];
 
     // Create stub connection with the real tool output
     let connection = StubAgentConnection::new();

@@ -478,7 +478,6 @@ impl Render for ConfigurationView {
                     .replace(
                         "{}",
                         match &self.target_agent {
-                            ConfigurationViewTargetAgent::ZedAgent => "ZZZ's agent with Google AI",
                             ConfigurationViewTargetAgent::Other(agent) => agent.as_ref(),
                         },
                     ),

@@ -298,11 +298,15 @@ pub trait LanguageModelProvider: 'static {
     fn reset_credentials(&self, cx: &mut App) -> Task<Result<()>>;
 }
 
-#[derive(Default, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum ConfigurationViewTargetAgent {
-    #[default]
-    ZedAgent,
     Other(SharedString),
+}
+
+impl Default for ConfigurationViewTargetAgent {
+    fn default() -> Self {
+        Self::Other("agent".into())
+    }
 }
 
 pub trait LanguageModelProviderState: 'static {

@@ -245,7 +245,7 @@ impl AgentConnectionStore {
     ) {
         let store = store.read(cx);
         self.entries.retain(|key, _| match key {
-            Agent::NativeAgent => false, // Native agent has been removed; clean up any stale entries.
+            Agent::Absent => false,
             Agent::Custom { id } => store.external_agents.contains_key(id),
             #[cfg(any(test, feature = "test-support"))]
             Agent::Stub => true,

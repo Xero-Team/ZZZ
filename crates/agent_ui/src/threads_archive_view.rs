@@ -853,9 +853,12 @@ impl ThreadsArchiveView {
         };
         let fs = <dyn Fs>::global(cx);
 
+        let Some(server) = agent.server(fs, ThreadStore::global(cx)) else {
+            return;
+        };
         let task = agent_connection_store.update(cx, |store, cx| {
             store
-                .request_connection(agent.clone(), agent.server(fs, ThreadStore::global(cx)), cx)
+                .request_connection(agent.clone(), server, cx)
                 .read(cx)
                 .wait_for_connection()
         });

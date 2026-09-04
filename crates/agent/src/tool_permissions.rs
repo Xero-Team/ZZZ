@@ -1,4 +1,3 @@
-use crate::AgentTool;
 use crate::tools::TerminalTool;
 use agent_settings::{AgentSettings, CompiledRegex, ToolPermissions, ToolRules};
 use settings::ToolPermissionMode;
@@ -558,9 +557,8 @@ pub fn most_restrictive(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::AgentTool;
     use crate::pattern_extraction::extract_terminal_pattern;
-    use crate::tools::{DeletePathTool, EditFileTool, FetchTool, TerminalTool};
+    use crate::tools::TerminalTool;
     use agent_settings::{AgentProfileId, CompiledRegex, InvalidRegexPattern, ToolRules};
     use gpui::px;
     use settings::{DockPosition, NotifyWhenAgentWaiting, PlaySoundWhenAgentDone};
@@ -1011,7 +1009,7 @@ mod tests {
             },
         );
         tools.insert(
-            Arc::from(EditFileTool::NAME),
+            Arc::from("edit_file"),
             ToolRules {
                 default: Some(ToolPermissionMode::Allow),
                 always_allow: vec![],
@@ -1035,7 +1033,7 @@ mod tests {
         ));
         assert_eq!(
             ToolPermissionDecision::from_input(
-                EditFileTool::NAME,
+                "edit_file",
                 &["x".to_string()],
                 &p,
                 ShellKind::Posix
@@ -1607,55 +1605,55 @@ mod tests {
     #[test]
     fn always_confirm_works_for_file_tools() {
         t("sensitive.env")
-            .tool(EditFileTool::NAME)
+            .tool("edit_file")
             .confirm(&["sensitive"])
             .is_confirm();
 
         t("normal.txt")
-            .tool(EditFileTool::NAME)
+            .tool("edit_file")
             .confirm(&["sensitive"])
             .mode(ToolPermissionMode::Allow)
             .is_allow();
 
         t("/etc/config")
-            .tool(DeletePathTool::NAME)
+            .tool("delete_path")
             .confirm(&["/etc/"])
             .is_confirm();
 
         t("/home/user/safe.txt")
-            .tool(DeletePathTool::NAME)
+            .tool("delete_path")
             .confirm(&["/etc/"])
             .mode(ToolPermissionMode::Allow)
             .is_allow();
 
         t("https://secret.internal.com/api")
-            .tool(FetchTool::NAME)
+            .tool("fetch")
             .confirm(&["secret\\.internal"])
             .is_confirm();
 
         t("https://public.example.com/api")
-            .tool(FetchTool::NAME)
+            .tool("fetch")
             .confirm(&["secret\\.internal"])
             .mode(ToolPermissionMode::Allow)
             .is_allow();
 
         // confirm on non-terminal tools still beats allow
         t("sensitive.env")
-            .tool(EditFileTool::NAME)
+            .tool("edit_file")
             .allow(&["sensitive"])
             .confirm(&["\\.env$"])
             .is_confirm();
 
         // confirm on non-terminal tools is still beaten by deny
         t("sensitive.env")
-            .tool(EditFileTool::NAME)
+            .tool("edit_file")
             .confirm(&["sensitive"])
             .deny(&["\\.env$"])
             .is_deny();
 
         // global default allow does not bypass confirm on non-terminal tools
         t("/etc/passwd")
-            .tool(EditFileTool::NAME)
+            .tool("edit_file")
             .confirm(&["/etc/"])
             .global_default(ToolPermissionMode::Allow)
             .is_confirm();
@@ -2225,7 +2223,7 @@ mod tests {
             default: ToolPermissionMode::Confirm,
             tools: Default::default(),
         });
-        let decision = decide_permission_for_path(EditFileTool::NAME, "src/main.rs", &settings);
+        let decision = decide_permission_for_path("edit_file", "src/main.rs", &settings);
         assert_eq!(decision, ToolPermissionDecision::Confirm);
     }
 
@@ -2234,7 +2232,7 @@ mod tests {
         let deny_regex = CompiledRegex::new("/etc/passwd", false).unwrap();
         let mut tools = collections::HashMap::default();
         tools.insert(
-            Arc::from(EditFileTool::NAME),
+            Arc::from("edit_file"),
             ToolRules {
                 default: Some(ToolPermissionMode::Allow),
                 always_allow: vec![],
@@ -2248,8 +2246,7 @@ mod tests {
             tools,
         });
 
-        let decision =
-            decide_permission_for_path(EditFileTool::NAME, "/tmp/../etc/passwd", &settings);
+        let decision = decide_permission_for_path("edit_file", "/tmp/../etc/passwd", &settings);
         assert!(
             matches!(decision, ToolPermissionDecision::Deny(_)),
             "expected Deny for traversal to /etc/passwd, got {:?}",
@@ -2404,7 +2401,7 @@ mod tests {
 
     #[test]
     fn decide_permission_for_path_denies_edit_file_traversal_to_dotenv() {
-        let decision = path_perm(EditFileTool::NAME, "src/../.env", &["^\\.env"], &[], &[]);
+        let decision = path_perm("edit_file", "src/../.env", &["^\\.env"], &[], &[]);
         assert!(matches!(decision, ToolPermissionDecision::Deny(_)));
     }
 }

@@ -6,12 +6,12 @@ use acp_thread::{
 };
 use acp_thread::{AgentConnection, Plan};
 use action_log::{ActionLog, ActionLogTelemetry, DiffStats};
-use agent::{NoModelConfiguredError, ThreadStore};
+use agent::ThreadStore;
 use agent_client_protocol::schema as acp;
 #[cfg(test)]
 use agent_servers::AgentServerDelegate;
 use agent_servers::{AgentServer, GEMINI_TERMINAL_AUTH_METHOD_ID};
-use agent_settings::{AgentProfileId, AgentSettings};
+use agent_settings::AgentSettings;
 use anyhow::{Result, anyhow};
 #[cfg(feature = "audio")]
 use audio::{Audio, Sound};
@@ -86,8 +86,7 @@ use crate::agent_diff::AgentDiff;
 use crate::completion_provider::AgentContextSelection;
 use crate::entry_view_state::{EntryViewEvent, ViewEvent};
 use crate::message_editor::{InputAttempt, MessageEditor, MessageEditorEvent};
-use crate::profile_selector::{ProfileProvider, ProfileSelector};
-
+use crate::profile_selector::ProfileSelector;
 use crate::thread_metadata_store::{ThreadId, ThreadMetadataStore};
 use crate::ui::{AgentNotification, AgentNotificationEvent};
 use crate::{
@@ -151,7 +150,6 @@ pub(crate) enum ThreadError {
     },
     RequestFailed,
     MaxOutputTokens,
-    NoModelSelected,
     ApiError {
         provider: SharedString,
     },
@@ -165,8 +163,6 @@ impl From<anyhow::Error> for ThreadError {
     fn from(error: anyhow::Error) -> Self {
         if error.is::<MaxOutputTokensError>() {
             Self::MaxOutputTokens
-        } else if error.is::<NoModelConfiguredError>() {
-            Self::NoModelSelected
         } else if error.is::<language_model::PaymentRequiredError>() {
             Self::PaymentRequired
         } else if let Some(acp_error) = error.downcast_ref::<acp::Error>()
@@ -228,29 +224,6 @@ impl From<anyhow::Error> for ThreadError {
                 acp_error_code,
             }
         }
-    }
-}
-
-impl ProfileProvider for Entity<agent::Thread> {
-    fn profile_id(&self, cx: &App) -> AgentProfileId {
-        self.read(cx).profile().clone()
-    }
-
-    fn set_profile(&self, profile_id: AgentProfileId, cx: &mut App) {
-        self.update(cx, |thread, cx| {
-            // Apply the profile and let the thread swap to its default model.
-            thread.set_profile(profile_id, cx);
-        });
-    }
-
-    fn profiles_supported(&self, cx: &App) -> bool {
-        self.read(cx)
-            .model()
-            .is_some_and(|model| model.supports_tools())
-    }
-
-    fn model_selected(&self, cx: &App) -> bool {
-        self.read(cx).model().is_some()
     }
 }
 
@@ -3314,7 +3287,7 @@ fn plan_label_markdown_style(
 pub(crate) mod tests {
     use acp_thread::StubAgentConnection;
     use action_log::ActionLog;
-    use agent::{AgentTool, EditFileTool, FetchTool, TerminalTool, ToolPermissionContext};
+    use agent::{TerminalTool, ToolPermissionContext};
     use agent_servers::FakeAcpAgentServer;
     use editor::MultiBufferOffset;
     use editor::actions::Paste;
@@ -6819,7 +6792,7 @@ pub(crate) mod tests {
             .kind(acp::ToolKind::Edit);
 
         let permission_options =
-            ToolPermissionContext::new(EditFileTool::NAME, vec!["src/main.rs".to_string()])
+            ToolPermissionContext::new("edit_file", vec!["src/main.rs".to_string()])
                 .build_permission_options();
 
         let connection =
@@ -6909,7 +6882,7 @@ pub(crate) mod tests {
             .kind(acp::ToolKind::Fetch);
 
         let permission_options =
-            ToolPermissionContext::new(FetchTool::NAME, vec!["https://docs.rs/gpui".to_string()])
+            ToolPermissionContext::new("fetch", vec!["https://docs.rs/gpui".to_string()])
                 .build_permission_options();
 
         let connection =

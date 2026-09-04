@@ -771,10 +771,6 @@ impl Item for AgentRegistryPage {
         tr(cx, "agent_ui.registry.title", "ACP Registry")
     }
 
-    fn telemetry_event_text(&self) -> Option<&'static str> {
-        None
-    }
-
     fn show_toolbar(&self) -> bool {
         false
     }

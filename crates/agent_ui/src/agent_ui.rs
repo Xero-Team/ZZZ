@@ -393,44 +393,13 @@ pub struct NewExternalAgentThread {
     agent: Option<Agent>,
 }
 
-/// Stub server returned when old serialized data refers to the removed built-in Zed Agent.
-/// Attempting to connect will produce a clear error rather than a crash.
-struct RemovedNativeAgentServer;
-
-impl agent_servers::AgentServer for RemovedNativeAgentServer {
-    fn agent_id(&self) -> project::AgentId {
-        agent::ZED_AGENT_ID.clone()
-    }
-
-    fn logo(&self) -> IconName {
-        IconName::ZedAssistant
-    }
-
-    fn connect(
-        &self,
-        _delegate: agent_servers::AgentServerDelegate,
-        _project: gpui::Entity<project::Project>,
-        cx: &mut gpui::App,
-    ) -> gpui::Task<anyhow::Result<std::rc::Rc<dyn acp_thread::AgentConnection>>> {
-        gpui::Task::ready(Err(anyhow::anyhow!(app_i18n::tr(
-            cx,
-            "agent_ui.agent.removed_native_agent_error",
-            "The built-in Zed Agent has been removed. Please configure an external agent in the agent settings.",
-        ))))
-    }
-
-    fn into_any(self: std::rc::Rc<Self>) -> std::rc::Rc<dyn std::any::Any> {
-        self
-    }
-}
-
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum Agent {
     #[default]
-    #[serde(alias = "NativeAgent", alias = "TextThread")]
-    NativeAgent,
+    #[serde(alias = "NativeAgent", alias = "TextThread", alias = "native_agent")]
+    Absent,
     #[serde(alias = "Custom")]
     Custom {
         #[serde(rename = "name")]
@@ -443,7 +412,7 @@ pub enum Agent {
 impl From<AgentId> for Agent {
     fn from(id: AgentId) -> Self {
         if id.as_ref() == agent::ZED_AGENT_ID.as_ref() {
-            Self::NativeAgent
+            Self::Absent
         } else {
             Self::Custom { id }
         }
@@ -453,7 +422,7 @@ impl From<AgentId> for Agent {
 impl Agent {
     pub fn id(&self) -> AgentId {
         match self {
-            Self::NativeAgent => agent::ZED_AGENT_ID.clone(),
+            Self::Absent => agent::ZED_AGENT_ID.clone(),
             Self::Custom { id } => id.clone(),
             #[cfg(any(test, feature = "test-support"))]
             Self::Stub => "stub".into(),
@@ -465,30 +434,30 @@ impl Agent {
     /// The built-in Zed Agent runtime has been removed. This method exists only to detect stale
     /// serialized data that still references the old agent so it can be handled safely.
     pub fn is_native(&self) -> bool {
-        matches!(self, Self::NativeAgent)
+        matches!(self, Self::Absent)
     }
 
     pub fn label(&self) -> SharedString {
         match self {
-            Self::NativeAgent => "Zed Agent".into(),
+            Self::Absent => SharedString::default(),
             Self::Custom { id, .. } => id.0.clone(),
             #[cfg(any(test, feature = "test-support"))]
             Self::Stub => "Stub Agent".into(),
         }
     }
 
-    pub fn localized_label(&self, cx: &App) -> SharedString {
+    pub fn localized_label(&self, _cx: &App) -> SharedString {
         match self {
-            Self::NativeAgent => app_i18n::tr(cx, "agent_ui.agent.zed", "Zed Agent").into(),
+            Self::Absent => SharedString::default(),
             Self::Custom { id, .. } => id.0.clone(),
             #[cfg(any(test, feature = "test-support"))]
-            Self::Stub => app_i18n::tr(cx, "agent_ui.agent.stub", "Stub Agent").into(),
+            Self::Stub => app_i18n::tr(_cx, "agent_ui.agent.stub", "Stub Agent").into(),
         }
     }
 
     pub fn icon(&self) -> Option<IconName> {
         match self {
-            Self::NativeAgent => None,
+            Self::Absent => None,
             Self::Custom { .. } => Some(IconName::Sparkle),
             #[cfg(any(test, feature = "test-support"))]
             Self::Stub => None,
@@ -499,18 +468,16 @@ impl Agent {
         &self,
         _fs: Arc<dyn fs::Fs>,
         _thread_store: Entity<agent::ThreadStore>,
-    ) -> Rc<dyn agent_servers::AgentServer> {
+    ) -> Option<Rc<dyn agent_servers::AgentServer>> {
         match self {
-            Self::NativeAgent => {
-                // The built-in Zed Agent runtime has been removed. Return a server that fails
-                // gracefully when a stale reference to the native agent is encountered.
-                Rc::new(RemovedNativeAgentServer)
-            }
+            Self::Absent => None,
             Self::Custom { id: name } => {
-                Rc::new(agent_servers::CustomAgentServer::new(name.clone()))
+                Some(Rc::new(agent_servers::CustomAgentServer::new(name.clone())))
             }
             #[cfg(any(test, feature = "test-support"))]
-            Self::Stub => Rc::new(crate::test_support::StubAgentServer::default_response()),
+            Self::Stub => Some(Rc::new(
+                crate::test_support::StubAgentServer::default_response(),
+            )),
         }
     }
 }
@@ -736,11 +703,9 @@ fn update_command_palette_filter(cx: &mut App) {
             filter.hide_namespace("agents");
             filter.hide_namespace("assistant");
             filter.hide_namespace("copilot");
-            filter.hide_namespace("zed_predict_onboarding");
             filter.hide_namespace("edit_prediction");
 
             filter.hide_action_types(&edit_prediction_actions);
-            filter.hide_action_types(&[TypeId::of::<zed_actions::OpenZedPredictOnboarding>()]);
         } else {
             if agent_enabled {
                 filter.show_namespace("agent");
@@ -763,19 +728,14 @@ fn update_command_palette_filter(cx: &mut App) {
                     filter.show_namespace("copilot");
                     filter.show_action_types(edit_prediction_actions.iter());
                 }
-                EditPredictionProvider::Zed
-                | EditPredictionProvider::Codestral
+                EditPredictionProvider::Codestral
                 | EditPredictionProvider::Ollama
-                | EditPredictionProvider::OpenAiCompatibleApi
-                | EditPredictionProvider::Mercury => {
+                | EditPredictionProvider::OpenAiCompatibleApi => {
                     filter.show_namespace("edit_prediction");
                     filter.hide_namespace("copilot");
                     filter.show_action_types(edit_prediction_actions.iter());
                 }
             }
-
-            filter.show_namespace("zed_predict_onboarding");
-            filter.show_action_types(&[TypeId::of::<zed_actions::OpenZedPredictOnboarding>()]);
 
             filter.show_namespace("multi_workspace");
         }
@@ -1082,7 +1042,7 @@ mod tests {
     fn test_deserialize_external_agent_variants() {
         assert_eq!(
             serde_json::from_str::<Agent>(r#""NativeAgent""#).unwrap(),
-            Agent::NativeAgent,
+            Agent::Absent,
         );
         assert_eq!(
             serde_json::from_str::<Agent>(r#"{"Custom":{"name":"my-agent"}}"#).unwrap(),
