@@ -3894,7 +3894,10 @@ impl Workspace {
 
     pub fn active_item_as<I: 'static>(&self, cx: &App) -> Option<Entity<I>> {
         let item = self.active_item(cx)?;
-        item.to_any_view().downcast::<I>().ok()
+        item.to_any_view()
+            .downcast::<I>()
+            .ok()
+            .or_else(|| item.act_as::<I>(cx))
     }
 
     fn active_project_path(&self, cx: &App) -> Option<ProjectPath> {
