@@ -2,21 +2,14 @@ use anyhow::Result;
 use client::{Client, EditPredictionUsage, NeedsLlmTokenRefresh, UserStore, global_llm_token};
 use cloud_api_client::LlmApiToken;
 use cloud_api_types::{OrganizationId, SubmitEditPredictionFeedbackBody};
-use cloud_llm_client::predict_edits_v3::{
-    PREDICT_EDITS_MODE_HEADER_NAME, PREDICT_EDITS_REQUEST_ID_HEADER_NAME,
-    PREDICT_EDITS_TRIGGER_HEADER_NAME, PredictEditsMode, PredictEditsV3Request,
-    PredictEditsV3Response, RawCompletionRequest, RawCompletionResponse,
-};
+use cloud_llm_client::predict_edits_v3::{RawCompletionRequest, RawCompletionResponse};
 use cloud_llm_client::{
     EditPredictionRejectReason, EditPredictionRejection,
     MAX_EDIT_PREDICTION_REJECTIONS_PER_REQUEST, MINIMUM_REQUIRED_VERSION_HEADER_NAME,
-    PREFERRED_EXPERIMENT_HEADER_NAME, PredictEditsRequestTrigger, RejectEditPredictionsBodyRef,
-    ZED_VERSION_HEADER_NAME,
+    PredictEditsRequestTrigger, RejectEditPredictionsBodyRef, ZED_VERSION_HEADER_NAME,
 };
 use collections::{HashMap, HashSet};
 use copilot::{Copilot, Reinstall, SignIn, SignOut};
-use credentials_provider::CredentialsProvider;
-use db::kvp::{Dismissable, KeyValueStore};
 use edit_prediction_context::{RelatedExcerptStore, RelatedExcerptStoreEvent, RelatedFile};
 use feature_flags::{FeatureFlag, FeatureFlagAppExt as _, PresenceFlag, register_feature_flag};
 use futures::{
@@ -33,11 +26,10 @@ use gpui::{
 };
 use heapless::Vec as ArrayVec;
 use language::{
-    Anchor, Buffer, BufferSnapshot, EditPredictionPromptFormat, EditPredictionsMode, EditPreview,
-    File, OffsetRangeExt, Point, TextBufferSnapshot, ToOffset, ToPoint,
-    language_settings::all_language_settings,
+    Anchor, Buffer, BufferSnapshot, EditPredictionPromptFormat, File, OffsetRangeExt, Point,
+    TextBufferSnapshot, ToOffset, ToPoint, language_settings::all_language_settings,
 };
-use project::{DisableAiSettings, Project, ProjectPath, WorktreeId};
+use project::{DisableAiSettings, Project, ProjectPath};
 use release_channel::AppVersion;
 use semver::Version;
 use serde::de::DeserializeOwned;
@@ -46,12 +38,11 @@ use std::collections::{VecDeque, hash_map};
 use std::env;
 use text::{AnchorRangeExt, Edit};
 use workspace::{AppState, Workspace};
-use zeta_prompt::{ZetaFormat, ZetaPromptInput};
+use zeta_prompt::ZetaFormat;
 
 use std::mem;
 use std::ops::Range;
 use std::path::Path;
-use std::rc::Rc;
 use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -62,17 +53,13 @@ use util::{RangeExt as _, ResultExt as _, rel_path::RelPath};
 pub mod cursor_excerpt;
 pub mod example_spec;
 pub mod fim;
-mod license_detection;
-pub mod mercury;
 pub mod metrics;
 pub mod ollama;
-mod onboarding_modal;
 pub mod open_ai_response;
 mod prediction;
 
 pub mod udiff;
 
-mod capture_example;
 pub mod open_ai_compatible;
 mod zed_edit_prediction_delegate;
 pub mod zeta;
@@ -81,15 +68,10 @@ pub mod zeta;
 mod edit_prediction_tests;
 
 use crate::cursor_excerpt::expand_context_syntactically_then_linewise;
-use crate::example_spec::ExampleSpec;
-use crate::license_detection::LicenseDetectionWatcher;
-use crate::mercury::Mercury;
 pub use crate::metrics::{KeptRateResult, compute_kept_rate};
-use crate::onboarding_modal::ZedPredictModal;
 pub use crate::prediction::EditPrediction;
 pub use crate::prediction::EditPredictionId;
 use crate::prediction::EditPredictionResult;
-pub use capture_example::capture_example;
 pub use language_model::ApiKeyState;
 pub use zed_edit_prediction_delegate::ZedEditPredictionDelegate;
 
@@ -117,10 +99,7 @@ const CHANGE_GROUPING_LINE_SPAN: u32 = 8;
 const EDIT_HISTORY_DIFF_SIZE_LIMIT: usize = 2048 * 3; // ~2048 tokens or ~50% of typical prompt budget
 const COLLABORATOR_EDIT_LOCALITY_CONTEXT_TOKENS: usize = 512;
 const LAST_CHANGE_GROUPING_TIME: Duration = Duration::from_secs(1);
-const ZED_PREDICT_DATA_COLLECTION_CHOICE: &str = "zed_predict_data_collection_choice";
 const REJECT_REQUEST_DEBOUNCE: Duration = Duration::from_secs(15);
-const EDIT_PREDICTION_SETTLED_TTL: Duration = Duration::from_secs(60 * 5);
-const EDIT_PREDICTION_SETTLED_QUIESCENCE: Duration = Duration::from_secs(10);
 
 pub struct EditPredictionJumpsFeatureFlag;
 
@@ -149,23 +128,13 @@ pub struct EditPredictionStore {
     client: Arc<Client>,
     user_store: Entity<UserStore>,
     llm_token: LlmApiToken,
-    _fetch_experiments_task: Task<()>,
     projects: HashMap<EntityId, ProjectState>,
     update_required: bool,
     edit_prediction_model: EditPredictionModel,
     zeta2_raw_config: Option<Zeta2RawConfig>,
-    preferred_experiment: Option<String>,
-    available_experiments: Vec<String>,
-    pub mercury: Mercury,
-    #[allow(dead_code)]
-    legacy_data_collection_enabled: bool,
     reject_predictions_tx: mpsc::UnboundedSender<EditPredictionRejectionPayload>,
-    settled_predictions_tx: mpsc::UnboundedSender<Instant>,
     shown_predictions: VecDeque<EditPrediction>,
     rated_predictions: HashSet<EditPredictionId>,
-    #[cfg(test)]
-    settled_event_callback: Option<Box<dyn Fn(EditPredictionId, String)>>,
-    credentials_provider: Arc<dyn CredentialsProvider>,
 }
 
 pub(crate) struct EditPredictionRejectionPayload {
@@ -177,23 +146,17 @@ pub(crate) struct EditPredictionRejectionPayload {
 pub enum EditPredictionModel {
     Zeta,
     Fim { format: EditPredictionPromptFormat },
-    Mercury,
 }
 
 #[derive(Clone)]
 pub struct EditPredictionModelInput {
-    project: Entity<Project>,
     buffer: Entity<Buffer>,
     snapshot: BufferSnapshot,
     position: Anchor,
     events: Vec<Arc<zeta_prompt::Event>>,
     related_files: Vec<RelatedFile>,
-    mode: PredictEditsMode,
-    trigger: PredictEditsRequestTrigger,
     diagnostic_search_range: Range<Point>,
     debug_tx: Option<mpsc::UnboundedSender<DebugEvent>>,
-    can_collect_data: bool,
-    is_open_source: bool,
 }
 
 #[derive(Debug)]
@@ -330,7 +293,6 @@ struct ProjectState {
     last_jump_prediction_refresh: Option<(EntityId, Instant)>,
     cancelled_predictions: HashSet<usize>,
     context: Entity<RelatedExcerptStore>,
-    license_detection_watchers: HashMap<WorktreeId, Rc<LicenseDetectionWatcher>>,
     _subscriptions: [gpui::Subscription; 2],
     copilot: Option<Entity<Copilot>>,
 }
@@ -342,8 +304,8 @@ impl ProjectState {
             .cloned()
             .chain(self.last_event.as_ref().iter().flat_map(|event| {
                 let (one, two) = event.split_by_pause();
-                let one = one.finalize(&self.license_detection_watchers, cx);
-                let two = two.and_then(|two| two.finalize(&self.license_detection_watchers, cx));
+                let one = one.finalize(cx);
+                let two = two.and_then(|two| two.finalize(cx));
                 one.into_iter().chain(two)
             }))
             .collect()
@@ -492,19 +454,9 @@ impl std::ops::Deref for BufferEditPrediction<'_> {
     }
 }
 
-#[derive(Clone)]
-struct PendingSettledPrediction {
-    #[cfg(test)]
-    request_id: EditPredictionId,
-    editable_anchor_range: Range<Anchor>,
-    enqueued_at: Instant,
-    last_edit_at: Instant,
-}
-
 struct RegisteredBuffer {
     file: Option<Arc<dyn File>>,
     snapshot: TextBufferSnapshot,
-    pending_predictions: Vec<PendingSettledPrediction>,
     last_position: Option<Anchor>,
     _subscriptions: [gpui::Subscription; 2],
 }
@@ -524,24 +476,11 @@ struct LastEvent {
 }
 
 impl LastEvent {
-    pub fn finalize(
-        &self,
-        license_detection_watchers: &HashMap<WorktreeId, Rc<LicenseDetectionWatcher>>,
-        cx: &App,
-    ) -> Option<StoredEvent> {
+    pub fn finalize(&self, cx: &App) -> Option<StoredEvent> {
         let path = buffer_path_with_id_fallback(self.new_file.as_ref(), &self.new_snapshot, cx);
         let old_path = buffer_path_with_id_fallback(self.old_file.as_ref(), &self.old_snapshot, cx);
 
-        let in_open_source_repo =
-            [self.new_file.as_ref(), self.old_file.as_ref()]
-                .iter()
-                .all(|file| {
-                    file.is_some_and(|file| {
-                        license_detection_watchers
-                            .get(&file.worktree_id(cx))
-                            .is_some_and(|watcher| watcher.is_project_open_source())
-                    })
-                });
+        let in_open_source_repo = false;
 
         let (diff, edit_range) = compute_diff_between_snapshots_in_range(
             &self.old_snapshot,
@@ -763,7 +702,6 @@ impl EditPredictionStore {
 
     pub fn new(client: Arc<Client>, user_store: Entity<UserStore>, cx: &mut Context<Self>) -> Self {
         let llm_token = global_llm_token(cx);
-        let legacy_data_collection_enabled = Self::load_legacy_data_collection_enabled(cx);
 
         let (reject_tx, reject_rx) = mpsc::unbounded();
         cx.background_spawn({
@@ -784,53 +722,18 @@ impl EditPredictionStore {
         })
         .detach();
 
-        let (settled_predictions_tx, settled_predictions_rx) = mpsc::unbounded();
-        cx.spawn(async move |this, cx| {
-            Self::run_settled_predictions_worker(this, settled_predictions_rx, cx).await;
-        })
-        .detach();
-
-        let mut current_user = user_store.read(cx).watch_current_user();
-        let fetch_experiments_task = cx.spawn(async move |this, cx| {
-            while current_user.borrow().is_none() {
-                current_user.next().await;
-            }
-
-            this.update(cx, |this, cx| {
-                if cx.is_staff() {
-                    this.refresh_available_experiments(cx);
-                }
-            })
-            .log_err();
-        });
-
-        let credentials_provider = zed_credentials_provider::global(cx);
-
-        let this = Self {
+        Self {
             projects: HashMap::default(),
             client,
             user_store,
             llm_token,
-            _fetch_experiments_task: fetch_experiments_task,
             update_required: false,
             edit_prediction_model: EditPredictionModel::Zeta,
             zeta2_raw_config: Self::zeta2_raw_config_from_env(),
-            preferred_experiment: None,
-            available_experiments: Vec::new(),
-            mercury: Mercury::new(cx),
-            legacy_data_collection_enabled,
-
             reject_predictions_tx: reject_tx,
-            settled_predictions_tx,
             rated_predictions: Default::default(),
             shown_predictions: Default::default(),
-            #[cfg(test)]
-            settled_event_callback: None,
-
-            credentials_provider,
-        };
-
-        this
+        }
     }
 
     fn zeta2_raw_config_from_env() -> Option<Zeta2RawConfig> {
@@ -857,83 +760,9 @@ impl EditPredictionStore {
         self.zeta2_raw_config.as_ref()
     }
 
-    pub fn preferred_experiment(&self) -> Option<&str> {
-        self.preferred_experiment.as_deref()
-    }
-
-    pub fn set_preferred_experiment(&mut self, experiment: Option<String>) {
-        self.preferred_experiment = experiment;
-    }
-
-    pub fn available_experiments(&self) -> &[String] {
-        &self.available_experiments
-    }
-
-    pub fn active_experiment(&self) -> Option<&str> {
-        self.preferred_experiment.as_deref().or_else(|| {
-            self.shown_predictions
-                .iter()
-                .find_map(|p| p.model_version.as_ref())
-                .and_then(|model_version| model_version.strip_prefix("zeta2:"))
-        })
-    }
-
-    pub fn refresh_available_experiments(&mut self, cx: &mut Context<Self>) {
-        let client = self.client.clone();
-        let llm_token = self.llm_token.clone();
-        let app_version = AppVersion::global(cx);
-        let organization_id = self
-            .user_store
-            .read(cx)
-            .current_organization()
-            .map(|organization| organization.id.clone());
-
-        cx.spawn(async move |this, cx| {
-            let experiments = cx
-                .background_spawn(async move {
-                    let http_client = client.http_client();
-                    let token = client
-                        .acquire_llm_token(&llm_token, organization_id.clone())
-                        .await?;
-                    let url = http_client.build_zed_llm_url("/edit_prediction_experiments", &[])?;
-                    let request = http_client::Request::builder()
-                        .method(Method::GET)
-                        .uri(url.as_ref())
-                        .header("Authorization", format!("Bearer {}", token))
-                        .header(ZED_VERSION_HEADER_NAME, app_version.to_string())
-                        .body(Default::default())?;
-                    let mut response = http_client.send(request).await?;
-                    if response.status().is_success() {
-                        let mut body = Vec::new();
-                        response.body_mut().read_to_end(&mut body).await?;
-                        let experiments: Vec<String> = serde_json::from_slice(&body)?;
-                        Ok(experiments)
-                    } else {
-                        let mut body = String::new();
-                        response.body_mut().read_to_string(&mut body).await?;
-                        anyhow::bail!(
-                            "Failed to fetch experiments: {:?}\nBody: {}",
-                            response.status(),
-                            body
-                        );
-                    }
-                })
-                .await?;
-            this.update(cx, |this, cx| {
-                this.available_experiments = experiments;
-                cx.notify();
-            })?;
-            anyhow::Ok(())
-        })
-        .detach_and_log_err(cx);
-    }
-
     pub fn icons(&self, cx: &App) -> edit_prediction_types::EditPredictionIconSet {
         use ui::IconName;
         match self.edit_prediction_model {
-            EditPredictionModel::Mercury => {
-                edit_prediction_types::EditPredictionIconSet::new(IconName::Inception)
-            }
             EditPredictionModel::Zeta => {
                 edit_prediction_types::EditPredictionIconSet::new(IconName::ZedPredict)
                     .with_disabled(IconName::ZedPredictDisabled)
@@ -953,14 +782,6 @@ impl EditPredictionStore {
                 }
             }
         }
-    }
-
-    pub fn has_mercury_api_token(&self, cx: &App) -> bool {
-        self.mercury.api_token.read(cx).has_key()
-    }
-
-    pub fn mercury_has_payment_required_error(&self) -> bool {
-        self.mercury.has_payment_required_error()
     }
 
     pub fn clear_history(&mut self) {
@@ -999,11 +820,8 @@ impl EditPredictionStore {
                 project_state.context.update(cx, |context, cx| {
                     context
                         .related_files_with_buffers(cx)
-                        .map(|(mut related_file, buffer)| {
-                            related_file.in_open_source_repo = buffer
-                                .read(cx)
-                                .file()
-                                .map_or(false, |file| self.is_file_open_source(&project, file, cx));
+                        .map(|(mut related_file, _buffer)| {
+                            related_file.in_open_source_repo = false;
                             related_file
                         })
                         .collect()
@@ -1112,7 +930,6 @@ impl EditPredictionStore {
                 next_pending_prediction_id: 0,
                 last_edit_prediction_refresh: None,
                 last_jump_prediction_refresh: None,
-                license_detection_watchers: HashMap::default(),
                 _subscriptions: [
                     cx.subscribe(&project, Self::handle_project_event),
                     cx.observe_release(&project, move |this, _, cx| {
@@ -1247,29 +1064,6 @@ impl EditPredictionStore {
     ) -> &'a mut RegisteredBuffer {
         let buffer_id = buffer.entity_id();
 
-        if let Some(file) = buffer.read(cx).file() {
-            let worktree_id = file.worktree_id(cx);
-            if let Some(worktree) = project.read(cx).worktree_for_id(worktree_id, cx) {
-                project_state
-                    .license_detection_watchers
-                    .entry(worktree_id)
-                    .or_insert_with(|| {
-                        let project_entity_id = project.entity_id();
-                        cx.observe_release(&worktree, move |this, _worktree, _cx| {
-                            let Some(project_state) = this.projects.get_mut(&project_entity_id)
-                            else {
-                                return;
-                            };
-                            project_state
-                                .license_detection_watchers
-                                .remove(&worktree_id);
-                        })
-                        .detach();
-                        Rc::new(LicenseDetectionWatcher::new(&worktree, cx))
-                    });
-            }
-        }
-
         match project_state.registered_buffers.entry(buffer_id) {
             hash_map::Entry::Occupied(entry) => entry.into_mut(),
             hash_map::Entry::Vacant(entry) => {
@@ -1281,7 +1075,6 @@ impl EditPredictionStore {
                     snapshot,
                     file,
                     last_position: None,
-                    pending_predictions: Vec::new(),
                     _subscriptions: [
                         cx.subscribe(buffer, {
                             let project = project.downgrade();
@@ -1343,12 +1136,6 @@ impl EditPredictionStore {
             return;
         };
 
-        for pending_prediction in &mut registered_buffer.pending_predictions {
-            if edit_range.overlaps(&pending_prediction.editable_anchor_range, &new_snapshot) {
-                pending_prediction.last_edit_at = now;
-            }
-        }
-
         let include_in_history = is_local
             || collaborator_edit_overlaps_locality_region(
                 project_state,
@@ -1371,7 +1158,7 @@ impl EditPredictionStore {
 
         if !is_recordable_history_edit {
             if let Some(event) = project_state.last_event.take() {
-                if let Some(event) = event.finalize(&project_state.license_detection_watchers, cx) {
+                if let Some(event) = event.finalize(cx) {
                     if events.len() + 1 >= EVENT_COUNT_MAX {
                         events.pop_front();
                     }
@@ -1417,7 +1204,7 @@ impl EditPredictionStore {
         }
 
         if let Some(event) = project_state.last_event.take() {
-            if let Some(event) = event.finalize(&project_state.license_detection_watchers, cx) {
+            if let Some(event) = event.finalize(cx) {
                 if events.len() + 1 >= EVENT_COUNT_MAX {
                     events.pop_front();
                 }
@@ -1508,23 +1295,7 @@ impl EditPredictionStore {
         }
 
         match self.edit_prediction_model {
-            EditPredictionModel::Mercury => {
-                mercury::edit_prediction_accepted(
-                    current_prediction.prediction.id,
-                    self.client.http_client(),
-                    cx,
-                );
-            }
-            EditPredictionModel::Zeta => {
-                let is_cloud = !matches!(
-                    all_language_settings(None, cx).edit_predictions.provider,
-                    EditPredictionProvider::Ollama | EditPredictionProvider::OpenAiCompatibleApi
-                );
-                if is_cloud {
-                    zeta::edit_prediction_accepted(self, current_prediction, cx)
-                }
-            }
-            EditPredictionModel::Fim { .. } => {}
+            EditPredictionModel::Zeta | EditPredictionModel::Fim { .. } => {}
         }
     }
 
@@ -1590,130 +1361,6 @@ impl EditPredictionStore {
                 batched.drain(start..);
             }
         }
-    }
-
-    async fn run_settled_predictions_worker(
-        this: WeakEntity<Self>,
-        mut rx: UnboundedReceiver<Instant>,
-        cx: &mut AsyncApp,
-    ) {
-        let mut next_wake_time: Option<Instant> = None;
-        loop {
-            let now = cx.background_executor().now();
-            if let Some(wake_time) = next_wake_time.take() {
-                cx.background_executor()
-                    .timer(wake_time.duration_since(now))
-                    .await;
-            } else {
-                let Some(new_enqueue_time) = rx.next().await else {
-                    break;
-                };
-                next_wake_time = Some(new_enqueue_time + EDIT_PREDICTION_SETTLED_QUIESCENCE);
-                while rx.next().now_or_never().flatten().is_some() {}
-                continue;
-            }
-
-            let Some(this) = this.upgrade() else {
-                break;
-            };
-
-            let now = cx.background_executor().now();
-            let mut oldest_edited_at = None;
-            let mut ready_predictions = Vec::new();
-
-            this.update(cx, |this, _| {
-                for (_, project_state) in this.projects.iter_mut() {
-                    for (_, registered_buffer) in project_state.registered_buffers.iter_mut() {
-                        let mut pending_index = 0;
-                        while pending_index < registered_buffer.pending_predictions.len() {
-                            let pending_prediction =
-                                &registered_buffer.pending_predictions[pending_index];
-                            let age = now.saturating_duration_since(pending_prediction.enqueued_at);
-                            if age >= EDIT_PREDICTION_SETTLED_TTL {
-                                registered_buffer.pending_predictions.remove(pending_index);
-                                continue;
-                            }
-
-                            let quiet_for =
-                                now.saturating_duration_since(pending_prediction.last_edit_at);
-                            if quiet_for >= EDIT_PREDICTION_SETTLED_QUIESCENCE {
-                                let pending_prediction =
-                                    registered_buffer.pending_predictions.remove(pending_index);
-                                let settled_editable_region = registered_buffer
-                                    .snapshot
-                                    .text_for_range(
-                                        pending_prediction.editable_anchor_range.clone(),
-                                    )
-                                    .collect::<String>();
-                                ready_predictions
-                                    .push((pending_prediction, settled_editable_region));
-                                continue;
-                            }
-
-                            if oldest_edited_at
-                                .is_none_or(|time| pending_prediction.last_edit_at < time)
-                            {
-                                oldest_edited_at = Some(pending_prediction.last_edit_at);
-                            }
-                            pending_index += 1;
-                        }
-                    }
-                }
-            });
-
-            for (_pending_prediction, _settled_editable_region) in ready_predictions {
-                #[cfg(test)]
-                {
-                    let request_id = _pending_prediction.request_id.clone();
-                    let settled_editable_region = _settled_editable_region.clone();
-                    this.update(cx, |this, _| {
-                        if let Some(callback) = &this.settled_event_callback {
-                            callback(request_id, settled_editable_region);
-                        }
-                    });
-                }
-            }
-
-            next_wake_time = oldest_edited_at.map(|time| time + EDIT_PREDICTION_SETTLED_QUIESCENCE);
-        }
-    }
-
-    pub(crate) fn enqueue_settled_prediction(
-        &mut self,
-        request_id: EditPredictionId,
-        project: &Entity<Project>,
-        edited_buffer: &Entity<Buffer>,
-        edited_buffer_snapshot: &BufferSnapshot,
-        editable_offset_range: Range<usize>,
-        _edit_preview: &EditPreview,
-        _example: Option<ExampleSpec>,
-        _e2e_latency: std::time::Duration,
-        cx: &mut Context<Self>,
-    ) {
-        #[cfg(not(test))]
-        let _ = &request_id;
-
-        let this = &mut *self;
-        let project_state = this.get_or_init_project(project, cx);
-        let Some(registered_buffer) = project_state
-            .registered_buffers
-            .get_mut(&edited_buffer.entity_id())
-        else {
-            return;
-        };
-        let editable_anchor_range =
-            edited_buffer_snapshot.anchor_range_inside(editable_offset_range);
-        let now = cx.background_executor().now();
-        registered_buffer
-            .pending_predictions
-            .push(PendingSettledPrediction {
-                #[cfg(test)]
-                request_id,
-                editable_anchor_range,
-                enqueued_at: now,
-                last_edit_at: now,
-            });
-        this.settled_predictions_tx.unbounded_send(now).ok();
     }
 
     fn reject_current_prediction(
@@ -1811,15 +1458,6 @@ impl EditPredictionStore {
                         })
                         .log_err();
                 }
-            }
-            EditPredictionModel::Mercury => {
-                mercury::edit_prediction_rejected(
-                    prediction_id,
-                    was_shown,
-                    reason,
-                    self.client.http_client(),
-                    cx,
-                );
             }
             EditPredictionModel::Fim { .. } => {}
         }
@@ -2046,10 +1684,7 @@ fn currently_following(project: &Entity<Project>, cx: &App) -> bool {
 
 fn is_ep_store_provider(provider: EditPredictionProvider) -> bool {
     match provider {
-        EditPredictionProvider::Zed
-        | EditPredictionProvider::Mercury
-        | EditPredictionProvider::Ollama
-        | EditPredictionProvider::OpenAiCompatibleApi => true,
+        EditPredictionProvider::Ollama | EditPredictionProvider::OpenAiCompatibleApi => true,
         EditPredictionProvider::None
         | EditPredictionProvider::Copilot
         | EditPredictionProvider::Codestral => false,
@@ -2087,7 +1722,6 @@ impl EditPredictionStore {
             edit_prediction_settings.debounce_for(edit_prediction_settings.provider);
         let (needs_acceptance_tracking, max_pending_predictions) =
             match edit_prediction_settings.provider {
-                EditPredictionProvider::Zed | EditPredictionProvider::Mercury => (true, 2),
                 EditPredictionProvider::Ollama => (false, 1),
                 EditPredictionProvider::OpenAiCompatibleApi => (false, 2),
                 EditPredictionProvider::None
@@ -2317,44 +1951,19 @@ impl EditPredictionStore {
             Point::new(diagnostic_search_start, 0)..Point::new(diagnostic_search_end, 0);
 
         let related_files = self.context_for_project(&project, cx);
-        let mode = match all_language_settings(snapshot.file(), cx).edit_predictions_mode() {
-            EditPredictionsMode::Eager => PredictEditsMode::Eager,
-            EditPredictionsMode::Subtle => PredictEditsMode::Subtle,
-        };
-
-        let is_open_source = snapshot
-            .file()
-            .map_or(false, |file| self.is_file_open_source(&project, file, cx))
-            && events.iter().all(|event| event.in_open_source_repo())
-            && related_files.iter().all(|file| file.in_open_source_repo);
-
-        let can_collect_data = false;
         let inputs = EditPredictionModelInput {
-            project: project.clone(),
             buffer: active_buffer,
             snapshot,
             position,
             events,
             related_files,
-            mode,
-            trigger,
             diagnostic_search_range,
             debug_tx,
-            can_collect_data,
-            is_open_source,
         };
 
-        let capture_data = None;
-
         let task = match self.edit_prediction_model {
-            EditPredictionModel::Zeta => {
-                zeta::request_prediction_with_zeta(self, inputs, capture_data, cx)
-            }
+            EditPredictionModel::Zeta => zeta::request_prediction_with_zeta(self, inputs, cx),
             EditPredictionModel::Fim { format } => fim::request_prediction(inputs, format, cx),
-            EditPredictionModel::Mercury => {
-                self.mercury
-                    .request_prediction(inputs, self.credentials_provider.clone(), cx)
-            }
         };
 
         cx.spawn(async move |this, cx| {
@@ -2529,51 +2138,6 @@ impl EditPredictionStore {
         .await
     }
 
-    pub(crate) async fn send_v3_request(
-        input: ZetaPromptInput,
-        preferred_experiment: Option<String>,
-        client: Arc<Client>,
-        llm_token: LlmApiToken,
-        organization_id: Option<OrganizationId>,
-        app_version: Version,
-        trigger: PredictEditsRequestTrigger,
-        mode: PredictEditsMode,
-    ) -> Result<(PredictEditsV3Response, Option<EditPredictionUsage>)> {
-        let url = client
-            .http_client()
-            .build_zed_llm_url("/predict_edits/v3", &[])?;
-
-        let request = PredictEditsV3Request { input };
-        let request_id = uuid::Uuid::new_v4().to_string();
-
-        let json_bytes = serde_json::to_vec(&request)?;
-        let compressed = zstd::encode_all(&json_bytes[..], 3)?;
-
-        Self::send_api_request(
-            |builder| {
-                let builder = builder
-                    .uri(url.as_ref())
-                    .header("Content-Encoding", "zstd")
-                    .header(PREDICT_EDITS_MODE_HEADER_NAME, mode.as_ref())
-                    .header(PREDICT_EDITS_REQUEST_ID_HEADER_NAME, request_id.as_str())
-                    .header(PREDICT_EDITS_TRIGGER_HEADER_NAME, trigger.as_ref());
-                let builder = if let Some(preferred_experiment) = preferred_experiment.as_deref() {
-                    builder.header(PREFERRED_EXPERIMENT_HEADER_NAME, preferred_experiment)
-                } else {
-                    builder
-                };
-                let req = builder.body(compressed.clone().into());
-                Ok(req?)
-            },
-            client,
-            llm_token,
-            organization_id,
-            app_version,
-            true,
-        )
-        .await
-    }
-
     async fn send_api_request<Res>(
         build: impl Fn(http_client::http::request::Builder) -> Result<http_client::Request<AsyncBody>>,
         client: Arc<Client>,
@@ -2692,51 +2256,6 @@ impl EditPredictionStore {
     ) {
         let project_state = self.get_or_init_project(project, cx);
         project_state.recent_paths = paths.into_iter().collect();
-    }
-
-    fn is_file_open_source(
-        &self,
-        project: &Entity<Project>,
-        file: &Arc<dyn File>,
-        cx: &App,
-    ) -> bool {
-        if !file.is_local() || file.is_private() {
-            return false;
-        }
-        let Some(project_state) = self.projects.get(&project.entity_id()) else {
-            return false;
-        };
-        project_state
-            .license_detection_watchers
-            .get(&file.worktree_id(cx))
-            .as_ref()
-            .is_some_and(|watcher| watcher.is_project_open_source())
-    }
-
-    pub(crate) fn is_data_collection_enabled(&self, cx: &App) -> bool {
-        let _ = cx;
-        false
-    }
-
-    fn load_legacy_data_collection_enabled(cx: &App) -> bool {
-        KeyValueStore::global(cx)
-            .read_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE)
-            .log_err()
-            .flatten()
-            .as_deref()
-            == Some("true")
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn is_data_collection_allowed_by_organization(&self, cx: &App) -> bool {
-        self.user_store
-            .read(cx)
-            .current_organization_configuration()
-            .is_none_or(|organization_configuration| {
-                organization_configuration
-                    .edit_prediction
-                    .is_feedback_enabled
-            })
     }
 
     pub fn shown_predictions(&self) -> impl DoubleEndedIterator<Item = &EditPrediction> {
@@ -2931,53 +2450,8 @@ pub struct ZedUpdateRequiredError {
     minimum_version: Version,
 }
 
-struct ZedPredictUpsell;
-
-fn is_upsell_dismissed(cx: &App) -> bool {
-    // To make this backwards compatible with older versions of Zed, we
-    // check if the user has seen the previous Edit Prediction Onboarding
-    // before, by checking the data collection choice which was written to
-    // the database once the user clicked on "Accept and Enable"
-    let kvp = KeyValueStore::global(cx);
-    if kvp
-        .read_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE)
-        .log_err()
-        .is_some_and(|s| s.is_some())
-    {
-        return true;
-    }
-
-    kvp.read_kvp(ZedPredictUpsell::KEY)
-        .log_err()
-        .is_some_and(|s| s.is_some())
-}
-
-impl Dismissable for ZedPredictUpsell {
-    const KEY: &'static str = "dismissed-edit-predict-upsell";
-
-    fn dismissed(cx: &App) -> bool {
-        is_upsell_dismissed(cx)
-    }
-}
-
-pub fn should_show_upsell_modal(cx: &App) -> bool {
-    !is_upsell_dismissed(cx)
-}
-
 pub fn init(cx: &mut App) {
     cx.observe_new(move |workspace: &mut Workspace, _, _cx| {
-        workspace.register_action(
-            move |workspace, _: &zed_actions::OpenZedPredictOnboarding, window, cx| {
-                ZedPredictModal::toggle(
-                    workspace,
-                    workspace.user_store().clone(),
-                    workspace.client().clone(),
-                    window,
-                    cx,
-                )
-            },
-        );
-
         workspace.register_action(|workspace, _: &ResetOnboarding, _window, cx| {
             update_settings_file(workspace.app_state().fs.clone(), cx, move |settings, _| {
                 settings

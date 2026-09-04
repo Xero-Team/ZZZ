@@ -257,6 +257,9 @@ pub fn migrate_settings(text: &str) -> Result<Option<String>> {
             migrations::m_2026_05_04::SETTINGS_PATTERNS,
             &SETTINGS_QUERY_2026_05_04,
         ),
+        MigrationType::Json(
+            migrations::m_2026_09_04::map_rejected_edit_prediction_surfaces_to_absent,
+        ),
     ];
     run_migrations(text, migrations)
 }

@@ -113,32 +113,16 @@ pub enum EditPredictionProvider {
     #[default]
     None,
     Copilot,
-    Zed,
     Codestral,
     Ollama,
     OpenAiCompatibleApi,
-    Mercury,
 }
 
 impl EditPredictionProvider {
-    pub fn is_zed(&self) -> bool {
-        match self {
-            EditPredictionProvider::Zed => true,
-            EditPredictionProvider::None
-            | EditPredictionProvider::Copilot
-            | EditPredictionProvider::Codestral
-            | EditPredictionProvider::Ollama
-            | EditPredictionProvider::OpenAiCompatibleApi
-            | EditPredictionProvider::Mercury => false,
-        }
-    }
-
     pub fn display_name(&self) -> Option<&'static str> {
         match self {
-            EditPredictionProvider::Zed => Some("Zeta format"),
             EditPredictionProvider::Copilot => Some("GitHub Copilot"),
             EditPredictionProvider::Codestral => Some("Codestral"),
-            EditPredictionProvider::Mercury => Some("Mercury"),
             EditPredictionProvider::None => None,
             EditPredictionProvider::Ollama => Some("Ollama"),
             EditPredictionProvider::OpenAiCompatibleApi => Some("OpenAI-Compatible API"),
@@ -169,12 +153,6 @@ pub struct EditPredictionSettingsContent {
     pub open_ai_compatible_api: Option<CustomEditPredictionProviderSettingsContent>,
     /// The directory where manually captured edit prediction examples are stored.
     pub examples_dir: Option<Arc<Path>>,
-    /// Controls whether training data may be collected. ZZZ never collects.
-    ///
-    /// - `"default"`: never collect.
-    /// - `"yes"`: ignored; collection stays off.
-    /// - `"no"`: never allow data collection.
-    pub allow_data_collection: Option<EditPredictionDataCollectionChoice>,
 }
 
 #[with_fallible_options]
@@ -320,32 +298,6 @@ pub struct OllamaEditPredictionSettingsContent {
     ///
     /// Default: 0
     pub prediction_debounce: Option<DelayMs>,
-}
-
-/// Controls whether Zed collects training data when using Zed's Edit Predictions.
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Eq,
-    PartialEq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum EditPredictionDataCollectionChoice {
-    /// Never collect training data.
-    Default,
-    /// Ignored; collection stays off.
-    Yes,
-    /// Never allow training data collection.
-    #[default]
-    No,
 }
 
 /// The mode in which edit predictions should be displayed.

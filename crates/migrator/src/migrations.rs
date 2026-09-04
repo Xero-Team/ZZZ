@@ -364,3 +364,9 @@ pub(crate) mod m_2026_05_04 {
 
     pub(crate) use settings::SETTINGS_PATTERNS;
 }
+
+pub(crate) mod m_2026_09_04 {
+    mod settings;
+
+    pub(crate) use settings::map_rejected_edit_prediction_surfaces_to_absent;
+}

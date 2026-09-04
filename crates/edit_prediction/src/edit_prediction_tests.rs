@@ -9,7 +9,6 @@ use cloud_llm_client::{
     predict_edits_v3::{PredictEditsV3Request, PredictEditsV3Response},
 };
 use db::AppDatabase;
-use settings::EditPredictionDataCollectionChoice;
 
 use futures::{
     AsyncReadExt, FutureExt, StreamExt,
@@ -42,8 +41,8 @@ use workspace::{AppState, CollaboratorId, MultiWorkspace};
 use zeta_prompt::ZetaPromptInput;
 
 use crate::{
-    BufferEditPrediction, EDIT_PREDICTION_SETTLED_QUIESCENCE, EditPredictionId,
-    EditPredictionJumpsFeatureFlag, EditPredictionStore, REJECT_REQUEST_DEBOUNCE,
+    BufferEditPrediction, EditPredictionId, EditPredictionJumpsFeatureFlag, EditPredictionStore,
+    REJECT_REQUEST_DEBOUNCE,
 };
 
 #[gpui::test]
@@ -2538,30 +2537,12 @@ struct RequestChannels {
 fn init_test_with_fake_client(
     cx: &mut TestAppContext,
 ) -> (Entity<EditPredictionStore>, RequestChannels) {
-    init_test_with_fake_client_and_legacy_data_collection(cx, None)
-}
-
-fn init_test_with_fake_client_and_legacy_data_collection(
-    cx: &mut TestAppContext,
-    legacy_data_collection_choice: Option<&str>,
-) -> (Entity<EditPredictionStore>, RequestChannels) {
     cx.executor().allow_parking();
     cx.update(move |cx| {
         cx.set_global(AppDatabase::test_new());
         let settings_store = SettingsStore::test(cx);
         cx.set_global(settings_store);
         zlog::init_test();
-
-        if let Some(legacy_data_collection_choice) = legacy_data_collection_choice {
-            KeyValueStore::global(cx)
-                .write_kvp(
-                    ZED_PREDICT_DATA_COLLECTION_CHOICE.into(),
-                    legacy_data_collection_choice.to_string(),
-                )
-                .now_or_never()
-                .expect("legacy data collection write should complete immediately")
-                .expect("legacy data collection write should succeed");
-        }
 
         let (predict_req_tx, predict_req_rx) = mpsc::unbounded();
         let (reject_req_tx, reject_req_rx) = mpsc::unbounded();
@@ -3039,16 +3020,6 @@ async fn make_test_ep_store(
         let mut ep_store = EditPredictionStore::new(client, project.read(cx).user_store(), cx);
         ep_store.set_edit_prediction_model(EditPredictionModel::Zeta);
 
-        let worktrees = project.read(cx).worktrees(cx).collect::<Vec<_>>();
-        for worktree in worktrees {
-            let worktree_id = worktree.read(cx).id();
-            ep_store
-                .get_or_init_project(project, cx)
-                .license_detection_watchers
-                .entry(worktree_id)
-                .or_insert_with(|| Rc::new(LicenseDetectionWatcher::new(&worktree, cx)));
-        }
-
         ep_store
     });
 
@@ -3365,192 +3336,6 @@ async fn test_diagnostic_jump_excludes_collaborator_regions(cx: &mut TestAppCont
 }
 
 #[gpui::test]
-async fn test_edit_prediction_settled(cx: &mut TestAppContext) {
-    let (ep_store, _requests) = init_test_with_fake_client(cx);
-    let fs = FakeFs::new(cx.executor());
-
-    // Buffer with two clearly separated regions:
-    //   Region A = lines 0-9   (offsets 0..50)
-    //   Region B = lines 20-29 (offsets 105..155)
-    // A big gap in between so edits in one region never overlap the other.
-    let mut content = String::new();
-    for i in 0..30 {
-        content.push_str(&format!("line {i:02}\n"));
-    }
-
-    fs.insert_tree(
-        "/root",
-        json!({
-            "foo.md": content.clone()
-        }),
-    )
-    .await;
-    let project = Project::test(fs, vec![path!("/root").as_ref()], cx).await;
-
-    let buffer = project
-        .update(cx, |project, cx| {
-            let path = project.find_project_path(path!("root/foo.md"), cx).unwrap();
-            project.open_buffer(path, cx)
-        })
-        .await
-        .unwrap();
-
-    type SettledEventRecord = (EditPredictionId, String);
-    let settled_events: Arc<Mutex<Vec<SettledEventRecord>>> = Arc::new(Mutex::new(Vec::new()));
-
-    ep_store.update(cx, |ep_store, cx| {
-        ep_store.register_buffer(&buffer, &project, cx);
-
-        let settled_events = settled_events.clone();
-        ep_store.settled_event_callback = Some(Box::new(move |id, text| {
-            settled_events.lock().push((id, text));
-        }));
-    });
-
-    // --- Phase 1: edit in region A and enqueue prediction A ---
-
-    buffer.update(cx, |buffer, cx| {
-        // Edit at the start of line 0.
-        buffer.edit(vec![(0..0, "ADDED ")], None, cx);
-    });
-    cx.run_until_parked();
-
-    let snapshot_a = buffer.read_with(cx, |buffer, _cx| buffer.snapshot());
-    let empty_edits: Arc<[(Range<Anchor>, Arc<str>)]> = Vec::new().into();
-    let edit_preview_a = buffer
-        .read_with(cx, |buffer, cx| {
-            buffer.preview_edits(empty_edits.clone(), cx)
-        })
-        .await;
-
-    // Region A: first 10 lines of the buffer.
-    let editable_region_a = 0..snapshot_a.point_to_offset(Point::new(10, 0));
-
-    ep_store.update(cx, |ep_store, cx| {
-        ep_store.enqueue_settled_prediction(
-            EditPredictionId("prediction-a".into()),
-            &project,
-            &buffer,
-            &snapshot_a,
-            editable_region_a.clone(),
-            &edit_preview_a,
-            None,
-            Duration::from_secs(0),
-            cx,
-        );
-    });
-
-    // --- Phase 2: repeatedly edit in region A to keep it unsettled ---
-
-    // Let the worker process the channel message before we start advancing.
-    cx.run_until_parked();
-
-    for region_a_edit_offset in 5..8 {
-        // Edit inside region A (not at the boundary) so `last_edit_at` is
-        // updated before the worker's next wake.
-        buffer.update(cx, |buffer, cx| {
-            buffer.edit(
-                vec![(region_a_edit_offset..region_a_edit_offset, "x")],
-                None,
-                cx,
-            );
-        });
-        cx.run_until_parked();
-
-        cx.executor()
-            .advance_clock(EDIT_PREDICTION_SETTLED_QUIESCENCE / 2);
-        cx.run_until_parked();
-        assert!(
-            settled_events.lock().is_empty(),
-            "no settled events should fire while region A is still being edited"
-        );
-    }
-
-    // Still nothing settled.
-    assert!(settled_events.lock().is_empty());
-
-    // --- Phase 3: edit in distinct region B, enqueue prediction B ---
-    // Advance a small amount so B's quiescence window starts later than A's,
-    // but not so much that A settles (A's last edit was at the start of
-    // iteration 3, and it needs a full Q to settle).
-    cx.executor()
-        .advance_clock(EDIT_PREDICTION_SETTLED_QUIESCENCE / 4);
-    cx.run_until_parked();
-    assert!(settled_events.lock().is_empty());
-
-    let snapshot_b = buffer.read_with(cx, |buffer, _cx| buffer.snapshot());
-    let line_20_offset = snapshot_b.point_to_offset(Point::new(20, 0));
-
-    buffer.update(cx, |buffer, cx| {
-        buffer.edit(vec![(line_20_offset..line_20_offset, "NEW ")], None, cx);
-    });
-    cx.run_until_parked();
-
-    let snapshot_b2 = buffer.read_with(cx, |buffer, _cx| buffer.snapshot());
-    let edit_preview_b = buffer
-        .read_with(cx, |buffer, cx| buffer.preview_edits(empty_edits, cx))
-        .await;
-    let editable_region_b = line_20_offset..snapshot_b2.point_to_offset(Point::new(25, 0));
-
-    ep_store.update(cx, |ep_store, cx| {
-        ep_store.enqueue_settled_prediction(
-            EditPredictionId("prediction-b".into()),
-            &project,
-            &buffer,
-            &snapshot_b2,
-            editable_region_b.clone(),
-            &edit_preview_b,
-            None,
-            Duration::from_secs(0),
-            cx,
-        );
-    });
-
-    cx.run_until_parked();
-    assert!(
-        settled_events.lock().is_empty(),
-        "neither prediction should have settled yet"
-    );
-
-    // --- Phase 4: let enough time pass for region A to settle ---
-    // A's last edit was at T_a (during the last loop iteration). The worker is
-    // sleeping until T_a + Q. We advance just enough to reach that wake time
-    // (Q/4 since we already advanced Q/4 in phase 3 on top of the loop's
-    // 3*Q/2). At that point A has been quiet for Q and settles, but B was
-    // enqueued only Q/4 ago and stays pending.
-    cx.executor()
-        .advance_clock(EDIT_PREDICTION_SETTLED_QUIESCENCE / 4);
-    cx.run_until_parked();
-
-    {
-        let events = settled_events.lock().clone();
-        assert_eq!(
-            events.len(),
-            1,
-            "prediction and capture_sample for A should have settled, got: {events:?}"
-        );
-        assert_eq!(events[0].0, EditPredictionId("prediction-a".into()));
-    }
-
-    // --- Phase 5: let more time pass for region B to settle ---
-    // B's last edit was Q/4 before A settled. The worker rescheduled to
-    // B's last_edit_at + Q, which is 3Q/4 from now.
-    cx.executor()
-        .advance_clock(EDIT_PREDICTION_SETTLED_QUIESCENCE * 3 / 4);
-    cx.run_until_parked();
-
-    {
-        let events = settled_events.lock().clone();
-        assert_eq!(
-            events.len(),
-            2,
-            "both prediction and capture_sample settled events should be emitted for each request, got: {events:?}"
-        );
-        assert_eq!(events[1].0, EditPredictionId("prediction-b".into()));
-    }
-}
-
-#[gpui::test]
 fn test_buffer_path_with_id_fallback(cx: &mut TestAppContext) {
     let buffer_1 = cx.new(|cx| Buffer::local("one", cx));
     let buffer_2 = cx.new(|cx| Buffer::local("two", cx));
@@ -3578,104 +3363,6 @@ fn test_buffer_path_with_id_fallback(cx: &mut TestAppContext) {
         Path::new(&format!("untitled-{}", snapshot_2.remote_id()))
     );
     assert_ne!(path_1.as_ref(), path_2.as_ref());
-}
-
-#[gpui::test]
-async fn test_data_collection_disabled_by_default(cx: &mut TestAppContext) {
-    let (ep_store, _channels) = init_test_with_fake_client(cx);
-
-    cx.update(|cx| {
-        assert!(!ep_store.read(cx).is_data_collection_enabled(cx));
-    });
-
-    cx.update_global::<SettingsStore, _>(|settings, cx| {
-        settings.update_user_settings(cx, |content| {
-            content
-                .project
-                .all_languages
-                .edit_predictions
-                .get_or_insert_default()
-                .allow_data_collection = Some(EditPredictionDataCollectionChoice::Yes);
-        });
-    });
-
-    cx.update(|cx| {
-        assert!(!ep_store.read(cx).is_data_collection_enabled(cx));
-    });
-}
-
-#[gpui::test]
-async fn test_upsell_shown_by_default(cx: &mut TestAppContext) {
-    init_test(cx);
-    let kvp = cx.update(|cx| KeyValueStore::global(cx));
-    kvp.delete_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE.into())
-        .await
-        .ok();
-    kvp.delete_kvp(ZedPredictUpsell::KEY.into()).await.ok();
-
-    cx.update(|cx| assert!(should_show_upsell_modal(cx)));
-}
-
-#[gpui::test]
-async fn test_upsell_dismissed_when_data_collection_choice_in_kv_store(cx: &mut TestAppContext) {
-    init_test(cx);
-
-    // Any value for the data collection key means the old upsell was already
-    // shown, regardless of whether data collection was accepted or declined.
-    for value in &["true", "false"] {
-        cx.update(|cx| KeyValueStore::global(cx))
-            .write_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE.into(), value.to_string())
-            .await
-            .unwrap();
-
-        cx.update(|cx| {
-            assert!(
-                !should_show_upsell_modal(cx),
-                "upsell should be suppressed when data collection choice is '{value}'"
-            );
-        });
-    }
-
-    cx.update(|cx| KeyValueStore::global(cx))
-        .delete_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE.into())
-        .await
-        .unwrap();
-}
-
-#[gpui::test]
-async fn test_upsell_dismissed_when_dismissed_key_set(cx: &mut TestAppContext) {
-    init_test(cx);
-    let kvp = cx.update(|cx| KeyValueStore::global(cx));
-    kvp.delete_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE.into())
-        .await
-        .ok();
-    kvp.write_kvp(ZedPredictUpsell::KEY.into(), "1".into())
-        .await
-        .unwrap();
-
-    cx.update(|cx| assert!(!should_show_upsell_modal(cx)));
-
-    kvp.delete_kvp(ZedPredictUpsell::KEY.into()).await.unwrap();
-}
-
-#[gpui::test]
-async fn test_upsell_dismissed_via_dismissable_api(cx: &mut TestAppContext) {
-    init_test(cx);
-    let kvp = cx.update(|cx| KeyValueStore::global(cx));
-    kvp.delete_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE.into())
-        .await
-        .ok();
-    kvp.delete_kvp(ZedPredictUpsell::KEY.into()).await.ok();
-
-    cx.update(|cx| {
-        assert!(should_show_upsell_modal(cx));
-        ZedPredictUpsell::set_dismissed(true, cx);
-    });
-    cx.run_until_parked();
-
-    cx.update(|cx| assert!(!should_show_upsell_modal(cx)));
-
-    kvp.delete_kvp(ZedPredictUpsell::KEY.into()).await.unwrap();
 }
 
 #[ctor::ctor]

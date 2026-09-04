@@ -1,7 +1,6 @@
 use codestral::{CODESTRAL_API_URL, codestral_api_key_state, codestral_api_url};
 use edit_prediction::{
     ApiKeyState,
-    mercury::{MERCURY_CREDENTIALS_URL, mercury_api_token},
     open_ai_compatible::{open_ai_compatible_api_token, open_ai_compatible_api_url},
 };
 use edit_prediction_ui::{get_available_providers, set_completion_provider};
@@ -40,21 +39,6 @@ pub(crate) fn render_edit_prediction_setup_page(
     let providers = [
         Some(render_provider_dropdown(window, cx)),
         render_github_copilot_provider(window, cx).map(IntoElement::into_any_element),
-        Some(
-            render_api_key_provider(
-                IconName::Inception,
-                "Mercury",
-                ApiKeyDocs::Link {
-                    dashboard_url: "https://platform.inceptionlabs.ai/dashboard/api-keys".into(),
-                },
-                mercury_api_token(cx),
-                |_cx| MERCURY_CREDENTIALS_URL,
-                None,
-                window,
-                cx,
-            )
-            .into_any_element(),
-        ),
         Some(
             render_api_key_provider(
                 IconName::AiMistral,

@@ -393,5 +393,34 @@ fn register_language_model_providers(
         )),
         cx,
     );
-    registry.register_provider(Arc::new(CopilotChatLanguageModelProvider::new(cx)), cx);
+}
+
+pub fn ensure_copilot_chat(
+    fs: Arc<dyn fs::Fs>,
+    http_client: Arc<dyn http_client::HttpClient>,
+    cx: &mut App,
+) {
+    if copilot_chat::CopilotChat::global(cx).is_none() {
+        let configuration = copilot_chat::CopilotChatConfiguration {
+            enterprise_uri: language::language_settings::all_language_settings(None, cx)
+                .edit_predictions
+                .copilot
+                .enterprise_uri
+                .clone(),
+        };
+        copilot_chat::init(fs, http_client, configuration, cx);
+    }
+
+    let registry = LanguageModelRegistry::global(cx);
+    let already_registered = registry
+        .read(cx)
+        .providers()
+        .iter()
+        .any(|provider| provider.id() == LanguageModelProviderId::new("copilot_chat"));
+    if !already_registered {
+        registry.update(cx, |registry, cx| {
+            let provider = Arc::new(CopilotChatLanguageModelProvider::new(cx));
+            registry.register_provider(provider, cx);
+        });
+    }
 }

@@ -566,20 +566,6 @@ fn main() {
             cx.background_executor().clone(),
         );
         command_palette::init(cx);
-        let copilot_chat_configuration = copilot_chat::CopilotChatConfiguration {
-            enterprise_uri: language::language_settings::all_language_settings(None, cx)
-                .edit_predictions
-                .copilot
-                .enterprise_uri
-                .clone(),
-        };
-        copilot_chat::init(
-            app_state.fs.clone(),
-            app_state.client.http_client(),
-            copilot_chat_configuration,
-            cx,
-        );
-
         copilot_ui::init(&app_state, cx);
         language_model::init(cx);
         RefreshLlmTokenListener::register(
@@ -588,11 +574,36 @@ fn main() {
             cx,
         );
         language_models::init(app_state.user_store.clone(), app_state.client.clone(), cx);
+        if language::language_settings::all_language_settings(None, cx)
+            .edit_predictions
+            .provider
+            == settings::EditPredictionProvider::Copilot
+        {
+            language_models::ensure_copilot_chat(
+                app_state.fs.clone(),
+                app_state.client.http_client(),
+                cx,
+            );
+        }
+        cx.observe_global::<settings::SettingsStore>({
+            let fs = app_state.fs.clone();
+            let http_client = app_state.client.http_client();
+            move |cx| {
+                if language::language_settings::all_language_settings(None, cx)
+                    .edit_predictions
+                    .provider
+                    == settings::EditPredictionProvider::Copilot
+                {
+                    language_models::ensure_copilot_chat(fs.clone(), http_client.clone(), cx);
+                }
+            }
+        })
+        .detach();
         acp_tools::init(cx);
         zed::remote_debug::init(cx);
         edit_prediction_ui::init(cx);
         web_search::init(cx);
-        web_search_providers::init(app_state.client.clone(), app_state.user_store.clone(), cx);
+        web_search_providers::init(cx);
         snippet_provider::init(cx);
         edit_prediction_registry::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         let prompt_builder = PromptBuilder::load(app_state.fs.clone(), stdout_is_a_pty(), cx);

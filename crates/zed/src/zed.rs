@@ -551,7 +551,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
         let edit_prediction_ui = cx.new(|cx| {
             edit_prediction_ui::EditPredictionButton::new(
                 app_state.fs.clone(),
-                app_state.user_store.clone(),
                 edit_prediction_menu_handle.clone(),
                 workspace.project().clone(),
                 cx,
@@ -5710,12 +5709,6 @@ mod tests {
             terminal_view::init(cx);
             notifications::init(app_state.client.clone(), app_state.user_store.clone(), cx);
             title_bar::init(cx);
-            copilot_chat::init(
-                app_state.fs.clone(),
-                app_state.client.http_client(),
-                copilot_chat::CopilotChatConfiguration::default(),
-                cx,
-            );
             image_viewer::init(cx);
             pdf_viewer::init(cx);
             audio_viewer::init(cx);
@@ -5728,7 +5721,7 @@ mod tests {
             language_models::init(app_state.user_store.clone(), app_state.client.clone(), cx);
             web_search::init(cx);
             git_graph::init(cx);
-            web_search_providers::init(app_state.client.clone(), app_state.user_store.clone(), cx);
+            web_search_providers::init(cx);
             let prompt_builder = PromptBuilder::load(app_state.fs.clone(), false, cx);
             project::AgentRegistryStore::init_global(
                 cx,

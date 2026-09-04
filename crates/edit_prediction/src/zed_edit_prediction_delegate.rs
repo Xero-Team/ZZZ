@@ -7,7 +7,7 @@ use edit_prediction_types::{
     EditPredictionIconSet, SuggestionDisplayType,
 };
 use gpui::{App, Entity, prelude::*};
-use language::{Buffer, ToPoint as _};
+use language::ToPoint as _;
 use project::Project;
 
 use crate::{BufferEditPrediction, EditPredictionStore};
@@ -15,13 +15,11 @@ use crate::{BufferEditPrediction, EditPredictionStore};
 pub struct ZedEditPredictionDelegate {
     store: Entity<EditPredictionStore>,
     project: Entity<Project>,
-    singleton_buffer: Option<Entity<Buffer>>,
 }
 
 impl ZedEditPredictionDelegate {
     pub fn new(
         project: Entity<Project>,
-        singleton_buffer: Option<Entity<Buffer>>,
         client: &Arc<Client>,
         user_store: &Entity<UserStore>,
         cx: &mut Context<Self>,
@@ -36,11 +34,7 @@ impl ZedEditPredictionDelegate {
         })
         .detach();
 
-        Self {
-            project,
-            store,
-            singleton_buffer,
-        }
+        Self { project, store }
     }
 }
 
@@ -65,28 +59,9 @@ impl EditPredictionDelegate for ZedEditPredictionDelegate {
         self.store.read(cx).icons(cx)
     }
 
-    fn data_collection_state(&self, cx: &App) -> DataCollectionState {
-        if let Some(buffer) = &self.singleton_buffer
-            && let Some(file) = buffer.read(cx).file()
-        {
-            let is_project_open_source =
-                self.store
-                    .read(cx)
-                    .is_file_open_source(&self.project, file, cx);
-
-            if self.store.read(cx).is_data_collection_enabled(cx) {
-                DataCollectionState::Enabled {
-                    is_project_open_source,
-                }
-            } else {
-                DataCollectionState::Disabled {
-                    is_project_open_source,
-                }
-            }
-        } else {
-            DataCollectionState::Disabled {
-                is_project_open_source: false,
-            }
+    fn data_collection_state(&self, _cx: &App) -> DataCollectionState {
+        DataCollectionState::Disabled {
+            is_project_open_source: false,
         }
     }
 
@@ -123,14 +98,6 @@ impl EditPredictionDelegate for ZedEditPredictionDelegate {
         _debounce: bool,
         cx: &mut Context<Self>,
     ) {
-        let store = self.store.read(cx);
-
-        if store.user_store.read_with(cx, |user_store, _cx| {
-            user_store.account_too_young() || user_store.has_overdue_invoices()
-        }) {
-            return;
-        }
-
         self.store.update(cx, |store, cx| {
             if let Some(current) =
                 store.prediction_at(&buffer, Some(cursor_position), &self.project, cx)

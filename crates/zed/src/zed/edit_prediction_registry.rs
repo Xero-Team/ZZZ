@@ -107,9 +107,6 @@ fn edit_prediction_provider_config_for_settings(cx: &App) -> Option<EditPredicti
     match provider {
         EditPredictionProvider::None => None,
         EditPredictionProvider::Copilot => Some(EditPredictionProviderConfig::Copilot),
-        EditPredictionProvider::Zed => {
-            Some(EditPredictionProviderConfig::Zed(EditPredictionModel::Zeta))
-        }
         EditPredictionProvider::Codestral => Some(EditPredictionProviderConfig::Codestral),
         EditPredictionProvider::Ollama | EditPredictionProvider::OpenAiCompatibleApi => {
             let custom_settings = if provider == EditPredictionProvider::Ollama {
@@ -136,10 +133,6 @@ fn edit_prediction_provider_config_for_settings(cx: &App) -> Option<EditPredicti
                 ))
             }
         }
-
-        EditPredictionProvider::Mercury => Some(EditPredictionProviderConfig::Zed(
-            EditPredictionModel::Mercury,
-        )),
     }
 }
 
@@ -257,13 +250,7 @@ fn assign_edit_prediction_provider(
                 });
 
                 let provider = cx.new(|cx| {
-                    ZedEditPredictionDelegate::new(
-                        project.clone(),
-                        singleton_buffer,
-                        &client,
-                        &user_store,
-                        cx,
-                    )
+                    ZedEditPredictionDelegate::new(project.clone(), &client, &user_store, cx)
                 });
                 editor.set_edit_prediction_provider(Some(provider), window, cx);
             }
