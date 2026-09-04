@@ -39,7 +39,7 @@ use std::sync::Arc;
 use theme::ActiveTheme;
 use title_bar_settings::TitleBarSettings;
 use ui::{
-    Avatar, ButtonLike, ContextMenu, ContextMenuEntry, IconWithIndicator, Indicator, PopoverMenu,
+    ButtonLike, ContextMenu, ContextMenuEntry, IconWithIndicator, Indicator, PopoverMenu,
     TintColor, Tooltip, prelude::*, utils::platform_title_bar_height,
 };
 use util::ResultExt;
@@ -1173,132 +1173,22 @@ impl TitleBar {
         let user_store_read = user_store.read(cx);
         let user = user_store_read.current_user();
 
-        let user_avatar = user.as_ref().map(|u| u.avatar_uri.clone());
-        let user_login = user.as_ref().map(|u| u.github_login.clone());
+        let _user = user;
+        let _user_store_read = user_store_read;
 
-        let is_signed_in = user.is_some();
-
-        let has_subscription_period = user_store_read.subscription_period().is_some();
-        let _plan = user_store_read.plan().filter(|_| has_subscription_period);
-
-        let has_organization = user_store_read.current_organization().is_some();
-
-        let current_organization = user_store_read.current_organization();
-        let business_organization = current_organization
-            .as_ref()
-            .filter(|organization| !organization.is_personal);
-        let organizations: Vec<_> = user_store_read
-            .organizations()
-            .iter()
-            .map(|org| {
-                let plan = user_store_read.plan_for_organization(&org.id);
-                (org.clone(), plan)
-            })
-            .collect();
-
-        let show_user_picture = TitleBarSettings::get_global(cx).show_user_picture;
-
-        let trigger = if is_signed_in && show_user_picture {
-            let avatar = user_avatar.map(Avatar::new);
-
-            ButtonLike::new("user-menu").child(
-                h_flex()
-                    .when_some(business_organization, |this, organization| {
-                        this.gap_2()
-                            .child(Label::new(&organization.name).size(LabelSize::Small))
-                    })
-                    .children(avatar),
-            )
-        } else {
-            ButtonLike::new("user-menu")
-                .child(Icon::new(IconName::ChevronDown).size(IconSize::Small))
-        };
+        let trigger = ButtonLike::new("user-menu")
+            .child(Icon::new(IconName::ChevronDown).size(IconSize::Small));
 
         PopoverMenu::new("user-menu")
             .trigger(trigger)
             .menu(move |window, cx| {
-                let user_login = user_login.clone();
-                let current_organization = current_organization.clone();
-                let organizations = organizations.clone();
-                let user_store = user_store.clone();
-
                 let ai_enabled = !project::DisableAiSettings::get_global(cx).disable_ai;
                 let current_layout = AgentSettings::get_layout(cx);
                 let is_editor = matches!(current_layout, WindowLayout::Editor(_));
                 let is_agent = matches!(current_layout, WindowLayout::Agent(_));
                 let is_custom = matches!(current_layout, WindowLayout::Custom(_));
                 ContextMenu::build(window, cx, |menu, _, cx| {
-                    menu.when(is_signed_in, |this| {
-                        let user_login = user_login.clone();
-                        this.custom_entry(
-                            move |_window, _cx| {
-                                let user_login = user_login.clone().unwrap_or_default();
-
-                                h_flex()
-                                    .w_full()
-                                    .justify_between()
-                                    .child(Label::new(user_login))
-                                    .into_any_element()
-                            },
-                            move |_, cx| {
-                                let _ = cx;
-                            },
-                        )
-                        .separator()
-                    })
-                    .when(has_organization, |this| {
-                        let mut this =
-                            this.header(tr(cx, "title_bar.user_menu.organization", "Organization"));
-
-                        for (organization, plan) in &organizations {
-                            let organization = organization.clone();
-                            let _plan = *plan;
-
-                            let is_current =
-                                current_organization
-                                    .as_ref()
-                                    .is_some_and(|current_organization| {
-                                        current_organization.id == organization.id
-                                    });
-
-                            this = this.custom_entry(
-                                {
-                                    let organization = organization.clone();
-                                    move |_window, _cx| {
-                                        h_flex()
-                                            .w_full()
-                                            .gap_4()
-                                            .justify_between()
-                                            .child(
-                                                h_flex()
-                                                    .gap_1()
-                                                    .child(Label::new(&organization.name))
-                                                    .when(is_current, |this| {
-                                                        this.child(
-                                                            Icon::new(IconName::Check)
-                                                                .color(Color::Accent),
-                                                        )
-                                                    }),
-                                            )
-                                            .into_any_element()
-                                    }
-                                },
-                                {
-                                    let user_store = user_store.clone();
-                                    let organization = organization.clone();
-                                    move |_window, cx| {
-                                        user_store.update(cx, |user_store, cx| {
-                                            user_store
-                                                .set_current_organization(organization.clone(), cx);
-                                        });
-                                    }
-                                },
-                            );
-                        }
-
-                        this.separator()
-                    })
-                    .action(
+                    menu.action(
                         tr(cx, "menu.settings", "Settings"),
                         zed_actions::OpenSettings.boxed_clone(),
                     )
@@ -1356,12 +1246,6 @@ impl TitleBar {
                                     )
                                 })
                             },
-                        )
-                    })
-                    .when(is_signed_in, |this| {
-                        this.separator().action(
-                            tr(cx, "menu.sign_out", "Sign Out"),
-                            client::SignOut.boxed_clone(),
                         )
                     })
                 })

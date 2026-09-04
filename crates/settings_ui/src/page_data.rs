@@ -4535,7 +4535,7 @@ fn window_and_layout_page() -> SettingsPage {
         ]
     }
 
-    fn title_bar_section() -> [SettingsPageItem; 9] {
+    fn title_bar_section() -> [SettingsPageItem; 8] {
         [
             SettingsPageItem::SectionHeader(lt("settings_ui.page_data.section.title.bar", "Title Bar")),
             SettingsPageItem::SettingItem(SettingItem {
@@ -4639,28 +4639,6 @@ fn window_and_layout_page() -> SettingsPage {
                             .title_bar
                             .get_or_insert_default()
                             .show_user_menu = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: lt("settings_ui.page_data.title.show.user.picture", "Show User Picture"),
-                description: lt("settings_ui.page_data.description.show.user.picture.in.the.titlebar", "Show user picture in the titlebar."),
-                field: Box::new(SettingField {
-                    json_path: Some("title_bar.show_user_picture"),
-                    pick: |settings_content| {
-                        settings_content
-                            .title_bar
-                            .as_ref()?
-                            .show_user_picture
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .title_bar
-                            .get_or_insert_default()
-                            .show_user_picture = value;
                     },
                 }),
                 metadata: None,
