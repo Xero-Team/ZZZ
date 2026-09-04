@@ -1768,6 +1768,7 @@ impl RemoteServerProjects {
                             let connection = connection.clone();
                             let host = host.clone();
                             move |this, _: &menu::Confirm, window, cx| {
+                                cx.emit(DismissEvent);
                                 let new_ix = this.create_host_from_ssh_config(&host, cx);
                                 this.create_remote_project(
                                     new_ix.into(),
@@ -1791,6 +1792,7 @@ impl RemoteServerProjects {
                                 .on_click(cx.listener({
                                     let host = host.clone();
                                     move |this, _, window, cx| {
+                                        cx.emit(DismissEvent);
                                         let new_ix = this.create_host_from_ssh_config(&host, cx);
                                         this.create_remote_project(
                                             new_ix.into(),
