@@ -16,6 +16,7 @@ use language_model::{
 use opencode::{ApiProtocol, OPENCODE_API_URL, OpenCodeSubscription};
 pub use settings::OpenCodeAvailableModel as AvailableModel;
 use settings::{Settings, SettingsStore, update_settings_file};
+use std::hash::BuildHasher as _;
 use std::sync::{Arc, LazyLock};
 use strum::IntoEnumIterator;
 use ui::{
@@ -59,7 +60,8 @@ const PROVIDER_NAME: LanguageModelProviderName = LanguageModelProviderName::new(
 
 const API_KEY_ENV_VAR_NAME: &str = "OPENCODE_API_KEY";
 static API_KEY_ENV_VAR: LazyLock<EnvVar> = env_var!(API_KEY_ENV_VAR_NAME);
-pub(crate) const RESERVED_HEADER_NAMES: &[&str] = &["x-opencode-session"];
+const OPENCODE_SESSION_HEADER_NAME: &str = "x-opencode-session";
+pub(crate) const RESERVED_HEADER_NAMES: &[&str] = &[OPENCODE_SESSION_HEADER_NAME];
 
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct OpenCodeSettings {
@@ -340,6 +342,7 @@ impl HttpClient for InjectHeaderClient {
     fn proxy(&self) -> Option<&http_client::Url> {
         self.inner.proxy()
     }
+
     fn send(
         &self,
         mut req: http::Request<AsyncBody>,
@@ -348,6 +351,17 @@ impl HttpClient for InjectHeaderClient {
             .insert(self.name.clone(), self.value.clone());
         self.inner.send(req)
     }
+}
+
+fn opencode_session_header_value(thread_id: Option<&str>) -> http::HeaderValue {
+    thread_id
+        .filter(|thread_id| !thread_id.is_empty())
+        .and_then(|thread_id| http::HeaderValue::from_str(thread_id).ok())
+        .unwrap_or_else(|| {
+            let value = std::hash::RandomState::new().hash_one(0u64);
+            http::HeaderValue::from_str(&value.to_string())
+                .unwrap_or_else(|_| http::HeaderValue::from_static("0"))
+        })
 }
 
 impl OpenCodeLanguageModel {
@@ -640,17 +654,11 @@ impl LanguageModel for OpenCodeLanguageModel {
             LanguageModelCompletionError,
         >,
     > {
-        let http_client = if let Some(ref thread_id) = request.thread_id
-            && let Ok(value) = http::HeaderValue::from_str(thread_id)
-        {
-            Arc::new(InjectHeaderClient {
-                inner: self.http_client.clone(),
-                name: http::HeaderName::from_static("x-opencode-session"),
-                value,
-            })
-        } else {
-            self.http_client.clone()
-        };
+        let http_client: Arc<dyn HttpClient> = Arc::new(InjectHeaderClient {
+            inner: self.http_client.clone(),
+            name: http::HeaderName::from_static(OPENCODE_SESSION_HEADER_NAME),
+            value: opencode_session_header_value(request.thread_id.as_deref()),
+        });
         let extra_headers = self.custom_headers(cx);
 
         match self.model.protocol(self.subscription) {
@@ -1009,5 +1017,46 @@ impl Render for ConfigurationView {
                 .children(no_subscriptions_warning)
                 .into_any()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_opencode_session_header_uses_thread_id() {
+        let value = opencode_session_header_value(Some("thread-123"));
+
+        assert_eq!(value, "thread-123");
+    }
+
+    #[test]
+    fn test_opencode_session_header_without_thread_id() {
+        let value = opencode_session_header_value(None);
+
+        assert_generated_session_id(&value);
+    }
+
+    #[test]
+    fn test_opencode_session_header_with_empty_thread_id() {
+        let value = opencode_session_header_value(Some(""));
+
+        assert_generated_session_id(&value);
+    }
+
+    #[test]
+    fn test_opencode_session_header_with_invalid_thread_id() {
+        let value = opencode_session_header_value(Some("thread\n123"));
+
+        assert_generated_session_id(&value);
+    }
+
+    fn assert_generated_session_id(value: &http::HeaderValue) {
+        value
+            .to_str()
+            .unwrap()
+            .parse::<u64>()
+            .expect("generated session id should be a u64");
     }
 }
