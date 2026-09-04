@@ -264,6 +264,30 @@ async fn build_remote_server_from_source(
         Ok(())
     }
 
+    fn apply_tmpfs_zig_cache(command: &mut Command) {
+        let cache = std::env::var_os("ZIG_GLOBAL_CACHE_DIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                #[cfg(unix)]
+                {
+                    let tmp = std::path::PathBuf::from("/tmp");
+                    if tmp.is_dir() {
+                        return tmp.join("zzz-zig-cache");
+                    }
+                }
+                std::env::temp_dir().join("zzz-zig-cache")
+            });
+        let local = std::env::var_os("ZIG_LOCAL_CACHE_DIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| cache.join("local"));
+        if let Err(error) = std::fs::create_dir_all(&local) {
+            log::warn!("failed to create zig cache {}: {error}", local.display());
+        }
+        command
+            .env("ZIG_GLOBAL_CACHE_DIR", &cache)
+            .env("ZIG_LOCAL_CACHE_DIR", &local);
+    }
+
     let use_musl = !build_remote_server.contains("nomusl");
     let triple = format!(
         "{}-{}",
@@ -386,6 +410,7 @@ async fn build_remote_server_from_source(
                 &triple,
             ])
             .env("RUSTFLAGS", &rust_flags);
+        apply_tmpfs_zig_cache(&mut command);
         if let Some(sdkroot) = &macos_sdkroot {
             command.env("SDKROOT", sdkroot);
         }

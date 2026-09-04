@@ -242,6 +242,12 @@ if [[ "$remote_server_triple" != "aarch64-unknown-linux-musl" ]] \
     if "$rustup_installed"; then
         rustup target add aarch64-unknown-linux-musl || true
     fi
+    export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-/tmp/zzz-zig-cache}"
+    export ZIG_LOCAL_CACHE_DIR="${ZIG_LOCAL_CACHE_DIR:-${ZIG_GLOBAL_CACHE_DIR}/local}"
+    mkdir -p "${ZIG_LOCAL_CACHE_DIR}"
+    rm -rf "${target_dir}/aarch64-unknown-linux-musl/release/build"/aws-lc-sys-*
+    rm -rf "${target_dir}/aarch64-unknown-linux-musl/release/.fingerprint"/aws-lc-sys-*
+    rm -f "${target_dir}/aarch64-unknown-linux-musl/release/deps"/libaws_lc*
     if cargo zigbuild --release --target aarch64-unknown-linux-musl --package remote_server; then
         gzip -f --stdout --best "${target_dir}/aarch64-unknown-linux-musl/release/remote_server" \
             > "${target_dir}/zzz-remote-server-linux-aarch64.gz"

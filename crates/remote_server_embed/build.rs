@@ -197,6 +197,10 @@ fn build_target(workspace: &Path, target: &RemoteTarget, host: &str) -> Result<P
         "build"
     };
     let mut command = cargo_command(workspace, subcommand, target, &target_dir, rustflags.trim());
+    if subcommand == "zigbuild" {
+        apply_tmpfs_zig_cache(&mut command);
+        invalidate_corrupt_aws_lc_sys(&target_dir, target.triple);
+    }
     if target.musl
         && let Some(cc) = musl_cc(target.triple)
     {
@@ -337,6 +341,105 @@ fn musl_cc(triple: &str) -> Option<PathBuf> {
 
 fn host_arch(host: &str) -> String {
     host.split('-').next().unwrap_or(host).to_string()
+}
+
+fn zig_cache_root() -> PathBuf {
+    #[cfg(unix)]
+    {
+        let tmp = PathBuf::from("/tmp");
+        if tmp.is_dir() {
+            return tmp.join("zzz-zig-cache");
+        }
+    }
+    env::temp_dir().join("zzz-zig-cache")
+}
+
+fn apply_tmpfs_zig_cache(command: &mut Command) {
+    let cache = env::var_os("ZIG_GLOBAL_CACHE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(zig_cache_root);
+    let local = env::var_os("ZIG_LOCAL_CACHE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| cache.join("local"));
+    if let Err(error) = fs::create_dir_all(&local) {
+        println!(
+            "cargo:warning=failed to create zig cache {}: {error}",
+            local.display()
+        );
+    }
+    command
+        .env("ZIG_GLOBAL_CACHE_DIR", &cache)
+        .env("ZIG_LOCAL_CACHE_DIR", &local);
+}
+
+fn object_missing_named_symbols(path: &Path) -> bool {
+    let Ok(output) = Command::new("nm").arg(path).output() else {
+        return false;
+    };
+    if !output.status.success() {
+        return true;
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .all(|line| !line.contains(" T ") && !line.contains(" t "))
+}
+
+fn invalidate_corrupt_aws_lc_sys(target_dir: &Path, triple: &str) {
+    let profile_dir = target_dir.join(triple).join("release");
+    let build_dir = profile_dir.join("build");
+    let Ok(entries) = fs::read_dir(&build_dir) else {
+        return;
+    };
+    let mut corrupt = false;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if !name.to_string_lossy().starts_with("aws-lc-sys-") {
+            continue;
+        }
+        let out = entry.path().join("out");
+        let Ok(objects) = fs::read_dir(out) else {
+            continue;
+        };
+        if objects.flatten().any(|object| {
+            object
+                .file_name()
+                .to_string_lossy()
+                .ends_with("bignum_sqr.o")
+                && object_missing_named_symbols(&object.path())
+        }) {
+            corrupt = true;
+            if let Err(error) = fs::remove_dir_all(entry.path()) {
+                println!(
+                    "cargo:warning=failed to remove corrupt aws-lc-sys build {}: {error}",
+                    entry.path().display()
+                );
+            }
+        }
+    }
+    if !corrupt {
+        return;
+    }
+    println!("cargo:warning=removed corrupt aws-lc-sys objects for {triple}");
+    for dir_name in [".fingerprint", "deps"] {
+        let Ok(entries) = fs::read_dir(profile_dir.join(dir_name)) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with("aws-lc-sys-") || name.starts_with("libaws_lc") {
+                let path = entry.path();
+                let result = if path.is_dir() {
+                    fs::remove_dir_all(&path)
+                } else {
+                    fs::remove_file(&path)
+                };
+                if let Err(error) = result {
+                    println!("cargo:warning=failed to remove {}: {error}", path.display());
+                }
+            }
+        }
+    }
 }
 
 fn cargo_command(
