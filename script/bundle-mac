@@ -19,6 +19,9 @@ help_info() {
 Usage: ${0##*/} [options] [architecture=host]
 Build the application bundle for macOS.
 
+The bundle embeds the host macOS remote_server plus Linux x86_64 and
+aarch64 remote_server archives (musl, via zig / cargo-zigbuild).
+
 Options:
   -d    Compile in debug mode
   -o    Open dir with the resulting DMG or launch the app itself in local mode.
@@ -87,12 +90,61 @@ script/generate-licenses
 rustup target add $target_triple
 
 echo "Compiling zed binaries"
-# Build remote_server first so the editor can embed the archive.
+# Build remote_server first so the editor can embed the archives.
 export ZZZ_BUILDING_REMOTE_SERVER=1
 cargo build ${build_flag} --package remote_server --target $target_triple
-unset ZZZ_BUILDING_REMOTE_SERVER
 gzip -f --stdout --best "target/${target_triple}/${target_dir}/remote_server" \
     > "target/zzz-remote-server-macos-${arch_suffix}.gz"
+
+build_linux_remote_server() {
+    local linux_triple="$1"
+    local linux_arch="$2"
+    rustup target add "$linux_triple"
+    rm -rf "target/${linux_triple}/release/build"/aws-lc-sys-*
+    rm -rf "target/${linux_triple}/release/.fingerprint"/aws-lc-sys-*
+    rm -f "target/${linux_triple}/release/deps"/libaws_lc*
+    echo "Compiling remote_server for ${linux_triple}"
+    cargo zigbuild --release --package remote_server --target "$linux_triple"
+    gzip -f --stdout --best "target/${linux_triple}/release/remote_server" \
+        > "target/zzz-remote-server-linux-${linux_arch}.gz"
+}
+
+if [[ "$target_dir" != "debug" || "${ZZZ_EMBED_REMOTE_SERVERS:-}" == "1" ]]; then
+    if ! command -v zig >/dev/null 2>&1; then
+        echo "Error: zig is required to embed Linux remote_server binaries in the macOS bundle." >&2
+        echo "Install zig (https://ziglang.org/learn/getting-started) or zigup." >&2
+        exit 1
+    fi
+    if ! command -v cargo-zigbuild >/dev/null 2>&1; then
+        echo "Installing cargo-zigbuild for Linux remote_server cross-compilation"
+        cargo install --locked cargo-zigbuild
+    fi
+
+    export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-/tmp/zzz-zig-cache}"
+    export ZIG_LOCAL_CACHE_DIR="${ZIG_LOCAL_CACHE_DIR:-${ZIG_GLOBAL_CACHE_DIR}/local}"
+    mkdir -p "${ZIG_LOCAL_CACHE_DIR}"
+
+    saved_cxxflags="${CXXFLAGS:-}"
+    saved_sdkroot="${SDKROOT:-}"
+    saved_rustflags="${RUSTFLAGS:-}"
+    unset CXXFLAGS
+    unset SDKROOT
+    export RUSTFLAGS="${saved_rustflags} -C target-feature=+crt-static"
+    build_linux_remote_server x86_64-unknown-linux-musl x86_64
+    build_linux_remote_server aarch64-unknown-linux-musl aarch64
+    if [[ -n "${saved_cxxflags}" ]]; then
+        export CXXFLAGS="${saved_cxxflags}"
+    fi
+    if [[ -n "${saved_sdkroot}" ]]; then
+        export SDKROOT="${saved_sdkroot}"
+    fi
+    if [[ -n "${saved_rustflags}" ]]; then
+        export RUSTFLAGS="${saved_rustflags}"
+    else
+        unset RUSTFLAGS
+    fi
+fi
+unset ZZZ_BUILDING_REMOTE_SERVER
 export ZZZ_EMBED_REMOTE_SERVER_DIR="$(cd target && pwd)"
 cargo build ${build_flag} --package zzz --package cli --target $target_triple
 
