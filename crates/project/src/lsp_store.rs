@@ -342,7 +342,6 @@ pub struct LocalLspStore {
     restricted_worktrees_tasks: HashMap<WorktreeId, (Subscription, watch::Receiver<bool>)>,
     all_language_servers_stopped: bool,
     stopped_language_servers: HashSet<LanguageServerName>,
-    language_servers_allowed_to_download: HashSet<LanguageServerName>,
 
     buffers_to_refresh_hash_set: HashSet<BufferId>,
     buffers_to_refresh_queue: VecDeque<BufferId>,
@@ -476,16 +475,13 @@ impl LocalLspStore {
             });
         let update_binary_status = wait_until_worktree_trust.is_none();
 
-        let allow_binary_download = self
-            .language_servers_allowed_to_download
-            .remove(&adapter.name());
         let binary = self.get_language_server_binary(
             worktree_abs_path.clone(),
             adapter.clone(),
             settings,
             toolchain.clone(),
             delegate.clone(),
-            allow_binary_download,
+            true,
             wait_until_worktree_trust,
             cx,
         );
@@ -4606,7 +4602,6 @@ impl LspStore {
                 restricted_worktrees_tasks: HashMap::default(),
                 all_language_servers_stopped: false,
                 stopped_language_servers: HashSet::default(),
-                language_servers_allowed_to_download: HashSet::default(),
                 watched_manifest_filenames: ManifestProvidersStore::global(cx)
                     .manifest_file_names(),
             }),
@@ -5337,7 +5332,7 @@ impl LspStore {
                     prettier_store.install_default_prettier(
                         worktree_id,
                         prettier_plugins.iter().map(|s| Arc::from(s.as_str())),
-                        false,
+                        true,
                         cx,
                     )
                 })
@@ -11768,11 +11763,6 @@ impl LspStore {
         buffers: Vec<Entity<Buffer>>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(local) = self.as_local_mut() {
-            local
-                .language_servers_allowed_to_download
-                .insert(server_name.clone());
-        }
         self.restart_language_servers_for_buffers(
             buffers,
             HashSet::from_iter([LanguageServerSelector::Name(server_name)]),

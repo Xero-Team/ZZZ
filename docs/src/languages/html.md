@@ -10,7 +10,15 @@ HTML support is available through the [HTML extension](https://github.com/zed-in
 - Tree-sitter: [tree-sitter/tree-sitter-html](https://github.com/tree-sitter/tree-sitter-html)
 - Language Server: [microsoft/vscode-html-languageservice](https://github.com/microsoft/vscode-html-languageservice)
 
-Install the HTML extension from the Extension Gallery when you need HTML language support.
+This extension is automatically installed, but if you do not want to use it, you can add the following to your settings:
+
+```json [settings]
+{
+  "auto_install_extensions": {
+    "html": false
+  }
+}
+```
 
 ## Formatting
 

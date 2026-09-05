@@ -272,7 +272,7 @@ impl DapStore {
                 let user_args = dap_settings.and_then(|s| s.args.clone());
                 let user_env = dap_settings.and_then(|s| s.env.clone());
 
-                let delegate = self.delegate(worktree, console, false, cx);
+                let delegate = self.delegate(worktree, console, true, cx);
 
                 let worktree = worktree.clone();
                 cx.spawn(async move |this, cx| {

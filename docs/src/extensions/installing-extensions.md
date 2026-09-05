@@ -9,7 +9,7 @@ Extensions add functionality to ZZZ, including languages, themes, and AI tools. 
 
 Open the Extension Gallery with {#kb zed::Extensions}, or select "ZZZ > Extensions" from the menu bar.
 
-The gallery lists and downloads extensions from the public Zed marketplace at `https://api.zed.dev`. ZZZ does not install or update extensions unless you request it.
+The gallery lists and downloads extensions from the public Zed marketplace at `https://api.zed.dev`. ZZZ auto-installs the HTML extension on startup and auto-updates installed extensions unless you disable those settings.
 
 ## Installation Location
 
@@ -21,3 +21,7 @@ This directory contains two subdirectories:
 
 - `installed`, which contains the source code for each extension.
 - `work` which contains files created by the extension itself, such as downloaded language servers.
+
+## Auto-installing
+
+To automate extension installation/uninstallation see the docs for [auto_install_extensions](../reference/all-settings.md#auto-install-extensions).

@@ -3,7 +3,7 @@ title: ZZZ Terms
 slug: terms
 ---
 
-**Last Updated**: August 28, 2026
+**Last Updated**: September 5, 2026
 
 ZZZ is community-maintained, open-source software provided under the licenses
 included in this repository. ZZZ does not provide accounts, subscriptions,
@@ -13,8 +13,9 @@ trials, payments, hosted AI, or hosted collaboration by default.
 
 The application runs locally and stores settings and project data on your
 machine. It does not send telemetry, behavioral logs, crash reports, or system
-identifiers by default. Automatic updates and extension downloads are disabled
-by default.
+identifiers by default. Automatic application updates are disabled by default.
+Language-server, debug adapter, Prettier, Node, and extension downloads may
+contact third-party hosts.
 
 ## User-configured services
 

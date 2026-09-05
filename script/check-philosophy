@@ -18,18 +18,13 @@ check_default_settings() {
     rg -q '"auto_update": false' "$root/assets/settings/default.json" \
         && rg -q '"server_url": "http://127\.0\.0\.1:7331"' "$root/assets/settings/default.json" \
         && rg -q '"show_zen_models": false' "$root/assets/settings/default.json" \
-        && ! rg -q '"auto_install_extensions"' "$root/assets/settings/default.json" \
+        && rg -q '"auto_install_extensions"' "$root/assets/settings/default.json" \
         && ! rg -q '"auto_update_extensions"' "$root/assets/settings/default.json"
 }
 
-check_no_automatic_extension_network() {
-    ! rg -n 'fn auto_install_extensions|fn check_for_updates|fn fetch_extensions_with_update_available' \
-        "$root/crates/extension_host/src"
-}
-
-# User-initiated Extension Gallery traffic (extensions, themes, icon themes,
-# languages) may contact the public Zed marketplace. Collab server_url stays
-# local and must not be reused for that gallery.
+# Extension Gallery traffic (extensions, themes, icon themes, languages) may
+# contact the public Zed marketplace. Collab server_url stays local and must
+# not be reused for that gallery.
 check_extension_marketplace_uses_upstream() {
     rg -q 'ZED_EXTENSION_MARKETPLACE_API: .*"https://api\.zed\.dev"' \
         "$root/crates/http_client/src/http_client.rs" \
@@ -209,17 +204,6 @@ check_no_default_refresh_if_stale() {
         "$root/crates/project/src/agent_server_store.rs"
 }
 
-check_allow_binary_download_off() {
-    rg -q 'allow_binary_download: false' "$root/crates/zed/src/main.rs" \
-        && ! rg -n 'allow_binary_download: true' "$root/crates/zed/src/main.rs" \
-        && ! rg -n 'allow_binary_download,\s*$' -A0 "$root/crates/project/src/lsp_store.rs" | rg -q 'true'
-}
-
-check_lsp_store_no_auto_download() {
-    ! rg -n 'delegate\.clone\(\),\s*$' -A1 "$root/crates/project/src/lsp_store.rs" \
-        | rg -q 'true,'
-}
-
 check_no_unconditional_copilot_chat_init() {
     ! rg -n 'copilot_chat::init' "$root/crates/zed/src/main.rs"
 }
@@ -227,11 +211,6 @@ check_no_unconditional_copilot_chat_init() {
 check_no_unconditional_copilot_chat_register() {
     ! rg -n 'register_provider\(Arc::new\(CopilotChatLanguageModelProvider' \
         "$root/crates/language_models/src/language_models.rs"
-}
-
-check_no_js_debug_companion_session_install() {
-    ! rg -n 'get_or_install_companion' \
-        "$root/crates/project/src/debugger/session.rs"
 }
 
 check_eval_clis_absent() {
@@ -256,21 +235,6 @@ check_no_after_release_hosted_deploy() {
         "$root/tooling/xtask/src/tasks/workflows/after_release.rs"
 }
 
-check_dap_download_gated() {
-    rg -q 'fn allow_binary_download' "$root/crates/dap/src/adapters.rs" \
-        && rg -q 'allow_binary_download' "$root/crates/dap/src/adapters.rs"
-}
-
-check_prettier_language_detect_no_network() {
-    rg -n 'prettier_store.install_default_prettier' -A3 "$root/crates/project/src/lsp_store.rs" \
-        | rg -q 'false,'
-}
-
-check_dap_session_start_no_download() {
-    rg -q 'self\.delegate\(worktree, console, false, cx\)' \
-        "$root/crates/project/src/debugger/dap_store.rs"
-}
-
 check_allowlisted_hosts() {
     local urls
     urls=$(rg --no-filename -o 'https?://[^"` )]+' "$root/assets/settings/default.json" "$root/crates/client/src/client.rs" \
@@ -285,7 +249,6 @@ check_allowlisted_hosts() {
 }
 
 check "default settings are local-first" check_default_settings
-check "extensions are not installed or updated automatically" check_no_automatic_extension_network
 check "extension gallery uses the upstream marketplace" check_extension_marketplace_uses_upstream
 check "telemetry endpoint is absent" check_no_telemetry_endpoint
 check "Sentry uploads require explicit opt-in" check_sentry_opt_in
@@ -317,19 +280,13 @@ check "NativeAgent is absent from production agent UI" check_no_native_agent_pro
 check "ZED_AGENT_ID is not a live selectable agent" check_no_live_zed_agent_id
 check "agent registry init does not refresh when empty" check_registry_init_no_refresh
 check "default agent registry paths do not refresh_if_stale" check_no_default_refresh_if_stale
-check "NodeBinaryOptions allow_binary_download is false" check_allow_binary_download_off
-check "lsp_store language-server start does not auto-download" check_lsp_store_no_auto_download
 check "copilot_chat::init is not unconditional in main.rs" check_no_unconditional_copilot_chat_init
 check "CopilotChatLanguageModelProvider is not registered at language_models init" check_no_unconditional_copilot_chat_register
-check "js-debug-companion is not installed on debugger session start" check_no_js_debug_companion_session_install
 check "eval_cli and edit_prediction_cli directories are absent" check_eval_clis_absent
 check "Item::telemetry_event_text is absent" check_no_telemetry_event_text
 check "Danger GitHub API proxy host is absent" check_no_danger_proxy
 check "lychee.toml has no collab hosts" check_no_collab_lychee
 check "after_release has no hosted Discord/Vercel/winget deploy" check_no_after_release_hosted_deploy
-check "DAP downloads require allow_binary_download" check_dap_download_gated
-check "language-detect does not npm-install default Prettier" check_prettier_language_detect_no_network
-check "debug session start does not auto-download adapters" check_dap_session_start_no_download
 check "network hosts are allowlisted" check_allowlisted_hosts
 
 if (( failures > 0 )); then

@@ -6,16 +6,18 @@ description: Default network behavior and explicit opt-in rules for ZZZ.
 # Privacy and Network Boundary
 
 ZZZ is local-first. A fresh installation does not create an account, contact a
-hosted ZZZ service, send telemetry, upload crash data, or install extensions
-from the network.
+hosted ZZZ service, send telemetry, or upload crash data.
 
 ## Allowed by default
 
 - Loopback connections used by local Ollama (`localhost:11434`), llama.cpp
   (`localhost:8080`), LM Studio, and user-configured local tools.
+- Language-server, debug adapter, Prettier, and Node binary downloads needed
+  to start editing.
+- Extension Gallery browse, install, auto-install, and auto-update requests to
+  the public Zed marketplace (`https://api.zed.dev`). The HTML extension is
+  installed on startup unless you disable it.
 - User-initiated Git, LSP, MCP, and browser actions.
-- User-initiated Extension Gallery browse, install, and upgrade requests to the
-  public Zed marketplace (`https://api.zed.dev`).
 - Providers configured explicitly by the user, including OpenAI-compatible
   endpoints.
 
@@ -25,9 +27,7 @@ from the network.
   requests.
 - Telemetry, Anthropic behavior logging, Sentry uploads, and crash reporting.
 - Automatic application updates.
-- Automatic extension installation or updates.
-- Automatic language-server, DAP, Prettier, Node, and Agent Registry
-  downloads. Use an explicit Install or Download action.
+- Automatic Agent Registry downloads.
 
 ## Explicit opt-in
 

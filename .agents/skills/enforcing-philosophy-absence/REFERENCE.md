@@ -26,11 +26,10 @@ Leave these alone unless the user names them:
 - Deleting the `collab`, `copilot`, `cloud_api_*`, or
   `language_models_cloud` crates
 - `Cargo.toml` git dependencies on `github.com/zed-industries/*`
-- Language-server and DAP auto-download (separate network-default pass)
 - `docs/src/development/upstream-sync-*.md` historical audits
 - `assets/licenses.md` third-party copyright notices
 - Theme `$schema` URLs at `https://zed.dev/schema/...` (upstream schema)
-- User-initiated Extension Gallery traffic to `https://api.zed.dev`
+- Extension Gallery traffic to `https://api.zed.dev`
 
 ## Keep
 
@@ -44,7 +43,8 @@ Leave these alone unless the user names them:
 - Help menu without Twitter / join-the-team / hosted docs
 - `crates/feedback` URLs on Codeberg
 - Embedded `remote_server`
-- No automatic extension install/update
+- Language-server, DAP, Prettier, and Node auto-download
+- Extension auto-install (HTML by default) and auto-update via `api.zed.dev`
 - Copilot / Codestral / OpenAI / Anthropic as *optional* providers
 - Zeta 1 / 2 / 2.1 *prompt formats* for local Ollama or OpenAI-compatible
   servers

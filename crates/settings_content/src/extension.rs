@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use collections::HashMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings_macros::{MergeFrom, with_fallible_options};
@@ -5,6 +8,16 @@ use settings_macros::{MergeFrom, with_fallible_options};
 #[with_fallible_options]
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct ExtensionSettingsContent {
+    /// The extensions that should be automatically installed by Zed.
+    ///
+    /// This is used to make functionality provided by extensions (e.g., language support)
+    /// available out-of-the-box.
+    ///
+    /// Default: { "html": true }
+    #[serde(default)]
+    pub auto_install_extensions: HashMap<Arc<str>, bool>,
+    #[serde(default)]
+    pub auto_update_extensions: HashMap<Arc<str>, bool>,
     /// The capabilities granted to extensions.
     pub granted_extension_capabilities: Option<Vec<ExtensionCapabilityContent>>,
 }

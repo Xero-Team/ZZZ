@@ -3,7 +3,7 @@ title: Privacy Policy
 slug: privacy-policy
 ---
 
-**Last Updated**: September 1, 2026
+**Last Updated**: September 5, 2026
 
 ## Summary
 
@@ -49,8 +49,10 @@ ZZZ does not, by default:
   server
 - Honor or need a hosted opt-out toggle, because collection is absent
 
-Automatic updates and automatic extension downloads are disabled by
-default.
+Automatic application updates are disabled by default. Language-server,
+debug adapter, Prettier, Node, and extension downloads may contact
+third-party hosts, including the public Zed marketplace at
+`https://api.zed.dev`.
 
 ## User-configured services
 
@@ -64,9 +66,10 @@ and acceptable-use rules for a destination are governed by that
 destination's terms and privacy policy. See
 [Third-party terms](./third-party-terms.md).
 
-User-initiated Extension Gallery browse, install, and upgrade requests
-may contact the public Zed marketplace at `https://api.zed.dev`. That
-traffic is not a ZZZ account or telemetry channel.
+Extension Gallery browse, install, auto-install, and auto-update
+requests may contact the public Zed marketplace at
+`https://api.zed.dev`. That traffic is not a ZZZ account or telemetry
+channel.
 
 ## Contact
 

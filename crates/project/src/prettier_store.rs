@@ -721,7 +721,7 @@ impl PrettierStore {
             self.install_default_prettier(
                 worktree,
                 prettier_plugins.into_iter().map(Arc::from),
-                false,
+                true,
                 cx,
             );
         }
