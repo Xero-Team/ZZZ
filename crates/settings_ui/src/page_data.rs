@@ -1265,7 +1265,7 @@ fn appearance_page() -> SettingsPage {
         ]
     }
 
-    fn cursor_section() -> [SettingsPageItem; 5] {
+    fn cursor_section() -> [SettingsPageItem; 6] {
         [
             SettingsPageItem::SectionHeader(lt("settings_ui.page_data.section.cursor", "Cursor")),
             SettingsPageItem::SettingItem(SettingItem {
@@ -1314,6 +1314,36 @@ fn appearance_page() -> SettingsPage {
                     pick: |settings_content| settings_content.editor.cursor_shape.as_ref(),
                     write: |settings_content, value, _| {
                         settings_content.editor.cursor_shape = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.cursor.animation",
+                    "Cursor Animation",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.whether.the.cursor.smoothly.animates",
+                    "Whether the cursor smoothly animates when moving around the editor.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("cursor_animation.enabled"),
+                    pick: |settings_content| {
+                        settings_content
+                            .editor
+                            .cursor_animation
+                            .as_ref()?
+                            .enabled
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .editor
+                            .cursor_animation
+                            .get_or_insert_default()
+                            .enabled = value;
                     },
                 }),
                 metadata: None,
