@@ -109,6 +109,9 @@ impl WebWindow {
         style
             .set_property("touch-action", "none")
             .map_err(|e| anyhow::anyhow!("Failed to set touch-action style: {e:?}"))?;
+        style
+            .set_property("-webkit-touch-callout", "none")
+            .map_err(|e| anyhow::anyhow!("Failed to set -webkit-touch-callout style: {e:?}"))?;
 
         let body = document
             .body()
