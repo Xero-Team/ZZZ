@@ -5644,7 +5644,7 @@ fn window_and_layout_page() -> SettingsPage {
 }
 
 fn panels_page() -> SettingsPage {
-    fn project_panel_section() -> [SettingsPageItem; 29] {
+    fn project_panel_section() -> [SettingsPageItem; 30] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.project.panel",
@@ -5664,6 +5664,34 @@ fn panels_page() -> SettingsPage {
                     pick: |settings_content| settings_content.project_panel.as_ref()?.dock.as_ref(),
                     write: |settings_content, value, _| {
                         settings_content.project_panel.get_or_insert_default().dock = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.project.panel.title.tooltip.delay",
+                    "Path Tooltip Delay",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.delay.before.showing.a.path.tooltip",
+                    "Delay before showing a path tooltip when hovering a project panel entry.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("project_panel.title_tooltip_delay"),
+                    pick: |settings_content| {
+                        settings_content
+                            .project_panel
+                            .as_ref()?
+                            .title_tooltip_delay
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .project_panel
+                            .get_or_insert_default()
+                            .title_tooltip_delay = value;
                     },
                 }),
                 metadata: None,

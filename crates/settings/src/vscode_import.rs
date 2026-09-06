@@ -806,6 +806,7 @@ impl VsCodeSettings {
             button: None,
             default_width: None,
             dock: None,
+            title_tooltip_delay: None,
             drag_and_drop: None,
             entry_spacing: None,
             file_icons: None,

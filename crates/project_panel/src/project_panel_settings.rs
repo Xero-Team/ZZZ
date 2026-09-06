@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings::{
     DockSide, ProjectPanelEntrySpacing, ProjectPanelSortMode, ProjectPanelSortOrder,
-    RegisterSetting, Settings, ShowDiagnostics, ShowIndentGuides,
+    ProjectPanelTitleTooltipDelay, RegisterSetting, Settings, ShowDiagnostics, ShowIndentGuides,
 };
 use ui::{
     px,
@@ -16,6 +16,7 @@ pub struct ProjectPanelSettings {
     pub button: bool,
     pub hide_gitignore: bool,
     pub default_width: Pixels,
+    pub title_tooltip_delay: ProjectPanelTitleTooltipDelay,
     pub dock: DockSide,
     pub entry_spacing: ProjectPanelEntrySpacing,
     pub file_icons: bool,
@@ -102,6 +103,7 @@ impl Settings for ProjectPanelSettings {
             hide_gitignore: project_panel.hide_gitignore.unwrap(),
             default_width: px(project_panel.default_width.unwrap()),
             dock: project_panel.dock.unwrap(),
+            title_tooltip_delay: project_panel.title_tooltip_delay.unwrap(),
             entry_spacing: project_panel.entry_spacing.unwrap(),
             file_icons: project_panel.file_icons.unwrap(),
             folder_icons: project_panel.folder_icons.unwrap(),

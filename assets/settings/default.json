@@ -826,6 +826,15 @@
     "default_width": 240,
     // Where to dock the project panel. Can be 'left' or 'right'.
     "dock": "right",
+    // Delay before showing a path tooltip when hovering a project panel entry.
+    //
+    // 1. Default delay of 1500ms:
+    //    "default"
+    // 2. A custom delay in milliseconds:
+    //    {"custom": 500}
+    // 3. Disable the tooltip:
+    //    "disabled"
+    "title_tooltip_delay": "default",
     // Spacing between worktree entries in the project panel. Can be 'comfortable' or 'standard'.
     "entry_spacing": "comfortable",
     // Whether to show file icons in the project panel.
