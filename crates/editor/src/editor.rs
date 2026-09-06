@@ -14,10 +14,10 @@
 pub mod actions;
 pub mod blink_manager;
 mod bracket_colorization;
-mod cursor_animation;
 mod clangd_ext;
 pub mod code_context_menus;
 mod code_lens;
+mod cursor_animation;
 pub mod display_map;
 mod document_colors;
 mod document_links;
@@ -103,7 +103,6 @@ use ::git::{Blame, Restore, blame::BlameEntry, commit::ParsedCommitMessage, stat
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, BuildError};
 use anyhow::{Context as _, Result, anyhow, bail};
 use blink_manager::BlinkManager;
-use cursor_animation::CursorAnimationStates;
 use buffer_diff::DiffHunkStatus;
 use client::{Collaborator, ParticipantIndex, parse_zed_link};
 use clock::ReplicaId;
@@ -115,6 +114,7 @@ use code_lens::CodeLensState;
 use collections::TypeIdHashMap;
 use collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use convert_case::{Case, Casing};
+use cursor_animation::CursorAnimationStates;
 use dap::TelemetrySpawnLocation;
 use display_map::*;
 use document_colors::LspColorData;
