@@ -6482,10 +6482,19 @@ impl EditorElement {
         });
     }
 
+    const DELETED_MARKER_WIDTH_RATIO: f32 = 0.35 / 0.275;
+
     fn gutter_strip_width(line_height: Pixels, cx: &App) -> Pixels {
         match EditorSettings::get_global(cx).gutter.git_gutter_width {
             Some(width) => px(width),
             None => (0.275 * line_height).floor(),
+        }
+    }
+
+    fn deleted_marker_base_width(setting: Option<f32>, line_height: Pixels) -> Pixels {
+        match setting {
+            Some(width) => px(width * Self::DELETED_MARKER_WIDTH_RATIO),
+            None => (0.275 * line_height * Self::DELETED_MARKER_WIDTH_RATIO).floor(),
         }
     }
 
@@ -6524,10 +6533,10 @@ impl EditorElement {
                             .into();
                     let end_y = start_y + line_height;
 
-                    let width = match EditorSettings::get_global(cx).gutter.git_gutter_width {
-                        Some(width) => px(width),
-                        None => (0.35 * line_height).floor(),
-                    };
+                    let width = Self::deleted_marker_base_width(
+                        EditorSettings::get_global(cx).gutter.git_gutter_width,
+                        line_height,
+                    );
                     let highlight_origin = gutter_bounds.origin + point(px(0.), start_y);
                     let highlight_size = size(width, end_y - start_y);
                     Bounds::new(highlight_origin, highlight_size)
@@ -14503,6 +14512,25 @@ mod tests {
 
         // line height is close to 1/4 the target height
         assert_eq!(EditorElement::spacer_pattern_period(20.0, 4.8), 5.0);
+    }
+
+    #[test]
+    fn test_deleted_marker_base_width() {
+        assert_eq!(
+            EditorElement::deleted_marker_base_width(None, px(22.0)),
+            px(7.0),
+        );
+
+        let boosted = EditorElement::deleted_marker_base_width(Some(6.0), px(22.0));
+        assert!(
+            boosted > px(6.0),
+            "boosted={boosted:?} must exceed the raw custom width so the deleted pill stays visible"
+        );
+
+        assert_eq!(
+            EditorElement::deleted_marker_base_width(Some(0.0), px(22.0)),
+            px(0.0),
+        );
     }
 
     #[gpui::test(iterations = 100)]
