@@ -1,26 +1,18 @@
 use std::sync::Arc;
 
-use client::{Client, UserStore};
-use gpui::{Entity, IntoElement, ParentElement};
+use gpui::{IntoElement, ParentElement};
 use language_model::{LanguageModelRegistry, ZED_CLOUD_PROVIDER_ID};
 use ui::prelude::*;
 
 use crate::{AgentPanelOnboardingCard, ApiKeysWithoutProviders, ZedAiOnboarding};
 
 pub struct AgentPanelOnboarding {
-    user_store: Entity<UserStore>,
-    client: Arc<Client>,
     has_configured_providers: bool,
-    continue_with_zed_ai: Arc<dyn Fn(&mut Window, &mut App)>,
+    dismiss: Arc<dyn Fn(&mut Window, &mut App)>,
 }
 
 impl AgentPanelOnboarding {
-    pub fn new(
-        user_store: Entity<UserStore>,
-        client: Arc<Client>,
-        continue_with_zed_ai: impl Fn(&mut Window, &mut App) + 'static,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(dismiss: impl Fn(&mut Window, &mut App) + 'static, cx: &mut Context<Self>) -> Self {
         cx.subscribe(
             &LanguageModelRegistry::global(cx),
             |this: &mut Self, _registry, event: &language_model::Event, cx| match event {
@@ -36,10 +28,8 @@ impl AgentPanelOnboarding {
         .detach();
 
         Self {
-            user_store,
-            client,
             has_configured_providers: Self::has_configured_providers(cx),
-            continue_with_zed_ai: Arc::new(continue_with_zed_ai),
+            dismiss: Arc::new(dismiss),
         }
     }
 
@@ -52,15 +42,9 @@ impl AgentPanelOnboarding {
 }
 
 impl Render for AgentPanelOnboarding {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let onboarding = ZedAiOnboarding::new(
-            self.client.clone(),
-            &self.user_store,
-            self.continue_with_zed_ai.clone(),
-            cx,
-        )
-        .with_dismiss({
-            let callback = self.continue_with_zed_ai.clone();
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let onboarding = ZedAiOnboarding::new().with_dismiss({
+            let callback = self.dismiss.clone();
             move |window, cx| callback(window, cx)
         });
 

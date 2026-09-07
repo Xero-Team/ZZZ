@@ -2,19 +2,15 @@ mod agent_api_keys_onboarding;
 mod agent_panel_onboarding_card;
 mod agent_panel_onboarding_content;
 mod edit_prediction_onboarding_content;
-mod plan_definitions;
 
 pub use agent_api_keys_onboarding::{ApiKeysWithProviders, ApiKeysWithoutProviders};
 pub use agent_panel_onboarding_card::AgentPanelOnboardingCard;
 pub use agent_panel_onboarding_content::AgentPanelOnboarding;
 pub use edit_prediction_onboarding_content::EditPredictionOnboarding;
-pub use plan_definitions::PlanDefinitions;
 
 use std::sync::Arc;
 
-use client::{Client, UserStore};
-use cloud_api_types::Plan;
-use gpui::{AnyElement, Entity, IntoElement, ParentElement};
+use gpui::{AnyElement, IntoElement, ParentElement};
 use i18n as app_i18n;
 use ui::{List, ListBulletItem, RegisterComponent, Tooltip, prelude::*};
 
@@ -22,53 +18,14 @@ fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()
 }
 
-#[derive(PartialEq)]
-pub enum SignInStatus {
-    SignedIn,
-    SigningIn,
-    SignedOut,
-}
-
-impl From<client::Status> for SignInStatus {
-    fn from(status: client::Status) -> Self {
-        if status.is_signing_in() {
-            Self::SigningIn
-        } else if status.is_signed_out() {
-            Self::SignedOut
-        } else {
-            Self::SignedIn
-        }
-    }
-}
-
 #[derive(RegisterComponent, IntoElement)]
 pub struct ZedAiOnboarding {
-    pub sign_in_status: SignInStatus,
-    pub plan: Option<Plan>,
-    pub account_too_young: bool,
-    pub continue_with_zed_ai: Arc<dyn Fn(&mut Window, &mut App)>,
-    pub sign_in: Arc<dyn Fn(&mut Window, &mut App)>,
     pub dismiss_onboarding: Option<Arc<dyn Fn(&mut Window, &mut App)>>,
 }
 
 impl ZedAiOnboarding {
-    pub fn new(
-        client: Arc<Client>,
-        user_store: &Entity<UserStore>,
-        continue_with_zed_ai: Arc<dyn Fn(&mut Window, &mut App)>,
-        cx: &mut App,
-    ) -> Self {
-        let store = user_store.read(cx);
-        let status = *client.status().borrow();
-
+    pub fn new() -> Self {
         Self {
-            sign_in_status: status.into(),
-            plan: store.plan(),
-            account_too_young: store.account_too_young(),
-            continue_with_zed_ai,
-            // ZZZ has no account onboarding. Remote providers are configured in
-            // the provider settings view, never through a sign-in flow.
-            sign_in: Arc::new(|_window, _cx| {}),
             dismiss_onboarding: None,
         }
     }
@@ -113,13 +70,18 @@ impl ZedAiOnboarding {
             .child(
                 Label::new(tr(
                     cx,
-                    "ai_onboarding.sign_in_try_pro",
+                    "ai_onboarding.configure_local_provider_body",
                     "Configure a local or user-managed provider to use AI features.",
                 ))
                 .color(Color::Muted)
                 .mb_2(),
             )
-            .child(PlanDefinitions.configure_local_provider())
+            .child(
+                List::new()
+                    .child(ListBulletItem::new("Configure a local provider"))
+                    .child(ListBulletItem::new("Ollama and llama.cpp are preferred"))
+                    .child(ListBulletItem::new("No ZZZ account required")),
+            )
             .children(self.render_dismiss_button(cx))
             .into_any_element()
     }
@@ -147,17 +109,8 @@ impl Component for ZedAiOnboarding {
                 .min_w_40()
                 .max_w(px(1100.))
                 .child(
-                    AgentPanelOnboardingCard::new().child(
-                        ZedAiOnboarding {
-                            sign_in_status: SignInStatus::SignedOut,
-                            plan: None,
-                            account_too_young: false,
-                            continue_with_zed_ai: Arc::new(|_, _| {}),
-                            sign_in: Arc::new(|_, _| {}),
-                            dismiss_onboarding: None,
-                        }
-                        .into_any_element(),
-                    ),
+                    AgentPanelOnboardingCard::new()
+                        .child(ZedAiOnboarding::new().into_any_element()),
                 )
                 .into_any_element()
         }
