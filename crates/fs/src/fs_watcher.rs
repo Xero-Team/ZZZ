@@ -3,7 +3,7 @@ use notify::{Event, EventKind};
 use parking_lot::Mutex;
 use std::{
     collections::HashMap,
-    fs,
+    fs, io,
     ops::DerefMut,
     path::Path,
     sync::{Arc, LazyLock, OnceLock},
@@ -975,12 +975,7 @@ impl GlobalWatcher {
         };
 
         match watcher {
-            // inotify auto-removes a watch when its directory is deleted, so a
-            // later unwatch races that and fails with a benign error. Either way
-            // the path is no longer watched, which is all we wanted.
-            Some(Err(error)) if !matches!(error.kind, notify::ErrorKind::WatchNotFound) => {
-                Err(error.into())
-            }
+            Some(Err(error)) if !is_benign_unwatch_error(&error) => Err(error.into()),
             _ => Ok(()),
         }
     }
@@ -1073,6 +1068,20 @@ fn global_watcher() -> &'static GlobalWatcher {
             event_tx,
         }
     })
+}
+
+fn is_benign_unwatch_error(error: &notify::Error) -> bool {
+    match &error.kind {
+        notify::ErrorKind::WatchNotFound | notify::ErrorKind::PathNotFound => true,
+        notify::ErrorKind::Io(io_error) => {
+            matches!(io_error.raw_os_error(), Some(libc::EINVAL | libc::ENOENT))
+                || matches!(
+                    io_error.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::InvalidInput
+                )
+        }
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -1168,6 +1177,22 @@ mod tests {
         path_events: Vec<PathEvent>,
         expected_pending_paths: Vec<PathEvent>,
         expected_path_events: Vec<PathEvent>,
+    }
+
+    #[test]
+    fn unwatch_treats_missing_and_invalid_watches_as_benign() {
+        assert!(is_benign_unwatch_error(&notify::Error::new(
+            notify::ErrorKind::WatchNotFound
+        )));
+        assert!(is_benign_unwatch_error(&notify::Error::new(
+            notify::ErrorKind::PathNotFound
+        )));
+        assert!(is_benign_unwatch_error(&notify::Error::new(
+            notify::ErrorKind::Io(io::Error::from_raw_os_error(libc::EINVAL))
+        )));
+        assert!(!is_benign_unwatch_error(&notify::Error::new(
+            notify::ErrorKind::MaxFilesWatch
+        )));
     }
 
     #[test]
