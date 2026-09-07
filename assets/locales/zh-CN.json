@@ -3458,6 +3458,7 @@
     "audio_viewer.mute": "静音",
     "audio_viewer.file_name.fallback": "音频",
     "audio_viewer.error.missing_extension": "音频文件没有扩展名",
+    "audio_viewer.error.not_local": "音频文件在本地不可用",
     "audio_viewer.error.playback": "无法打开音频输出",
     "audio_viewer.channels.mono": "单声道",
     "audio_viewer.channels.stereo": "立体声",

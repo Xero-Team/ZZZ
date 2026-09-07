@@ -30,9 +30,10 @@ Or use `Cmd+O` (macOS) / `Ctrl+O` (Linux/Windows) to open a folder from within Z
 By default, new projects open in your current window's threads sidebar. To open in a new window instead, use `zzz -n ~/projects/my-app` or press `Cmd+Enter` when selecting from Open Recent. See [Windows & Projects](./windows-and-projects.md) for more details.
 
 Opening an MP3, WAV, FLAC, OGG, M4A, or AAC file uses the audio viewer instead
-of a text editor. {#kb audio_viewer::TogglePlay} plays or pauses,
-{#kb audio_viewer::Stop} stops, and arrow keys seek. Images and PDFs also open
-in dedicated viewers.
+of a text editor. It streams the file, shows tags and cover art when present,
+and lists sample rate, bit depth, and bitrate. {#kb audio_viewer::TogglePlay}
+plays or pauses, {#kb audio_viewer::Stop} stops, and arrow keys seek. Images
+and PDFs also open in dedicated viewers.
 
 ### 2. Learn the Essential Commands
 

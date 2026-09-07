@@ -3458,6 +3458,7 @@
     "audio_viewer.mute": "Mute",
     "audio_viewer.file_name.fallback": "Audio",
     "audio_viewer.error.missing_extension": "Audio file has no extension",
+    "audio_viewer.error.not_local": "Audio file is not available locally",
     "audio_viewer.error.playback": "Could not open audio output",
     "audio_viewer.channels.mono": "Mono",
     "audio_viewer.channels.stereo": "Stereo",

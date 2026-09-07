@@ -1,11 +1,10 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use anyhow::Context as _;
 use audio::PlaybackHandle;
 use editor::RevealInFileManager;
 use gpui::{
-    App, AppContext, Bounds, Context, Entity, EventEmitter, FocusHandle, Focusable, Pixels,
-    SharedString, Task, WeakEntity, Window,
+    App, AppContext, Bounds, Context, Entity, EventEmitter, FocusHandle, Focusable, Image, Pixels,
+    SharedString, Subscription, Task, WeakEntity, Window,
 };
 use i18n::tr;
 use project::{Project, ProjectPath};
@@ -34,9 +33,10 @@ pub(crate) enum LoadState {
 }
 
 pub(crate) struct LoadedAudio {
-    pub bytes: Arc<[u8]>,
+    pub path: PathBuf,
     pub format_hint: String,
     pub metadata: AudioMetadata,
+    pub cover: Option<Arc<Image>>,
     pub peaks: Option<Arc<[(f32, f32)]>>,
     pub analyzing: bool,
 }
@@ -61,6 +61,7 @@ pub struct AudioView {
     _load_task: Task<()>,
     _waveform_task: Option<Task<()>>,
     _position_task: Option<Task<()>>,
+    _worktree_subscription: Subscription,
 }
 
 pub enum AudioViewEvent {
@@ -91,6 +92,7 @@ impl AudioView {
         .detach();
 
         let load_task = Self::start_load(cx);
+        let worktree_subscription = cx.subscribe(&project, Self::on_project_event);
 
         Self {
             audio_item,
@@ -112,51 +114,67 @@ impl AudioView {
             _load_task: load_task,
             _waveform_task: None,
             _position_task: None,
+            _worktree_subscription: worktree_subscription,
         }
+    }
+
+    fn on_project_event(
+        &mut self,
+        _: Entity<Project>,
+        event: &project::Event,
+        cx: &mut Context<Self>,
+    ) {
+        let project::Event::WorktreeUpdatedEntries(worktree_id, changes) = event else {
+            return;
+        };
+        let item = self.audio_item.read(cx);
+        if item.worktree_id != *worktree_id {
+            return;
+        }
+        let path = item.path.clone();
+        if changes
+            .iter()
+            .any(|(changed_path, _, _)| changed_path.as_ref() == path.as_ref())
+        {
+            self.reload(cx);
+        }
+    }
+
+    fn reload(&mut self, cx: &mut Context<Self>) {
+        self.stop_playback(cx);
+        self._load_task = Self::start_load(cx);
     }
 
     fn start_load(cx: &mut Context<Self>) -> Task<()> {
         cx.spawn(async move |this, cx| {
-            let load_task = this.update(cx, |view, cx| {
-                let item = view.audio_item.read(cx);
-                let path = item.path.clone();
-                let worktree_id = item.worktree_id;
-                let worktree = view
-                    .project
-                    .read(cx)
-                    .worktree_for_id(worktree_id, cx)
-                    .with_context(|| format!("worktree {worktree_id:?} not found"))?;
-                anyhow::Ok(worktree.update(cx, |worktree, cx| {
-                    worktree.load_binary_file(path.as_ref(), cx)
-                }))
-            });
-
-            let load_task = match load_task {
-                Ok(Ok(task)) => task,
-                Ok(Err(error)) | Err(error) => {
-                    Self::set_error(&this, error.to_string(), cx);
-                    return;
-                }
-            };
-
-            let loaded = match load_task.await {
-                Ok(loaded) => loaded,
-                Err(error) => {
-                    Self::set_error(&this, error.to_string(), cx);
-                    return;
-                }
-            };
-
-            let bytes: Arc<[u8]> = Arc::from(loaded.content);
-            let format_hint = match this.update(cx, |view, cx| {
-                view.audio_item
+            let prepared = this.update(cx, |view, cx| {
+                let format_hint = view
+                    .audio_item
                     .read(cx)
                     .path
                     .extension()
-                    .map(ToOwned::to_owned)
-            }) {
-                Ok(Some(extension)) => extension,
-                Ok(None) => {
+                    .map(ToOwned::to_owned);
+                (view.abs_path(cx), format_hint)
+            });
+
+            let (path, format_hint) = match prepared {
+                Ok((Some(path), Some(format_hint))) => (path, format_hint),
+                Ok((None, _)) => {
+                    this.update(cx, |view, cx| {
+                        view.load_state = LoadState::Error(
+                            tr(
+                                cx,
+                                "audio_viewer.error.not_local",
+                                "Audio file is not available locally",
+                            )
+                            .into(),
+                        );
+                        cx.notify();
+                    })
+                    .ok();
+                    return;
+                }
+                Ok((_, None)) => {
                     this.update(cx, |view, cx| {
                         view.load_state = LoadState::Error(
                             tr(
@@ -177,33 +195,44 @@ impl AudioView {
                 }
             };
 
-            let decode_bytes = bytes.clone();
-            let hint = format_hint.clone();
-            let metadata_result = cx
-                .background_spawn(async move { player::decode_metadata(decode_bytes, &hint) })
+            let info = cx
+                .background_spawn({
+                    let path = path.clone();
+                    let format_hint = format_hint.clone();
+                    async move { player::read_audio(&path, &format_hint) }
+                })
                 .await;
 
-            let metadata = match metadata_result {
-                Ok(metadata) => metadata,
-                Err(error) => {
-                    Self::set_error(&this, error.to_string(), cx);
-                    return;
+            match info {
+                Ok(info) => {
+                    this.update(cx, |view, cx| {
+                        view.load_state = LoadState::Loaded(Box::new(LoadedAudio {
+                            path,
+                            format_hint,
+                            metadata: info.metadata,
+                            cover: info.cover,
+                            peaks: None,
+                            analyzing: true,
+                        }));
+                        view.start_waveform(cx);
+                        cx.emit(AudioViewEvent::TitleChanged);
+                        cx.notify();
+                    })
+                    .ok();
                 }
-            };
-
-            this.update(cx, |view, cx| {
-                view.load_state = LoadState::Loaded(Box::new(LoadedAudio {
-                    bytes,
-                    format_hint,
-                    metadata,
-                    peaks: None,
-                    analyzing: true,
-                }));
-                view.start_waveform(cx);
-                cx.emit(AudioViewEvent::TitleChanged);
-                cx.notify();
-            })
-            .ok();
+                Err(error) => {
+                    let keep_existing = this
+                        .update(cx, |view, _cx| {
+                            matches!(view.load_state, LoadState::Loaded(_))
+                        })
+                        .unwrap_or(false);
+                    if keep_existing {
+                        log::error!("reloading audio preview: {error:#}");
+                    } else {
+                        Self::set_error(&this, error.to_string(), cx);
+                    }
+                }
+            }
         })
     }
 
@@ -224,13 +253,13 @@ impl AudioView {
         let LoadState::Loaded(loaded) = &self.load_state else {
             return;
         };
-        let bytes = loaded.bytes.clone();
+        let path = loaded.path.clone();
         let format_hint = loaded.format_hint.clone();
 
         self._waveform_task = Some(cx.spawn(async move |this, cx| {
             let result = cx
                 .background_spawn(async move {
-                    let decoder = player::open_decoder(bytes, &format_hint)?;
+                    let decoder = player::open_decoder(&path, &format_hint)?;
                     anyhow::Ok(waveform::extract_waveform_peaks(
                         decoder,
                         WAVEFORM_BUCKETS,
@@ -274,6 +303,25 @@ impl AudioView {
 
     pub(crate) fn duration(&self) -> Option<Duration> {
         self.loaded().and_then(|loaded| loaded.metadata.duration)
+    }
+
+    pub(crate) fn cover(&self) -> Option<Arc<Image>> {
+        self.loaded().and_then(|loaded| loaded.cover.clone())
+    }
+
+    pub(crate) fn tag_title(&self) -> Option<&str> {
+        self.loaded()
+            .and_then(|loaded| loaded.metadata.title.as_deref())
+    }
+
+    pub(crate) fn tag_artist(&self) -> Option<&str> {
+        self.loaded()
+            .and_then(|loaded| loaded.metadata.artist.as_deref())
+    }
+
+    pub(crate) fn tag_album(&self) -> Option<&str> {
+        self.loaded()
+            .and_then(|loaded| loaded.metadata.album.as_deref())
     }
 
     pub(crate) fn is_playing(&self) -> bool {
@@ -326,6 +374,16 @@ impl AudioView {
     pub(crate) fn metadata_tooltip(&self, cx: &App) -> String {
         let path_style = self.project.read(cx).path_style(cx);
         let mut lines = vec![self.relative_path(cx).display(path_style).into_owned()];
+        if let Some(title) = self.tag_title() {
+            lines.push(title.to_string());
+        }
+        let artist_album = [self.tag_artist(), self.tag_album()]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        if !artist_album.is_empty() {
+            lines.push(artist_album.join(" • "));
+        }
         if let Some(parts) = self.metadata_parts(cx) {
             lines.push(parts.join(" • "));
         }
@@ -336,7 +394,13 @@ impl AudioView {
         let loaded = self.loaded()?;
         let mut parts = Vec::new();
         parts.push(format_sample_rate(loaded.metadata.sample_rate));
+        if let Some(bit_depth) = loaded.metadata.bit_depth {
+            parts.push(format_bit_depth(bit_depth));
+        }
         parts.push(format_channels(loaded.metadata.channels, cx));
+        if let Some(bitrate) = loaded.metadata.bitrate {
+            parts.push(format_bitrate(bitrate));
+        }
         parts.push(loaded.metadata.format_label.to_string());
         if let Some(duration) = loaded.metadata.duration {
             parts.push(format_timestamp(duration));
@@ -424,7 +488,7 @@ impl AudioView {
         let Some(loaded) = self.loaded() else {
             return;
         };
-        let bytes = loaded.bytes.clone();
+        let path = loaded.path.clone();
         let format_hint = loaded.format_hint.clone();
         let duration = loaded.metadata.duration;
         if let Some(duration) = duration
@@ -436,7 +500,7 @@ impl AudioView {
         let start = self.position;
         let volume = self.output_volume();
 
-        match player::play_bytes(bytes, &format_hint, start, volume, cx) {
+        match player::play_path(&path, &format_hint, start, volume, cx) {
             Ok(handle) => {
                 self.handle = Some(handle);
                 self.playback = PlaybackStatus::Playing;
@@ -567,8 +631,7 @@ impl AudioView {
         let Some(duration) = self.duration() else {
             return;
         };
-        let nanos = (duration.as_secs_f64() * ratio.clamp(0.0, 1.0) as f64) as u64;
-        self.seek_to(Duration::from_nanos(nanos), cx);
+        self.seek_to(position_from_ratio(duration, ratio), cx);
     }
 
     pub(crate) fn set_volume_from_ratio(&mut self, ratio: f32, cx: &mut Context<Self>) {
@@ -590,6 +653,10 @@ impl AudioView {
     }
 }
 
+fn position_from_ratio(duration: Duration, ratio: f32) -> Duration {
+    Duration::from_secs_f64(duration.as_secs_f64() * ratio.clamp(0.0, 1.0) as f64)
+}
+
 pub(crate) fn format_timestamp(duration: Duration) -> String {
     let total_seconds = duration.as_secs();
     let hours = total_seconds / 3600;
@@ -600,6 +667,14 @@ pub(crate) fn format_timestamp(duration: Duration) -> String {
     } else {
         format!("{minutes}:{seconds:02}")
     }
+}
+
+fn format_bitrate(bitrate: u32) -> String {
+    format!("{bitrate} kbps")
+}
+
+fn format_bit_depth(bit_depth: u8) -> String {
+    format!("{bit_depth}-bit")
 }
 
 fn format_sample_rate(sample_rate: u32) -> String {
@@ -624,8 +699,25 @@ fn format_channels(channels: u16, cx: &App) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::format_timestamp;
+    use super::{format_bit_depth, format_bitrate, format_timestamp, position_from_ratio};
     use std::time::Duration;
+
+    #[test]
+    fn format_bitrate_and_bit_depth() {
+        assert_eq!(format_bitrate(320), "320 kbps");
+        assert_eq!(format_bit_depth(16), "16-bit");
+        assert_eq!(format_bit_depth(24), "24-bit");
+    }
+
+    #[test]
+    fn position_from_ratio_maps_seconds() {
+        let duration = Duration::from_secs(200);
+        assert_eq!(position_from_ratio(duration, 0.0), Duration::ZERO);
+        assert_eq!(position_from_ratio(duration, 0.5), Duration::from_secs(100));
+        assert_eq!(position_from_ratio(duration, 1.0), duration);
+        assert_eq!(position_from_ratio(duration, -0.5), Duration::ZERO);
+        assert_eq!(position_from_ratio(duration, 2.0), duration);
+    }
 
     #[test]
     fn format_timestamp_minutes_and_seconds() {

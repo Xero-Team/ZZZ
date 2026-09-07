@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use gpui::{
     AnyElement, Bounds, Context, CursorStyle, EventEmitter, Focusable, InteractiveElement,
-    IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels,
-    Render, Styled, WeakEntity, Window, canvas, div, px, relative,
+    IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit,
+    ParentElement, Pixels, Render, Styled, WeakEntity, Window, canvas, div, img, px, relative,
 };
 use i18n::tr;
 use ui::{Tooltip, prelude::*};
@@ -39,6 +39,9 @@ impl AudioView {
             .max_w_128()
             .gap_4()
             .p_6()
+            .when_some(self.render_identity(cx), |this, identity| {
+                this.child(identity)
+            })
             .child(self.render_waveform(cx))
             .child(self.render_transport(cx))
             .when_some(self.playback_error.clone(), |this, message| {
@@ -56,6 +59,53 @@ impl AudioView {
                 )
             })
             .into_any_element()
+    }
+
+    fn render_identity(&self, _cx: &mut Context<Self>) -> Option<AnyElement> {
+        let cover = self.cover();
+        let title = self.tag_title().map(ToOwned::to_owned);
+        let artist = self.tag_artist().map(ToOwned::to_owned);
+        let album = self.tag_album().map(ToOwned::to_owned);
+        if cover.is_none() && title.is_none() && artist.is_none() && album.is_none() {
+            return None;
+        }
+
+        let subtitle = match (artist, album) {
+            (Some(artist), Some(album)) => Some(format!("{artist} • {album}")),
+            (artist, album) => artist.or(album),
+        };
+        let details = v_flex()
+            .min_w_0()
+            .gap_1()
+            .when_some(title, |this, title| {
+                this.child(Label::new(title).single_line())
+            })
+            .when_some(subtitle, |this, subtitle| {
+                this.child(
+                    Label::new(subtitle)
+                        .size(LabelSize::Small)
+                        .color(Color::Muted)
+                        .single_line(),
+                )
+            });
+
+        Some(
+            h_flex()
+                .w_full()
+                .gap_4()
+                .items_center()
+                .when_some(cover, |this, cover| {
+                    this.child(
+                        img(cover)
+                            .id("audio-cover")
+                            .size(px(96.))
+                            .rounded_md()
+                            .object_fit(ObjectFit::Cover),
+                    )
+                })
+                .child(details)
+                .into_any_element(),
+        )
     }
 
     fn render_waveform(&self, cx: &mut Context<Self>) -> AnyElement {
