@@ -90,7 +90,57 @@ check_product_surfaces_no_hosted_docs() {
         "$root/crates/title_bar" "$root/crates/edit_prediction_ui" "$root/crates/edit_prediction/src" \
         "$root/crates/agent_ui" "$root/crates/settings_ui/src" "$root/crates/language_tools/src" \
         "$root/crates/theme_selector/src" "$root/crates/debugger_ui/src" "$root/crates/repl/src" \
-        "$root/crates/install_cli/src" "$root/crates/language_onboarding/src" "$root/crates/feedback/src"
+        "$root/crates/install_cli/src" "$root/crates/language_onboarding/src" "$root/crates/feedback/src" \
+        "$root/crates/extensions_ui/src" "$root/crates/editor/src/editor.rs" \
+        "$root/crates/workspace/src/notifications.rs" "$root/crates/language_models/src" \
+        "$root/crates/recent_projects/src" "$root/crates/cli/src/main.rs" \
+        "$root/crates/project/src/project.rs"
+}
+
+check_no_extension_feature_upsells() {
+    ! rg -n 'fn render_feature_upsells|fn refresh_feature_upsells|extensions_ui.upsell\.' \
+        "$root/crates/extensions_ui" "$root/assets/locales"
+}
+
+check_onboarding_has_no_plan_or_signin() {
+    ! rg -n 'cloud_api_types::Plan|continue_with_zed_ai|PlanDefinitions|enum SignInStatus' \
+        "$root/crates/ai_onboarding"
+}
+
+check_no_zed_business_locale() {
+    ! rg -n 'welcome_zed_business|Welcome to Zed Business|welcome_zed_student|Welcome to Zed Student' \
+        "$root/assets/locales/en.json" "$root/assets/locales/zh-CN.json"
+}
+
+check_no_discord_community() {
+    ! rg -n 'discord\.gg/zed-community' "$root/docs" "$root/crates"
+}
+
+check_dev_docs_clone_this_repo() {
+    ! rg -n 'Clone the \[ZZZ repository\]\(https://github.com/zed-industries/zed\)' \
+        "$root/docs/src/development"
+}
+
+check_orphan_billing_docs_absent() {
+    ! test -f "$root/docs/src/ai/billing.md" \
+        && ! test -f "$root/docs/src/ai/subscription.md" \
+        && ! test -f "$root/docs/src/ai/plans-and-usage.md" \
+        && ! test -f "$root/docs/src/ai/ai-improvement.md" \
+        && ! test -f "$root/docs/src/authentication.md"
+}
+
+check_cloudflare_workers_absent() {
+    ! test -d "$root/.cloudflare" \
+        && ! rg -n 'cloudflare/wrangler-action|deploy \.cloudflare/' \
+            "$root/tooling/xtask/src/tasks/workflows/deploy_docs.rs"
+}
+
+check_open_router_no_zed_identity() {
+    ! rg -n 'HTTP-Referer.*zed\.dev|X-Title.*, "Zed Editor"' "$root/crates/open_router"
+}
+
+check_keymaps_no_hosted_docs() {
+    ! rg -n 'zed\.dev/docs' "$root/assets/keymaps"
 }
 
 check_privacy_documented() {
@@ -260,6 +310,15 @@ check "packaging terms are offline and non-commercial" check_packaging_terms_are
 check "default cloud hosts are absent" check_no_default_cloud_hosts
 check "product defaults do not reference hosted ZZZ hosts" check_product_defaults_no_zed_host
 check "product surfaces have no hosted documentation links" check_product_surfaces_no_hosted_docs
+check "extension gallery has no feature upsell banners" check_no_extension_feature_upsells
+check "AI onboarding has no plan or sign-in types" check_onboarding_has_no_plan_or_signin
+check "locales have no Zed Business or Student welcome copy" check_no_zed_business_locale
+check "docs have no Discord community invite" check_no_discord_community
+check "development clone URLs point at this repository" check_dev_docs_clone_this_repo
+check "orphan billing and account docs are absent" check_orphan_billing_docs_absent
+check "Cloudflare hosted-docs workers are absent" check_cloudflare_workers_absent
+check "OpenRouter requests do not identify as Zed" check_open_router_no_zed_identity
+check "default keymaps do not point at hosted docs" check_keymaps_no_hosted_docs
 check "privacy boundary is linked from documentation summary" check_privacy_documented
 check "docs do not say auto-update is on by default" check_docs_auto_update_off
 check "docs do not default edit prediction provider to zed" check_docs_no_zed_edit_prediction_default
