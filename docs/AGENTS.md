@@ -114,11 +114,8 @@ Use bold labels for callouts:
 
 ### Image References
 
-Images are hosted externally. Reference format:
-
-```markdown
-![Alt text description](https://zed.dev/img/path/to/image.webp)
-```
+Do not hotlink `https://zed.dev/img/...` or `https://images.zed.dev/...`.
+Use an in-repo asset, or omit the image.
 
 ### Cross-Linking
 

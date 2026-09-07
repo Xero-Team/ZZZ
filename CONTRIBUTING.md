@@ -44,7 +44,7 @@ submitted. If you'd like your PR to have the best chance of being merged:
   effort. If there isn't already a Codeberg issue for your feature with
   confirmation that we want it, start with an issue rather than a PR.
 - Include a clear description of **what you're solving**, and why it's important.
-- Include **tests**. For UI changes, consider updating visual regression tests (see [Building Zed for macOS](./docs/src/development/macos.md#visual-regression-tests)).
+- Include **tests**. For UI changes, consider updating visual regression tests (see [Building ZZZ for macOS](./docs/src/development/macos.md#visual-regression-tests)).
 - If it changes the UI, attach **screenshots** or screen recordings.
 - Make the PR about **one thing only**, e.g. if it's a bugfix, don't add two
   features and a refactoring on top of that.
@@ -95,13 +95,13 @@ When your changes affect UI, consult this checklist:
 - Frames must take no more than 8ms (120fps)
 
 **Consistency**
-- Does it match Zed’s design language (spacing, typography, icons)?
-- Are terminology, labels, and tone consistent with the rest of Zed?
+- Does it match ZZZ’s design language (spacing, typography, icons)?
+- Are terminology, labels, and tone consistent with the rest of ZZZ?
 - Are interactions consistent (e.g., how tabs close, how modals dismiss, how errors show)?
 
 **Internationalization & Text**
 - Are strings concise, clear, and unambiguous?
-- Do we avoid internal Zed jargon that only insiders would know?
+- Do we avoid internal jargon that only insiders would know?
 
 **User Paths & Edge Cases**
 - What does the happy path look like?

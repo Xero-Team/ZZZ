@@ -9,7 +9,7 @@ description: "Guide to building zed for windows for ZZZ development."
 
 ## Repository
 
-Clone the [ZZZ repository](https://github.com/zed-industries/zed).
+Clone the [ZZZ repository](https://codeberg.org/ZZZEditor/ZZZ).
 
 ## Dependencies
 
@@ -220,7 +220,7 @@ This error can happen if you are using the "rust-lld.exe" linker. Consider tryin
 
 If you are using a global config, consider moving the ZZZ repository to a nested directory and add a `.cargo/config.toml` with a custom linker config in the parent directory.
 
-See this issue for more information [#12041](https://github.com/zed-industries/zed/issues/12041)
+See upstream Zed issue [#12041](https://github.com/zed-industries/zed/issues/12041) for more information.
 
 ### Invalid RC path selected
 
@@ -247,7 +247,7 @@ warning: build failed, waiting for other jobs to finish...
 To fix this issue, manually set the `ZED_RC_TOOLKIT_PATH` environment variable to the RC toolkit path. Usually this is:
 `C:\Program Files (x86)\Windows Kits\10\bin\<SDK_version>\x64`.
 
-See this [issue](https://github.com/zed-industries/zed/issues/18393) for more information.
+See upstream Zed issue [#18393](https://github.com/zed-industries/zed/issues/18393) for more information.
 
 ### Build fails: Path too long
 

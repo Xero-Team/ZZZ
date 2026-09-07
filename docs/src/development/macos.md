@@ -7,7 +7,7 @@ description: "Guide to building zed for macos for ZZZ development."
 
 ## Repository
 
-Clone the [ZZZ repository](https://github.com/zed-industries/zed).
+Clone the [ZZZ repository](https://codeberg.org/ZZZEditor/ZZZ).
 
 ## Dependencies
 

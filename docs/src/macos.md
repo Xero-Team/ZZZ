@@ -138,4 +138,6 @@ If ZZZ uses more resources than expected:
 2. Try disabling extensions one by one to identify conflicts
 3. For large projects, consider using [project settings](./reference/all-settings.md#file-scan-exclusions) to exclude unnecessary folders from indexing
 
-For additional help, see the [Troubleshooting guide](./troubleshooting.md) or visit the [ZZZ Discord](https://discord.gg/zed-community).
+For additional help, see the [Troubleshooting guide](./troubleshooting.md) or
+open an issue at
+<https://codeberg.org/ZZZEditor/ZZZ/issues/new>.
