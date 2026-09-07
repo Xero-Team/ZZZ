@@ -53,126 +53,17 @@ fn main() {
         }
     }
 
-    if cfg!(windows) {
-        if cfg!(target_env = "msvc") {
+    if targeting_windows() {
+        if targeting_msvc() {
             // todo(windows): This is to avoid stack overflow. Remove it when solved.
             println!("cargo:rustc-link-arg=/stack:{}", 8 * 1024 * 1024);
             println!("cargo:rustc-link-arg=/DELAYLOAD:windowsperformancerecordercontrol");
             println!("cargo:rustc-link-lib=delayimp");
         }
 
-        if cfg!(target_arch = "x86_64") || cfg!(target_arch = "aarch64") {
-            let out_dir = std::env::var("OUT_DIR").unwrap();
-            let out_dir: &std::path::Path = out_dir.as_ref();
-            let target_dir = std::path::Path::new(&out_dir)
-                .parent()
-                .and_then(|p| p.parent())
-                .and_then(|p| p.parent())
-                .expect("Failed to find target directory");
-
-            let conpty_dll_target = target_dir.join("conpty.dll");
-            let open_console_target = target_dir.join("OpenConsole.exe");
-
-            let conpty_url = "https://github.com/microsoft/terminal/releases/download/v1.24.10621.0/Microsoft.Windows.Console.ConPTY.1.24.260303001.nupkg";
-            let nupkg_path = out_dir.join("conpty.nupkg.zip");
-            let extract_dir = out_dir.join("conpty");
-
-            let download_script = format!(
-                "$ProgressPreference = 'SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '{}' -OutFile '{}'",
-                conpty_url,
-                nupkg_path.display()
-            );
-
-            let download_result = Command::new("powershell")
-                .args([
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-Command",
-                    &download_script,
-                ])
-                .output();
-
-            match download_result {
-                Ok(output) if output.status.success() => {
-                    println!("Downloaded conpty nupkg successfully");
-
-                    let extract_script = format!(
-                        "$ProgressPreference = 'SilentlyContinue'; Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
-                        nupkg_path.display(),
-                        extract_dir.display()
-                    );
-
-                    let extract_result = Command::new("powershell")
-                        .args(["-NoProfile", "-NonInteractive", "-Command", &extract_script])
-                        .output();
-
-                    match extract_result {
-                        Ok(output) if output.status.success() => {
-                            let (conpty_dll_source, open_console_source) =
-                                if cfg!(target_arch = "x86_64") {
-                                    (
-                                        extract_dir.join("runtimes/win-x64/native/conpty.dll"),
-                                        extract_dir
-                                            .join("build/native/runtimes/x64/OpenConsole.exe"),
-                                    )
-                                } else {
-                                    (
-                                        extract_dir.join("runtimes/win-arm64/native/conpty.dll"),
-                                        extract_dir
-                                            .join("build/native/runtimes/arm64/OpenConsole.exe"),
-                                    )
-                                };
-
-                            match std::fs::copy(&conpty_dll_source, &conpty_dll_target) {
-                                Ok(_) => {
-                                    println!("Copied conpty.dll to {}", conpty_dll_target.display())
-                                }
-                                Err(e) => println!(
-                                    "cargo::warning=Failed to copy conpty.dll from {}: {}",
-                                    conpty_dll_source.display(),
-                                    e
-                                ),
-                            }
-
-                            match std::fs::copy(&open_console_source, &open_console_target) {
-                                Ok(_) => println!(
-                                    "Copied OpenConsole.exe to {}",
-                                    open_console_target.display()
-                                ),
-                                Err(e) => println!(
-                                    "cargo::warning=Failed to copy OpenConsole.exe from {}: {}",
-                                    open_console_source.display(),
-                                    e
-                                ),
-                            }
-                        }
-                        Ok(output) => {
-                            println!(
-                                "cargo::warning=Failed to extract conpty nupkg: {}",
-                                String::from_utf8_lossy(&output.stderr)
-                            );
-                        }
-                        Err(e) => {
-                            println!(
-                                "cargo::warning=Failed to run PowerShell for extraction: {}",
-                                e
-                            );
-                        }
-                    }
-                }
-                Ok(output) => {
-                    println!(
-                        "cargo::warning=Failed to download conpty nupkg: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
-                Err(e) => {
-                    println!(
-                        "cargo::warning=Failed to run PowerShell for download: {}",
-                        e
-                    );
-                }
-            }
+        let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+        if target_arch == "x86_64" || target_arch == "aarch64" {
+            fetch_conpty(&target_arch);
         }
 
         let release_channel = option_env!("RELEASE_CHANNEL").unwrap_or("dev");
@@ -185,14 +76,233 @@ fn main() {
         println!("cargo:rerun-if-env-changed=RELEASE_CHANNEL");
         println!("cargo:rerun-if-env-changed=GITHUB_RUN_NUMBER");
 
-        #[cfg(windows)]
-        {
-            windows_resources::compile(false).expect("failed to compile Windows resources");
-        }
+        windows_resources::compile(false).expect("failed to compile Windows resources");
     }
 
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-    prepare_app_icon_x11();
+    if targeting_linux_or_freebsd() {
+        prepare_app_icon_x11();
+    }
+}
+
+fn targeting_windows() -> bool {
+    std::env::var("CARGO_CFG_TARGET_OS").ok().as_deref() == Some("windows")
+}
+
+fn targeting_msvc() -> bool {
+    std::env::var("CARGO_CFG_TARGET_ENV").ok().as_deref() == Some("msvc")
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn targeting_linux_or_freebsd() -> bool {
+    matches!(
+        std::env::var("CARGO_CFG_TARGET_OS").ok().as_deref(),
+        Some("linux" | "freebsd")
+    )
+}
+
+fn fetch_conpty(target_arch: &str) {
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+    let out_dir: &std::path::Path = out_dir.as_ref();
+    let target_dir = std::path::Path::new(&out_dir)
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.parent())
+        .expect("Failed to find target directory");
+
+    let conpty_url = "https://github.com/microsoft/terminal/releases/download/v1.24.10621.0/Microsoft.Windows.Console.ConPTY.1.24.260303001.nupkg";
+    let nupkg_path = out_dir.join("conpty.nupkg.zip");
+    let extract_dir = out_dir.join("conpty");
+
+    #[cfg(windows)]
+    {
+        let download_script = format!(
+            "$ProgressPreference = 'SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '{}' -OutFile '{}'",
+            conpty_url,
+            nupkg_path.display()
+        );
+
+        let download_result = Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &download_script,
+            ])
+            .output();
+
+        match download_result {
+            Ok(output) if output.status.success() => {
+                println!("Downloaded conpty nupkg successfully");
+
+                let extract_script = format!(
+                    "$ProgressPreference = 'SilentlyContinue'; Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
+                    nupkg_path.display(),
+                    extract_dir.display()
+                );
+
+                let extract_result = Command::new("powershell")
+                    .args(["-NoProfile", "-NonInteractive", "-Command", &extract_script])
+                    .output();
+
+                match extract_result {
+                    Ok(output) if output.status.success() => {
+                        install_conpty_artifacts(&extract_dir, target_dir, target_arch);
+                    }
+                    Ok(output) => {
+                        println!(
+                            "cargo::warning=Failed to extract conpty nupkg: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        );
+                    }
+                    Err(e) => {
+                        println!(
+                            "cargo::warning=Failed to run PowerShell for extraction: {}",
+                            e
+                        );
+                    }
+                }
+            }
+            Ok(output) => {
+                println!(
+                    "cargo::warning=Failed to download conpty nupkg: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            Err(e) => {
+                println!(
+                    "cargo::warning=Failed to run PowerShell for download: {}",
+                    e
+                );
+            }
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        let download_ok = if nupkg_path.exists() {
+            true
+        } else {
+            match Command::new("curl")
+                .args(["-fsSL", "-o", &nupkg_path.to_string_lossy(), conpty_url])
+                .status()
+            {
+                Ok(status) if status.success() => {
+                    println!("Downloaded conpty nupkg successfully");
+                    true
+                }
+                Ok(status) => {
+                    println!(
+                        "cargo::warning=Failed to download conpty nupkg: curl exited {status}"
+                    );
+                    false
+                }
+                Err(e) => {
+                    println!("cargo::warning=Failed to run curl for conpty download: {e}");
+                    false
+                }
+            }
+        };
+
+        if download_ok && extract_zip(&nupkg_path, &extract_dir) {
+            install_conpty_artifacts(&extract_dir, target_dir, target_arch);
+        }
+    }
+}
+
+fn install_conpty_artifacts(
+    extract_dir: &std::path::Path,
+    target_dir: &std::path::Path,
+    target_arch: &str,
+) {
+    let conpty_dll_target = target_dir.join("conpty.dll");
+    let open_console_target = target_dir.join("OpenConsole.exe");
+    let (conpty_dll_source, open_console_source) = if target_arch == "x86_64" {
+        (
+            extract_dir.join("runtimes/win-x64/native/conpty.dll"),
+            extract_dir.join("build/native/runtimes/x64/OpenConsole.exe"),
+        )
+    } else {
+        (
+            extract_dir.join("runtimes/win-arm64/native/conpty.dll"),
+            extract_dir.join("build/native/runtimes/arm64/OpenConsole.exe"),
+        )
+    };
+
+    match std::fs::copy(&conpty_dll_source, &conpty_dll_target) {
+        Ok(_) => println!("Copied conpty.dll to {}", conpty_dll_target.display()),
+        Err(e) => println!(
+            "cargo::warning=Failed to copy conpty.dll from {}: {}",
+            conpty_dll_source.display(),
+            e
+        ),
+    }
+
+    match std::fs::copy(&open_console_source, &open_console_target) {
+        Ok(_) => println!(
+            "Copied OpenConsole.exe to {}",
+            open_console_target.display()
+        ),
+        Err(e) => println!(
+            "cargo::warning=Failed to copy OpenConsole.exe from {}: {}",
+            open_console_source.display(),
+            e
+        ),
+    }
+}
+
+#[cfg(not(windows))]
+fn extract_zip(zip_path: &std::path::Path, extract_dir: &std::path::Path) -> bool {
+    if extract_dir.exists()
+        && let Err(e) = std::fs::remove_dir_all(extract_dir)
+    {
+        println!(
+            "cargo::warning=Failed to clear conpty extract dir {}: {e}",
+            extract_dir.display()
+        );
+        return false;
+    }
+    if let Err(e) = std::fs::create_dir_all(extract_dir) {
+        println!(
+            "cargo::warning=Failed to create conpty extract dir {}: {e}",
+            extract_dir.display()
+        );
+        return false;
+    }
+
+    if Command::new("unzip")
+        .args([
+            "-qo",
+            &zip_path.to_string_lossy(),
+            "-d",
+            &extract_dir.to_string_lossy(),
+        ])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+    {
+        return true;
+    }
+
+    match Command::new("python3")
+        .args([
+            "-c",
+            "import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])",
+            &zip_path.to_string_lossy(),
+            &extract_dir.to_string_lossy(),
+        ])
+        .status()
+    {
+        Ok(status) if status.success() => true,
+        Ok(status) => {
+            println!("cargo::warning=Failed to extract conpty nupkg: python3 exited {status}");
+            false
+        }
+        Err(e) => {
+            println!("cargo::warning=Failed to extract conpty nupkg: {e}");
+            false
+        }
+    }
 }
 
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]

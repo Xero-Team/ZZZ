@@ -29,8 +29,7 @@ fn main() {
         println!("cargo:rustc-env=ZED_BUILD_ID={build_identifier}");
     }
 
-    #[cfg(windows)]
-    {
+    if std::env::var("CARGO_CFG_TARGET_OS").ok().as_deref() == Some("windows") {
         println!("cargo:rerun-if-env-changed=RELEASE_CHANNEL");
         println!("cargo:rerun-if-env-changed=GITHUB_RUN_NUMBER");
 

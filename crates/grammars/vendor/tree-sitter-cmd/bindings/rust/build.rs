@@ -5,7 +5,8 @@ fn main() {
     c_config
         .std("c11")
         .include(src_dir)
-        .flag_if_supported("-Wno-unused-parameter");
+        .flag_if_supported("-Wno-unused-parameter")
+        .flag_if_supported("-Wno-unused-but-set-variable");
 
     #[cfg(target_env = "msvc")]
     c_config.flag("-utf-8");

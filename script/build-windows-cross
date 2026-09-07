@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: script/build-windows-cross [options] [-- cargo-args...]
+
+Cross-compile zzz.exe and cli.exe from Linux with msvc-wine.
+Does not build an MSI or Inno Setup installer.
+
+Options:
+  -h, --help          Show this help
+  -a, --arch ARCH     x86_64 (default) or aarch64
+  --debug             Build the dev profile instead of release
+  --profile NAME      Cargo profile (default: release)
+  --no-embed          Skip building and embedding remote_server archives
+
+Environment:
+  MSVC_ROOT           msvc-wine install root (default: /opt/msvc)
+  MSVC_DIR            msvc wrapper scripts (default: ~/.local/share/msvc)
+  GPUI_FXC_PATH       Override fxc.exe path
+EOF
+}
+
+if [[ "$(uname -s)" != Linux ]]; then
+  echo "script/build-windows-cross is for Linux hosts." >&2
+  echo "On Windows, run: cargo build --release --package zzz --package cli" >&2
+  exit 1
+fi
+
+arch=x86_64
+profile=release
+embed_remote_server=1
+cargo_args=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -a | --arch)
+      arch="${2:?missing architecture}"
+      shift 2
+      ;;
+    --debug)
+      profile=dev
+      shift
+      ;;
+    --profile)
+      profile="${2:?missing profile}"
+      shift 2
+      ;;
+    --no-embed)
+      embed_remote_server=0
+      shift
+      ;;
+    --)
+      shift
+      cargo_args+=("$@")
+      break
+      ;;
+    -*)
+      echo "Unknown option: $1" >&2
+      usage
+      exit 1
+      ;;
+    *)
+      echo "Unexpected argument: $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+case "$arch" in
+  x86_64 | x64 | amd64)
+    rust_arch=x86_64
+    msvc_arch=x64
+    ;;
+  aarch64 | arm64)
+    rust_arch=aarch64
+    msvc_arch=arm64
+    ;;
+  *)
+    echo "Unsupported architecture: $arch (use x86_64 or aarch64)" >&2
+    exit 1
+    ;;
+esac
+
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$repo_root"
+
+MSVC_ROOT="${MSVC_ROOT:-/opt/msvc}"
+MSVC_DIR="${MSVC_DIR:-${HOME}/.local/share/msvc}"
+bindir="${MSVC_ROOT}/bin/${msvc_arch}"
+
+if [[ ! -x "${bindir}/cl" ]]; then
+  echo "msvc-wine cl not found at ${bindir}/cl (MSVC_ROOT=${MSVC_ROOT})" >&2
+  exit 1
+fi
+
+if [[ -s "${MSVC_DIR}/msvc.sh" ]]; then
+  # shellcheck source=/dev/null
+  . "${MSVC_DIR}/msvc.sh"
+  msvc use "${msvc_arch}"
+else
+  PATH="${bindir}:${PATH}"
+  export PATH
+fi
+
+# shellcheck source=/dev/null
+. "${bindir}/msvcenv.sh"
+
+triple="${rust_arch}-pc-windows-msvc"
+env_triple="${triple//-/_}"
+
+# embed-resource on Linux only accepts llvm-rc/windres, not the msvc-wine `rc` wrapper.
+unset RC
+
+msvc_unix="${MSVC_ROOT}/vc/tools/msvc/${MSVCVER}"
+sdk_include=""
+sdk_lib=""
+for sdk_base in "${MSVC_ROOT}/kits/10" "${MSVC_ROOT}/Windows Kits/10"; do
+  if [[ -d "${sdk_base}/include/${SDKVER}" ]]; then
+    sdk_include="${sdk_base}/include/${SDKVER}"
+    sdk_lib="${sdk_base}/lib/${SDKVER}"
+    break
+  fi
+done
+if [[ ! -d "${msvc_unix}/include" || -z "$sdk_include" ]]; then
+  echo "msvc-wine headers not found under ${MSVC_ROOT} (MSVCVER=${MSVCVER}, SDKVER=${SDKVER})" >&2
+  exit 1
+fi
+
+export INCLUDE="${msvc_unix}/include;${msvc_unix}/atlmfc/include;${sdk_include}/shared;${sdk_include}/ucrt;${sdk_include}/um;${sdk_include}/winrt"
+export LIB="${msvc_unix}/lib/${msvc_arch};${msvc_unix}/atlmfc/lib/${msvc_arch};${sdk_lib}/ucrt/${msvc_arch};${sdk_lib}/um/${msvc_arch}"
+
+export "CC_${env_triple}=clang-cl"
+export "CXX_${env_triple}=clang-cl"
+export "AR_${env_triple}=llvm-lib"
+export "CARGO_TARGET_${env_triple^^}_LINKER=lld-link"
+export "CFLAGS_${env_triple}=-Wno-unused-but-set-variable"
+
+if [[ -z "${GPUI_FXC_PATH:-}" ]]; then
+  fxc=""
+  for kit_bin in "${MSVC_ROOT}/Windows Kits/10/bin" "${MSVC_ROOT}/kits/10/bin"; do
+    [[ -d "$kit_bin" ]] || continue
+    for version_dir in "$kit_bin"/*/; do
+      [[ -d "$version_dir" ]] || continue
+      candidate="${version_dir}${msvc_arch}/fxc.exe"
+      if [[ -f "$candidate" ]]; then
+        fxc="$candidate"
+      fi
+    done
+  done
+  if [[ -n "$fxc" ]]; then
+    export GPUI_FXC_PATH="$fxc"
+  fi
+fi
+
+if ! rustup target list --installed | grep -qx "$triple"; then
+  rustup target add "$triple"
+fi
+
+apply_windows_env() {
+  export INCLUDE="${msvc_unix}/include;${msvc_unix}/atlmfc/include;${sdk_include}/shared;${sdk_include}/ucrt;${sdk_include}/um;${sdk_include}/winrt"
+  export LIB="${msvc_unix}/lib/${msvc_arch};${msvc_unix}/atlmfc/lib/${msvc_arch};${sdk_lib}/ucrt/${msvc_arch};${sdk_lib}/um/${msvc_arch}"
+  export "CC_${env_triple}=clang-cl"
+  export "CXX_${env_triple}=clang-cl"
+  export "AR_${env_triple}=llvm-lib"
+  export "CARGO_TARGET_${env_triple^^}_LINKER=lld-link"
+  export "CFLAGS_${env_triple}=-Wno-unused-but-set-variable"
+}
+
+embed_dir="${repo_root}/target"
+
+build_linux_remote_server() {
+  local musl_triple="x86_64-unknown-linux-musl"
+  local gnu_triple="x86_64-unknown-linux-gnu"
+  local dest="${embed_dir}/zzz-remote-server-linux-x86_64.gz"
+  mkdir -p "$embed_dir"
+  (
+    unix_path=""
+    old_ifs=$IFS
+    IFS=:
+    for dir in $PATH; do
+      case "$dir" in
+        "${MSVC_ROOT}/bin/"*) continue ;;
+      esac
+      if [[ -n "$unix_path" ]]; then
+        unix_path="${unix_path}:${dir}"
+      else
+        unix_path="$dir"
+      fi
+    done
+    IFS=$old_ifs
+    export PATH="$unix_path"
+    unset INCLUDE LIB RC GPUI_FXC_PATH
+    unset "CC_${env_triple}" "CXX_${env_triple}" "AR_${env_triple}"
+    unset "CARGO_TARGET_${env_triple^^}_LINKER" "CFLAGS_${env_triple}"
+    if rustup target list --installed | grep -qx "$musl_triple" || rustup target add "$musl_triple"; then
+      if cargo build --release --package remote_server --target "$musl_triple"; then
+        gzip -f --stdout --best "target/${musl_triple}/release/remote_server" >"$dest"
+        exit 0
+      fi
+    fi
+    cargo build --release --package remote_server --target "$gnu_triple"
+    gzip -f --stdout --best "target/${gnu_triple}/release/remote_server" >"$dest"
+  )
+}
+
+build_windows_remote_server() {
+  local dest="${embed_dir}/zzz-remote-server-windows-${rust_arch}.zip"
+  mkdir -p "$embed_dir"
+  cargo build --release --package remote_server --target "$triple"
+  python3 - "$triple" "$dest" <<'PY'
+import sys
+import zipfile
+from pathlib import Path
+
+triple, dest = sys.argv[1], sys.argv[2]
+src = Path("target") / triple / "release" / "remote_server.exe"
+with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as archive:
+    archive.write(src, "remote_server.exe")
+PY
+}
+
+if [[ "$embed_remote_server" -eq 1 ]]; then
+  build_linux_remote_server
+  if command -v msvc >/dev/null 2>&1; then
+    msvc use --silent "${msvc_arch}"
+  else
+    PATH="${bindir}:${PATH}"
+    export PATH
+  fi
+  apply_windows_env
+  build_windows_remote_server
+  export ZZZ_EMBED_REMOTE_SERVER_DIR="$embed_dir"
+  export ZZZ_EMBED_REMOTE_SERVERS=1
+fi
+
+cargo_profile_args=()
+if [[ "$profile" == dev ]]; then
+  cargo_profile_args=()
+else
+  cargo_profile_args=(--profile "$profile")
+fi
+
+set -x
+cargo build \
+  "${cargo_profile_args[@]}" \
+  --package zzz \
+  --package cli \
+  --target "$triple" \
+  "${cargo_args[@]}"
+
+artifact_profile="$profile"
+if [[ "$profile" == dev ]]; then
+  artifact_profile=debug
+fi
+
+echo "Built target/${triple}/${artifact_profile}/zzz.exe"
+echo "Built target/${triple}/${artifact_profile}/cli.exe"

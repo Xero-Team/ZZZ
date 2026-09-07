@@ -2,7 +2,6 @@
     clippy::disallowed_methods,
     reason = "build helper used only from build scripts"
 )]
-#![cfg(target_os = "windows")]
 
 use std::process::Command;
 
@@ -82,11 +81,29 @@ pub fn compile(manifest: bool) -> Result<(), Box<dyn std::error::Error>> {
     let channel = option_env!("RELEASE_CHANNEL").unwrap_or("dev");
     let (icon_filename, product_name) = product_identity(channel);
     let icon = std::path::PathBuf::from(ICON_DIR).join(icon_filename);
+    let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR")?);
+
+    #[cfg(windows)]
     let icon_escaped = icon.to_string_lossy().replace('\\', "\\\\");
+    #[cfg(not(windows))]
+    let icon_escaped = {
+        let staged = out_dir.join(icon_filename);
+        std::fs::copy(&icon, &staged)?;
+        icon_filename.to_string()
+    };
 
     let manifest_line = if manifest {
-        let escaped = MANIFEST_PATH.replace('\\', "\\\\");
-        format!("1 24 \"{escaped}\"")
+        #[cfg(windows)]
+        {
+            let escaped = MANIFEST_PATH.replace('\\', "\\\\");
+            format!("1 24 \"{escaped}\"")
+        }
+        #[cfg(not(windows))]
+        {
+            let staged = out_dir.join("manifest.xml");
+            std::fs::copy(MANIFEST_PATH, &staged)?;
+            "1 24 \"manifest.xml\"".to_string()
+        }
     } else {
         String::new()
     };
@@ -128,7 +145,6 @@ END
 "#
     );
 
-    let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR")?);
     let rc_path = out_dir.join("zed_resources.rc");
     std::fs::write(&rc_path, rc_content)?;
 

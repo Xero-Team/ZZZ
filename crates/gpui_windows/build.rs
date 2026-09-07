@@ -1,15 +1,19 @@
 #![allow(clippy::disallowed_methods, reason = "build scripts are exempt")]
 
 fn main() {
-    #[cfg(target_os = "windows")]
-    {
-        // Compile HLSL shaders
-        #[cfg(not(debug_assertions))]
+    if targeting_windows() && !target_debug_assertions() {
         compile_shaders();
     }
 }
 
-#[cfg(all(target_os = "windows", not(debug_assertions)))]
+fn targeting_windows() -> bool {
+    std::env::var("CARGO_CFG_TARGET_OS").ok().as_deref() == Some("windows")
+}
+
+fn target_debug_assertions() -> bool {
+    std::env::var("CARGO_CFG_DEBUG_ASSERTIONS").is_ok()
+}
+
 mod shader_compilation {
     use std::{
         fs,
@@ -24,11 +28,11 @@ mod shader_compilation {
         let out_dir = std::env::var("OUT_DIR").unwrap();
 
         println!("cargo:rerun-if-changed={}", shader_path.display());
+        println!("cargo:rerun-if-env-changed=GPUI_FXC_PATH");
+        println!("cargo:rerun-if-env-changed=MSVC_ROOT");
 
-        // Check if fxc.exe is available
         let fxc_path = find_fxc_compiler();
 
-        // Define all modules
         let modules = [
             "quad",
             "shadow",
@@ -68,14 +72,14 @@ mod shader_compilation {
         }
     }
 
-    /// Locate `binary` in the newest installed Windows SDK.
+    #[cfg(windows)]
     pub fn find_latest_windows_sdk_binary(
         binary: &str,
     ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
         let key = windows_registry::LOCAL_MACHINE
             .open("SOFTWARE\\WOW6432Node\\Microsoft\\Microsoft SDKs\\Windows\\v10.0")?;
 
-        let install_folder: String = key.get_string("InstallationFolder")?; // "C:\Program Files (x86)\Windows Kits\10\"
+        let install_folder: String = key.get_string("InstallationFolder")?;
         let install_folder_bin = Path::new(&install_folder).join("bin");
 
         let mut versions: Vec<_> = std::fs::read_dir(&install_folder_bin)?
@@ -111,31 +115,96 @@ mod shader_compilation {
         Ok(None)
     }
 
-    /// You can set the `GPUI_FXC_PATH` environment variable to specify the path to the fxc.exe compiler.
     fn find_fxc_compiler() -> String {
-        // Check environment variable
         if let Ok(path) = std::env::var("GPUI_FXC_PATH")
             && Path::new(&path).exists()
         {
             return path;
         }
 
-        // Try to find in PATH
-        // NOTE: This has to be `where.exe` on Windows, not `where`, it must be ended with `.exe`
-        if let Ok(output) = std::process::Command::new("where.exe")
-            .arg("fxc.exe")
-            .output()
-            && output.status.success()
+        #[cfg(windows)]
         {
-            let path = String::from_utf8_lossy(&output.stdout);
-            return path.trim().to_owned();
+            if let Ok(output) = std::process::Command::new("where.exe")
+                .arg("fxc.exe")
+                .output()
+                && output.status.success()
+            {
+                let path = String::from_utf8_lossy(&output.stdout);
+                return path.trim().to_owned();
+            }
+
+            if let Ok(Some(path)) = find_latest_windows_sdk_binary("fxc.exe") {
+                return path.to_string_lossy().into_owned();
+            }
         }
 
-        if let Ok(Some(path)) = find_latest_windows_sdk_binary("fxc.exe") {
-            return path.to_string_lossy().into_owned();
+        #[cfg(not(windows))]
+        {
+            if let Some(path) = find_on_path("fxc.exe").or_else(|| find_on_path("fxc")) {
+                return path;
+            }
+            if let Some(path) = find_fxc_in_msvc_sysroot() {
+                return path;
+            }
         }
 
         panic!("Failed to find fxc.exe");
+    }
+
+    #[cfg(not(windows))]
+    fn find_on_path(name: &str) -> Option<String> {
+        let path = std::env::var_os("PATH")?;
+        std::env::split_paths(&path).find_map(|dir| {
+            let candidate = dir.join(name);
+            candidate
+                .is_file()
+                .then(|| candidate.to_string_lossy().into_owned())
+        })
+    }
+
+    #[cfg(not(windows))]
+    fn find_fxc_in_msvc_sysroot() -> Option<String> {
+        let mut roots = Vec::new();
+        if let Ok(root) = std::env::var("MSVC_ROOT") {
+            roots.push(PathBuf::from(root));
+        }
+        roots.push(PathBuf::from("/opt/msvc"));
+
+        let kit_bins = ["Windows Kits/10/bin", "kits/10/bin"];
+        let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+        let arches: &[&str] = if target_arch == "aarch64" {
+            &["arm64", "x64"]
+        } else {
+            &["x64", "arm64"]
+        };
+
+        for root in roots {
+            for kit_bin in kit_bins {
+                let bin_root = root.join(kit_bin);
+                let Ok(entries) = fs::read_dir(&bin_root) else {
+                    continue;
+                };
+                let mut versions: Vec<_> = entries
+                    .flatten()
+                    .filter(|entry| entry.path().is_dir())
+                    .filter_map(|entry| entry.file_name().into_string().ok())
+                    .collect();
+                versions.sort_by_key(|s| {
+                    s.split('.')
+                        .filter_map(|p| p.parse::<u32>().ok())
+                        .collect::<Vec<u32>>()
+                });
+                for version in versions.iter().rev() {
+                    for arch in arches {
+                        let candidate = bin_root.join(version).join(arch).join("fxc.exe");
+                        if candidate.is_file() {
+                            return Some(candidate.to_string_lossy().into_owned());
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 
     fn compile_shader_for_module(
@@ -145,7 +214,6 @@ mod shader_compilation {
         shader_path: &str,
         rust_binding_path: &str,
     ) {
-        // Compile vertex shader
         let output_file = format!("{}/{}_vs.h", out_dir, module);
         let const_name = format!("{}_VERTEX_BYTES", module.to_uppercase());
         compile_shader_impl(
@@ -158,7 +226,6 @@ mod shader_compilation {
         );
         generate_rust_binding(&const_name, &output_file, rust_binding_path);
 
-        // Compile fragment shader
         let output_file = format!("{}/{}_ps.h", out_dir, module);
         let const_name = format!("{}_FRAGMENT_BYTES", module.to_uppercase());
         compile_shader_impl(
@@ -172,6 +239,37 @@ mod shader_compilation {
         generate_rust_binding(&const_name, &output_file, rust_binding_path);
     }
 
+    fn fxc_command(fxc_path: &str) -> Command {
+        #[cfg(windows)]
+        {
+            Command::new(fxc_path)
+        }
+        #[cfg(not(windows))]
+        {
+            let path = Path::new(fxc_path);
+            if path.extension().is_none_or(|ext| ext != "exe") {
+                return Command::new(fxc_path);
+            }
+            if let Some(wrapper) = wine_msvc_wrapper() {
+                let mut command = Command::new(wrapper);
+                command.arg(fxc_path);
+                command
+            } else {
+                let mut command = Command::new("wine");
+                command.arg(fxc_path);
+                command
+            }
+        }
+    }
+
+    #[cfg(not(windows))]
+    fn wine_msvc_wrapper() -> Option<PathBuf> {
+        find_on_path("cl").and_then(|cl| {
+            let wrapper = Path::new(&cl).parent()?.join("wine-msvc.sh");
+            wrapper.is_file().then_some(wrapper)
+        })
+    }
+
     fn compile_shader_impl(
         fxc_path: &str,
         entry_point: &str,
@@ -180,7 +278,7 @@ mod shader_compilation {
         shader_path: &str,
         target: &str,
     ) {
-        let output = Command::new(fxc_path)
+        let output = fxc_command(fxc_path)
             .args([
                 "/T",
                 target,
@@ -238,5 +336,4 @@ mod shader_compilation {
     }
 }
 
-#[cfg(all(target_os = "windows", not(debug_assertions)))]
 use shader_compilation::compile_shaders;

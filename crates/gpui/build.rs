@@ -17,7 +17,25 @@ fn embed_resource() {
     let rc_file = std::path::Path::new("resources/windows/gpui.rc");
     println!("cargo:rerun-if-changed={}", manifest.display());
     println!("cargo:rerun-if-changed={}", rc_file.display());
+
+    #[cfg(windows)]
     embed_resource::compile(rc_file, embed_resource::NONE)
         .manifest_required()
         .unwrap();
+
+    #[cfg(not(windows))]
+    {
+        let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+        let staged_manifest = out_dir.join("gpui.manifest.xml");
+        std::fs::copy(manifest, &staged_manifest).unwrap();
+        let staged_rc = out_dir.join("gpui.rc");
+        std::fs::write(
+            &staged_rc,
+            "#define RT_MANIFEST 24\n1 RT_MANIFEST \"gpui.manifest.xml\"\n",
+        )
+        .unwrap();
+        embed_resource::compile(&staged_rc, embed_resource::NONE)
+            .manifest_required()
+            .unwrap();
+    }
 }

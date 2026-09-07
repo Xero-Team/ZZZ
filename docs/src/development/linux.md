@@ -53,6 +53,11 @@ You can install a local build on your machine with:
 
 This builds `~/.local/bin/zzz` and the `cli` in release mode, installs the binary at `~/.local/bin/zzz`, and installs `.desktop` files to `~/.local/share`.
 
+## Cross-compiling Windows executables
+
+To build `zzz.exe` on Linux without an MSI, see
+[Cross-compiling from Linux](./windows.md#cross-compiling-from-linux).
+
 ## Wayland & X11
 
 ZZZ supports both X11 and Wayland. By default, we pick whichever we can find at runtime. If you're on Wayland and want to run in X11 mode, use the environment variable `WAYLAND_DISPLAY=''`.

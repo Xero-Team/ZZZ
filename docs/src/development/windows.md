@@ -125,6 +125,35 @@ cargo test --workspace
 
 > **Note:** Visual regression tests are currently macOS-only and require Screen Recording permission. See [Building ZZZ for macOS](./macos.md#visual-regression-tests) for details.
 
+## Cross-compiling from Linux {#cross-compiling-from-linux}
+
+Native Windows builds above are unchanged. To produce `zzz.exe` on
+Linux without an MSI, install
+[msvc-wine](https://github.com/mstorsjo/msvc-wine) (default root
+`/opt/msvc`) and the `x86_64-pc-windows-msvc` rustup target, then:
+
+```sh
+./script/build-windows-cross
+```
+
+Debug:
+
+```sh
+./script/build-windows-cross --debug
+```
+
+Binaries land in `target/x86_64-pc-windows-msvc/release/` (or
+`debug/`). This path does not run Inno Setup or WiX.
+
+msvc-wine supplies headers, libs, and `fxc.exe`. The script compiles with
+`clang-cl` / `lld-link` / `llvm-rc` (do not set `RC` to the msvc-wine
+`rc` wrapper; `embed-resource` rejects it). Override the sysroot with
+`MSVC_ROOT`. Release builds need `fxc.exe`; the script sets
+`GPUI_FXC_PATH` when it finds it.
+
+The script embeds `remote_server` archives for Linux x86_64 and the
+Windows target, including `--debug`. Pass `--no-embed` to skip that.
+
 ## Installing from msys2
 
 ZZZ does not support unofficial MSYS2 ZZZ packages built for Mingw-w64. Please report any issues you may have with [mingw-w64-zed](https://github.com/msys2/MINGW-packages/issues?q=is%3Aissue+is%3Aopen+zed) to [msys2/MINGW-packages/issues](https://github.com/msys2/MINGW-packages/issues?q=is%3Aissue+is%3Aopen+zed).
