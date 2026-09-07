@@ -1184,7 +1184,7 @@ async fn test_managing_project_specific_settings(cx: &mut gpui::TestAppContext) 
 }
 
 #[gpui::test]
-async fn test_invalid_local_tasks_shows_toast_with_doc_link(cx: &mut gpui::TestAppContext) {
+async fn test_invalid_local_tasks_shows_toast(cx: &mut gpui::TestAppContext) {
     init_test(cx);
     TaskStore::init(None);
 
@@ -1222,11 +1222,11 @@ async fn test_invalid_local_tasks_shows_toast_with_doc_link(cx: &mut gpui::TestA
             Event::Toast {
                 notification_id,
                 message,
-                link: Some(ToastLink { url, .. }),
+                link,
             } => {
                 assert!(notification_id.starts_with("local-tasks-"));
                 assert!(message.contains("ZED_FOO"));
-                assert_eq!(*url, "https://zed.dev/docs/tasks");
+                assert!(link.is_none());
                 *saw_toast.borrow_mut() = true;
             }
             _ => {}

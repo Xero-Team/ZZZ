@@ -27564,16 +27564,6 @@ impl Render for MissingEditPredictionKeybindingTooltip {
                                     cx,
                                 )
                             }),
-                        )
-                        .child(
-                            Button::new(
-                                "see-docs",
-                                tr(cx, "editor.edit_prediction.see_docs", "See Docs"),
-                            )
-                            .size(ButtonSize::Compact)
-                            .on_click(|_ev, _window, cx| {
-                                cx.open_url("https://zed.dev/docs/completions#edit-predictions-missing-keybinding");
-                            }),
                         ),
                 )
         })

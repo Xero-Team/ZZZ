@@ -2490,41 +2490,15 @@ impl RemoteServerProjects {
                             )
                         } else {
                             this.child(
-                                h_flex()
-                                    .p_2()
-                                    .w_full()
-                                    .gap_1()
-                                    .child(
-                                        Label::new(i18n::tr(
-                                            cx,
-                                            "recent_projects.remote_servers.enter_ssh_command",
-                                            "Enter the command you use to SSH into this server.",
-                                        ))
-                                        .color(Color::Muted)
-                                        .size(LabelSize::Small),
-                                    )
-                                    .child(
-                                        Button::new(
-                                            "learn-more",
-                                            i18n::tr(
-                                                cx,
-                                                "recent_projects.remote_servers.learn_more",
-                                                "Learn More",
-                                            ),
-                                        )
-                                        .label_size(LabelSize::Small)
-                                        .end_icon(
-                                            Icon::new(IconName::ArrowUpRight)
-                                                .size(IconSize::XSmall),
-                                        )
-                                        .on_click(
-                                            |_, _, cx| {
-                                                cx.open_url(
-                                                    "https://zed.dev/docs/remote-development",
-                                                );
-                                            },
-                                        ),
-                                    ),
+                                h_flex().p_2().w_full().gap_1().child(
+                                    Label::new(i18n::tr(
+                                        cx,
+                                        "recent_projects.remote_servers.enter_ssh_command",
+                                        "Enter the command you use to SSH into this server.",
+                                    ))
+                                    .color(Color::Muted)
+                                    .size(LabelSize::Small),
+                                ),
                             )
                         }
                     }),

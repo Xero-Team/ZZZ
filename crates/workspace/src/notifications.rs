@@ -178,12 +178,7 @@ impl Workspace {
         struct PortalError;
 
         self.show_notification(NotificationId::unique::<PortalError>(), cx, |cx| {
-            cx.new(|cx| {
-                ErrorMessagePrompt::new(err.to_string(), cx).with_link_button(
-                    tr(cx, "workspace.notifications.see_docs", "See docs"),
-                    "https://zed.dev/docs/linux#i-cant-open-any-files".to_owned(),
-                )
-            })
+            cx.new(|cx| ErrorMessagePrompt::new(err.to_string(), cx))
         });
     }
 

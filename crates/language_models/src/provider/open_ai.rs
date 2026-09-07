@@ -764,22 +764,8 @@ impl Render for ConfigurationView {
                     .child(Label::new(tr(
                         cx,
                         "language_models.open_ai.compatible_models_supported",
-                        "Zed also supports OpenAI-compatible models.",
+                        "ZZZ also supports OpenAI-compatible models.",
                     ))),
-            )
-            .child(
-                Button::new(
-                    "docs",
-                    tr(cx, "language_models.common.learn_more", "Learn More"),
-                )
-                .end_icon(
-                    Icon::new(IconName::ArrowUpRight)
-                        .size(IconSize::Small)
-                        .color(Color::Muted),
-                )
-                .on_click(move |_, _window, cx| {
-                    cx.open_url("https://zed.dev/docs/ai/llm-providers#openai-api-compatible")
-                }),
             );
 
         if self.load_credentials_task.is_some() {
