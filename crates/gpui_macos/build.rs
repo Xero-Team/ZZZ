@@ -18,12 +18,13 @@ mod macos_build {
 
     pub fn run() {
         let header_path = generate_shader_bindings();
-        if metal_compiler_available() {
+        let can_compile_metal = metal_compiler_available();
+        if can_compile_metal {
             compile_metal_shaders(&header_path);
         } else {
-            emit_stitched_shaders(&header_path);
             println!("cargo:rustc-cfg=gpui_cross_runtime_shaders");
         }
+        emit_stitched_shaders(&header_path);
     }
 
     fn generate_shader_bindings() -> PathBuf {
@@ -102,6 +103,9 @@ mod macos_build {
     }
 
     fn metal_compiler_available() -> bool {
+        if !cfg!(target_os = "macos") {
+            return false;
+        }
         Command::new("xcrun")
             .args(["-sdk", "macosx", "-f", "metal"])
             .output()
