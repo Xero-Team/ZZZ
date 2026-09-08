@@ -37,6 +37,7 @@ visual-tests = [
     "gpui/test-support",
     "gpui_platform/screen-capture",
     "gpui_platform/test-support",
+    "dep:base64",
     "dep:image",
     "dep:tempfile",
     "dep:action_log",
@@ -77,6 +78,7 @@ agent_ui = { workspace = true, features = ["audio"] }
 anyhow.workspace = true
 askpass.workspace = true
 assets.workspace = true
+base64 = { workspace = true, optional = true }
 audio.workspace = true
 breadcrumbs.workspace = true
 chrono.workspace = true
