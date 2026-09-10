@@ -38,6 +38,7 @@ pub(crate) struct LoadedAudio {
     pub metadata: AudioMetadata,
     pub cover: Option<Arc<Image>>,
     pub peaks: Option<Arc<[(f32, f32)]>>,
+    pub waveform_duration: Option<Duration>,
     pub analyzing: bool,
 }
 
@@ -212,6 +213,7 @@ impl AudioView {
                             metadata: info.metadata,
                             cover: info.cover,
                             peaks: None,
+                            waveform_duration: None,
                             analyzing: true,
                         }));
                         view.start_waveform(cx);
@@ -274,15 +276,9 @@ impl AudioView {
                     match result {
                         Ok(waveform) => {
                             loaded.peaks = Some(Arc::from(waveform.peaks));
-                            let sample_rate = loaded.metadata.sample_rate as f64;
-                            let channels = loaded.metadata.channels.max(1) as f64;
-                            if sample_rate > 0.0 && waveform.sample_count > 0 {
-                                let analyzed = Duration::from_secs_f64(
-                                    waveform.sample_count as f64 / sample_rate / channels,
-                                );
-                                if waveform.reached_end || loaded.metadata.duration.is_none() {
-                                    loaded.metadata.duration = Some(analyzed);
-                                }
+                            loaded.waveform_duration = Some(waveform.duration);
+                            if waveform.reached_end && !waveform.duration.is_zero() {
+                                loaded.metadata.duration = Some(waveform.duration);
                             }
                         }
                         Err(error) => log::error!("analyzing audio waveform: {error:#}"),

@@ -14,7 +14,7 @@ use workspace::{
 use crate::{
     Stop, ToggleMute, TogglePlay,
     view::{AudioView, LoadState},
-    waveform::paint_waveform,
+    waveform::{self, paint_waveform},
 };
 
 impl AudioView {
@@ -115,6 +115,15 @@ impl AudioView {
             .unwrap_or_else(|| Arc::from(Vec::<(f32, f32)>::new()));
         let analyzing = self.loaded().is_some_and(|loaded| loaded.analyzing);
         let playhead_ratio = self.playhead_ratio();
+        let waveform_coverage_ratio = self
+            .loaded()
+            .and_then(|loaded| {
+                Some(waveform::waveform_coverage_ratio(
+                    loaded.waveform_duration?,
+                    loaded.metadata.duration?,
+                ))
+            })
+            .unwrap_or(1.0);
         let unplayed = cx.theme().colors().text.opacity(0.28);
         let played = cx.theme().status().info;
         let view = cx.entity().downgrade();
@@ -140,6 +149,7 @@ impl AudioView {
                                 bounds,
                                 &peaks,
                                 playhead_ratio,
+                                waveform_coverage_ratio,
                                 unplayed,
                                 played,
                             );

@@ -89,6 +89,23 @@ case "$arch" in
     ;;
 esac
 
+# fxc.exe runs through Wine and must match the Linux host, not the Windows target.
+case "$(uname -m)" in
+  x86_64 | amd64)
+    fxc_arch=x64
+    ;;
+  aarch64 | arm64)
+    fxc_arch=arm64
+    ;;
+  i686 | i386)
+    fxc_arch=x86
+    ;;
+  *)
+    echo "Unsupported host architecture for fxc.exe: $(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
@@ -149,7 +166,7 @@ if [[ -z "${GPUI_FXC_PATH:-}" ]]; then
     [[ -d "$kit_bin" ]] || continue
     for version_dir in "$kit_bin"/*/; do
       [[ -d "$version_dir" ]] || continue
-      candidate="${version_dir}${msvc_arch}/fxc.exe"
+      candidate="${version_dir}${fxc_arch}/fxc.exe"
       if [[ -f "$candidate" ]]; then
         fxc="$candidate"
       fi
