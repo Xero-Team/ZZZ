@@ -171,11 +171,9 @@ mod shader_compilation {
         roots.push(PathBuf::from("/opt/msvc"));
 
         let kit_bins = ["Windows Kits/10/bin", "kits/10/bin"];
-        let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
-        let arches: &[&str] = if target_arch == "aarch64" {
-            &["arm64", "x64"]
-        } else {
-            &["x64", "arm64"]
+        // fxc.exe runs through Wine, so select the architecture of this build-script host.
+        let Some(host_arch) = host_fxc_arch(std::env::consts::ARCH) else {
+            return None;
         };
 
         for root in roots {
@@ -195,16 +193,24 @@ mod shader_compilation {
                         .collect::<Vec<u32>>()
                 });
                 for version in versions.iter().rev() {
-                    for arch in arches {
-                        let candidate = bin_root.join(version).join(arch).join("fxc.exe");
-                        if candidate.is_file() {
-                            return Some(candidate.to_string_lossy().into_owned());
-                        }
+                    let candidate = bin_root.join(version).join(host_arch).join("fxc.exe");
+                    if candidate.is_file() {
+                        return Some(candidate.to_string_lossy().into_owned());
                     }
                 }
             }
         }
         None
+    }
+
+    #[cfg(not(windows))]
+    fn host_fxc_arch(host_arch: &str) -> Option<&'static str> {
+        match host_arch {
+            "x86_64" => Some("x64"),
+            "aarch64" => Some("arm64"),
+            "x86" | "i686" => Some("x86"),
+            _ => None,
+        }
     }
 
     fn compile_shader_for_module(
@@ -333,6 +339,19 @@ mod shader_compilation {
         options
             .write_all(rust_binding.as_bytes())
             .expect("Failed to write Rust binding file");
+    }
+
+    #[cfg(all(test, not(windows)))]
+    mod tests {
+        use super::host_fxc_arch;
+
+        #[test]
+        fn fxc_arch_matches_the_host() {
+            assert_eq!(host_fxc_arch("x86_64"), Some("x64"));
+            assert_eq!(host_fxc_arch("aarch64"), Some("arm64"));
+            assert_eq!(host_fxc_arch("i686"), Some("x86"));
+            assert_eq!(host_fxc_arch("riscv64"), None);
+        }
     }
 }
 

@@ -32,6 +32,7 @@ pub(crate) fn downsample_peaks(samples: &[f32], bucket_count: usize) -> Vec<(f32
 pub(crate) struct WaveformPeaks {
     pub peaks: Vec<(f32, f32)>,
     pub sample_count: usize,
+    pub duration: Duration,
     pub reached_end: bool,
 }
 
@@ -44,6 +45,7 @@ pub(crate) fn extract_waveform_peaks<S: Source>(
         return WaveformPeaks {
             peaks: Vec::new(),
             sample_count: 0,
+            duration: Duration::ZERO,
             reached_end: true,
         };
     }
@@ -64,7 +66,13 @@ pub(crate) fn extract_waveform_peaks<S: Source>(
         .min(max_samples)
         .max(1);
 
-    stream_peaks(source, bucket_count, estimated_total, max_samples)
+    let waveform = stream_peaks(source, bucket_count, estimated_total, max_samples);
+    WaveformPeaks {
+        duration: Duration::from_secs_f64(
+            waveform.sample_count as f64 / sample_rate as f64 / channel_count as f64,
+        ),
+        ..waveform
+    }
 }
 
 fn stream_peaks<S: Source>(
@@ -104,8 +112,30 @@ fn stream_peaks<S: Source>(
     WaveformPeaks {
         peaks,
         sample_count: sample_index,
+        duration: Duration::ZERO,
         reached_end,
     }
+}
+
+pub(crate) fn waveform_coverage_ratio(analyzed: Duration, total: Duration) -> f32 {
+    if total.is_zero() {
+        return 1.0;
+    }
+
+    (analyzed.as_secs_f64() / total.as_secs_f64()).clamp(0.0, 1.0) as f32
+}
+
+fn peak_count_before_playhead(
+    playhead_ratio: f32,
+    waveform_coverage_ratio: f32,
+    peak_count: usize,
+) -> usize {
+    if waveform_coverage_ratio <= 0.0 {
+        return 0;
+    }
+
+    ((playhead_ratio.clamp(0.0, 1.0) / waveform_coverage_ratio * peak_count as f32) as usize)
+        .min(peak_count)
 }
 
 pub(crate) fn paint_waveform(
@@ -113,6 +143,7 @@ pub(crate) fn paint_waveform(
     bounds: Bounds<Pixels>,
     peaks: &[(f32, f32)],
     playhead_ratio: f32,
+    waveform_coverage_ratio: f32,
     unplayed: Hsla,
     played: Hsla,
 ) {
@@ -126,13 +157,17 @@ pub(crate) fn paint_waveform(
         return;
     }
 
-    let bar_width = width / peaks.len() as f32;
+    let waveform_width = width * waveform_coverage_ratio.clamp(0.0, 1.0);
+    if waveform_width <= 0.0 {
+        return;
+    }
+    let bar_width = waveform_width / peaks.len() as f32;
     let gap = (bar_width * 0.25).min(1.0);
     let fill_width = (bar_width - gap).max(0.5);
     let center_y = bounds.origin.y + bounds.size.height / 2.0;
     let half_height = bounds.size.height / 2.0;
     let playhead_index =
-        ((playhead_ratio.clamp(0.0, 1.0) * peaks.len() as f32) as usize).min(peaks.len());
+        peak_count_before_playhead(playhead_ratio, waveform_coverage_ratio, peaks.len());
 
     paint_peak_range(
         window,
@@ -203,7 +238,12 @@ fn paint_peak_range(
 
 #[cfg(test)]
 mod tests {
-    use super::downsample_peaks;
+    use std::time::Duration;
+
+    use super::{
+        downsample_peaks, extract_waveform_peaks, peak_count_before_playhead,
+        waveform_coverage_ratio,
+    };
 
     #[test]
     fn downsample_peaks_of_short_synthetic_buffer() {
@@ -272,5 +312,29 @@ mod tests {
                 .skip(5)
                 .all(|&(min, max)| min < 0.0 && max <= 0.0)
         );
+    }
+
+    #[test]
+    fn waveform_coverage_keeps_limited_analysis_on_the_full_timeline() {
+        assert_eq!(
+            waveform_coverage_ratio(Duration::from_secs(600), Duration::from_secs(1200)),
+            0.5
+        );
+        assert_eq!(peak_count_before_playhead(0.25, 0.5, 100), 50);
+        assert_eq!(peak_count_before_playhead(0.75, 0.5, 100), 100);
+    }
+
+    #[test]
+    fn extract_waveform_peaks_reports_the_limited_duration() {
+        use rodio::{nz, static_buffer::StaticSamplesBuffer};
+
+        const SAMPLES: [f32; 1_200] = [0.25; 1_200];
+        let source = StaticSamplesBuffer::new(nz!(1), nz!(1), &SAMPLES);
+        let waveform = extract_waveform_peaks(source, 10, Duration::from_secs(600));
+
+        assert!(!waveform.reached_end);
+        assert_eq!(waveform.sample_count, 600);
+        assert_eq!(waveform.duration, Duration::from_secs(600));
+        assert_eq!(waveform.peaks.len(), 10);
     }
 }
