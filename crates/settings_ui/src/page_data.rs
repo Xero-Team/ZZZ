@@ -5113,7 +5113,7 @@ fn window_and_layout_page() -> SettingsPage {
                 ),
                 description: lt(
                     "settings_ui.page_data.description.whether.to.open.tabs.in.preview.mode.when.opened.from.the.project.panel.with.a.single.click",
-                    "Whether to open tabs in preview mode when opened from the project panel with a single click.",
+                    "Whether to open tabs in preview mode when opened from the project panel with a single click or the Open action.",
                 ),
                 field: Box::new(SettingField {
                     json_path: Some("preview_tabs.enable_preview_from_project_panel"),
