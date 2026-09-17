@@ -20849,6 +20849,7 @@ dependencies = [
  "assets",
  "audio",
  "audio_viewer",
+ "base64 0.22.1",
  "breadcrumbs",
  "chrono",
  "clap",
