@@ -189,12 +189,16 @@ Restart Amp after adding the environment variable.
 
 ### OpenCode Notifications {#opencode-notifications}
 
-OpenCode can update terminal titles automatically. For ZZZ notifications, add an OpenCode plugin that emits a terminal bell when OpenCode needs your attention.
+OpenCode can update terminal titles automatically. For ZZZ
+notifications, add an OpenCode plugin that emits a terminal bell when
+OpenCode needs your attention.
 
-Create `~/.config/opencode/plugins/zed-bell.js` in your project, or `~/.config/opencode/plugins/zed-bell.js` to use it globally:
+Create `.opencode/plugins/zed-bell.js` in your project, or
+`~/.config/opencode/plugins/zed-bell.js` to use it globally. OpenCode
+loads files in those directories automatically:
 
 ```js
-export const ZedBell = async () => {
+export const ZedBell = async ({ project, client, $, directory, worktree }) => {
   return {
     event: async ({ event }) => {
       if (process.env.OPENCODE_CLIENT === "acp") return;

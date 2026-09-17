@@ -23,6 +23,13 @@ const REFRESH_THROTTLE_DURATION: Duration = Duration::from_secs(60 * 60);
 // HTTP client only has a connect timeout.
 const REGISTRY_FETCH_TIMEOUT: Duration = Duration::from_secs(30);
 const REGISTRY_ICON_FETCH_TIMEOUT: Duration = Duration::from_secs(10);
+// The public ACP registry still ships OpenCode 1.x GitHub release archives.
+// OpenCode v2 is not on GitHub Releases; binaries live at opencode.ai/files/bin.
+const OPENCODE_REGISTRY_ID: &str = "opencode";
+const OPENCODE_LATEST_VERSION_URL: &str = "https://opencode.ai/update/api/latest/cli/npm";
+const OPENCODE_V2_ARCHIVE_BASE: &str = "https://opencode.ai/files/bin";
+const OPENCODE_V2_FALLBACK_VERSION: &str = "2.0.6";
+const OPENCODE_VERSION_FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Debug)]
 pub struct RegistryAgentMetadata {
@@ -301,12 +308,24 @@ impl AgentRegistryStore {
                 .load_bytes(&cache_path)
                 .await
                 .context("reading cached registry")?;
-            let index: RegistryIndex =
+            let mut registry: serde_json::Value =
                 serde_json::from_slice(&bytes).context("parsing cached registry")?;
+            let rewritten =
+                rewrite_stale_opencode_agent(&mut registry, OPENCODE_V2_FALLBACK_VERSION);
+            let body = if rewritten {
+                let serialized = serde_json::to_vec(&registry)
+                    .context("serializing rewritten OpenCode registry cache")?;
+                fs.write(&cache_path, &serialized).await?;
+                serialized
+            } else {
+                bytes
+            };
+            let index: RegistryIndex =
+                serde_json::from_value(registry).context("parsing cached registry")?;
 
             let executor = cx.background_executor().clone();
             let agents =
-                build_registry_agents(fs, http_client, index, bytes, false, &executor).await?;
+                build_registry_agents(fs, http_client, index, body, false, &executor).await?;
 
             this.update(cx, |this, cx| {
                 this.agents = agents;
@@ -328,10 +347,14 @@ async fn fetch_registry_index(
     http_client: Arc<dyn HttpClient>,
     executor: &BackgroundExecutor,
 ) -> Result<RegistryFetchResult> {
-    let (status, body) =
-        fetch_url_body(http_client, REGISTRY_URL, REGISTRY_FETCH_TIMEOUT, executor)
-            .await
-            .context("fetching ACP registry")?;
+    let (status, body) = fetch_url_body(
+        http_client.clone(),
+        REGISTRY_URL,
+        REGISTRY_FETCH_TIMEOUT,
+        executor,
+    )
+    .await
+    .context("fetching ACP registry")?;
 
     if status.is_client_error() {
         let text = String::from_utf8_lossy(body.as_slice());
@@ -341,11 +364,12 @@ async fn fetch_registry_index(
         );
     }
 
-    let index: RegistryIndex = serde_json::from_slice(&body).context("parsing ACP registry")?;
-    Ok(RegistryFetchResult {
-        index,
-        raw_body: body,
-    })
+    let mut registry: serde_json::Value =
+        serde_json::from_slice(&body).context("parsing ACP registry")?;
+    let raw_body =
+        apply_opencode_v2_registry_rewrite(&mut registry, body, http_client, executor).await?;
+    let index: RegistryIndex = serde_json::from_value(registry).context("parsing ACP registry")?;
+    Ok(RegistryFetchResult { index, raw_body })
 }
 
 async fn build_registry_agents(
@@ -558,6 +582,184 @@ async fn fetch_url_body(
     })?
 }
 
+async fn apply_opencode_v2_registry_rewrite(
+    registry: &mut serde_json::Value,
+    original_body: Vec<u8>,
+    http_client: Arc<dyn HttpClient>,
+    executor: &BackgroundExecutor,
+) -> Result<Vec<u8>> {
+    if !opencode_registry_agent(registry).is_some_and(opencode_needs_v2_rewrite) {
+        return Ok(original_body);
+    }
+
+    let version = resolve_opencode_v2_version(http_client, executor).await;
+    rewrite_stale_opencode_agent(registry, &version);
+    serde_json::to_vec(registry).context("serializing rewritten OpenCode registry")
+}
+
+async fn resolve_opencode_v2_version(
+    http_client: Arc<dyn HttpClient>,
+    executor: &BackgroundExecutor,
+) -> String {
+    match fetch_opencode_latest_version(http_client, executor).await {
+        Ok(version) => version,
+        Err(error) => {
+            log::warn!(
+                "Failed to resolve OpenCode v2 version: {error:#}; using {OPENCODE_V2_FALLBACK_VERSION}"
+            );
+            OPENCODE_V2_FALLBACK_VERSION.to_string()
+        }
+    }
+}
+
+async fn fetch_opencode_latest_version(
+    http_client: Arc<dyn HttpClient>,
+    executor: &BackgroundExecutor,
+) -> Result<String> {
+    let (status, body) = fetch_url_body(
+        http_client,
+        OPENCODE_LATEST_VERSION_URL,
+        OPENCODE_VERSION_FETCH_TIMEOUT,
+        executor,
+    )
+    .await
+    .context("fetching OpenCode latest version")?;
+
+    if !status.is_success() {
+        bail!("OpenCode latest version status error {}", status.as_u16());
+    }
+
+    let response: OpenCodeLatestVersionResponse =
+        serde_json::from_slice(&body).context("parsing OpenCode latest version")?;
+    let version = response
+        .version
+        .strip_prefix('v')
+        .unwrap_or(&response.version)
+        .to_string();
+    match semver::Version::parse(&version) {
+        Ok(parsed) if parsed.major >= 2 => Ok(version),
+        Ok(parsed) => bail!("OpenCode latest version {parsed} is not v2"),
+        Err(error) => bail!("invalid OpenCode latest version {version:?}: {error}"),
+    }
+}
+
+fn rewrite_stale_opencode_agent(registry: &mut serde_json::Value, v2_version: &str) -> bool {
+    let Some(entry) = opencode_registry_agent_mut(registry) else {
+        return false;
+    };
+    if !opencode_needs_v2_rewrite(entry) {
+        return false;
+    }
+
+    let current_version = entry
+        .get("version")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    let target_version = match parse_opencode_version(current_version) {
+        Some(parsed) if parsed.major >= 2 => current_version
+            .strip_prefix('v')
+            .unwrap_or(current_version)
+            .to_string(),
+        _ => v2_version.to_string(),
+    };
+    if parse_opencode_version(&target_version).is_none_or(|parsed| parsed.major < 2) {
+        return false;
+    }
+
+    entry["version"] = serde_json::Value::String(target_version.clone());
+    let Some(binary) = entry
+        .get_mut("distribution")
+        .and_then(|distribution| distribution.get_mut("binary"))
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return true;
+    };
+
+    for target in binary.values_mut() {
+        let Some(target_object) = target.as_object_mut() else {
+            continue;
+        };
+        if let Some(rewritten_archive) = target_object
+            .get("archive")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|archive| opencode_v2_archive_url(&target_version, archive))
+        {
+            target_object.insert(
+                "archive".to_string(),
+                serde_json::Value::String(rewritten_archive),
+            );
+        }
+        target_object.remove("sha256");
+    }
+
+    true
+}
+
+fn opencode_needs_v2_rewrite(entry: &serde_json::Value) -> bool {
+    let version = entry
+        .get("version")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    match parse_opencode_version(version) {
+        Some(parsed) if parsed.major < 2 => true,
+        Some(_) => opencode_archives_use_github_releases(entry),
+        None => false,
+    }
+}
+
+fn opencode_archives_use_github_releases(entry: &serde_json::Value) -> bool {
+    let Some(binary) = entry
+        .get("distribution")
+        .and_then(|distribution| distribution.get("binary"))
+        .and_then(serde_json::Value::as_object)
+    else {
+        return false;
+    };
+
+    binary.values().any(|target| {
+        target
+            .get("archive")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|archive| archive.contains("/opencode/releases/download/"))
+    })
+}
+
+fn opencode_v2_archive_url(version: &str, existing_archive: &str) -> Option<String> {
+    let file_name = opencode_archive_file_name(existing_archive)?;
+    Some(format!("{OPENCODE_V2_ARCHIVE_BASE}/{version}/{file_name}"))
+}
+
+fn opencode_archive_file_name(archive: &str) -> Option<&str> {
+    let path = archive.split(['?', '#']).next()?;
+    let file_name = path.rsplit('/').next()?;
+    if file_name.starts_with("opencode-") && file_name.contains('.') {
+        Some(file_name)
+    } else {
+        None
+    }
+}
+
+fn parse_opencode_version(version: &str) -> Option<semver::Version> {
+    let version = version.strip_prefix('v').unwrap_or(version);
+    semver::Version::parse(version).ok()
+}
+
+fn opencode_registry_agent(registry: &serde_json::Value) -> Option<&serde_json::Value> {
+    registry.get("agents")?.as_array()?.iter().find(|agent| {
+        agent.get("id").and_then(serde_json::Value::as_str) == Some(OPENCODE_REGISTRY_ID)
+    })
+}
+
+fn opencode_registry_agent_mut(registry: &mut serde_json::Value) -> Option<&mut serde_json::Value> {
+    registry
+        .get_mut("agents")?
+        .as_array_mut()?
+        .iter_mut()
+        .find(|agent| {
+            agent.get("id").and_then(serde_json::Value::as_str) == Some(OPENCODE_REGISTRY_ID)
+        })
+}
+
 fn resolve_icon_url(entry: &RegistryEntry) -> Option<String> {
     let icon = entry.icon.as_ref()?;
     if icon.starts_with("https://") || icon.starts_with("http://") {
@@ -665,4 +867,9 @@ struct RegistryNpxDistribution {
     args: Vec<String>,
     #[serde(default)]
     env: HashMap<String, String>,
+}
+
+#[derive(Deserialize)]
+struct OpenCodeLatestVersionResponse {
+    version: String,
 }
