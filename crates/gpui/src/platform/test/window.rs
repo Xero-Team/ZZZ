@@ -38,6 +38,7 @@ pub(crate) struct TestWindowState {
     frame_wake_count: Rc<Cell<usize>>,
     input_handler: Option<PlatformInputHandler>,
     is_fullscreen: bool,
+    scale_factor: f32,
     appearance: WindowAppearance,
 }
 
@@ -96,6 +97,8 @@ impl TestWindow {
             frame_wake_count: Rc::new(Cell::new(0)),
             input_handler: None,
             is_fullscreen: false,
+            // Preserve the test platform's historical 2x default.
+            scale_factor: 2.0,
             appearance: WindowAppearance::Light,
         })))
     }
@@ -111,6 +114,16 @@ impl TestWindow {
         drop(lock);
         callback(size, scale_factor);
         self.0.lock().resize_callback = Some(callback);
+    }
+
+    /// Simulates a display scale change through the resize callback, preserving logical bounds.
+    pub fn simulate_scale_factor_change(&mut self, scale_factor: f32) {
+        let size = {
+            let mut lock = self.0.lock();
+            lock.scale_factor = scale_factor;
+            lock.bounds.size
+        };
+        self.simulate_resize(size);
     }
 
     pub(crate) fn simulate_active_status_change(&self, active: bool) {
@@ -183,7 +196,7 @@ impl PlatformWindow for TestWindow {
     }
 
     fn scale_factor(&self) -> f32 {
-        2.0
+        self.0.lock().scale_factor
     }
 
     fn appearance(&self) -> WindowAppearance {
