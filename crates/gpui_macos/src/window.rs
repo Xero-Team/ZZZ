@@ -1101,9 +1101,9 @@ impl MacWindow {
                             native_view,
                             NSTrackingMouseEnteredAndExited
                                 | NSTrackingMouseMoved
-                                // Track while this application is active, even if another
-                                // window in the application has focus.
-                                | NSTrackingActiveInActiveApp
+                                // Track even when another application is active so visible
+                                // windows can respond to hover without being focused.
+                                | NSTrackingActiveAlways
                                 | NSTrackingInVisibleRect,
                         );
                     }
