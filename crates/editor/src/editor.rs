@@ -16209,6 +16209,7 @@ impl Editor {
             let empty_str: Arc<str> = Arc::default();
             let mut suffixes_inserted = Vec::new();
             let ignore_indent = action.ignore_indent;
+            let comment_empty_lines = action.comment_empty_lines;
 
             fn comment_prefix_range(
                 snapshot: &MultiBufferSnapshot,
@@ -16338,11 +16339,13 @@ impl Editor {
                         .map(|p| p.trim_end_matches(' ').len())
                         .collect::<SmallVec<[usize; 4]>>();
 
-                    let mut all_selection_lines_are_comments = true;
+                    let mut commented_lines = 0;
+                    let mut uncommented_lines = 0;
 
                     for row in start_row.0..=end_row.0 {
                         let row = MultiBufferRow(row);
-                        if start_row < end_row && snapshot.is_line_blank(row) {
+                        let is_blank = start_row < end_row && snapshot.is_line_blank(row);
+                        if !comment_empty_lines && is_blank {
                             continue;
                         }
 
@@ -16361,14 +16364,20 @@ impl Editor {
                             .max_by_key(|range| range.end.column - range.start.column)
                             .expect("prefixes is non-empty");
 
-                        if prefix_range.is_empty() {
-                            all_selection_lines_are_comments = false;
+                        if !is_blank {
+                            if prefix_range.is_empty() {
+                                uncommented_lines += 1;
+                            } else {
+                                commented_lines += 1;
+                            }
                         }
 
                         selection_edit_ranges.push(prefix_range);
                     }
 
-                    if all_selection_lines_are_comments {
+                    let should_uncomment = uncommented_lines == 0 && commented_lines > 0;
+
+                    if should_uncomment {
                         edits.extend(
                             selection_edit_ranges
                                 .iter()
