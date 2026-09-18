@@ -1151,6 +1151,13 @@
     },
   },
   {
+    "context": "LspCommandSelector > Picker > Editor",
+    "bindings": {
+      "tab": "lsp_command_selector::ToggleArgumentsFocus",
+
+    },
+  },
+  {
     "context": "ToolchainSelector",
     "use_key_equivalents": true,
     "bindings": {
