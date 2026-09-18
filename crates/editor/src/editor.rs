@@ -24575,6 +24575,7 @@ fn process_completion_for_edit(
         let replace_range = &completion.replace_range;
         if let CompletionSource::Lsp {
             insert_range: Some(insert_range),
+            lsp_completion,
             ..
         } = &completion.source
         {
@@ -24613,7 +24614,7 @@ fn process_completion_for_edit(
                                     ..buffer.anchor_after(replace_range.end),
                             );
                             let mut current_needle = text_to_replace.next();
-                            for haystack_ch in completion.label.text.chars() {
+                            for haystack_ch in lsp_completion.label.chars() {
                                 if let Some(needle_ch) = current_needle
                                     && haystack_ch.eq_ignore_ascii_case(&needle_ch)
                                 {
@@ -24636,9 +24637,8 @@ fn process_completion_for_edit(
                                     )
                                     .collect::<String>()
                                     .to_ascii_lowercase();
-                                completion
+                                lsp_completion
                                     .label
-                                    .text
                                     .to_ascii_lowercase()
                                     .ends_with(&text_after_cursor)
                             } else {
