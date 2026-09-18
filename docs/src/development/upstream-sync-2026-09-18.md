@@ -10,117 +10,110 @@ description: Selective Zed upstream sync audit.
 - Target branch: `sync/upstream-2026-09-18` from `sync/upstream-2026-09-17`
   (originally `main` at `e6adb70968552e53dae959f107df4f8ac03470d9`)
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
-- Previously reviewed baseline: `490aad88d5c754e4b0fbbb2bf1e3d6936df27729`
-- Reviewed upstream head: `d7f28899166cead457a2239ad23056d0a980bd7c`
+- Previously reviewed baseline: `d7f28899166cead457a2239ad23056d0a980bd7c`
+- Reviewed upstream head: `251854020a9dbea1a388bf392c9bd04fd136a557`
 - Live upstream head queried: `650a8d1bedaca3f841f1c11f89fa786f574c2aab`
-- Query time: `2026-09-18T19:58:57+02:00`
-- Reviewed range: `490aad88..d7f28899`
+- Query time: `2026-09-18T20:44:51+02:00`
+- Reviewed range: `d7f28899..25185402`
 
 This batch covered the first 20 commits after the previous baseline. Counts:
-5 A, 7 B, and 8 C. The reviewed baseline is now
-`d7f28899166cead457a2239ad23056d0a980bd7c`; 143 commits remain through the
+3 A, 5 B, and 12 C. The reviewed baseline is now
+`251854020a9dbea1a388bf392c9bd04fd136a557`; 123 commits remain through the
 queried live head.
 
 ## Decisions
 
-| Upstream | Class | Local commit       | Disposition                                                                                      |
-| -------- | ----- | ------------------ | ------------------------------------------------------------------------------------------------ |
-| 3384317a | C     | --                 | `util/debug-embed` / `fs_embed` are absent; enabling the feature would not compile.              |
-| 6f72bdb7 | B     | 2ae663c6           | ACP thread copies plain text by default; keep i18n labels.                                       |
-| e2534d23 | A     | 6059ecd9           | Cherry-picked with `-x -s`.                                                                      |
-| 20d3cd1d | B     | c533f5c7, f15db659 | Join-line prefix fix; drop rust block-comment assertions that need comment overrides.            |
-| ff6a6abb | A     | 8fe587d9           | Cherry-picked with `-x -s`.                                                                      |
-| 10676bad | C     | --                 | Collab peer search sharing of `private_files`.                                                   |
-| f29c8eaf | A     | 6abea349           | Cherry-picked with `-x -s`.                                                                      |
-| 4612aa2f | C     | --                 | Collab selection broadcast skip needs `Project::is_shared` and deleted `editor/src/input.rs`.    |
-| 72b02bf1 | A     | b1e2ffc9           | Cherry-picked with `-x -s`.                                                                      |
-| f83313d0 | A     | e7f57596           | Cherry-picked with `-x -s`.                                                                      |
-| 58962741 | B     | 675a0796           | Owning GPUI asset cache; omit wasm lock/channel Cargo.toml splits.                               |
-| 71b60bba | C     | --                 | Upstream release metadata version bump.                                                          |
-| fceace0b | B     | 60f16bbe           | Emmet language-based suggestion on existing notifications; omit zed.dev URL and lockfile tests.  |
-| 0690433b | B     | 61330ebc           | LSP executeCommand and showDocument; omit collab, telemetry proto IDs, and `lsp_locations`.      |
-| 002161d5 | B     | b0806d4a           | Inlay hint commands on `element.rs`; omit deleted `element/mouse.rs`.                            |
-| 33c6212b | C     | --                 | macOS Space restore rewrites persistence (`set_session_id`) and MultiWorkspace restore.          |
-| 45077524 | C     | --                 | Idle-sleep API spans every GPUI backend, native-agent settings UI, and deleted `livekit_client`. |
-| 907b55f7 | B     | cc07c65f           | macOS `register_url_scheme` on objc2; enable `NSWorkspace` and `block2` features.                |
-| 318c664e | C     | --                 | Markdown parse-time highlight cache rewrites already-diverged `markdown.rs` (10 conflicts).      |
-| d7f28899 | C     | --                 | Buffer highlight cache depends on rejected `318c664e` `ResolvedHighlights`.                      |
+| Upstream | Class | Local commit | Disposition                                                                                       |
+| -------- | ----- | ------------ | ------------------------------------------------------------------------------------------------- |
+| 77226930 | C     | --           | Trial copy for the $5 GPT Luna offer; onboarding, plan chips, and hosted-docs billing.            |
+| 284c7240 | C     | --           | Document-highlight dynamic registration needs upstream `dynamic_registration.rs`.                 |
+| e9d2934e | A     | 24ae4df8     | Cherry-picked with `-x -s`.                                                                       |
+| a3e93fff | B     | eabe3cdc     | wasi-sdk 34 with VERSION invalidation; omit bail-to-ensure log churn.                             |
+| 52b2927a | A     | 1db3e67a     | Cherry-picked with `-x -s`.                                                                       |
+| f9a1fc89 | C     | --           | New `watch::snapshot` public API with no current ZZZ caller.                                      |
+| 26b6a267 | C     | --           | Upstream GitHub Actions / xtask Miri pin.                                                         |
+| d3865b09 | B     | 8ea5c20a     | macOS path prompts on objc2; `MainThreadMarker::new()` instead of a platform tuple field.         |
+| 290cbcb9 | B     | 02a1fd0e     | Remote `path_to_buffer_id` update on file move; omit conflicting telemetry test.                  |
+| 6ad3c7f2 | C     | --           | gpui_web keyboard-focus rewrite; `ime_mirror.rs` and related GPUI APIs are absent.                |
+| 9e636045 | B     | add60ecd     | Inline assistant uses `default_model()` fallback.                                                 |
+| 86b2cf96 | C     | --           | Screen-capture `get_sources` needs new `objc2-screen-capture-kit` and `MacPlatform` marker field. |
+| 595d6286 | B     | 552f00b3     | `comment_empty_lines` on `editor.rs`; omit deleted `input.rs` and vscode.json keymaps.            |
+| 7e0b34ba | C     | --           | Anthropic `ProviderErrorCategory::PaymentRequired` is absent.                                     |
+| 72c53bf0 | C     | --           | `start_external_drag` GPUI API is absent.                                                         |
+| 3405c42f | C     | --           | PET lockfile-only fork pin; local microsoft rev already diverged.                                 |
+| 5a773a40 | C     | --           | gpui_web IME autoscroll; `ime_mirror.rs` is absent.                                               |
+| a57ba9b1 | A     | 7620cf28     | Cherry-picked with `-x -s`.                                                                       |
+| 1a84d5d9 | C     | --           | Folder-drag highlight fix needs absent external-drag APIs and new `on_file_drop_exit`.            |
+| 25185402 | C     | --           | Native Agent Panel terminal-thread renaming.                                                      |
 
 ## Applied work
 
-Direct A commits `e2534d23`, `ff6a6abb`, `f29c8eaf`, `72b02bf1`, and
-`f83313d0` were absorbed with `git cherry-pick -x -s`.
+Direct A commits `e9d2934e`, `52b2927a`, and `a57ba9b1` were absorbed with
+`git cherry-pick -x -s`.
 
 B ports retain `Upstream`, `Retained`, and `Omitted` trailers:
 
-- `6f72bdb7`: ACP thread context menu copies selected text as plain text and
-  offers copy as markdown. AgentPanel markdown keymaps no longer override
-  ctrl/cmd-c.
-- `20d3cd1d`: join lines skip block-comment prefixes unless the language scope
-  override is `comment`, so markdown `*bar*` is kept. The rust `/* */`
-  assertions were dropped.
-- `58962741`: GPUI asset loads use owning `CachedLoad` entries.
-  `fetch_asset` returns `Option`.
-- `fceace0b`: HTML-like buffers suggest the Emmet extension after language
-  detection.
-- `0690433b`: language servers can execute commands and show documents,
-  including a command selector and remote-server forwarding.
-- `002161d5`: inlay hint label parts can carry and activate LSP commands.
-- `907b55f7`: `MacPlatform::register_url_scheme` uses objc2 `NSWorkspace`.
+- `a3e93fff`: Extension grammar compilation and `download-wasi-sdk` install
+  wasi-sdk 34 and invalidate stale caches via `VERSION`.
+- `d3865b09`: `MacPlatform` path open/save panels use objc2 `NSOpenPanel` /
+  `NSSavePanel` and block2.
+- `290cbcb9`: Remote `UpdateBufferFile` removes the previous path from
+  `path_to_buffer_id`.
+- `9e636045`: Inline assistant uses `LanguageModelRegistry::default_model()`.
+- `595d6286`: `editor::ToggleComments` gains `comment_empty_lines` (default
+  true) on the `editor.rs` path.
 
 ## Per-commit notes
 
-### 3384317a
+### 77226930
 
-Adds `util/debug-embed` to `remote_server`'s `debug-embed` feature. ZZZ's
-`util` crate has no such feature and no `fs_embed!` panic path. The earlier
-`debug-embed` commits are already behind the reviewed baseline and were not
-absorbed.
+Updates trial onboarding, plan definitions, Zed cloud provider copy, and
+hosted plans-and-pricing docs for a GPT Luna trial offer.
 
-### 10676bad, 4612aa2f
+### 284c7240
 
-Collab-only. Private-file search sharing is a peer RPC check.
-`should_broadcast_selections` needs `Project::is_shared()`, which is absent,
-and the commit also touches deleted `editor/src/input.rs`.
+Advertises and handles `textDocument/documentHighlight` dynamic registration.
+ZZZ's `DynamicRegistrations` only tracks watched files and diagnostics. The
+selector-aware text-document registration module is absent, so advertising the
+capability without handling it would be incorrect.
 
-### 71b60bba
+### f9a1fc89, 26b6a267
 
-Bumps the Zed crate from 1.20.0 to 1.21.0. Upstream release metadata.
+Snapshot watch channels are a new unused API. The Miri pin is GitHub Actions
+and xtask workflow infrastructure.
 
-### 33c6212b
+### 6ad3c7f2, 5a773a40
 
-Adds GPUI `native_window_state` and a workspace DB column, then restores
-windows through MultiWorkspace. Auto-merge deleted `set_session_id` and
-conflicted on ZZZ's `DetachFromSession` serialize path.
+gpui_web keyboard focus and IME autoscroll both touch `ime_mirror.rs`, which
+ZZZ does not have. The keyboard rewrite also spans GPUI test/window APIs.
 
-### 45077524
+### 86b2cf96, 72c53bf0, 1a84d5d9
 
-New `Platform::prevent_idle_sleep` plus native-agent settings, ACP thread
-rewrites, settings UI, and livekit. `livekit_client` is deleted locally.
-A GPUI API with no current ZZZ caller would also be C.
+Screen-capture `get_sources` adds `objc2-screen-capture-kit` and needs a
+`MainThreadMarker` field on `MacPlatform`. External drag and the project-panel
+highlight follow-up require `start_external_drag` / `on_file_drop_exit`.
 
-### 318c664e, d7f28899
+### 7e0b34ba, 3405c42f, 25185402
 
-Parse-time markdown highlight caching rewrites `crates/markdown/src/markdown.rs`
-in ten conflict hunks. The follow-up buffer row-chunk cache needs
-`ResolvedHighlights` from that commit.
+Anthropic credit exhaustion maps to an absent `PaymentRequired` category.
+Python PET is a lockfile-only switch to the zed-industries fork at a rev
+ZZZ does not share. Terminal-thread renaming is native Agent Panel.
 
 ## Verification
 
 ```text
-PASS git merge-base --is-ancestor 490aad88 FETCH_HEAD
-PASS cargo check --locked -p gpui -p editor -p language -p language_core
-PASS cargo check --locked -p extensions_ui -p lsp_command_selector -p project
-PASS cargo check --locked -p gpui_macos
-PASS cargo test --locked -p editor --lib test_join_lines_strips_comment_prefix
-PASS cargo test --locked -p editor --lib test_rotate_selections
-PASS cargo test --locked -p language --lib test_injection_grouped_by_host
+PASS git merge-base --is-ancestor d7f28899 FETCH_HEAD
+PASS cargo check --locked -p sqlez -p extension -p language_model -p recent_projects
+PASS cargo check --locked -p editor -p project -p gpui_macos -p remote_server
+PASS cargo test --locked -p extension --lib test_installed_wasi_sdk_version
+PASS cargo test --locked -p editor --lib test_toggle_comment
+PASS cargo test --locked -p editor --lib test_advance_downward_on_toggle_comment
+PASS cargo test --locked -p project --test integration test_completion_label
 PASS git diff --check
-BLOCKED cargo test --locked -p tab_switcher --lib (baseline missing i18n::GlobalI18nService)
 NOT RUN macOS / Windows / wasm32 runtime tests
 NOT RUN cargo test --workspace
 NOT RUN cargo fmt --check (known edition-2024 formatting drift on this host)
 ```
 
-The reviewed baseline is `d7f28899166cead457a2239ad23056d0a980bd7c`.
+The reviewed baseline is `251854020a9dbea1a388bf392c9bd04fd136a557`.
 Work remains on `sync/upstream-2026-09-18` and has not been merged to `main`.
