@@ -10,17 +10,17 @@ description: Selective Zed upstream sync audit.
 - Target branch: `sync/upstream-2026-09-18` from `sync/upstream-2026-09-17`
   (originally `main` at `e6adb70968552e53dae959f107df4f8ac03470d9`)
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
-- Previously reviewed baseline: `251854020a9dbea1a388bf392c9bd04fd136a557`
-- Reviewed upstream head: `87a1ea30e819e193f8e3fcb517c6884f91ee7a9c`
-- Live upstream head queried: `a8535d86b7c4f8061c35b1802734be33201d815b`
-- Query time: `2026-09-18T21:32:20+02:00`
-- Reviewed range: `25185402..87a1ea30`
+- Previously reviewed baseline: `87a1ea30e819e193f8e3fcb517c6884f91ee7a9c`
+- Reviewed upstream head: `45ff33717b6e539d0d2f2123b50c4224b84bd961`
+- Live upstream head queried: `72b060af2e901406f9cf4a050c4f30bb479103fe`
+- Query time: `2026-09-18T22:15:18+02:00`
+- Reviewed range: `87a1ea30..45ff3371`
 
 The first batch on this branch reviewed `d7f28899..25185402` (3 A, 5 B, 12
-C). This second batch covered the next 20 commits. Counts: 5 A, 5 B, and
-10 C. The reviewed baseline is now
-`87a1ea30e819e193f8e3fcb517c6884f91ee7a9c`; 104 commits remain through the
-queried live head.
+C). The second covered `25185402..87a1ea30` (5 A, 5 B, 10 C). This third
+batch covered the next 20 commits. Counts: 3 A, 3 B, and 14 C. The
+reviewed baseline is now `45ff33717b6e539d0d2f2123b50c4224b84bd961`; 86
+commits remain through the queried live head.
 
 ## Decisions
 
@@ -66,6 +66,26 @@ queried live head.
 | 9d272b03 | C     | --           | GitHub Actions / xtask macOS SDK printing for release bundling.                                   |
 | a2651e3b | A     | 22627461     | Cherry-picked with `-x -s`.                                                                       |
 | 87a1ea30 | A     | d9e431df     | Cherry-picked with `-x -s`.                                                                       |
+| d27fa556 | C     | --           | Outline-panel deleted-file tree rewrite; 13 conflicts plus local i18n.                            |
+| 7960b2a7 | C     | --           | gpui_web Canvas font fallback; `font_weight_and_style` has no ZZZ caller.                         |
+| 250b6581 | A     | a6d0420e     | Cherry-picked with `-x -s`.                                                                       |
+| bf921d03 | B     | 69a2938f     | Commit-editor Cut/Copy/Paste menu; omit test that needs `simulate_next_frame`.                    |
+| 3e442f25 | C     | --           | First-class ACP tool-call names need ACP 2.1; ZZZ is on 0.12.0.                                   |
+| d89e9c21 | C     | --           | Native agent elicitation tool-call IDs.                                                           |
+| d1dae815 | C     | --           | ACP compaction capability and native-agent compaction rewrite.                                    |
+| 25b5569d | B     | 211a9225     | `project_panel::OpenContextMenu`; omit absent external-drag GPUI imports.                         |
+| f50ebf29 | C     | --           | Tool-name fallbacks depend on unabsorbed first-class ACP names.                                   |
+| 7cda6f05 | A     | c07e4bd2     | Cherry-picked with `-x -s`.                                                                       |
+| f792c2d7 | C     | --           | New unused `ShapedLineCursor` public API.                                                         |
+| 47b8ea58 | C     | --           | Reveal-in-panel needs `Item::active_project_path` and missing DiffMultibuffer.                    |
+| d62802d4 | C     | --           | Trunk README link exists only on the unabsorbed gpui_web gallery rewrite.                         |
+| 59d996d8 | C     | --           | Per-request output-limit scaffolding; Copilot, cloud, native agent, no ZZZ setter.                |
+| cbffa0f5 | C     | --           | `snapshot_with_edits` / `EditedBufferSnapshot` are absent.                                        |
+| 9e6e1416 | C     | --           | Dynamic font APIs plus gpui_web; depends on Canvas fallback.                                      |
+| b68add5b | C     | --           | Mutex removal depends on unabsorbed dynamic font loading.                                         |
+| 7f00507e | A     | 1aabd210     | Cherry-picked with `-x -s`.                                                                       |
+| ba7da93e | B     | 56bd8252     | Drop stale settings keys; keep omitted/`none` provider copy instead of Zeta.                      |
+| 45ff3371 | C     | --           | Recent-commands UX follow-up; conflicts across picker, settings, and vscode import.               |
 
 ## Applied work
 
@@ -209,5 +229,70 @@ NOT RUN cargo check -p gpui_macos (cfg(target_os = "macos") on this Linux host)
 ```
 
 The reviewed baseline is `87a1ea30e819e193f8e3fcb517c6884f91ee7a9c`.
+Work remains on `sync/upstream-2026-09-18` and has not been merged to
+`main`.
+
+## Batch 3 applied work
+
+Direct A commits `250b6581`, `7cda6f05`, and `7f00507e` were absorbed with
+`git cherry-pick -x -s`.
+
+B ports retain `Upstream`, `Retained`, and `Omitted` trailers:
+
+- `bf921d03`: commit-message editors get Cut/Copy/Paste context menus.
+  Local follow-up `eaeeaf09` drops the regression test.
+- `25b5569d`: `project_panel::OpenContextMenu` deploys the menu at the
+  selected entry, with Menu / Shift-F10 bindings.
+- `ba7da93e`: settings reference drops `features`,
+  `edit_prediction_provider`, `agent_font_size`, and
+  `projects_online_by_default`.
+
+## Batch 3 per-commit notes
+
+### d27fa556
+
+Rewrites `outline_panel.rs` (+4489/-1263) to synthesize `ProjectEntryId`s
+for deleted files. Cherry-pick hit 13 conflicts plus local i18n.
+
+### 7960b2a7, 9e6e1416, b68add5b, d62802d4
+
+Canvas fallback, dynamic font installation, and the mutex follow-up are
+gpui_web plus unused public APIs. The Trunk README fix only exists on
+that unabsorbed gallery rewrite.
+
+### 3e442f25, d89e9c21, d1dae815, f50ebf29
+
+First-class tool-call names and ACP compaction need ACP 2.1
+(`tool_call.name`, `CompactionCapabilities`). Elicitation IDs are native
+agent. Tool-name fallbacks depend on the names commit.
+
+### 47b8ea58, cbffa0f5, f792c2d7, 59d996d8
+
+Reveal-in-panel needs `Item::active_project_path` and missing
+`DiffMultibuffer` / `StagedDiff`. Diff highlighting needs
+`snapshot_with_edits`. `ShapedLineCursor` has no caller. Output-limit
+plumbing is scaffolding for later Copilot/cloud/native-agent PRs.
+
+### 45ff3371
+
+Follow-up to unabsorbed recent-commands UX. Conflicts in picker,
+`settings_content`, vscode import, and settings UI.
+
+## Batch 3 verification
+
+```text
+PASS git merge-base --is-ancestor 87a1ea30 FETCH_HEAD
+PASS cargo check --locked -p gpui -p project_panel
+PASS cargo check --locked -p project -p agent_ui -p agent_servers -p git_ui
+PASS cargo test --locked -p project_panel --lib test_context_menu
+PASS cargo test --locked -p project_panel --lib test_panel_keeps_focus_highlight
+PASS git diff --check
+NOT RUN cargo test -p git_ui test_commit_editor_context_menu_clipboard_actions (omitted; needs simulate_next_frame)
+NOT RUN macOS / Windows / wasm32 runtime tests
+NOT RUN cargo test --workspace
+NOT RUN cargo fmt --check (known edition-2024 formatting drift on this host)
+```
+
+The reviewed baseline is `45ff33717b6e539d0d2f2123b50c4224b84bd961`.
 Work remains on `sync/upstream-2026-09-18` and has not been merged to
 `main`.
