@@ -24,7 +24,7 @@ use metal::{
     CAMetalLayer, CommandQueue, MTLGPUFamily, MTLPixelFormat, MTLResourceOptions, NSRange,
     RenderPassColorAttachmentDescriptorRef,
 };
-use objc::{self, msg_send, sel, sel_impl};
+use objc::{self, msg_send, rc::autoreleasepool, sel, sel_impl};
 use parking_lot::Mutex;
 
 use std::{cell::Cell, ffi::c_void, mem, ptr, sync::Arc};
@@ -628,6 +628,9 @@ impl MetalRenderer {
             anyhow::bail!("Invalid size for render_scene_to_image: {:?}", size);
         }
 
+        // Headless callers do not have a Cocoa event-loop pool to release
+        // autoreleased command buffers and render-pass descriptors.
+        autoreleasepool(|| {
         // Update path intermediate textures for this size
         self.update_path_intermediate_textures(size);
 
@@ -727,6 +730,7 @@ impl MetalRenderer {
                 }
             }
         }
+        })
     }
 
     fn draw_primitives(
