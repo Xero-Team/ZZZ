@@ -22,20 +22,19 @@ use wasmparser::Parser;
 /// Currently, we compile with Rust's `wasm32-wasip2` target, which works with WASI `preview2` and the component model.
 const RUST_TARGET: &str = "wasm32-wasip2";
 
-/// Compiling Tree-sitter parsers from C to WASM requires Clang 17, and a WASM build of libc
-/// and clang's runtime library. The `wasi-sdk` provides these binaries.
-///
-/// Once Clang 17 and its wasm target are available via system package managers, we won't need
-/// to download this.
-const WASI_SDK_URL: &str = "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/";
-const WASI_SDK_ASSET_NAME: Option<&str> = cfg_select! {
-    all(target_os = "macos", target_arch = "x86_64") => Some("wasi-sdk-25.0-x86_64-macos.tar.gz"),
-    all(target_os = "macos", target_arch = "aarch64") => Some("wasi-sdk-25.0-arm64-macos.tar.gz"),
-    all(target_os = "linux", target_arch = "x86_64") => Some("wasi-sdk-25.0-x86_64-linux.tar.gz"),
-    all(target_os = "linux", target_arch = "aarch64") => Some("wasi-sdk-25.0-arm64-linux.tar.gz"),
-    all(target_os = "freebsd", target_arch = "x86_64") => Some("wasi-sdk-25.0-x86_64-linux.tar.gz"),
-    all(target_os = "freebsd", target_arch = "aarch64") => Some("wasi-sdk-25.0-arm64-linux.tar.gz"),
-    all(target_os = "windows", target_arch = "x86_64") => Some("wasi-sdk-25.0-x86_64-windows.tar.gz"),
+/// Compiling Tree-sitter parsers from C to WebAssembly requires a compiler,
+/// a WASI sysroot, and compiler runtime libraries, provided by `wasi-sdk`.
+const WASI_SDK_VERSION: &str = "34";
+const WASI_SDK_URL: &str = "https://github.com/WebAssembly/wasi-sdk/releases/download/";
+const WASI_SDK_PLATFORM: Option<&str> = cfg_select! {
+    all(target_os = "macos", target_arch = "x86_64") => Some("x86_64-macos"),
+    all(target_os = "macos", target_arch = "aarch64") => Some("arm64-macos"),
+    all(target_os = "linux", target_arch = "x86_64") => Some("x86_64-linux"),
+    all(target_os = "linux", target_arch = "aarch64") => Some("arm64-linux"),
+    all(target_os = "freebsd", target_arch = "x86_64") => Some("x86_64-linux"),
+    all(target_os = "freebsd", target_arch = "aarch64") => Some("arm64-linux"),
+    all(target_os = "windows", target_arch = "x86_64") => Some("x86_64-windows"),
+    all(target_os = "windows", target_arch = "aarch64") => Some("arm64-windows"),
     _ => None
 };
 
@@ -404,25 +403,53 @@ impl ExtensionBuilder {
     }
 
     async fn install_wasi_sdk_if_needed(&self) -> Result<PathBuf> {
-        let url = if let Some(asset_name) = WASI_SDK_ASSET_NAME {
-            format!("{WASI_SDK_URL}{asset_name}")
-        } else {
-            bail!("wasi-sdk is not available for platform {}", env::consts::OS);
-        };
-
         let wasi_sdk_dir = self.cache_dir.join("wasi-sdk");
         let mut clang_path = wasi_sdk_dir.clone();
         clang_path.extend(["bin", &format!("clang{}", env::consts::EXE_SUFFIX)]);
 
-        log::info!("downloading wasi-sdk to {}", wasi_sdk_dir.display());
-
-        if fs::metadata(&clang_path).is_ok_and(|metadata| metadata.is_file()) {
-            return Ok(clang_path);
+        match self
+            .update_wasi_sdk_if_needed(&wasi_sdk_dir, &clang_path)
+            .await
+        {
+            Ok(()) => Ok(clang_path),
+            Err(error) => {
+                if fs::metadata(&clang_path).is_ok_and(|metadata| metadata.is_file()) {
+                    let installed_version = installed_wasi_sdk_version(&wasi_sdk_dir)
+                        .unwrap_or_else(|| "unknown".to_string());
+                    log::warn!(
+                        "failed to install wasi-sdk {WASI_SDK_VERSION}.0, using cached wasi-sdk {installed_version} from {}: {error:#}",
+                        wasi_sdk_dir.display()
+                    );
+                    Ok(clang_path)
+                } else {
+                    Err(error)
+                }
+            }
         }
+    }
+
+    async fn update_wasi_sdk_if_needed(
+        &self,
+        wasi_sdk_dir: &Path,
+        clang_path: &Path,
+    ) -> Result<()> {
+        if installed_wasi_sdk_version(wasi_sdk_dir) == Some(format!("{WASI_SDK_VERSION}.0"))
+            && fs::metadata(clang_path).is_ok_and(|metadata| metadata.is_file())
+        {
+            return Ok(());
+        }
+
+        let platform = WASI_SDK_PLATFORM.with_context(|| {
+            format!("wasi-sdk is not available for platform {}", env::consts::OS)
+        })?;
+        let url = format!(
+            "{WASI_SDK_URL}wasi-sdk-{WASI_SDK_VERSION}/wasi-sdk-{WASI_SDK_VERSION}.0-{platform}.tar.gz"
+        );
+
+        log::info!("downloading wasi-sdk to {}", wasi_sdk_dir.display());
 
         let tar_out_dir = self.cache_dir.join("wasi-sdk-temp");
 
-        fs::remove_dir_all(&wasi_sdk_dir).ok();
         fs::remove_dir_all(&tar_out_dir).ok();
         fs::create_dir_all(&tar_out_dir).context("failed to create extraction directory")?;
 
@@ -469,10 +496,15 @@ impl ExtensionBuilder {
             .context("no content")?
             .context("failed to read contents of extracted wasi archive directory")?
             .path();
-        fs::rename(&inner_dir, &wasi_sdk_dir).context("failed to move extracted wasi dir")?;
+        match fs::remove_dir_all(wasi_sdk_dir) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error).context("failed to remove outdated wasi-sdk"),
+        }
+        fs::rename(&inner_dir, wasi_sdk_dir).context("failed to move extracted wasi dir")?;
         fs::remove_dir_all(&tar_out_dir).ok();
 
-        Ok(clang_path)
+        Ok(())
     }
 
     // This was adapted from:
@@ -698,6 +730,23 @@ fn file_newer_than_deps(target: &Path, dependencies: &[&Path]) -> Result<bool, s
     Ok(true)
 }
 
+fn installed_wasi_sdk_version(wasi_sdk_dir: &Path) -> Option<String> {
+    let version_path = wasi_sdk_dir.join("VERSION");
+    let contents = match fs::read_to_string(&version_path) {
+        Ok(contents) => contents,
+        Err(error) => {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                log::warn!(
+                    "failed to read wasi-sdk version from {}: {error}",
+                    version_path.display()
+                );
+            }
+            return None;
+        }
+    };
+    contents.lines().next().map(str::to_string)
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -712,7 +761,7 @@ mod tests {
 
     use crate::{
         ExtensionManifest, ExtensionSnippets,
-        extension_builder::{file_newer_than_deps, populate_defaults},
+        extension_builder::{file_newer_than_deps, installed_wasi_sdk_version, populate_defaults},
     };
 
     #[test]
@@ -750,6 +799,29 @@ mod tests {
             "target is newer than dependencies (target {:?}, dep2 {:?})",
             target.metadata().unwrap().modified().unwrap(),
             dep2.metadata().unwrap().modified().unwrap(),
+        );
+    }
+
+    #[test]
+    fn test_installed_wasi_sdk_version() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let version_path = tmpdir.path().join("VERSION");
+
+        assert_eq!(installed_wasi_sdk_version(tmpdir.path()), None);
+
+        std::fs::write(&version_path, "").unwrap();
+        assert_eq!(installed_wasi_sdk_version(tmpdir.path()), None);
+
+        std::fs::write(&version_path, "25.0\nwasi-libc: 574b88da4815\n").unwrap();
+        assert_eq!(
+            installed_wasi_sdk_version(tmpdir.path()),
+            Some("25.0".to_string())
+        );
+
+        std::fs::write(&version_path, "34.0\r\nwasi-libc: 2e6fb9d8ee0c\r\n").unwrap();
+        assert_eq!(
+            installed_wasi_sdk_version(tmpdir.path()),
+            Some("34.0".to_string())
         );
     }
 
