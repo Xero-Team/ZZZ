@@ -10,18 +10,19 @@ description: Selective Zed upstream sync audit.
 - Target branch: `sync/upstream-2026-09-18` from `sync/upstream-2026-09-17`
   (originally `main` at `e6adb70968552e53dae959f107df4f8ac03470d9`)
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
-- Previously reviewed baseline: `45ff33717b6e539d0d2f2123b50c4224b84bd961`
-- Reviewed upstream head: `739fdbef762f7e514d62e1fa650c1b7cac5bbff4`
+- Previously reviewed baseline: `739fdbef762f7e514d62e1fa650c1b7cac5bbff4`
+- Reviewed upstream head: `06e889c439f420714543e37806402666615ed1ca`
 - Live upstream head queried: `72b060af2e901406f9cf4a050c4f30bb479103fe`
-- Query time: `2026-09-18T22:50:33+02:00`
-- Reviewed range: `45ff3371..739fdbef`
+- Query time: `2026-09-18T23:16:51+02:00`
+- Reviewed range: `739fdbef..06e889c4`
 
 The first batch on this branch reviewed `d7f28899..25185402` (3 A, 5 B, 12
 C). The second covered `25185402..87a1ea30` (5 A, 5 B, 10 C). The third
-covered `87a1ea30..45ff3371` (3 A, 3 B, 14 C). This fourth batch covered
-the next 20 commits. Counts: 3 A, 8 B, and 9 C. The reviewed baseline is
-now `739fdbef762f7e514d62e1fa650c1b7cac5bbff4`; 66 commits remain through
-the queried live head.
+covered `87a1ea30..45ff3371` (3 A, 3 B, 14 C). The fourth covered
+`45ff3371..739fdbef` (3 A, 8 B, 9 C). This fifth batch covered the next 20
+commits. Counts: 4 A, 7 B, and 9 C. The reviewed baseline is now
+`06e889c439f420714543e37806402666615ed1ca`; 46 commits remain through the
+queried live head.
 
 ## Decisions
 
@@ -107,6 +108,26 @@ the queried live head.
 | 46ee98a8 | C     | --           | Stop events for Zed-hosted Gemini via `language_models_cloud`.                                    |
 | c2451489 | C     | --           | xtask GPUI crate-graph walker plus lockfile churn.                                                |
 | 739fdbef | C     | --           | Copilot token-limit metadata.                                                                     |
+| de2c85f2 | B     | 8394a53c     | Qualify Windows screen-capture oneshot; keep local gpui_windows imports.                          |
+| 5f1a6530 | C     | --           | SuperGrok OAuth / subscribed xAI provider.                                                        |
+| 0e7972f3 | C     | --           | GitHub Actions merge-queue dependency check.                                                      |
+| 55a43c22 | B     | 667c8de1     | Document git_panel keys ZZZ ships; skip collab and folder_indicator.                              |
+| 95c0d74b | A     | 747f00e9     | Cherry-picked with `-x -s`.                                                                       |
+| fe1dd2d3 | A     | b89b10ef     | Cherry-picked with `-x -s`.                                                                       |
+| 53fcf4be | B     | fb6aa72f     | DeepSeek Flash 4.1 plus images; omit OpenCode subscription table.                                 |
+| 5c9efb75 | B     | 6997e708     | std Mutex on GPUI queues and web mailbox; omit hello_web tests.                                   |
+| 3c82de74 | A     | --           | Already equivalent: `.github/CODEOWNERS.hold` is absent.                                          |
+| e4d73588 | C     | --           | Guild `REVIEWERS.conl` removal.                                                                   |
+| f6838a7c | B     | 58b2f6dd     | Normal macOS windows use `NSTrackingActiveAlways` on cocoa tracking.                              |
+| 2328e18c | C     | --           | Move livekit/lychee/renovate/workflow config; upstream infra.                                     |
+| b0db8327 | C     | --           | Upstream Zed v1.22.0 release metadata.                                                            |
+| 0968dc60 | A     | 197a4346     | Cherry-picked with `-x -s`.                                                                       |
+| f0fb48c7 | C     | --           | ForegroundJournal sleep/visibility needs unabsorbed Window APIs and hang telemetry.               |
+| b0f53ad2 | B     | 7535e58c     | Inspector idle-cost cut; omit bench and tests that need absent GPUI APIs.                         |
+| dc339e4f | C     | --           | LLVM IR adapter sharing; conflicts plus deleted picker window_controls.                           |
+| 9930d2c2 | C     | --           | Bundle-config / share-generics follow-up; `.cargo/bundle-config.toml` is absent.                  |
+| 67ebcd95 | B     | 14dfdec7     | Infer completion insert ranges; omit diverged remote_server tests.                                |
+| 06e889c4 | C     | --           | Native-agent subagent compaction; follows unabsorbed ACP compaction.                              |
 
 ## Applied work
 
@@ -388,5 +409,86 @@ NOT RUN cargo check -p gpui_windows (cfg(target_os = "windows") on this Linux ho
 ```
 
 The reviewed baseline is `739fdbef762f7e514d62e1fa650c1b7cac5bbff4`.
+Work remains on `sync/upstream-2026-09-18` and has not been merged to
+`main`.
+
+## Batch 5 applied work
+
+Direct A commits `95c0d74b`, `fe1dd2d3`, and `0968dc60` were absorbed
+with `git cherry-pick -x -s`. Already-equivalent A commit `3c82de74`
+made no local code change.
+
+B ports retain `Upstream`, `Retained`, and `Omitted` trailers:
+
+- `de2c85f2`: `WindowsPlatform::screen_capture_sources` names the
+  oneshot receiver with a fully qualified path.
+- `55a43c22`: all-settings documents git_panel keys that ZZZ ships.
+  Dock defaults for git and outline panels match `default.json`.
+- `53fcf4be`: DeepSeek lists `deepseek-flash` as V4.1 Flash and
+  serializes images. Docs live in `llm-providers.md`.
+- `5c9efb75`: GPUI priority queues and the gpui_web mailbox use std
+  Mutex/Condvar with poison recovery.
+- `f6838a7c`: Normal macOS windows track mouse with
+  `NSTrackingActiveAlways`.
+- `b0f53ad2`: Inspector IDs and state lookups run only while a window
+  inspector is open; LSP shutdown drain uses the shutdown timeout.
+  Follow-ups `7fe76ef9` and `880eb5ac` drop tests that need absent
+  GPUI APIs.
+- `67ebcd95`: Completions without LSP edit ranges infer an insert
+  range ending at the cursor.
+
+## Batch 5 per-commit notes
+
+### 5f1a6530, 0e7972f3, e4d73588, 2328e18c, b0db8327
+
+SuperGrok is an OAuth subscribed xAI provider. Merge-queue dependency
+checks, `REVIEWERS.conl`, livekit/lychee/renovate moves, and the
+v1.22.0 bump are GitHub Actions, guild, or release metadata.
+
+### f0fb48c7, 06e889c4
+
+ForegroundJournal sleep/visibility depends on the rejected Window
+visibility APIs (`3db02c2c`) and hang telemetry. Subagent compaction
+is native agent and follows unabsorbed ACP compaction.
+
+### dc339e4f, 9930d2c2
+
+LLVM IR adapter sharing conflicted across ACP, deleted picker
+`window_controls.rs`, settings_ui, and context_menu. The rodio /
+share-generics follow-up needs absent `.cargo/bundle-config.toml`.
+
+### b0f53ad2
+
+Product inspector and LSP shutdown changes compiled. Upstream tests
+call `Entity::cached` and `Frame::clear(&mut App)`, and
+`LanguageRegistry::register_language` has a different local
+signature. The gpui_platform `inspector_render` bench needs absent
+`bench-support`.
+
+## Batch 5 verification
+
+```text
+PASS git merge-base --is-ancestor 739fdbef FETCH_HEAD
+PASS cargo check --locked -p gpui -p inspector_ui -p lsp
+PASS cargo check --locked -p deepseek -p language_models
+PASS cargo check --locked -p ollama -p editor -p project
+PASS cargo test --locked -p snippet_provider --lib test_register_snippets
+PASS cargo test --locked -p snippet_provider --lib test_register_global_snippets
+PASS cargo test --locked -p snippet_provider --lib test_get_snippets_unknown_language
+PASS cargo test --locked -p deepseek --lib model_helpers_cover_built_in_and_custom_variants
+PASS cargo test --locked -p language_models --lib serializes_deepseek_image_parts
+PASS cargo test --locked -p gpui --lib queue::
+PASS cargo test --locked -p editor --lib test_completion_without_text_edit
+PASS cargo test --locked -p editor --lib test_completion_with_explicit_replace_range
+PASS git diff --check
+NOT RUN macOS / Windows / wasm32 runtime tests
+NOT RUN cargo test --workspace
+NOT RUN cargo fmt --check (known edition-2024 formatting drift on this host)
+NOT RUN cargo check -p gpui_macos (cfg(target_os = "macos") on this Linux host)
+NOT RUN cargo check -p gpui_windows (cfg(target_os = "windows") on this Linux host)
+NOT RUN cargo test -p inspector_ui (omitted; needs absent GPUI test APIs)
+```
+
+The reviewed baseline is `06e889c439f420714543e37806402666615ed1ca`.
 Work remains on `sync/upstream-2026-09-18` and has not been merged to
 `main`.
