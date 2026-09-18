@@ -10,17 +10,18 @@ description: Selective Zed upstream sync audit.
 - Target branch: `sync/upstream-2026-09-18` from `sync/upstream-2026-09-17`
   (originally `main` at `e6adb70968552e53dae959f107df4f8ac03470d9`)
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
-- Previously reviewed baseline: `87a1ea30e819e193f8e3fcb517c6884f91ee7a9c`
-- Reviewed upstream head: `45ff33717b6e539d0d2f2123b50c4224b84bd961`
+- Previously reviewed baseline: `45ff33717b6e539d0d2f2123b50c4224b84bd961`
+- Reviewed upstream head: `739fdbef762f7e514d62e1fa650c1b7cac5bbff4`
 - Live upstream head queried: `72b060af2e901406f9cf4a050c4f30bb479103fe`
-- Query time: `2026-09-18T22:15:18+02:00`
-- Reviewed range: `87a1ea30..45ff3371`
+- Query time: `2026-09-18T22:50:33+02:00`
+- Reviewed range: `45ff3371..739fdbef`
 
 The first batch on this branch reviewed `d7f28899..25185402` (3 A, 5 B, 12
-C). The second covered `25185402..87a1ea30` (5 A, 5 B, 10 C). This third
-batch covered the next 20 commits. Counts: 3 A, 3 B, and 14 C. The
-reviewed baseline is now `45ff33717b6e539d0d2f2123b50c4224b84bd961`; 86
-commits remain through the queried live head.
+C). The second covered `25185402..87a1ea30` (5 A, 5 B, 10 C). The third
+covered `87a1ea30..45ff3371` (3 A, 3 B, 14 C). This fourth batch covered
+the next 20 commits. Counts: 3 A, 8 B, and 9 C. The reviewed baseline is
+now `739fdbef762f7e514d62e1fa650c1b7cac5bbff4`; 66 commits remain through
+the queried live head.
 
 ## Decisions
 
@@ -86,6 +87,26 @@ commits remain through the queried live head.
 | 7f00507e | A     | 1aabd210     | Cherry-picked with `-x -s`.                                                                       |
 | ba7da93e | B     | 56bd8252     | Drop stale settings keys; keep omitted/`none` provider copy instead of Zeta.                      |
 | 45ff3371 | C     | --           | Recent-commands UX follow-up; conflicts across picker, settings, and vscode import.               |
+| 69af529e | B     | 085e2797     | Context menus use `web_time::Instant` for WASM.                                                   |
+| 169a2b11 | B     | 1bbd9b1f     | `"..."` splices inherited `read_only_files`; VS Code maps `files.readonlyInclude`.                |
+| 9862d8ea | B     | 10381bf9     | DiffStat uses version-control added/deleted colors.                                               |
+| ee1c6f8c | C     | --           | GPUI release-notes Dangerfile and draft-release-notes automation.                                 |
+| 5151c795 | B     | 90e2864d     | Clarify `agent.flexible` vs `agent.default_width`; keep local i18n keys.                          |
+| 07df4386 | A     | --           | Already equivalent: local gpui has no `ztracing` dependency.                                      |
+| 0be55589 | A     | f2bddd27     | Cherry-picked with `-x -s`.                                                                       |
+| 93f9fce1 | C     | --           | Require GPUI release notes in Dangerfile; follows unabsorbed ee1c6f8c.                            |
+| bf9a3601 | C     | --           | GitHub Actions / xtask Linux runner size for migration checks.                                    |
+| ee7af091 | C     | --           | New unused `count_input_tokens` API plus hosted-cloud consent.                                    |
+| aef893e2 | C     | --           | Native Agent Panel Threads Sidebar width setting.                                                 |
+| a95da07d | B     | 078a930a     | Helix paste uses before/after anchors in deleted hunks.                                           |
+| db7f9cee | B     | 1e275524     | macOS normal windows track mouse via cocoa `NSTrackingArea`.                                      |
+| 763924c2 | B     | a0f869e5     | Project panel autoscrolls collapsed parent folders.                                               |
+| 01c555b4 | A     | 4d99ac07     | Cherry-picked with `-x -s`.                                                                       |
+| a0f8fa7b | B     | 26e64013     | Windows dialogs and Credential Manager I/O leave the foreground thread.                           |
+| f092e5e9 | C     | --           | Rescan diagnostics need upstream `OsWatcher`; ZZZ still uses `GlobalWatcher`.                     |
+| 46ee98a8 | C     | --           | Stop events for Zed-hosted Gemini via `language_models_cloud`.                                    |
+| c2451489 | C     | --           | xtask GPUI crate-graph walker plus lockfile churn.                                                |
+| 739fdbef | C     | --           | Copilot token-limit metadata.                                                                     |
 
 ## Applied work
 
@@ -294,5 +315,78 @@ NOT RUN cargo fmt --check (known edition-2024 formatting drift on this host)
 ```
 
 The reviewed baseline is `45ff33717b6e539d0d2f2123b50c4224b84bd961`.
+Work remains on `sync/upstream-2026-09-18` and has not been merged to
+`main`.
+
+## Batch 4 applied work
+
+Direct A commit `0be55589` and `01c555b4` were absorbed with
+`git cherry-pick -x -s`. Already-equivalent A commit `07df4386` made no
+local code change.
+
+B ports retain `Upstream`, `Retained`, and `Omitted` trailers:
+
+- `69af529e`: ContextMenu uses `web_time::Instant`.
+- `169a2b11`: `read_only_files` is a `SplicingVec`; `"..."` extends
+  inherited globs. VS Code import uses `files.readonlyInclude`.
+- `9862d8ea`: DiffStat labels use version-control colors.
+- `5151c795`: Settings comments, UI copy, locales, and docs explain that
+  `agent.default_width` applies only when `agent.flexible` is false.
+- `a95da07d`: Helix paste tracks inserted ranges with anchors.
+- `db7f9cee`: Normal macOS windows disable `acceptsMouseMovedEvents` and
+  add an `ActiveInActiveApp` tracking area on cocoa `msg_send`.
+- `763924c2`: Collapsing a directory selects that parent and autoscrolls.
+- `a0f8fa7b`: Windows file/message dialogs run on a COM STA worker;
+  Credential Manager I/O uses the background executor.
+
+## Batch 4 per-commit notes
+
+### ee1c6f8c, 93f9fce1, bf9a3601, c2451489
+
+GPUI release-notes scaffolding and the follow-up that requires those notes
+are Dangerfile / draft-release-notes automation. The smaller Linux runner
+and the GPUI crate-graph walker are GitHub Actions / xtask infrastructure.
+
+### ee7af091, aef893e2, 739fdbef, 46ee98a8
+
+`count_input_tokens` is a new LanguageModel API with no current ZZZ caller;
+implementations target hosted Anthropic/OpenAI and data-retention consent.
+Threads Sidebar width is native Agent Panel. Copilot token-limit metadata
+is Copilot. Gemini stop events are Zed-hosted cloud.
+
+### f092e5e9
+
+Replaces the rescan rate limiter on `OsWatcher`. Local `fs_watcher` still
+uses `GlobalWatcher`, so the snapshot APIs do not isolate.
+
+### db7f9cee, a0f8fa7b
+
+macOS mouse tracking cherry-pick needed objc2 `NSTrackingArea` and
+`WindowKind::AnchoredPopup`. The port keeps cocoa tracking areas. Windows
+dialog drop omits `visibility_change`, which has no local callback field.
+
+## Batch 4 verification
+
+```text
+PASS git merge-base --is-ancestor 45ff3371 FETCH_HEAD
+PASS cargo check --locked -p ui -p settings_content -p worktree -p settings
+PASS cargo check --locked -p inspector_ui -p project -p agent_ui
+PASS cargo check --locked -p vim -p project_panel
+PASS cargo test --locked -p settings_content --lib test_read_only_files_splice
+PASS cargo test --locked -p settings_content --lib test_file_scan_exclusions_splice
+PASS cargo test --locked -p settings --lib test_import_read_only_files
+PASS cargo test --locked -p project --test integration test_read_only_files_splice_project_settings
+PASS cargo test --locked -p vim --lib test_paste_in_expanded_deleted_hunk
+PASS cargo test --locked -p vim --lib test_system_clipboard_crlf_paste_at_end_of_buffer
+PASS cargo test --locked -p project_panel --lib test_collapse_selected_entry
+PASS git diff --check
+NOT RUN macOS / Windows / wasm32 runtime tests
+NOT RUN cargo test --workspace
+NOT RUN cargo fmt --check (known edition-2024 formatting drift on this host)
+NOT RUN cargo check -p gpui_macos (cfg(target_os = "macos") on this Linux host)
+NOT RUN cargo check -p gpui_windows (cfg(target_os = "windows") on this Linux host)
+```
+
+The reviewed baseline is `739fdbef762f7e514d62e1fa650c1b7cac5bbff4`.
 Work remains on `sync/upstream-2026-09-18` and has not been merged to
 `main`.
