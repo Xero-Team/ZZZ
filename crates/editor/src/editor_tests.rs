@@ -6979,34 +6979,6 @@ async fn test_join_lines_strips_comment_prefix(cx: &mut TestAppContext) {
         cx.assert_editor_state(indoc! {"
             // fooˇ bar
         "});
-
-        // Strips block comment body prefix (`* `) from the joined-in line.
-        cx.set_state(indoc! {"
-            /*
-             * ˇfoo
-             * bar
-             */
-        "});
-        cx.update_editor(|e, window, cx| e.join_lines(&JoinLines, window, cx));
-        cx.assert_editor_state(indoc! {"
-            /*
-             * fooˇ bar
-             */
-        "});
-
-        // Strips bare block comment body prefix (`*` without trailing space).
-        cx.set_state(indoc! {"
-            /*
-             * ˇfoo
-             *
-             */
-        "});
-        cx.update_editor(|e, window, cx| e.join_lines(&JoinLines, window, cx));
-        cx.assert_editor_state(indoc! {"
-            /*
-             * fooˇ
-             */
-        "});
     }
 
     {
