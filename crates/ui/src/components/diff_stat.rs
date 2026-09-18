@@ -40,12 +40,12 @@ impl RenderOnce for DiffStat {
             .gap_1()
             .child(
                 Label::new(format!("+\u{2009}{}", self.added))
-                    .color(Color::Success)
+                    .color(Color::VersionControlAdded)
                     .size(self.label_size),
             )
             .child(
                 Label::new(format!("\u{2012}\u{2009}{}", self.removed))
-                    .color(Color::Error)
+                    .color(Color::VersionControlDeleted)
                     .size(self.label_size),
             )
             .when_some(tooltip, |this, tooltip| {
