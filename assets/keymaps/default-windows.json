@@ -248,13 +248,6 @@
     },
   },
   {
-    "context": "AgentPanel > Markdown",
-    "use_key_equivalents": true,
-    "bindings": {
-      "ctrl-c": "markdown::CopyAsMarkdown",
-    },
-  },
-  {
     "context": "AgentPanel && acp_thread",
     "use_key_equivalents": true,
     "bindings": {
