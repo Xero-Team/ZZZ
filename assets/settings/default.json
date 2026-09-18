@@ -1622,6 +1622,7 @@
   "hidden_files": ["**/.*"],
   // Globs to match files that will be opened as read-only. You can still view these files,
   // but cannot edit them. This is useful for generated files or external dependencies.
+  // A "..." entry expands to the inherited list. Omit it to replace, or use [] to clear.
   "read_only_files": [],
   // Git gutter behavior configuration.
   "git": {
