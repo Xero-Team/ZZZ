@@ -666,6 +666,7 @@ mod tests {
     pub(crate) fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
         cx.update(|cx| {
             let state = AppState::test(cx);
+            i18n::init(cx);
             crate::init(cx);
             editor::init(cx);
             TaskStore::init(None);
