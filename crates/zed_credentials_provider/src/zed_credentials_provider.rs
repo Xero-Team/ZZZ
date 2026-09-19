@@ -201,8 +201,8 @@ mod tests {
         let (provider, _temp_dir) = provider_in_tempdir();
         let expected = HashMap::from([
             (
-                "https://zed.dev".to_string(),
-                ("zed".to_string(), b"secret".to_vec()),
+                "http://127.0.0.1:7331".to_string(),
+                ("local".to_string(), b"secret".to_vec()),
             ),
             (
                 "https://example.com".to_string(),
@@ -219,11 +219,11 @@ mod tests {
     fn read_stored_credential_returns_none_for_missing_and_invalid_files() {
         let (provider, _temp_dir) = provider_in_tempdir();
 
-        assert_eq!(provider.read_stored_credential("https://zed.dev"), None);
+        assert_eq!(provider.read_stored_credential("http://127.0.0.1:7331"), None);
 
         std::fs::write(&provider.path, "{not json").unwrap();
 
-        assert_eq!(provider.read_stored_credential("https://zed.dev"), None);
+        assert_eq!(provider.read_stored_credential("http://127.0.0.1:7331"), None);
     }
 
     #[test]
@@ -231,17 +231,17 @@ mod tests {
         let (provider, _temp_dir) = provider_in_tempdir();
 
         provider
-            .write_stored_credential("https://zed.dev", "zed", b"secret")
+            .write_stored_credential("http://127.0.0.1:7331", "local", b"secret")
             .unwrap();
         provider
             .write_stored_credential("https://example.com", "other", b"token")
             .unwrap();
         provider
-            .write_stored_credential("https://zed.dev", "updated", b"new-secret")
+            .write_stored_credential("http://127.0.0.1:7331", "updated", b"new-secret")
             .unwrap();
 
         assert_eq!(
-            provider.read_stored_credential("https://zed.dev"),
+            provider.read_stored_credential("http://127.0.0.1:7331"),
             Some(("updated".to_string(), b"new-secret".to_vec()))
         );
         assert_eq!(
@@ -250,10 +250,10 @@ mod tests {
         );
 
         provider
-            .delete_stored_credential("https://zed.dev")
+            .delete_stored_credential("http://127.0.0.1:7331")
             .unwrap();
 
-        assert_eq!(provider.read_stored_credential("https://zed.dev"), None);
+        assert_eq!(provider.read_stored_credential("http://127.0.0.1:7331"), None);
         assert_eq!(
             provider.read_stored_credential("https://example.com"),
             Some(("other".to_string(), b"token".to_vec()))

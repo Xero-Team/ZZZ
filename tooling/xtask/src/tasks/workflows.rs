@@ -11,7 +11,6 @@ use crate::tasks::workflow_checks::{self};
 
 mod autofix_pr;
 mod bump_patch_version;
-mod bump_zed_version;
 mod change_detection;
 mod cherry_pick;
 mod compare_perf;

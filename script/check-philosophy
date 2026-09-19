@@ -285,6 +285,48 @@ check_no_after_release_hosted_deploy() {
         "$root/tooling/xtask/src/tasks/workflows/after_release.rs"
 }
 
+check_hosted_release_automation_absent() {
+    ! test -f "$root/script/get-released-version" \
+        && ! test -f "$root/script/trigger-release" \
+        && ! test -f "$root/script/trigger-docs-build" \
+        && ! test -f "$root/script/redeploy-vercel" \
+        && ! test -f "$root/script/bump-zed-version" \
+        && ! test -f "$root/script/kube-shell" \
+        && ! test -f "$root/script/digital-ocean-db.sh" \
+        && ! test -f "$root/script/drop-test-dbs" \
+        && ! test -f "$root/script/community-pr-track-mapping.json" \
+        && ! test -f "$root/Procfile" \
+        && ! test -f "$root/Procfile.web" \
+        && ! test -f "$root/compose.yml" \
+        && ! test -f "$root/REVIEWERS.conl"
+}
+
+check_local_backend_harness_absent() {
+    ! test -f "$root/script/bootstrap" \
+        && ! test -f "$root/script/bootstrap.ps1" \
+        && ! test -f "$root/script/zed-local" \
+        && ! test -f "$root/script/reset_db" \
+        && ! test -f "$root/script/run-local-minio"
+}
+
+check_github_triage_scripts_absent() {
+    ! ls "$root"/script/github-*.py >/dev/null 2>&1 \
+        && ! test -f "$root/script/github-pr-status"
+}
+
+check_no_vestigial_commercial_locale_keys() {
+    ! rg -n 'powered_by_zeta|built\.in\.zeta|active_subscription|subscribe_on_github|agent_ui\.end_trial|agent_ui\.agent_configuration\.plan' \
+        "$root/assets/locales/en.json" "$root/assets/locales/zh-CN.json"
+}
+
+check_onboarding_has_no_cloud_api_types() {
+    ! rg -n 'cloud_api_types' "$root/crates/onboarding/Cargo.toml" "$root/crates/onboarding/src"
+}
+
+check_title_bar_has_no_upgrade_required() {
+    ! rg -n 'Status::UpgradeRequired|title_bar\.status\.upgrade_required' "$root/crates/title_bar/src"
+}
+
 check_allowlisted_hosts() {
     local urls
     urls=$(rg --no-filename -o 'https?://[^"` )]+' "$root/assets/settings/default.json" "$root/crates/client/src/client.rs" \
@@ -346,6 +388,12 @@ check "Item::telemetry_event_text is absent" check_no_telemetry_event_text
 check "Danger GitHub API proxy host is absent" check_no_danger_proxy
 check "lychee.toml has no collab hosts" check_no_collab_lychee
 check "after_release has no hosted Discord/Vercel/winget deploy" check_no_after_release_hosted_deploy
+check "hosted release and deploy automation is absent" check_hosted_release_automation_absent
+check "local backend and collab harness is absent" check_local_backend_harness_absent
+check "GitHub triage scripts are absent" check_github_triage_scripts_absent
+check "no vestigial commercial locale keys remain" check_no_vestigial_commercial_locale_keys
+check "onboarding has no cloud_api_types dependency" check_onboarding_has_no_cloud_api_types
+check "title bar has no upgrade-required collab status" check_title_bar_has_no_upgrade_required
 check "network hosts are allowlisted" check_allowlisted_hosts
 
 if (( failures > 0 )); then

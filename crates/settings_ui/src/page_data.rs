@@ -11556,7 +11556,7 @@ fn edit_prediction_language_settings_section() -> [SettingsPageItem; 4] {
             search_aliases: &[],
             json_path: Some("edit_predictions.providers"),
             description: Some(lt(
-                "settings_ui.page_data.description.set.up.different.edit.prediction.providers.in.complement.to.zed.s.built.in.zeta.model",
+                "settings_ui.page_data.description.configure.edit.prediction.providers",
                 "Set up local or optional remote edit prediction providers. Prefer Ollama or llama.cpp.",
             )),
             in_json: false,

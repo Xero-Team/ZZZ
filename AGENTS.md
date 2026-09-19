@@ -11,7 +11,6 @@
 - Fast dev profile: `cargo run --profile release-fast`
 - Full workspace tests: `cargo test --workspace`
 - Lint: `./script/clippy` (not `cargo clippy`)
-- Local backend bootstrap: `script/bootstrap`, then `foreman start`, then `script/zed-local -2|-3|-4`
 - Linux install/build quirk: `REMOTE_SERVER_TARGET=x86_64-unknown-linux-gnu script/install-linux`
 - Docs preprocessor: `cargo run -p docs_preprocessor --` and `cargo run -p docs_preprocessor -- postprocess`
 - Docs formatting: `cd docs && npx prettier --write src/`; verify with `cd docs && npx prettier --check src/`

@@ -1151,19 +1151,6 @@ impl TitleBar {
                     )))
                     .into_any_element(),
             ),
-            client::Status::UpgradeRequired => Some(
-                Button::new(
-                    "connection-status",
-                    tr(
-                        cx,
-                        "title_bar.status.upgrade_required",
-                        "Please update ZZZ to Collaborate",
-                    ),
-                )
-                .label_size(LabelSize::Small)
-                .disabled(true)
-                .into_any_element(),
-            ),
             _ => None,
         }
     }

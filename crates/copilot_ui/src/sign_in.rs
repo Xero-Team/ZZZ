@@ -305,7 +305,7 @@ impl CopilotCodeVerification {
             .child(
                 Label::new(tr(
                     cx,
-                    "copilot_ui.sign_in.active_subscription_required",
+                    "copilot_ui.sign_in.authentication_required",
                     "Authenticate with GitHub to use Copilot as an optional provider.",
                 ))
                 .color(Color::Muted),
@@ -443,7 +443,7 @@ impl CopilotCodeVerification {
             .child(
                 Headline::new(tr(
                     cx,
-                    "copilot_ui.sign_in.active_subscription_needed",
+                    "copilot_ui.sign_in.not_authorized",
                     "GitHub Copilot is not authorized for this account.",
                 ))
                 .size(HeadlineSize::Large),
@@ -452,7 +452,7 @@ impl CopilotCodeVerification {
             .child(
                 Button::new(
                     "copilot-subscribe-button",
-                    tr(cx, "copilot_ui.sign_in.subscribe_on_github", "Open GitHub"),
+                    tr(cx, "copilot_ui.sign_in.open_github", "Open GitHub"),
                 )
                 .full_width()
                 .style(ButtonStyle::Outlined)
