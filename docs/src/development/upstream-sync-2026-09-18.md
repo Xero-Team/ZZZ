@@ -20,7 +20,7 @@ The first batch on this branch reviewed `d7f28899..25185402` (3 A, 5 B, 12
 C). The second covered `25185402..87a1ea30` (5 A, 5 B, 10 C). The third
 covered `87a1ea30..45ff3371` (3 A, 3 B, 14 C). The fourth covered
 `45ff3371..739fdbef` (3 A, 8 B, 9 C). The fifth covered
-`739fdbef..06e889c4` (4 A, 7 B, 9 C). The sixth covered `06e889c4..9d956a09`
+`739fdbef..06e889c4` (4 A, 8 B, 8 C). The sixth covered `06e889c4..9d956a09`
 (1 A, 4 B, 15 C). The seventh covered `9d956a09..0d08af1e` (7 A, 4 B, 9 C).
 This eighth batch covered the remaining 11 commits through the live head.
 Counts: 4 A, 1 B, and 6 C. The reviewed baseline is now
@@ -123,7 +123,7 @@ queried live head.
 | e4d73588 | C     | --           | Guild `REVIEWERS.conl` removal.                                                                   |
 | f6838a7c | B     | 58b2f6dd     | Normal macOS windows use `NSTrackingActiveAlways` on cocoa tracking.                              |
 | 2328e18c | C     | --           | Move livekit/lychee/renovate/workflow config; upstream infra.                                     |
-| b0db8327 | C     | --           | Upstream Zed v1.22.0 release metadata.                                                            |
+| b0db8327 | B     | 57b5799a     | Follow upstream app version to 1.22.0; package name stays zzz.                                    |
 | 0968dc60 | A     | 197a4346     | Cherry-picked with `-x -s`.                                                                       |
 | f0fb48c7 | C     | --           | ForegroundJournal sleep/visibility needs unabsorbed Window APIs and hang telemetry.               |
 | b0f53ad2 | B     | 7535e58c     | Inspector idle-cost cut; omit bench and tests that need absent GPUI APIs.                         |
@@ -490,14 +490,22 @@ B ports retain `Upstream`, `Retained`, and `Omitted` trailers:
   GPUI APIs.
 - `67ebcd95`: Completions without LSP edit ranges infer an insert
   range ending at the cursor.
+- `b0db8327`: follow upstream app version to 1.22.0. Package name stays
+  `zzz`.
 
 ## Batch 5 per-commit notes
 
-### 5f1a6530, 0e7972f3, e4d73588, 2328e18c, b0db8327
+### 5f1a6530, 0e7972f3, e4d73588, 2328e18c
 
 SuperGrok is an OAuth subscribed xAI provider. Merge-queue dependency
-checks, `REVIEWERS.conl`, livekit/lychee/renovate moves, and the
-v1.22.0 bump are GitHub Actions, guild, or release metadata.
+checks, `REVIEWERS.conl`, and livekit/lychee/renovate moves are GitHub
+Actions, guild, or release metadata.
+
+### b0db8327
+
+Follow upstream app version to 1.22.0 in `crates/zed` and `Cargo.lock`.
+Package name stays `zzz`. No other release-channel metadata was
+imported.
 
 ### f0fb48c7, 06e889c4
 
@@ -771,3 +779,16 @@ NOT RUN cargo check -p gpui_windows (cfg(target_os = "windows") on this Linux ho
 The reviewed baseline is `b961b4950febbc050081554bafe976b5d1b93f39`.
 Work remains on `sync/upstream-2026-09-18` and has not been merged to
 `main`.
+
+## Follow-up: v1.22.0 version bump
+
+`b0db8327` was reclassified from C to B so the local app version tracks
+upstream. Local commit `57b5799a` updates `crates/zed` and `Cargo.lock`
+from 1.20.0 to 1.22.0.
+
+```text
+PASS cargo check --locked -p zzz
+PASS git diff --check
+NOT RUN macOS / Windows / wasm32 runtime tests
+NOT RUN cargo test --workspace
+```
