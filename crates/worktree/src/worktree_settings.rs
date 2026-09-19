@@ -59,10 +59,10 @@ impl Settings for WorktreeSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let worktree = content.project.worktree.clone();
         let file_scan_exclusions = worktree.file_scan_exclusions.unwrap().0;
-        let file_scan_inclusions = worktree.file_scan_inclusions.unwrap();
+        let file_scan_inclusions = worktree.file_scan_inclusions.unwrap().0;
         let private_files = worktree.private_files.unwrap().0;
         let hidden_files = worktree.hidden_files.unwrap();
-        let read_only_files = worktree.read_only_files.unwrap_or_default();
+        let read_only_files = worktree.read_only_files.unwrap_or_default().0;
         let parsed_file_scan_inclusions: Vec<String> = file_scan_inclusions
             .iter()
             .flat_map(|glob| {

@@ -882,7 +882,7 @@ impl Render for DeleteBranchTooltip {
                 tr(
                     cx,
                     "git_ui.branch_picker.hold_alt_to_force_delete",
-                    "Hold alt to force delete",
+                    concat!("Hold ", ui::alt_key_name!(), " to force delete"),
                 ),
                 &self.focus_handle,
                 cx,

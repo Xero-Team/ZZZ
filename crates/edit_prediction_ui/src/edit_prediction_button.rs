@@ -665,7 +665,11 @@ impl EditPredictionButton {
                             Label::new(tr(
                                 cx,
                                 "edit_prediction_ui.button.subtle_description",
-                                "Display predictions inline only when holding a modifier key (alt by default).",
+                                concat!(
+                                    "Display predictions inline only when holding a modifier key (",
+                                    ui::alt_key_name!(),
+                                    " by default)."
+                                ),
                             ))
                             .into_any_element()
                         })

@@ -6462,7 +6462,7 @@ impl Repository {
         repo_path: &RepoPath,
         is_dir: bool,
     ) -> oneshot::Receiver<Result<()>> {
-        let repository_dir = self.snapshot.repository_dir_abs_path.clone();
+        let repository_dir = self.snapshot.common_dir_abs_path.clone();
         let path_display = repo_path.as_ref().display(PathStyle::Posix);
         let file_path_str = if is_dir {
             format!("{}/", path_display)

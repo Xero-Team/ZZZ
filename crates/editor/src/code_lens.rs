@@ -555,6 +555,10 @@ fn build_code_lens_renderer(line: CodeLensLine, editor: WeakEntity<Editor>) -> R
         let text_style = &cx.editor_style.text;
         let font = text_style.font();
         let font_size = text_style.font_size.to_pixels(cx.window.rem_size()) * 0.9;
+        let colors = cx.app.theme().colors();
+        let code_lens_color = colors
+            .editor_code_lens_foreground
+            .unwrap_or(colors.text_muted);
 
         for (i, item) in line.items.iter().enumerate() {
             if i > 0 {
@@ -562,7 +566,7 @@ fn build_code_lens_renderer(line: CodeLensLine, editor: WeakEntity<Editor>) -> R
                     div()
                         .font(font.clone())
                         .text_size(font_size)
-                        .text_color(cx.app.theme().colors().text_muted)
+                        .text_color(code_lens_color)
                         .child(" | ")
                         .into_any_element(),
                 );
@@ -578,7 +582,7 @@ fn build_code_lens_renderer(line: CodeLensLine, editor: WeakEntity<Editor>) -> R
                     .id(ElementId::from(i))
                     .font(font.clone())
                     .text_size(font_size)
-                    .text_color(cx.app.theme().colors().text_muted)
+                    .text_color(code_lens_color)
                     .cursor_pointer()
                     .hover(|style| style.text_color(cx.app.theme().colors().text))
                     .child(title)

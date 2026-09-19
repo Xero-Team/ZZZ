@@ -88,10 +88,43 @@ Non-negative `float` values
 }
 ```
 
-## Agent Font Size
+## Agent Panel {#agent-panel}
+
+To configure panel sizing, open the Settings Editor and search for “Agent Panel Default Width” or “Agent Panel Flexible Sizing”.
+
+### Default Width {#agent-panel-default-width}
+
+- Description: Default fixed width in pixels when the agent panel is docked to the left or right and `agent.flexible` is `false`.
+- Setting: `agent.default_width`
+- Default: `640`
+
+### Flexible Sizing {#agent-panel-flexible-sizing}
+
+- Description: Whether the agent panel uses flexible (proportional) sizing when docked to the left or right. When enabled, `agent.default_width` does not control the panel width, and double-clicking the panel’s outer resize handle restores the default proportion.
+- Setting: `agent.flexible`
+- Default: `true`
+
+**Options**
+
+`boolean` values
+
+To use a fixed reset width, disable flexible sizing in the Settings Editor. Or add this to your settings.json:
+
+```json [settings]
+{
+  "agent": {
+    "default_width": 640,
+    "flexible": false
+  }
+}
+```
+
+See [Agent Panel visual customization](../visual-customization.md#agent-panel) for other panel appearance settings.
+
+## Agent UI Font Size
 
 - Description: The font size for text in the agent panel. Inherits the UI font size if unset.
-- Setting: `agent_font_size`
+- Setting: `agent_ui_font_size`
 - Default: `null`
 
 **Options**
@@ -134,13 +167,35 @@ Note: This setting has no effect in Vim mode, as rewrap is already allowed every
 
 ## Auto Indent
 
-- Description: Whether indentation should be adjusted based on context while typing. This can be specified on a per-language basis.
+- Description: Controls automatic indentation behavior when typing. This can be specified on a per-language basis.
 - Setting: `auto_indent`
-- Default: `true`
+- Default: `syntax_aware`
 
 **Options**
 
-`boolean` values
+1. `syntax_aware`, adjusts indentation based on syntax context, using Tree-sitter to analyze the code structure:
+
+```json [settings]
+{
+  "auto_indent": "syntax_aware"
+}
+```
+
+2. `preserve_indent`, keeps the indentation of the current line when starting a new one, without adjusting for syntax:
+
+```json [settings]
+{
+  "auto_indent": "preserve_indent"
+}
+```
+
+3. `none`, disables automatic indentation, so new lines start at column 0:
+
+```json [settings]
+{
+  "auto_indent": "none"
+}
+```
 
 ## Auto Indent On Paste
 
@@ -498,7 +553,7 @@ Note: Dirty files (files with unsaved changes) will not be automatically closed 
 
 - Description: Which level to use to filter out diagnostics displayed in the editor
 - Setting: `diagnostics_max_severity`
-- Default: `null`
+- Default: `all`
 
 **Options**
 
@@ -632,18 +687,59 @@ For the case of "open", regular selection behavior can be achieved by holding `a
       "**/*.cert",
       "**/*.crt",
       "**/.dev.vars",
-      "**/secrets.yml"
+      "**/secrets.yml",
+      "**/.zed/settings.json",
+      "/**/zed/settings.json",
+      "/**/zed/keymap.json"
     ]
   }
 ```
 
 **Options**
 
+### Edit Prediction Provider
+
+- Description: Which edit prediction provider to use
+- Setting: `provider`
+- Default: omitted / `"none"`
+
+**Options**
+
+1. Use a local Ollama provider:
+
+```json [settings]
+{
+  "edit_predictions": {
+    "provider": "ollama"
+  }
+}
+```
+
+2. Use Copilot as the edit prediction provider after you configure it:
+
+```json [settings]
+{
+  "edit_predictions": {
+    "provider": "copilot"
+  }
+}
+```
+
+3. Turn off edit predictions across all providers
+
+```json [settings]
+{
+  "edit_predictions": {
+    "provider": "none"
+  }
+}
+```
+
 ### Disabled Globs
 
 - Description: A list of globs for which edit predictions should be disabled for. This list adds to a pre-existing, sensible default set of globs. Any additional ones you add are combined with them.
 - Setting: `disabled_globs`
-- Default: `["**/.env*", "**/*.pem", "**/*.key", "**/*.cert", "**/*.crt", "**/.dev.vars", "**/secrets.yml"]`
+- Default: `["**/.env*", "**/*.pem", "**/*.key", "**/*.cert", "**/*.crt", "**/.dev.vars", "**/secrets.yml", "**/.zed/settings.json", "/**/zed/settings.json", "/**/zed/keymap.json"]`
 
 **Options**
 
@@ -1843,58 +1939,6 @@ While other options may be changed at a runtime and should be placed under `sett
 
 `integer` values representing milliseconds
 
-## Features
-
-- Description: Features that can be globally enabled or disabled
-- Setting: `features`
-- Default:
-
-```json [settings]
-{
-  "edit_predictions": {
-    "provider": "none"
-  }
-}
-```
-
-### Edit Prediction Provider
-
-- Description: Which edit prediction provider to use
-- Setting: `edit_prediction_provider`
-- Default: omitted / `"none"`
-
-**Options**
-
-1. Use a local Ollama provider:
-
-```json [settings]
-{
-  "edit_predictions": {
-    "provider": "ollama"
-  }
-}
-```
-
-2. Use Copilot as the edit prediction provider after you configure it:
-
-```json [settings]
-{
-  "edit_predictions": {
-    "provider": "copilot"
-  }
-}
-```
-
-3. Turn off edit predictions across all providers
-
-```json [settings]
-{
-  "edit_predictions": {
-    "provider": "none"
-  }
-}
-```
-
 ## Focus Follows Mouse
 
 - Description: Whether the focused panel follows the mouse location.
@@ -1969,7 +2013,9 @@ Non-negative `integer` values
 
 - Description: Whether or not to perform a buffer format before saving.
 - Setting: `format_on_save`
-- Default: `on`
+- Default: `off`
+
+Zed ships `"format_on_save": "on"` as a per-language default for Astro, Dart, EEx, Elixir, Elm, Go, GraphQL, HEEx, Kotlin, Rust, Starlark, and Zig. Every other language uses the top-level default above. Use [`languages`](#languages) to configure individual languages differently.
 
 **Options**
 
@@ -2106,7 +2152,7 @@ The result is still `)))` and not `))))))`, which is what it would be by default
 ## File Scan Exclusions
 
 - Setting: `file_scan_exclusions`
-- Description: Files or globs of files that will be excluded by ZZZ entirely. They will be skipped during file scans, file searches, and not be displayed in the project file tree. Overrides `file_scan_inclusions`.
+- Description: Exclude files matching these glob patterns from file scans, file searches, and the project file tree. Takes precedence over `file_scan_inclusions`.
 - Default:
 
 ```json [settings]
@@ -2116,6 +2162,8 @@ The result is still `)))` and not `))))))`, which is what it would be by default
     "**/.svn",
     "**/.hg",
     "**/.jj",
+    "**/.sl",
+    "**/.repo",
     "**/CVS",
     "**/.DS_Store",
     "**/Thumbs.db",
@@ -2125,12 +2173,20 @@ The result is still `)))` and not `))))))`, which is what it would be by default
 }
 ```
 
-Note, specifying `file_scan_exclusions` in settings.json will override the defaults (shown above). If you are looking to exclude additional items you will need to include all the default values in your settings.
+Use `"..."` to add patterns without repeating ZZZ's defaults. In project settings, it extends the user or parent configuration value. Omit `"..."` to replace the inherited list.
+
+```json [settings]
+{
+  "file_scan_exclusions": ["**/node_modules", "..."]
+}
+```
+
+Inherited patterns are inserted at `"..."`, and duplicates keep their first occurrence.
 
 ## File Scan Inclusions
 
 - Setting: `file_scan_inclusions`
-- Description: Files or globs of files that will be included by ZZZ, even when ignored by git. This is useful for files that are not tracked by git, but are still important to your project. Note that globs that are overly broad can slow down ZZZ's file scanning. `file_scan_exclusions` takes precedence over these inclusions.
+- Description: Include files matching these glob patterns when scanning, even if ignored by Git. Note that broad patterns can slow file scanning. `file_scan_exclusions` takes precedence.
 - Default:
 
 ```json [settings]
@@ -2138,6 +2194,16 @@ Note, specifying `file_scan_exclusions` in settings.json will override the defau
   "file_scan_inclusions": [".env*"]
 }
 ```
+
+Use `"..."` to add patterns without repeating ZZZ's defaults. In project settings, it extends the user or parent configuration value. Omit `"..."` to replace the inherited list.
+
+```json [settings]
+{
+  "file_scan_inclusions": ["**/build/**", "..."]
+}
+```
+
+Inherited patterns are inserted at `"..."`, and duplicates keep their first occurrence.
 
 ## File Types
 
@@ -2329,7 +2395,7 @@ To interpret all `.c` files as C++, files called `MyLockFile` as TOML and files 
 
 - Description: Sets the debounce threshold (in milliseconds) after which changes are reflected in the git gutter.
 - Setting: `gutter_debounce`
-- Default: `null`
+- Default: `0`
 
 **Options**
 
@@ -2573,6 +2639,31 @@ Example:
 **Options**
 
 `boolean` values
+
+## Hidden Files {#hidden-files}
+
+- Description: Glob patterns that mark files and folders as hidden in the Project Panel.
+- Setting: `hidden_files`
+- Default: `["**/.*"]`
+
+**Options**
+
+List of `string` glob patterns.
+
+The default matches files and folders whose names start with a dot. Files inside matching folders are also considered hidden.
+
+The [Project Panel](../project-panel.md#hiding-files) shows hidden entries by default. To hide them, enable **Hide Hidden** under **Panels > Project Panel** in the Settings Editor, or set `project_panel.hide_hidden` to `true`.
+
+Customizing `hidden_files` replaces the default patterns. To hide `*.log` files while keeping dotfiles and dotfolders hidden, add this to your `settings.json`:
+
+```json [settings]
+{
+  "hidden_files": ["**/*.log", "**/.*"],
+  "project_panel": {
+    "hide_hidden": true
+  }
+}
+```
 
 ## Indent Guides
 
@@ -3329,13 +3420,15 @@ Examples:
 ## Preview tabs
 
 - Description:
-  Preview tabs allow you to open files in preview mode, where they close automatically when you switch to another file unless you explicitly pin them. This is useful for quickly viewing files without cluttering your workspace. Preview tabs display their file names in italics. \
+  Preview tabs allow you to open files in preview mode. A pane keeps at most one preview tab at a time, so opening another file in preview mode takes over that slot. Switching to a file that is already open does not close the preview tab. This is useful for quickly viewing files without cluttering your workspace. Preview tabs display their file names in italics. \
   There are several ways to convert a preview tab into a regular tab:
   - Double-clicking on the file
   - Double-clicking on the tab header
   - Using the {#action project_panel::OpenPermanent} action
   - Editing the file
   - Dragging the file to a different pane
+  - Pinning the tab with the {#action pane::TogglePinTab} action
+  - Using the {#action pane::TogglePreviewTab} action
 
 - Setting: `preview_tabs`
 - Default:
@@ -3356,7 +3449,7 @@ Examples:
 
 ### Enable preview from project panel
 
-- Description: Determines whether to open files in preview mode when opened from the project panel with a single click.
+- Description: Determines whether to open files in preview mode when opened from the project panel with a single click or the {#action project_panel::Open} action ({#kb project_panel::Open}).
 - Setting: `enable_preview_from_project_panel`
 - Default: `true`
 
@@ -3502,15 +3595,27 @@ Examples:
 
 List of `string` glob patterns
 
-## Projects Online By Default
+## Read-Only Files {#read-only-files}
 
-- Description: Whether or not to show the online projects view by default.
-- Setting: `projects_online_by_default`
-- Default: `true`
+- Setting: `read_only_files`
+- Description: Treat files matching these glob patterns as read-only when opened. You can view but not edit them, which is useful for build outputs, external dependencies, or generated files.
+- Default:
 
-**Options**
+```json [settings]
+{
+  "read_only_files": []
+}
+```
 
-`boolean` values
+Use `"..."` to add patterns without repeating ZZZ's defaults. In project settings, it extends the user or parent configuration value. Omit `"..."` to replace the inherited list.
+
+```json [settings]
+{
+  "read_only_files": ["**/build/**", "..."]
+}
+```
+
+Inherited patterns are inserted at `"..."`, and duplicates keep their first occurrence.
 
 ## Read SSH Config
 
@@ -4206,7 +4311,7 @@ List of `integer` column numbers
 
 - Description: Set whether Alternate Scroll mode (DECSET code: `?1007`) is active by default. Alternate Scroll mode converts mouse scroll events into up / down key presses when in the alternate screen (e.g. when running applications like vim or less). The terminal can still set and unset this mode with ANSI escape codes.
 - Setting: `alternate_scroll`
-- Default: `off`
+- Default: `on`
 
 **Options**
 
@@ -4290,9 +4395,9 @@ List of `integer` column numbers
 
 ### Terminal: Cursor Shape
 
-- Description: Controls the visual shape of the cursor in the terminal. When not explicitly set, it defaults to a block shape.
+- Description: Controls the visual shape of the cursor in the terminal.
 - Setting: `cursor_shape`
-- Default: `null` (defaults to block)
+- Default: `block`
 
 **Options**
 
@@ -5439,17 +5544,24 @@ See the [debugger page](../debugger.md) for more information about debugging sup
 {
   "git_panel": {
     "button": true,
-    "dock": "left",
+    "dock": "right",
     "default_width": 360,
     "status_style": "icon",
+    "file_icons": false,
+    "folder_icons": true,
     "fallback_branch_name": "main",
     "sort_by": "path",
     "group_by": "status",
     "collapse_untracked_diff": false,
+    "tree_view": false,
     "scrollbar": {
       "show": null
     },
-    "starts_open": false
+    "starts_open": false,
+    "show_count_badge": false,
+    "diff_stats": true,
+    "commit_title_max_length": 0,
+    "entry_primary_click_action": "project_diff"
   }
 }
 ```
@@ -5460,12 +5572,19 @@ See the [debugger page](../debugger.md) for more information about debugging sup
 - `dock`: Where to dock the git panel. Can be `left` or `right`
 - `default_width`: Default width of the git panel
 - `status_style`: How to display git status. Can be `label_color` or `icon`
+- `file_icons`: Whether to show file icons in the git panel
+- `folder_icons`: Whether to show folder icons for directories in the git panel
 - `fallback_branch_name`: What branch name to use if `init.defaultBranch` is not set
 - `sort_by`: How to sort entries in the git panel. Can be `path` or `name`
 - `group_by`: How to group entries in the git panel. Can be `none` or `status`
 - `collapse_untracked_diff`: Whether to collapse untracked files in the diff panel
+- `tree_view`: Whether to show entries in tree or flat view in the panel
 - `scrollbar`: When to show the scrollbar in the git panel
 - `starts_open`: Whether the git panel should open on startup
+- `show_count_badge`: Whether to show a badge on the git panel icon with the count of uncommitted changes
+- `diff_stats`: Whether to show the addition/deletion change count next to each file in the git panel
+- `commit_title_max_length`: Maximum length of the commit message title before a warning is shown. Set to `0` to disable
+- `entry_primary_click_action`: Default action when clicking a changed file in the git panel. Can be `project_diff`, `file_diff`, or `view_file`
 
 ## Git Worktree Directory
 
@@ -5523,7 +5642,7 @@ You can define these in user or project settings; project settings are merged on
 
 ## Outline Panel
 
-- Description: Customize outline Panel
+- Description: Customize outline panel
 - Setting: `outline_panel`
 - Default:
 
@@ -5532,7 +5651,7 @@ You can define these in user or project settings; project settings are merged on
   "outline_panel": {
     "button": true,
     "default_width": 300,
-    "dock": "left",
+    "dock": "right",
     "file_icons": true,
     "folder_icons": true,
     "git_status": true,

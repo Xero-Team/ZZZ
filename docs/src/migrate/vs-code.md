@@ -91,7 +91,6 @@ The following VS Code settings are automatically imported when you use **Import 
 | `files.insertFinalNewline`  | `ensure_final_newline_on_save` |
 | `files.associations`        | `file_types`                   |
 | `files.watcherExclude`      | `file_scan_exclusions`         |
-| `files.watcherInclude`      | `file_scan_inclusions`         |
 | `files.simpleDialog.enable` | `use_system_path_prompts`      |
 | `search.smartCase`          | `use_smartcase_search`         |
 | `search.useIgnoreFiles`     | `search.include_ignored`       |

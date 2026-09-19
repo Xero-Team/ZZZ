@@ -24,7 +24,7 @@ use metal::{
     CAMetalLayer, CommandQueue, MTLGPUFamily, MTLPixelFormat, MTLResourceOptions, NSRange,
     RenderPassColorAttachmentDescriptorRef,
 };
-use objc::{self, msg_send, sel, sel_impl};
+use objc::{self, msg_send, rc::autoreleasepool, sel, sel_impl};
 use parking_lot::Mutex;
 
 use std::{cell::Cell, ffi::c_void, mem, ptr, sync::Arc};
@@ -628,105 +628,114 @@ impl MetalRenderer {
             anyhow::bail!("Invalid size for render_scene_to_image: {:?}", size);
         }
 
-        // Update path intermediate textures for this size
-        self.update_path_intermediate_textures(size);
+        // Headless callers do not have a Cocoa event-loop pool to release
+        // autoreleased command buffers and render-pass descriptors.
+        autoreleasepool(|| {
+            // Update path intermediate textures for this size
+            self.update_path_intermediate_textures(size);
 
-        // Create an offscreen texture as render target
-        let texture_descriptor = metal::TextureDescriptor::new();
-        texture_descriptor.set_width(size.width.0 as u64);
-        texture_descriptor.set_height(size.height.0 as u64);
-        texture_descriptor.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
-        texture_descriptor
-            .set_usage(metal::MTLTextureUsage::RenderTarget | metal::MTLTextureUsage::ShaderRead);
-        texture_descriptor.set_storage_mode(metal::MTLStorageMode::Managed);
-        let target_texture = self.device.new_texture(&texture_descriptor);
+            // Create an offscreen texture as render target
+            let texture_descriptor = metal::TextureDescriptor::new();
+            texture_descriptor.set_width(size.width.0 as u64);
+            texture_descriptor.set_height(size.height.0 as u64);
+            texture_descriptor.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+            texture_descriptor.set_usage(
+                metal::MTLTextureUsage::RenderTarget | metal::MTLTextureUsage::ShaderRead,
+            );
+            texture_descriptor.set_storage_mode(metal::MTLStorageMode::Managed);
+            let target_texture = self.device.new_texture(&texture_descriptor);
 
-        loop {
-            let mut instance_buffer = self
-                .instance_buffer_pool
-                .lock()
-                .acquire(&self.device, self.is_unified_memory);
+            loop {
+                let mut instance_buffer = self
+                    .instance_buffer_pool
+                    .lock()
+                    .acquire(&self.device, self.is_unified_memory);
 
-            let command_buffer =
-                self.draw_primitives_to_texture(scene, &mut instance_buffer, &target_texture, size);
+                let command_buffer = self.draw_primitives_to_texture(
+                    scene,
+                    &mut instance_buffer,
+                    &target_texture,
+                    size,
+                );
 
-            match command_buffer {
-                Ok(command_buffer) => {
-                    let instance_buffer_pool = self.instance_buffer_pool.clone();
-                    let instance_buffer = Cell::new(Some(instance_buffer));
-                    let block = ConcreteBlock::new(move |_| {
-                        if let Some(instance_buffer) = instance_buffer.take() {
-                            instance_buffer_pool.lock().release(instance_buffer);
+                match command_buffer {
+                    Ok(command_buffer) => {
+                        let instance_buffer_pool = self.instance_buffer_pool.clone();
+                        let instance_buffer = Cell::new(Some(instance_buffer));
+                        let block = ConcreteBlock::new(move |_| {
+                            if let Some(instance_buffer) = instance_buffer.take() {
+                                instance_buffer_pool.lock().release(instance_buffer);
+                            }
+                        });
+                        let block = block.copy();
+                        command_buffer.add_completed_handler(&block);
+
+                        // On discrete GPUs (non-unified memory), Managed textures
+                        // require an explicit blit synchronize before the CPU can
+                        // read back the rendered data. Without this, get_bytes
+                        // returns stale zeros.
+                        if !self.is_unified_memory {
+                            let blit = command_buffer.new_blit_command_encoder();
+                            blit.synchronize_resource(&target_texture);
+                            blit.end_encoding();
                         }
-                    });
-                    let block = block.copy();
-                    command_buffer.add_completed_handler(&block);
 
-                    // On discrete GPUs (non-unified memory), Managed textures
-                    // require an explicit blit synchronize before the CPU can
-                    // read back the rendered data. Without this, get_bytes
-                    // returns stale zeros.
-                    if !self.is_unified_memory {
-                        let blit = command_buffer.new_blit_command_encoder();
-                        blit.synchronize_resource(&target_texture);
-                        blit.end_encoding();
+                        // Commit and wait for completion
+                        command_buffer.commit();
+                        command_buffer.wait_until_completed();
+
+                        // Read pixels from the texture
+                        let width = size.width.0 as u32;
+                        let height = size.height.0 as u32;
+                        let bytes_per_row = width as usize * 4;
+                        let buffer_size = height as usize * bytes_per_row;
+
+                        let mut pixels = vec![0u8; buffer_size];
+
+                        let region = metal::MTLRegion {
+                            origin: metal::MTLOrigin { x: 0, y: 0, z: 0 },
+                            size: metal::MTLSize {
+                                width: width as u64,
+                                height: height as u64,
+                                depth: 1,
+                            },
+                        };
+
+                        target_texture.get_bytes(
+                            pixels.as_mut_ptr() as *mut std::ffi::c_void,
+                            bytes_per_row as u64,
+                            region,
+                            0,
+                        );
+
+                        // Convert BGRA to RGBA (swap B and R channels)
+                        for chunk in pixels.chunks_exact_mut(4) {
+                            chunk.swap(0, 2);
+                        }
+
+                        return RgbaImage::from_raw(width, height, pixels).ok_or_else(|| {
+                            anyhow::anyhow!("Failed to create RgbaImage from pixel data")
+                        });
                     }
-
-                    // Commit and wait for completion
-                    command_buffer.commit();
-                    command_buffer.wait_until_completed();
-
-                    // Read pixels from the texture
-                    let width = size.width.0 as u32;
-                    let height = size.height.0 as u32;
-                    let bytes_per_row = width as usize * 4;
-                    let buffer_size = height as usize * bytes_per_row;
-
-                    let mut pixels = vec![0u8; buffer_size];
-
-                    let region = metal::MTLRegion {
-                        origin: metal::MTLOrigin { x: 0, y: 0, z: 0 },
-                        size: metal::MTLSize {
-                            width: width as u64,
-                            height: height as u64,
-                            depth: 1,
-                        },
-                    };
-
-                    target_texture.get_bytes(
-                        pixels.as_mut_ptr() as *mut std::ffi::c_void,
-                        bytes_per_row as u64,
-                        region,
-                        0,
-                    );
-
-                    // Convert BGRA to RGBA (swap B and R channels)
-                    for chunk in pixels.chunks_exact_mut(4) {
-                        chunk.swap(0, 2);
+                    Err(err) => {
+                        log::error!(
+                            "failed to render: {}. retrying with larger instance buffer size",
+                            err
+                        );
+                        let mut instance_buffer_pool = self.instance_buffer_pool.lock();
+                        let buffer_size = instance_buffer_pool.buffer_size;
+                        if buffer_size >= 256 * 1024 * 1024 {
+                            anyhow::bail!("instance buffer size grew too large: {}", buffer_size);
+                        }
+                        instance_buffer_pool.reset(buffer_size * 2);
+                        log::info!(
+                            "increased instance buffer size to {}",
+                            instance_buffer_pool.buffer_size
+                        );
                     }
-
-                    return RgbaImage::from_raw(width, height, pixels).ok_or_else(|| {
-                        anyhow::anyhow!("Failed to create RgbaImage from pixel data")
-                    });
-                }
-                Err(err) => {
-                    log::error!(
-                        "failed to render: {}. retrying with larger instance buffer size",
-                        err
-                    );
-                    let mut instance_buffer_pool = self.instance_buffer_pool.lock();
-                    let buffer_size = instance_buffer_pool.buffer_size;
-                    if buffer_size >= 256 * 1024 * 1024 {
-                        anyhow::bail!("instance buffer size grew too large: {}", buffer_size);
-                    }
-                    instance_buffer_pool.reset(buffer_size * 2);
-                    log::info!(
-                        "increased instance buffer size to {}",
-                        instance_buffer_pool.buffer_size
-                    );
                 }
             }
-        }
+        })
     }
 
     fn draw_primitives(

@@ -481,7 +481,10 @@ message Envelope {
     ResolveDocumentLink resolve_document_link = 455;
     ResolveDocumentLinkResponse resolve_document_link_response = 456;
     GitWorktreeCreatedAt git_worktree_created_at = 457;
-    GitWorktreeCreatedAtResponse git_worktree_created_at_response = 458; // current max
+    GitWorktreeCreatedAtResponse git_worktree_created_at_response = 458;
+    LanguageServerShowDocumentRequest language_server_show_document_request = 459;
+    ExecuteLspCommand execute_lsp_command = 460;
+    ExecuteLspCommandResponse execute_lsp_command_response = 461; // current max
   }
 
   reserved 87 to 88;

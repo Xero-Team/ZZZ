@@ -5,7 +5,8 @@ use editor::{
 use fuzzy::StringMatch;
 use gpui::{
     AsyncWindowContext, DivInspectorState, Entity, InspectorElementId, IntoElement,
-    StyleRefinement, Task, Window, inspector_reflection::FunctionReflection, styled_reflection,
+    StyleRefinement, Subscription, Task, WeakEntity, Window,
+    inspector_reflection::FunctionReflection, styled_reflection,
 };
 use i18n::tr;
 use language::language_settings::SoftWrap;
@@ -48,6 +49,7 @@ pub(crate) struct DivInspector {
     rust_completion: Option<String>,
     /// Range that will be replaced by the completion if selected.
     rust_completion_replace_range: Option<Range<Anchor>>,
+    _initialization_task: Task<()>,
 }
 
 enum State {
@@ -61,6 +63,7 @@ enum State {
         rust_style_editor: Entity<Editor>,
         json_style_buffer: Entity<Buffer>,
         json_style_editor: Entity<Editor>,
+        _subscriptions: [Subscription; 2],
     },
     LoadError {
         message: SharedString,
@@ -74,7 +77,7 @@ impl DivInspector {
         cx: &mut Context<Self>,
     ) -> DivInspector {
         // Open the buffers once, so they can then be used for each editor.
-        cx.spawn_in(window, {
+        let initialization_task = cx.spawn_in(window, {
             let languages = project.read(cx).languages().clone();
             let project = project.clone();
             async move |this, cx| {
@@ -105,10 +108,11 @@ impl DivInspector {
                             // `update_inspected_element`. This avoids continuing to show
                             // "Loading..." until the user moves the mouse to a different element.
                             if let Some(id) = this.inspector_id.take() {
-                                let inspector_state =
-                                    window.with_inspector_state(Some(&id), cx, |state, _window| {
+                                let inspector_state = window
+                                    .with_inspector_state(Some(&id), cx, |state, _window| {
                                         state.clone()
-                                    });
+                                    })
+                                    .flatten();
                                 if let Some(inspector_state) = inspector_state {
                                     this.update_inspected_element(&id, inspector_state, window, cx);
                                     cx.notify();
@@ -133,8 +137,7 @@ impl DivInspector {
                     }
                 }
             }
-        })
-        .detach();
+        });
 
         DivInspector {
             state: State::Loading,
@@ -147,6 +150,7 @@ impl DivInspector {
             rust_completion: None,
             rust_completion_replace_range: None,
             json_style_error: None,
+            _initialization_task: initialization_task,
         }
     }
 
@@ -184,7 +188,7 @@ impl DivInspector {
         let rust_style_editor = self.create_editor(rust_style_buffer.clone(), window, cx);
 
         rust_style_editor.update(cx, {
-            let div_inspector = cx.entity();
+            let div_inspector = cx.weak_entity();
             |rust_style_editor, _cx| {
                 rust_style_editor.set_completion_provider(Some(Rc::new(
                     RustStyleCompletionProvider { div_inspector },
@@ -204,7 +208,7 @@ impl DivInspector {
             }
         };
 
-        cx.subscribe_in(&json_style_editor, window, {
+        let json_subscription = cx.subscribe_in(&json_style_editor, window, {
             let id = id.clone();
             let rust_style_buffer = rust_style_buffer.clone();
             move |this, editor, event: &EditorEvent, window, cx| {
@@ -251,10 +255,9 @@ impl DivInspector {
                     }
                 }
             }
-        })
-        .detach();
+        });
 
-        cx.subscribe(&rust_style_editor, {
+        let rust_subscription = cx.subscribe(&rust_style_editor, {
             let json_style_buffer = json_style_buffer.clone();
             let rust_style_buffer = rust_style_buffer.clone();
             move |this, _editor, event: &EditorEvent, cx| {
@@ -262,8 +265,7 @@ impl DivInspector {
                     this.update_json_style_from_rust(&json_style_buffer, &rust_style_buffer, cx);
                 }
             }
-        })
-        .detach();
+        });
 
         self.unconvertible_style = style.subtract(&rust_style);
         self.json_style_overrides = StyleRefinement::default();
@@ -272,6 +274,7 @@ impl DivInspector {
             rust_style_editor,
             json_style_buffer,
             json_style_editor,
+            _subscriptions: [json_subscription, rust_subscription],
         };
     }
 
@@ -694,7 +697,7 @@ fn is_not_identifier_char(c: char) -> bool {
 }
 
 struct RustStyleCompletionProvider {
-    div_inspector: Entity<DivInspector>,
+    div_inspector: WeakEntity<DivInspector>,
 }
 
 impl CompletionProvider for RustStyleCompletionProvider {
@@ -711,9 +714,15 @@ impl CompletionProvider for RustStyleCompletionProvider {
             return Task::ready(Ok(Vec::new()));
         };
 
-        self.div_inspector.update(cx, |div_inspector, _cx| {
-            div_inspector.rust_completion_replace_range = Some(replace_range.clone());
-        });
+        if self
+            .div_inspector
+            .update(cx, |div_inspector, _cx| {
+                div_inspector.rust_completion_replace_range = Some(replace_range.clone());
+            })
+            .is_err()
+        {
+            return Task::ready(Ok(Vec::new()));
+        }
 
         Task::ready(Ok(vec![CompletionResponse {
             completions: STYLE_METHODS
@@ -753,9 +762,11 @@ impl CompletionProvider for RustStyleCompletionProvider {
         let div_inspector = self.div_inspector.clone();
         let rust_completion = mat.as_ref().map(|mat| mat.string.clone());
         cx.defer(move |cx| {
-            div_inspector.update(cx, |div_inspector, cx| {
-                div_inspector.handle_rust_completion_selection_change(rust_completion, cx);
-            });
+            div_inspector
+                .update(cx, |div_inspector, cx| {
+                    div_inspector.handle_rust_completion_selection_change(rust_completion, cx);
+                })
+                .ok();
         });
     }
 

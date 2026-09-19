@@ -1397,10 +1397,10 @@ async fn test_file_scan_inclusions(cx: &mut TestAppContext) {
         cx.update_global::<SettingsStore, _>(|store, cx| {
             store.update_user_settings(cx, |settings| {
                 settings.project.worktree.file_scan_exclusions = Some(SplicingVec::from(vec![]));
-                settings.project.worktree.file_scan_inclusions = Some(vec![
-                    "node_modules/**/package.json".to_string(),
+                settings.project.worktree.file_scan_inclusions = Some(SplicingVec::from(vec![
                     "**/.DS_Store".to_string(),
-                ]);
+                    "node_modules/**/package.json".to_string(),
+                ]));
             });
         });
     });
@@ -1469,7 +1469,7 @@ async fn test_file_scan_exclusions_overrules_inclusions(cx: &mut TestAppContext)
                 settings.project.worktree.file_scan_exclusions =
                     Some(SplicingVec::from(vec!["**/.DS_Store".to_string()]));
                 settings.project.worktree.file_scan_inclusions =
-                    Some(vec!["**/.DS_Store".to_string()]);
+                    Some(SplicingVec::from(vec!["**/.DS_Store".to_string()]));
             });
         });
     });
@@ -1532,7 +1532,7 @@ async fn test_file_scan_inclusions_reindexes_on_setting_change(cx: &mut TestAppC
             store.update_user_settings(cx, |settings| {
                 settings.project.worktree.file_scan_exclusions = Some(SplicingVec::from(vec![]));
                 settings.project.worktree.file_scan_inclusions =
-                    Some(vec!["node_modules/**".to_string()]);
+                    Some(SplicingVec::from(vec!["node_modules/**".to_string()]));
             });
         });
     });
@@ -1566,7 +1566,7 @@ async fn test_file_scan_inclusions_reindexes_on_setting_change(cx: &mut TestAppC
         cx.update_global::<SettingsStore, _>(|store, cx| {
             store.update_user_settings(cx, |settings| {
                 settings.project.worktree.file_scan_exclusions = Some(SplicingVec::from(vec![]));
-                settings.project.worktree.file_scan_inclusions = Some(vec![]);
+                settings.project.worktree.file_scan_inclusions = Some(SplicingVec::from(vec![]));
             });
         });
     });
@@ -5212,6 +5212,66 @@ async fn test_single_file_worktree_deleted(cx: &mut TestAppContext) {
         deleted_event_received.get(),
         "Should receive Deleted event when single-file worktree root is deleted"
     );
+}
+
+#[gpui::test]
+async fn test_root_ancestor_rename_is_detected_without_fs_events(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        path!("/code"),
+        json!({
+            "project": {
+                "src": {
+                    "main.rs": "fn main() {}",
+                },
+            },
+        }),
+    )
+    .await;
+
+    let tree = Worktree::local(
+        Path::new(path!("/code/project")),
+        true,
+        fs.clone(),
+        Default::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .unwrap();
+    cx.read(|cx| tree.read(cx).as_local().unwrap().scan_complete())
+        .await;
+
+    // Renaming an ancestor of the root produces no event under the watched
+    // path, so only the periodic root check can notice it.
+    fs.rename(
+        Path::new(path!("/code")),
+        Path::new(path!("/src")),
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    cx.background_executor.run_until_parked();
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(tree.abs_path().as_ref(), Path::new(path!("/code/project")));
+    });
+
+    cx.background_executor
+        .advance_clock(worktree::ROOT_PATH_CHECK_INTERVAL);
+    cx.background_executor.run_until_parked();
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(tree.abs_path().as_ref(), Path::new(path!("/src/project")));
+        assert_eq!(tree.root_name(), rel_path("project"));
+        assert_eq!(
+            tree.entries(false, 0)
+                .map(|entry| entry.path.as_ref())
+                .collect::<Vec<_>>(),
+            vec![rel_path(""), rel_path("src"), rel_path("src/main.rs"),]
+        );
+    });
 }
 
 #[gpui::test]

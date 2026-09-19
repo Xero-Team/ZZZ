@@ -350,7 +350,7 @@ pub fn init(cx: &mut App) {
     workspace::register_serializable_item::<Editor>(cx);
 
     cx.observe_new(
-        |workspace: &mut Workspace, _: Option<&mut Window>, _cx: &mut Context<Workspace>| {
+        |workspace: &mut Workspace, window: Option<&mut Window>, cx: &mut Context<Workspace>| {
             workspace.register_action(Editor::new_file);
             workspace.register_action(Editor::new_file_split);
             workspace.register_action(Editor::new_file_vertical);
@@ -358,6 +358,19 @@ pub fn init(cx: &mut App) {
             workspace.register_action(Editor::cancel_language_server_work);
             workspace.register_action(Editor::toggle_focus);
             workspace.register_action(Editor::view_bookmarks);
+            if let Some(window) = window {
+                cx.subscribe_in(
+                    workspace.project(),
+                    window,
+                    |workspace, _, event, window, cx| {
+                        if let project::Event::LanguageServerShowDocument(request) = event {
+                            items::handle_lsp_show_document(workspace, request, window, cx)
+                                .detach();
+                        }
+                    },
+                )
+                .detach();
+            }
         },
     )
     .detach();
@@ -1954,6 +1967,8 @@ struct GutterButtonTooltip {
     primary: GutterButtonIntent,
     secondary: GutterButtonIntent,
     focus_handle: FocusHandle,
+    #[cfg(test)]
+    on_render: Option<Rc<RefCell<Vec<(String, String)>>>>,
 }
 
 impl GutterButtonTooltip {
@@ -1965,7 +1980,7 @@ impl GutterButtonTooltip {
         }
     }
 
-    fn meta_text(&self, intent: GutterButtonIntent) -> String {
+    fn meta_text(&self) -> String {
         const RIGHT_CLICK_HINT: &str = "right-click for more options";
 
         if self.primary == self.secondary {
@@ -1975,11 +1990,11 @@ impl GutterButtonTooltip {
             modifiers: Modifiers::secondary_key(),
             ..Default::default()
         };
-        let other = match intent {
-            GutterButtonIntent::SetBookmark => "breakpoint",
-            GutterButtonIntent::SetBreakpoint => "bookmark",
+        let secondary = match self.secondary {
+            GutterButtonIntent::SetBookmark => "bookmark",
+            GutterButtonIntent::SetBreakpoint => "breakpoint",
         };
-        format!("{modifier_as_text}-click to add a {other}\n{RIGHT_CLICK_HINT}")
+        format!("{modifier_as_text}-click to add a {secondary}\n{RIGHT_CLICK_HINT}")
     }
 }
 
@@ -1987,7 +2002,14 @@ impl Render for GutterButtonTooltip {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let intent = self.active_intent(window.modifiers());
         let key_binding = KeyBinding::for_action_in(intent.action(), &self.focus_handle, cx);
-        let meta_text = self.meta_text(intent);
+        let meta_text = self.meta_text();
+
+        #[cfg(test)]
+        if let Some(on_render) = &self.on_render {
+            on_render
+                .borrow_mut()
+                .push((intent.as_str().to_owned(), meta_text.clone()));
+        }
 
         tooltip_container(cx, move |this, _| {
             this.child(
@@ -8900,6 +8922,8 @@ impl Editor {
                         primary,
                         secondary,
                         focus_handle: focus_handle.clone(),
+                        #[cfg(test)]
+                        on_render: None,
                     })
                     .into()
                 })
@@ -11075,20 +11099,21 @@ impl Editor {
                             .collect::<String>();
 
                         if !line_text_after_indent.is_empty() {
-                            let block_prefix = language_scope
+                            let block_prefixes = language_scope
                                 .block_comment()
-                                .map(|c| c.prefix.as_ref())
-                                .filter(|p| !p.is_empty());
-                            let doc_prefix = language_scope
-                                .documentation_comment()
-                                .map(|c| c.prefix.as_ref())
-                                .filter(|p| !p.is_empty());
+                                .into_iter()
+                                .chain(language_scope.documentation_comment())
+                                .filter(|comment| {
+                                    language_scope.override_name() == Some("comment")
+                                        && !comment.prefix.is_empty()
+                                        && !line_text_after_indent.starts_with(comment.end.as_ref())
+                                })
+                                .map(|comment| comment.prefix.as_ref());
                             let comment_prefixes = language_scope
                                 .line_comment_prefixes()
                                 .iter()
                                 .map(|p| p.as_ref())
-                                .chain(block_prefix)
-                                .chain(doc_prefix)
+                                .chain(block_prefixes)
                                 .map(|prefix| (prefix, false));
                             let all_prefixes = comment_prefixes.chain(
                                 language_scope
@@ -12178,13 +12203,14 @@ impl Editor {
                     .map(|(i, &row)| (row, i))
                     .collect();
 
-                // Compute new line start offsets after rotation (handles CRLF)
-                let newline_len = line_ranges[1].start.0 - line_ranges[0].end.0;
-                let first_line_start = line_ranges[0].start.0;
-                let mut new_line_starts: Vec<usize> = vec![first_line_start];
-                for text in line_texts.iter().take(num_rows - 1) {
-                    let prev_start = *new_line_starts.last().unwrap();
-                    new_line_starts.push(prev_start + text.len() + newline_len);
+                let mut old_line_end = 0;
+                let mut new_line_end = 0;
+                let mut new_line_starts = Vec::new();
+                for (range, text) in line_ranges.iter().zip(&line_texts) {
+                    let line_start = new_line_end + (range.start.0 - old_line_end);
+                    new_line_starts.push(line_start);
+                    old_line_end = range.end.0;
+                    new_line_end = line_start + text.len();
                 }
 
                 let new_selections = selections
@@ -16194,6 +16220,7 @@ impl Editor {
             let empty_str: Arc<str> = Arc::default();
             let mut suffixes_inserted = Vec::new();
             let ignore_indent = action.ignore_indent;
+            let comment_empty_lines = action.comment_empty_lines;
 
             fn comment_prefix_range(
                 snapshot: &MultiBufferSnapshot,
@@ -16323,11 +16350,13 @@ impl Editor {
                         .map(|p| p.trim_end_matches(' ').len())
                         .collect::<SmallVec<[usize; 4]>>();
 
-                    let mut all_selection_lines_are_comments = true;
+                    let mut commented_lines = 0;
+                    let mut uncommented_lines = 0;
 
                     for row in start_row.0..=end_row.0 {
                         let row = MultiBufferRow(row);
-                        if start_row < end_row && snapshot.is_line_blank(row) {
+                        let is_blank = start_row < end_row && snapshot.is_line_blank(row);
+                        if !comment_empty_lines && is_blank {
                             continue;
                         }
 
@@ -16346,14 +16375,20 @@ impl Editor {
                             .max_by_key(|range| range.end.column - range.start.column)
                             .expect("prefixes is non-empty");
 
-                        if prefix_range.is_empty() {
-                            all_selection_lines_are_comments = false;
+                        if !is_blank {
+                            if prefix_range.is_empty() {
+                                uncommented_lines += 1;
+                            } else {
+                                commented_lines += 1;
+                            }
                         }
 
                         selection_edit_ranges.push(prefix_range);
                     }
 
-                    if all_selection_lines_are_comments {
+                    let should_uncomment = uncommented_lines == 0 && commented_lines > 0;
+
+                    if should_uncomment {
                         edits.extend(
                             selection_edit_ranges
                                 .iter()
@@ -17283,10 +17318,11 @@ impl Editor {
             .iter()
             .flat_map(|selection| {
                 snapshot
-                    .range_to_buffer_ranges(selection.range())
-                    .into_iter()
-                    .filter_map(|(buffer_snapshot, range, _)| {
-                        snapshot.anchor_in_excerpt(buffer_snapshot.anchor_after(range.start))
+                    .range_to_buffer_ranges_with_deleted_hunks(selection.range())
+                    .filter_map(|(buffer_snapshot, range, deleted_hunk_anchor)| {
+                        deleted_hunk_anchor.or_else(|| {
+                            snapshot.anchor_in_excerpt(buffer_snapshot.anchor_after(range.start))
+                        })
                     })
             })
             .collect::<Vec<_>>();
@@ -24540,6 +24576,7 @@ fn process_completion_for_edit(
         let replace_range = &completion.replace_range;
         if let CompletionSource::Lsp {
             insert_range: Some(insert_range),
+            lsp_completion,
             ..
         } = &completion.source
         {
@@ -24578,7 +24615,7 @@ fn process_completion_for_edit(
                                     ..buffer.anchor_after(replace_range.end),
                             );
                             let mut current_needle = text_to_replace.next();
-                            for haystack_ch in completion.label.text.chars() {
+                            for haystack_ch in lsp_completion.label.chars() {
                                 if let Some(needle_ch) = current_needle
                                     && haystack_ch.eq_ignore_ascii_case(&needle_ch)
                                 {
@@ -24601,9 +24638,8 @@ fn process_completion_for_edit(
                                     )
                                     .collect::<String>()
                                     .to_ascii_lowercase();
-                                completion
+                                lsp_completion
                                     .label
-                                    .text
                                     .to_ascii_lowercase()
                                     .ends_with(&text_after_cursor)
                             } else {

@@ -25,7 +25,6 @@ use collections::{FxHashMap, FxHashSet};
 #[cfg(target_os = "macos")]
 use core_video::pixel_buffer::CVPixelBuffer;
 use derive_more::{Deref, DerefMut};
-use futures::FutureExt;
 use futures::channel::oneshot;
 use gpui_util::post_inc;
 use gpui_util::{ResultExt, measure};
@@ -835,6 +834,8 @@ pub(crate) struct Frame {
     pub(crate) cursor_styles: Vec<CursorStyleRequest>,
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) debug_bounds: FxHashMap<String, Bounds<Pixels>>,
+    #[cfg(any(test, feature = "test-support"))]
+    debug_bounds_records: Vec<(String, Bounds<Pixels>)>,
     #[cfg(any(feature = "inspector", debug_assertions))]
     pub(crate) next_inspector_instance_ids: FxHashMap<Rc<crate::InspectorElementPath>, usize>,
     #[cfg(any(feature = "inspector", debug_assertions))]
@@ -855,6 +856,8 @@ pub(crate) struct PrepaintStateIndex {
 #[derive(Clone, Default)]
 pub(crate) struct PaintIndex {
     scene_index: usize,
+    #[cfg(any(test, feature = "test-support"))]
+    debug_bounds_index: usize,
     mouse_listeners_index: usize,
     input_handlers_index: usize,
     cursor_styles_index: usize,
@@ -864,6 +867,12 @@ pub(crate) struct PaintIndex {
 }
 
 impl Frame {
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn record_debug_bounds(&mut self, selector: String, bounds: Bounds<Pixels>) {
+        self.debug_bounds.insert(selector.clone(), bounds);
+        self.debug_bounds_records.push((selector, bounds));
+    }
+
     pub(crate) fn new(dispatch_tree: DispatchTree) -> Self {
         Frame {
             focus: None,
@@ -882,6 +891,8 @@ impl Frame {
 
             #[cfg(any(test, feature = "test-support"))]
             debug_bounds: FxHashMap::default(),
+            #[cfg(any(test, feature = "test-support"))]
+            debug_bounds_records: Vec::new(),
 
             #[cfg(any(feature = "inspector", debug_assertions))]
             next_inspector_instance_ids: FxHashMap::default(),
@@ -910,6 +921,7 @@ impl Frame {
         #[cfg(any(test, feature = "test-support"))]
         {
             self.debug_bounds.clear();
+            self.debug_bounds_records.clear();
         }
 
         #[cfg(any(feature = "inspector", debug_assertions))]
@@ -3063,6 +3075,8 @@ impl Window {
     pub(crate) fn paint_index(&self) -> PaintIndex {
         PaintIndex {
             scene_index: self.next_frame.scene.len(),
+            #[cfg(any(test, feature = "test-support"))]
+            debug_bounds_index: self.next_frame.debug_bounds_records.len(),
             mouse_listeners_index: self.next_frame.mouse_listeners.len(),
             input_handlers_index: self.next_frame.input_handlers.len(),
             cursor_styles_index: self.next_frame.cursor_styles.len(),
@@ -3073,6 +3087,14 @@ impl Window {
     }
 
     pub(crate) fn reuse_paint(&mut self, range: Range<PaintIndex>) {
+        // Cached elements still exist in the frame even when their paint methods don't run.
+        #[cfg(any(test, feature = "test-support"))]
+        for (selector, bounds) in &self.rendered_frame.debug_bounds_records
+            [range.start.debug_bounds_index..range.end.debug_bounds_index]
+        {
+            self.next_frame
+                .record_debug_bounds(selector.clone(), *bounds);
+        }
         self.next_frame.cursor_styles.extend(
             self.rendered_frame.cursor_styles
                 [range.start.cursor_styles_index..range.end.cursor_styles_index]
@@ -3284,25 +3306,7 @@ impl Window {
     /// Note that the multiple calls to this method will only result in one `Asset::load` call at a
     /// time.
     pub fn use_asset<A: Asset>(&mut self, source: &A::Source, cx: &mut App) -> Option<A::Output> {
-        let (task, is_first) = cx.fetch_asset::<A>(source);
-        task.clone().now_or_never().or_else(|| {
-            if is_first {
-                let entity_id = self.current_view();
-                self.spawn(cx, {
-                    let task = task.clone();
-                    async move |cx| {
-                        task.await;
-
-                        cx.on_next_frame(move |_, cx| {
-                            cx.notify(entity_id);
-                        });
-                    }
-                })
-                .detach();
-            }
-
-            None
-        })
+        cx.asset_entry::<A>(source).use_by(self.current_view())
     }
 
     /// Asynchronously load an asset, if the asset hasn't finished loading or doesn't exist this will return None.
@@ -3311,8 +3315,7 @@ impl Window {
     /// Note that the multiple calls to this method will only result in one `Asset::load` call at a
     /// time.
     pub fn get_asset<A: Asset>(&mut self, source: &A::Source, cx: &mut App) -> Option<A::Output> {
-        let (task, _) = cx.fetch_asset::<A>(source);
-        task.now_or_never()
+        cx.fetch_asset::<A>(source)
     }
     /// Obtain the current element offset. This method should only be called during the
     /// prepaint phase of element drawing.
@@ -3842,7 +3845,7 @@ impl Window {
         if !raster_bounds.is_zero() {
             let tile = self
                 .sprite_atlas
-                .get_or_insert_with(&params.clone().into(), &mut || {
+                .get_or_insert_with(params.clone().into(), &mut || {
                     let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
                     Ok(Some((size, Cow::Owned(bytes))))
                 })?
@@ -3934,7 +3937,7 @@ impl Window {
         if !raster_bounds.is_zero() {
             let tile = self
                 .sprite_atlas
-                .get_or_insert_with(&params.clone().into(), &mut || {
+                .get_or_insert_with(params.clone().into(), &mut || {
                     let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
                     Ok(Some((size, Cow::Owned(bytes))))
                 })?
@@ -3987,7 +3990,7 @@ impl Window {
 
         let Some(tile) =
             self.sprite_atlas
-                .get_or_insert_with(&params.clone().into(), &mut || {
+                .get_or_insert_with(params.clone().into(), &mut || {
                     let Some((size, bytes)) = cx.svg_renderer.render_alpha_mask(&params, data)?
                     else {
                         return Ok(None);
@@ -4060,7 +4063,7 @@ impl Window {
 
         let tile = self
             .sprite_atlas
-            .get_or_insert_with(&params.into(), &mut || {
+            .get_or_insert_with(params.into(), &mut || {
                 Ok(Some((
                     data.size(frame_index),
                     Cow::Borrowed(
@@ -5550,7 +5553,13 @@ impl Window {
     pub fn toggle_inspector(&mut self, cx: &mut App) {
         self.inspector = match self.inspector {
             None => Some(cx.new(|_| Inspector::new())),
-            Some(_) => None,
+            Some(_) => {
+                self.rendered_frame.next_inspector_instance_ids = FxHashMap::default();
+                self.rendered_frame.inspector_hitboxes = FxHashMap::default();
+                self.next_frame.next_inspector_instance_ids = FxHashMap::default();
+                self.next_frame.inspector_hitboxes = FxHashMap::default();
+                None
+            }
         };
         self.refresh();
     }
@@ -5570,22 +5579,24 @@ impl Window {
     #[cfg(any(feature = "inspector", debug_assertions))]
     pub fn with_inspector_state<T: 'static, R>(
         &mut self,
-        _inspector_id: Option<&crate::InspectorElementId>,
+        inspector_id: Option<&crate::InspectorElementId>,
         cx: &mut App,
         f: impl FnOnce(&mut Option<T>, &mut Self) -> R,
-    ) -> R {
-        if let Some(inspector_id) = _inspector_id
-            && let Some(inspector) = &self.inspector
-        {
-            let inspector = inspector.clone();
-            let active_element_id = inspector.read(cx).active_element_id();
-            if Some(inspector_id) == active_element_id {
-                return inspector.update(cx, |inspector, _cx| {
-                    inspector.with_active_element_state(self, f)
-                });
-            }
+    ) -> Option<R> {
+        let inspector_id = inspector_id?;
+        let inspector = self.inspector.as_ref()?;
+        if inspector.read(cx).active_element_id() != Some(inspector_id) {
+            return None;
         }
-        f(&mut None, self)
+        let inspector = inspector.clone();
+        Some(inspector.update(cx, |inspector, _cx| {
+            inspector.with_active_element_state(self, f)
+        }))
+    }
+
+    #[cfg(any(feature = "inspector", debug_assertions))]
+    pub(crate) fn inspector_enabled(&self) -> bool {
+        self.inspector.is_some()
     }
 
     #[cfg(any(feature = "inspector", debug_assertions))]
@@ -6257,9 +6268,9 @@ pub fn outline(
 #[cfg(test)]
 mod tests {
     use crate::{
-        AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _, IntoElement,
-        ParentElement as _, Pixels, Render, RequestFrameOptions, Styled as _, TestAppContext,
-        Window, WindowAppearance, canvas, div, px, size,
+        AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _,
+        IntoElement, ParentElement as _, Pixels, Render, RequestFrameOptions, Styled as _,
+        TestAppContext, Window, WindowAppearance, canvas, div, px, size,
     };
     use std::{cell::Cell, rc::Rc};
 
@@ -6273,6 +6284,45 @@ mod tests {
     impl Render for EmptyView {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
             div()
+        }
+    }
+
+    #[test]
+    fn test_scale_factor_change_preserves_bounds_and_survives_resize() {
+        let mut cx = TestAppContext::single();
+        let window = cx.add_window(|_, _| EmptyView);
+        let handle: AnyWindowHandle = window.into();
+        let window_state = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, _| {
+                (
+                    window.scale_factor(),
+                    window.bounds(),
+                    window.viewport_size(),
+                )
+            })
+            .unwrap()
+        };
+
+        let (scale_factor, mut expected_bounds, _) = window_state(&mut cx);
+        assert_eq!(scale_factor, 2.0);
+
+        for (scale_factor, resized_size) in [
+            (1.0, size(px(800.), px(600.))),
+            (1.25, size(px(640.), px(480.))),
+            (2.0, size(px(1024.), px(768.))),
+        ] {
+            cx.simulate_window_scale_factor_change(handle, scale_factor);
+            assert_eq!(
+                window_state(&mut cx),
+                (scale_factor, expected_bounds, expected_bounds.size)
+            );
+
+            cx.simulate_window_resize(handle, resized_size);
+            expected_bounds.size = resized_size;
+            assert_eq!(
+                window_state(&mut cx),
+                (scale_factor, expected_bounds, resized_size)
+            );
         }
     }
 

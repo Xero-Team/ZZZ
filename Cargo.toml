@@ -118,6 +118,7 @@ members = [
     "crates/llama_cpp",
     "crates/lmstudio",
     "crates/lsp",
+    "crates/lsp_command_selector",
     "crates/markdown",
     "crates/markdown_preview",
     "crates/media",
@@ -369,6 +370,7 @@ line_ending_selector = { path = "crates/line_ending_selector" }
 llama_cpp = { path = "crates/llama_cpp" }
 lmstudio = { path = "crates/lmstudio" }
 lsp = { path = "crates/lsp" }
+lsp_command_selector = { path = "crates/lsp_command_selector" }
 markdown = { path = "crates/markdown" }
 markdown_preview = { path = "crates/markdown_preview" }
 svg_preview = { path = "crates/svg_preview" }
@@ -640,9 +642,14 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
     "NSButton",
     "NSControl",
     "NSGraphics",
+    "NSOpenPanel",
+    "NSPanel",
     "NSResponder",
+    "NSSavePanel",
     "NSView",
     "NSWindow",
+    "NSWorkspace",
+    "block2",
     "objc2-core-foundation",
 ] }
 objc2-foundation = { version = "=0.3.2", default-features = false, features = [

@@ -14,11 +14,7 @@ use std::{
 
 use anyhow::{Context as _, Result, anyhow};
 use derive_more::{Deref, DerefMut};
-use futures::{
-    Future, FutureExt,
-    channel::oneshot,
-    future::{LocalBoxFuture, Shared},
-};
+use futures::{Future, FutureExt, channel::oneshot, future::LocalBoxFuture};
 use itertools::Itertools;
 use parking_lot::RwLock;
 use slotmap::SlotMap;
@@ -43,6 +39,7 @@ pub use visual_test_context::*;
 
 #[cfg(any(feature = "inspector", debug_assertions))]
 use crate::InspectorElementRegistry;
+use crate::asset_cache::CachedLoad;
 use crate::{
     Action, ActionBuildError, ActionRegistry, Any, AnyView, AnyWindowHandle, AppContext, Arena,
     ArenaBox, Asset, AssetSource, BackgroundExecutor, Bounds, ClipboardItem, CursorStyle,
@@ -2440,27 +2437,33 @@ impl App {
         self.loading_assets.remove(&asset_id);
     }
 
-    /// Asynchronously load an asset, if the asset hasn't finished loading this will return None.
-    ///
-    /// Note that the multiple calls to this method will only result in one `Asset::load` call at a
-    /// time, and the results of this call will be cached
-    pub fn fetch_asset<A: Asset>(&mut self, source: &A::Source) -> (Shared<Task<A::Output>>, bool) {
+    /// Check whether an asset is present in GPUI's cache (loading or loaded),
+    /// without fetching it.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn has_asset<A: Asset>(&self, source: &A::Source) -> bool {
         let asset_id = (TypeId::of::<A>(), hash(source));
-        let mut is_first = false;
-        let task = self
-            .loading_assets
-            .remove(&asset_id)
-            .map(|boxed_task| *boxed_task.downcast::<Shared<Task<A::Output>>>().unwrap())
-            .unwrap_or_else(|| {
-                is_first = true;
-                let future = A::load(source.clone(), self);
+        self.loading_assets.contains_key(&asset_id)
+    }
 
-                self.background_executor().spawn(future).shared()
-            });
+    /// Starts loading an uncached asset and returns its result once available.
+    ///
+    /// Pending loads and completed results are cached until [`Self::remove_asset`].
+    /// This method does not subscribe a view to completion notifications.
+    pub fn fetch_asset<A: Asset>(&mut self, source: &A::Source) -> Option<A::Output> {
+        self.asset_entry::<A>(source).get()
+    }
 
-        self.loading_assets.insert(asset_id, Box::new(task.clone()));
-
-        (task, is_first)
+    pub(crate) fn asset_entry<A: Asset>(&mut self, source: &A::Source) -> &CachedLoad<A::Output> {
+        let asset_id = (TypeId::of::<A>(), hash(source));
+        if !self.loading_assets.contains_key(&asset_id) {
+            let future = A::load(source.clone(), self);
+            let entry = CachedLoad::new(future, self);
+            self.loading_assets.insert(asset_id, Box::new(entry));
+        }
+        self.loading_assets
+            .get(&asset_id)
+            .and_then(|entry| entry.downcast_ref())
+            .expect("asset cache entries are keyed by their asset type")
     }
 
     /// Obtain a new [`FocusHandle`], which allows you to track and manipulate the keyboard focus
@@ -2542,11 +2545,13 @@ impl App {
 
     /// Registers a renderer specific to an inspector state.
     #[cfg(any(feature = "inspector", debug_assertions))]
-    pub fn register_inspector_element<T: 'static, R: crate::IntoElement>(
+    pub fn register_inspector_element<T: 'static, R: crate::IntoElement, F>(
         &mut self,
-        f: impl 'static + Fn(crate::InspectorElementId, &T, &mut Window, &mut App) -> R,
-    ) {
-        self.inspector_element_registry.register(f);
+        factory: impl 'static + Fn(&mut Window, &mut App) -> F,
+    ) where
+        F: 'static + FnMut(crate::InspectorElementId, &T, &mut Window, &mut App) -> R,
+    {
+        self.inspector_element_registry.register(factory);
     }
 
     /// Initializes gpui's default colors for the application.

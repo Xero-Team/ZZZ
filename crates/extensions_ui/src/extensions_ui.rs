@@ -121,6 +121,7 @@ pub fn init(cx: &mut App) {
         update_rebuild_dev_extension_visibility(&store, cx);
     })
     .detach();
+    extension_suggest::init(cx);
 
     cx.observe_new(move |workspace: &mut Workspace, window, cx| {
         let Some(window) = window else {

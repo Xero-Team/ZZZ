@@ -836,6 +836,16 @@ impl EditorElement {
             return;
         }
 
+        if !event.modifiers.modified()
+            && text_hitbox.is_hovered(window)
+            && editor.hovered_inlay_hint_command().is_some_and(|command| {
+                command.contains_point(&position_map.snapshot, point_for_position)
+            })
+        {
+            cx.stop_propagation();
+            return;
+        }
+
         if EditorSettings::get_global(cx)
             .drag_and_drop_selection
             .enabled
@@ -1165,8 +1175,6 @@ impl EditorElement {
 
         if let Some(mouse_position) = event.mouse_position()
             && !pending_nonempty_selections
-            && hovered_link_modifier
-            && mouse_down_hovered_link_modifier
             && text_hitbox.is_hovered(window)
             && !matches!(
                 editor.selection_drag_state,
@@ -1174,10 +1182,27 @@ impl EditorElement {
             )
         {
             let point = position_map.point_for_position(mouse_position);
-            editor.handle_click_hovered_link(point, event.modifiers(), window, cx);
-            editor.selection_drag_state = SelectionDragState::None;
+            if let ClickEvent::Mouse(mouse_event) = event
+                && mouse_event.up.click_count == 1
+                && !mouse_event.down.modifiers.modified()
+                && !mouse_event.up.modifiers.modified()
+                && editor.activate_hovered_inlay_hint_command(
+                    &position_map.snapshot,
+                    position_map.point_for_position(mouse_event.down.position),
+                    point,
+                    cx,
+                )
+            {
+                editor.selection_drag_state = SelectionDragState::None;
+                cx.stop_propagation();
+                return;
+            }
 
-            cx.stop_propagation();
+            if hovered_link_modifier && mouse_down_hovered_link_modifier {
+                editor.handle_click_hovered_link(point, event.modifiers(), window, cx);
+                editor.selection_drag_state = SelectionDragState::None;
+                cx.stop_propagation();
+            }
         }
     }
 
@@ -6806,6 +6831,19 @@ impl EditorElement {
                     .hovered_link_state
                     .as_ref()
                     .is_some_and(|hovered_link_state| !hovered_link_state.links.is_empty())
+                {
+                    window.set_cursor_style(
+                        CursorStyle::PointingHand,
+                        &layout.position_map.text_hitbox,
+                    );
+                } else if !window.modifiers().modified()
+                    && let Some(hovered_command) = editor.hovered_inlay_hint_command()
+                    && hovered_command.contains_point(
+                        &layout.position_map.snapshot,
+                        layout
+                            .position_map
+                            .point_for_position(window.mouse_position()),
+                    )
                 {
                     window.set_cursor_style(
                         CursorStyle::PointingHand,

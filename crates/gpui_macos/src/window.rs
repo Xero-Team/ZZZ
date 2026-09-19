@@ -95,6 +95,8 @@ const NSTrackingMouseEnteredAndExited: NSUInteger = 0x01;
 #[allow(non_upper_case_globals)]
 const NSTrackingMouseMoved: NSUInteger = 0x02;
 #[allow(non_upper_case_globals)]
+const NSTrackingActiveInActiveApp: NSUInteger = 0x40;
+#[allow(non_upper_case_globals)]
 const NSTrackingActiveAlways: NSUInteger = 0x80;
 #[allow(non_upper_case_globals)]
 const NSTrackingInVisibleRect: NSUInteger = 0x200;
@@ -384,6 +386,10 @@ unsafe fn build_window_class(name: &'static str, superclass: &Class) -> *const C
             window_will_exit_fullscreen as extern "C" fn(&Object, Sel, id),
         );
         decl.add_method(
+            sel!(windowDidFailToExitFullScreen:),
+            window_did_fail_to_exit_fullscreen as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
             sel!(windowDidExitFullScreen:),
             window_did_exit_fullscreen as extern "C" fn(&Object, Sel, id),
         );
@@ -465,6 +471,7 @@ unsafe fn build_window_class(name: &'static str, superclass: &Class) -> *const C
     }
 }
 
+#[derive(Clone, Copy)]
 struct TrafficLightFrames {
     titlebar: Objc2NSRect,
     close: Objc2NSRect,
@@ -585,6 +592,7 @@ struct MacWindowState {
     synthetic_drag_counter: usize,
     traffic_light_position: Option<Point<Pixels>>,
     traffic_light_frames: Option<TrafficLightFrames>,
+    pre_fullscreen_traffic_light_frames: Option<TrafficLightFrames>,
     transparent_titlebar: bool,
     previous_modifiers_changed_event: Option<PlatformInput>,
     keystroke_for_do_command: Option<Keystroke>,
@@ -598,6 +606,7 @@ struct MacWindowState {
     // windows draw their own titlebar and move the window via `start_window_move`.
     app_owns_titlebar_drag: bool,
     fullscreen_restore_bounds: Bounds<Pixels>,
+    is_exiting_fullscreen: bool,
     simple_fullscreen_state: Option<SimpleFullscreenState>,
     move_tab_to_new_window_callback: Option<Box<dyn FnMut()>>,
     merge_all_windows_callback: Option<Box<dyn FnMut()>>,
@@ -613,7 +622,7 @@ struct MacWindowState {
 impl MacWindowState {
     fn move_traffic_light(&mut self) {
         if let Some(traffic_light_position) = self.traffic_light_position {
-            if self.is_fullscreen() {
+            if self.is_fullscreen() && !self.is_exiting_fullscreen {
                 self.restore_traffic_light();
                 return;
             }
@@ -1013,6 +1022,7 @@ impl MacWindow {
                     .as_ref()
                     .and_then(|titlebar| titlebar.traffic_light_position),
                 traffic_light_frames: None,
+                pre_fullscreen_traffic_light_frames: None,
                 transparent_titlebar: titlebar
                     .as_ref()
                     .is_none_or(|titlebar| titlebar.appears_transparent),
@@ -1023,6 +1033,7 @@ impl MacWindow {
                 first_mouse: false,
                 app_owns_titlebar_drag,
                 fullscreen_restore_bounds: Bounds::default(),
+                is_exiting_fullscreen: false,
                 simple_fullscreen_state: None,
                 move_tab_to_new_window_callback: None,
                 merge_all_windows_callback: None,
@@ -1091,10 +1102,20 @@ impl MacWindow {
                     if kind == WindowKind::Floating {
                         // Let the window float keep above normal windows.
                         native_window.setLevel_(NSFloatingWindowLevel);
+                        native_window.setAcceptsMouseMovedEvents_(YES);
                     } else {
                         native_window.setLevel_(NSNormalWindowLevel);
+                        native_window.setAcceptsMouseMovedEvents_(NO);
+                        add_mouse_tracking_area(
+                            native_view,
+                            NSTrackingMouseEnteredAndExited
+                                | NSTrackingMouseMoved
+                                // Track even when another application is active so visible
+                                // windows can respond to hover without being focused.
+                                | NSTrackingActiveAlways
+                                | NSTrackingInVisibleRect,
+                        );
                     }
-                    native_window.setAcceptsMouseMovedEvents_(YES);
 
                     if let Some(tabbing_identifier) = tabbing_identifier {
                         let tabbing_id = ns_string(tabbing_identifier.as_str());
@@ -1107,16 +1128,13 @@ impl MacWindow {
                     // Use a tracking area to allow receiving MouseMoved events even when
                     // the window or application aren't active, which is often the case
                     // e.g. for notification windows.
-                    let tracking_area: id = msg_send![class!(NSTrackingArea), alloc];
-                    let _: () = msg_send![
-                        tracking_area,
-                        initWithRect: NSRect::new(NSPoint::new(0., 0.), NSSize::new(0., 0.))
-                        options: NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved | NSTrackingActiveAlways | NSTrackingInVisibleRect
-                        owner: native_view
-                        userInfo: nil
-                    ];
-                    let _: () =
-                        msg_send![native_view, addTrackingArea: tracking_area.autorelease()];
+                    add_mouse_tracking_area(
+                        native_view,
+                        NSTrackingMouseEnteredAndExited
+                            | NSTrackingMouseMoved
+                            | NSTrackingActiveAlways
+                            | NSTrackingInVisibleRect,
+                    );
 
                     native_window.setLevel_(NSPopUpWindowLevel);
                     let _: () = msg_send![
@@ -1936,8 +1954,15 @@ impl PlatformWindow for MacWindow {
                                 window.zoom_(nil);
                             }
                             "Fill" => {
-                                // There is no documented API for "Fill" action, so we'll just zoom the window
-                                window.zoom_(nil);
+                                // Unlike `zoom:`, AppKit's private Fill action honors the system's
+                                // "Tiled windows have margins" setting.
+                                let responds_to_zoom_fill: BOOL =
+                                    msg_send![window, respondsToSelector: sel!(_zoomFill:)];
+                                if responds_to_zoom_fill == YES {
+                                    let _: () = msg_send![window, _zoomFill: nil];
+                                } else {
+                                    window.zoom_(nil);
+                                }
                             }
                             _ => {
                                 window.zoom_(nil);
@@ -2049,6 +2074,20 @@ extern "C" fn dealloc_view(this: &Object, _: Sel) {
     unsafe {
         drop_window_state(this);
         let _: () = msg_send![super(this, class!(NSView)), dealloc];
+    }
+}
+
+fn add_mouse_tracking_area(native_view: id, options: NSUInteger) {
+    unsafe {
+        let tracking_area: id = msg_send![class!(NSTrackingArea), alloc];
+        let _: () = msg_send![
+            tracking_area,
+            initWithRect: NSRect::new(NSPoint::new(0., 0.), NSSize::new(0., 0.))
+            options: options
+            owner: native_view
+            userInfo: nil
+        ];
+        let _: () = msg_send![native_view, addTrackingArea: tracking_area.autorelease()];
     }
 }
 
@@ -2491,6 +2530,8 @@ extern "C" fn window_will_enter_fullscreen(this: &Object, _: Sel, _: id) {
     let window_state = unsafe { get_window_state(this) };
     let mut lock = window_state.as_ref().lock();
     lock.fullscreen_restore_bounds = lock.bounds();
+    lock.is_exiting_fullscreen = false;
+    lock.pre_fullscreen_traffic_light_frames = lock.traffic_light_frames;
     lock.restore_traffic_light();
 
     let min_version = NSOperatingSystemVersion::new(15, 3, 0);
@@ -2504,7 +2545,8 @@ extern "C" fn window_will_enter_fullscreen(this: &Object, _: Sel, _: id) {
 
 extern "C" fn window_will_exit_fullscreen(this: &Object, _: Sel, _: id) {
     let window_state = unsafe { get_window_state(this) };
-    let lock = window_state.as_ref().lock();
+    let mut lock = window_state.as_ref().lock();
+    lock.is_exiting_fullscreen = true;
 
     let min_version = NSOperatingSystemVersion::new(15, 3, 0);
 
@@ -2513,13 +2555,27 @@ extern "C" fn window_will_exit_fullscreen(this: &Object, _: Sel, _: id) {
             lock.native_window.setTitlebarAppearsTransparent_(YES);
         }
     }
+
+    lock.move_traffic_light();
+}
+
+extern "C" fn window_did_fail_to_exit_fullscreen(this: &Object, _: Sel, _: id) {
+    let window_state = unsafe { get_window_state(this) };
+    let mut lock = window_state.as_ref().lock();
+    lock.is_exiting_fullscreen = false;
+    lock.restore_traffic_light();
 }
 
 extern "C" fn window_did_exit_fullscreen(this: &Object, _: Sel, _: id) {
     // SAFETY: This method is registered only on GPUI window classes, which initialize
     // WINDOW_STATE_IVAR with an Arc<Mutex<MacWindowState>> during window creation.
     let window_state = unsafe { get_window_state(this) };
-    window_state.as_ref().lock().move_traffic_light();
+    let mut lock = window_state.as_ref().lock();
+    lock.is_exiting_fullscreen = false;
+    // Moving the buttons during the transition captures their fullscreen frames.
+    // Keep using the native windowed frames when restoring them on the next entry.
+    lock.traffic_light_frames = lock.pre_fullscreen_traffic_light_frames.take();
+    lock.move_traffic_light();
 }
 
 pub(crate) fn is_macos_version_at_least(version: NSOperatingSystemVersion) -> bool {

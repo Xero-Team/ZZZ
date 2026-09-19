@@ -237,7 +237,7 @@ ZZZ will also use the `DEEPSEEK_API_KEY` environment variable if it's defined.
 
 #### Custom Models {#deepseek-custom-models}
 
-The ZZZ agent comes pre-configured to use DeepSeek V4 Flash and DeepSeek V4 Pro.
+The ZZZ agent comes pre-configured to use DeepSeek V4.1 Flash and DeepSeek V4 Pro.
 If you wish to use alternate models or customize the API endpoint, you can do so by adding the following to your ZZZ settings file ([how to edit](../configuring-zed.md#settings-files)):
 
 ```json [settings]
@@ -247,8 +247,8 @@ If you wish to use alternate models or customize the API endpoint, you can do so
       "api_url": "https://api.deepseek.com",
       "available_models": [
         {
-          "name": "deepseek-v4-flash",
-          "display_name": "DeepSeek V4 Flash",
+          "name": "deepseek-flash",
+          "display_name": "DeepSeek V4.1 Flash",
           "max_tokens": 1000000,
           "max_output_tokens": 384000
         },

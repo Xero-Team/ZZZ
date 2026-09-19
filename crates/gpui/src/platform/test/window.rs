@@ -1,11 +1,9 @@
 use crate::{
-    AnyWindowHandle, AtlasKey, AtlasTextureId, AtlasTile, Bounds, DevicePixels,
-    DispatchEventResult, GpuSpecs, Pixels, PlatformAtlas, PlatformDisplay,
-    PlatformHeadlessRenderer, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
-    PromptButton, RequestFrameOptions, Scene, Size, TestPlatform, TileId, WindowAppearance,
-    WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowParams,
+    AnyWindowHandle, Bounds, DevicePixels, DispatchEventResult, GpuSpecs, HeadlessAtlas, Pixels,
+    PlatformAtlas, PlatformDisplay, PlatformHeadlessRenderer, PlatformInput, PlatformInputHandler,
+    PlatformWindow, Point, PromptButton, RequestFrameOptions, Scene, Size, TestPlatform,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowParams,
 };
-use collections::HashMap;
 use image::RgbaImage;
 use parking_lot::Mutex;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -38,6 +36,7 @@ pub(crate) struct TestWindowState {
     frame_wake_count: Rc<Cell<usize>>,
     input_handler: Option<PlatformInputHandler>,
     is_fullscreen: bool,
+    scale_factor: f32,
     appearance: WindowAppearance,
 }
 
@@ -72,7 +71,7 @@ impl TestWindow {
     ) -> Self {
         let sprite_atlas: Arc<dyn PlatformAtlas> = match &renderer {
             Some(r) => r.sprite_atlas(),
-            None => Arc::new(TestAtlas::new()),
+            None => Arc::new(HeadlessAtlas::default()),
         };
         Self(Rc::new(Mutex::new(TestWindowState {
             bounds: params.bounds,
@@ -96,6 +95,8 @@ impl TestWindow {
             frame_wake_count: Rc::new(Cell::new(0)),
             input_handler: None,
             is_fullscreen: false,
+            // Preserve the test platform's historical 2x default.
+            scale_factor: 2.0,
             appearance: WindowAppearance::Light,
         })))
     }
@@ -111,6 +112,16 @@ impl TestWindow {
         drop(lock);
         callback(size, scale_factor);
         self.0.lock().resize_callback = Some(callback);
+    }
+
+    /// Simulates a display scale change through the resize callback, preserving logical bounds.
+    pub fn simulate_scale_factor_change(&mut self, scale_factor: f32) {
+        let size = {
+            let mut lock = self.0.lock();
+            lock.scale_factor = scale_factor;
+            lock.bounds.size
+        };
+        self.simulate_resize(size);
     }
 
     pub(crate) fn simulate_active_status_change(&self, active: bool) {
@@ -183,7 +194,7 @@ impl PlatformWindow for TestWindow {
     }
 
     fn scale_factor(&self) -> f32 {
-        2.0
+        self.0.lock().scale_factor
     }
 
     fn appearance(&self) -> WindowAppearance {
@@ -378,70 +389,5 @@ impl PlatformWindow for TestWindow {
 
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         None
-    }
-}
-
-pub(crate) struct TestAtlasState {
-    next_id: u32,
-    tiles: HashMap<AtlasKey, AtlasTile>,
-}
-
-pub(crate) struct TestAtlas(Mutex<TestAtlasState>);
-
-impl TestAtlas {
-    pub fn new() -> Self {
-        TestAtlas(Mutex::new(TestAtlasState {
-            next_id: 0,
-            tiles: HashMap::default(),
-        }))
-    }
-}
-
-impl PlatformAtlas for TestAtlas {
-    fn get_or_insert_with<'a>(
-        &self,
-        key: &crate::AtlasKey,
-        build: &mut dyn FnMut() -> anyhow::Result<
-            Option<(Size<crate::DevicePixels>, std::borrow::Cow<'a, [u8]>)>,
-        >,
-    ) -> anyhow::Result<Option<crate::AtlasTile>> {
-        let mut state = self.0.lock();
-        if let Some(&tile) = state.tiles.get(key) {
-            return Ok(Some(tile));
-        }
-        drop(state);
-
-        let Some((size, _)) = build()? else {
-            return Ok(None);
-        };
-
-        let mut state = self.0.lock();
-        state.next_id += 1;
-        let texture_id = state.next_id;
-        state.next_id += 1;
-        let tile_id = state.next_id;
-
-        state.tiles.insert(
-            key.clone(),
-            crate::AtlasTile {
-                texture_id: AtlasTextureId {
-                    index: texture_id,
-                    kind: crate::AtlasTextureKind::Monochrome,
-                },
-                tile_id: TileId(tile_id),
-                padding: 0,
-                bounds: crate::Bounds {
-                    origin: Point::default(),
-                    size,
-                },
-            },
-        );
-
-        Ok(Some(state.tiles[key]))
-    }
-
-    fn remove(&self, key: &AtlasKey) {
-        let mut state = self.0.lock();
-        state.tiles.remove(key);
     }
 }
