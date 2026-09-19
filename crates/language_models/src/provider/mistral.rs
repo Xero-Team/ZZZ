@@ -855,7 +855,7 @@ impl Render for ConfigurationView {
                 .child(Label::new(tr(
                     cx,
                     "language_models.mistral.setup_intro",
-                    "To use Mistral, you need to add an API key. Follow these steps:",
+                    "To use ZZZ's agent with Mistral, you need to add an API key. Follow these steps:",
                 )))
                 .child(
                     List::new()

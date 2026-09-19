@@ -2236,11 +2236,18 @@ impl ConversationView {
         let actions = h_flex()
             .gap_1()
             .child(
-                Button::new("retry-agent-launch", "Retry")
-                    .tooltip(Tooltip::text("Try to restart the agent"))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.retry_connection(window, cx);
-                    })),
+                Button::new(
+                    "retry-agent-launch",
+                    tr(cx, "agent_ui.conversation.retry", "Retry"),
+                )
+                .tooltip(Tooltip::text(tr(
+                    cx,
+                    "agent_ui.conversation.retry_tooltip",
+                    "Try to restart the agent",
+                )))
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.retry_connection(window, cx);
+                })),
             )
             .children(action_slot)
             .into_any_element();

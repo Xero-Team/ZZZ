@@ -1029,7 +1029,7 @@ impl Render for ConfigurationView {
                 .child(Label::new(tr(
                     cx,
                     "language_models.open_router.setup_intro",
-                    "To use OpenRouter, you need to add an API key. Follow these steps:",
+                    "To use ZZZ's agent with OpenRouter, you need to add an API key. Follow these steps:",
                 )))
                 .child(
                     List::new()

@@ -697,7 +697,7 @@ impl EditPredictionButton {
                     Label::new(tr(
                         cx,
                         "edit_prediction_ui.button.configure_excluded_files_description",
-                        "Open your settings to add sensitive paths for which Zed will never predict edits.",
+                        "Open your settings to add sensitive paths for which ZZZ will never predict edits.",
                     ))
                     .into_any_element()
                 })

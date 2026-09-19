@@ -24,6 +24,12 @@
 - In GPUI tests, use executor timers, not `smol::Timer::after(...)`.
 - `clippy.toml` also disallows `std::process::Command::*` and `smol::Timer::after`; use `smol::process::Command` and GPUI timers.
 
+## i18n
+- Localize user-facing text with `i18n::tr(cx, key, fallback)` (some crates alias it, e.g. `app_i18n::tr`).
+- Add every key to both `assets/locales/en.json` and `assets/locales/zh-CN.json`; the two catalogs must keep identical key sets.
+- The catalogs are authoritative for what is displayed. Keep the in-code `fallback` identical to the `en.json` value so it does not drift (a changed fallback alone is invisible at runtime).
+- Do not localize brand names, shell commands, HTTP headers, or internal/log identifiers.
+
 ## Contributions
 - README says DCO/no CLA; use `git commit -s`. `CONTRIBUTING.md` is upstream-stale on this point.
 - If you discover a reusable pattern, add it to `.rules` only after validation; include a `Suggested .rules additions` section in PR text.

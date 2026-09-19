@@ -520,6 +520,11 @@ impl AgentConfiguration {
             "agent_ui.agent_configuration.install_from_extensions",
             "Install from Extensions",
         );
+        let add_remote_server_label = tr(
+            cx,
+            "agent_ui.agent_configuration.add_remote_server",
+            "Add Remote Server",
+        );
 
         let add_server_popover = PopoverMenu::new("add-server-popover")
             .trigger(
@@ -546,7 +551,7 @@ impl AgentConfiguration {
                                 )
                             }
                         })
-                        .entry("Add Remote Server", None, {
+                        .entry(add_remote_server_label.clone(), None, {
                             |window, cx| {
                                 window.dispatch_action(
                                     crate::AddContextServer::remote().boxed_clone(),

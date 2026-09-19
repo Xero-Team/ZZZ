@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use gpui::Entity;
+use i18n::tr;
 use language::Buffer;
 use multi_buffer::{Anchor, MultiBufferOffset, MultiBufferSnapshot, ToOffset as _};
 use project::{Project, bookmark_store::BookmarkStore};
@@ -213,7 +214,11 @@ impl Editor {
         self.add_edit_block(
             target.anchor,
             label,
-            "Enter bookmark label (Optional)",
+            &tr(
+                cx,
+                "editor.bookmark.label_placeholder",
+                "Enter bookmark label (Optional)",
+            ),
             Some(Box::new(move |label, _, cx| {
                 bookmark_store.update(cx, |store, cx| {
                     store.edit_bookmark(&target.buffer, target.buffer_anchor, label, cx)
@@ -237,7 +242,11 @@ impl Editor {
             self.add_edit_block(
                 target.anchor,
                 "",
-                "Enter bookmark label (Optional)",
+                &tr(
+                    cx,
+                    "editor.bookmark.label_placeholder",
+                    "Enter bookmark label (Optional)",
+                ),
                 Some(Box::new(move |label: String, _, cx| {
                     bookmark_store.update(cx, |store, cx| {
                         store.toggle_bookmark(target.buffer, target.buffer_anchor, label, cx);

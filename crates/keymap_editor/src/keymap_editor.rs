@@ -2387,7 +2387,7 @@ impl Render for KeymapEditor {
                                                     tr(
                                                         cx,
                                                         "keymap_editor.tooltip.binding_overridden",
-                                                        "This binding is overridden.",
+                                                        "This binding is overridden by other bindings.",
                                                     )
                                                 });
 

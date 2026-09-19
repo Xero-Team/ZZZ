@@ -854,7 +854,7 @@ impl Render for ConfigurationView {
                 .child(Label::new(tr(
                     cx,
                     "language_models.open_ai_compatible.setup_intro",
-                    "To use an OpenAI-compatible provider, you need to add an API key.",
+                    "To use ZZZ's agent with an OpenAI-compatible provider, you need to add an API key.",
                 )))
                 .child(
                     div()

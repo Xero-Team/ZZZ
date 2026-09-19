@@ -712,7 +712,7 @@ impl RenderOnce for NotificationFrame {
                                                     tr(
                                                         cx,
                                                         "workspace.notifications.click_to_close",
-                                                        "Click to Close",
+                                                        "Click to close",
                                                     ),
                                                     cx,
                                                 )

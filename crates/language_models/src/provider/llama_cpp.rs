@@ -6,6 +6,7 @@ use futures::Stream;
 use futures::{FutureExt, StreamExt, future::BoxFuture, stream::BoxStream};
 use gpui::{AnyView, App, AsyncApp, Context, CursorStyle, Entity, Task};
 use http_client::{CustomHeaders, HttpClient};
+use i18n::tr;
 use language_model::util::parse_tool_arguments;
 use language_model::{
     ApiKeyState, AuthenticateError, EnvVar, IconOrSvg, LanguageModel, LanguageModelCompletionError,
@@ -1327,40 +1328,72 @@ impl ConfigurationView {
     fn render_instructions(cx: &App) -> Div {
         v_flex()
             .gap_2()
-            .child(Label::new(
-                "Run open models locally with llama.cpp's built-in server, or connect to a \
-                remote llama.cpp server.",
-            ))
-            .child(Label::new("To use a local llama.cpp server:"))
+            .child(Label::new(tr(
+                cx,
+                "language_models.llama_cpp.description",
+                "Run open models locally with llama.cpp's built-in server, or connect to a remote llama.cpp server.",
+            )))
+            .child(Label::new(tr(
+                cx,
+                "language_models.llama_cpp.local_setup",
+                "To use a local llama.cpp server:",
+            )))
             .child(
                 List::new()
                     .child(
                         ListBulletItem::new("")
-                            .child(Label::new("Install llama.cpp from"))
+                            .child(Label::new(tr(
+                                cx,
+                                "language_models.llama_cpp.install_from",
+                                "Install llama.cpp from",
+                            )))
                             .child(ButtonLink::new("llama.app", LLAMA_CPP_DOWNLOAD_URL)),
                     )
                     .child(
                         ListBulletItem::new("")
-                            .child(Label::new("Start the server in router mode:"))
+                            .child(Label::new(tr(
+                                cx,
+                                "language_models.llama_cpp.start_router_mode",
+                                "Start the server in router mode:",
+                            )))
                             .child(Label::new("llama serve").inline_code(cx)),
                     )
-                    .child(ListBulletItem::new(
-                        "Click 'Connect' below to start using llama.cpp in Zed",
-                    )),
+                    .child(ListBulletItem::new(tr(
+                        cx,
+                        "language_models.llama_cpp.connect_below",
+                        "Click 'Connect' below to start using llama.cpp in ZZZ",
+                    ))),
             )
-            .child(Label::new(
-                "Alternatively, you can connect to a remote llama.cpp server by specifying its \
-                URL and API key (set with --api-key, may not be required):",
-            ))
+            .child(Label::new(tr(
+                cx,
+                "language_models.llama_cpp.alternative_server_setup",
+                "Alternatively, you can connect to a remote llama.cpp server by specifying its URL and API key (set with --api-key, may not be required):",
+            )))
     }
 
     fn render_api_key_editor(&self, cx: &Context<Self>) -> impl IntoElement {
         let state = self.state.read(cx);
         let env_var_set = state.api_key_state.is_from_env_var();
         let configured_card_label = if env_var_set {
-            format!("API key set in {API_KEY_ENV_VAR_NAME} environment variable.")
+            format!(
+                "{} {API_KEY_ENV_VAR_NAME} {}",
+                tr(
+                    cx,
+                    "language_models.llama_cpp.api_key_set_in_env_prefix",
+                    "API key set in"
+                ),
+                tr(
+                    cx,
+                    "language_models.llama_cpp.api_key_set_in_env_suffix",
+                    "environment variable."
+                )
+            )
         } else {
-            "API key configured".to_owned()
+            tr(
+                cx,
+                "language_models.llama_cpp.api_key_configured",
+                "API key configured",
+            )
         };
 
         if !state.api_key_state.has_key() {
@@ -1404,21 +1437,32 @@ impl ConfigurationView {
                     h_flex()
                         .gap_2()
                         .child(Icon::new(IconName::Check).color(Color::Success))
-                        .child(v_flex().gap_1().child(Label::new(format!(
-                            "Context Window: {}",
-                            settings.context_window.unwrap_or_default()
-                        )))),
+                        .child(
+                            v_flex().gap_1().child(Label::new(
+                                tr(
+                                    cx,
+                                    "language_models.common.context_window_value",
+                                    "Context Window: {}",
+                                )
+                                .replacen(
+                                    "{}",
+                                    &settings.context_window.unwrap_or_default().to_string(),
+                                    1,
+                                ),
+                            )),
+                        ),
                 )
                 .child(
-                    Button::new("reset-context-window", "Reset")
-                        .label_size(LabelSize::Small)
-                        .start_icon(Icon::new(IconName::Undo).size(IconSize::Small))
-                        .layer(ElevationIndex::ModalSurface)
-                        .on_click(
-                            cx.listener(|this, _, window, cx| {
-                                this.reset_context_window(window, cx)
-                            }),
-                        ),
+                    Button::new(
+                        "reset-context-window",
+                        tr(cx, "language_models.common.reset", "Reset"),
+                    )
+                    .label_size(LabelSize::Small)
+                    .start_icon(Icon::new(IconName::Undo).size(IconSize::Small))
+                    .layer(ElevationIndex::ModalSurface)
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.reset_context_window(window, cx)),
+                    ),
                 )
         } else {
             v_flex()
@@ -1429,9 +1473,13 @@ impl ConfigurationView {
                 )
                 .child(self.context_window_editor.clone())
                 .child(
-                    Label::new("Default: discovered from the server")
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
+                    Label::new(tr(
+                        cx,
+                        "language_models.llama_cpp.context_window_default",
+                        "Default: discovered from the server",
+                    ))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
                 )
         }
     }
@@ -1455,13 +1503,18 @@ impl ConfigurationView {
                         .child(v_flex().gap_1().child(Label::new(api_url))),
                 )
                 .child(
-                    Button::new("reset-api-url", "Reset API URL")
-                        .label_size(LabelSize::Small)
-                        .start_icon(Icon::new(IconName::Undo).size(IconSize::Small))
-                        .layer(ElevationIndex::ModalSurface)
-                        .on_click(
-                            cx.listener(|this, _, window, cx| this.reset_api_url(window, cx)),
+                    Button::new(
+                        "reset-api-url",
+                        tr(
+                            cx,
+                            "language_models.llama_cpp.reset_api_url",
+                            "Reset API URL",
                         ),
+                    )
+                    .label_size(LabelSize::Small)
+                    .start_icon(Icon::new(IconName::Undo).size(IconSize::Small))
+                    .layer(ElevationIndex::ModalSurface)
+                    .on_click(cx.listener(|this, _, window, cx| this.reset_api_url(window, cx))),
                 )
         } else {
             v_flex()
@@ -1526,29 +1579,43 @@ impl Render for ConfigurationView {
                                     )
                                 } else {
                                     this.child(
-                                        Button::new("download_llama_cpp_button", "Get llama.cpp")
-                                            .style(ButtonStyle::Subtle)
-                                            .end_icon(
-                                                Icon::new(IconName::ArrowUpRight)
-                                                    .size(IconSize::XSmall)
-                                                    .color(Color::Muted),
-                                            )
-                                            .on_click(move |_, _, cx| {
-                                                cx.open_url(LLAMA_CPP_DOWNLOAD_URL)
-                                            })
-                                            .into_any_element(),
+                                        Button::new(
+                                            "download_llama_cpp_button",
+                                            tr(
+                                                cx,
+                                                "language_models.llama_cpp.get_llama_cpp",
+                                                "Get llama.cpp",
+                                            ),
+                                        )
+                                        .style(ButtonStyle::Subtle)
+                                        .end_icon(
+                                            Icon::new(IconName::ArrowUpRight)
+                                                .size(IconSize::XSmall)
+                                                .color(Color::Muted),
+                                        )
+                                        .on_click(move |_, _, cx| {
+                                            cx.open_url(LLAMA_CPP_DOWNLOAD_URL)
+                                        })
+                                        .into_any_element(),
                                     )
                                 }
                             })
                             .child(
-                                Button::new("view-models", "Browse GGUF Models")
-                                    .style(ButtonStyle::Subtle)
-                                    .end_icon(
-                                        Icon::new(IconName::ArrowUpRight)
-                                            .size(IconSize::XSmall)
-                                            .color(Color::Muted),
-                                    )
-                                    .on_click(move |_, _, cx| cx.open_url(LLAMA_CPP_MODELS_URL)),
+                                Button::new(
+                                    "view-models",
+                                    tr(
+                                        cx,
+                                        "language_models.llama_cpp.browse_models",
+                                        "Browse GGUF Models",
+                                    ),
+                                )
+                                .style(ButtonStyle::Subtle)
+                                .end_icon(
+                                    Icon::new(IconName::ArrowUpRight)
+                                        .size(IconSize::XSmall)
+                                        .color(Color::Muted),
+                                )
+                                .on_click(move |_, _, cx| cx.open_url(LLAMA_CPP_MODELS_URL)),
                             ),
                     )
                     .map(|this| {
@@ -1561,12 +1628,20 @@ impl Render for ConfigurationView {
                                         h_flex()
                                             .gap_2()
                                             .child(Icon::new(IconName::Check).color(Color::Success))
-                                            .child(Label::new("Connected"))
+                                            .child(Label::new(tr(
+                                                cx,
+                                                "language_models.common.connected",
+                                                "Connected",
+                                            )))
                                             .into_any_element(),
                                     )
                                     .child(
                                         IconButton::new("refresh-models", IconName::RotateCcw)
-                                            .tooltip(Tooltip::text("Refresh Models"))
+                                            .tooltip(Tooltip::text(tr(
+                                                cx,
+                                                "language_models.common.refresh_models",
+                                                "Refresh Models",
+                                            )))
                                             .on_click(cx.listener(|this, _, window, cx| {
                                                 this.state.update(cx, |state, _| {
                                                     state.fetched_models.clear();
@@ -1577,13 +1652,16 @@ impl Render for ConfigurationView {
                             )
                         } else {
                             this.child(
-                                Button::new("retry_llama_cpp_models", "Connect")
-                                    .start_icon(
-                                        Icon::new(IconName::PlayOutlined).size(IconSize::XSmall),
-                                    )
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.retry_connection(window, cx)
-                                    })),
+                                Button::new(
+                                    "retry_llama_cpp_models",
+                                    tr(cx, "language_models.common.connect", "Connect"),
+                                )
+                                .start_icon(
+                                    Icon::new(IconName::PlayOutlined).size(IconSize::XSmall),
+                                )
+                                .on_click(cx.listener(
+                                    move |this, _, window, cx| this.retry_connection(window, cx),
+                                )),
                             )
                         }
                     }),

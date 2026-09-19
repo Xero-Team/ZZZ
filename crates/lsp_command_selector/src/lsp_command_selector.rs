@@ -9,6 +9,7 @@ use gpui::{
     AnyElement, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
     ParentElement, Render, SharedString, Task, WeakEntity, Window, actions,
 };
+use i18n::tr;
 use language::Buffer;
 use lsp::{LanguageServerId, LanguageServerName};
 use picker::{Picker, PickerDelegate};
@@ -61,13 +62,14 @@ impl LspCommandSelector {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let placeholder = tr(
+            cx,
+            "lsp_command_selector.arguments_placeholder",
+            "JSON arguments (42, {\"key\": \"value\"}, …) or plain text for one string",
+        );
         let arguments_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text(
-                "JSON arguments (42, {\"key\": \"value\"}, …) or plain text for one string",
-                window,
-                cx,
-            );
+            editor.set_placeholder_text(&placeholder, window, cx);
             editor
         });
         let delegate = LspCommandSelectorDelegate::new(
@@ -192,8 +194,13 @@ impl PickerDelegate for LspCommandSelectorDelegate {
         "lsp command selector"
     }
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Select a language server command…".into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(
+            cx,
+            "lsp_command_selector.placeholder",
+            "Select a language server command…",
+        )
+        .into()
     }
 
     fn match_count(&self) -> usize {
@@ -370,7 +377,7 @@ impl PickerDelegate for LspCommandSelectorDelegate {
                         .gap_2()
                         .justify_between()
                         .child(
-                            Label::new("Arguments")
+                            Label::new(tr(cx, "lsp_command_selector.arguments", "Arguments"))
                                 .size(LabelSize::Small)
                                 .color(Color::Muted),
                         )
@@ -383,9 +390,13 @@ impl PickerDelegate for LspCommandSelectorDelegate {
                                     cx,
                                 ))
                                 .child(
-                                    Label::new("to switch focus")
-                                        .size(LabelSize::Small)
-                                        .color(Color::Muted),
+                                    Label::new(tr(
+                                        cx,
+                                        "lsp_command_selector.switch_focus_hint",
+                                        "to switch focus",
+                                    ))
+                                    .size(LabelSize::Small)
+                                    .color(Color::Muted),
                                 ),
                         ),
                 )
@@ -393,9 +404,13 @@ impl PickerDelegate for LspCommandSelectorDelegate {
                 .map(|footer| match &self.execution {
                     Execution::Idle => footer,
                     Execution::Running { .. } => footer.child(
-                        Label::new("Executing command…")
-                            .size(LabelSize::Small)
-                            .color(Color::Muted),
+                        Label::new(tr(
+                            cx,
+                            "lsp_command_selector.executing",
+                            "Executing command…",
+                        ))
+                        .size(LabelSize::Small)
+                        .color(Color::Muted),
                     ),
                     Execution::Failed(error) => footer.child(
                         Label::new(error.clone())

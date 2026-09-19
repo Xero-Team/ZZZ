@@ -1476,34 +1476,47 @@ impl NotebookEditor {
             .items_center()
             .justify_center()
             .gap_3()
-            .child(Label::new("This notebook is empty.").color(Color::Muted))
+            .child(
+                Label::new(tr(
+                    cx,
+                    "repl.notebook.empty_state",
+                    "This notebook is empty.",
+                ))
+                .color(Color::Muted),
+            )
             .child(
                 h_flex()
                     .gap_2()
                     .child(
-                        Button::new("empty-state-add-code", "Add code cell")
-                            .start_icon(Icon::new(IconName::Code))
-                            .key_binding(KeyBinding::for_action_in(
-                                &AddCodeBlock,
-                                &self.focus_handle,
-                                cx,
-                            ))
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.add_code_block(window, cx)),
-                            ),
+                        Button::new(
+                            "empty-state-add-code",
+                            tr(cx, "repl.notebook.add_code_cell", "Add code cell"),
+                        )
+                        .start_icon(Icon::new(IconName::Code))
+                        .key_binding(KeyBinding::for_action_in(
+                            &AddCodeBlock,
+                            &self.focus_handle,
+                            cx,
+                        ))
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.add_code_block(window, cx)),
+                        ),
                     )
                     .child(
-                        Button::new("empty-state-add-markdown", "Add markdown cell")
-                            .style(ButtonStyle::Subtle)
-                            .start_icon(Icon::new(IconName::FileMarkdown))
-                            .key_binding(KeyBinding::for_action_in(
-                                &AddMarkdownBlock,
-                                &self.focus_handle,
-                                cx,
-                            ))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.add_markdown_block(window, cx)
-                            })),
+                        Button::new(
+                            "empty-state-add-markdown",
+                            tr(cx, "repl.notebook.add_markdown_cell", "Add markdown cell"),
+                        )
+                        .style(ButtonStyle::Subtle)
+                        .start_icon(Icon::new(IconName::FileMarkdown))
+                        .key_binding(KeyBinding::for_action_in(
+                            &AddMarkdownBlock,
+                            &self.focus_handle,
+                            cx,
+                        ))
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.add_markdown_block(window, cx)),
+                        ),
                     ),
             )
     }

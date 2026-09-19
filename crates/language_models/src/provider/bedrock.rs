@@ -1635,7 +1635,7 @@ impl Render for ConfigurationView {
             .child(Label::new(tr(
                 cx,
                 "language_models.bedrock.setup_intro",
-                "To use Bedrock, you can set a custom authentication strategy through your settings file or use static credentials.",
+                "To use ZZZ's agent with Bedrock, you can set a custom authentication strategy through your settings file or use static credentials.",
             )))
             .child(Label::new(tr(
                 cx,

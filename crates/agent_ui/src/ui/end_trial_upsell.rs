@@ -26,13 +26,13 @@ impl RenderOnce for EndTrialUpsell {
             .child(Headline::new(tr(
                 cx,
                 "agent_ui.end_trial.trial_expired",
-                "Local provider configuration is available in settings",
+                "Local provider mode",
             )))
             .child(
                 Label::new(tr(
                     cx,
                     "agent_ui.end_trial.reset_to_free",
-                    "Cloud subscriptions are not part of the default experience.",
+                    "Use a local or user-managed provider.",
                 ))
                     .color(Color::Muted)
                     .mb_2(),

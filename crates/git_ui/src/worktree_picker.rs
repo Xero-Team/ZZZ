@@ -730,7 +730,7 @@ impl PickerDelegate for WorktreePickerDelegate {
         Arc::from(app_i18n::tr(
             _cx,
             "git_ui.worktree_picker.placeholder",
-            "Switch or type to create a worktree…",
+            "Select a worktree...",
         ))
     }
 

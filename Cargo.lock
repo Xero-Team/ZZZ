@@ -9054,6 +9054,7 @@ dependencies = [
  "futures 0.3.32",
  "fuzzy",
  "gpui",
+ "i18n",
  "language",
  "log",
  "lsp",

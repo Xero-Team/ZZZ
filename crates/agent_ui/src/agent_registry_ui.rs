@@ -519,7 +519,11 @@ impl AgentRegistryPage {
             .icon_size(IconSize::Small)
             .tooltip(move |_, cx| {
                 Tooltip::with_meta(
-                    "View Agent License or Terms of Service",
+                    tr(
+                        cx,
+                        "agent_ui.registry.agent_license_tooltip",
+                        "View Agent License or Terms of Service",
+                    ),
                     None,
                     license_url.clone(),
                     cx,

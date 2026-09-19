@@ -2014,7 +2014,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                                 i18n::tr(
                                     cx,
                                     "recent_projects.open_project_in_this_window",
-                                    "This Window",
+                                    "Open Project in This Window",
                                 ),
                             )
                             .key_binding(KeyBinding::for_action_in(

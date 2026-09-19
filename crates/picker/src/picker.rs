@@ -1175,14 +1175,14 @@ impl<D: PickerDelegate> Picker<D> {
                                     &focus_handle,
                                     cx,
                                 ))
-                                .child(Label::new("Select")),
+                                .child(Label::new(tr(cx, "picker.multi_select.select", "Select"))),
                         )
                         .child(Divider::vertical())
                         .child(
                             h_flex()
                                 .gap_1()
                                 .child(KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx))
-                                .child(Label::new("Open")),
+                                .child(Label::new(tr(cx, "picker.multi_select.open", "Open"))),
                         )
                         .into_any_element()
                 }))

@@ -4860,14 +4860,18 @@ impl GitPanel {
         path + file_name + depth * 2
     }
 
-    fn render_view_options_menu(&self, id: impl Into<ElementId>) -> impl IntoElement {
+    fn render_view_options_menu(
+        &self,
+        id: impl Into<ElementId>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let focus_handle = self.focus_handle.clone();
 
         PopoverMenu::new(id.into())
             .trigger_with_tooltip(
                 IconButton::new("view-options-menu-trigger", IconName::Sliders)
                     .icon_size(IconSize::Small),
-                Tooltip::text("View Options"),
+                Tooltip::text(tr(cx, "git_ui.git_panel.view_options", "View Options")),
             )
             .menu(move |window, cx| {
                 Some(git_panel_view_options_menu(
@@ -5363,7 +5367,7 @@ impl GitPanel {
                 .child(
                     h_flex()
                         .gap_1()
-                        .child(self.render_view_options_menu("view_options_menu"))
+                        .child(self.render_view_options_menu("view_options_menu", cx))
                         .child(self.render_git_changes_actions_button(cx)),
                 ),
         )

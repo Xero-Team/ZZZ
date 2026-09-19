@@ -702,7 +702,7 @@ impl Render for ConfigurationView {
                 .child(Label::new(tr(
                     cx,
                     "language_models.vercel_ai_gateway.setup_intro",
-                    "To use Vercel AI Gateway, you need to add an API key. Follow these steps:",
+                    "To use ZZZ's agent with Vercel AI Gateway, you need to add an API key. Follow these steps:",
                 )))
                 .child(
                     List::new()

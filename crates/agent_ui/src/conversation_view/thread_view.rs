@@ -6155,7 +6155,7 @@ impl ThreadView {
                         ContextMenuEntry::new(tr(
                             cx,
                             "agent_ui.thread_view.scroll_to_top",
-                            "Scroll to Top",
+                            "Scroll To Top",
                         ))
                         .handler({
                             let entity = entity.clone();
@@ -9118,7 +9118,7 @@ impl ThreadView {
                     tr(
                         cx,
                         "agent_ui.thread_view.api_key_missing",
-                        "Credentials Missing",
+                        "API Key Missing",
                     ),
                     message,
                     false,
