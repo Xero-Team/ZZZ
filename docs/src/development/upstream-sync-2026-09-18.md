@@ -10,18 +10,19 @@ description: Selective Zed upstream sync audit.
 - Target branch: `sync/upstream-2026-09-18` from `sync/upstream-2026-09-17`
   (originally `main` at `e6adb70968552e53dae959f107df4f8ac03470d9`)
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
-- Previously reviewed baseline: `739fdbef762f7e514d62e1fa650c1b7cac5bbff4`
-- Reviewed upstream head: `06e889c439f420714543e37806402666615ed1ca`
-- Live upstream head queried: `72b060af2e901406f9cf4a050c4f30bb479103fe`
-- Query time: `2026-09-18T23:16:51+02:00`
-- Reviewed range: `739fdbef..06e889c4`
+- Previously reviewed baseline: `06e889c439f420714543e37806402666615ed1ca`
+- Reviewed upstream head: `9d956a090b411d93322bab04b64f17bf27245816`
+- Live upstream head queried: `b961b4950febbc050081554bafe976b5d1b93f39`
+- Query time: `2026-09-19T06:58:15+02:00`
+- Reviewed range: `06e889c4..9d956a09`
 
 The first batch on this branch reviewed `d7f28899..25185402` (3 A, 5 B, 12
 C). The second covered `25185402..87a1ea30` (5 A, 5 B, 10 C). The third
 covered `87a1ea30..45ff3371` (3 A, 3 B, 14 C). The fourth covered
-`45ff3371..739fdbef` (3 A, 8 B, 9 C). This fifth batch covered the next 20
-commits. Counts: 4 A, 7 B, and 9 C. The reviewed baseline is now
-`06e889c439f420714543e37806402666615ed1ca`; 46 commits remain through the
+`45ff3371..739fdbef` (3 A, 8 B, 9 C). The fifth covered
+`739fdbef..06e889c4` (4 A, 7 B, 9 C). This sixth batch covered the next 20
+commits. Counts: 1 A, 4 B, and 15 C. The reviewed baseline is now
+`9d956a090b411d93322bab04b64f17bf27245816`; 31 commits remain through the
 queried live head.
 
 ## Decisions
@@ -128,6 +129,26 @@ queried live head.
 | 9930d2c2 | C     | --           | Bundle-config / share-generics follow-up; `.cargo/bundle-config.toml` is absent.                  |
 | 67ebcd95 | B     | 14dfdec7     | Infer completion insert ranges; omit diverged remote_server tests.                                |
 | 06e889c4 | C     | --           | Native-agent subagent compaction; follows unabsorbed ACP compaction.                              |
+| 52e0b848 | C     | --           | Threads Sidebar auto-open; native agent plus MultiWorkspace.                                      |
+| 59adbbe8 | C     | --           | `lsp_results_location` picker needs absent `crates/lsp_locations`.                                |
+| c6124d35 | B     | 5073131b     | Expand excerpts from deleted hunks on `editor.rs`; omit bookmarks helper test.                    |
+| 0dea8c63 | C     | --           | Point-diagnostic squiggles rewrite GPUI underline APIs and `element/header.rs`.                   |
+| 3d91988e | C     | --           | New `columnar_selection.rs` grapheme engine; local column selection is inline.                    |
+| 70a74b87 | C     | --           | GitHub Actions / xtask remote-server check on each commit.                                        |
+| 8eebe1ce | B     | a1538e0b     | Markdown preview tab tooltip reuses the source editor path.                                       |
+| cd78c2db | C     | --           | Flaky bracket test does not exist locally.                                                        |
+| 395fbd11 | C     | --           | Auto-update title-bar feedback; `auto_update` and `UpdateVersion` are absent.                     |
+| 87f65de6 | C     | --           | gpui_web canvas emoji fallback; follows unabsorbed Canvas fallback.                               |
+| 6c9d10cb | C     | --           | WebGL texel loading; WebGL backend is absent.                                                     |
+| 7a01ac15 | A     | 856d42ab     | Cherry-picked with `-x -s`.                                                                       |
+| 4b47ceb9 | C     | --           | Screen-capture objc2 migration depends on rejected `86b2cf96`.                                    |
+| 31971937 | C     | --           | Move `corgi-patches` into tooling; local tree has no corgi patches.                               |
+| 0ef92145 | B     | 1859d25a     | Owned `AtlasKey` plus shared `AtlasState`; Metal stays on `gpui_macos`.                           |
+| 613a80b9 | B     | 1b5b6156     | Traffic lights keep moving during fullscreen exit on cocoa/objc2.                                 |
+| aec7395e | C     | --           | cargo-shear across 159 files including telemetry, Copilot, and `crates/path`.                     |
+| 534319bd | C     | --           | Pending-keystrokes indicator file and timeout APIs are absent.                                    |
+| ecc2353d | C     | --           | Corgi patches license softlink; follows unabsorbed `31971937`.                                    |
+| 9d956a09 | C     | --           | GitHub Actions / xtask license-check frequency.                                                   |
 
 ## Applied work
 
@@ -490,5 +511,77 @@ NOT RUN cargo test -p inspector_ui (omitted; needs absent GPUI test APIs)
 ```
 
 The reviewed baseline is `06e889c439f420714543e37806402666615ed1ca`.
+Work remains on `sync/upstream-2026-09-18` and has not been merged to
+`main`.
+
+## Batch 6 applied work
+
+Direct A commit `7a01ac15` was absorbed with `git cherry-pick -x -s`.
+
+B ports retain `Upstream`, `Retained`, and `Omitted` trailers:
+
+- `c6124d35`: `expand_excerpts_for_direction` resolves deleted hunks;
+  `range_to_buffer_ranges_with_deleted_hunks` keeps half-open boundaries
+  and trailing empty excerpts; expansion skips removed paths.
+- `8eebe1ce`: Markdown preview tabs reuse the source editor
+  `tab_tooltip_text`.
+- `0ef92145`: `PlatformAtlas::get_or_insert_with` takes an owned
+  `AtlasKey`; `AtlasState` caches only successful inserts; tests and
+  Linux headless use `HeadlessAtlas`.
+- `613a80b9`: Normal macOS windows keep moving traffic lights while
+  exiting fullscreen and restore pre-fullscreen frames.
+
+## Batch 6 per-commit notes
+
+### 52e0b848, 59adbbe8, 0dea8c63, 3d91988e
+
+Threads Sidebar auto-open is native agent plus MultiWorkspace.
+Honoring `lsp_results_location` on cmd-click needs
+`crates/lsp_locations`. Point-diagnostic squiggles rewrite GPUI
+underline exclusion APIs and `element/header.rs`. Columnar selection
+extracts a grapheme engine ZZZ does not have.
+
+### 70a74b87, 395fbd11, 87f65de6, 6c9d10cb
+
+Remote-server CI is GitHub Actions / xtask. Title-bar "Up to Date"
+needs the absent `auto_update` crate. Canvas emoji fallback and WebGL
+texel loading follow rejected gpui_web / WebGL work.
+
+### 4b47ceb9, 31971937, aec7395e, 534319bd, ecc2353d, 9d956a09
+
+Screen-capture objc2 depends on rejected `86b2cf96`. Corgi patches and
+the license softlink are absent. cargo-shear is lockfile and unused-dep
+churn across rejected crates. The pending-keystrokes indicator and CI
+license-check frequency have no local surface.
+
+### cd78c2db
+
+The flaky bracket test
+`test_bracket_ranges_keep_pairs_straddling_a_chunk_boundary_amid_errors`
+does not exist locally.
+
+## Batch 6 verification
+
+```text
+PASS git merge-base --is-ancestor 06e889c4 FETCH_HEAD
+PASS cargo check --locked -p gpui -p gpui_linux -p gpui_wgpu
+PASS cargo check --locked -p editor -p multi_buffer -p markdown_preview
+PASS cargo test --locked -p gpui --lib atlas_tests
+PASS cargo test --locked -p gpui_wgpu --lib wgpu_atlas::
+PASS cargo test --locked -p editor --lib cursor_animation::
+PASS cargo test --locked -p editor --lib test_cursor_animation_remains_active_during_keyboard_autoscroll
+PASS cargo test --locked -p editor --lib test_expand_excerpts
+PASS cargo test --locked -p multi_buffer --lib test_expand_excerpts
+PASS cargo test --locked -p multi_buffer --lib test_range_to_buffer_ranges
+PASS cargo test --locked -p markdown_preview --lib preview_tab_tooltip_matches_source_file_path
+PASS git diff --check
+NOT RUN macOS / Windows / wasm32 runtime tests
+NOT RUN cargo test --workspace
+NOT RUN cargo fmt --check (known edition-2024 formatting drift on this host)
+NOT RUN cargo check -p gpui_macos (cfg(target_os = "macos") on this Linux host)
+NOT RUN cargo check -p gpui_windows (cfg(target_os = "windows") on this Linux host)
+```
+
+The reviewed baseline is `9d956a090b411d93322bab04b64f17bf27245816`.
 Work remains on `sync/upstream-2026-09-18` and has not been merged to
 `main`.
