@@ -1618,7 +1618,8 @@
   // Files or globs of files that will be included by ZZZ, even when ignored by git. This is useful
   // for files that are not tracked by git, but are still important to your project. Note that globs
   // that are overly broad can slow down ZZZ's file scanning. `file_scan_exclusions` takes
-  // precedence over these inclusions.
+  // precedence over these inclusions. A "..." entry expands to the inherited list. Omit it to
+  // replace, or use [] to clear.
   "file_scan_inclusions": [".env*"],
   // Globs to match files that will be considered "hidden". These files can be hidden from the
   // project panel by toggling the "hide_hidden" setting.

@@ -2185,6 +2185,26 @@ Note, specifying `file_scan_exclusions` in settings.json will override the defau
 }
 ```
 
+Use `"..."` to extend the inherited list instead of replacing it. In your
+user settings, it expands to ZZZ's defaults. In a project's
+`.zed/settings.json`, it expands to the resolved list from your user
+settings, including any defaults you kept.
+
+For example, add this to your settings.json to include generated files
+without repeating inherited patterns:
+
+```json [settings]
+{
+  "file_scan_inclusions": ["...", "generated/**"]
+}
+```
+
+With the default user settings, this keeps `.env*` and adds
+`generated/**`. Omit `"..."` to replace the inherited list, or use `[]`
+to clear it. Duplicate patterns keep their first occurrence, even if
+`"..."` appears more than once. `file_scan_exclusions` still takes
+precedence.
+
 ## File Types
 
 - Setting: `file_types`

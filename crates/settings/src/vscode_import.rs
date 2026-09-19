@@ -1084,15 +1084,8 @@ impl VsCodeSettings {
                 })
                 .filter(|r| !r.is_empty())
                 .map(SplicingVec::from),
-            file_scan_inclusions: self
-                .read_value("files.watcherInclude")
-                .and_then(|v| v.as_array())
-                .map(|v| {
-                    v.iter()
-                        .filter_map(|n| n.as_str().map(str::to_owned))
-                        .collect::<Vec<_>>()
-                })
-                .filter(|r| !r.is_empty()),
+            // `files.watcherInclude` adds watch roots, not Git-ignore overrides
+            file_scan_inclusions: None,
             private_files: None,
             hidden_files: None,
             // ZZZ cannot represent the writable exceptions in `files.readonlyExclude`
@@ -1138,6 +1131,34 @@ fn skip_default<T: Default + PartialEq>(value: T) -> Option<T> {
 mod tests {
     use super::*;
     use crate::settings_content::merge_from::MergeFrom;
+
+    #[test]
+    fn test_import_watcher_include_preserves_file_scan_inclusions() -> Result<()> {
+        let inherited = WorktreeSettingsContent {
+            file_scan_inclusions: Some(SplicingVec::from(vec![
+                ".env*".to_string(),
+                "**/*.local".to_string(),
+            ])),
+            ..Default::default()
+        };
+        for content in [
+            r#"{}"#,
+            r#"{"files.watcherInclude": []}"#,
+            r#"{"files.watcherInclude": ["linked-folder"]}"#,
+            r#"{"files.watcherInclude": ["..."]}"#,
+            r#"{"files.watcherInclude": ["linked-folder", false]}"#,
+            r#"{"files.watcherInclude": {"linked-folder": true}}"#,
+        ] {
+            let imported = VsCodeSettings::from_str(content, VsCodeSettingsSource::VsCode)?
+                .worktree_settings_content();
+            assert_eq!(imported.file_scan_inclusions, None);
+
+            let mut unchanged = inherited.clone();
+            unchanged.merge_from(&imported);
+            assert_eq!(unchanged.file_scan_inclusions, inherited.file_scan_inclusions);
+        }
+        Ok(())
+    }
 
     #[test]
     fn test_import_read_only_files() -> Result<()> {

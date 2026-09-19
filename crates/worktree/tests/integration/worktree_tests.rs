@@ -1397,10 +1397,10 @@ async fn test_file_scan_inclusions(cx: &mut TestAppContext) {
         cx.update_global::<SettingsStore, _>(|store, cx| {
             store.update_user_settings(cx, |settings| {
                 settings.project.worktree.file_scan_exclusions = Some(SplicingVec::from(vec![]));
-                settings.project.worktree.file_scan_inclusions = Some(vec![
-                    "node_modules/**/package.json".to_string(),
+                settings.project.worktree.file_scan_inclusions = Some(SplicingVec::from(vec![
                     "**/.DS_Store".to_string(),
-                ]);
+                    "node_modules/**/package.json".to_string(),
+                ]));
             });
         });
     });
@@ -1469,7 +1469,7 @@ async fn test_file_scan_exclusions_overrules_inclusions(cx: &mut TestAppContext)
                 settings.project.worktree.file_scan_exclusions =
                     Some(SplicingVec::from(vec!["**/.DS_Store".to_string()]));
                 settings.project.worktree.file_scan_inclusions =
-                    Some(vec!["**/.DS_Store".to_string()]);
+                    Some(SplicingVec::from(vec!["**/.DS_Store".to_string()]));
             });
         });
     });
@@ -1532,7 +1532,7 @@ async fn test_file_scan_inclusions_reindexes_on_setting_change(cx: &mut TestAppC
             store.update_user_settings(cx, |settings| {
                 settings.project.worktree.file_scan_exclusions = Some(SplicingVec::from(vec![]));
                 settings.project.worktree.file_scan_inclusions =
-                    Some(vec!["node_modules/**".to_string()]);
+                    Some(SplicingVec::from(vec!["node_modules/**".to_string()]));
             });
         });
     });
@@ -1566,7 +1566,7 @@ async fn test_file_scan_inclusions_reindexes_on_setting_change(cx: &mut TestAppC
         cx.update_global::<SettingsStore, _>(|store, cx| {
             store.update_user_settings(cx, |settings| {
                 settings.project.worktree.file_scan_exclusions = Some(SplicingVec::from(vec![]));
-                settings.project.worktree.file_scan_inclusions = Some(vec![]);
+                settings.project.worktree.file_scan_inclusions = Some(SplicingVec::from(vec![]));
             });
         });
     });
