@@ -6616,6 +6616,7 @@ dependencies = [
  "anyhow",
  "async-task",
  "block",
+ "block2",
  "cbindgen",
  "cocoa 0.26.1",
  "collections",

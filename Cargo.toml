@@ -523,6 +523,7 @@ backtrace = "0.3"
 base64 = "0.22"
 betlang = "0.1.1"
 bitflags = "2.11.1"
+block2 = "0.6"
 brotli = "8.0.2"
 bytes = "1.11"
 cargo_metadata = "0.23"
@@ -639,6 +640,7 @@ num-format = "0.4.4"
 objc = "0.2"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+    "NSApplication",
     "NSButton",
     "NSControl",
     "NSGraphics",
