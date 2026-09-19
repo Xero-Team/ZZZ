@@ -1051,11 +1051,10 @@ mod tests {
         language_registry.add(Arc::new(Language::new(
             LanguageConfig {
                 name: "Markdown".into(),
-                matcher: (LanguageMatcher {
+                matcher: LanguageMatcher {
                     path_suffixes: vec!["md".to_string()],
                     ..LanguageMatcher::default()
-                })
-                .into(),
+                },
                 ..LanguageConfig::default()
             },
             None,

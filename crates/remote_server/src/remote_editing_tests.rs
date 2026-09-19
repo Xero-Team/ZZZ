@@ -33,7 +33,10 @@ use settings::{Settings, SettingsLocation, SettingsStore, initial_server_setting
 use smol::stream::StreamExt;
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 use unindent::Unindent as _;
 use util::{path, paths::PathMatcher, rel_path::rel_path};
@@ -2625,11 +2628,10 @@ async fn test_remote_lsp_show_document(cx: &mut TestAppContext, server_cx: &mut 
     cx.update_entity(&project, |project, _| {
         project.languages().register_test_language(LanguageConfig {
             name: "Rust".into(),
-            matcher: (LanguageMatcher {
+            matcher: LanguageMatcher {
                 path_suffixes: vec!["rs".into()],
                 ..LanguageMatcher::default()
-            })
-            .into(),
+            },
             ..LanguageConfig::default()
         });
         project.languages().register_fake_lsp_adapter(
@@ -2732,11 +2734,10 @@ async fn test_remote_execute_lsp_command(cx: &mut TestAppContext, server_cx: &mu
     cx.update_entity(&project, |project, _| {
         project.languages().register_test_language(LanguageConfig {
             name: "Rust".into(),
-            matcher: (LanguageMatcher {
+            matcher: LanguageMatcher {
                 path_suffixes: vec!["rs".into()],
                 ..LanguageMatcher::default()
-            })
-            .into(),
+            },
             ..LanguageConfig::default()
         });
         project.languages().register_fake_lsp_adapter(
