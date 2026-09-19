@@ -10,20 +10,21 @@ description: Selective Zed upstream sync audit.
 - Target branch: `sync/upstream-2026-09-18` from `sync/upstream-2026-09-17`
   (originally `main` at `e6adb70968552e53dae959f107df4f8ac03470d9`)
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
-- Previously reviewed baseline: `9d956a090b411d93322bab04b64f17bf27245816`
-- Reviewed upstream head: `0d08af1e53378fc2aca09eed049ab77df1a8439a`
+- Previously reviewed baseline: `0d08af1e53378fc2aca09eed049ab77df1a8439a`
+- Reviewed upstream head: `b961b4950febbc050081554bafe976b5d1b93f39`
 - Live upstream head queried: `b961b4950febbc050081554bafe976b5d1b93f39`
-- Query time: `2026-09-19T08:15:07+02:00`
-- Reviewed range: `9d956a09..0d08af1e`
+- Query time: `2026-09-19T10:16:54+02:00`
+- Reviewed range: `0d08af1e..b961b495`
 
 The first batch on this branch reviewed `d7f28899..25185402` (3 A, 5 B, 12
 C). The second covered `25185402..87a1ea30` (5 A, 5 B, 10 C). The third
 covered `87a1ea30..45ff3371` (3 A, 3 B, 14 C). The fourth covered
 `45ff3371..739fdbef` (3 A, 8 B, 9 C). The fifth covered
 `739fdbef..06e889c4` (4 A, 7 B, 9 C). The sixth covered `06e889c4..9d956a09`
-(1 A, 4 B, 15 C). This seventh batch covered the next 20 commits. Counts: 7
-A, 4 B, and 9 C. The reviewed baseline is now
-`0d08af1e53378fc2aca09eed049ab77df1a8439a`; 11 commits remain through the
+(1 A, 4 B, 15 C). The seventh covered `9d956a09..0d08af1e` (7 A, 4 B, 9 C).
+This eighth batch covered the remaining 11 commits through the live head.
+Counts: 4 A, 1 B, and 6 C. The reviewed baseline is now
+`b961b4950febbc050081554bafe976b5d1b93f39`; 0 commits remain through the
 queried live head.
 
 ## Decisions
@@ -170,6 +171,17 @@ queried live head.
 | 74a6468b | B     | 8daa3d9d95   | `"..."` splice for `file_scan_inclusions`; drop watcherInclude import.                            |
 | 15d2fd55 | C     | --           | Disable share-generics; `.cargo/bundle-config.toml` is absent.                                    |
 | 0d08af1e | C     | --           | Share GPUI/scheduler impls; conflicts in app.rs, view.rs, div.rs, executor.rs.                    |
+| 8a3f841f | A     | 8f2361d04d   | Cherry-picked with `-x -s`.                                                                       |
+| 78648aaf | C     | --           | Collab AWS SDK rustls dependency drop.                                                            |
+| 650a8d1b | A     | --           | Already equivalent: local `write_output` builds a Processor per call.                             |
+| a8535d86 | C     | --           | Unused `LanguageModelRequest.prompt_cache_key`; native agent and Copilot.                         |
+| 968be64a | B     | 9ab26bea5c   | Align `"..."` docs; ZZZ copy; exclusions default includes `.sl`/`.repo`.                          |
+| 72b060af | C     | --           | Incremental git diffs need absent `DiffMultibuffer`.                                              |
+| ac729007 | C     | --           | Wezel binary-size experiment and CI path filter.                                                  |
+| 5618f439 | C     | --           | GitHub Actions Wezel runner.                                                                      |
+| c9827338 | C     | --           | GitHub Actions Wezel Linux deps.                                                                  |
+| 01448f56 | A     | a1008c6b3b   | Cherry-picked with `-x -s`. Follow-up `670fbaece7` inits i18n in tests.                           |
+| b961b495 | A     | 4ec59a75f4   | Cherry-picked with `-x -s`.                                                                       |
 
 ## Applied work
 
@@ -684,5 +696,78 @@ NOT RUN cargo check -p gpui_windows (cfg(target_os = "windows") on this Linux ho
 ```
 
 The reviewed baseline is `0d08af1e53378fc2aca09eed049ab77df1a8439a`.
+Work remains on `sync/upstream-2026-09-18` and has not been merged to
+`main`.
+
+## Batch 8 applied work
+
+Direct A commits `8a3f841f`, `01448f56`, and `b961b495` were absorbed with
+`git cherry-pick -x -s`. Already-equivalent A commit `650a8d1b` made no
+local code change. Local follow-up `670fbaece7` inits i18n in `tasks_ui`
+tests so untitled editors can be added to a pane.
+
+B ports retain `Upstream`, `Retained`, and `Omitted` trailers:
+
+- `968be64a`: rustdoc and all-settings use matching `"..."` wording for
+  `file_scan_exclusions`, `file_scan_inclusions`, and `read_only_files`.
+  Exclusions defaults include `**/.sl` and `**/.repo`.
+
+## Batch 8 per-commit notes
+
+### 650a8d1b
+
+Upstream keeps a 2 MiB `Processor` on `Terminal` and drops it in
+`release_pty_resources`. Local `write_output` already constructs a
+`Processor` per injected write and drops it at the end of the call, so
+there is no retained parse-buffer field to release.
+
+### a8535d86
+
+Adds unused `LanguageModelRequest.prompt_cache_key`. The only product
+caller is native-agent thread cache affinity; Copilot and agent_ui
+literals are `None`. Without a ZZZ setter this is a new unused API.
+
+### 72b060af
+
+Skips the git job queue for blob reads and drives `DiffBuffer::load`
+through `DiffMultibuffer` at concurrency 16. `DiffMultibuffer` is
+absent; dropping the queue without that bound would fork unbounded
+`cat-file` processes.
+
+### 78648aaf, ac729007, 5618f439, c9827338
+
+Collab AWS TLS, Wezel binary-size experiments, and the Wezel GitHub
+Actions runner are collab or upstream CI infrastructure.
+
+### 01448f56
+
+Product change cherry-picked cleanly. The new untitled-editor regression
+test needs `i18n::init` because local tab titles call `tr`.
+
+## Batch 8 verification
+
+```text
+PASS git merge-base --is-ancestor 0d08af1e FETCH_HEAD
+PASS cargo check --locked -p editor
+PASS cargo check --locked -p task -p tasks_ui -p util
+PASS cargo check --locked -p settings -p settings_content -p ui
+PASS cargo test --locked -p editor --lib test_autoscroll
+PASS cargo test --locked -p task --lib test_worktree_root_with_spaces_stays_atomic_in_args_and_cwd
+PASS cargo test --locked -p util --lib windows_powershell_preserves_spaced_arg_as_single_shell_argument
+PASS cargo test --locked -p util --lib windows_cmd_preserves_spaced_arg_as_single_shell_argument
+PASS cargo test --locked -p tasks_ui --lib test_non_project_active_editor_uses_visible_worktree_context
+PASS cargo test --locked -p tasks_ui --lib test_default_language_context
+PASS cargo test --locked -p settings_content --lib test_file_scan_exclusions_splice
+PASS cargo test --locked -p settings_content --lib test_file_scan_inclusions_splice
+PASS cargo test --locked -p settings_content --lib test_read_only_files_splice
+PASS git diff --check
+NOT RUN macOS / Windows / wasm32 runtime tests
+NOT RUN cargo test --workspace
+NOT RUN cargo fmt --check (known edition-2024 formatting drift on this host)
+NOT RUN cargo check -p gpui_macos (cfg(target_os = "macos") on this Linux host)
+NOT RUN cargo check -p gpui_windows (cfg(target_os = "windows") on this Linux host)
+```
+
+The reviewed baseline is `b961b4950febbc050081554bafe976b5d1b93f39`.
 Work remains on `sync/upstream-2026-09-18` and has not been merged to
 `main`.
