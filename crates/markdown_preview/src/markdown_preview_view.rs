@@ -1438,6 +1438,14 @@ impl Item for MarkdownPreviewView {
             .unwrap_or_else(|| tr(cx, "markdown_preview.tab_title", "Markdown Preview").into())
     }
 
+    fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString> {
+        self.active_editor
+            .as_ref()?
+            .editor
+            .read(cx)
+            .tab_tooltip_text(cx)
+    }
+
     fn added_to_workspace(
         &mut self,
         workspace: &mut Workspace,
@@ -1990,7 +1998,7 @@ mod tests {
     use util::path;
     use util::rel_path::{RelPath, rel_path};
     use util::test::TempTree;
-    use workspace::item::SerializableItem;
+    use workspace::item::{Item, SerializableItem};
     use workspace::{
         AppState, ItemId, MultiWorkspace, SaveIntent, Workspace, WorkspaceId, open_paths,
     };
@@ -2955,6 +2963,20 @@ mod tests {
             bound_editor, second_editor,
             "a Default preview must stay bound to the editor it was opened from, not another \
              editor that happens to share the same buffer in a different split"
+        );
+    }
+
+    #[gpui::test]
+    async fn preview_tab_tooltip_matches_source_file_path(cx: &mut TestAppContext) {
+        let (multi_workspace, source_editor) =
+            open_markdown_file(cx, "guide.md", "# Guide\n").await;
+        let preview = open_preview_for_active_editor(cx, &multi_workspace);
+
+        let source_tooltip = source_editor.read_with(cx, |editor, cx| editor.tab_tooltip_text(cx));
+        assert!(source_tooltip.is_some());
+        assert_eq!(
+            preview.read_with(cx, |preview, cx| preview.tab_tooltip_text(cx)),
+            source_tooltip
         );
     }
 
