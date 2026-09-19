@@ -1,9 +1,8 @@
 use crate::{
     AnyWindowHandle, Bounds, DevicePixels, DispatchEventResult, GpuSpecs, HeadlessAtlas, Pixels,
     PlatformAtlas, PlatformDisplay, PlatformHeadlessRenderer, PlatformInput, PlatformInputHandler,
-    PlatformWindow,
-    Point, PromptButton, RequestFrameOptions, Scene, Size, TestPlatform, WindowAppearance,
-    WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowParams,
+    PlatformWindow, Point, PromptButton, RequestFrameOptions, Scene, Size, TestPlatform,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowParams,
 };
 use image::RgbaImage;
 use parking_lot::Mutex;

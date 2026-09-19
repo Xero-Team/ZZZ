@@ -26,7 +26,8 @@ use multi_buffer::{BufferOffset, MultiBufferOffset, MultiBufferRow, PathKey};
 use project::{
     File, Project, ProjectItem as _, ProjectPath,
     lsp_store::{FormatTrigger, LanguageServerShowDocumentRequest},
-    project_settings::ProjectSettings, search::SearchQuery,
+    project_settings::ProjectSettings,
+    search::SearchQuery,
 };
 use rope::TextSummary;
 use rpc::proto::{self, update_view};

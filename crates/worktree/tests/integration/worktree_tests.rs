@@ -5269,11 +5269,7 @@ async fn test_root_ancestor_rename_is_detected_without_fs_events(cx: &mut TestAp
             tree.entries(false, 0)
                 .map(|entry| entry.path.as_ref())
                 .collect::<Vec<_>>(),
-            vec![
-                rel_path(""),
-                rel_path("src"),
-                rel_path("src/main.rs"),
-            ]
+            vec![rel_path(""), rel_path("src"), rel_path("src/main.rs"),]
         );
     });
 }

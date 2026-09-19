@@ -39,8 +39,8 @@ use crate::{
 use anyhow::Result;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use anyhow::bail;
-use collections::FxHashMap;
 use async_task::Runnable;
+use collections::FxHashMap;
 use futures::channel::oneshot;
 #[cfg(any(test, feature = "test-support"))]
 use image::RgbaImage;

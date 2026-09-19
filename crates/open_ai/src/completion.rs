@@ -1877,15 +1877,8 @@ mod tests {
                 speed: None,
                 compact_at_tokens: None,
             };
-            let response = into_open_ai_response(
-                request.clone(),
-                model_id,
-                true,
-                true,
-                None,
-                None,
-                false,
-            );
+            let response =
+                into_open_ai_response(request.clone(), model_id, true, true, None, None, false);
             let chat = into_open_ai(
                 request,
                 model_id,

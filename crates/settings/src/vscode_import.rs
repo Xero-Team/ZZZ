@@ -1155,7 +1155,10 @@ mod tests {
 
             let mut unchanged = inherited.clone();
             unchanged.merge_from(&imported);
-            assert_eq!(unchanged.file_scan_inclusions, inherited.file_scan_inclusions);
+            assert_eq!(
+                unchanged.file_scan_inclusions,
+                inherited.file_scan_inclusions
+            );
         }
         Ok(())
     }

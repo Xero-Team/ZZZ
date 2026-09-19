@@ -1170,7 +1170,11 @@ impl KeymapEditor {
                             tr(
                                 cx,
                                 "keymap_editor.tooltip.view_conflicts_meta",
-                                concat!("Use ", ui::alt_key_name!(), "+click to show all conflicts"),
+                                concat!(
+                                    "Use ",
+                                    ui::alt_key_name!(),
+                                    "+click to show all conflicts"
+                                ),
                             ),
                             cx,
                         )
@@ -1209,7 +1213,7 @@ impl KeymapEditor {
                     }))
             } else {
                 base_button_style(index, IconName::Info)
-                    .tooltip(|_window, cx|  {
+                    .tooltip(|_window, cx| {
                         Tooltip::with_meta(
                             "Show matching keybinds",
                             Some(&ShowMatchingKeybinds),

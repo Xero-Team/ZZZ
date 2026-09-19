@@ -167,7 +167,7 @@ impl Element for ImageCacheElement {
 pub struct ImageCacheItem(CachedLoad<Result<Arc<RenderImage>, ImageCacheError>>);
 
 impl std::fmt::Debug for ImageCacheItem {
-    fn fmt(&self,         f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ImageCacheItem")
             .field("result", &self.get())
             .finish()

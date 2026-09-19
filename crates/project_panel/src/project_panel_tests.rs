@@ -2,9 +2,7 @@ use super::*;
 // use crate::undo::tests::{build_create_operation, build_rename_operation};
 use collections::HashSet;
 use editor::MultiBufferOffset;
-use gpui::{
-    Bounds, Empty, Entity, Size, TestAppContext, VisualTestContext, point, px, size,
-};
+use gpui::{Bounds, Empty, Entity, Size, TestAppContext, VisualTestContext, point, px, size};
 use menu::Cancel;
 use pretty_assertions::assert_eq;
 use project::{FakeFs, ProjectPath};
