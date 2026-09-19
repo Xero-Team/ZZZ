@@ -96,6 +96,8 @@ pub enum Model {
     FivePointSixTerra,
     #[serde(rename = "gpt-5.6-luna")]
     FivePointSixLuna,
+    #[serde(rename = "gpt-6-astra")]
+    SixAstra,
     #[serde(rename = "custom")]
     Custom {
         name: String,
@@ -145,6 +147,7 @@ impl Model {
             "gpt-5.6-sol" => Ok(Self::FivePointSixSol),
             "gpt-5.6-terra" => Ok(Self::FivePointSixTerra),
             "gpt-5.6-luna" => Ok(Self::FivePointSixLuna),
+            "gpt-6-astra" => Ok(Self::SixAstra),
             invalid_id => anyhow::bail!("invalid model id '{invalid_id}'"),
         }
     }
@@ -169,6 +172,7 @@ impl Model {
             Self::FivePointSixSol => "gpt-5.6-sol",
             Self::FivePointSixTerra => "gpt-5.6-terra",
             Self::FivePointSixLuna => "gpt-5.6-luna",
+            Self::SixAstra => "gpt-6-astra",
             Self::Custom { name, .. } => name,
         }
     }
@@ -193,6 +197,7 @@ impl Model {
             Self::FivePointSixSol => "gpt-5.6-sol",
             Self::FivePointSixTerra => "gpt-5.6-terra",
             Self::FivePointSixLuna => "gpt-5.6-luna",
+            Self::SixAstra => "gpt-6-astra",
             Self::Custom { display_name, .. } => display_name.as_deref().unwrap_or(&self.id()),
         }
     }
@@ -217,6 +222,7 @@ impl Model {
             Self::FivePointSixSol => 1_050_000,
             Self::FivePointSixTerra => 1_050_000,
             Self::FivePointSixLuna => 1_050_000,
+            Self::SixAstra => 1_050_000,
             Self::Custom { max_tokens, .. } => *max_tokens,
         }
     }
@@ -244,6 +250,7 @@ impl Model {
             Self::FivePointSixSol => Some(128_000),
             Self::FivePointSixTerra => Some(128_000),
             Self::FivePointSixLuna => Some(128_000),
+            Self::SixAstra => Some(128_000),
         }
     }
 
@@ -267,7 +274,8 @@ impl Model {
             | Self::FivePointFive
             | Self::FivePointFivePro
             | Self::FivePointSixTerra
-            | Self::FivePointSixLuna => Some(ReasoningEffort::Medium),
+            | Self::FivePointSixLuna
+            | Self::SixAstra => Some(ReasoningEffort::Medium),
             _ => None,
         }
     }
@@ -320,6 +328,12 @@ impl Model {
                 ReasoningEffort::High,
                 ReasoningEffort::XHigh,
             ],
+            Self::SixAstra => &[
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+                ReasoningEffort::XHigh,
+            ],
             Self::FivePointTwo
             | Self::FivePointFour
             | Self::FivePointFive
@@ -366,6 +380,7 @@ impl Model {
             | Self::FivePointSixSol
             | Self::FivePointSixTerra
             | Self::FivePointSixLuna
+            | Self::SixAstra
             | Self::FiveNano => true,
             Self::O3 | Model::Custom { .. } => false,
         }
@@ -394,7 +409,8 @@ impl Model {
             | Self::FivePointFive
             | Self::FivePointSixSol
             | Self::FivePointSixTerra
-            | Self::FivePointSixLuna => true,
+            | Self::FivePointSixLuna
+            | Self::SixAstra => true,
             Self::Four
             | Self::FiveNano
             | Self::FivePointFourNano
@@ -455,7 +471,12 @@ mod tests {
             Model::from_id("gpt-5.6-luna").unwrap(),
             Model::FivePointSixLuna
         );
+        assert_eq!(Model::from_id("gpt-6-astra").unwrap(), Model::SixAstra);
         assert_eq!(Model::FivePointSixSol.id(), "gpt-5.6-sol");
+        assert_eq!(Model::SixAstra.id(), "gpt-6-astra");
+        assert_eq!(Model::SixAstra.display_name(), "gpt-6-astra");
+        assert_eq!(Model::SixAstra.max_token_count(), 1_050_000);
+        assert_eq!(Model::SixAstra.max_output_tokens(), Some(128_000));
         assert_eq!(Model::FivePointSixTerra.display_name(), "gpt-5.6-terra");
         assert_eq!(Model::FivePointSixLuna.max_token_count(), 1_050_000);
         assert_eq!(Model::FivePointSixLuna.max_output_tokens(), Some(128_000));
@@ -730,8 +751,11 @@ pub struct Request {
     pub service_tier: Option<ServiceTier>,
 }
 
-/// Service tier for OpenAI requests. We only send `Priority` today in response
-/// to Fast Mode, but other variants are included so echoed values deserialize.
+/// Selects the service tier for OpenAI requests.
+///
+/// This maps to the top-level `service_tier` field on Responses and Chat
+/// Completions. `Priority` serializes as `priority` for compatibility, while
+/// deserialization also accepts the `fast` value echoed by some models.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceTier {
@@ -739,6 +763,7 @@ pub enum ServiceTier {
     Default,
     Flex,
     Scale,
+    #[serde(alias = "fast")]
     Priority,
 }
 
