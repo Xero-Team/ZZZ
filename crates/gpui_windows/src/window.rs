@@ -67,7 +67,7 @@ pub struct WindowsWindowState {
     /// treated as a forced render. This guarantees the next frame both
     /// re-enables drawing (via `mark_drawable`) and bypasses the GPUI view
     /// cache, which would otherwise replay stale atlas tile references from
-    /// the previous frame and panic in `DirectXAtlasState::texture`.
+    /// the previous frame and panic in `DirectXAtlasTextures::texture`.
     pub force_render_after_recovery: Cell<bool>,
 
     pub click_state: ClickState,
