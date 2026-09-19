@@ -2152,7 +2152,7 @@ The result is still `)))` and not `))))))`, which is what it would be by default
 ## File Scan Exclusions
 
 - Setting: `file_scan_exclusions`
-- Description: Files or globs of files that will be excluded by ZZZ entirely. They will be skipped during file scans, file searches, and not be displayed in the project file tree. Overrides `file_scan_inclusions`.
+- Description: Exclude files matching these glob patterns from file scans, file searches, and the project file tree. Takes precedence over `file_scan_inclusions`.
 - Default:
 
 ```json [settings]
@@ -2162,6 +2162,8 @@ The result is still `)))` and not `))))))`, which is what it would be by default
     "**/.svn",
     "**/.hg",
     "**/.jj",
+    "**/.sl",
+    "**/.repo",
     "**/CVS",
     "**/.DS_Store",
     "**/Thumbs.db",
@@ -2171,12 +2173,20 @@ The result is still `)))` and not `))))))`, which is what it would be by default
 }
 ```
 
-Note, specifying `file_scan_exclusions` in settings.json will override the defaults (shown above). If you are looking to exclude additional items you will need to include all the default values in your settings.
+Use `"..."` to add patterns without repeating ZZZ's defaults. In project settings, it extends the user or parent configuration value. Omit `"..."` to replace the inherited list.
+
+```json [settings]
+{
+  "file_scan_exclusions": ["**/node_modules", "..."]
+}
+```
+
+Inherited patterns are inserted at `"..."`, and duplicates keep their first occurrence.
 
 ## File Scan Inclusions
 
 - Setting: `file_scan_inclusions`
-- Description: Files or globs of files that will be included by ZZZ, even when ignored by git. This is useful for files that are not tracked by git, but are still important to your project. Note that globs that are overly broad can slow down ZZZ's file scanning. `file_scan_exclusions` takes precedence over these inclusions.
+- Description: Include files matching these glob patterns when scanning, even if ignored by Git. Note that broad patterns can slow file scanning. `file_scan_exclusions` takes precedence.
 - Default:
 
 ```json [settings]
@@ -2185,25 +2195,15 @@ Note, specifying `file_scan_exclusions` in settings.json will override the defau
 }
 ```
 
-Use `"..."` to extend the inherited list instead of replacing it. In your
-user settings, it expands to ZZZ's defaults. In a project's
-`.zed/settings.json`, it expands to the resolved list from your user
-settings, including any defaults you kept.
-
-For example, add this to your settings.json to include generated files
-without repeating inherited patterns:
+Use `"..."` to add patterns without repeating ZZZ's defaults. In project settings, it extends the user or parent configuration value. Omit `"..."` to replace the inherited list.
 
 ```json [settings]
 {
-  "file_scan_inclusions": ["...", "generated/**"]
+  "file_scan_inclusions": ["**/build/**", "..."]
 }
 ```
 
-With the default user settings, this keeps `.env*` and adds
-`generated/**`. Omit `"..."` to replace the inherited list, or use `[]`
-to clear it. Duplicate patterns keep their first occurrence, even if
-`"..."` appears more than once. `file_scan_exclusions` still takes
-precedence.
+Inherited patterns are inserted at `"..."`, and duplicates keep their first occurrence.
 
 ## File Types
 
@@ -3597,21 +3597,25 @@ List of `string` glob patterns
 
 ## Read-Only Files {#read-only-files}
 
-- Default: `[]`
-- Description: Glob patterns for files you can open and view but cannot edit, such as generated files or external dependencies.
 - Setting: `read_only_files`
-
-Add this to your project’s `.ZZZ/settings.json`:
+- Description: Treat files matching these glob patterns as read-only when opened. You can view but not edit them, which is useful for build outputs, external dependencies, or generated files.
+- Default:
 
 ```json [settings]
 {
-  "read_only_files": ["**/generated/**", "..."]
+  "read_only_files": []
 }
 ```
 
-Like [File Scan Exclusions](#file-scan-exclusions), `"..."` expands to the list inherited from the preceding settings layer. This example adds generated files to the read-only patterns from your user settings without repeating them. Duplicate entries collapse to their first occurrence.
+Use `"..."` to add patterns without repeating ZZZ's defaults. In project settings, it extends the user or parent configuration value. Omit `"..."` to replace the inherited list.
 
-Omit `"..."` to replace the inherited list, or use `[]` to clear it. These patterns apply when you open a file.
+```json [settings]
+{
+  "read_only_files": ["**/build/**", "..."]
+}
+```
+
+Inherited patterns are inserted at `"..."`, and duplicates keep their first occurrence.
 
 ## Read SSH Config
 
