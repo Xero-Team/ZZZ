@@ -10,19 +10,20 @@ description: Selective Zed upstream sync audit.
 - Target branch: `sync/upstream-2026-09-18` from `sync/upstream-2026-09-17`
   (originally `main` at `e6adb70968552e53dae959f107df4f8ac03470d9`)
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
-- Previously reviewed baseline: `06e889c439f420714543e37806402666615ed1ca`
-- Reviewed upstream head: `9d956a090b411d93322bab04b64f17bf27245816`
+- Previously reviewed baseline: `9d956a090b411d93322bab04b64f17bf27245816`
+- Reviewed upstream head: `0d08af1e53378fc2aca09eed049ab77df1a8439a`
 - Live upstream head queried: `b961b4950febbc050081554bafe976b5d1b93f39`
-- Query time: `2026-09-19T06:58:15+02:00`
-- Reviewed range: `06e889c4..9d956a09`
+- Query time: `2026-09-19T08:15:07+02:00`
+- Reviewed range: `9d956a09..0d08af1e`
 
 The first batch on this branch reviewed `d7f28899..25185402` (3 A, 5 B, 12
 C). The second covered `25185402..87a1ea30` (5 A, 5 B, 10 C). The third
 covered `87a1ea30..45ff3371` (3 A, 3 B, 14 C). The fourth covered
 `45ff3371..739fdbef` (3 A, 8 B, 9 C). The fifth covered
-`739fdbef..06e889c4` (4 A, 7 B, 9 C). This sixth batch covered the next 20
-commits. Counts: 1 A, 4 B, and 15 C. The reviewed baseline is now
-`9d956a090b411d93322bab04b64f17bf27245816`; 31 commits remain through the
+`739fdbef..06e889c4` (4 A, 7 B, 9 C). The sixth covered `06e889c4..9d956a09`
+(1 A, 4 B, 15 C). This seventh batch covered the next 20 commits. Counts: 7
+A, 4 B, and 9 C. The reviewed baseline is now
+`0d08af1e53378fc2aca09eed049ab77df1a8439a`; 11 commits remain through the
 queried live head.
 
 ## Decisions
@@ -149,6 +150,26 @@ queried live head.
 | 534319bd | C     | --           | Pending-keystrokes indicator file and timeout APIs are absent.                                    |
 | ecc2353d | C     | --           | Corgi patches license softlink; follows unabsorbed `31971937`.                                    |
 | 9d956a09 | C     | --           | GitHub Actions / xtask license-check frequency.                                                   |
+| 6e368ab5 | C     | --           | Proto extension version-only bump; local is still 0.3.2.                                          |
+| e8041cce | C     | --           | GLSL extension version-only bump; local is still 0.2.3.                                           |
+| b6171bcc | A     | 012d63dae1   | Cherry-picked with `-x -s`.                                                                       |
+| ccadf399 | C     | --           | GitHub Actions / xtask Miri and migration-check runner sizes.                                     |
+| 68ec865b | C     | --           | ACP elicitation keyboard nav; `elicitation.rs` is absent.                                         |
+| b9419ae7 | A     | 6cf49deabe   | Cherry-picked with `-x -s`.                                                                       |
+| ac6818fb | A     | 24ed0feec8   | Cherry-picked with `-x -s`.                                                                       |
+| cf4deb27 | A     | b7f3c1d43e   | Cherry-picked with `-x -s`.                                                                       |
+| c24e309d | B     | 7e3f660623   | Relative gpui.rc manifest path; keep local non-Windows OUT_DIR staging.                           |
+| 19096d4c | A     | 50fa06fc95   | Cherry-picked with `-x -s`.                                                                       |
+| 74646bf2 | A     | f57fd07277   | Cherry-picked with `-x -s`.                                                                       |
+| 10fb4986 | B     | 1618d3b0e0   | GPT-6 Astra catalog plus temperature omit; no ReasoningEffort::Max.                               |
+| 6872711f | C     | --           | Native Agent Panel terminal-thread double spawn.                                                  |
+| 49276a3d | C     | --           | GitHub Actions / xtask gate tests on check_style.                                                 |
+| d0ae2f05 | C     | --           | Native-agent sidebar terminal-thread selection flicker.                                           |
+| 94c997e0 | A     | 7665cf8be4   | Cherry-picked with `-x -s`.                                                                       |
+| 6b95ac3d | B     | ef3cf5c0ed   | `info/exclude` uses `common_dir_abs_path`; omit remote worktree test.                             |
+| 74a6468b | B     | 8daa3d9d95   | `"..."` splice for `file_scan_inclusions`; drop watcherInclude import.                            |
+| 15d2fd55 | C     | --           | Disable share-generics; `.cargo/bundle-config.toml` is absent.                                    |
+| 0d08af1e | C     | --           | Share GPUI/scheduler impls; conflicts in app.rs, view.rs, div.rs, executor.rs.                    |
 
 ## Applied work
 
@@ -583,5 +604,85 @@ NOT RUN cargo check -p gpui_windows (cfg(target_os = "windows") on this Linux ho
 ```
 
 The reviewed baseline is `9d956a090b411d93322bab04b64f17bf27245816`.
+Work remains on `sync/upstream-2026-09-18` and has not been merged to
+`main`.
+
+## Batch 7 applied work
+
+Direct A commits `b6171bcc`, `b9419ae7`, `ac6818fb`, `cf4deb27`,
+`19096d4c`, `74646bf2`, and `94c997e0` were absorbed with
+`git cherry-pick -x -s`.
+
+B ports retain `Upstream`, `Retained`, and `Omitted` trailers:
+
+- `c24e309d`: `gpui.rc` references `gpui.manifest.xml` next to itself;
+  native Windows `embed-resource` adds that include directory.
+- `10fb4986`: OpenAI API-key catalog includes `gpt-6-astra`; converters
+  omit Astra temperature; `ServiceTier::Priority` deserializes `fast`.
+- `6b95ac3d`: `add_path_to_git_info_exclude` writes
+  `common_dir_abs_path/info/exclude`.
+- `74a6468b`: `file_scan_inclusions` is a `SplicingVec`; VS Code
+  `files.watcherInclude` is not imported.
+
+## Batch 7 per-commit notes
+
+### 6e368ab5, e8041cce
+
+Zippy version-only bumps. Local proto is 0.3.2 and GLSL is 0.2.3, so the
+patches that expected 0.3.3 and 0.2.4 conflicted. No extension source
+changed.
+
+### 68ec865b, 6872711f, d0ae2f05
+
+ACP elicitation keyboard navigation lives in absent
+`conversation_view/elicitation.rs`. The other two commits are native
+Agent Panel / Threads Sidebar terminal threads.
+
+### ccadf399, 49276a3d, 15d2fd55
+
+Miri runner size, gating tests on `check_style`, and disabling share
+generics are GitHub Actions / xtask or absent
+`.cargo/bundle-config.toml`.
+
+### 0d08af1e
+
+Binary-size monomorphization rewrite of GPUI window/entity updates, view
+rendering, and scheduler spawn. Cherry-pick conflicted in `app.rs`,
+`view.rs`, `elements/div.rs`, and `scheduler/src/executor.rs`.
+
+### 10fb4986
+
+Local display names stay as model ids. `ReasoningEffort::Max` does not
+exist, so Astra's selectable efforts stop at `XHigh`. Request conversion
+tests use the local `into_open_ai` / `into_open_ai_response` signatures.
+
+### 74a6468b
+
+Same `"..."` merge as `read_only_files`. The upstream project-settings
+worktree test needs `build_worktree` helpers that are not local.
+
+## Batch 7 verification
+
+```text
+PASS git merge-base --is-ancestor 9d956a09 FETCH_HEAD
+PASS cargo check --locked -p gpui -p open_ai -p language_models
+PASS cargo check --locked -p project -p settings_content -p settings -p worktree
+PASS cargo test --locked -p open_ai --lib request_conversion_omits_unsupported_temperature
+PASS cargo test --locked -p open_ai --lib completion_event_decodes_priority_and_fast_service_tiers
+PASS cargo test --locked -p open_ai --lib default_and_known_model_helpers
+PASS cargo test --locked -p settings_content --lib test_file_scan_inclusions_splice
+PASS cargo test --locked -p settings_content --lib test_file_scan_inclusions_replace_and_clear
+PASS cargo test --locked -p settings --lib test_import_watcher_include
+PASS cargo test --locked -p worktree --test integration test_file_scan_inclusions
+PASS cargo test --locked -p gpui --lib geometry::tests::test_bounds_intersects
+PASS git diff --check
+NOT RUN macOS / Windows / wasm32 runtime tests
+NOT RUN cargo test --workspace
+NOT RUN cargo fmt --check (known edition-2024 formatting drift on this host)
+NOT RUN cargo check -p gpui_macos (cfg(target_os = "macos") on this Linux host)
+NOT RUN cargo check -p gpui_windows (cfg(target_os = "windows") on this Linux host)
+```
+
+The reviewed baseline is `0d08af1e53378fc2aca09eed049ab77df1a8439a`.
 Work remains on `sync/upstream-2026-09-18` and has not been merged to
 `main`.
