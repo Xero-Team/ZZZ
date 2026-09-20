@@ -14,15 +14,14 @@ pub enum KnownOrUnknown<K, U> {
 #[cfg(test)]
 mod tests {
     use super::KnownOrUnknown;
-    use crate::Plan;
 
     #[test]
     fn deserializes_known_and_unknown_values() {
-        let known = serde_json::from_str::<KnownOrUnknown<Plan, String>>("\"zed_pro\"").unwrap();
-        assert_eq!(known, KnownOrUnknown::Known(Plan::ZedPro));
+        let known = serde_json::from_str::<KnownOrUnknown<String, String>>("\"known\"").unwrap();
+        assert_eq!(known, KnownOrUnknown::Known("known".to_string()));
 
         let unknown =
-            serde_json::from_str::<KnownOrUnknown<Plan, String>>("\"enterprise_plus\"").unwrap();
+            serde_json::from_str::<KnownOrUnknown<String, String>>("\"enterprise_plus\"").unwrap();
         assert_eq!(
             unknown,
             KnownOrUnknown::Unknown("enterprise_plus".to_string())

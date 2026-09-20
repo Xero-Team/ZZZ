@@ -1,7 +1,6 @@
 #[cfg(any(test, feature = "test-support"))]
 pub mod test;
 
-mod llm_token;
 mod proxy;
 pub mod telemetry;
 pub mod user;
@@ -14,10 +13,8 @@ use async_tungstenite::tungstenite::{
     http::{HeaderValue, Request, StatusCode},
 };
 use clock::SystemClock;
-use cloud_api_client::LlmApiToken;
+use cloud_api_client::CloudApiClient;
 use cloud_api_client::websocket_protocol::MessageToClient;
-use cloud_api_client::{ClientApiError, CloudApiClient};
-use cloud_api_types::OrganizationId;
 use credentials_provider::CredentialsProvider;
 use feature_flags::FeatureFlagAppExt as _;
 use futures::{
@@ -50,13 +47,11 @@ use std::{
     time::{Duration, Instant},
 };
 use std::{cmp, pin::Pin};
-use telemetry::Telemetry;
 use thiserror::Error;
 use tokio::net::TcpStream;
 use url::Url;
 use util::{ConnectionResult, ResultExt};
 
-pub use llm_token::*;
 pub use rpc::*;
 pub use user::*;
 
@@ -207,7 +202,6 @@ pub struct Client {
     peer: Arc<Peer>,
     http: Arc<HttpClientWithUrl>,
     cloud_client: Arc<CloudApiClient>,
-    telemetry: Arc<Telemetry>,
     credentials_provider: ClientCredentialsProvider,
     state: RwLock<ClientState>,
     handler_set: Mutex<ProtoMessageHandlerSet>,
@@ -532,14 +526,13 @@ impl<T: 'static> Drop for PendingEntitySubscription<T> {
 
 impl Client {
     pub fn new(
-        clock: Arc<dyn SystemClock>,
+        _clock: Arc<dyn SystemClock>,
         http: Arc<HttpClientWithUrl>,
         cx: &mut App,
     ) -> Arc<Self> {
         Arc::new(Self {
             id: AtomicU64::new(0),
             peer: Peer::new(0),
-            telemetry: Telemetry::new(clock, http.clone(), cx),
             cloud_client: Arc::new(CloudApiClient::new(http.clone())),
             http,
             credentials_provider: ClientCredentialsProvider::new(cx),
@@ -1451,7 +1444,7 @@ impl Client {
                         serde_urlencoded::to_string(&NativeAppSignInQueryParams {
                             native_app_port: port,
                             native_app_public_key: public_key,
-                            system_id: this.telemetry.system_id(),
+                            system_id: None,
                         })?
                     ));
 
@@ -1565,63 +1558,6 @@ impl Client {
             user_id: response.user_id,
             access_token: response.access_token,
         })
-    }
-
-    pub async fn acquire_llm_token(
-        &self,
-        llm_token: &LlmApiToken,
-        organization_id: Option<OrganizationId>,
-    ) -> Result<String> {
-        let cloud_client = self.cloud_client();
-        match llm_token
-            .acquire(&cloud_client, None, organization_id)
-            .await
-        {
-            Ok(token) => Ok(token),
-            Err(ClientApiError::Unauthorized) => {
-                self.request_sign_out();
-                Err(ClientApiError::Unauthorized).context("Failed to create LLM token")
-            }
-            Err(err) => Err(anyhow::Error::from(err)),
-        }
-    }
-
-    pub async fn refresh_llm_token(
-        &self,
-        llm_token: &LlmApiToken,
-        organization_id: Option<OrganizationId>,
-    ) -> Result<String> {
-        let cloud_client = self.cloud_client();
-        match llm_token
-            .refresh(&cloud_client, None, organization_id)
-            .await
-        {
-            Ok(token) => Ok(token),
-            Err(ClientApiError::Unauthorized) => {
-                self.request_sign_out();
-                return Err(ClientApiError::Unauthorized).context("Failed to create LLM token");
-            }
-            Err(err) => return Err(anyhow::Error::from(err)),
-        }
-    }
-
-    pub async fn clear_and_refresh_llm_token(
-        &self,
-        llm_token: &LlmApiToken,
-        organization_id: Option<OrganizationId>,
-    ) -> Result<String> {
-        let cloud_client = self.cloud_client();
-        match llm_token
-            .clear_and_refresh(&cloud_client, None, organization_id)
-            .await
-        {
-            Ok(token) => Ok(token),
-            Err(ClientApiError::Unauthorized) => {
-                self.request_sign_out();
-                return Err(ClientApiError::Unauthorized).context("Failed to create LLM token");
-            }
-            Err(err) => return Err(anyhow::Error::from(err)),
-        }
     }
 
     pub async fn sign_out(self: &Arc<Self>, cx: &AsyncApp) {
@@ -1799,10 +1735,6 @@ impl Client {
                 handler(&message, cx);
             }
         });
-    }
-
-    pub fn telemetry(&self) -> &Arc<Telemetry> {
-        &self.telemetry
     }
 }
 

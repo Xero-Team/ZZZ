@@ -107,8 +107,6 @@ impl ThreadFeedbackState {
 
         let project = thread.read(cx).project().read(cx);
         let client = project.client();
-        let user_store = project.user_store();
-        let organization = user_store.read(cx).current_organization();
 
         if self.feedback == Some(feedback) {
             return;
@@ -137,7 +135,7 @@ impl ThreadFeedbackState {
             client
                 .cloud_client()
                 .submit_agent_feedback(SubmitAgentThreadFeedbackBody {
-                    organization_id: organization.map(|organization| organization.id.clone()),
+                    organization_id: None,
                     agent: agent_telemetry_id.to_string(),
                     session_id: session_id.to_string(),
                     parent_session_id: parent_session_id.map(|id| id.to_string()),
@@ -171,8 +169,6 @@ impl ThreadFeedbackState {
 
         let project = thread.read(cx).project().read(cx);
         let client = project.client();
-        let user_store = project.user_store();
-        let organization = user_store.read(cx).current_organization();
 
         let session_id = thread.read(cx).session_id().clone();
         let agent_telemetry_id = thread.read(cx).connection().telemetry_id();
@@ -183,7 +179,7 @@ impl ThreadFeedbackState {
             client
                 .cloud_client()
                 .submit_agent_feedback_comments(SubmitAgentThreadFeedbackCommentsBody {
-                    organization_id: organization.map(|organization| organization.id.clone()),
+                    organization_id: None,
                     agent: agent_telemetry_id.to_string(),
                     session_id: session_id.to_string(),
                     comments,
@@ -5359,16 +5355,6 @@ impl ThreadView {
 
         if is_thread_bottom
             && util::maybe!({
-                let project = thread.read(cx).project().read(cx);
-                let user_store = project.user_store();
-                if let Some(configuration) =
-                    user_store.read(cx).current_organization_configuration()
-                {
-                    if !configuration.is_agent_thread_feedback_enabled {
-                        return false;
-                    }
-                }
-
                 AgentSettings::get_global(cx).enable_feedback
                     && self
                         .thread

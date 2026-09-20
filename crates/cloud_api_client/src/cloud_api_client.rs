@@ -1,4 +1,3 @@
-mod llm_token;
 mod websocket;
 
 use std::sync::Arc;
@@ -10,16 +9,12 @@ use futures::AsyncReadExt as _;
 use gpui::{App, Task};
 use gpui_tokio::Tokio;
 use http_client::http::request;
-use http_client::{
-    AsyncBody, HttpClientWithUrl, HttpRequestExt, Json, Method, Request, StatusCode, Url,
-};
+use http_client::{AsyncBody, HttpClientWithUrl, Method, Request, StatusCode};
 use parking_lot::RwLock;
 use thiserror::Error;
 use yawc::WebSocket;
 
 use crate::websocket::Connection;
-
-pub use llm_token::LlmApiToken;
 
 struct Credentials {
     user_id: u32,
@@ -86,19 +81,6 @@ impl CloudApiClient {
         *self.credentials.write() = None;
     }
 
-    fn cloud_host(&self) -> String {
-        self.http_client
-            .build_zed_cloud_url("/")
-            .ok()
-            .and_then(|url| url.host_str().map(String::from))
-            .unwrap_or_else(|| {
-                Url::parse(&self.http_client.base_url())
-                    .ok()
-                    .and_then(|url| url.host_str().map(String::from))
-                    .unwrap_or_else(|| "127.0.0.1".into())
-            })
-    }
-
     fn build_request(
         &self,
         req: request::Builder,
@@ -107,57 +89,6 @@ impl CloudApiClient {
         let credentials = self.credentials.read();
         let credentials = credentials.as_ref().ok_or(ClientApiError::NotSignedIn)?;
         build_request(req, body, credentials).map_err(ClientApiError::RequestBuildFailed)
-    }
-
-    pub async fn get_authenticated_user(
-        &self,
-        system_id: Option<String>,
-    ) -> Result<GetAuthenticatedUserResponse, ClientApiError> {
-        let host = self.cloud_host();
-        let request_builder = Request::builder()
-            .method(Method::GET)
-            .uri(
-                self.http_client
-                    .build_zed_cloud_url("/client/users/me")
-                    .map_err(ClientApiError::RequestBuildFailed)?
-                    .as_ref(),
-            )
-            .when_some(system_id, |builder, system_id| {
-                builder.header(ZED_SYSTEM_ID_HEADER_NAME, system_id)
-            });
-
-        let request = self.build_request(request_builder, AsyncBody::default())?;
-
-        let mut response = self.http_client.send(request).await.map_err(|source| {
-            ClientApiError::ConnectionFailed {
-                host: host.clone(),
-                source,
-            }
-        })?;
-
-        if !response.status().is_success() {
-            if response.status() == StatusCode::UNAUTHORIZED {
-                return Err(ClientApiError::Unauthorized);
-            }
-
-            let mut body = String::new();
-            response.body_mut().read_to_string(&mut body).await.ok();
-
-            return Err(ClientApiError::ServerError {
-                host,
-                status: response.status(),
-                body,
-            });
-        }
-
-        let mut body = String::new();
-        response
-            .body_mut()
-            .read_to_string(&mut body)
-            .await
-            .map_err(|e| ClientApiError::InvalidResponse(e.into()))?;
-
-        serde_json::from_str(&body).map_err(|e| ClientApiError::InvalidResponse(e.into()))
     }
 
     pub fn connect(&self, cx: &App) -> Result<Task<Result<Connection>>> {
@@ -187,111 +118,6 @@ impl CloudApiClient {
 
             Ok(Connection::new(ws))
         }))
-    }
-
-    pub async fn create_llm_token(
-        &self,
-        system_id: Option<String>,
-        organization_id: Option<OrganizationId>,
-    ) -> Result<CreateLlmTokenResponse, ClientApiError> {
-        let host = self.cloud_host();
-        let request_builder = Request::builder()
-            .method(Method::POST)
-            .uri(
-                self.http_client
-                    .build_zed_cloud_url("/client/llm_tokens")
-                    .map_err(ClientApiError::RequestBuildFailed)?
-                    .as_ref(),
-            )
-            .when_some(system_id, |builder, system_id| {
-                builder.header(ZED_SYSTEM_ID_HEADER_NAME, system_id)
-            });
-
-        let request = self.build_request(
-            request_builder,
-            Json(CreateLlmTokenBody { organization_id }),
-        )?;
-
-        let mut response = self.http_client.send(request).await.map_err(|source| {
-            ClientApiError::ConnectionFailed {
-                host: host.clone(),
-                source,
-            }
-        })?;
-
-        if !response.status().is_success() {
-            if response.status() == StatusCode::UNAUTHORIZED {
-                return Err(ClientApiError::Unauthorized);
-            }
-
-            let mut body = String::new();
-            response.body_mut().read_to_string(&mut body).await.ok();
-
-            return Err(ClientApiError::ServerError {
-                host,
-                status: response.status(),
-                body,
-            });
-        }
-
-        let mut body = String::new();
-        response
-            .body_mut()
-            .read_to_string(&mut body)
-            .await
-            .map_err(|e| ClientApiError::InvalidResponse(e.into()))?;
-
-        serde_json::from_str(&body).map_err(|e| ClientApiError::InvalidResponse(e.into()))
-    }
-
-    pub async fn update_system_settings(
-        &self,
-        system_id: String,
-        body: UpdateSystemSettingsBody,
-    ) -> Result<SystemSettings, ClientApiError> {
-        let host = self.cloud_host();
-        let request_builder = Request::builder()
-            .method(Method::PATCH)
-            .uri(
-                self.http_client
-                    .build_zed_cloud_url("/client/system_settings")
-                    .map_err(ClientApiError::RequestBuildFailed)?
-                    .as_ref(),
-            )
-            .header(ZED_SYSTEM_ID_HEADER_NAME, system_id);
-
-        let request = self.build_request(request_builder, Json(body))?;
-
-        let mut response = self.http_client.send(request).await.map_err(|source| {
-            ClientApiError::ConnectionFailed {
-                host: host.clone(),
-                source,
-            }
-        })?;
-
-        if !response.status().is_success() {
-            if response.status() == StatusCode::UNAUTHORIZED {
-                return Err(ClientApiError::Unauthorized);
-            }
-
-            let mut body = String::new();
-            response.body_mut().read_to_string(&mut body).await.ok();
-
-            return Err(ClientApiError::ServerError {
-                host,
-                status: response.status(),
-                body,
-            });
-        }
-
-        let mut body = String::new();
-        response
-            .body_mut()
-            .read_to_string(&mut body)
-            .await
-            .map_err(|e| ClientApiError::InvalidResponse(e.into()))?;
-
-        serde_json::from_str(&body).map_err(|e| ClientApiError::InvalidResponse(e.into()))
     }
 
     pub async fn validate_credentials(&self, user_id: u32, access_token: &str) -> Result<bool> {
@@ -372,34 +198,6 @@ impl CloudApiClient {
 
             anyhow::bail!(
                 "Failed to submit agent feedback comments.\nStatus: {:?}\nBody: {body}",
-                response.status()
-            )
-        }
-
-        Ok(())
-    }
-
-    pub async fn submit_edit_prediction_feedback(
-        &self,
-        body: SubmitEditPredictionFeedbackBody,
-    ) -> Result<()> {
-        let request = self.build_request(
-            Request::builder().method(Method::POST).uri(
-                self.http_client
-                    .build_zed_cloud_url("/client/feedback/edit_prediction")?
-                    .as_ref(),
-            ),
-            AsyncBody::from(serde_json::to_string(&body)?),
-        )?;
-
-        let mut response = self.http_client.send(request).await?;
-
-        if !response.status().is_success() {
-            let mut body = String::new();
-            response.body_mut().read_to_string(&mut body).await?;
-
-            anyhow::bail!(
-                "Failed to submit edit prediction feedback.\nStatus: {:?}\nBody: {body}",
                 response.status()
             )
         }

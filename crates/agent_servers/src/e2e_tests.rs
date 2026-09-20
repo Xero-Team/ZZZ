@@ -1,7 +1,6 @@
 use crate::{AgentServer, AgentServerDelegate};
 use acp_thread::{AcpThread, AgentThreadEntry, ToolCall, ToolCallStatus};
 use agent_client_protocol::schema as acp;
-use client::RefreshLlmTokenListener;
 use futures::{FutureExt, StreamExt, channel::mpsc, select};
 use gpui::AppContext;
 use gpui::{Entity, TestAppContext};
@@ -413,9 +412,8 @@ pub async fn init_test(cx: &mut TestAppContext) -> Arc<FakeFs> {
         let http_client = reqwest_client::ReqwestClient::user_agent("agent tests").unwrap();
         cx.set_http_client(Arc::new(http_client));
         let client = client::Client::production(cx);
-        let user_store = cx.new(|cx| client::UserStore::new(client.clone(), cx));
+        let _user_store = cx.new(|cx| client::UserStore::new(client.clone(), cx));
         language_model::init(cx);
-        RefreshLlmTokenListener::register(client.clone(), user_store, cx);
 
         #[cfg(test)]
         project::agent_server_store::AllAgentServersSettings::override_global(

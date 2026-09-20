@@ -219,11 +219,17 @@ mod tests {
     fn read_stored_credential_returns_none_for_missing_and_invalid_files() {
         let (provider, _temp_dir) = provider_in_tempdir();
 
-        assert_eq!(provider.read_stored_credential("http://127.0.0.1:7331"), None);
+        assert_eq!(
+            provider.read_stored_credential("http://127.0.0.1:7331"),
+            None
+        );
 
         std::fs::write(&provider.path, "{not json").unwrap();
 
-        assert_eq!(provider.read_stored_credential("http://127.0.0.1:7331"), None);
+        assert_eq!(
+            provider.read_stored_credential("http://127.0.0.1:7331"),
+            None
+        );
     }
 
     #[test]
@@ -253,7 +259,10 @@ mod tests {
             .delete_stored_credential("http://127.0.0.1:7331")
             .unwrap();
 
-        assert_eq!(provider.read_stored_credential("http://127.0.0.1:7331"), None);
+        assert_eq!(
+            provider.read_stored_credential("http://127.0.0.1:7331"),
+            None
+        );
         assert_eq!(
             provider.read_stored_credential("https://example.com"),
             Some(("other".to_string(), b"token".to_vec()))

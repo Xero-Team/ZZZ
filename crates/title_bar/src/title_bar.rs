@@ -737,27 +737,17 @@ impl TitleBar {
         }
 
         let host = self.project.read(cx).host()?;
-        let host_user = self.user_store.read(cx).get_cached_user(host.user_id)?;
-        let participant_index = self
-            .user_store
-            .read(cx)
-            .participant_indices()
-            .get(&host_user.id)?;
 
         Some(
-            Button::new("project_owner_trigger", host_user.github_login.clone())
-                .color(Color::Player(participant_index.0))
+            Button::new("project_owner_trigger", host.user_id.to_string())
                 .label_size(LabelSize::Small)
                 .tooltip(move |_, cx| {
-                    let tooltip_title = tr(
-                        cx,
-                        "title_bar.project_host.tooltip.title",
-                        "{} is sharing this project. Click to follow.",
-                    )
-                    .replacen("{}", &host_user.github_login, 1);
-
                     Tooltip::with_meta(
-                        tooltip_title,
+                        tr(
+                            cx,
+                            "title_bar.project_host.tooltip.title",
+                            "This project is shared. Click to follow.",
+                        ),
                         None,
                         tr(cx, "title_bar.project_host.tooltip.meta", "Click to Follow"),
                         cx,
