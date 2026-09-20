@@ -1,5 +1,5 @@
 {
-  "$schema": "zed://schemas/settings",
+  "$schema": "zzz://schemas/settings",
   // The name of the ZZZ theme to use for the UI.
   //
   // `mode` is one of:
@@ -11,7 +11,7 @@
     "light": "One Light",
     "dark": "One Dark",
   },
-  "icon_theme": "Zed (Default)",
+  "icon_theme": "ZZZ (Default)",
   // The name of a base set of key bindings to use.
   // This setting can take six values, each named after another
   // text editor:
@@ -24,9 +24,9 @@
   // 6. "TextMate"
   "base_keymap": "VSCode",
   // The name of a font to use for rendering text in the editor
-  // ".ZedMono" currently aliases to Lilex
+  // ".ZZZMono" currently aliases to Lilex
   // but this may change in the future.
-  "buffer_font_family": ".ZedMono",
+  "buffer_font_family": ".ZZZMono",
   // Set the buffer text's font fallbacks, this will be merged with
   // the platform's default fallbacks.
   "buffer_font_fallbacks": null,
@@ -52,9 +52,9 @@
   "buffer_line_height": "comfortable",
   // The name of a font to use for rendering text in the UI
   // You can set this to ".SystemUIFont" to use the system font
-  // ".ZedSans" currently aliases to "IBM Plex Sans", but this may
+  // ".ZZZSans" currently aliases to "IBM Plex Sans", but this may
   // change in the future
-  "ui_font_family": ".ZedSans",
+  "ui_font_family": ".ZZZSans",
   // Set the UI's font fallbacks, this will be merged with the platform's
   // default font fallbacks.
   "ui_font_fallbacks": null,
@@ -182,7 +182,7 @@
   // The default behavior when opening projects from the UI.
   //
   // May take 2 values:
-  //  1. Open projects as a new workspace in the current Zed window's sidebar
+  //  1. Open projects as a new workspace in the current ZZZ window's sidebar
   //         "default_open_behavior": "existing_window"
   //  2. Open projects in a new window
   //         "default_open_behavior": "new_window"
@@ -550,7 +550,7 @@
   },
   // Whether to allow windows to tab together based on the user’s tabbing preference (macOS only).
   "use_system_window_tabs": false,
-  // Which fullscreen mode the `zed::ToggleFullScreen` action enters (macOS only).
+  // Which fullscreen mode the `zzz::ToggleFullScreen` action enters (macOS only).
   //
   // 1. Use macOS's native fullscreen, which moves the window into its own Mission Control space.
   //     "native"
@@ -580,7 +580,7 @@
     // loud you sound to others.
     //
     // Recommended: off (default)
-    // Microphones are too quite in zed, until everyone is on experimental
+    // Microphones are too quite in zzz, until everyone is on experimental
     // audio and has auto speaker volume on this will make you very loud
     // compared to other speakers.
     "experimental.auto_microphone_volume": false,
@@ -1687,15 +1687,15 @@
     // When the resolved directory is outside the project root, the
     // project's directory name is automatically appended so that
     // sibling repos don't collide. For example, with the default
-    // "../worktrees" and a project at ~/code/zed, worktrees are
-    // created under ~/code/worktrees/zed/.
+    // "../worktrees" and a project at ~/code/zzz, worktrees are
+    // created under ~/code/worktrees/zzz/.
     //
     // When the resolved directory is inside the project root, no
     // extra component is added (it's already project-scoped).
     //
     // Examples:
     //   "../worktrees" — ~/code/worktrees/<project>/ (default)
-    //   ".git/zed-worktrees" — <project>/.git/zed-worktrees/
+    //   ".git/zzz-worktrees" — <project>/.git/zzz-worktrees/
     //   "my-worktrees" — <project>/my-worktrees/
     //
     // Trailing slashes are ignored.
@@ -1733,9 +1733,9 @@
       "**/*.crt",
       "**/.dev.vars",
       "**/secrets.yml",
-      "**/.zed/settings.json", // zed project settings
-      "/**/zed/settings.json", // zed user settings
-      "/**/zed/keymap.json",
+      "**/.zzz/settings.json", // zzz project settings
+      "/**/zzz/settings.json", // zzz user settings
+      "/**/zzz/keymap.json",
     ],
     // When to show edit predictions previews in buffer.
     // This setting takes two possible values:
@@ -1836,7 +1836,7 @@
     //    this platform's home directory  (if we can find it)
     //      "working_directory": {
     //        "always": {
-    //          "directory": "~/zed/projects/"
+    //          "directory": "~/zzz/projects/"
     //        }
     //      }
     "working_directory": "current_project_directory",
@@ -1957,7 +1957,7 @@
     // "font_size": 15,
     // Set the terminal's font family. If this option is not included,
     // the terminal will default to matching the buffer's font family.
-    // "font_family": ".ZedMono",
+    // "font_family": ".ZZZMono",
     // Set the terminal's font fallbacks. If this option is not included,
     // the terminal will default to matching the buffer's font fallbacks.
     // This will be merged with the platform's default font fallbacks
@@ -2068,9 +2068,9 @@
   //
   "file_types": {
     "JSONC": [
-      "**/.zed/*.json",
+      "**/.zzz/*.json",
       "**/.vscode/**/*.json",
-      "**/{zed,ZZZ}/{settings,keymap,tasks,debug}.json",
+      "**/{zzz,ZZZ}/{settings,keymap,tasks,debug}.json",
       "tsconfig*.json",
     ],
     "Markdown": [".rules", ".cursorrules", ".windsurfrules", ".clinerules"],
@@ -2551,7 +2551,7 @@
     //   }
     // ]
     //
-    // Default rules are viewable via the "zed: show default semantic token rules" action.
+    // Default rules are viewable via the "zzz: show default semantic token rules" action.
     "semantic_token_rules": [],
   },
   // Jupyter settings
@@ -2610,7 +2610,7 @@
     "delay_ms": 1000,
   },
   // The server to connect to. If the environment variable
-  // ZED_SERVER_URL is set, it will override this setting.
+  // ZZZ_SERVER_URL is set, it will override this setting.
   "server_url": "http://127.0.0.1:7331",
   // Settings overrides to use when using ZZZ Preview.
   // Mostly useful for developers who are managing multiple instances of ZZZ.
@@ -2692,7 +2692,7 @@
   //     // "port": 22, "username": "test", "args": ["-i", "/home/user/.ssh/id_rsa"]
   //     "projects": [
   //       {
-  //         "paths": ["/home/user/code/zed"]
+  //         "paths": ["/home/user/code/zzz"]
   //       }
   //     ]
   //   }
@@ -2764,7 +2764,7 @@
   // Configuration for developer-oriented instrumentation tools that can be
   // toggled at runtime.
   "instrumentation": {
-    // Performance profiler, accessed via the `zed: open performance profiler`
+    // Performance profiler, accessed via the `zzz: open performance profiler`
     // action. Collects timing data for foreground and background executor
     // tasks. Enabling this may lead to increased memory usage, hence it's
     // disabled by default for regular builds.
