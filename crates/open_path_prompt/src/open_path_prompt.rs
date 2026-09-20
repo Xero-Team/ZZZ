@@ -45,6 +45,7 @@ pub struct OpenPathDelegate {
         Arc<dyn Fn(&mut Window, &mut Context<Picker<Self>>) -> Option<AnyElement> + 'static>,
     hidden_entries: bool,
     sort_mode: ProjectPanelSortMode,
+    confirmed_secondary: bool,
 }
 
 impl OpenPathDelegate {
@@ -77,6 +78,7 @@ impl OpenPathDelegate {
             render_footer: Arc::new(|_, _| None),
             hidden_entries: false,
             sort_mode,
+            confirmed_secondary: false,
         }
     }
 
@@ -93,6 +95,32 @@ impl OpenPathDelegate {
     pub fn show_hidden(mut self) -> Self {
         self.hidden_entries = true;
         self
+    }
+
+    /// Whether the last confirmation was triggered with the platform modifier
+    /// (e.g. `cmd-enter`), which callers can use to offer an alternative action
+    /// such as opening the selected path in a new window.
+    pub fn confirmed_secondary(&self) -> bool {
+        self.confirmed_secondary
+    }
+
+    /// Confirms the given paths without requiring them to be selected in the
+    /// list, used by callers that surface paths outside of the directory
+    /// listing (such as recent folders).
+    pub fn confirm_path(
+        &mut self,
+        paths: Vec<PathBuf>,
+        secondary: bool,
+        cx: &mut Context<Picker<Self>>,
+    ) {
+        if paths.is_empty() {
+            return;
+        }
+        self.confirmed_secondary = secondary;
+        if let Some(tx) = self.tx.take() {
+            tx.send(Some(paths)).ok();
+        }
+        cx.emit(gpui::DismissEvent);
     }
     fn get_entry(&self, selected_match_index: usize) -> Option<CandidateInfo> {
         match &self.directory_state {
@@ -617,7 +645,8 @@ impl PickerDelegate for OpenPathDelegate {
         )
     }
 
-    fn confirm(&mut self, _: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
+    fn confirm(&mut self, secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
+        self.confirmed_secondary = secondary;
         let Some(candidate) = self.get_entry(self.selected_index) else {
             return;
         };

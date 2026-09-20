@@ -478,6 +478,48 @@ async fn test_dismiss_cancels_in_flight_match(cx: &mut TestAppContext) {
     );
 }
 
+#[gpui::test]
+async fn test_confirm_path_bypasses_selection(cx: &mut TestAppContext) {
+    let app_state = init_test(cx);
+    app_state
+        .fs
+        .as_fake()
+        .insert_tree(
+            path!("/root"),
+            json!({
+                "a1": "A1",
+                "a2": "A2",
+            }),
+        )
+        .await;
+
+    let project = Project::test(app_state.fs.clone(), [path!("/root").as_ref()], cx).await;
+    let (tx, rx) = futures::channel::oneshot::channel();
+    let lister = project::DirectoryLister::Project(project.clone());
+
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
+    let workspace = multi_workspace.read_with(cx, |mw, _| mw.workspace().clone());
+    let picker = workspace.update_in(cx, |_, window, cx| {
+        let delegate = OpenPathDelegate::new(tx, lister, false, cx);
+        cx.new(|cx| Picker::uniform_list(delegate, window, cx).modal(false))
+    });
+
+    let recent = vec![std::path::PathBuf::from(path!("/root/a1"))];
+    picker.update_in(cx, |picker, _window, cx| {
+        picker.delegate.confirm_path(recent.clone(), true, cx);
+    });
+
+    assert!(
+        picker.read_with(cx, |picker, _| picker.delegate.confirmed_secondary()),
+        "confirm_path must record the secondary confirmation"
+    );
+    assert_eq!(
+        rx.await.expect("confirm_path must send the paths"),
+        Some(recent)
+    );
+}
+
 fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
     cx.update(|cx| {
         let state = AppState::test(cx);

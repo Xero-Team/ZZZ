@@ -27,7 +27,7 @@ use picker::{Picker, PickerDelegate};
 use project::{Fs, Project};
 use remote::{
     RemoteClient, RemoteConnectionOptions, SshConnectionOptions, WslConnectionOptions,
-    remote_client::ConnectionIdentifier,
+    remote_client::ConnectionIdentifier, same_remote_connection_identity,
 };
 use settings::{
     RemoteProject, RemoteSettingsContent, Settings as _, SettingsStore, update_settings_file,
@@ -55,7 +55,8 @@ use util::{
     rel_path::RelPath,
 };
 use workspace::{
-    AppState, DismissDecision, ModalView, MultiWorkspace, OpenLog, OpenOptions, Toast, Workspace,
+    AppState, DismissDecision, ModalView, MultiWorkspace, OpenLog, OpenOptions,
+    SerializedWorkspaceLocation, Toast, Workspace, WorkspaceDb,
     notifications::{DetachAndPromptErr, NotificationId},
     open_remote_project_with_existing_connection,
 };
@@ -178,6 +179,8 @@ enum ProjectPickerData {
 struct ProjectPicker {
     data: ProjectPickerData,
     picker: Entity<Picker<OpenPathDelegate>>,
+    recent_projects: Vec<Vec<PathBuf>>,
+    home_query: String,
     _path_task: Shared<Task<Option<()>>>,
 }
 
@@ -423,13 +426,101 @@ impl ProjectPicker {
     ) -> Entity<Self> {
         let (tx, rx) = oneshot::channel();
         let lister = project::DirectoryLister::Project(project.clone());
-        let delegate = open_path_prompt::OpenPathDelegate::new(tx, lister, false, cx).show_hidden();
+        let footer = Arc::new(
+            |_window: &mut Window, cx: &mut Context<Picker<OpenPathDelegate>>| {
+                let focus_handle = cx.entity().read(cx).focus_handle(cx);
+                Some(
+                    h_flex()
+                        .w_full()
+                        .p_1p5()
+                        .gap_2()
+                        .justify_start()
+                        .border_t_1()
+                        .border_color(cx.theme().colors().border_variant)
+                        .child(
+                            Button::new(
+                                "remote-project-open",
+                                i18n::tr(cx, "recent_projects.remote_servers.footer.open", "Open"),
+                            )
+                            .key_binding(KeyBinding::for_action_in(
+                                &menu::Confirm,
+                                &focus_handle,
+                                cx,
+                            ))
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(menu::Confirm.boxed_clone(), cx)
+                            }),
+                        )
+                        .child(
+                            Button::new(
+                                "remote-project-open-new-window",
+                                i18n::tr(
+                                    cx,
+                                    "recent_projects.remote_servers.footer.open_new_window",
+                                    "Open in New Window",
+                                ),
+                            )
+                            .key_binding(KeyBinding::for_action_in(
+                                &menu::SecondaryConfirm,
+                                &focus_handle,
+                                cx,
+                            ))
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx)
+                            }),
+                        )
+                        .child(
+                            Button::new(
+                                "remote-project-complete-path",
+                                i18n::tr(
+                                    cx,
+                                    "recent_projects.remote_servers.footer.complete",
+                                    "Complete Path",
+                                ),
+                            )
+                            .key_binding(KeyBinding::for_action_in(
+                                &picker::ConfirmCompletion,
+                                &focus_handle,
+                                cx,
+                            ))
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(picker::ConfirmCompletion.boxed_clone(), cx)
+                            }),
+                        )
+                        .child(
+                            Button::new(
+                                "remote-project-back",
+                                i18n::tr(cx, "recent_projects.remote_servers.footer.back", "Back"),
+                            )
+                            .key_binding(KeyBinding::for_action_in(
+                                &menu::Cancel,
+                                &focus_handle,
+                                cx,
+                            ))
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(menu::Cancel.boxed_clone(), cx)
+                            }),
+                        )
+                        .into_any_element(),
+                )
+            },
+        );
+        let delegate = open_path_prompt::OpenPathDelegate::new(tx, lister, false, cx)
+            .show_hidden()
+            .with_footer(footer);
+
+        let home_query = home_dir.to_string();
+        let path_style = home_dir.path_style();
+        let app_fs = workspace
+            .read_with(cx, |workspace, _| workspace.app_state().fs.clone())
+            .ok();
+        let recent_connection = connection.clone();
 
         let picker = cx.new(|cx| {
             let picker = Picker::uniform_list(delegate, window, cx)
                 .width(rems(34.))
                 .modal(false);
-            picker.set_query(&home_dir.to_string(), window, cx);
+            picker.set_query(&home_query, window, cx);
             picker
         });
 
@@ -454,6 +545,7 @@ impl ProjectPicker {
         };
         let _path_task = cx
             .spawn_in(window, {
+                let picker = picker.clone();
                 let workspace = workspace;
                 async move |this, cx| {
                     let Ok(Some(paths)) = rx.await else {
@@ -478,6 +570,9 @@ impl ProjectPicker {
                     let app_state = workspace
                         .read_with(cx, |workspace, _| workspace.app_state().clone())
                         .ok()?;
+
+                    let secondary_confirm =
+                        picker.read_with(cx, |picker, _| picker.delegate.confirmed_secondary());
 
                     let remote_connection = project.read_with(cx, |project, cx| {
                         project.remote_client()?.read(cx).connection()
@@ -519,7 +614,11 @@ impl ProjectPicker {
                     })
                     .log_err();
 
-                    let window = if create_new_window {
+                    let open_in_new_window = match (create_new_window, secondary_confirm) {
+                        (true, false) | (false, true) => true,
+                        (true, true) | (false, false) => false,
+                    };
+                    let window = if open_in_new_window {
                         let options = cx
                             .update(|_, cx| (app_state.build_window_options)(None, cx))
                             .log_err()?;
@@ -578,11 +677,66 @@ impl ProjectPicker {
                 }
             })
             .shared();
-        cx.new(|_| Self {
+        let entity = cx.new(|_| Self {
             _path_task,
             picker,
             data,
-        })
+            recent_projects: Vec::new(),
+            home_query,
+        });
+
+        if let Some(fs) = app_fs {
+            let db = WorkspaceDb::global(cx);
+            cx.spawn_in(window, {
+                let entity = entity.clone();
+                async move |_this, cx| {
+                    let workspaces = db
+                        .recent_project_workspaces(fs.as_ref())
+                        .await
+                        .log_err()
+                        .unwrap_or_default();
+                    let recent_projects = workspaces
+                        .into_iter()
+                        .filter_map(|workspace| match &workspace.location {
+                            SerializedWorkspaceLocation::Remote(options)
+                                if same_remote_connection_identity(
+                                    Some(options),
+                                    Some(&recent_connection),
+                                ) =>
+                            {
+                                let paths = workspace.paths.paths().to_vec();
+                                (!paths.is_empty()).then_some(paths)
+                            }
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>();
+
+                    entity
+                        .update_in(cx, |this, window, cx| {
+                            this.recent_projects = recent_projects;
+                            if let Some(most_recent) =
+                                this.recent_projects.first().and_then(|paths| paths.first())
+                            {
+                                let query = RemotePathBuf::new(
+                                    most_recent.to_string_lossy().into_owned(),
+                                    path_style,
+                                )
+                                .to_string();
+                                if this.picker.read(cx).query(cx) == this.home_query {
+                                    this.picker.update(cx, |picker, cx| {
+                                        picker.set_query(&query, window, cx)
+                                    });
+                                }
+                            }
+                            cx.notify();
+                        })
+                        .ok();
+                }
+            })
+            .detach();
+        }
+
+        entity
     }
 }
 
@@ -609,6 +763,48 @@ impl gpui::Render for ProjectPicker {
                     is_devcontainer: false,
                 }
                 .render(window, cx),
+            })
+            .when(!self.recent_projects.is_empty(), |this| {
+                this.child(
+                    v_flex()
+                        .py_1()
+                        .child(
+                            h_flex().px_3().pb_0p5().child(
+                                Label::new(i18n::tr(
+                                    cx,
+                                    "recent_projects.remote_servers.recent_folders",
+                                    "Recent Folders",
+                                ))
+                                .size(LabelSize::Small)
+                                .color(Color::Muted),
+                            ),
+                        )
+                        .children(self.recent_projects.iter().enumerate().map(|(ix, paths)| {
+                            let label = paths
+                                .iter()
+                                .map(|path| path.display().to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            let confirmed_paths = paths.clone();
+                            let picker = self.picker.clone();
+                            ListItem::new(("recent-remote-folder", ix))
+                                .inset(true)
+                                .spacing(ui::ListItemSpacing::Sparse)
+                                .start_slot(
+                                    Icon::new(IconName::Folder)
+                                        .color(Color::Muted)
+                                        .size(IconSize::Small),
+                                )
+                                .child(Label::new(label).truncate_start())
+                                .on_click(move |event: &ClickEvent, _window, cx| {
+                                    let secondary = event.modifiers().platform;
+                                    let paths = confirmed_paths.clone();
+                                    picker.update(cx, |picker, cx| {
+                                        picker.delegate.confirm_path(paths, secondary, cx);
+                                    });
+                                })
+                        })),
+                )
             })
             .child(
                 div()
