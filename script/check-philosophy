@@ -344,6 +344,39 @@ check_no_account_fetch_in_user_store() {
         "$root/crates/client/src/user.rs" "$root/crates/edit_prediction/src"
 }
 
+check_no_agent_feedback_upload() {
+    ! rg -n 'submit_agent_feedback|submit_agent_feedback_comments|/client/feedback/agent_thread' \
+        "$root/crates" --glob '*.rs' \
+        && ! rg -n '"enable_feedback"|agent\.enable_feedback' \
+            "$root/assets/settings/default.json" "$root/crates/settings_ui/src" \
+        && ! rg -n 'enable_feedback' \
+            "$root/crates/agent_settings/src" "$root/crates/settings_content/src" \
+        && ! rg -n 'agent_ui\.thread_view\.feedback|agent_ui\.inline_prompt\.(good_result|bad_result|cant_rate_still_generating|already_rated|click_to_copy_rating_id)' \
+            "$root/assets/locales/en.json" "$root/assets/locales/zh-CN.json"
+}
+
+check_no_cloud_websocket() {
+    ! rg -n 'connect_to_cloud|run_cloud_connection|MessageToClientHandler|add_message_to_client_handler|MessageToClient|websocket_protocol' \
+        "$root/crates" --glob '*.rs' \
+        && ! test -f "$root/crates/cloud_api_client/src/websocket.rs" \
+        && ! test -f "$root/crates/cloud_api_types/src/websocket_protocol.rs"
+}
+
+check_no_impersonation_backdoor() {
+    ! rg -n 'IMPERSONATE_LOGIN|ADMIN_API_TOKEN|USE_WEB_LOGIN|authenticate_as_admin|/internal/users/impersonate' \
+        "$root/crates" --glob '*.rs'
+}
+
+check_no_collab_ui_components() {
+    ! test -d "$root/crates/ui/src/components/collab" \
+        && ! test -f "$root/crates/ui/src/components/collab.rs"
+}
+
+check_no_inline_rating_actions() {
+    ! rg -n 'ThumbsUpResult|ThumbsDownResult|CompletionState::Rated' \
+        "$root/crates" "$root/assets/keymaps" --glob '*.rs' --glob '*.json'
+}
+
 check_allowlisted_hosts() {
     local urls
     urls=$(rg --no-filename -o 'https?://[^"` )]+' "$root/assets/settings/default.json" "$root/crates/client/src/client.rs" \
@@ -414,6 +447,11 @@ check "title bar has no upgrade-required collab status" check_title_bar_has_no_u
 check "hosted cloud language model provider is absent" check_no_hosted_cloud_provider
 check "LLM token and edit prediction usage APIs are absent" check_no_llm_token_api
 check "user store does not fetch account data" check_no_account_fetch_in_user_store
+check "agent feedback upload surface is absent" check_no_agent_feedback_upload
+check "hosted cloud websocket is absent" check_no_cloud_websocket
+check "admin impersonation backdoor is absent" check_no_impersonation_backdoor
+check "collab UI components are absent" check_no_collab_ui_components
+check "inline prompt rating actions are absent" check_no_inline_rating_actions
 check "network hosts are allowlisted" check_allowlisted_hosts
 
 if (( failures > 0 )); then
