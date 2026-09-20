@@ -18,23 +18,23 @@ pub use wit::{
     CodeLabel, CodeLabelSpan, CodeLabelSpanLiteral, Command, DownloadedFileType, EnvVars,
     KeyValueStore, LanguageServerInstallationStatus, Project, Range, Worktree, download_file,
     make_file_executable,
-    zzz::extension::context_server::ContextServerConfiguration,
-    zzz::extension::dap::{
+    zed::extension::context_server::ContextServerConfiguration,
+    zed::extension::dap::{
         AttachRequest, BuildTaskDefinition, BuildTaskDefinitionTemplatePayload, BuildTaskTemplate,
         DebugAdapterBinary, DebugConfig, DebugRequest, DebugScenario, DebugTaskDefinition,
         LaunchRequest, StartDebuggingRequestArguments, StartDebuggingRequestArgumentsRequest,
         TaskTemplate, TcpArguments, TcpArgumentsTemplate, resolve_tcp_template,
     },
-    zzz::extension::github::{
+    zed::extension::github::{
         GithubRelease, GithubReleaseAsset, GithubReleaseOptions, github_release_by_tag_name,
         latest_github_release,
     },
-    zzz::extension::nodejs::{
+    zed::extension::nodejs::{
         node_binary_path, npm_install_package, npm_package_installed_version,
         npm_package_latest_version,
     },
-    zzz::extension::platform::{Architecture, Os, current_platform},
-    zzz::extension::slash_command::{
+    zed::extension::platform::{Architecture, Os, current_platform},
+    zed::extension::slash_command::{
         SlashCommand, SlashCommandArgumentCompletion, SlashCommandOutput, SlashCommandOutputSection,
     },
 };
@@ -49,7 +49,7 @@ pub use wit::Guest;
 /// Constructs for interacting with language servers over the
 /// Language Server Protocol (LSP).
 pub mod lsp {
-    pub use crate::wit::zzz::extension::lsp::{
+    pub use crate::wit::zed::extension::lsp::{
         Completion, CompletionKind, InsertTextFormat, Symbol, SymbolKind,
     };
 }

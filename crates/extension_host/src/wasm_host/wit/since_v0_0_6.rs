@@ -19,10 +19,10 @@ wasmtime::component::bindgen!({
     path: "../extension_api/wit/since_v0.0.6",
     with: {
         "worktree": ExtensionWorktree,
-        "zzz:extension/github": since_v0_6_0::zzz::extension::github,
-        "zzz:extension/lsp": since_v0_1_0::zzz::extension::lsp,
-        "zzz:extension/nodejs": latest::zzz::extension::nodejs,
-        "zzz:extension/platform": since_v0_6_0::zzz::extension::platform,
+        "zed:extension/github": since_v0_6_0::zed::extension::github,
+        "zed:extension/lsp": since_v0_1_0::zed::extension::lsp,
+        "zed:extension/nodejs": latest::zed::extension::nodejs,
+        "zed:extension/platform": since_v0_6_0::zed::extension::platform,
     },
 });
 

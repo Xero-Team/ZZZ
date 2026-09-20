@@ -46,11 +46,11 @@ impl<T> ToAnyhowResult<T> for wasmtime::Result<T> {
 pub use latest::CodeLabelSpanLiteral;
 pub use latest::{
     CodeLabel, CodeLabelSpan, Command, DebugAdapterBinary, ExtensionProject, Range, SlashCommand,
-    zzz::extension::context_server::ContextServerConfiguration,
-    zzz::extension::lsp::{
+    zed::extension::context_server::ContextServerConfiguration,
+    zed::extension::lsp::{
         Completion, CompletionKind, CompletionLabelDetails, InsertTextFormat, Symbol, SymbolKind,
     },
-    zzz::extension::slash_command::{SlashCommandArgumentCompletion, SlashCommandOutput},
+    zed::extension::slash_command::{SlashCommandArgumentCompletion, SlashCommandOutput},
 };
 pub use since_v0_0_4::LanguageServerConfig;
 

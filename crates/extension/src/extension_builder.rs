@@ -1,6 +1,6 @@
 use crate::{
-    ExtensionLibraryKind, ExtensionManifest, GrammarManifestEntry, build_debug_adapter_schema_path,
-    parse_wasm_extension_version,
+    ExtensionLibraryKind, ExtensionManifest, GrammarManifestEntry, LEGACY_WASM_API_VERSION_SECTION,
+    WASM_API_VERSION_SECTION, build_debug_adapter_schema_path, parse_wasm_extension_version,
 };
 use ::fs::Fs;
 use anyhow::{Context as _, Result, bail};
@@ -521,7 +521,8 @@ impl ExtensionBuilder {
             name != "name"
                 && !name.starts_with("component-type:")
                 && name != "dylink.0"
-                && name != "zzz:api-version"
+                && name != WASM_API_VERSION_SECTION
+                && name != LEGACY_WASM_API_VERSION_SECTION
         };
 
         let mut output = Vec::new();

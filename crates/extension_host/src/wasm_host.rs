@@ -8,8 +8,8 @@ use dap::{DebugRequest, StartDebuggingRequestArgumentsRequest};
 use extension::{
     CodeLabel, Command, Completion, ContextServerConfiguration, DebugAdapterBinary,
     DebugTaskDefinition, ExtensionCapability, ExtensionHostProxy, KeyValueStoreDelegate,
-    ProjectDelegate, SlashCommand, SlashCommandArgumentCompletion, SlashCommandOutput, Symbol,
-    WorktreeDelegate,
+    LEGACY_WASM_API_VERSION_SECTION, ProjectDelegate, SlashCommand, SlashCommandArgumentCompletion,
+    SlashCommandOutput, Symbol, WASM_API_VERSION_SECTION, WorktreeDelegate,
 };
 use fs::Fs;
 use futures::future::LocalBoxFuture;
@@ -811,13 +811,14 @@ pub fn parse_wasm_extension_version(extension_id: &str, wasm_bytes: &[u8]) -> Re
     for part in wasmparser::Parser::new(0).parse_all(wasm_bytes) {
         if let wasmparser::Payload::CustomSection(s) =
             part.context("error parsing wasm extension")?
-            && s.name() == "zzz:api-version"
+            && (s.name() == WASM_API_VERSION_SECTION || s.name() == LEGACY_WASM_API_VERSION_SECTION)
         {
             version = parse_wasm_extension_version_custom_section(s.data());
             if version.is_none() {
                 bail!(
-                    "extension {} has invalid zzz:api-version section: {:?}",
+                    "extension {} has invalid {} section: {:?}",
                     extension_id,
+                    s.name(),
                     s.data()
                 );
             }
@@ -829,7 +830,12 @@ pub fn parse_wasm_extension_version(extension_id: &str, wasm_bytes: &[u8]) -> Re
     //
     // By parsing the entirety of the Wasm bytes before we return, we're able to detect this problem
     // earlier as an `Err` rather than as a panic.
-    version.with_context(|| format!("extension {extension_id} has no zzz:api-version section"))
+    version.with_context(|| {
+        format!(
+            "extension {extension_id} has no {WASM_API_VERSION_SECTION} section \
+             (legacy {LEGACY_WASM_API_VERSION_SECTION} is also accepted)"
+        )
+    })
 }
 
 fn parse_wasm_extension_version_custom_section(data: &[u8]) -> Option<Version> {
