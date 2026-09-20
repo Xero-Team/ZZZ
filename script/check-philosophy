@@ -48,7 +48,7 @@ check_sentry_opt_in() {
 check_no_commercial_entrypoints() {
     ! rg -n 'start_trial|upgrade_to_zed_pro|billing-support@zed\.dev|Try Zed Pro|Start Free Trial|Upgrade to Pro|Manage Subscription' \
         "$root/crates/ai_onboarding" "$root/crates/onboarding" "$root/crates/title_bar" \
-        "$root/crates/edit_prediction_ui" "$root/crates/agent_ui" "$root/crates/language_models/src/provider/cloud.rs"
+        "$root/crates/edit_prediction_ui" "$root/crates/agent_ui"
 }
 
 check_no_commercial_identifiers() {
@@ -327,6 +327,23 @@ check_title_bar_has_no_upgrade_required() {
     ! rg -n 'Status::UpgradeRequired|title_bar\.status\.upgrade_required' "$root/crates/title_bar/src"
 }
 
+check_no_hosted_cloud_provider() {
+    ! test -d "$root/crates/language_models_cloud" \
+        && ! test -f "$root/crates/language_models/src/provider/cloud.rs" \
+        && ! rg -n 'CloudLanguageModelProvider|ZedDotDevAvailable|zed_dot_dev|language_models_cloud' \
+            "$root/crates" "$root/assets/settings"
+}
+
+check_no_llm_token_api() {
+    ! rg -n 'global_llm_token|RefreshLlmTokenListener|LlmApiToken|acquire_llm_token|refresh_llm_token|clear_and_refresh_llm_token|NeedsLlmTokenRefresh|EditPredictionUsage' \
+        "$root/crates" --glob '*.rs'
+}
+
+check_no_account_fetch_in_user_store() {
+    ! rg -n 'get_authenticated_user|update_authenticated_user|submit_edit_prediction_feedback' \
+        "$root/crates/client/src/user.rs" "$root/crates/edit_prediction/src"
+}
+
 check_allowlisted_hosts() {
     local urls
     urls=$(rg --no-filename -o 'https?://[^"` )]+' "$root/assets/settings/default.json" "$root/crates/client/src/client.rs" \
@@ -394,6 +411,9 @@ check "GitHub triage scripts are absent" check_github_triage_scripts_absent
 check "no vestigial commercial locale keys remain" check_no_vestigial_commercial_locale_keys
 check "onboarding has no cloud_api_types dependency" check_onboarding_has_no_cloud_api_types
 check "title bar has no upgrade-required collab status" check_title_bar_has_no_upgrade_required
+check "hosted cloud language model provider is absent" check_no_hosted_cloud_provider
+check "LLM token and edit prediction usage APIs are absent" check_no_llm_token_api
+check "user store does not fetch account data" check_no_account_fetch_in_user_store
 check "network hosts are allowlisted" check_allowlisted_hosts
 
 if (( failures > 0 )); then
