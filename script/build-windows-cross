@@ -217,6 +217,18 @@ build_linux_remote_server() {
     unset INCLUDE LIB RC GPUI_FXC_PATH
     unset "CC_${env_triple}" "CXX_${env_triple}" "AR_${env_triple}"
     unset "CARGO_TARGET_${env_triple^^}_LINKER" "CFLAGS_${env_triple}"
+    # Pin the musl C compiler. A host CC (e.g. clang from the surrounding
+    # environment) has no musl sysroot and would fall back to glibc headers,
+    # where -D_GNU_SOURCE enables the ISO C23 sscanf/strtol redirects
+    # (__isoc23_*), which musl does not provide.
+    musl_cc_variable="CC_${musl_triple//-/_}"
+    if [[ -z "${!musl_cc_variable:-}" ]]; then
+      if command -v x86_64-linux-musl-gcc >/dev/null 2>&1; then
+        export "$musl_cc_variable=$(command -v x86_64-linux-musl-gcc)"
+      elif command -v musl-gcc >/dev/null 2>&1; then
+        export "$musl_cc_variable=$(command -v musl-gcc)"
+      fi
+    fi
     if rustup target list --installed | grep -qx "$musl_triple" || rustup target add "$musl_triple"; then
       if cargo build --release --package remote_server --target "$musl_triple"; then
         gzip -f --stdout --best "target/${musl_triple}/release/remote_server" >"$dest"
