@@ -752,8 +752,8 @@ impl PickerDelegate for TabSwitcherDelegate {
         .into()
     }
 
-    fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
-        Some("No tabs".into())
+    fn no_matches_text(&self, _window: &mut Window, cx: &mut App) -> Option<SharedString> {
+        Some(tr(cx, "tab_switcher.no_matches", "No tabs").into())
     }
 
     fn match_count(&self) -> usize {

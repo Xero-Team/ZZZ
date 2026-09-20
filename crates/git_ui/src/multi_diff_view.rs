@@ -5,6 +5,7 @@ use gpui::{
     AnyElement, App, AppContext as _, AsyncApp, Context, Entity, EventEmitter, FocusHandle,
     Focusable, Font, IntoElement, Render, SharedString, Task, Window,
 };
+use i18n::tr;
 use language::{Buffer, Capability, HighlightedText, OffsetRangeExt};
 use multi_buffer::PathKey;
 use project::Project;
@@ -238,13 +239,14 @@ impl MultiDiffView {
         Self { editor, file_count }
     }
 
-    fn title(&self) -> SharedString {
-        let suffix = if self.file_count == 1 {
-            "1 file".to_owned()
+    fn title(&self, cx: &App) -> SharedString {
+        if self.file_count == 1 {
+            tr(cx, "git_ui.multi_diff_view.title_one", "Diff (1 file)").into()
         } else {
-            format!("{} files", self.file_count)
-        };
-        format!("Diff ({suffix})").into()
+            tr(cx, "git_ui.multi_diff_view.title_many", "Diff ({} files)")
+                .replacen("{}", &self.file_count.to_string(), 1)
+                .into()
+        }
     }
 }
 
@@ -263,8 +265,8 @@ impl Item for MultiDiffView {
         Some(Icon::new(IconName::Diff).color(Color::Muted))
     }
 
-    fn tab_content(&self, params: TabContentParams, _window: &Window, _cx: &App) -> AnyElement {
-        Label::new(self.title())
+    fn tab_content(&self, params: TabContentParams, _window: &Window, cx: &App) -> AnyElement {
+        Label::new(self.title(cx))
             .color(if params.selected {
                 Color::Default
             } else {
@@ -273,12 +275,12 @@ impl Item for MultiDiffView {
             .into_any_element()
     }
 
-    fn tab_tooltip_text(&self, _cx: &App) -> Option<ui::SharedString> {
-        Some(self.title())
+    fn tab_tooltip_text(&self, cx: &App) -> Option<ui::SharedString> {
+        Some(self.title(cx))
     }
 
-    fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        self.title()
+    fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
+        self.title(cx)
     }
 
     fn to_item_events(event: &EditorEvent, f: &mut dyn FnMut(ItemEvent)) {

@@ -3,6 +3,7 @@ use editor::{
     display_map::ToDisplayPoint, movement,
 };
 use gpui::{Action, Context, Window};
+use i18n::tr;
 use language::{Bias, SelectionGoal};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -56,7 +57,11 @@ impl Vim {
                 .filter(|reg| !reg.text.is_empty())
                 else {
                     vim.set_status_label(
-                        format!("Nothing in register {}", selected_register.unwrap_or('"')),
+                        tr(cx, "vim.nothing_in_register", "Nothing in register {}").replacen(
+                            "{}",
+                            &selected_register.unwrap_or('"').to_string(),
+                            1,
+                        ),
                         cx,
                     );
                     return;
@@ -319,7 +324,11 @@ impl Vim {
                 })
                 .filter(|reg| !reg.text.is_empty()) else {
                     vim.set_status_label(
-                        format!("Nothing in register {}", selected_register.unwrap_or('"')),
+                        tr(cx, "vim.nothing_in_register", "Nothing in register {}").replacen(
+                            "{}",
+                            &selected_register.unwrap_or('"').to_string(),
+                            1,
+                        ),
                         cx,
                     );
                     return;
@@ -367,7 +376,11 @@ impl Vim {
                 })
                 .filter(|reg| !reg.text.is_empty()) else {
                     vim.set_status_label(
-                        format!("Nothing in register {}", selected_register.unwrap_or('"')),
+                        tr(cx, "vim.nothing_in_register", "Nothing in register {}").replacen(
+                            "{}",
+                            &selected_register.unwrap_or('"').to_string(),
+                            1,
+                        ),
                         cx,
                     );
                     return;

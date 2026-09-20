@@ -42,7 +42,10 @@ pub(crate) fn render_edit_prediction_setup_page(
         Some(
             render_api_key_provider(
                 IconName::AiOpenAiCompat,
-                "OpenAI Compatible API",
+                lt(
+                    "settings_ui.edit_prediction_provider_setup.title.openai_compatible_api",
+                    "OpenAI Compatible API",
+                ),
                 ApiKeyDocs::Custom {
                     message: lt(
                         "settings_ui.edit_prediction_provider_setup.description.authorization_bearer_api_key",
@@ -189,7 +192,7 @@ enum ApiKeyDocs {
 
 fn render_api_key_provider(
     icon: IconName,
-    title: &'static str,
+    title: UiText,
     docs: ApiKeyDocs,
     api_key_state: Entity<ApiKeyState>,
     current_url: fn(&mut App) -> SharedString,
@@ -242,8 +245,8 @@ fn render_api_key_provider(
             .detach_and_log_err(cx);
     };
 
-    let base_container = v_flex().id(title).min_w_0().pt_8().gap_1p5();
-    let header = SettingsSectionHeader::new(title)
+    let base_container = v_flex().id(title.stable_id()).min_w_0().pt_8().gap_1p5();
+    let header = SettingsSectionHeader::new(title.resolve(cx))
         .icon(icon)
         .no_padding(true);
     let description = match docs {

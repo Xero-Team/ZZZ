@@ -4620,7 +4620,11 @@ impl GitPanel {
                         workspace.show_toast(
                             workspace::Toast::new(
                                 NotificationId::unique::<GitJobQueueToast>(),
-                                "No active repository",
+                                tr(
+                                    cx,
+                                    "git_ui.git_panel.no_active_repository",
+                                    "No active repository",
+                                ),
                             )
                             .autohide(),
                             cx,

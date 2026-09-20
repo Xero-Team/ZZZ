@@ -197,8 +197,15 @@ impl PickerDelegate for RulePickerDelegate {
         self.filtered_entries.len()
     }
 
-    fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
-        Some("No rules found matching your search.".into())
+    fn no_matches_text(&self, _window: &mut Window, cx: &mut App) -> Option<SharedString> {
+        Some(
+            tr(
+                cx,
+                "rules_library.no_matches",
+                "No rules found matching your search.",
+            )
+            .into(),
+        )
     }
 
     fn selected_index(&self) -> usize {

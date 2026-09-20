@@ -737,6 +737,7 @@ impl TitleBar {
         }
 
         let host = self.project.read(cx).host()?;
+        let project_owner = host.user_id.to_string();
 
         Some(
             Button::new("project_owner_trigger", host.user_id.to_string())
@@ -746,8 +747,9 @@ impl TitleBar {
                         tr(
                             cx,
                             "title_bar.project_host.tooltip.title",
-                            "This project is shared. Click to follow.",
-                        ),
+                            "{} is sharing this project. Click to follow.",
+                        )
+                        .replacen("{}", &project_owner, 1),
                         None,
                         tr(cx, "title_bar.project_host.tooltip.meta", "Click to Follow"),
                         cx,

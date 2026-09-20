@@ -895,12 +895,22 @@ fn save_llm_provider_form(
     };
 
     let fs = <dyn fs::Fs>::global(cx);
+    let settings_update_canceled = tr(
+        cx,
+        "settings_ui.llm_providers_page.settings_update_canceled",
+        "Settings update was canceled",
+    )
+    .to_string();
+    let failed_to_write_api_key = tr(
+        cx,
+        "settings_ui.llm_providers_page.failed_to_write_api_key",
+        "Failed to write API key to keychain",
+    )
+    .to_string();
     let write_key = cx.write_credentials(&api_url, "Bearer", api_key.as_bytes());
     cx.spawn_in(window, async move |this, cx| {
         let result = async {
-            write_key
-                .await
-                .context("Failed to write API key to keychain")?;
+            write_key.await.context(failed_to_write_api_key)?;
 
             let completion = cx.update(|_window, cx| {
                 let provider_name = provider_name.clone();
@@ -925,7 +935,7 @@ fn save_llm_provider_form(
 
             completion
                 .await
-                .map_err(|_| anyhow!("Settings update was canceled"))??;
+                .map_err(|_| anyhow!("{settings_update_canceled}"))??;
 
             cx.update(|window, cx| {
                 this.update(cx, |this, cx| {
@@ -1053,6 +1063,7 @@ fn parse_open_ai_model(
                 "settings_ui.llm_providers_page.max_completion_tokens",
                 "Max Completion Tokens",
             ),
+            cx,
         )?),
         max_output_tokens: Some(parse_u64_field(
             &model.max_output_tokens,
@@ -1061,6 +1072,7 @@ fn parse_open_ai_model(
                 "settings_ui.llm_providers_page.max_output_tokens",
                 "Max Output Tokens",
             ),
+            cx,
         )?),
         max_tokens: parse_u64_field(
             &model.max_tokens,
@@ -1069,6 +1081,7 @@ fn parse_open_ai_model(
                 "settings_ui.llm_providers_page.max_tokens",
                 "Max Tokens",
             ),
+            cx,
         )?,
         reasoning_effort: model.supports_thinking.then_some(model.reasoning_effort),
         capabilities: OpenAiCompatibleModelCapabilities {
@@ -1085,11 +1098,16 @@ fn parse_open_ai_model(
     })
 }
 
-fn parse_u64_field(value: &str, name: SharedString) -> Result<u64, SharedString> {
-    value
-        .trim()
-        .parse::<u64>()
-        .map_err(|_| format!("{name} must be a number").into())
+fn parse_u64_field(value: &str, name: SharedString, cx: &App) -> Result<u64, SharedString> {
+    value.trim().parse::<u64>().map_err(|_| {
+        tr(
+            cx,
+            "settings_ui.llm_providers_page.field_must_be_a_number",
+            "{} must be a number",
+        )
+        .replacen("{}", name.as_ref(), 1)
+        .into()
+    })
 }
 
 #[cfg(test)]
@@ -1125,6 +1143,11 @@ mod tests {
         cx.update(|cx| {
             let store = settings::SettingsStore::test(cx);
             cx.set_global(store);
+            cx.update_global::<settings::SettingsStore, _>(|store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.workspace.display_language = Some(settings::DisplayLanguage::En);
+                });
+            });
             i18n::init(cx);
             language_model::init(cx);
         });

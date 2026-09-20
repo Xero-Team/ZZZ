@@ -360,9 +360,14 @@ fn general_page(cx: &App) -> SettingsPage {
                 files: USER,
             }),
             SettingsPageItem::SettingItem(SettingItem {
-                title: "Reveal If Open".into(),
-                description: "When enabled, ZZZ prefers an already-open file in another pane."
-                    .into(),
+                title: lt(
+                    "settings_ui.page_data.title.reveal.if.open",
+                    "Reveal If Open",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.when.enabled.zzz.prefers.an.already.open.file.in.another.pane",
+                    "When enabled, ZZZ prefers an already-open file in another pane.",
+                ),
                 field: Box::new(SettingField {
                     json_path: Some("reveal_if_open"),
                     pick: |settings_content| settings_content.workspace.reveal_if_open.as_ref(),
@@ -5550,8 +5555,14 @@ fn window_and_layout_page() -> SettingsPage {
                 files: USER,
             }),
             SettingsPageItem::SettingItem(SettingItem {
-                title: "Close Panel on Toggle".into(),
-                description: "Whether invoking a panel's ToggleFocus action while it's already focused closes the panel, instead of just moving focus back to the editor.".into(),
+                title: lt(
+                    "settings_ui.page_data.title.close.panel.on.toggle",
+                    "Close Panel on Toggle",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.whether.invoking.a.panel.s.togglefocus.action.while.it.s.already.focused.closes.the.panel.instead.of.just.moving.focus.back.to.the.editor",
+                    "Whether invoking a panel's ToggleFocus action while it's already focused closes the panel, instead of just moving focus back to the editor.",
+                ),
                 field: Box::new(SettingField {
                     json_path: Some("close_panel_on_toggle"),
                     pick: |settings_content| {
@@ -10720,9 +10731,14 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
                 "Miscellaneous",
             )),
             SettingsPageItem::SettingItem(SettingItem {
-                title: "Language Detection".into(),
-                description: "Whether to enable automatic language detection in unsaved buffers."
-                    .into(),
+                title: lt(
+                    "settings_ui.page_data.title.language.detection",
+                    "Language Detection",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.whether.to.enable.automatic.language.detection.in.unsaved.buffers",
+                    "Whether to enable automatic language detection in unsaved buffers.",
+                ),
                 field: Box::new(SettingField {
                     json_path: Some("language_detection"),
                     pick: |settings_content| settings_content.editor.language_detection.as_ref(),

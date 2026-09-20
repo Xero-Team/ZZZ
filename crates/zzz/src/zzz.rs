@@ -940,13 +940,14 @@ fn register_actions(
                     cx.open_url(parsed_url.as_str());
                 }
                 Err(e) => {
-                    workspace.show_error(
-                        &anyhow::anyhow!(
-                            "Opening this URL in a browser failed because the URL is invalid: {}\n\nError was: {e}",
-                            action.url
-                        ),
+                    let message = tr(
                         cx,
-                    );
+                        "zzz.open_url.invalid_url_error",
+                        "Opening this URL in a browser failed because the URL is invalid: {}\n\nError was: {}",
+                    )
+                    .replacen("{}", &action.url, 1)
+                    .replacen("{}", &e.to_string(), 1);
+                    workspace.show_error(&anyhow::anyhow!(message), cx);
                 }
             }
         })
@@ -1138,10 +1139,12 @@ fn register_actions(
                     workspace.show_toast(
                         Toast::new(
                             NotificationId::unique::<RegisterZZZScheme>(),
-                            format!(
+                            tr(
+                                cx,
+                                "zzz.register_scheme.toast",
                                 "zzz:// links will now open in {}.",
-                                ReleaseChannel::global(cx).display_name()
-                            ),
+                            )
+                            .replacen("{}", ReleaseChannel::global(cx).display_name(), 1),
                         ),
                         cx,
                     )
@@ -1149,7 +1152,11 @@ fn register_actions(
                 Ok(())
             })
             .detach_and_prompt_err(
-                "Error registering zzz:// scheme",
+                &tr(
+                    cx,
+                    "zzz.register_scheme.error_title",
+                    "Error registering zzz:// scheme",
+                ),
                 window,
                 cx,
                 |_, _, _| None,

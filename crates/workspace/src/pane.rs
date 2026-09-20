@@ -4163,9 +4163,11 @@ impl Pane {
                 if project.is_via_remote_server() {
                     if !project.is_via_wsl(cx) {
                         workspace.show_error(
-                            &anyhow::anyhow!(
-                                "Cannot drop local files on a remote SSH/Docker project"
-                            ),
+                            &anyhow::anyhow!(tr(
+                                cx,
+                                "workspace.pane.cannot_drop_local_files_remote",
+                                "Cannot drop local files on a remote SSH/Docker project",
+                            )),
                             cx,
                         );
                         return (true, false);
@@ -4223,9 +4225,11 @@ impl Pane {
                             workspace
                                 .update_in(cx, |workspace, _, cx| {
                                     workspace.show_error(
-                                        &anyhow::anyhow!(
-                                            "Could not translate the dropped paths into WSL paths"
-                                        ),
+                                        &anyhow::anyhow!(tr(
+                                            cx,
+                                            "workspace.pane.could_not_translate_wsl_paths",
+                                            "Could not translate the dropped paths into WSL paths",
+                                        )),
                                         cx,
                                     );
                                 })

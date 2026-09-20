@@ -149,7 +149,11 @@ impl EncodingSelectorDelegate {
         let current_encoding = self.buffer.read(cx).encoding();
 
         if candidate_encoding.name() == current_encoding.name() {
-            format!("{} (current)", candidate_encoding.name())
+            tr(cx, "encoding_selector.current", "{} (current)").replacen(
+                "{}",
+                candidate_encoding.name(),
+                1,
+            )
         } else {
             candidate_encoding.name().to_owned()
         }

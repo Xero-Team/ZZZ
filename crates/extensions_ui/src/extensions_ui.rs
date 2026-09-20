@@ -226,7 +226,12 @@ pub fn init(cx: &mut App) {
                                         workspace.show_error(
                                             // NOTE: using `anyhow::context` here ends up not printing
                                             // the error
-                                            &format!("Failed to install dev extension: {}", err),
+                                            &tr(
+                                                cx,
+                                                "extensions_ui.failed_to_install_dev_extension",
+                                                "Failed to install dev extension: {}",
+                                            )
+                                            .replacen("{}", &err.to_string(), 1),
                                             cx,
                                         );
                                     })
@@ -891,8 +896,19 @@ impl ExtensionsPage {
                                 installed_version
                                     .filter(|installed_version| *installed_version != version)
                                     .map(|installed_version| {
-                                        Headline::new(format!("(v{installed_version} installed)",))
-                                            .size(HeadlineSize::XSmall)
+                                        Headline::new(
+                                            tr(
+                                                cx,
+                                                "extensions_ui.version.installed",
+                                                "(v{} installed)",
+                                            )
+                                            .replacen(
+                                                "{}",
+                                                installed_version.as_ref(),
+                                                1,
+                                            ),
+                                        )
+                                        .size(HeadlineSize::XSmall)
                                     }),
                             )
                             .map(|parent| {

@@ -78,9 +78,21 @@ impl ZZZAiOnboarding {
             )
             .child(
                 List::new()
-                    .child(ListBulletItem::new("Configure a local provider"))
-                    .child(ListBulletItem::new("Ollama and llama.cpp are preferred"))
-                    .child(ListBulletItem::new("No ZZZ account required")),
+                    .child(ListBulletItem::new(tr(
+                        cx,
+                        "ai_onboarding.configure_local_provider.bullet1",
+                        "Configure a local provider",
+                    )))
+                    .child(ListBulletItem::new(tr(
+                        cx,
+                        "ai_onboarding.configure_local_provider.bullet2",
+                        "Ollama and llama.cpp are preferred",
+                    )))
+                    .child(ListBulletItem::new(tr(
+                        cx,
+                        "ai_onboarding.configure_local_provider.bullet3",
+                        "No ZZZ account required",
+                    ))),
             )
             .children(self.render_dismiss_button(cx))
             .into_any_element()

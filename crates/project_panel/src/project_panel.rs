@@ -7924,7 +7924,13 @@ impl Render for DraggedProjectEntryView {
                     .bg(cx.theme().colors().background)
                     .map(|this| {
                         if self.selections.len() > 1 && self.selections.contains(&self.selection) {
-                            this.child(Label::new(format!("{} entries", self.selections.len())))
+                            this.child(Label::new(
+                                tr(cx, "project_panel.entries_count", "{} entries").replacen(
+                                    "{}",
+                                    &self.selections.len().to_string(),
+                                    1,
+                                ),
+                            ))
                         } else {
                             this.child(if let Some(icon) = &self.icon {
                                 div().child(Icon::from_path(icon.clone()))

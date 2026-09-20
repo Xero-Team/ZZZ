@@ -78,6 +78,11 @@ fn open_copilot_code_verification_window(copilot: &Entity<Copilot>, window: &Win
         gpui::size(height, width),
     ));
     let app_id = ReleaseChannel::global(cx).app_id();
+    let window_title = tr(
+        cx,
+        "copilot_ui.connect_github_copilot",
+        "Connect GitHub Copilot",
+    );
     cx.open_window(
         WindowOptions {
             kind: gpui::WindowKind::PopUp,
@@ -85,7 +90,7 @@ fn open_copilot_code_verification_window(copilot: &Entity<Copilot>, window: &Win
             is_resizable: false,
             is_movable: true,
             titlebar: Some(gpui::TitlebarOptions {
-                title: Some("Connect GitHub Copilot".into()),
+                title: Some(window_title.into()),
                 appears_transparent: true,
                 ..Default::default()
             }),

@@ -976,9 +976,19 @@ impl HighlightsTreeToolbarItemView {
         let filtered = tree_view.entry_count();
 
         let label = if filtered == total {
-            format!("{} highlights", total)
+            tr(cx, "language_tools.highlights.count", "{} highlights").replacen(
+                "{}",
+                &total.to_string(),
+                1,
+            )
         } else {
-            format!("{} / {} highlights", filtered, total)
+            tr(
+                cx,
+                "language_tools.highlights.filtered_count",
+                "{} / {} highlights",
+            )
+            .replacen("{}", &filtered.to_string(), 1)
+            .replacen("{}", &total.to_string(), 1)
         };
 
         Some(ButtonLike::new("highlights header").child(Label::new(label)))

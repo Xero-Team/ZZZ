@@ -3161,7 +3161,11 @@ impl GitGraph {
                                 this.child(
                                     Button::new(
                                         "view-on-provider",
-                                        format!("View on {}", provider_name),
+                                        tr(cx, "git_graph.view_on", "View on {}").replacen(
+                                            "{}",
+                                            provider_name.as_ref(),
+                                            1,
+                                        ),
                                     )
                                     .start_icon(
                                         Icon::new(icon).size(IconSize::Small).color(Color::Muted),

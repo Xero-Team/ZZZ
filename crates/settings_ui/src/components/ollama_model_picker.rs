@@ -130,11 +130,21 @@ impl PickerDelegate for OllamaModelPickerDelegate {
         .into()
     }
 
-    fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
+    fn no_matches_text(&self, _window: &mut Window, cx: &mut App) -> Option<SharedString> {
         Some(if self.loading {
-            "Loading models…".into()
+            app_i18n::tr(
+                cx,
+                "settings_ui.ollama_model_picker.loading_models",
+                "Loading models…",
+            )
+            .into()
         } else {
-            "No models found. Check your Ollama server URL.".into()
+            app_i18n::tr(
+                cx,
+                "settings_ui.ollama_model_picker.no_models_found",
+                "No models found. Check your Ollama server URL.",
+            )
+            .into()
         })
     }
 

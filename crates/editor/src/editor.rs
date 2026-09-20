@@ -3289,7 +3289,7 @@ impl Editor {
         cx: &mut Context<Workspace>,
     ) {
         Self::new_in_workspace(workspace, window, cx).detach_and_prompt_err(
-            "Failed to create buffer",
+            &tr(cx, "editor.new_file.failed", "Failed to create buffer"),
             window,
             cx,
             |e, _, _| match e.error_code() {
