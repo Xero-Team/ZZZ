@@ -4,7 +4,7 @@ use gpui::{IntoElement, ParentElement};
 use i18n as app_i18n;
 use ui::prelude::*;
 
-use crate::ZedAiOnboarding;
+use super::ZedAiOnboarding;
 
 pub struct EditPredictionOnboarding {
     dismiss: Arc<dyn Fn(&mut Window, &mut App)>,

@@ -15,7 +15,6 @@ path = "src/edit_prediction.rs"
 cli-support = []
 
 [dependencies]
-ai_onboarding.workspace = true
 anyhow.workspace = true
 heapless.workspace = true
 buffer_diff.workspace = true

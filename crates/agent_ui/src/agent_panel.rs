@@ -33,6 +33,7 @@ use zed_actions::{
 use crate::ExpandMessageEditor;
 use crate::ManageProfiles;
 use crate::agent_connection_store::AgentConnectionStore;
+use crate::ai_onboarding::AgentPanelOnboarding;
 use crate::completion_provider::AgentContextSource;
 use crate::thread_metadata_store::{ThreadId, ThreadMetadataStore, ThreadMetadataStoreEvent};
 use crate::{
@@ -45,7 +46,6 @@ use crate::{
 };
 use crate::{Agent, AgentInitialContent, ExternalSourcePrompt, NewExternalAgentThread};
 use agent_settings::AgentSettings;
-use ai_onboarding::AgentPanelOnboarding;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use collections::HashMap;

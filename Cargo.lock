@@ -357,7 +357,6 @@ dependencies = [
  "agent-client-protocol",
  "agent_servers",
  "agent_settings",
- "ai_onboarding",
  "anyhow",
  "async-channel 2.5.0",
  "audio",
@@ -430,6 +429,7 @@ dependencies = [
  "serde_json",
  "serde_json_lenient",
  "settings",
+ "smallvec",
  "streaming_diff",
  "task",
  "tempfile",
@@ -474,19 +474,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ddd31a130427c27518df266943a5308ed92d4b226cc639f5a8f1002816174301"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "ai_onboarding"
-version = "0.1.0"
-dependencies = [
- "component",
- "gpui",
- "i18n",
- "language_model",
- "smallvec",
- "ui",
- "zed_actions",
 ]
 
 [[package]]
@@ -4571,7 +4558,6 @@ dependencies = [
 name = "edit_prediction"
 version = "0.1.0"
 dependencies = [
- "ai_onboarding",
  "anyhow",
  "buffer_diff",
  "client",
@@ -8431,7 +8417,6 @@ dependencies = [
 name = "language_models"
 version = "0.1.0"
 dependencies = [
- "ai_onboarding",
  "anthropic",
  "anyhow",
  "async-lock",

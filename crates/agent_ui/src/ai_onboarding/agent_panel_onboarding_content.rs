@@ -4,7 +4,7 @@ use gpui::{IntoElement, ParentElement};
 use language_model::LanguageModelRegistry;
 use ui::prelude::*;
 
-use crate::{AgentPanelOnboardingCard, ApiKeysWithoutProviders, ZedAiOnboarding};
+use super::{AgentPanelOnboardingCard, ApiKeysWithoutProviders, ZedAiOnboarding};
 
 pub struct AgentPanelOnboarding {
     has_configured_providers: bool,
