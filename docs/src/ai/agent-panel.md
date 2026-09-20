@@ -363,11 +363,4 @@ ZZZ's UI will inform you about this via a warning icon that appears close to the
 
 If you hit an error or unusual LLM behavior, open the thread as Markdown with `agent: open thread as markdown` and attach it to your GitHub issue.
 
-You can also open threads as Markdown by clicking on the file icon button, to the right of the thumbs down button, when focused on the panel's editor.
-
-## Feedback {#feedback}
-
-ZZZ does not collect agent ratings or conversation threads for training.
-See [Privacy and Security](./privacy-and-security.md).
-
-You can provide feedback on the thread at any point after the agent responds, and multiple times within the same thread.
+You can also open threads as Markdown by clicking on the file icon button when focused on the panel's editor.

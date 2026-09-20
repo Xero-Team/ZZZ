@@ -117,12 +117,6 @@ pub struct QueuedMessage {
     pub tracked_buffers: Vec<Entity<Buffer>>,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum ThreadFeedback {
-    Positive,
-    Negative,
-}
-
 #[derive(Debug)]
 pub(crate) enum ThreadError {
     PaymentRequired,

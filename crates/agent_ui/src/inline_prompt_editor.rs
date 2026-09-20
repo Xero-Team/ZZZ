@@ -1,5 +1,4 @@
 use agent::ThreadStore;
-use agent_settings::AgentSettings;
 use collections::{HashMap, VecDeque};
 use editor::actions::Paste;
 use editor::code_context_menus::CodeContextMenu;
@@ -10,8 +9,8 @@ use editor::{
 };
 use fs::Fs;
 use gpui::{
-    AnyElement, App, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    Subscription, TextStyle, TextStyleRefinement, WeakEntity, Window, actions,
+    AnyElement, App, Context, Entity, EventEmitter, FocusHandle, Focusable, Subscription,
+    TextStyle, TextStyleRefinement, WeakEntity, Window,
 };
 use i18n as app_i18n;
 use language_model::{LanguageModel, LanguageModelRegistry};
@@ -27,9 +26,7 @@ use std::sync::Arc;
 use theme_settings::ThemeSettings;
 use ui::utils::WithRemSize;
 use ui::{IconButtonShape, KeyBinding, PopoverMenuHandle, Tooltip, prelude::*};
-use uuid::Uuid;
-use workspace::notifications::NotificationId;
-use workspace::{Toast, Workspace};
+use workspace::Workspace;
 use zed_actions::{
     agent::ToggleModelSelector,
     editor::{MoveDown, MoveUp},
@@ -47,8 +44,6 @@ use crate::{
     CycleFavoriteModels, CycleNextInlineAssist, CyclePreviousInlineAssist, ModelUsageContext,
 };
 
-actions!(inline_assistant, [ThumbsUpResult, ThumbsDownResult]);
-
 fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()
 }
@@ -56,11 +51,9 @@ fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
 enum CompletionState {
     Pending,
     Generated,
-    Rated,
 }
 
 struct SessionState {
-    session_id: Uuid,
     completion: CompletionState,
 }
 
@@ -184,8 +177,6 @@ impl<T: 'static> Render for PromptEditor<T> {
                     .on_action(cx.listener(Self::cancel))
                     .on_action(cx.listener(Self::move_up))
                     .on_action(cx.listener(Self::move_down))
-                    .on_action(cx.listener(Self::thumbs_up))
-                    .on_action(cx.listener(Self::thumbs_down))
                     .capture_action(cx.listener(Self::cycle_prev))
                     .capture_action(cx.listener(Self::cycle_next))
                     .on_action(cx.listener(|this, _: &ToggleModelSelector, window, cx| {
@@ -595,109 +586,6 @@ impl<T: 'static> PromptEditor<T> {
         };
     }
 
-    fn thumbs_up(&mut self, _: &ThumbsUpResult, _window: &mut Window, cx: &mut Context<Self>) {
-        match &self.session_state.completion {
-            CompletionState::Pending => {
-                self.toast(
-                    &app_i18n::tr(
-                        cx,
-                        "agent_ui.inline_prompt.cant_rate_still_generating",
-                        "Can't rate, still generating...",
-                    ),
-                    None,
-                    cx,
-                );
-                return;
-            }
-            CompletionState::Rated => {
-                self.toast(
-                    &app_i18n::tr(
-                        cx,
-                        "agent_ui.inline_prompt.already_rated_this_completion",
-                        "Already rated this completion",
-                    ),
-                    Some(self.session_state.session_id),
-                    cx,
-                );
-                return;
-            }
-            CompletionState::Generated => {
-                self.session_state.completion = CompletionState::Rated;
-
-                cx.notify();
-            }
-        }
-    }
-
-    fn thumbs_down(&mut self, _: &ThumbsDownResult, _window: &mut Window, cx: &mut Context<Self>) {
-        match &self.session_state.completion {
-            CompletionState::Pending => {
-                self.toast(
-                    &app_i18n::tr(
-                        cx,
-                        "agent_ui.inline_prompt.cant_rate_still_generating",
-                        "Can't rate, still generating...",
-                    ),
-                    None,
-                    cx,
-                );
-                return;
-            }
-            CompletionState::Rated => {
-                self.toast(
-                    &app_i18n::tr(
-                        cx,
-                        "agent_ui.inline_prompt.already_rated_this_completion",
-                        "Already rated this completion",
-                    ),
-                    Some(self.session_state.session_id),
-                    cx,
-                );
-                return;
-            }
-            CompletionState::Generated => {
-                self.session_state.completion = CompletionState::Rated;
-
-                cx.notify();
-            }
-        }
-    }
-
-    fn toast(&mut self, msg: &str, uuid: Option<Uuid>, cx: &mut Context<'_, PromptEditor<T>>) {
-        self.workspace
-            .update(cx, |workspace, cx| {
-                enum InlinePromptRating {}
-                workspace.show_toast(
-                    {
-                        let mut toast = Toast::new(
-                            NotificationId::unique::<InlinePromptRating>(),
-                            msg.to_owned(),
-                        )
-                        .autohide();
-
-                        if let Some(uuid) = uuid {
-                            toast = toast.on_click(
-                                app_i18n::tr(
-                                    cx,
-                                    "agent_ui.inline_prompt.click_to_copy_rating_id",
-                                    "Click to copy rating ID",
-                                ),
-                                move |_, cx| {
-                                    cx.write_to_clipboard(ClipboardItem::new_string(
-                                        uuid.to_string(),
-                                    ));
-                                },
-                            );
-                        };
-
-                        toast
-                    },
-                    cx,
-                );
-            })
-            .ok();
-    }
-
     fn move_up(&mut self, _: &MoveUp, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(ix) = self.prompt_history_ix {
             if ix > 0 {
@@ -813,8 +701,6 @@ impl<T: 'static> PromptEditor<T> {
                             .into_any_element(),
                     ]
                 } else {
-                    let rated = matches!(self.session_state.completion, CompletionState::Rated);
-
                     let accept = IconButton::new("accept", IconName::Check)
                         .icon_color(Color::Info)
                         .shape(IconButtonShape::Square)
@@ -827,103 +713,6 @@ impl<T: 'static> PromptEditor<T> {
                         .into_any_element();
 
                     let mut buttons = Vec::new();
-
-                    if AgentSettings::get_global(cx).enable_feedback {
-                        buttons.push(
-                            h_flex()
-                                .pl_1()
-                                .gap_1()
-                                .border_l_1()
-                                .border_color(cx.theme().colors().border_variant)
-                                .child(
-                                    IconButton::new("thumbs-up", IconName::ThumbsUp)
-                                        .shape(IconButtonShape::Square)
-                                        .map(|this| {
-                                            if rated {
-                                                this.disabled(true)
-                                                    .icon_color(Color::Disabled)
-                                                    .tooltip(move |_, cx| {
-                                                        Tooltip::with_meta(
-                                                            tr(
-                                                                cx,
-                                                                "agent_ui.inline_prompt.good_result",
-                                                                "Good Result",
-                                                            ),
-                                                            None,
-                                                            tr(
-                                                                cx,
-                                                                "agent_ui.inline_prompt.already_rated_this_result",
-                                                                "You already rated this result",
-                                                            ),
-                                                            cx,
-                                                        )
-                                                    })
-                                            } else {
-                                                this.icon_color(Color::Muted).tooltip(
-                                                    move |_, cx| {
-                                                        Tooltip::for_action(
-                                                            tr(
-                                                                cx,
-                                                                "agent_ui.inline_prompt.good_result",
-                                                                "Good Result",
-                                                            ),
-                                                            &ThumbsUpResult,
-                                                            cx,
-                                                        )
-                                                    },
-                                                )
-                                            }
-                                        })
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.thumbs_up(&ThumbsUpResult, window, cx);
-                                        })),
-                                )
-                                .child(
-                                    IconButton::new("thumbs-down", IconName::ThumbsDown)
-                                        .shape(IconButtonShape::Square)
-                                        .map(|this| {
-                                            if rated {
-                                                this.disabled(true)
-                                                    .icon_color(Color::Disabled)
-                                                    .tooltip(move |_, cx| {
-                                                        Tooltip::with_meta(
-                                                            tr(
-                                                                cx,
-                                                                "agent_ui.inline_prompt.bad_result",
-                                                                "Bad Result",
-                                                            ),
-                                                            None,
-                                                            tr(
-                                                                cx,
-                                                                "agent_ui.inline_prompt.already_rated_this_result",
-                                                                "You already rated this result",
-                                                            ),
-                                                            cx,
-                                                        )
-                                                    })
-                                            } else {
-                                                this.icon_color(Color::Muted).tooltip(
-                                                    move |_, cx| {
-                                                        Tooltip::for_action(
-                                                            tr(
-                                                                cx,
-                                                                "agent_ui.inline_prompt.bad_result",
-                                                                "Bad Result",
-                                                            ),
-                                                            &ThumbsDownResult,
-                                                            cx,
-                                                        )
-                                                    },
-                                                )
-                                            }
-                                        })
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.thumbs_down(&ThumbsDownResult, window, cx);
-                                        })),
-                                )
-                                .into_any_element(),
-                        );
-                    }
 
                     buttons.push(accept);
 
@@ -1235,7 +1024,6 @@ impl PromptEditor<BufferCodegen> {
         prompt_history: VecDeque<String>,
         prompt_buffer: Entity<MultiBuffer>,
         codegen: Entity<BufferCodegen>,
-        session_id: Uuid,
         fs: Arc<dyn Fs>,
         thread_store: Entity<ThreadStore>,
         prompt_store: Option<Entity<PromptStore>>,
@@ -1306,7 +1094,6 @@ impl PromptEditor<BufferCodegen> {
             show_rate_limit_notice: false,
             mode,
             session_state: SessionState {
-                session_id,
                 completion: CompletionState::Pending,
             },
             _phantom: Default::default(),
@@ -1391,7 +1178,6 @@ impl PromptEditor<TerminalCodegen> {
         prompt_history: VecDeque<String>,
         prompt_buffer: Entity<MultiBuffer>,
         codegen: Entity<TerminalCodegen>,
-        session_id: Uuid,
         fs: Arc<dyn Fs>,
         thread_store: Entity<ThreadStore>,
         prompt_store: Option<Entity<PromptStore>>,
@@ -1457,7 +1243,6 @@ impl PromptEditor<TerminalCodegen> {
             mode,
             show_rate_limit_notice: false,
             session_state: SessionState {
-                session_id,
                 completion: CompletionState::Pending,
             },
             _phantom: Default::default(),
@@ -1730,7 +1515,6 @@ mod tests {
                     VecDeque::new(),
                     prompt_buffer,
                     codegen,
-                    session_id,
                     fs,
                     thread_store,
                     None,

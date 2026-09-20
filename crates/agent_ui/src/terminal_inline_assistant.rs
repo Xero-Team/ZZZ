@@ -86,7 +86,6 @@ impl TerminalInlineAssistant {
                 self.prompt_history.clone(),
                 prompt_buffer.clone(),
                 codegen,
-                session_id,
                 self.fs.clone(),
                 thread_store.clone(),
                 prompt_store.clone(),

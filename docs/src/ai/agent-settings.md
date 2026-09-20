@@ -363,16 +363,3 @@ It is set to `true` by default, but if set to false, the card will be fully coll
   }
 }
 ```
-
-### Feedback Controls
-
-Control whether to display the thumbs up/down buttons at the bottom of each agent response, allowing you to give ZZZ feedback about the agent's performance.
-The default value is `true`.
-
-```json [settings]
-{
-  "agent": {
-    "enable_feedback": false
-  }
-}
-```

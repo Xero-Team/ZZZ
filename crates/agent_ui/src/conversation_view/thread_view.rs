@@ -8,7 +8,6 @@ use std::cell::RefCell;
 
 use crate::message_editor::SharedSessionCapabilities;
 use acp_thread::{PlanEntry, SandboxAuthorizationDetails};
-use cloud_api_types::{SubmitAgentThreadFeedbackBody, SubmitAgentThreadFeedbackCommentsBody};
 use editor::actions::OpenExcerpts;
 
 use gpui::List;
@@ -82,155 +81,6 @@ fn localize_permission_label(cx: &App, label: &str) -> SharedString {
 
             label.into()
         }
-    }
-}
-
-#[derive(Default)]
-struct ThreadFeedbackState {
-    feedback: Option<ThreadFeedback>,
-    comments_editor: Option<Entity<Editor>>,
-}
-
-impl ThreadFeedbackState {
-    pub fn submit(
-        &mut self,
-        thread: Entity<AcpThread>,
-        feedback: ThreadFeedback,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        let Some(thread_snapshot_provider) =
-            thread.read(cx).connection().thread_snapshot_provider()
-        else {
-            return;
-        };
-
-        let project = thread.read(cx).project().read(cx);
-        let client = project.client();
-
-        if self.feedback == Some(feedback) {
-            return;
-        }
-
-        self.feedback = Some(feedback);
-        match feedback {
-            ThreadFeedback::Positive => {
-                self.comments_editor = None;
-            }
-            ThreadFeedback::Negative => {
-                self.comments_editor = Some(Self::build_feedback_comments_editor(window, cx));
-            }
-        }
-        let session_id = thread.read(cx).session_id().clone();
-        let parent_session_id = thread.read(cx).parent_session_id().cloned();
-        let agent_telemetry_id = thread.read(cx).connection().telemetry_id();
-        let task = thread_snapshot_provider.snapshot_for_thread(&session_id, cx);
-        let rating = match feedback {
-            ThreadFeedback::Positive => "positive",
-            ThreadFeedback::Negative => "negative",
-        };
-        cx.background_spawn(async move {
-            let thread = task.await?;
-
-            client
-                .cloud_client()
-                .submit_agent_feedback(SubmitAgentThreadFeedbackBody {
-                    organization_id: None,
-                    agent: agent_telemetry_id.to_string(),
-                    session_id: session_id.to_string(),
-                    parent_session_id: parent_session_id.map(|id| id.to_string()),
-                    rating: rating.to_owned(),
-                    thread,
-                })
-                .await?;
-
-            anyhow::Ok(())
-        })
-        .detach_and_log_err(cx);
-    }
-
-    pub fn submit_comments(&mut self, thread: Entity<AcpThread>, cx: &mut App) {
-        let Some(thread_snapshot_provider) =
-            thread.read(cx).connection().thread_snapshot_provider()
-        else {
-            return;
-        };
-
-        let Some(comments) = self
-            .comments_editor
-            .as_ref()
-            .map(|editor| editor.read(cx).text(cx))
-            .filter(|text| !text.trim().is_empty())
-        else {
-            return;
-        };
-
-        self.comments_editor.take();
-
-        let project = thread.read(cx).project().read(cx);
-        let client = project.client();
-
-        let session_id = thread.read(cx).session_id().clone();
-        let agent_telemetry_id = thread.read(cx).connection().telemetry_id();
-        let task = thread_snapshot_provider.snapshot_for_thread(&session_id, cx);
-        cx.background_spawn(async move {
-            let thread = task.await?;
-
-            client
-                .cloud_client()
-                .submit_agent_feedback_comments(SubmitAgentThreadFeedbackCommentsBody {
-                    organization_id: None,
-                    agent: agent_telemetry_id.to_string(),
-                    session_id: session_id.to_string(),
-                    comments,
-                    thread,
-                })
-                .await?;
-
-            anyhow::Ok(())
-        })
-        .detach_and_log_err(cx);
-    }
-
-    pub fn clear(&mut self) {
-        *self = Self::default()
-    }
-
-    pub fn dismiss_comments(&mut self) {
-        self.comments_editor.take();
-    }
-
-    fn build_feedback_comments_editor(window: &mut Window, cx: &mut App) -> Entity<Editor> {
-        let buffer = cx.new(|cx| {
-            let empty_string = String::new();
-            MultiBuffer::singleton(cx.new(|cx| Buffer::local(empty_string, cx)), cx)
-        });
-
-        let editor = cx.new(|cx| {
-            let mut editor = Editor::new(
-                editor::EditorMode::AutoHeight {
-                    min_lines: 1,
-                    max_lines: Some(4),
-                },
-                buffer,
-                None,
-                window,
-                cx,
-            );
-            editor.set_placeholder_text(
-                &app_i18n::tr(
-                    cx,
-                    "agent_ui.thread_view.feedback.placeholder",
-                    "What went wrong? Share your feedback so we can improve.",
-                ),
-                window,
-                cx,
-            );
-            editor
-        });
-
-        editor.read(cx).focus_handle(cx).focus(window, cx);
-        editor
     }
 }
 
@@ -626,7 +476,6 @@ pub struct ThreadView {
     pub thread_error_markdown: Option<Entity<Markdown>>,
     pub token_limit_callout_dismissed: bool,
     pub last_token_limit_telemetry: Option<acp_thread::TokenUsageRatio>,
-    thread_feedback: ThreadFeedbackState,
     pub list_state: ListState,
     pub session_capabilities: SharedSessionCapabilities,
     /// Tracks which tool calls have their content/output expanded.
@@ -887,7 +736,6 @@ impl ThreadView {
             thread_error_markdown: None,
             token_limit_callout_dismissed: false,
             last_token_limit_telemetry: None,
-            thread_feedback: Default::default(),
             expanded_tool_calls: HashSet::default(),
             expanded_tool_call_raw_inputs: HashSet::default(),
             collapsed_sandbox_authorization_details: HashSet::default(),
@@ -1318,7 +1166,6 @@ impl ThreadView {
         let contents = self.resolve_message_contents(&message_editor, cx);
 
         self.thread_error.take();
-        self.thread_feedback.clear();
         self.editing_message.take();
 
         if self.should_be_following {
@@ -5097,8 +4944,6 @@ impl ThreadView {
         let is_assistant = matches!(entry, AgentThreadEntry::AssistantMessage(_));
         let needs_confirmation = Self::is_waiting_for_confirmation(entry);
 
-        let comments_editor = self.thread_feedback.comments_editor.clone();
-
         let primary = if entry_ix + 1 == total_entries {
             let last_assistant_index = thread
                 .read(cx)
@@ -5118,9 +4963,6 @@ impl ThreadView {
                         None,
                         cx,
                     ))
-                })
-                .when_some(comments_editor, |this, editor| {
-                    this.child(Self::render_feedback_feedback_editor(editor, cx))
                 })
                 .into_any_element()
         } else {
@@ -5150,48 +4992,6 @@ impl ThreadView {
         } else {
             primary
         }
-    }
-
-    fn render_feedback_feedback_editor(editor: Entity<Editor>, cx: &Context<Self>) -> Div {
-        h_flex()
-            .key_context("AgentFeedbackMessageEditor")
-            .on_action(cx.listener(move |this, _: &menu::Cancel, _, cx| {
-                this.thread_feedback.dismiss_comments();
-                cx.notify();
-            }))
-            .on_action(cx.listener(move |this, _: &menu::Confirm, _window, cx| {
-                this.submit_feedback_message(cx);
-            }))
-            .p_2()
-            .mb_2()
-            .mx_5()
-            .gap_1()
-            .rounded_md()
-            .border_1()
-            .border_color(cx.theme().colors().border)
-            .bg(cx.theme().colors().editor_background)
-            .child(div().w_full().child(editor))
-            .child(
-                h_flex()
-                    .child(
-                        IconButton::new("dismiss-feedback-message", IconName::Close)
-                            .icon_color(Color::Error)
-                            .icon_size(IconSize::XSmall)
-                            .shape(ui::IconButtonShape::Square)
-                            .on_click(cx.listener(move |this, _, _window, cx| {
-                                this.thread_feedback.dismiss_comments();
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        IconButton::new("submit-feedback-message", IconName::Return)
-                            .icon_size(IconSize::XSmall)
-                            .shape(ui::IconButtonShape::Square)
-                            .on_click(cx.listener(move |this, _, _window, cx| {
-                                this.submit_feedback_message(cx);
-                            })),
-                    ),
-            )
     }
 
     /// A turn ends when no further assistant output (message or tool call)
@@ -5332,7 +5132,7 @@ impl ThreadView {
             })
             .flatten();
 
-        let mut container = h_flex()
+        let container = h_flex()
             .w_full()
             .py_2()
             .px_5()
@@ -5352,94 +5152,6 @@ impl ThreadView {
                     )
                 },
             );
-
-        if is_thread_bottom
-            && util::maybe!({
-                AgentSettings::get_global(cx).enable_feedback
-                    && self
-                        .thread
-                        .read(cx)
-                        .connection()
-                        .thread_snapshot_provider()
-                        .is_some()
-            })
-        {
-            let feedback = self.thread_feedback.feedback;
-            let feedback_tooltip_meta = tr(
-                cx,
-                "agent_ui.thread_view.feedback.tooltip_meta",
-                "Rating the thread sends all of your current conversation to the ZZZ team.",
-            );
-            let thanks_for_feedback = tr(
-                cx,
-                "agent_ui.thread_view.feedback.thanks",
-                "Thanks for your feedback!",
-            );
-            let helpful_response = tr(
-                cx,
-                "agent_ui.thread_view.feedback.helpful_response",
-                "Helpful Response",
-            );
-            let feedback_tooltip_meta_positive = feedback_tooltip_meta.clone();
-            let improve_future = tr(
-                cx,
-                "agent_ui.thread_view.feedback.improve_future",
-                "We appreciate your feedback and will use it to improve in the future.",
-            );
-            let not_helpful_response = tr(
-                cx,
-                "agent_ui.thread_view.feedback.not_helpful_response",
-                "Not Helpful Response",
-            );
-
-            container = container
-                .child(
-                    IconButton::new("feedback-thumbs-up", IconName::ThumbsUp)
-                        .shape(ui::IconButtonShape::Square)
-                        .icon_size(IconSize::Small)
-                        .icon_color(match feedback {
-                            Some(ThreadFeedback::Positive) => Color::Accent,
-                            _ => Color::Ignored,
-                        })
-                        .tooltip(move |window, cx| match feedback {
-                            Some(ThreadFeedback::Positive) => {
-                                Tooltip::text(thanks_for_feedback.clone())(window, cx)
-                            }
-                            _ => Tooltip::with_meta(
-                                helpful_response.clone(),
-                                None,
-                                feedback_tooltip_meta_positive.clone(),
-                                cx,
-                            ),
-                        })
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.handle_feedback_click(ThreadFeedback::Positive, window, cx);
-                        })),
-                )
-                .child(
-                    IconButton::new("feedback-thumbs-down", IconName::ThumbsDown)
-                        .shape(ui::IconButtonShape::Square)
-                        .icon_size(IconSize::Small)
-                        .icon_color(match feedback {
-                            Some(ThreadFeedback::Negative) => Color::Accent,
-                            _ => Color::Ignored,
-                        })
-                        .tooltip(move |window, cx| match feedback {
-                            Some(ThreadFeedback::Negative) => {
-                                Tooltip::text(improve_future.clone())(window, cx)
-                            }
-                            _ => Tooltip::with_meta(
-                                not_helpful_response.clone(),
-                                None,
-                                feedback_tooltip_meta.clone(),
-                                cx,
-                            ),
-                        })
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.handle_feedback_click(ThreadFeedback::Negative, window, cx);
-                        })),
-                );
-        }
 
         container
             .when_some(open_as_markdown, |this, button| this.child(button))
@@ -5478,23 +5190,6 @@ impl ThreadView {
 
     pub fn scroll_to_end(&mut self, cx: &mut Context<Self>) {
         self.list_state.scroll_to_end();
-        cx.notify();
-    }
-
-    fn handle_feedback_click(
-        &mut self,
-        feedback: ThreadFeedback,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.thread_feedback
-            .submit(self.thread.clone(), feedback, window, cx);
-        cx.notify();
-    }
-
-    fn submit_feedback_message(&mut self, cx: &mut Context<Self>) {
-        let thread = self.thread.clone();
-        self.thread_feedback.submit_comments(thread, cx);
         cx.notify();
     }
 

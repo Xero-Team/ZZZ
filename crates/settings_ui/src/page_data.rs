@@ -9074,24 +9074,6 @@ fn ai_page(cx: &App) -> SettingsPage {
                 files: USER,
             }),
             SettingsPageItem::SettingItem(SettingItem {
-                title: lt("settings_ui.page_data.title.enable.feedback", "Enable Feedback"),
-                description: lt("settings_ui.page_data.description.show.voting.thumbs.up.down.icon.buttons.for.feedback.on.agent.edits", "Show voting thumbs up/down icon buttons for feedback on agent edits."),
-                field: Box::new(SettingField {
-                    json_path: Some("agent.enable_feedback"),
-                    pick: |settings_content| {
-                        settings_content.agent.as_ref()?.enable_feedback.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .agent
-                            .get_or_insert_default()
-                            .enable_feedback = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
                 title: lt("settings_ui.page_data.title.notify.when.agent.waiting", "Notify When Agent Waiting"),
                 description: lt("settings_ui.page_data.description.where.to.show.notifications.when.the.agent.has.completed.its.response.or.needs.confirmation.before.running.a.tool.action", "Where to show notifications when the agent has completed its response or needs confirmation before running a tool action."),
                 field: Box::new(SettingField {
