@@ -205,7 +205,7 @@ is gone.
   must be false. Remove `rand::random_ratio(1, 1000)` capture.
 - `crates/edit_prediction/src/zeta.rs`: do not attach repo URLs or
   capture payloads for training.
-- `crates/edit_prediction/src/zed_edit_prediction_delegate.rs`: remove
+- `crates/edit_prediction/src/zzz_edit_prediction_delegate.rs`: remove
   data-collection toggle API usage from the product UI path.
 - `crates/edit_prediction_ui/src/edit_prediction_button.rs`: remove
   "Training Data Collection" menu and "Powered by Zeta".
@@ -229,7 +229,7 @@ is gone.
   `build_zed_extension_marketplace_url` → `api.zed.dev`. Cloud/LLM URL
   builders must not map an unset local `server_url` onto
   `cloud.zed.dev`.
-- `crates/client/src/zed_urls.rs`: keep `about:blank`; fix comments that
+- `crates/client/src/zzz_urls.rs`: keep `about:blank`; fix comments that
   still say "Zed AI".
 
 ### Group 5 — Defaults and locales
