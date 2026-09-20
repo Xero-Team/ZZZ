@@ -867,7 +867,7 @@ impl Fs for RealFs {
 
     async fn trash(&self, path: &Path, _options: RemoveOptions) -> Result<TrashedEntry> {
         // We must make the path absolute or trash will make a weird abomination
-        // of the zed working directory (not usually the worktree) and whatever
+        // of the zzz working directory (not usually the worktree) and whatever
         // the path variable holds.
         // We deliberately avoid `canonicalize` here so trashing a symlink
         // moves the link itself instead of resolving and trashing its target.

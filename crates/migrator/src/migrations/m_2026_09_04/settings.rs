@@ -62,7 +62,7 @@ fn map_provider_to_none(obj: &mut serde_json::Map<String, Value>, field_name: &s
     let Some(Value::String(provider)) = obj.get(field_name) else {
         return;
     };
-    if matches!(provider.as_str(), "zed" | "mercury" | "sweep") {
+    if matches!(provider.as_str(), "zzz" | "mercury" | "sweep") {
         obj.insert(field_name.to_owned(), Value::String("none".to_owned()));
     }
 }

@@ -198,7 +198,7 @@ fn render_api_key_provider(
     cx: &mut Context<SettingsWindow>,
 ) -> impl IntoElement {
     let weak_page = cx.weak_entity();
-    let credentials_provider = zed_credentials_provider::global(cx);
+    let credentials_provider = zzz_credentials_provider::global(cx);
     _ = window.use_keyed_state(current_url(cx), cx, |_, cx| {
         let task = api_key_state.update(cx, |key_state, cx| {
             key_state.load_if_needed(
@@ -227,7 +227,7 @@ fn render_api_key_provider(
     });
 
     let write_key = move |api_key: Option<String>, cx: &mut App| {
-        let credentials_provider = zed_credentials_provider::global(cx);
+        let credentials_provider = zzz_credentials_provider::global(cx);
         api_key_state
             .update(cx, |key_state, cx| {
                 let url = current_url(cx);
@@ -330,7 +330,7 @@ fn render_api_key_provider(
                                     tr(
                                         cx,
                                         "settings_ui.edit_prediction_provider_setup.env_var_and_restart_zzz",
-                                        "env var and restart Zed.",
+                                        "env var and restart ZZZ.",
                                     ),
                                 );
                                 Label::new(label).size(LabelSize::Small).color(Color::Muted)

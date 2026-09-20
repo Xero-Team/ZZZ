@@ -4,7 +4,7 @@ use gpui::{IntoElement, ParentElement};
 use i18n as app_i18n;
 use ui::prelude::*;
 
-use super::ZedAiOnboarding;
+use super::ZZZAiOnboarding;
 
 pub struct EditPredictionOnboarding {
     dismiss: Arc<dyn Fn(&mut Window, &mut App)>,
@@ -18,7 +18,7 @@ impl EditPredictionOnboarding {
 
 impl Render for EditPredictionOnboarding {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex().gap_2().child(ZedAiOnboarding::new()).child(
+        v_flex().gap_2().child(ZZZAiOnboarding::new()).child(
             Button::new(
                 "use-local-provider",
                 app_i18n::tr(

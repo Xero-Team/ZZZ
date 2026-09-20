@@ -15,7 +15,7 @@
   <!-- TODO: Use the ZZZ signing certificate here. -->
   <Identity
     Name="ZZZIndustries.ZZZ"
-    Publisher="CN=Zed Industries Inc, O=Zed Industries Inc, L=Denver, S=Colorado, C=US"
+    Publisher="CN=Xero Team, O=Xero Team, L=Denver, S=Colorado, C=US"
     Version="1.0.0.0" />
   <Properties>
     <DisplayName>ZZZ</DisplayName>
@@ -69,7 +69,7 @@
         <com:Extension Category="windows.comServer">
           <com:ComServer>
             <com:SurrogateServer DisplayName="ZZZ">
-              <com:Class Id="6a1f6b13-3b82-48a1-9e06-7bb0a6d0bffd" Path="zed_explorer_command_injector.dll" ThreadingModel="STA"/>
+              <com:Class Id="6a1f6b13-3b82-48a1-9e06-7bb0a6d0bffd" Path="zzz_explorer_command_injector.dll" ThreadingModel="STA"/>
             </com:SurrogateServer>
           </com:ComServer>
         </com:Extension>

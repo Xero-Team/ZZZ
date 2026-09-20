@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use client::zed_urls;
+use client::zzz_urls;
 use collections::HashMap;
 use editor::{Editor, EditorElement, EditorStyle};
 use fs::Fs;
@@ -700,7 +700,7 @@ impl Render for AgentRegistryPage {
                                         .color(Color::Muted),
                                 )
                                 .on_click(move |_, _, cx| {
-                                    cx.open_url(&zed_urls::acp_registry_blog(cx))
+                                    cx.open_url(&zzz_urls::acp_registry_blog(cx))
                                 }),
                             ),
                     )

@@ -345,7 +345,7 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
     assert_eq!(Some(settings_e.tab_size), NonZeroU32::new(5));
     assert_eq!(settings_e.hard_tabs, false);
     // An empty value opts out of the inherited `max_line_length = 120`,
-    // falling back to .zed/settings.json instead of rejecting the whole file.
+    // falling back to .zzz/settings.json instead of rejecting the whole file.
     assert_eq!(settings_e.preferred_line_length, 64);
 
     // "indent_size" is not set, so "tab_width" is used
@@ -1209,7 +1209,7 @@ async fn test_invalid_local_tasks_shows_toast(cx: &mut gpui::TestAppContext) {
     // later assert that the `Event::Toast` even is emitted.
     fs.save(
         path!("/dir/.ZZZ/tasks.json").as_ref(),
-        &r#"[{ "label": "test $ZED_FOO", "command": "echo" }]"#.into(),
+        &r#"[{ "label": "test $ZZZ_FOO", "command": "echo" }]"#.into(),
         Default::default(),
     )
     .await
@@ -1225,7 +1225,7 @@ async fn test_invalid_local_tasks_shows_toast(cx: &mut gpui::TestAppContext) {
                 link,
             } => {
                 assert!(notification_id.starts_with("local-tasks-"));
-                assert!(message.contains("ZED_FOO"));
+                assert!(message.contains("ZZZ_FOO"));
                 assert!(link.is_none());
                 *saw_toast.borrow_mut() = true;
             }
@@ -1253,7 +1253,7 @@ async fn test_fallback_to_single_worktree_tasks(cx: &mut gpui::TestAppContext) {
             ".ZZZ": {
                 "tasks.json": r#"[{
                     "label": "test worktree root",
-                    "command": "echo $ZED_WORKTREE_ROOT"
+                    "command": "echo $ZZZ_WORKTREE_ROOT"
                 }]"#,
             },
             "a": {
@@ -1290,7 +1290,7 @@ async fn test_fallback_to_single_worktree_tasks(cx: &mut gpui::TestAppContext) {
         .await;
     assert!(
         active_non_worktree_item_tasks.is_empty(),
-        "A task can not be resolved with context with no ZED_WORKTREE_ROOT data"
+        "A task can not be resolved with context with no ZZZ_WORKTREE_ROOT data"
     );
 
     let active_worktree_tasks = cx
@@ -12913,7 +12913,7 @@ async fn test_project_group_key_groups_nested_linked_worktree_under_main_repo(
     )
     .await;
 
-    let linked_worktree_path = PathBuf::from(path!("/root/my-repo/.zed/worktrees/feature"));
+    let linked_worktree_path = PathBuf::from(path!("/root/my-repo/.zzz/worktrees/feature"));
     fs.add_linked_worktree_for_repo(
         Path::new(path!("/root/my-repo/.git")),
         false,
@@ -12940,7 +12940,7 @@ async fn test_project_group_key_groups_nested_linked_worktree_under_main_repo(
     assert_eq!(
         project_worktree_paths(&project, cx),
         (
-            vec![PathBuf::from(path!("/root/my-repo/.zed/worktrees/feature"))],
+            vec![PathBuf::from(path!("/root/my-repo/.zzz/worktrees/feature"))],
             vec![PathBuf::from(path!("/root/my-repo"))],
         )
     );
@@ -14791,7 +14791,7 @@ fn git_remove_index(path: &Path, repo: &git2::Repository) {
 fn git_commit(msg: &'static str, repo: &git2::Repository) {
     use git2::Signature;
 
-    let signature = Signature::now("test", "test@zed.dev").unwrap();
+    let signature = Signature::now("test", "test@zzz.dev").unwrap();
     let oid = repo.index().unwrap().write_tree().unwrap();
     let tree = repo.find_tree(oid).unwrap();
     if let Ok(head) = repo.head() {
@@ -14824,7 +14824,7 @@ fn git_cherry_pick(commit: &git2::Commit<'_>, repo: &git2::Repository) {
 fn git_stash(repo: &mut git2::Repository) {
     use git2::Signature;
 
-    let signature = Signature::now("test", "test@zed.dev").unwrap();
+    let signature = Signature::now("test", "test@zzz.dev").unwrap();
     repo.stash_save(&signature, "N/A", None)
         .expect("Failed to stash");
 }

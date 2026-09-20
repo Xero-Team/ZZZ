@@ -611,7 +611,7 @@ impl MentionSet {
         Task::ready(Err(anyhow!(app_i18n::tr(
             cx,
             "agent_ui.mention_set.thread_mentions_no_longer_supported",
-            "Thread mentions are no longer supported: the built-in Zed Agent has been removed.",
+            "Thread mentions are no longer supported: the built-in ZZZ Agent has been removed.",
         ))))
     }
 

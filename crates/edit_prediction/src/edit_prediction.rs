@@ -3,7 +3,7 @@ use client::{Client, UserStore};
 use cloud_llm_client::{
     EditPredictionRejectReason, EditPredictionRejection,
     MAX_EDIT_PREDICTION_REJECTIONS_PER_REQUEST, MINIMUM_REQUIRED_VERSION_HEADER_NAME,
-    PredictEditsRequestTrigger, RejectEditPredictionsBodyRef, ZED_VERSION_HEADER_NAME,
+    PredictEditsRequestTrigger, RejectEditPredictionsBodyRef, ZZZ_VERSION_HEADER_NAME,
 };
 use collections::{HashMap, HashSet};
 use copilot::{Copilot, Reinstall, SignIn, SignOut};
@@ -55,8 +55,8 @@ mod prediction;
 pub mod udiff;
 
 pub mod open_ai_compatible;
-mod zed_edit_prediction_delegate;
 pub mod zeta;
+mod zzz_edit_prediction_delegate;
 
 #[cfg(test)]
 mod edit_prediction_tests;
@@ -67,7 +67,7 @@ pub use crate::prediction::EditPrediction;
 pub use crate::prediction::EditPredictionId;
 use crate::prediction::EditPredictionResult;
 pub use language_model::ApiKeyState;
-pub use zed_edit_prediction_delegate::ZedEditPredictionDelegate;
+pub use zzz_edit_prediction_delegate::ZZZEditPredictionDelegate;
 
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
@@ -718,11 +718,11 @@ impl EditPredictionStore {
         use ui::IconName;
         match self.edit_prediction_model {
             EditPredictionModel::Zeta => {
-                edit_prediction_types::EditPredictionIconSet::new(IconName::ZedPredict)
-                    .with_disabled(IconName::ZedPredictDisabled)
-                    .with_up(IconName::ZedPredictUp)
-                    .with_down(IconName::ZedPredictDown)
-                    .with_error(IconName::ZedPredictError)
+                edit_prediction_types::EditPredictionIconSet::new(IconName::ZZZPredict)
+                    .with_disabled(IconName::ZZZPredictDisabled)
+                    .with_up(IconName::ZZZPredictUp)
+                    .with_down(IconName::ZZZPredictDown)
+                    .with_error(IconName::ZZZPredictError)
             }
             EditPredictionModel::Fim { .. } => {
                 let settings = &all_language_settings(None, cx).edit_predictions;
@@ -1270,7 +1270,7 @@ impl EditPredictionStore {
 
             let url = client
                 .http_client()
-                .build_zed_llm_url("/predict_edits/reject", &[])
+                .build_zzz_llm_url("/predict_edits/reject", &[])
                 .unwrap();
 
             let flush_count = batched
@@ -2046,7 +2046,7 @@ impl EditPredictionStore {
         let request_builder = http_client::Request::builder()
             .method(Method::POST)
             .header("Content-Type", "application/json")
-            .header(ZED_VERSION_HEADER_NAME, app_version.to_string());
+            .header(ZZZ_VERSION_HEADER_NAME, app_version.to_string());
 
         let request = build(request_builder)?;
 
@@ -2059,7 +2059,7 @@ impl EditPredictionStore {
         {
             anyhow::ensure!(
                 app_version >= minimum_required_version,
-                ZedUpdateRequiredError {
+                ZZZUpdateRequiredError {
                     minimum_version: minimum_required_version
                 }
             );
@@ -2263,7 +2263,7 @@ fn merge_anchor_ranges(
 #[error(
     "You must update to ZZZ version {minimum_version} or higher to continue using edit predictions."
 )]
-pub struct ZedUpdateRequiredError {
+pub struct ZZZUpdateRequiredError {
     minimum_version: Version,
 }
 

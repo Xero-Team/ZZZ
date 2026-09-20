@@ -1,5 +1,5 @@
 [package]
-name = "zed_glsl"
+name = "zzz_glsl"
 version = "0.2.3"
 edition.workspace = true
 publish.workspace = true
@@ -13,4 +13,4 @@ path = "src/glsl.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-zed_extension_api = "0.7.0"
+zzz_extension_api = { path = "../../crates/extension_api" }

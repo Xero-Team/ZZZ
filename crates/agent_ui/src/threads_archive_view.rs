@@ -44,8 +44,8 @@ use workspace::{
     WorkspaceDb, WorkspaceId,
 };
 
-use zed_actions::agents_sidebar::FocusSidebarFilter;
-use zed_actions::editor::{MoveDown, MoveUp};
+use zzz_actions::agents_sidebar::FocusSidebarFilter;
+use zzz_actions::editor::{MoveDown, MoveUp};
 
 fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()
@@ -652,8 +652,8 @@ impl ThreadsArchiveView {
                     .upgrade()
                     .and_then(|store| store.read(cx).agent_icon(&thread.agent_id));
 
-                let icon = if thread.agent_id.as_ref() == agent::ZED_AGENT_ID.as_ref() {
-                    IconName::ZedAgent
+                let icon = if thread.agent_id.as_ref() == agent::ZZZ_AGENT_ID.as_ref() {
+                    IconName::ZZZAgent
                 } else {
                     IconName::Sparkle
                 };

@@ -1484,7 +1484,7 @@ impl OutlinePanel {
                 .separator()
                 .action(
                     tr(cx, "project_panel.menu.copy_path", "Copy Path"),
-                    Box::new(zed_actions::workspace::CopyPath),
+                    Box::new(zzz_actions::workspace::CopyPath),
                 )
                 .action(
                     tr(
@@ -1492,7 +1492,7 @@ impl OutlinePanel {
                         "project_panel.menu.copy_relative_path",
                         "Copy Relative Path",
                     ),
-                    Box::new(zed_actions::workspace::CopyRelativePath),
+                    Box::new(zzz_actions::workspace::CopyRelativePath),
                 )
         });
         window.focus(&context_menu.focus_handle(cx), cx);
@@ -1985,7 +1985,7 @@ impl OutlinePanel {
 
     fn copy_path(
         &mut self,
-        _: &zed_actions::workspace::CopyPath,
+        _: &zzz_actions::workspace::CopyPath,
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -2000,7 +2000,7 @@ impl OutlinePanel {
 
     fn copy_relative_path(
         &mut self,
-        _: &zed_actions::workspace::CopyRelativePath,
+        _: &zzz_actions::workspace::CopyRelativePath,
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {

@@ -19,11 +19,11 @@ fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
 }
 
 #[derive(RegisterComponent, IntoElement)]
-pub struct ZedAiOnboarding {
+pub struct ZZZAiOnboarding {
     pub dismiss_onboarding: Option<Arc<dyn Fn(&mut Window, &mut App)>>,
 }
 
-impl ZedAiOnboarding {
+impl ZZZAiOnboarding {
     pub fn new() -> Self {
         Self {
             dismiss_onboarding: None,
@@ -87,13 +87,13 @@ impl ZedAiOnboarding {
     }
 }
 
-impl RenderOnce for ZedAiOnboarding {
+impl RenderOnce for ZZZAiOnboarding {
     fn render(self, _window: &mut ui::Window, cx: &mut App) -> impl IntoElement {
         self.render_configure_local_provider(cx)
     }
 }
 
-impl Component for ZedAiOnboarding {
+impl Component for ZZZAiOnboarding {
     fn scope() -> ComponentScope {
         ComponentScope::Onboarding
     }
@@ -110,7 +110,7 @@ impl Component for ZedAiOnboarding {
                 .max_w(px(1100.))
                 .child(
                     AgentPanelOnboardingCard::new()
-                        .child(ZedAiOnboarding::new().into_any_element()),
+                        .child(ZZZAiOnboarding::new().into_any_element()),
                 )
                 .into_any_element()
         }

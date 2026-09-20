@@ -27,7 +27,7 @@ use theme_settings::ThemeSettings;
 use ui::utils::WithRemSize;
 use ui::{IconButtonShape, KeyBinding, PopoverMenuHandle, Tooltip, prelude::*};
 use workspace::Workspace;
-use zed_actions::{
+use zzz_actions::{
     agent::ToggleModelSelector,
     editor::{MoveDown, MoveUp},
 };
@@ -413,7 +413,7 @@ impl<T: 'static> PromptEditor<T> {
         };
 
         let agent_panel_keybinding =
-            ui::text_for_action(&zed_actions::assistant::ToggleFocus, window, cx)
+            ui::text_for_action(&zzz_actions::assistant::ToggleFocus, window, cx)
                 .map(|keybinding| {
                     app_i18n::tr(
                         cx,

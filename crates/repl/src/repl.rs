@@ -29,21 +29,21 @@ pub use crate::session::Session;
 pub const KERNEL_DOCS_URL: &str = "https://codeberg.org/ZZZEditor/ZZZ";
 
 pub fn init(fs: Arc<dyn Fs>, cx: &mut App) {
-    set_dispatcher(zed_dispatcher(cx));
+    set_dispatcher(zzz_dispatcher(cx));
     repl_sessions_ui::init(cx);
     ReplStore::init(fs, cx);
 }
 
-fn zed_dispatcher(cx: &mut App) -> impl Dispatcher {
-    struct ZedDispatcher {
+fn zzz_dispatcher(cx: &mut App) -> impl Dispatcher {
+    struct ZZZDispatcher {
         dispatcher: Arc<dyn PlatformDispatcher>,
     }
 
     // PlatformDispatcher is _super_ close to the same interface we put in
     // async-dispatcher, except for the task label in dispatch. Later we should
     // just make that consistent so we have this dispatcher ready to go for
-    // other crates in Zed.
-    impl Dispatcher for ZedDispatcher {
+    // other crates in ZZZ.
+    impl Dispatcher for ZZZDispatcher {
         #[track_caller]
         fn dispatch(&self, runnable: Runnable) {
             let location = core::panic::Location::caller();
@@ -71,7 +71,7 @@ fn zed_dispatcher(cx: &mut App) -> impl Dispatcher {
         }
     }
 
-    ZedDispatcher {
+    ZZZDispatcher {
         dispatcher: cx.background_executor().dispatcher().clone(),
     }
 }

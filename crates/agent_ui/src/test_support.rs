@@ -75,7 +75,7 @@ where
     C: 'static + AgentConnection + Send + Clone,
 {
     fn logo(&self) -> ui::IconName {
-        ui::IconName::ZedAgent
+        ui::IconName::ZZZAgent
     }
 
     fn agent_id(&self) -> AgentId {
@@ -126,7 +126,7 @@ pub async fn fake_worktree_created_at(fs: &dyn fs::Fs, worktree_path: &Path) -> 
     UNIX_EPOCH + Duration::new(seconds, nanos)
 }
 
-pub async fn record_zed_created_worktree(
+pub async fn record_zzz_created_worktree(
     fs: &dyn fs::Fs,
     worktree_path: &Path,
     remote: Option<&remote::RemoteConnectionOptions>,

@@ -519,10 +519,10 @@ fn render_registry_agent_button(
         })
 }
 
-fn render_zed_agent_button(_user_store: &Entity<UserStore>, cx: &mut App) -> impl IntoElement {
-    AgentSetupButton::new("zed-agent-onboarding")
+fn render_zzz_agent_button(_user_store: &Entity<UserStore>, cx: &mut App) -> impl IntoElement {
+    AgentSetupButton::new("zzz-agent-onboarding")
         .icon(
-            Icon::new(IconName::ZedAgent)
+            Icon::new(IconName::ZZZAgent)
                 .size(IconSize::XSmall)
                 .color(Color::Muted),
         )
@@ -558,7 +558,7 @@ fn render_ai_section(user_store: &Entity<UserStore>, cx: &mut App) -> impl IntoE
             .grid()
             .grid_cols(column_count)
             .gap_2()
-            .child(render_zed_agent_button(user_store, cx)),
+            .child(render_zzz_agent_button(user_store, cx)),
         |grid, agent_id| {
             let Some(agent) = registry_agents
                 .iter()

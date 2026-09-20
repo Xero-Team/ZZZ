@@ -146,12 +146,12 @@ mod tests {
 
     #[test]
     fn borrowed_and_owned_arc_cow_compare_equally() {
-        let borrowed: ArcCow<'_, str> = ArcCow::from("zed");
-        let owned: ArcCow<'_, str> = ArcCow::from(String::from("zed"));
+        let borrowed: ArcCow<'_, str> = ArcCow::from("zzz");
+        let owned: ArcCow<'_, str> = ArcCow::from(String::from("zzz"));
 
         assert_eq!(borrowed, owned);
-        assert_eq!(borrowed.as_ref(), "zed");
-        assert_eq!(&*owned, "zed");
+        assert_eq!(borrowed.as_ref(), "zzz");
+        assert_eq!(&*owned, "zzz");
     }
 
     #[test]

@@ -502,13 +502,13 @@ mod tests {
 
     #[test]
     fn test_user_agent_helpers() {
-        let client = ReqwestClient::user_agent("zed-test-agent/1.0").unwrap();
+        let client = ReqwestClient::user_agent("zzz-test-agent/1.0").unwrap();
         assert_eq!(client.proxy(), None);
 
-        let proxied = ReqwestClient::proxy_and_user_agent(None, "zed-test-agent/2.0").unwrap();
+        let proxied = ReqwestClient::proxy_and_user_agent(None, "zzz-test-agent/2.0").unwrap();
         assert_eq!(
             proxied.user_agent().and_then(|value| value.to_str().ok()),
-            Some("zed-test-agent/2.0")
+            Some("zzz-test-agent/2.0")
         );
         assert_eq!(proxied.proxy(), None);
     }

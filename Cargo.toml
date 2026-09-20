@@ -211,11 +211,11 @@ members = [
     "crates/worktree",
     "crates/worktree_benchmarks",
     "crates/x_ai",
-    "crates/zed",
-    "crates/zed_actions",
+    "crates/zzz",
+    "crates/zzz_actions",
     "crates/windows_resources",
-    "crates/zed_credentials_provider",
-    "crates/zed_env_vars",
+    "crates/zzz_credentials_provider",
+    "crates/zzz_env_vars",
     "crates/zeta_prompt",
     "crates/zlog",
     "crates/zlog_settings",
@@ -239,7 +239,7 @@ members = [
     "tooling/perf",
     "tooling/xtask",
 ]
-default-members = ["crates/zed"]
+default-members = ["crates/zzz"]
 
 [workspace.package]
 publish = false
@@ -458,10 +458,10 @@ web_search_providers = { path = "crates/web_search_providers" }
 workspace = { path = "crates/workspace" }
 worktree = { path = "crates/worktree" }
 x_ai = { path = "crates/x_ai" }
-zed = { package = "zzz", path = "crates/zed" }
-zed_actions = { path = "crates/zed_actions" }
-zed_credentials_provider = { path = "crates/zed_credentials_provider" }
-zed_env_vars = { path = "crates/zed_env_vars" }
+zzz = { package = "zzz", path = "crates/zzz" }
+zzz_actions = { path = "crates/zzz_actions" }
+zzz_credentials_provider = { path = "crates/zzz_credentials_provider" }
+zzz_env_vars = { path = "crates/zzz_env_vars" }
 edit_prediction = { path = "crates/edit_prediction" }
 edit_prediction_metrics = { path = "crates/edit_prediction_metrics" }
 zeta_prompt = { path = "crates/zeta_prompt" }
@@ -989,7 +989,7 @@ snippets_ui = { codegen-units = 1 }
 theme_selector = { codegen-units = 1 }
 time_format = { codegen-units = 1 }
 ui_input = { codegen-units = 1 }
-zed_actions = { codegen-units = 1 }
+zzz_actions = { codegen-units = 1 }
 
 [profile.release]
 opt-level = 3
@@ -1037,7 +1037,7 @@ redundant_clone = "deny"
 disallowed_methods = "deny"
 
 # We currently do not restrict any style rules
-# as it slows down shipping code to Zed.
+# as it slows down shipping code to ZZZ.
 #
 # Running ./script/clippy can take several minutes, and so it's
 # common to skip that step and let CI do it. Any unexpected failures
@@ -1045,7 +1045,7 @@ disallowed_methods = "deny"
 # to an old branch, manual fixing, and re-pushing.
 #
 # In the future we could improve this by either making sure
-# Zed can surface clippy errors in diagnostics (in addition to the
+# ZZZ can surface clippy errors in diagnostics (in addition to the
 # rust-analyzer errors), or by having CI fix style nits automatically.
 style = { level = "allow", priority = -1 }
 

@@ -1,7 +1,7 @@
 use gpui::{Action, ClickEvent, FocusHandle, prelude::*};
 use i18n as app_i18n;
 use ui::{Chip, ElevationIndex, KeyBinding, ListItem, ListItemSpacing, Tooltip, prelude::*};
-use zed_actions::agent::ToggleModelSelector;
+use zzz_actions::agent::ToggleModelSelector;
 
 use crate::CycleFavoriteModels;
 

@@ -694,7 +694,7 @@ mod tests {
             &r#"
             {
                 "features": {
-                    "inline_completion_provider": "zed"
+                    "inline_completion_provider": "zzz"
                 },
             }
             "#
@@ -703,7 +703,7 @@ mod tests {
                 &r#"
                 {
                     "edit_predictions": {
-                        "provider": "zed"
+                        "provider": "zzz"
                     }
                 }
                 "#
@@ -2895,7 +2895,7 @@ mod tests {
             &r#"
             {
                 "features": {
-                    "edit_prediction_provider": "zed"
+                    "edit_prediction_provider": "zzz"
                 },
                 "edit_predictions": {
                     "mode": "eager"
@@ -2907,7 +2907,7 @@ mod tests {
                 &r#"
                 {
                     "edit_predictions": {
-                        "provider": "zed",
+                        "provider": "zzz",
                         "mode": "eager"
                     }
                 }
@@ -2950,7 +2950,7 @@ mod tests {
             &r#"
             {
                 "edit_predictions": {
-                    "provider": "zed"
+                    "provider": "zzz"
                 }
             }
             "#
@@ -3057,7 +3057,7 @@ mod tests {
                 },
                 "macos": {
                     "features": {
-                        "edit_prediction_provider": "zed"
+                        "edit_prediction_provider": "zzz"
                     }
                 },
                 "profiles": {
@@ -3078,7 +3078,7 @@ mod tests {
                     },
                     "macos": {
                         "edit_predictions": {
-                            "provider": "zed"
+                            "provider": "zzz"
                         }
                     },
                     "profiles": {
@@ -3190,7 +3190,7 @@ mod tests {
             &r#"
             {
                 "edit_predictions": {
-                    "provider": "zed"
+                    "provider": "zzz"
                 }
             }
             "#
@@ -3216,7 +3216,7 @@ mod tests {
                 &r#"
                 {
                     "edit_predictions": {
-                        "provider": "zed"
+                        "provider": "zzz"
                     }
                 }
                 "#

@@ -4,7 +4,7 @@ Local fork of `tree-sitter-toml-ng`.
 
 ## Why vendored
 
-Patched for TOML 1.1 support gaps needed by Zed:
+Patched for TOML 1.1 support gaps needed by ZZZ:
 
 - offset datetime with space delimiter, e.g. `1979-05-27 07:32Z`
 - local datetime without seconds, e.g. `1979-05-27T07:32`
@@ -34,4 +34,4 @@ This regenerates:
 ## Related workspace wiring
 
 - workspace dependency: `/Cargo.toml`
-- Zed TOML queries/config: `/crates/grammars/src/toml/`
+- ZZZ TOML queries/config: `/crates/grammars/src/toml/`

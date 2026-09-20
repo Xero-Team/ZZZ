@@ -37,7 +37,7 @@ use workspace::{
     Workspace,
     item::{Item, ItemEvent},
 };
-use zed_actions::ExtensionCategoryFilter;
+use zzz_actions::ExtensionCategoryFilter;
 
 use crate::components::ExtensionCard;
 use crate::extension_version_selector::{
@@ -49,7 +49,7 @@ fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
 }
 
 actions!(
-    zed,
+    zzz,
     [
         /// Installs an extension from a local directory for development.
         InstallDevExtension,
@@ -58,7 +58,7 @@ actions!(
 
 /// Rebuilds an installed dev extension.
 #[derive(Clone, Debug, Default, PartialEq, Deserialize, JsonSchema, gpui::Action)]
-#[action(namespace = zed)]
+#[action(namespace = zzz)]
 #[serde(deny_unknown_fields)]
 pub struct RebuildDevExtension {
     /// The ID of the dev extension to rebuild.
@@ -129,7 +129,7 @@ pub fn init(cx: &mut App) {
         };
         workspace
             .register_action(
-                move |workspace, action: &zed_actions::Extensions, window, cx| {
+                move |workspace, action: &zzz_actions::Extensions, window, cx| {
                     let provides_filter = action.category_filter.map(|category| match category {
                         ExtensionCategoryFilter::Themes => ExtensionProvides::Themes,
                         ExtensionCategoryFilter::IconThemes => ExtensionProvides::IconThemes,
@@ -495,7 +495,7 @@ impl ExtensionsPage {
             workspace
                 .update(cx, |_workspace, cx| {
                     window.dispatch_action(
-                        zed_actions::theme_selector::Toggle {
+                        zzz_actions::theme_selector::Toggle {
                             themes_filter: Some(themes),
                         }
                         .boxed_clone(),
@@ -514,7 +514,7 @@ impl ExtensionsPage {
             workspace
                 .update(cx, |_workspace, cx| {
                     window.dispatch_action(
-                        zed_actions::icon_theme_selector::Toggle {
+                        zzz_actions::icon_theme_selector::Toggle {
                             themes_filter: Some(icon_themes),
                         }
                         .boxed_clone(),

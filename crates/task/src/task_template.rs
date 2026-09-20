@@ -10,14 +10,14 @@ use util::{ResultExt, truncate_and_remove_front};
 
 use crate::{
     AttachRequest, ResolvedTask, RevealTarget, Shell, SpawnInTerminal, TaskContext, TaskId,
-    VariableName, ZED_VARIABLE_NAME_PREFIX, serde_helpers::non_empty_string_vec,
+    VariableName, ZZZ_VARIABLE_NAME_PREFIX, serde_helpers::non_empty_string_vec,
 };
 
-/// A template definition of a Zed task to run.
+/// A template definition of a ZZZ task to run.
 /// May use the [`VariableName`] to get the corresponding substitutions into its fields.
 ///
 /// Template itself is not ready to spawn a task, it needs to be resolved with a [`TaskContext`] first, that
-/// contains all relevant Zed state in task variables.
+/// contains all relevant ZZZ state in task variables.
 /// A single template may produce different tasks (or none) for different contexts.
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -303,11 +303,11 @@ impl TaskTemplate {
         })
     }
 
-    /// Validates that all `$ZED_*` variables used in this template are known
+    /// Validates that all `$ZZZ_*` variables used in this template are known
     /// variable names, returning a vector with all of the unique unknown
     /// variables.
     ///
-    /// Note that `$ZED_CUSTOM_*` variables are never considered to be invalid
+    /// Note that `$ZZZ_CUSTOM_*` variables are never considered to be invalid
     /// since those are provided dynamically by extensions.
     pub fn unknown_variables(&self) -> Vec<String> {
         let mut variables = HashSet::default();
@@ -333,13 +333,13 @@ impl TaskTemplate {
     fn collect_unknown_variables(template: &str, unknown: &mut HashSet<String>) {
         shellexpand::env_with_context_no_errors(template, |variable| {
             // It's possible that the variable has a default defined, which is
-            // separated by a `:`, for example, `${ZED_FILE:default_value} so we
+            // separated by a `:`, for example, `${ZZZ_FILE:default_value} so we
             // ensure that we're only looking at the variable name itself.
             let colon_position = variable.find(':').unwrap_or(variable.len());
             let variable_name = &variable[..colon_position];
 
-            if variable_name.starts_with(ZED_VARIABLE_NAME_PREFIX)
-                && let without_prefix = &variable_name[ZED_VARIABLE_NAME_PREFIX.len()..]
+            if variable_name.starts_with(ZZZ_VARIABLE_NAME_PREFIX)
+                && let without_prefix = &variable_name[ZZZ_VARIABLE_NAME_PREFIX.len()..]
                 && !without_prefix.starts_with("CUSTOM_")
                 && variable_name.parse::<VariableName>().is_err()
             {
@@ -412,8 +412,8 @@ fn substitute_all_template_variables_in_str<A: AsRef<str>>(
             }
             // Got a task variable hit - use the variable value, ignore default
             return Ok(Some(name.as_ref().to_owned()));
-        } else if variable_name.starts_with(ZED_VARIABLE_NAME_PREFIX) {
-            // Unknown ZED variable - use default if available
+        } else if variable_name.starts_with(ZZZ_VARIABLE_NAME_PREFIX) {
+            // Unknown ZZZ variable - use default if available
             if !default.is_empty() {
                 // Strip the colon and return the default value
                 return Ok(Some(default[1..].to_owned()));
@@ -825,7 +825,7 @@ mod tests {
             );
             assert!(
                 matches!(resolved_task_attempt, None),
-                "If any of the Zed task variables is not substituted, the task should not be resolved, but got some resolution without the variable {removed_variable:?} (index {i})"
+                "If any of the ZZZ task variables is not substituted, the task should not be resolved, but got some resolution without the variable {removed_variable:?} (index {i})"
             );
         }
     }
@@ -849,11 +849,11 @@ mod tests {
     }
 
     #[test]
-    fn test_errors_on_missing_zed_variable() {
+    fn test_errors_on_missing_zzz_variable() {
         let task = TaskTemplate {
             label: "My task".into(),
             command: "echo".into(),
-            args: vec!["$ZED_VARIABLE".into()],
+            args: vec!["$ZZZ_VARIABLE".into()],
             ..TaskTemplate::default()
         };
         assert!(
@@ -1031,13 +1031,13 @@ mod tests {
                 VariableName::File.to_string() + ":fallback.txt"
             ),
             args: vec![
-                "${ZED_MISSING_VAR:default_value}".to_string(),
+                "${ZZZ_MISSING_VAR:default_value}".to_string(),
                 format!("${{{}}}", VariableName::Row.to_string() + ":42"),
             ],
             ..TaskTemplate::default()
         };
 
-        // Test 1: When ZED_FILE exists, should use actual value and ignore default
+        // Test 1: When ZZZ_FILE exists, should use actual value and ignore default
         let context_with_file = TaskContext {
             cwd: None,
             task_variables: TaskVariables::from_iter(vec![
@@ -1054,7 +1054,7 @@ mod tests {
         assert_eq!(
             resolved.resolved.command.unwrap(),
             "echo actual_file.rs",
-            "Should use actual ZED_FILE value, not default"
+            "Should use actual ZZZ_FILE value, not default"
         );
         assert_eq!(
             resolved.resolved.args,
@@ -1062,7 +1062,7 @@ mod tests {
             "Should use default for missing var, actual value for existing var"
         );
 
-        // Test 2: When ZED_FILE doesn't exist, should use default value
+        // Test 2: When ZZZ_FILE doesn't exist, should use default value
         let context_without_file = TaskContext {
             cwd: None,
             task_variables: TaskVariables::from_iter(vec![(VariableName::Row, "456".to_string())]),
@@ -1076,7 +1076,7 @@ mod tests {
         assert_eq!(
             resolved.resolved.command.unwrap(),
             "echo fallback.txt",
-            "Should use default value when ZED_FILE is missing"
+            "Should use default value when ZZZ_FILE is missing"
         );
         assert_eq!(
             resolved.resolved.args,
@@ -1084,10 +1084,10 @@ mod tests {
             "Should use defaults for missing vars"
         );
 
-        // Test 3: Missing ZED variable without default should fail
+        // Test 3: Missing ZZZ variable without default should fail
         let task_no_default = TaskTemplate {
             label: "test no default".to_string(),
-            command: "${ZED_MISSING_NO_DEFAULT}".to_string(),
+            command: "${ZZZ_MISSING_NO_DEFAULT}".to_string(),
             ..TaskTemplate::default()
         };
 
@@ -1095,28 +1095,28 @@ mod tests {
             task_no_default
                 .resolve_task(TEST_ID_BASE, &TaskContext::default())
                 .is_none(),
-            "Should fail when ZED variable has no default and doesn't exist"
+            "Should fail when ZZZ variable has no default and doesn't exist"
         );
     }
 
     #[test]
     fn test_unknown_variables() {
-        // Variable names starting with `ZED_` that are not valid should be
+        // Variable names starting with `ZZZ_` that are not valid should be
         // reported.
         let label = "test unknown variables".to_string();
-        let command = "$ZED_UNKNOWN".to_string();
+        let command = "$ZZZ_UNKNOWN".to_string();
         let task = TaskTemplate {
             label,
             command,
             ..TaskTemplate::default()
         };
 
-        assert_eq!(task.unknown_variables(), vec!["ZED_UNKNOWN".to_string()]);
+        assert_eq!(task.unknown_variables(), vec!["ZZZ_UNKNOWN".to_string()]);
 
-        // Variable names starting with `ZED_CUSTOM_` should never be reported,
+        // Variable names starting with `ZZZ_CUSTOM_` should never be reported,
         // as those are dynamically provided by extensions.
         let label = "test custom variables".to_string();
-        let command = "$ZED_CUSTOM_UNKNOWN".to_string();
+        let command = "$ZZZ_CUSTOM_UNKNOWN".to_string();
         let task = TaskTemplate {
             label,
             command,
@@ -1128,18 +1128,18 @@ mod tests {
         // Unknown variable names with defaults should still be reported,
         // otherwise the default would always be silently used.
         let label = "test custom variables".to_string();
-        let command = "${ZED_UNKNOWN:default_value}".to_string();
+        let command = "${ZZZ_UNKNOWN:default_value}".to_string();
         let task = TaskTemplate {
             label,
             command,
             ..TaskTemplate::default()
         };
 
-        assert_eq!(task.unknown_variables(), vec!["ZED_UNKNOWN".to_string()]);
+        assert_eq!(task.unknown_variables(), vec!["ZZZ_UNKNOWN".to_string()]);
 
         // Valid variable names are not reported.
         let label = "test custom variables".to_string();
-        let command = "$ZED_FILE".to_string();
+        let command = "$ZZZ_FILE".to_string();
         let task = TaskTemplate {
             label,
             command,
@@ -1151,16 +1151,16 @@ mod tests {
     #[test]
     fn test_git_variables_resolution() {
         let task = TaskTemplate {
-            label: "Show $ZED_GIT_SHA_SHORT in $ZED_GIT_REPOSITORY_NAME".to_string(),
+            label: "Show $ZZZ_GIT_SHA_SHORT in $ZZZ_GIT_REPOSITORY_NAME".to_string(),
             command: "git".to_string(),
-            args: vec!["show".to_string(), "$ZED_GIT_SHA".to_string()],
-            cwd: Some("$ZED_GIT_REPOSITORY_PATH".to_string()),
-            env: HashMap::from_iter([("COMMIT".to_string(), "$ZED_GIT_SHA".to_string())]),
+            args: vec!["show".to_string(), "$ZZZ_GIT_SHA".to_string()],
+            cwd: Some("$ZZZ_GIT_REPOSITORY_PATH".to_string()),
+            env: HashMap::from_iter([("COMMIT".to_string(), "$ZZZ_GIT_SHA".to_string())]),
             ..TaskTemplate::default()
         };
         let sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string();
         let sha_short = "0123456".to_string();
-        let repo_name = "zed".to_string();
+        let repo_name = "zzz".to_string();
         let repo_path = format!("/Users/example/{repo_name}");
 
         let context = TaskContext {

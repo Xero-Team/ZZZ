@@ -4,7 +4,7 @@ use std::process::Command;
 fn main() {
     println!("cargo:rustc-check-cfg=cfg(zzz_bundled_uninstall)");
 
-    if std::env::var("ZED_UPDATE_EXPLANATION").is_err() {
+    if std::env::var("ZZZ_UPDATE_EXPLANATION").is_err() {
         println!("cargo:rustc-cfg=zzz_bundled_uninstall");
     }
 
@@ -23,10 +23,10 @@ fn main() {
         let git_sha = String::from_utf8_lossy(&output.stdout);
         let git_sha = git_sha.trim();
 
-        println!("cargo:rustc-env=ZED_COMMIT_SHA={git_sha}");
+        println!("cargo:rustc-env=ZZZ_COMMIT_SHA={git_sha}");
     }
     if let Some(build_identifier) = option_env!("GITHUB_RUN_NUMBER") {
-        println!("cargo:rustc-env=ZED_BUILD_ID={build_identifier}");
+        println!("cargo:rustc-env=ZZZ_BUILD_ID={build_identifier}");
     }
 
     if std::env::var("CARGO_CFG_TARGET_OS").ok().as_deref() == Some("windows") {

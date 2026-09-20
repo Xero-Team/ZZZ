@@ -50,7 +50,7 @@ use workspace::{
     SerializedWorkspaceLocation, Workspace, WorkspaceDb, WorkspaceId,
     notifications::DetachAndPromptErr, with_active_or_new_workspace,
 };
-use zed_actions::{OpenDevContainer, OpenRecent, OpenRemote};
+use zzz_actions::{OpenDevContainer, OpenRecent, OpenRemote};
 
 actions!(
     recent_projects,
@@ -286,7 +286,7 @@ pub(crate) fn default_open_in_new_window(cx: &App) -> bool {
 
 pub fn init(cx: &mut App) {
     #[cfg(target_os = "windows")]
-    cx.on_action(|open_wsl: &zed_actions::wsl_actions::OpenFolderInWsl, cx| {
+    cx.on_action(|open_wsl: &zzz_actions::wsl_actions::OpenFolderInWsl, cx| {
         let create_new_window = open_wsl
             .create_new_window
             .unwrap_or_else(|| default_open_in_new_window(cx));
@@ -354,13 +354,13 @@ pub fn init(cx: &mut App) {
                     let message = indoc::indoc! { r#"
                         Invalid path specified when trying to open a folder inside WSL.
 
-                        Please note that Zed currently does not support opening network share folders inside wsl.
+                        Please note that ZZZ currently does not support opening network share folders inside wsl.
                     "#};
                     let title = cx
                         .update(|_, cx| i18n::tr(cx, "recent_projects.invalid_path", "Invalid path"))
                         .unwrap_or_else(|_| "Invalid path".to_owned());
                     let ok_label = cx
-                        .update(|_, cx| i18n::tr(cx, "zed.common.ok", "Ok"))
+                        .update(|_, cx| i18n::tr(cx, "zzz.common.ok", "Ok"))
                         .unwrap_or_else(|_| "Ok".to_owned());
 
                     let _ = cx
@@ -385,7 +385,7 @@ pub fn init(cx: &mut App) {
     });
 
     #[cfg(target_os = "windows")]
-    cx.on_action(|open_wsl: &zed_actions::wsl_actions::OpenWsl, cx| {
+    cx.on_action(|open_wsl: &zzz_actions::wsl_actions::OpenWsl, cx| {
         let create_new_window = open_wsl
             .create_new_window
             .unwrap_or_else(|| default_open_in_new_window(cx));
@@ -533,7 +533,7 @@ pub fn init(cx: &mut App) {
                             "Cannot open Dev Container from remote project".to_owned()
                         });
                     let ok_label = cx
-                        .update(|_, cx| i18n::tr(cx, "zed.common.ok", "Ok"))
+                        .update(|_, cx| i18n::tr(cx, "zzz.common.ok", "Ok"))
                         .unwrap_or_else(|_| "Ok".to_owned());
                     cx.prompt(
                         gpui::PromptLevel::Critical,

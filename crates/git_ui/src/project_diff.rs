@@ -51,8 +51,8 @@ use workspace::{
     notifications::NotifyTaskExt,
     searchable::SearchableItemHandle,
 };
-use zed_actions::agent::ReviewBranchDiff;
 use ztracing::instrument;
+use zzz_actions::agent::ReviewBranchDiff;
 
 actions!(
     git,
@@ -1908,9 +1908,9 @@ impl Render for ProjectDiffToolbar {
                         },
                     )
                     .child(
-                        Button::new("commit", tr(cx, "zed.about.commit", "Commit"))
+                        Button::new("commit", tr(cx, "zzz.about.commit", "Commit"))
                             .tooltip(Tooltip::for_action_title_in(
-                                tr(cx, "zed.about.commit", "Commit"),
+                                tr(cx, "zzz.about.commit", "Commit"),
                                 &Commit,
                                 &focus_handle,
                             ))
@@ -1947,7 +1947,7 @@ fn render_send_review_to_agent_button(
         .replacen("{}", &review_count.to_string(), 1),
     )
     .start_icon(
-        Icon::new(IconName::ZedAssistant)
+        Icon::new(IconName::ZZZAssistant)
             .size(IconSize::Small)
             .color(Color::Muted),
     )
@@ -2106,7 +2106,7 @@ impl Render for BranchDiffToolbar {
                         tr(cx, "git_ui.project_diff.review_diff", "Review Diff"),
                     )
                     .start_icon(
-                        Icon::new(IconName::ZedAssistant)
+                        Icon::new(IconName::ZZZAssistant)
                             .size(IconSize::Small)
                             .color(Color::Muted),
                     )

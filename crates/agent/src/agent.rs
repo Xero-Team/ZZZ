@@ -22,7 +22,7 @@ use project::AgentId;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 
-pub static ZED_AGENT_ID: LazyLock<AgentId> = LazyLock::new(|| AgentId::new("zed-agent"));
+pub static ZZZ_AGENT_ID: LazyLock<AgentId> = LazyLock::new(|| AgentId::new("zzz-agent"));
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProjectSnapshot {

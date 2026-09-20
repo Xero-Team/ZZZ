@@ -35,7 +35,7 @@ use workspace::{
     StatusItemView, Toast, Workspace, create_and_open_local_file, item::ItemHandle,
     notifications::NotificationId,
 };
-use zed_actions::{OpenBrowser, OpenSettingsAt};
+use zzz_actions::{OpenBrowser, OpenSettingsAt};
 
 fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()
@@ -371,14 +371,14 @@ impl EditPredictionButton {
                     continue;
                 };
                 let is_current = provider == current_provider;
-                let is_disabled_zed_provider = false;
+                let is_disabled_zzz_provider = false;
                 let fs = self.fs.clone();
 
                 menu = menu.item(
                     ContextMenuEntry::new(name)
-                        .toggleable(IconPosition::Start, is_current && !is_disabled_zed_provider)
-                        .disabled(is_disabled_zed_provider)
-                        .when(is_disabled_zed_provider, |item| {
+                        .toggleable(IconPosition::Start, is_current && !is_disabled_zzz_provider)
+                        .disabled(is_disabled_zzz_provider)
+                        .when(is_disabled_zzz_provider, |item| {
                             item.documentation_aside(DocumentationSide::Left, move |cx| {
                                 Label::new(tr(
                                     cx,
@@ -671,7 +671,7 @@ impl EditPredictionButton {
                 .as_ref()
                 .map(|p| p.icons(cx))
                 .unwrap_or_else(|| {
-                    edit_prediction_types::EditPredictionIconSet::new(IconName::ZedPredict)
+                    edit_prediction_types::EditPredictionIconSet::new(IconName::ZZZPredict)
                 });
             menu = menu.item(
                 ContextMenuEntry::new(tr(
@@ -1104,7 +1104,7 @@ fn render_zeta_tab_animation(cx: &App) -> impl IntoElement {
             8.,
         ))
         .child(tab_sequence(true))
-        .child(Icon::new(IconName::ZedPredict))
+        .child(Icon::new(IconName::ZZZPredict))
         .child(tab_sequence(false))
 }
 

@@ -22,7 +22,7 @@ use ui::prelude::*;
 use workspace::{
     MultiWorkspace, OpenMode, PreviousWorkspaceState, ToastView, Workspace, dock::DockPosition,
 };
-use zed_actions::NewWorktreeBranchTarget;
+use zzz_actions::NewWorktreeBranchTarget;
 
 use git::repository::{FetchOptions, Remote};
 
@@ -275,7 +275,7 @@ impl Render for WorktreeFetchFailedToast {
                         workspace.update(cx, |workspace, cx| {
                             handle_create_worktree_inner(
                                 workspace,
-                                &zed_actions::CreateWorktree {
+                                &zzz_actions::CreateWorktree {
                                     worktree_name: worktree_name.clone(),
                                     branch_target: branch_target.clone(),
                                 },
@@ -670,7 +670,7 @@ fn maybe_propagate_worktree_trust(
 /// Creates a new git worktree, opens the workspace, restores layout and files.
 pub fn handle_create_worktree(
     workspace: &mut Workspace,
-    action: &zed_actions::CreateWorktree,
+    action: &zzz_actions::CreateWorktree,
     window: &mut gpui::Window,
     fallback_focused_dock: Option<DockPosition>,
     cx: &mut gpui::Context<Workspace>,
@@ -687,7 +687,7 @@ pub fn handle_create_worktree(
 
 fn handle_create_worktree_inner(
     workspace: &mut Workspace,
-    action: &zed_actions::CreateWorktree,
+    action: &zzz_actions::CreateWorktree,
     window: &mut gpui::Window,
     fallback_focused_dock: Option<DockPosition>,
     remote_branch_fetch_mode: RemoteBranchFetchMode,
@@ -814,7 +814,7 @@ fn handle_create_worktree_inner(
 
 pub fn handle_switch_worktree(
     workspace: &mut Workspace,
-    action: &zed_actions::SwitchWorktree,
+    action: &zzz_actions::SwitchWorktree,
     window: &mut gpui::Window,
     fallback_focused_dock: Option<DockPosition>,
     cx: &mut gpui::Context<Workspace>,
@@ -1355,7 +1355,7 @@ mod tests {
                     .update_file_based_tasks(
                         TaskSettingsLocation::Worktree(SettingsLocation {
                             worktree_id,
-                            path: rel_path(".zed"),
+                            path: rel_path(".zzz"),
                         }),
                         Some(hook_tasks_json),
                     )
@@ -1378,7 +1378,7 @@ mod tests {
             json!({
                 "project": {
                     ".git": {},
-                    ".zed": {
+                    ".zzz": {
                         "tasks.json": hook_tasks_json,
                     },
                     "src": {
@@ -1416,7 +1416,7 @@ mod tests {
         main_workspace.update_in(cx, |workspace, window, cx| {
             handle_create_worktree(
                 workspace,
-                &zed_actions::CreateWorktree {
+                &zzz_actions::CreateWorktree {
                     worktree_name: Some("feature".to_string()),
                     branch_target: NewWorktreeBranchTarget::CurrentBranch,
                 },
@@ -1455,7 +1455,7 @@ mod tests {
         active_workspace.update_in(cx, |workspace, window, cx| {
             handle_switch_worktree(
                 workspace,
-                &zed_actions::SwitchWorktree {
+                &zzz_actions::SwitchWorktree {
                     path: main_project_root.clone(),
                     display_name: "project".to_string(),
                 },
@@ -1547,7 +1547,7 @@ mod tests {
         main_workspace.update_in(cx, |workspace, window, cx| {
             handle_create_worktree(
                 workspace,
-                &zed_actions::CreateWorktree {
+                &zzz_actions::CreateWorktree {
                     worktree_name: Some("feature".to_string()),
                     branch_target: NewWorktreeBranchTarget::CurrentBranch,
                 },

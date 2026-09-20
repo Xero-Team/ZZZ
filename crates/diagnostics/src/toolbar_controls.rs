@@ -7,8 +7,8 @@ use settings::Settings;
 use text::{Anchor, BufferId};
 use ui::{Tooltip, prelude::*};
 use workspace::{ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, item::ItemHandle};
-use zed_actions::assistant::InlineAssist;
-use zed_actions::buffer_search;
+use zzz_actions::assistant::InlineAssist;
+use zzz_actions::buffer_search;
 
 pub struct ToolbarControls {
     editor: Option<Box<dyn DiagnosticsToolbarEditor>>,
@@ -69,7 +69,7 @@ impl Render for ToolbarControls {
                 IconButton::new("toggle_search", IconName::MagnifyingGlass)
                     .icon_size(IconSize::Small)
                     .tooltip(Tooltip::for_action_title(
-                        tr(cx, "zed.quick_action_bar.buffer_search", "Buffer Search"),
+                        tr(cx, "zzz.quick_action_bar.buffer_search", "Buffer Search"),
                         &buffer_search::Deploy::find(),
                     ))
                     .on_click(|_, window, cx| {
@@ -78,10 +78,10 @@ impl Render for ToolbarControls {
             })
             .when(is_agent_enabled, |this| {
                 this.child(
-                    IconButton::new("inline_assist", IconName::ZedAssistant)
+                    IconButton::new("inline_assist", IconName::ZZZAssistant)
                         .icon_size(IconSize::Small)
                         .tooltip(Tooltip::for_action_title(
-                            tr(cx, "zed.quick_action_bar.inline_assist", "Inline Assist"),
+                            tr(cx, "zzz.quick_action_bar.inline_assist", "Inline Assist"),
                             &InlineAssist::default(),
                         ))
                         .on_click(|_, window, cx| {

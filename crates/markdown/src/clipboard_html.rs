@@ -1650,19 +1650,19 @@ mod tests {
 
     #[test]
     fn serializes_metadata_block_rows_as_table() {
-        let markdown = "---\ntitle: Post\nauthor: Zed\n---";
+        let markdown = "---\ntitle: Post\nauthor: ZZZ\n---";
         assert_eq!(
             html_for_selection(markdown, 4..27, "unused", false, true),
-            "<table><tbody><tr><th>title</th><td>Post</td></tr><tr><th>author</th><td>Zed</td></tr></tbody></table>"
+            "<table><tbody><tr><th>title</th><td>Post</td></tr><tr><th>author</th><td>ZZZ</td></tr></tbody></table>"
         );
     }
 
     #[test]
     fn serializes_metadata_block_without_rows_as_code() {
-        let markdown = "---\ntags:\n  - zed\n---";
+        let markdown = "---\ntags:\n  - zzz\n---";
         assert_eq!(
             html_for_selection(markdown, 4..17, "unused", false, true),
-            "<pre><code>tags:\n  - zed</code></pre>"
+            "<pre><code>tags:\n  - zzz</code></pre>"
         );
     }
 

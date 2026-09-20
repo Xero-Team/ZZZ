@@ -122,7 +122,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             }
         );
     }
@@ -152,7 +152,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             }
         );
     }
@@ -167,7 +167,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             }
         );
     }
@@ -192,7 +192,7 @@ mod tests {
         let permalink = Tangled::public_instance().build_commit_permalink(
             &ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             },
             BuildCommitPermalinkParams {
                 sha: "faa6f979be417239b2e070dbbf6392b909224e0b",
@@ -209,7 +209,7 @@ mod tests {
         let permalink = Tangled::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             },
             BuildPermalinkParams::new(
                 "faa6f979be417239b2e070dbbf6392b909224e0b",
@@ -245,7 +245,7 @@ mod tests {
         let permalink = Tangled::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             },
             BuildPermalinkParams::new(
                 "faa6f979be417239b2e070dbbf6392b909224e0b",
@@ -263,7 +263,7 @@ mod tests {
         let permalink = Tangled::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             },
             BuildPermalinkParams::new(
                 "faa6f979be417239b2e070dbbf6392b909224e0b",

@@ -1,6 +1,6 @@
 #![allow(rustdoc::private_intra_doc_links)]
 //! This is the place where everything editor-related is stored (data-wise) and displayed (ui-wise).
-//! The main point of interest in this crate is [`Editor`] type, which is used in every other Zed part as a user input element.
+//! The main point of interest in this crate is [`Editor`] type, which is used in every other ZZZ part as a user input element.
 //! It comes in different flavors: single line, multiline and a fixed height one.
 //!
 //! Editor contains of multiple large submodules:
@@ -104,7 +104,7 @@ use aho_corasick::{AhoCorasick, AhoCorasickBuilder, BuildError};
 use anyhow::{Context as _, Result, anyhow, bail};
 use blink_manager::BlinkManager;
 use buffer_diff::DiffHunkStatus;
-use client::{Collaborator, parse_zed_link};
+use client::{Collaborator, parse_zzz_link};
 use clock::ReplicaId;
 use code_context_menus::{
     AvailableCodeAction, CodeActionContents, CodeActionsItem, CodeActionsMenu, CodeContextMenu,
@@ -243,8 +243,8 @@ use workspace::{
     notifications::{DetachAndPromptErr, NotificationId, NotifyResultExt, NotifyTaskExt},
     searchable::SearchEvent,
 };
-pub use zed_actions::editor::RevealInFileManager;
-use zed_actions::editor::{MoveDown, MoveUp};
+pub use zzz_actions::editor::RevealInFileManager;
+use zzz_actions::editor::{MoveDown, MoveUp};
 
 use crate::{
     code_context_menus::CompletionsMenuSource,
@@ -1146,7 +1146,7 @@ struct ActionFetchReady {
     actions: Rc<[AvailableCodeAction]>,
 }
 
-/// Zed's primary implementation of text input, allowing users to edit a [`MultiBuffer`].
+/// ZZZ's primary implementation of text input, allowing users to edit a [`MultiBuffer`].
 ///
 /// See the [module level documentation](self) for more information.
 pub struct Editor {
@@ -3294,7 +3294,7 @@ impl Editor {
             cx,
             |e, _, _| match e.error_code() {
                 ErrorCode::RemoteUpgradeRequired => Some(format!(
-                "The remote instance of Zed does not support this yet. It must be upgraded to {}",
+                "The remote instance of ZZZ does not support this yet. It must be upgraded to {}",
                 e.error_tag("required").unwrap_or("the latest version")
             )),
                 _ => None,
@@ -3367,7 +3367,7 @@ impl Editor {
         let remote_upgrade_required = tr(
             cx,
             "editor.error.remote_upgrade_required_for_buffer_creation",
-            "The remote instance of Zed does not support this yet. It must be upgraded to {}",
+            "The remote instance of ZZZ does not support this yet. It must be upgraded to {}",
         );
 
         cx.spawn_in(window, async move |workspace, cx| {
@@ -5314,7 +5314,7 @@ impl Editor {
             return None;
         }
 
-        // OnTypeFormatting returns a list of edits, no need to pass them between Zed instances,
+        // OnTypeFormatting returns a list of edits, no need to pass them between ZZZ instances,
         // hence we do LSP request & edit on host side only — add formats to host's history.
         let push_to_lsp_host_history = true;
         let push_to_client_history = false;
@@ -9807,7 +9807,7 @@ impl Editor {
     ) -> edit_prediction_types::EditPredictionIconSet {
         match provider {
             Some(provider) => provider.provider.icons(cx),
-            None => edit_prediction_types::EditPredictionIconSet::new(IconName::ZedPredict),
+            None => edit_prediction_types::EditPredictionIconSet::new(IconName::ZZZPredict),
         }
     }
 
@@ -13704,7 +13704,7 @@ impl Editor {
             .all::<MultiBufferOffset>(&self.display_snapshot(cx));
 
         if selections.is_empty() {
-            log::warn!("There should always be at least one selection in Zed. This is a bug.");
+            log::warn!("There should always be at least one selection in ZZZ. This is a bug.");
             return;
         };
 
@@ -17878,8 +17878,8 @@ impl Editor {
 
             if let Some(url) = url {
                 cx.update(|window, cx| {
-                    if parse_zed_link(&url, cx).is_some() {
-                        window.dispatch_action(Box::new(zed_actions::OpenZedUrl { url }), cx);
+                    if parse_zzz_link(&url, cx).is_some() {
+                        window.dispatch_action(Box::new(zzz_actions::OpenZZZUrl { url }), cx);
                     } else {
                         cx.open_url(&url);
                     }
@@ -18079,9 +18079,9 @@ impl Editor {
                 match first_url_or_file {
                     Some(Either::Left(url)) => {
                         cx.update(|window, cx| {
-                            if parse_zed_link(&url, cx).is_some() {
+                            if parse_zzz_link(&url, cx).is_some() {
                                 window
-                                    .dispatch_action(Box::new(zed_actions::OpenZedUrl { url }), cx);
+                                    .dispatch_action(Box::new(zzz_actions::OpenZZZUrl { url }), cx);
                             } else {
                                 cx.open_url(&url);
                             }
@@ -20074,7 +20074,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) -> Entity<Self> {
         const MINIMAP_FONT_WEIGHT: gpui::FontWeight = gpui::FontWeight::BLACK;
-        const MINIMAP_FONT_FAMILY: SharedString = SharedString::new_static(".ZedMono");
+        const MINIMAP_FONT_FAMILY: SharedString = SharedString::new_static(".ZZZMono");
 
         let mut minimap = Editor::new_internal(
             EditorMode::Minimap {
@@ -21403,7 +21403,7 @@ impl Editor {
 
     pub fn copy_path(
         &mut self,
-        _: &zed_actions::workspace::CopyPath,
+        _: &zzz_actions::workspace::CopyPath,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -21418,7 +21418,7 @@ impl Editor {
 
     pub fn copy_relative_path(
         &mut self,
-        _: &zed_actions::workspace::CopyRelativePath,
+        _: &zzz_actions::workspace::CopyRelativePath,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -27569,7 +27569,7 @@ impl Render for MissingEditPredictionKeybindingTooltip {
                             .size(ButtonSize::Compact)
                             .on_click(|_ev, window, cx| {
                                 window.dispatch_action(
-                                    zed_actions::OpenKeymapFile.boxed_clone(),
+                                    zzz_actions::OpenKeymapFile.boxed_clone(),
                                     cx,
                                 )
                             }),
@@ -27716,7 +27716,7 @@ fn render_diff_hunk_controls(
                             let focus_handle = editor.focus_handle(cx);
                             move |_window, cx| {
                                 Tooltip::for_action_in(
-                                    tr(cx, "zed.quick_action_bar.next_hunk", "Next Hunk"),
+                                    tr(cx, "zzz.quick_action_bar.next_hunk", "Next Hunk"),
                                     &GoToHunk,
                                     &focus_handle,
                                     cx,
@@ -27754,7 +27754,7 @@ fn render_diff_hunk_controls(
                                 Tooltip::for_action_in(
                                     tr(
                                         cx,
-                                        "zed.quick_action_bar.previous_hunk",
+                                        "zzz.quick_action_bar.previous_hunk",
                                         "Previous Hunk",
                                     ),
                                     &GoToPreviousHunk,

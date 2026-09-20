@@ -9,7 +9,7 @@ use std::{env, fmt::Display};
 use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 
 actions!(
-    zed,
+    zzz,
     [
         /// Copies system specifications to the clipboard for bug reports.
         CopySystemSpecsIntoClipboard,
@@ -279,17 +279,17 @@ fn read_pci_id_from_path(path: impl AsRef<std::path::Path>) -> anyhow::Result<u1
     u16::from_str_radix(id, 16).context("Failed to parse device ID")
 }
 
-/// Returns value of `ZED_BUNDLE_TYPE` set at compiletime or else at runtime.
+/// Returns value of `ZZZ_BUNDLE_TYPE` set at compiletime or else at runtime.
 ///
 /// The compiletime value is used by flatpak since it doesn't seem to have a way to provide a
 /// runtime environment variable.
 ///
-/// The runtime value is used by snap since the Zed snaps use release binaries directly, and so
+/// The runtime value is used by snap since the ZZZ snaps use release binaries directly, and so
 /// cannot have this baked in.
 fn bundle_type() -> Option<String> {
-    option_env!("ZED_BUNDLE_TYPE")
+    option_env!("ZZZ_BUNDLE_TYPE")
         .map(|bundle_type| bundle_type.to_owned())
-        .or_else(|| env::var("ZED_BUNDLE_TYPE").ok())
+        .or_else(|| env::var("ZZZ_BUNDLE_TYPE").ok())
 }
 
 #[cfg(test)]
@@ -325,10 +325,10 @@ mod tests {
     #[test]
     fn bundle_type_uses_runtime_env_when_compile_time_value_is_absent() {
         let _lock = ENV_LOCK.lock().expect("env lock poisoned");
-        let _restore = EnvRestore::new("ZED_BUNDLE_TYPE");
-        unsafe { env::set_var("ZED_BUNDLE_TYPE", "portable-test") };
+        let _restore = EnvRestore::new("ZZZ_BUNDLE_TYPE");
+        unsafe { env::set_var("ZZZ_BUNDLE_TYPE", "portable-test") };
 
-        let expected = option_env!("ZED_BUNDLE_TYPE")
+        let expected = option_env!("ZZZ_BUNDLE_TYPE")
             .map(str::to_string)
             .unwrap_or_else(|| "portable-test".to_string());
 

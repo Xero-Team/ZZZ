@@ -1,6 +1,6 @@
 use crate::{
     DebugEvent, EditPredictionFinishedDebugEvent, EditPredictionId, EditPredictionModelInput,
-    EditPredictionStartedDebugEvent, EditPredictionStore, ZedUpdateRequiredError,
+    EditPredictionStartedDebugEvent, EditPredictionStore, ZZZUpdateRequiredError,
     buffer_path_with_id_fallback,
     cursor_excerpt::{self, compute_cursor_excerpt, compute_syntax_ranges},
     prediction::EditPredictionResult,
@@ -312,7 +312,7 @@ fn handle_api_response<T>(
     match response {
         Ok(data) => Ok(data),
         Err(err) => {
-            if err.is::<ZedUpdateRequiredError>() {
+            if err.is::<ZZZUpdateRequiredError>() {
                 cx.update(|cx| {
                     this.update(cx, |this, _cx| {
                         this.update_required = true;
@@ -321,7 +321,7 @@ fn handle_api_response<T>(
 
                     let error_message: SharedString = err.to_string().into();
                     show_app_notification(
-                        NotificationId::unique::<ZedUpdateRequiredError>(),
+                        NotificationId::unique::<ZZZUpdateRequiredError>(),
                         cx,
                         move |cx| {
                             cx.new(|cx| {

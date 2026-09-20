@@ -1,4 +1,4 @@
-use super::register_zed_scheme;
+use super::register_zzz_scheme;
 use anyhow::Result;
 use gpui::{AppContext as _, AsyncApp, Context, PromptLevel, Window, actions};
 use release_channel::ReleaseChannel;
@@ -100,7 +100,7 @@ pub fn install_cli_binary(window: &mut Window, cx: &mut Context<Workspace>) {
         "install_cli.error_installing_cli",
         "Error installing zzz cli",
     );
-    let ok = i18n::tr(cx, "zed.common.ok", "Ok");
+    let ok = i18n::tr(cx, "zzz.common.ok", "Ok");
 
     cx.spawn_in(window, async move |workspace, cx| {
         if cfg!(any(target_os = "linux", target_os = "freebsd")) {
@@ -143,11 +143,11 @@ pub fn install_cli_binary(window: &mut Window, cx: &mut Context<Workspace>) {
         };
 
         workspace.update_in(cx, |workspace, _, cx| {
-            struct InstalledZedCli;
+            struct InstalledZZZCli;
 
             workspace.show_toast(
                 Toast::new(
-                    NotificationId::unique::<InstalledZedCli>(),
+                    NotificationId::unique::<InstalledZZZCli>(),
                     installed_cli
                         .replacen("{}", &path.to_string_lossy(), 1)
                         .replacen("{}", ReleaseChannel::global(cx).display_name(), 1),
@@ -155,7 +155,7 @@ pub fn install_cli_binary(window: &mut Window, cx: &mut Context<Workspace>) {
                 cx,
             )
         })?;
-        register_zed_scheme(cx).await.log_err();
+        register_zzz_scheme(cx).await.log_err();
         Ok(())
     })
     .detach_and_prompt_err(&error_installing_cli, window, cx, |_, _, _| None);

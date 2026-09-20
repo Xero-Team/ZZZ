@@ -13,8 +13,8 @@ use project::DisableAiSettings;
 use std::ops::Range;
 use text::PointUtf16;
 use workspace::OpenInTerminal;
-use zed_actions::agent::AddSelectionToThread;
-use zed_actions::preview::{
+use zzz_actions::agent::AddSelectionToThread;
+use zzz_actions::preview::{
     markdown::OpenPreview as OpenMarkdownPreview, svg::OpenPreview as OpenSvgPreview,
 };
 
@@ -325,7 +325,7 @@ pub fn deploy_context_menu(
                     this.action(
                         tr(
                             cx,
-                            "zed.quick_action_bar.add_to_agent_thread",
+                            "zzz.quick_action_bar.add_to_agent_thread",
                             "Add to Agent Thread",
                         ),
                         Box::new(AddSelectionToThread),

@@ -11,7 +11,7 @@ use settings::Settings;
 use ui::{
     ContextMenu, KeybindingHint, PopoverMenu, PopoverMenuHandle, SplitButton, Tooltip, prelude::*,
 };
-use zed_actions::{DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize};
+use zzz_actions::{DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize};
 
 use editor::{Editor, EditorElement};
 use gpui::*;
@@ -379,7 +379,7 @@ impl CommitModal {
             .style(ButtonStyle::Transparent)
             .color(Color::Muted)
             .on_click(cx.listener(|_, _, window, cx| {
-                window.dispatch_action(zed_actions::git::Branch.boxed_clone(), cx);
+                window.dispatch_action(zzz_actions::git::Branch.boxed_clone(), cx);
             }));
 
         let branch_picker = PopoverMenu::new("popover-button")
@@ -397,7 +397,7 @@ impl CommitModal {
                 branch_picker_button,
                 Tooltip::for_action_title(
                     tr(cx, "git_ui.commit_modal.switch_branch", "Switch Branch"),
-                    &zed_actions::git::Branch,
+                    &zzz_actions::git::Branch,
                 ),
             )
             .anchor(Anchor::BottomLeft)
@@ -603,17 +603,17 @@ impl Render for CommitModal {
                 }))
             })
             .on_action(
-                cx.listener(|this, _: &zed_actions::git::Branch, window, cx| {
+                cx.listener(|this, _: &zzz_actions::git::Branch, window, cx| {
                     this.toggle_branch_selector(window, cx);
                 }),
             )
             .on_action(
-                cx.listener(|this, _: &zed_actions::git::CheckoutBranch, window, cx| {
+                cx.listener(|this, _: &zzz_actions::git::CheckoutBranch, window, cx| {
                     this.toggle_branch_selector(window, cx);
                 }),
             )
             .on_action(
-                cx.listener(|this, _: &zed_actions::git::Switch, window, cx| {
+                cx.listener(|this, _: &zzz_actions::git::Switch, window, cx| {
                     this.toggle_branch_selector(window, cx);
                 }),
             )

@@ -73,7 +73,7 @@ impl PowerShellLspAdapter {
         let session_details_path = Self::powershell_argument_string(&session_details_path);
         let log_directory_path = Self::powershell_argument_string(&log_directory_path);
         let command = format!(
-            "& '{start_script_path}' -BundledModulesPath '{bundled_modules_path}' -Stdio -SessionDetailsPath '{session_details_path}' -LogPath '{log_directory_path}' -FeatureFlags @() -AdditionalModules @() -HostName 'zed' -HostProfileId '0' -HostVersion '1.0.0' -LogLevel 'Trace'"
+            "& '{start_script_path}' -BundledModulesPath '{bundled_modules_path}' -Stdio -SessionDetailsPath '{session_details_path}' -LogPath '{log_directory_path}' -FeatureFlags @() -AdditionalModules @() -HostName 'zzz' -HostProfileId '0' -HostVersion '1.0.0' -LogLevel 'Trace'"
         );
 
         LanguageServerBinary {

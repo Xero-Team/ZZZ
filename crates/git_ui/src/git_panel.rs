@@ -91,7 +91,7 @@ use workspace::{
     dock::{DockPosition, Panel, PanelEvent},
     notifications::{DetachAndPromptErr, ErrorMessagePrompt, NotificationId, NotifyTaskExt},
 };
-use zed_actions::{DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize};
+use zzz_actions::{DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize};
 
 const MAX_HISTORY_TAG_CHIPS: usize = 3;
 actions!(
@@ -293,7 +293,7 @@ fn git_panel_context_menu(
             .action_disabled_when(!has_stash_items, stash_pop.clone(), StashPop.boxed_clone())
             .action(
                 view_stash.clone(),
-                zed_actions::git::ViewStash.boxed_clone(),
+                zzz_actions::git::ViewStash.boxed_clone(),
             )
             .separator()
             .action(open_diff.clone(), Diff.boxed_clone())
@@ -2800,7 +2800,7 @@ impl GitPanel {
             return;
         };
         let error_spawn = |message, window: &mut Window, cx: &mut App| {
-            let ok = tr(cx, "zed.common.ok", "Ok");
+            let ok = tr(cx, "zzz.common.ok", "Ok");
             let prompt = window.prompt(PromptLevel::Warning, message, None, &[ok.as_str()], cx);
             cx.spawn(async move |_| {
                 prompt.await.ok();
@@ -3508,7 +3508,7 @@ impl GitPanel {
                 "git_ui.git_panel.open_a_directory_first",
                 "Open a directory first",
             );
-            let ok = tr(cx, "zed.common.ok", "Ok");
+            let ok = tr(cx, "zzz.common.ok", "Ok");
             let result = window.prompt(
                 PromptLevel::Warning,
                 &title,
@@ -4763,7 +4763,7 @@ impl GitPanel {
                     (Toast | ToastWithLog { .. }, true) => {
                         this.action(create_pull_request, move |window, cx| {
                             window
-                                .dispatch_action(Box::new(zed_actions::git::CreatePullRequest), cx);
+                                .dispatch_action(Box::new(zzz_actions::git::CreatePullRequest), cx);
                         })
                     }
                     (Toast, false) => this,
@@ -5163,7 +5163,7 @@ impl GitPanel {
                 tr(cx, "git_ui.git_panel.amend", "Amend")
             }
         } else if self.has_staged_changes() {
-            tr(cx, "zed.about.commit", "Commit")
+            tr(cx, "zzz.about.commit", "Commit")
         } else {
             tr(cx, "git_ui.git_panel.commit_tracked", "Commit Tracked")
         }
@@ -5529,10 +5529,10 @@ impl GitPanel {
                             .cursor_text()
                             .flex_1()
                             .min_w_0()
-                            .on_action(|&zed_actions::editor::MoveUp, _, cx| {
+                            .on_action(|&zzz_actions::editor::MoveUp, _, cx| {
                                 cx.stop_propagation();
                             })
-                            .on_action(|&zed_actions::editor::MoveDown, _, cx| {
+                            .on_action(|&zzz_actions::editor::MoveDown, _, cx| {
                                 cx.stop_propagation();
                             })
                             .child(EditorElement::new(&self.commit_editor, panel_editor_style)),
@@ -7998,7 +7998,7 @@ impl RenderOnce for PanelRepoFooter {
             .label_size(LabelSize::Small)
             .truncate(true)
             .on_click(|_, window, cx| {
-                window.dispatch_action(zed_actions::git::Switch.boxed_clone(), cx);
+                window.dispatch_action(zzz_actions::git::Switch.boxed_clone(), cx);
             });
 
         let branch_selector = PopoverMenu::new("popover-button")
@@ -8011,7 +8011,7 @@ impl RenderOnce for PanelRepoFooter {
                 branch_selector_button,
                 Tooltip::for_action_title(
                     tr(cx, "git_ui.branch_picker.switch", "Switch"),
-                    &zed_actions::git::Switch,
+                    &zzz_actions::git::Switch,
                 ),
             )
             .anchor(Anchor::BottomLeft)
@@ -8119,7 +8119,7 @@ impl Component for PanelRepoFooter {
                 is_head: true,
                 ref_name: branch_name.to_owned().into(),
                 upstream: upstream.map(|tracking| Upstream {
-                    ref_name: format!("zed/{}", branch_name).into(),
+                    ref_name: format!("zzz/{}", branch_name).into(),
                     tracking,
                 }),
                 most_recent_commit: Some(CommitSummary {
@@ -8235,7 +8235,7 @@ impl Component for PanelRepoFooter {
                                     .w(example_width)
                                     .overflow_hidden()
                                     .child(PanelRepoFooter::new_preview(
-                                        SharedString::from("zed"),
+                                        SharedString::from("zzz"),
                                         Some(custom("main", behind_upstream)),
                                     ))
                                     .into_any_element(),
@@ -8246,7 +8246,7 @@ impl Component for PanelRepoFooter {
                                     .w(example_width)
                                     .overflow_hidden()
                                     .child(PanelRepoFooter::new_preview(
-                                        SharedString::from("zed"),
+                                        SharedString::from("zzz"),
                                         Some(custom(
                                             "redesign-and-update-git-ui-list-entry-style",
                                             behind_upstream,
@@ -8296,7 +8296,7 @@ impl Component for PanelRepoFooter {
                                     .w(example_width)
                                     .overflow_hidden()
                                     .child(PanelRepoFooter::new_preview(
-                                        SharedString::from("zed"),
+                                        SharedString::from("zzz"),
                                         Some(custom("update-README", behind_upstream)),
                                     ))
                                     .into_any_element(),
@@ -9010,7 +9010,7 @@ mod tests {
         fs.insert_tree(
             "/root",
             json!({
-                "zed": {
+                "zzz": {
                     ".git": {},
                     "crates": {
                         "gpui": {
@@ -9026,7 +9026,7 @@ mod tests {
         .await;
 
         fs.set_status_for_repo(
-            Path::new(path!("/root/zed/.git")),
+            Path::new(path!("/root/zzz/.git")),
             &[
                 ("crates/gpui/gpui.rs", StatusCode::Modified.worktree()),
                 ("crates/util/util.rs", StatusCode::Modified.worktree()),
@@ -9034,7 +9034,7 @@ mod tests {
         );
 
         let project =
-            Project::test(fs.clone(), [path!("/root/zed/crates/gpui").as_ref()], cx).await;
+            Project::test(fs.clone(), [path!("/root/zzz/crates/gpui").as_ref()], cx).await;
         let window_handle =
             cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
         let workspace = window_handle

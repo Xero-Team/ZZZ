@@ -15,7 +15,7 @@
   <!-- TODO: Use the ZZZ signing certificate here. -->
   <Identity
     Name="ZZZIndustries.ZZZ.Nightly"
-    Publisher="CN=Zed Industries Inc, O=Zed Industries Inc, L=Denver, S=Colorado, C=US"
+    Publisher="CN=Xero Team, O=Xero Team, L=Denver, S=Colorado, C=US"
     Version="1.0.0.0" />
   <Properties>
     <DisplayName>ZZZ Nightly</DisplayName>
@@ -68,7 +68,7 @@
         <com:Extension Category="windows.comServer">
           <com:ComServer>
             <com:SurrogateServer DisplayName="ZZZ Nightly">
-              <com:Class Id="266f2cfe-1653-42af-b55c-fe3590c83871" Path="zed_explorer_command_injector.dll" ThreadingModel="STA"/>
+              <com:Class Id="266f2cfe-1653-42af-b55c-fe3590c83871" Path="zzz_explorer_command_injector.dll" ThreadingModel="STA"/>
             </com:SurrogateServer>
           </com:ComServer>
         </com:Extension>

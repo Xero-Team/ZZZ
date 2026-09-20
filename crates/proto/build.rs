@@ -6,6 +6,6 @@ fn main() {
     build
         .protoc_executable(protoc_path)
         .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]")
-        .compile_protos(&["proto/zed.proto"], &["proto"])
+        .compile_protos(&["proto/zzz.proto"], &["proto"])
         .unwrap();
 }

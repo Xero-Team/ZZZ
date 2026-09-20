@@ -49,7 +49,7 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: off
     pub autosave: Option<AutosaveSetting>,
-    /// Controls previous session restoration in freshly launched Zed instance.
+    /// Controls previous session restoration in freshly launched ZZZ instance.
     /// Values: empty_tab, last_workspace, last_session, launchpad
     /// Default: last_session
     pub restore_on_startup: Option<RestoreOnStartupBehavior>,
@@ -86,13 +86,13 @@ pub struct WorkspaceSettingsContent {
     /// Default: auto ("on" on macOS, "off" otherwise)
     pub when_closing_with_no_tabs: Option<CloseWindowWhenNoItems>,
     /// Whether to use the system provided dialogs for Open and Save As.
-    /// When set to false, Zed will use the built-in keyboard-first pickers.
+    /// When set to false, ZZZ will use the built-in keyboard-first pickers.
     ///
     /// Default: true
     pub use_system_path_prompts: Option<bool>,
     /// Whether to use the system provided prompts.
-    /// When set to false, Zed will use the built-in prompts.
-    /// Note that this setting has no effect on Linux, where Zed will always
+    /// When set to false, ZZZ will use the built-in prompts.
+    /// Note that this setting has no effect on Linux, where ZZZ will always
     /// use the built-in prompts.
     ///
     /// Default: true
@@ -128,7 +128,7 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: false
     pub use_system_window_tabs: Option<bool>,
-    /// Which fullscreen mode the `zed::ToggleFullScreen` action enters (macOS only).
+    /// Which fullscreen mode the `zzz::ToggleFullScreen` action enters (macOS only).
     ///
     /// Default: native
     pub fullscreen_mode: Option<FullscreenMode>,
@@ -473,7 +473,7 @@ impl CloseWindowWhenNoItems {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum CliDefaultOpenBehavior {
-    /// Open directories as a new workspace in the current Zed window's sidebar.
+    /// Open directories as a new workspace in the current ZZZ window's sidebar.
     #[default]
     #[strum(serialize = "Add to Existing Window")]
     ExistingWindow,
@@ -499,7 +499,7 @@ pub enum CliDefaultOpenBehavior {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum DefaultOpenBehavior {
-    /// Open projects in the current Zed window.
+    /// Open projects in the current ZZZ window.
     #[default]
     #[strum(serialize = "Add to Existing Window")]
     ExistingWindow,
@@ -529,7 +529,7 @@ pub enum RestoreOnStartupBehavior {
     EmptyTab,
     /// Restore the workspace that was closed last.
     LastWorkspace,
-    /// Restore all workspaces that were open when quitting Zed.
+    /// Restore all workspaces that were open when quitting ZZZ.
     #[default]
     LastSession,
     /// Show the launchpad with recent projects (no tabs).

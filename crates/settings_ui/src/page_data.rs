@@ -110,8 +110,8 @@ fn developer_page() -> SettingsPage {
                     "Performance Profiler",
                 ),
                 description: lt(
-                    "settings_ui.page_data.description.collect.timing.data.for.foreground.and.background.executor.tasks.so.they.can.be.inspected.via.zed.open.performance.profiler.may.lead.to.increased.memory.usage",
-                    "Collect timing data for foreground and background executor tasks so they can be inspected via `zed: open performance profiler`. May lead to increased memory usage.",
+                    "settings_ui.page_data.description.collect.timing.data.for.foreground.and.background.executor.tasks.so.they.can.be.inspected.via.zzz.open.performance.profiler.may.lead.to.increased.memory.usage",
+                    "Collect timing data for foreground and background executor tasks so they can be inspected via `zzz: open performance profiler`. May lead to increased memory usage.",
                 ),
                 field: Box::new(SettingField {
                     json_path: Some("instrumentation.performance_profiler.enabled"),
@@ -314,8 +314,8 @@ fn general_page(cx: &App) -> SettingsPage {
                     "CLI Default Open Behavior",
                 ),
                 description: lt(
-                    "settings_ui.page_data.description.how.zed.path.opens.directories.when.no.flag.is.specified",
-                    "How `zed <path>` opens directories when no flag is specified.",
+                    "settings_ui.page_data.description.how.zzz.path.opens.directories.when.no.flag.is.specified",
+                    "How `zzz <path>` opens directories when no flag is specified.",
                 ),
                 field: Box::new(SettingField {
                     json_path: Some("cli_default_open_behavior"),
@@ -1583,7 +1583,7 @@ fn keymap_page() -> SettingsPage {
                     original_window
                         .update(cx, |_workspace, original_window, cx| {
                             original_window
-                                .dispatch_action(zed_actions::OpenKeymap.boxed_clone(), cx);
+                                .dispatch_action(zzz_actions::OpenKeymap.boxed_clone(), cx);
                             original_window.activate_window();
                         })
                         .ok();
@@ -9355,8 +9355,8 @@ fn network_page() -> SettingsPage {
             SettingsPageItem::SettingItem(SettingItem {
                 title: lt("settings_ui.page_data.title.server.url", "Server URL"),
                 description: lt(
-                    "settings_ui.page_data.description.the.url.of.the.zed.server.to.connect.to",
-                    "The URL of the Zed server to connect to.",
+                    "settings_ui.page_data.description.the.url.of.the.zzz.server.to.connect.to",
+                    "The URL of the ZZZ server to connect to.",
                 ),
                 field: Box::new(SettingField {
                     json_path: Some("server_url"),

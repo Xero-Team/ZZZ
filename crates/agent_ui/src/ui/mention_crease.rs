@@ -262,7 +262,7 @@ fn open_rule(
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) {
-    use zed_actions::assistant::OpenRulesLibrary;
+    use zzz_actions::assistant::OpenRulesLibrary;
 
     let PromptId::User { uuid } = id else {
         return;

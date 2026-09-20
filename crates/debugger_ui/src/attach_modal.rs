@@ -7,7 +7,7 @@ use i18n::tr;
 use picker::{Picker, PickerDelegate};
 use project::Project;
 use rpc::proto;
-use task::ZedDebugConfig;
+use task::ZZZDebugConfig;
 use util::debug_panic;
 
 use std::sync::Arc;
@@ -28,7 +28,7 @@ pub(super) struct Candidate {
 
 pub(crate) enum ModalIntent {
     ResolveProcessId(Option<oneshot::Sender<Option<i32>>>),
-    AttachToProcess(ZedDebugConfig),
+    AttachToProcess(ZZZDebugConfig),
 }
 
 pub(crate) struct AttachModalDelegate {
@@ -271,7 +271,7 @@ impl PickerDelegate for AttachModalDelegate {
 
                 let definition = definition.clone();
                 cx.spawn_in(window, async move |this, cx| {
-                    let Ok(scenario) = adapter.config_from_zed_format(definition).await else {
+                    let Ok(scenario) = adapter.config_from_zzz_format(definition).await else {
                         return;
                     };
 

@@ -506,10 +506,10 @@ mod tests {
     }
 
     #[test]
-    fn test_mermaid_font_family_resolves_zed_virtual_fonts() {
-        assert_eq!(super::mermaid_font_family(".ZedSans"), "IBM Plex Sans");
-        assert_eq!(super::mermaid_font_family("Zed Plex Sans"), "IBM Plex Sans");
-        assert_eq!(super::mermaid_font_family(".ZedMono"), "Lilex");
+    fn test_mermaid_font_family_resolves_zzz_virtual_fonts() {
+        assert_eq!(super::mermaid_font_family(".ZZZSans"), "IBM Plex Sans");
+        assert_eq!(super::mermaid_font_family("ZZZ Plex Sans"), "IBM Plex Sans");
+        assert_eq!(super::mermaid_font_family(".ZZZMono"), "Lilex");
         assert_eq!(super::mermaid_font_family(".SystemUIFont"), "system-ui");
         assert_eq!(super::mermaid_font_family("Custom Font"), "Custom Font");
     }

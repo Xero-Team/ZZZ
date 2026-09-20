@@ -21,7 +21,7 @@ use ui::{
     SwitchLabelPosition, ToggleState, Tooltip, prelude::*,
 };
 use util::ResultExt as _;
-use zed_actions::agent::ToggleModelSelector;
+use zzz_actions::agent::ToggleModelSelector;
 
 use crate::ui::{HoldForDefault, documentation_aside_side};
 use crate::{

@@ -38,7 +38,7 @@ use ui::{
 };
 use util::ResultExt as _;
 use workspace::{Workspace, create_and_open_local_file};
-use zed_actions::ExtensionCategoryFilter;
+use zzz_actions::ExtensionCategoryFilter;
 
 pub(crate) use configure_context_server_modal::ConfigureContextServerModal;
 pub(crate) use configure_context_server_tools_modal::ConfigureContextServerToolsModal;
@@ -565,7 +565,7 @@ impl AgentConfiguration {
                             {
                                 |window, cx| {
                                     window.dispatch_action(
-                                        zed_actions::Extensions {
+                                        zzz_actions::Extensions {
                                             category_filter: Some(
                                                 ExtensionCategoryFilter::ContextServers,
                                             ),
@@ -1166,7 +1166,7 @@ impl AgentConfiguration {
                     Some(ContextMenu::build(window, cx, |menu, _window, _cx| {
                         menu.entry(install_from_registry_label.clone(), None, {
                             |window, cx| {
-                                window.dispatch_action(Box::new(zed_actions::AcpRegistry), cx)
+                                window.dispatch_action(Box::new(zzz_actions::AcpRegistry), cx)
                             }
                         })
                         .entry(add_custom_agent_label.clone(), None, {

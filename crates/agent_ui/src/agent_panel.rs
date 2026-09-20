@@ -20,7 +20,7 @@ use project::agent_server_store::AllAgentServersSettings;
 use serde::{Deserialize, Serialize};
 use settings::{LanguageModelProviderSetting, LanguageModelSelection};
 
-use zed_actions::{
+use zzz_actions::{
     DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize,
     agent::{
         AddSelectionToThread, ConflictContent, LogoutAgent, OpenSettings, ReauthenticateAgent,
@@ -2552,7 +2552,7 @@ impl Panel for AgentPanel {
     }
 
     fn icon(&self, _window: &Window, cx: &App) -> Option<IconName> {
-        (self.enabled(cx) && AgentSettings::get_global(cx).button).then_some(IconName::ZedAssistant)
+        (self.enabled(cx) && AgentSettings::get_global(cx).button).then_some(IconName::ZZZAssistant)
     }
 
     fn icon_tooltip(&self, _window: &Window, cx: &App) -> Option<SharedString> {
@@ -2852,9 +2852,9 @@ impl AgentPanel {
                                     "agent_ui.panel.view_server_extensions",
                                     "View Server Extensions",
                                 ),
-                                Box::new(zed_actions::Extensions {
+                                Box::new(zzz_actions::Extensions {
                                     category_filter: Some(
-                                        zed_actions::ExtensionCategoryFilter::ContextServers,
+                                        zzz_actions::ExtensionCategoryFilter::ContextServers,
                                     ),
                                     id: None,
                                 }),
@@ -3095,7 +3095,7 @@ impl AgentPanel {
                             .icon_color(Color::Muted)
                             .handler({
                                 move |window, cx| {
-                                    window.dispatch_action(Box::new(zed_actions::AcpRegistry), cx)
+                                    window.dispatch_action(Box::new(zzz_actions::AcpRegistry), cx)
                                 }
                             }),
                         )
@@ -4446,8 +4446,8 @@ mod tests {
             "resource text should be the raw conflict"
         );
         assert!(
-            uri.starts_with("zed:///agent/merge-conflict"),
-            "URI should use the zed merge-conflict scheme, got: {uri}"
+            uri.starts_with("zzz:///agent/merge-conflict"),
+            "URI should use the zzz merge-conflict scheme, got: {uri}"
         );
         assert!(uri.contains("utils.rs"), "URI should encode the file path");
     }

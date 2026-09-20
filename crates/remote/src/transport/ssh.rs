@@ -224,7 +224,7 @@ impl MasterProcess {
 
 #[cfg(windows)]
 impl MasterProcess {
-    const CONNECTION_ESTABLISHED_MAGIC: &str = "ZED_SSH_CONNECTION_ESTABLISHED";
+    const CONNECTION_ESTABLISHED_MAGIC: &str = "ZZZ_SSH_CONNECTION_ESTABLISHED";
 
     pub fn new(
         askpass_script_path: &std::ffi::OsStr,
@@ -467,7 +467,7 @@ impl RemoteConnection for SshRemoteConnection {
         delegate: Arc<dyn RemoteClientDelegate>,
         cx: &mut AsyncApp,
     ) -> Task<Result<i32>> {
-        const VARS: [&str; 3] = ["RUST_LOG", "RUST_BACKTRACE", "ZED_GENERATE_MINIDUMPS"];
+        const VARS: [&str; 3] = ["RUST_LOG", "RUST_BACKTRACE", "ZZZ_GENERATE_MINIDUMPS"];
         delegate.set_status(Some("Starting proxy"), cx);
 
         let Some(remote_binary_path) = self.remote_binary_path.clone() else {
@@ -626,7 +626,7 @@ impl SshRemoteConnection {
         let destination = connection_options.ssh_destination();
 
         let temp_dir = tempfile::Builder::new()
-            .prefix("zed-ssh-session")
+            .prefix("zzz-ssh-session")
             .tempdir()?;
 
         // On non-Windows, check if the user already has an active ControlMaster
@@ -1968,7 +1968,7 @@ mod tests {
     #[test]
     fn test_build_command_quotes_env_assignment() -> Result<()> {
         let mut input_env = HashMap::default();
-        input_env.insert("ZED$(echo foo)".to_string(), "value".to_string());
+        input_env.insert("ZZZ$(echo foo)".to_string(), "value".to_string());
 
         let command = build_command_posix(
             Some("remote_program".to_string()),
@@ -1990,7 +1990,7 @@ mod tests {
             .last()
             .context("missing remote command argument")?;
         assert!(
-            remote_command.contains("exec env 'ZED$(echo foo)=value' remote_program"),
+            remote_command.contains("exec env 'ZZZ$(echo foo)=value' remote_program"),
             "expected env assignment to be quoted, got: {remote_command}"
         );
 
@@ -2001,10 +2001,10 @@ mod tests {
     fn test_sftp_put_command_quotes_paths() {
         assert_eq!(
             sftp_put_command(
-                "/tmp/Zed Repro/remote_server",
+                "/tmp/ZZZ Repro/remote_server",
                 ".zzz_server/downloaded server",
             ),
-            "put \"/tmp/Zed Repro/remote_server\" \".zzz_server/downloaded server\"\n"
+            "put \"/tmp/ZZZ Repro/remote_server\" \".zzz_server/downloaded server\"\n"
         );
     }
 
@@ -2012,18 +2012,18 @@ mod tests {
     fn test_sftp_put_command_escapes_quotes_in_paths() {
         assert_eq!(
             sftp_put_command(
-                r#"/tmp/Zed "Nightly"/remote_server"#,
+                r#"/tmp/ZZZ "Nightly"/remote_server"#,
                 ".zzz_server/remote_server",
             ),
-            "put \"/tmp/Zed \\\"Nightly\\\"/remote_server\" \".zzz_server/remote_server\"\n"
+            "put \"/tmp/ZZZ \\\"Nightly\\\"/remote_server\" \".zzz_server/remote_server\"\n"
         );
     }
 
     #[test]
     fn test_sftp_put_command_doubles_trailing_destination_backslash_before_closing_quote() {
         assert_eq!(
-            sftp_put_command("/tmp/remote_server", r"C:\zed server\"),
-            "put \"/tmp/remote_server\" \"C:\\\\zed server\\\\\"\n"
+            sftp_put_command("/tmp/remote_server", r"C:\zzz server\"),
+            "put \"/tmp/remote_server\" \"C:\\\\zzz server\\\\\"\n"
         );
     }
 
@@ -2031,10 +2031,10 @@ mod tests {
     fn test_sftp_put_command_doubles_source_backslashes_for_posix_glob() {
         assert_eq!(
             sftp_put_command(
-                r"/tmp/zed\server/remote_server",
+                r"/tmp/zzz\server/remote_server",
                 ".zzz_server/remote_server",
             ),
-            "put \"/tmp/zed\\\\server/remote_server\" \".zzz_server/remote_server\"\n"
+            "put \"/tmp/zzz\\\\server/remote_server\" \".zzz_server/remote_server\"\n"
         );
     }
 
@@ -2042,10 +2042,10 @@ mod tests {
     fn test_sftp_put_command_doubles_windows_source_backslashes_on_all_platforms() {
         assert_eq!(
             sftp_put_command(
-                r"C:\Users\Smit\Zed Repro\remote_server",
+                r"C:\Users\Smit\ZZZ Repro\remote_server",
                 ".zzz_server/remote_server",
             ),
-            "put \"C:\\\\Users\\\\Smit\\\\Zed Repro\\\\remote_server\" \".zzz_server/remote_server\"\n"
+            "put \"C:\\\\Users\\\\Smit\\\\ZZZ Repro\\\\remote_server\" \".zzz_server/remote_server\"\n"
         );
     }
 

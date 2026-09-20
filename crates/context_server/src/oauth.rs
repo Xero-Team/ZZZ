@@ -66,7 +66,7 @@ fn require_https_or_loopback(url: &Url) -> Result<()> {
 /// protections against private/reserved IP ranges.
 ///
 /// This wraps [`require_https_or_loopback`] and adds IP-range checks to prevent
-/// an attacker-controlled MCP server from directing Zed to fetch internal
+/// an attacker-controlled MCP server from directing ZZZ to fetch internal
 /// network resources via metadata URLs.
 ///
 /// **Known limitation:** Domain-name URLs that resolve to private IPs are *not*
@@ -724,7 +724,7 @@ pub fn dcr_registration_body(
     };
 
     let mut body = serde_json::json!({
-        "client_name": "Zed",
+        "client_name": "ZZZ",
         "redirect_uris": [redirect_uri],
         "grant_types": grant_types,
         "response_types": ["code"],
@@ -1192,14 +1192,14 @@ pub async fn start_callback_server() -> Result<(
                 Ok(_) => (
                     200,
                     "<html><body><h1>Authorization successful</h1>\
-                     <p>You can close this tab and return to Zed.</p></body></html>",
+                     <p>You can close this tab and return to ZZZ.</p></body></html>",
                 ),
                 Err(err) => {
                     log::error!("OAuth callback error: {}", err);
                     (
                         400,
                         "<html><body><h1>Authorization failed</h1>\
-                         <p>Something went wrong. Please try again from Zed.</p></body></html>",
+                         <p>Something went wrong. Please try again from ZZZ.</p></body></html>",
                     )
                 }
             };
@@ -2024,7 +2024,7 @@ mod tests {
     #[test]
     fn test_dcr_registration_body_shape() {
         let body = dcr_registration_body("http://127.0.0.1:12345/callback", None, &[]);
-        assert_eq!(body["client_name"], "Zed");
+        assert_eq!(body["client_name"], "ZZZ");
         assert_eq!(body["redirect_uris"][0], "http://127.0.0.1:12345/callback");
         assert_eq!(body["grant_types"][0], "authorization_code");
         assert_eq!(body["response_types"][0], "code");

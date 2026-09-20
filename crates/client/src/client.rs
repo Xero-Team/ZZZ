@@ -4,7 +4,7 @@ pub mod test;
 pub mod platform_info;
 mod proxy;
 pub mod user;
-pub mod zed_urls;
+pub mod zzz_urls;
 
 use anyhow::{Context as _, Result, anyhow};
 use async_tungstenite::tungstenite::{
@@ -49,15 +49,15 @@ use util::{ConnectionResult, ResultExt};
 pub use rpc::*;
 pub use user::*;
 
-static ZED_SERVER_URL: LazyLock<Option<String>> =
-    LazyLock::new(|| std::env::var("ZED_SERVER_URL").ok());
-static ZED_RPC_URL: LazyLock<Option<String>> = LazyLock::new(|| std::env::var("ZED_RPC_URL").ok());
+static ZZZ_SERVER_URL: LazyLock<Option<String>> =
+    LazyLock::new(|| std::env::var("ZZZ_SERVER_URL").ok());
+static ZZZ_RPC_URL: LazyLock<Option<String>> = LazyLock::new(|| std::env::var("ZZZ_RPC_URL").ok());
 
-pub static ZED_APP_PATH: LazyLock<Option<PathBuf>> =
-    LazyLock::new(|| std::env::var("ZED_APP_PATH").ok().map(PathBuf::from));
+pub static ZZZ_APP_PATH: LazyLock<Option<PathBuf>> =
+    LazyLock::new(|| std::env::var("ZZZ_APP_PATH").ok().map(PathBuf::from));
 
-pub static ZED_ALWAYS_ACTIVE: LazyLock<bool> =
-    LazyLock::new(|| std::env::var("ZED_ALWAYS_ACTIVE").is_ok_and(|e| !e.is_empty()));
+pub static ZZZ_ALWAYS_ACTIVE: LazyLock<bool> =
+    LazyLock::new(|| std::env::var("ZZZ_ALWAYS_ACTIVE").is_ok_and(|e| !e.is_empty()));
 
 pub const INITIAL_RECONNECTION_DELAY: Duration = Duration::from_millis(500);
 pub const MAX_RECONNECTION_DELAY: Duration = Duration::from_secs(30);
@@ -77,7 +77,7 @@ pub struct ClientSettings {
     /// Overrides the key used to store credentials in the system keychain.
     /// Defaults to `server_url` when unset.
     ///
-    /// Useful when running multiple Zed instances side by side without them
+    /// Useful when running multiple ZZZ instances side by side without them
     /// overwriting each other's keychain entries.
     ///
     /// Note: changing this after signing in will require signing in again, as
@@ -102,7 +102,7 @@ impl ClientSettings {
 
 impl Settings for ClientSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        if let Some(server_url) = &*ZED_SERVER_URL {
+        if let Some(server_url) = &*ZZZ_SERVER_URL {
             return Self {
                 server_url: server_url.clone(),
                 credentials_url: content.credentials_url.clone(),
@@ -318,7 +318,7 @@ pub struct ClientCredentialsProvider {
 impl ClientCredentialsProvider {
     pub fn new(cx: &App) -> Self {
         Self {
-            provider: zed_credentials_provider::global(cx),
+            provider: zzz_credentials_provider::global(cx),
         }
     }
 
@@ -1023,7 +1023,7 @@ impl Client {
                 return Ok(url);
             }
 
-            if let Some(url) = &*ZED_RPC_URL {
+            if let Some(url) = &*ZZZ_RPC_URL {
                 return Url::parse(url).context("invalid rpc url");
             }
 
@@ -1118,12 +1118,12 @@ impl Client {
                 HeaderValue::from_str(&credentials.authorization_header())?,
             );
             request_headers.insert(
-                "x-zed-protocol-version",
+                "x-zzz-protocol-version",
                 HeaderValue::from_str(&rpc::PROTOCOL_VERSION.to_string())?,
             );
-            request_headers.insert("x-zed-app-version", HeaderValue::from_str(&app_version)?);
+            request_headers.insert("x-zzz-app-version", HeaderValue::from_str(&app_version)?);
             request_headers.insert(
-                "x-zed-release-channel",
+                "x-zzz-release-channel",
                 HeaderValue::from_str(release_channel.map(|r| r.dev_name()).unwrap_or("unknown"))?,
             );
             if let Some(user_agent) = user_agent {
@@ -1340,16 +1340,16 @@ impl ProtoClient for Client {
 }
 
 /// Prefix for the zzz:// URL scheme.
-pub const ZED_URL_SCHEME: &str = "zzz";
+pub const ZZZ_URL_SCHEME: &str = "zzz";
 
-/// A parsed Zed link that can be handled internally by the application.
+/// A parsed ZZZ link that can be handled internally by the application.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ZedLink {}
+pub enum ZZZLink {}
 
-/// Parses the given link into a Zed link.
+/// Parses the given link into a ZZZ link.
 ///
 /// Returns [`None`] for links that should be opened in the browser.
-pub fn parse_zed_link(_link: &str, _cx: &App) -> Option<ZedLink> {
+pub fn parse_zzz_link(_link: &str, _cx: &App) -> Option<ZZZLink> {
     None
 }
 

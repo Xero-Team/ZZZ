@@ -39,7 +39,7 @@ use workspace::{
 };
 
 use anyhow::{Result, anyhow};
-use zed_actions::assistant::InlineAssist;
+use zzz_actions::assistant::InlineAssist;
 
 const TERMINAL_PANEL_KEY: &str = "TerminalPanel";
 
@@ -178,7 +178,7 @@ impl TerminalPanel {
                                         // context menu will be gone the moment we spawn the modal.
                                         .action(
                                             tr(cx, "menu.run.spawn_task", "Spawn Task"),
-                                            zed_actions::Spawn::modal().boxed_clone(),
+                                            zzz_actions::Spawn::modal().boxed_clone(),
                                         )
                                 });
 
@@ -1330,7 +1330,7 @@ impl Render for FailedToSpawnTerminal {
                     context_menu
                         .action(
                             tr(cx, "workspace.welcome.open_settings", "Open Settings"),
-                            zed_actions::OpenSettings.boxed_clone(),
+                            zzz_actions::OpenSettings.boxed_clone(),
                         )
                         .action(
                             tr(
@@ -1338,7 +1338,7 @@ impl Render for FailedToSpawnTerminal {
                                 "terminal_view.failed.edit_settings_json",
                                 "Edit settings.json",
                             ),
-                            zed_actions::OpenSettingsFile.boxed_clone(),
+                            zzz_actions::OpenSettingsFile.boxed_clone(),
                         )
                 }))
             })
@@ -1383,7 +1383,7 @@ impl Render for FailedToSpawnTerminal {
                                 .size(LabelSize::Small),
                             )
                             .on_click(|_, window, cx| {
-                                window.dispatch_action(zed_actions::OpenSettings.boxed_clone(), cx);
+                                window.dispatch_action(zzz_actions::OpenSettings.boxed_clone(), cx);
                             }),
                         popover_menu.into_any_element(),
                     )),
@@ -1756,14 +1756,14 @@ struct InlineAssistTabBarButton {
 impl Render for InlineAssistTabBarButton {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let focus_handle = self.focus_handle.clone();
-        IconButton::new("terminal_inline_assistant", IconName::ZedAssistant)
+        IconButton::new("terminal_inline_assistant", IconName::ZZZAssistant)
             .icon_size(IconSize::Small)
             .on_click(cx.listener(|_, _, window, cx| {
                 window.dispatch_action(InlineAssist::default().boxed_clone(), cx);
             }))
             .tooltip(move |_window, cx| {
                 Tooltip::for_action_in(
-                    tr(cx, "zed.quick_action_bar.inline_assist", "Inline Assist"),
+                    tr(cx, "zzz.quick_action_bar.inline_assist", "Inline Assist"),
                     &InlineAssist::default(),
                     &focus_handle,
                     cx,
@@ -1851,7 +1851,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_prepare_script_like_task() {
-        let user_command = r#"REPO_URL=$(git remote get-url origin | sed -e \"s/^git@\\(.*\\):\\(.*\\)\\.git$/https:\\/\\/\\1\\/\\2/\"); COMMIT_SHA=$(git log -1 --format=\"%H\" -- \"${ZED_RELATIVE_FILE}\"); echo \"${REPO_URL}/blob/${COMMIT_SHA}/${ZED_RELATIVE_FILE}#L${ZED_ROW}-$(echo $(($(wc -l <<< \"$ZED_SELECTED_TEXT\") + $ZED_ROW - 1)))\" | xclip -selection clipboard"#.to_string();
+        let user_command = r#"REPO_URL=$(git remote get-url origin | sed -e \"s/^git@\\(.*\\):\\(.*\\)\\.git$/https:\\/\\/\\1\\/\\2/\"); COMMIT_SHA=$(git log -1 --format=\"%H\" -- \"${ZZZ_RELATIVE_FILE}\"); echo \"${REPO_URL}/blob/${COMMIT_SHA}/${ZZZ_RELATIVE_FILE}#L${ZZZ_ROW}-$(echo $(($(wc -l <<< \"$ZZZ_SELECTED_TEXT\") + $ZZZ_ROW - 1)))\" | xclip -selection clipboard"#.to_string();
         let expected_cwd = PathBuf::from("/some/work");
 
         let input = SpawnInTerminal {

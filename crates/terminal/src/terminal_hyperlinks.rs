@@ -1110,7 +1110,7 @@ mod tests {
 
             #[perf]
             pub fn cargo_hyperlink_benchmark() {
-                const LINE: &str = "    Compiling terminal v0.1.0 (/Hyperlinks/Bench/Source/zed-hyperlinks/crates/terminal)\r\n";
+                const LINE: &str = "    Compiling terminal v0.1.0 (/Hyperlinks/Bench/Source/zzz-hyperlinks/crates/terminal)\r\n";
                 thread_local! {
                     static TEST_TERM_AND_POINT: (Term<VoidListener>, AlacPoint) =
                         build_test_term(LINE, 500, 50);
@@ -1120,7 +1120,7 @@ mod tests {
                         find_from_grid_point_bench(term, *point)
                             .map(|(path, ..)| path)
                             .unwrap_or_default(),
-                        "/Hyperlinks/Bench/Source/zed-hyperlinks/crates/terminal",
+                        "/Hyperlinks/Bench/Source/zzz-hyperlinks/crates/terminal",
                         "Hyperlink should have been found"
                     );
                 });
@@ -1128,7 +1128,7 @@ mod tests {
 
             #[perf]
             pub fn rust_hyperlink_benchmark() {
-                const LINE: &str = "    --> /Hyperlinks/Bench/Source/zed-hyperlinks/crates/terminal/terminal.rs:1000:42\r\n";
+                const LINE: &str = "    --> /Hyperlinks/Bench/Source/zzz-hyperlinks/crates/terminal/terminal.rs:1000:42\r\n";
                 thread_local! {
                     static TEST_TERM_AND_POINT: (Term<VoidListener>, AlacPoint) =
                         build_test_term(LINE, 500, 50);
@@ -1138,7 +1138,7 @@ mod tests {
                         find_from_grid_point_bench(term, *point)
                             .map(|(path, ..)| path)
                             .unwrap_or_default(),
-                        "/Hyperlinks/Bench/Source/zed-hyperlinks/crates/terminal/terminal.rs:1000:42",
+                        "/Hyperlinks/Bench/Source/zzz-hyperlinks/crates/terminal/terminal.rs:1000:42",
                         "Hyperlink should have been found"
                     );
                 });

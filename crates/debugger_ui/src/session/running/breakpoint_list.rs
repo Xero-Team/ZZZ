@@ -25,7 +25,7 @@ use ui::{
 };
 use util::paths::PathExt;
 use workspace::Workspace;
-use zed_actions::{ToggleEnableBreakpoint, UnsetBreakpoint};
+use zzz_actions::{ToggleEnableBreakpoint, UnsetBreakpoint};
 
 actions!(
     debugger,

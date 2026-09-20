@@ -1701,7 +1701,7 @@ mod tests {
                 [
                     {
                         "unbind": {
-                            "ctrl-a": ["zed::Unbind", "test_keymap_file::StringAction"]
+                            "ctrl-a": ["zzz::Unbind", "test_keymap_file::StringAction"]
                         }
                     }
                 ]
@@ -1716,7 +1716,7 @@ mod tests {
                 assert!(
                     error_message
                         .0
-                        .contains("can't use `\"zed::Unbind\"` as an unbind target.")
+                        .contains("can't use `\"zzz::Unbind\"` as an unbind target.")
                 );
             }
             other => panic!("expected SomeFailedToLoad, got {other:?}"),
@@ -1813,14 +1813,14 @@ mod tests {
             "[]",
             KeybindUpdateOperation::add(KeybindUpdateTarget {
                 keystrokes: &parse_keystrokes("ctrl-a"),
-                action_name: "zed::SomeAction",
+                action_name: "zzz::SomeAction",
                 context: None,
                 action_arguments: None,
             }),
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 }
             ]"#
@@ -1831,14 +1831,14 @@ mod tests {
             "[]",
             KeybindUpdateOperation::add(KeybindUpdateTarget {
                 keystrokes: &parse_keystrokes("\\ a"),
-                action_name: "zed::SomeAction",
+                action_name: "zzz::SomeAction",
                 context: None,
                 action_arguments: None,
             }),
             r#"[
                 {
                     "bindings": {
-                        "\\ a": "zed::SomeAction"
+                        "\\ a": "zzz::SomeAction"
                     }
                 }
             ]"#
@@ -1849,14 +1849,14 @@ mod tests {
             "[]",
             KeybindUpdateOperation::add(KeybindUpdateTarget {
                 keystrokes: &parse_keystrokes("ctrl-a"),
-                action_name: "zed::SomeAction",
+                action_name: "zzz::SomeAction",
                 context: None,
                 action_arguments: Some(""),
             }),
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 }
             ]"#
@@ -1867,26 +1867,26 @@ mod tests {
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 }
             ]"#
             .unindent(),
             KeybindUpdateOperation::add(KeybindUpdateTarget {
                 keystrokes: &parse_keystrokes("ctrl-b"),
-                action_name: "zed::SomeOtherAction",
+                action_name: "zzz::SomeOtherAction",
                 context: None,
                 action_arguments: None,
             }),
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 },
                 {
                     "bindings": {
-                        "ctrl-b": "zed::SomeOtherAction"
+                        "ctrl-b": "zzz::SomeOtherAction"
                     }
                 }
             ]"#
@@ -1897,27 +1897,27 @@ mod tests {
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 }
             ]"#
             .unindent(),
             KeybindUpdateOperation::add(KeybindUpdateTarget {
                 keystrokes: &parse_keystrokes("ctrl-b"),
-                action_name: "zed::SomeOtherAction",
+                action_name: "zzz::SomeOtherAction",
                 context: None,
                 action_arguments: Some(r#"{"foo": "bar"}"#),
             }),
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 },
                 {
                     "bindings": {
                         "ctrl-b": [
-                            "zed::SomeOtherAction",
+                            "zzz::SomeOtherAction",
                             {
                                 "foo": "bar"
                             }
@@ -1932,28 +1932,28 @@ mod tests {
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 }
             ]"#
             .unindent(),
             KeybindUpdateOperation::add(KeybindUpdateTarget {
                 keystrokes: &parse_keystrokes("ctrl-b"),
-                action_name: "zed::SomeOtherAction",
-                context: Some("Zed > Editor && some_condition = true"),
+                action_name: "zzz::SomeOtherAction",
+                context: Some("ZZZ > Editor && some_condition = true"),
                 action_arguments: Some(r#"{"foo": "bar"}"#),
             }),
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 },
                 {
-                    "context": "Zed > Editor && some_condition = true",
+                    "context": "ZZZ > Editor && some_condition = true",
                     "bindings": {
                         "ctrl-b": [
-                            "zed::SomeOtherAction",
+                            "zzz::SomeOtherAction",
                             {
                                 "foo": "bar"
                             }
@@ -1968,7 +1968,7 @@ mod tests {
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 }
             ]"#
@@ -1976,13 +1976,13 @@ mod tests {
             KeybindUpdateOperation::Replace {
                 target: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("ctrl-a"),
-                    action_name: "zed::SomeAction",
+                    action_name: "zzz::SomeAction",
                     context: None,
                     action_arguments: None,
                 },
                 source: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("ctrl-b"),
-                    action_name: "zed::SomeOtherAction",
+                    action_name: "zzz::SomeOtherAction",
                     context: None,
                     action_arguments: Some(r#"{"foo": "bar"}"#),
                 },
@@ -1991,13 +1991,13 @@ mod tests {
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 },
                 {
                     "bindings": {
                         "ctrl-b": [
-                            "zed::SomeOtherAction",
+                            "zzz::SomeOtherAction",
                             {
                                 "foo": "bar"
                             }
@@ -2006,7 +2006,7 @@ mod tests {
                 },
                 {
                     "unbind": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 }
             ]"#
@@ -2019,7 +2019,7 @@ mod tests {
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 }
             ]"#
@@ -2027,13 +2027,13 @@ mod tests {
             KeybindUpdateOperation::Replace {
                 target: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("ctrl-a"),
-                    action_name: "zed::SomeAction",
+                    action_name: "zzz::SomeAction",
                     context: None,
                     action_arguments: None,
                 },
                 source: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("ctrl-a"),
-                    action_name: "zed::SomeOtherAction",
+                    action_name: "zzz::SomeOtherAction",
                     context: None,
                     action_arguments: None,
                 },
@@ -2042,12 +2042,12 @@ mod tests {
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 },
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeOtherAction"
+                        "ctrl-a": "zzz::SomeOtherAction"
                     }
                 }
             ]"#
@@ -2061,7 +2061,7 @@ mod tests {
                 {
                     "context": "SomeContext",
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 }
             ]"#
@@ -2069,13 +2069,13 @@ mod tests {
             KeybindUpdateOperation::Replace {
                 target: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("ctrl-a"),
-                    action_name: "zed::SomeAction",
+                    action_name: "zzz::SomeAction",
                     context: Some("SomeContext"),
                     action_arguments: None,
                 },
                 source: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("ctrl-b"),
-                    action_name: "zed::SomeOtherAction",
+                    action_name: "zzz::SomeOtherAction",
                     context: Some("SomeContext"),
                     action_arguments: None,
                 },
@@ -2085,19 +2085,19 @@ mod tests {
                 {
                     "context": "SomeContext",
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 },
                 {
                     "context": "SomeContext",
                     "bindings": {
-                        "ctrl-b": "zed::SomeOtherAction"
+                        "ctrl-b": "zzz::SomeOtherAction"
                     }
                 },
                 {
                     "context": "SomeContext",
                     "unbind": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 }
             ]"#
@@ -2108,7 +2108,7 @@ mod tests {
             r#"[
                 {
                     "bindings": {
-                        "a": "zed::SomeAction"
+                        "a": "zzz::SomeAction"
                     }
                 }
             ]"#
@@ -2116,13 +2116,13 @@ mod tests {
             KeybindUpdateOperation::Replace {
                 target: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("a"),
-                    action_name: "zed::SomeAction",
+                    action_name: "zzz::SomeAction",
                     context: None,
                     action_arguments: None,
                 },
                 source: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("ctrl-b"),
-                    action_name: "zed::SomeOtherAction",
+                    action_name: "zzz::SomeOtherAction",
                     context: None,
                     action_arguments: Some(r#"{"foo": "bar"}"#),
                 },
@@ -2132,7 +2132,7 @@ mod tests {
                 {
                     "bindings": {
                         "ctrl-b": [
-                            "zed::SomeOtherAction",
+                            "zzz::SomeOtherAction",
                             {
                                 "foo": "bar"
                             }
@@ -2147,7 +2147,7 @@ mod tests {
             r#"[
                 {
                     "bindings": {
-                        "\\ a": "zed::SomeAction"
+                        "\\ a": "zzz::SomeAction"
                     }
                 }
             ]"#
@@ -2155,13 +2155,13 @@ mod tests {
             KeybindUpdateOperation::Replace {
                 target: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("\\ a"),
-                    action_name: "zed::SomeAction",
+                    action_name: "zzz::SomeAction",
                     context: None,
                     action_arguments: None,
                 },
                 source: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("\\ b"),
-                    action_name: "zed::SomeOtherAction",
+                    action_name: "zzz::SomeOtherAction",
                     context: None,
                     action_arguments: Some(r#"{"foo": "bar"}"#),
                 },
@@ -2171,7 +2171,7 @@ mod tests {
                 {
                     "bindings": {
                         "\\ b": [
-                            "zed::SomeOtherAction",
+                            "zzz::SomeOtherAction",
                             {
                                 "foo": "bar"
                             }
@@ -2186,7 +2186,7 @@ mod tests {
             r#"[
                 {
                     "bindings": {
-                        "\\ a": "zed::SomeAction"
+                        "\\ a": "zzz::SomeAction"
                     }
                 }
             ]"#
@@ -2194,13 +2194,13 @@ mod tests {
             KeybindUpdateOperation::Replace {
                 target: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("\\ a"),
-                    action_name: "zed::SomeAction",
+                    action_name: "zzz::SomeAction",
                     context: None,
                     action_arguments: None,
                 },
                 source: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("\\ a"),
-                    action_name: "zed::SomeAction",
+                    action_name: "zzz::SomeAction",
                     context: None,
                     action_arguments: None,
                 },
@@ -2209,7 +2209,7 @@ mod tests {
             r#"[
                 {
                     "bindings": {
-                        "\\ a": "zed::SomeAction"
+                        "\\ a": "zzz::SomeAction"
                     }
                 }
             ]"#
@@ -2220,7 +2220,7 @@ mod tests {
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 }
             ]"#
@@ -2228,13 +2228,13 @@ mod tests {
             KeybindUpdateOperation::Replace {
                 target: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("ctrl-a"),
-                    action_name: "zed::SomeNonexistentAction",
+                    action_name: "zzz::SomeNonexistentAction",
                     context: None,
                     action_arguments: None,
                 },
                 source: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("ctrl-b"),
-                    action_name: "zed::SomeOtherAction",
+                    action_name: "zzz::SomeOtherAction",
                     context: None,
                     action_arguments: None,
                 },
@@ -2243,12 +2243,12 @@ mod tests {
             r#"[
                 {
                     "bindings": {
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                     }
                 },
                 {
                     "bindings": {
-                        "ctrl-b": "zed::SomeOtherAction"
+                        "ctrl-b": "zzz::SomeOtherAction"
                     }
                 }
             ]"#
@@ -2260,7 +2260,7 @@ mod tests {
                 {
                     "bindings": {
                         // some comment
-                        "ctrl-a": "zed::SomeAction"
+                        "ctrl-a": "zzz::SomeAction"
                         // some other comment
                     }
                 }
@@ -2269,13 +2269,13 @@ mod tests {
             KeybindUpdateOperation::Replace {
                 target: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("ctrl-a"),
-                    action_name: "zed::SomeAction",
+                    action_name: "zzz::SomeAction",
                     context: None,
                     action_arguments: None,
                 },
                 source: KeybindUpdateTarget {
                     keystrokes: &parse_keystrokes("ctrl-b"),
-                    action_name: "zed::SomeOtherAction",
+                    action_name: "zzz::SomeOtherAction",
                     context: None,
                     action_arguments: Some(r#"{"foo": "bar"}"#),
                 },
@@ -2286,7 +2286,7 @@ mod tests {
                     "bindings": {
                         // some comment
                         "ctrl-b": [
-                            "zed::SomeOtherAction",
+                            "zzz::SomeOtherAction",
                             {
                                 "foo": "bar"
                             }

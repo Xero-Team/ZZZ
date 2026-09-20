@@ -8442,7 +8442,7 @@ pub fn render_breadcrumb_text(
                                             "Show Symbol Outline",
                                         )))
                                         .child(ui::KeyBinding::for_action_in(
-                                            &zed_actions::outline::ToggleOutline,
+                                            &zzz_actions::outline::ToggleOutline,
                                             &focus_handle,
                                             cx,
                                         )),
@@ -8469,7 +8469,7 @@ pub fn render_breadcrumb_text(
                             move |_, window, cx| {
                                 if let Some((editor, callback)) = editor
                                     .upgrade()
-                                    .zip(zed_actions::outline::TOGGLE_OUTLINE.get())
+                                    .zip(zzz_actions::outline::TOGGLE_OUTLINE.get())
                                 {
                                     callback(editor.to_any_view(), window, cx);
                                 }
@@ -9001,7 +9001,7 @@ pub(crate) fn render_buffer_header(
                         .when_some(abs_path, |menu, abs_path| {
                             menu.entry(
                                 tr(cx, "project_panel.menu.copy_path", "Copy Path"),
-                                Some(Box::new(zed_actions::workspace::CopyPath)),
+                                Some(Box::new(zzz_actions::workspace::CopyPath)),
                                 window.handler_for(&editor, move |_, _, cx| {
                                     cx.write_to_clipboard(ClipboardItem::new_string(
                                         abs_path.to_string_lossy().into_owned(),
@@ -9016,7 +9016,7 @@ pub(crate) fn render_buffer_header(
                                     "project_panel.menu.copy_relative_path",
                                     "Copy Relative Path",
                                 ),
-                                Some(Box::new(zed_actions::workspace::CopyRelativePath)),
+                                Some(Box::new(zzz_actions::workspace::CopyRelativePath)),
                                 window.handler_for(&editor, move |_, _, cx| {
                                     cx.write_to_clipboard(ClipboardItem::new_string(
                                         relative_path.display(path_style).to_string(),

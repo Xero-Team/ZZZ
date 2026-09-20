@@ -41,7 +41,7 @@ mkdir -p ~/projects
 echo "${LANGNAME}: ==>
 extension: ==>
 chore: ==>
-zed_extension_api: ==>
+zzz_extension_api: ==>
 "'regex:(?<![\[a-zA-Z0-9])(#[0-9]{3,5})==>zed-industries/zed\1' \
   > ~/projects/${LANGNAME}.txt
 
@@ -169,7 +169,7 @@ pnpm sort-extensions
 
 # edit extensions.toml:
 # - bump version
-# - change `submodule` from `extensions/zed` to new path
+# - change `submodule` from `extensions/zzz` to new path
 # - remove `path` line all together
 
 git add extensions.toml .gitmodules extensions/${LANGNAME}

@@ -963,13 +963,13 @@ mod tests {
     fn test_bare_program_resolved_via_custom_path() {
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
 
-        let link_path = temp_dir.path().join("zed-test-echo");
+        let link_path = temp_dir.path().join("zzz-test-echo");
         std::os::unix::fs::symlink("/bin/echo", &link_path).expect("failed to create symlink");
 
         let custom_path = temp_dir.path().to_string_lossy().into_owned();
 
         smol::block_on(async {
-            let output = Command::new("zed-test-echo")
+            let output = Command::new("zzz-test-echo")
                 .args(["-n", "from-custom-path"])
                 .env("PATH", &custom_path)
                 .output()
@@ -985,13 +985,13 @@ mod tests {
     fn test_bare_program_preserves_argv0_when_resolved_via_custom_path() {
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
 
-        let link_path = temp_dir.path().join("zed-test-sh");
+        let link_path = temp_dir.path().join("zzz-test-sh");
         std::os::unix::fs::symlink("/bin/sh", &link_path).expect("failed to create symlink");
 
         let custom_path = temp_dir.path().to_string_lossy().into_owned();
 
         smol::block_on(async {
-            let output = Command::new("zed-test-sh")
+            let output = Command::new("zzz-test-sh")
                 .args(["-c", "printf %s \"$0\""])
                 .env("PATH", &custom_path)
                 .output()
@@ -999,14 +999,14 @@ mod tests {
                 .expect("failed to spawn with custom PATH");
 
             assert!(output.status.success());
-            assert_eq!(output.stdout, b"zed-test-sh");
+            assert_eq!(output.stdout, b"zzz-test-sh");
         });
     }
 
     #[test]
     fn test_bare_program_with_custom_path_falls_back_when_not_found() {
         smol::block_on(async {
-            let result = Command::new("zed-nonexistent-binary-xyz")
+            let result = Command::new("zzz-nonexistent-binary-xyz")
                 .env("PATH", "/nonexistent/path")
                 .spawn();
 
@@ -1019,7 +1019,7 @@ mod tests {
         smol::block_on(async {
             let output = Command::new("echo")
                 .args(["-n", "from-inherited-path"])
-                .env("ZED_TEST_VAR", "test")
+                .env("ZZZ_TEST_VAR", "test")
                 .output()
                 .await
                 .expect("failed to spawn with custom env but no PATH override");
@@ -1033,11 +1033,11 @@ mod tests {
     fn test_relative_path_resolved_against_current_dir() {
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
 
-        let link_path = temp_dir.path().join("zed-test-echo");
+        let link_path = temp_dir.path().join("zzz-test-echo");
         std::os::unix::fs::symlink("/bin/echo", &link_path).expect("failed to create symlink");
 
         smol::block_on(async {
-            let output = Command::new("./zed-test-echo")
+            let output = Command::new("./zzz-test-echo")
                 .args(["-n", "from-relative-path"])
                 .current_dir(temp_dir.path())
                 .env("PATH", "/nonexistent/path")

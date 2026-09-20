@@ -45,7 +45,7 @@ use ui::{
 use util::ResultExt;
 use workspace::{MultiWorkspace, ToggleWorktreeSecurity, Workspace};
 
-use zed_actions::OpenRemote;
+use zzz_actions::OpenRemote;
 
 pub use onboarding_banner::restore_banner;
 
@@ -380,7 +380,7 @@ impl TitleBar {
         let platform_style = PlatformStyle::platform();
         let application_menu = match platform_style {
             PlatformStyle::Mac => {
-                if option_env!("ZED_USE_CROSS_PLATFORM_MENU").is_some() {
+                if option_env!("ZZZ_USE_CROSS_PLATFORM_MENU").is_some() {
                     Some(cx.new(|cx| ApplicationMenu::new(window, cx)))
                 } else {
                     None
@@ -850,7 +850,7 @@ impl TitleBar {
                             "title_bar.project_name.recent_projects",
                             "Recent Projects",
                         ),
-                        &zed_actions::OpenRecent::default(),
+                        &zzz_actions::OpenRecent::default(),
                         cx,
                     )
                 },
@@ -909,7 +909,7 @@ impl TitleBar {
                             "title_bar.project_name.recent_projects",
                             "Recent Projects",
                         ),
-                        &zed_actions::OpenRecent::default(),
+                        &zzz_actions::OpenRecent::default(),
                         cx,
                     )
                 },
@@ -1018,7 +1018,7 @@ impl TitleBar {
                     move |_window, cx| {
                         Tooltip::with_meta(
                             tr(cx, "title_bar.worktree.tooltip.title", "Worktree"),
-                            Some(&zed_actions::git::Worktree),
+                            Some(&zzz_actions::git::Worktree),
                             tr(
                                 cx,
                                 "title_bar.worktree.tooltip.currently_in_use",
@@ -1094,7 +1094,7 @@ impl TitleBar {
                         };
                         Tooltip::with_meta(
                             tr(cx, "title_bar.branch.tooltip.title", "Branch & Stash"),
-                            Some(&zed_actions::git::Branch),
+                            Some(&zzz_actions::git::Branch),
                             meta,
                             cx,
                         )
@@ -1167,15 +1167,15 @@ impl TitleBar {
                 ContextMenu::build(window, cx, |menu, _, cx| {
                     menu.action(
                         tr(cx, "menu.settings", "Settings"),
-                        zed_actions::OpenSettings.boxed_clone(),
+                        zzz_actions::OpenSettings.boxed_clone(),
                     )
                     .action(
                         tr(cx, "menu.settings.open_keymap", "Open Keymap"),
-                        Box::new(zed_actions::OpenKeymap),
+                        Box::new(zzz_actions::OpenKeymap),
                     )
                     .action(
                         tr(cx, "menu.settings.select_theme", "Select Theme..."),
-                        zed_actions::theme_selector::Toggle::default().boxed_clone(),
+                        zzz_actions::theme_selector::Toggle::default().boxed_clone(),
                     )
                     .action(
                         tr(
@@ -1183,11 +1183,11 @@ impl TitleBar {
                             "menu.settings.select_icon_theme",
                             "Select Icon Theme...",
                         ),
-                        zed_actions::icon_theme_selector::Toggle::default().boxed_clone(),
+                        zzz_actions::icon_theme_selector::Toggle::default().boxed_clone(),
                     )
                     .action(
                         tr(cx, "menu.extensions", "Extensions"),
-                        zed_actions::Extensions::default().boxed_clone(),
+                        zzz_actions::Extensions::default().boxed_clone(),
                     )
                     .when(ai_enabled, |menu| {
                         menu.separator().submenu(

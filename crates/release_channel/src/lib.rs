@@ -1,4 +1,4 @@
-//! Provides constructs for the Zed app version and release channel.
+//! Provides constructs for the ZZZ app version and release channel.
 
 #![deny(missing_docs)]
 
@@ -10,10 +10,10 @@ use semver::Version;
 /// The raw release channel name from the environment or embedded build metadata.
 static RAW_RELEASE_CHANNEL_NAME: LazyLock<String> = LazyLock::new(|| {
     if cfg!(debug_assertions) {
-        env::var("ZED_RELEASE_CHANNEL")
-            .unwrap_or_else(|_| include_str!("../../zed/RELEASE_CHANNEL").trim().to_owned())
+        env::var("ZZZ_RELEASE_CHANNEL")
+            .unwrap_or_else(|_| include_str!("../../zzz/RELEASE_CHANNEL").trim().to_owned())
     } else {
-        include_str!("../../zed/RELEASE_CHANNEL").trim().to_owned()
+        include_str!("../../zzz/RELEASE_CHANNEL").trim().to_owned()
     }
 });
 
@@ -39,7 +39,7 @@ pub fn app_identifier() -> &'static str {
     }
 }
 
-/// The Git commit SHA that Zed was built at.
+/// The Git commit SHA that ZZZ was built at.
 #[derive(Clone, Eq, Debug, PartialEq)]
 pub struct AppCommitSha(String);
 
@@ -79,7 +79,7 @@ struct GlobalAppVersion(Version);
 
 impl Global for GlobalAppVersion {}
 
-/// The version of Zed.
+/// The version of ZZZ.
 pub struct AppVersion;
 
 impl AppVersion {
@@ -89,8 +89,8 @@ impl AppVersion {
         build_id: Option<&str>,
         commit_sha: Option<AppCommitSha>,
     ) -> Version {
-        let mut version: Version = if let Ok(from_env) = env::var("ZED_APP_VERSION") {
-            from_env.parse().expect("invalid ZED_APP_VERSION")
+        let mut version: Version = if let Ok(from_env) = env::var("ZZZ_APP_VERSION") {
+            from_env.parse().expect("invalid ZZZ_APP_VERSION")
         } else {
             pkg_version.parse().expect("invalid version in Cargo.toml")
         };
@@ -122,12 +122,12 @@ impl AppVersion {
     }
 }
 
-/// A Zed release channel.
+/// A ZZZ release channel.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub enum ReleaseChannel {
     /// The development release channel.
     ///
-    /// Used for local debug builds of Zed.
+    /// Used for local debug builds of ZZZ.
     #[default]
     Dev,
 
@@ -189,7 +189,7 @@ impl ReleaseChannel {
 
     /// Returns the application ID that's used by Wayland as application ID
     /// and WM_CLASS on X11.
-    /// This also has to match the bundle identifier for Zed on macOS.
+    /// This also has to match the bundle identifier for ZZZ on macOS.
     pub fn app_id(&self) -> &'static str {
         match self {
             ReleaseChannel::Dev => "dev.zzz.ZZZ-Dev",
@@ -263,8 +263,8 @@ mod tests {
     #[test]
     fn app_version_load_uses_env_override_and_build_metadata() {
         let _lock = ENV_LOCK.lock().expect("env lock poisoned");
-        let _restore = EnvRestore::new("ZED_APP_VERSION");
-        unsafe { env::set_var("ZED_APP_VERSION", "1.2.3") };
+        let _restore = EnvRestore::new("ZZZ_APP_VERSION");
+        unsafe { env::set_var("ZZZ_APP_VERSION", "1.2.3") };
 
         let version = AppVersion::load(
             "9.9.9",
@@ -281,8 +281,8 @@ mod tests {
     #[test]
     fn app_version_load_falls_back_to_package_version_without_metadata() {
         let _lock = ENV_LOCK.lock().expect("env lock poisoned");
-        let _restore = EnvRestore::new("ZED_APP_VERSION");
-        unsafe { env::remove_var("ZED_APP_VERSION") };
+        let _restore = EnvRestore::new("ZZZ_APP_VERSION");
+        unsafe { env::remove_var("ZZZ_APP_VERSION") };
 
         let version = AppVersion::load("0.9.1", None, None);
 

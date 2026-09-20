@@ -14,7 +14,7 @@ use workspace::notifications::{NotificationId, show_app_notification};
 use wprcontrol::*;
 
 actions!(
-    zed,
+    zzz,
     [
         /// Starts recording an ETW (Event Tracing for Windows) trace.
         RecordEtwTrace,
@@ -130,7 +130,7 @@ fn prompt_for_etw_output_path(cx: &mut App) {
         }
     }
 
-    let save_dialog = cx.prompt_for_new_path(&PathBuf::default(), Some("zed-trace.etl"));
+    let save_dialog = cx.prompt_for_new_path(&PathBuf::default(), Some("zzz-trace.etl"));
     cx.spawn(async move |cx| {
         let picked = save_dialog.await.unwrap_or(Ok(None));
         cx.update(|cx| match picked {
@@ -237,7 +237,7 @@ fn start_etw_recording(cx: &mut App, heap_pid: Option<u32>) {
     .detach();
 }
 
-const INSTANCE_NAME: &str = "Zed";
+const INSTANCE_NAME: &str = "ZZZ";
 
 const BUILTIN_PROFILES: &[&str] = &[
     "CPU.Verbose.Memory",
@@ -251,7 +251,7 @@ fn heap_tracing_profile(heap_pid: Option<u32>) -> String {
         Some(pid) => (
             format!(
                 r#"
-    <HeapEventProvider Id="ZedHeapProvider">
+    <HeapEventProvider Id="ZZZHeapProvider">
       <HeapProcessIds Operation="Set">
         <HeapProcessId Value="{pid}"/>
       </HeapProcessIds>
@@ -261,7 +261,7 @@ fn heap_tracing_profile(heap_pid: Option<u32>) -> String {
       <Collectors Operation="Add">
         <HeapEventCollectorId Value="HeapCollector_WPRHeapCollector">
           <HeapEventProviders Operation="Set">
-            <HeapEventProviderId Value="ZedHeapProvider"/>
+            <HeapEventProviderId Value="ZZZHeapProvider"/>
           </HeapEventProviders>
         </HeapEventCollectorId>
       </Collectors>"#
@@ -272,11 +272,11 @@ fn heap_tracing_profile(heap_pid: Option<u32>) -> String {
 
     format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
-<WindowsPerformanceRecorder Version="1.0" Author="Zed Industries">
+<WindowsPerformanceRecorder Version="1.0" Author="Xero Team">
   <Profiles>
     {heap_provider}
 
-    <Profile Id="ZedHeap.Verbose.Memory" Base="Heap.Verbose.Memory" Name="ZedHeap" DetailLevel="Verbose" LoggingMode="Memory" Description="Heap tracing">
+    <Profile Id="ZZZHeap.Verbose.Memory" Base="Heap.Verbose.Memory" Name="ZZZHeap" DetailLevel="Verbose" LoggingMode="Memory" Description="Heap tracing">
       {heap_collector}
     </Profile>
   </Profiles>
@@ -439,7 +439,7 @@ fn build_profile_collection(heap_pid: Option<u32>) -> Result<IProfileCollection>
         collection
             .Add(&heap_profile, VARIANT_BOOL(0))
             .wpr_context(&collection)
-            .context("Add ZedHeap profile to collection")?;
+            .context("Add ZZZHeap profile to collection")?;
     }
 
     Ok(collection)
@@ -496,7 +496,7 @@ fn record_etw_trace_inner(heap_pid: Option<u32>, stream: &mut net::UnixStream) -
     send_json(stream, &StatusMessage::Started)?;
 
     let command: Command =
-        recv_json(&mut BufReader::new(&mut *stream)).context("Receive command from Zed")?;
+        recv_json(&mut BufReader::new(&mut *stream)).context("Receive command from ZZZ")?;
 
     match command {
         Command::Cancel => {
@@ -536,13 +536,13 @@ struct EtwSession {
 }
 
 fn launch_etw_recording(heap_pid: Option<u32>) -> Result<EtwSession> {
-    let sock_path = std::env::temp_dir().join(format!("zed-etw-{}.sock", std::process::id()));
+    let sock_path = std::env::temp_dir().join(format!("zzz-etw-{}.sock", std::process::id()));
 
     _ = std::fs::remove_file(&sock_path);
     let listener = net::UnixListener::bind(&sock_path).context("Bind Unix socket for ETW IPC")?;
 
     let exe_path = std::env::current_exe().context("Failed to get current exe path")?;
-    let heap_arg = heap_pid.map_or(String::new(), |pid| format!(" --etw-zed-pid {pid}"));
+    let heap_arg = heap_pid.map_or(String::new(), |pid| format!(" --etw-zzz-pid {pid}"));
     let args = format!(
         "--record-etw-trace{heap_arg} --etw-socket \"{}\"",
         sock_path.display(),

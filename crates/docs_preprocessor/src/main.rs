@@ -60,7 +60,7 @@ impl KeymapOverlay {
     }
 }
 
-const FRONT_MATTER_COMMENT: &str = "<!-- ZED_META {} -->";
+const FRONT_MATTER_COMMENT: &str = "<!-- ZZZ_META {} -->";
 
 fn main() -> Result<()> {
     zlog::init();
@@ -659,17 +659,17 @@ fn handle_postprocessing() -> Result<()> {
         .config
         .outputs::<serde_json::Value>()
         .context("failed to read mdBook outputs")?;
-    let zed_html = outputs
-        .get("zed-html")
+    let zzz_html = outputs
+        .get("zzz-html")
         .cloned()
-        .expect("zed-html output defined");
-    let default_description = zed_html
+        .expect("zzz-html output defined");
+    let default_description = zzz_html
         .get("default-description")
         .expect("Default description not found")
         .as_str()
         .expect("Default description not a string")
         .to_owned();
-    let default_title = zed_html
+    let default_title = zzz_html
         .get("default-title")
         .expect("Default title not found")
         .as_str()
@@ -684,7 +684,7 @@ fn handle_postprocessing() -> Result<()> {
         ""
     };
 
-    ctx.config.set("output.html", zed_html)?;
+    ctx.config.set("output.html", zzz_html)?;
     mdbook_html::HtmlHandlebars::new().render(&ctx)?;
     let ignore_list = ["toc.html"];
 
@@ -778,7 +778,7 @@ fn handle_postprocessing() -> Result<()> {
 
         title_tag_contents
             .trim()
-            .strip_suffix("- Zed")
+            .strip_suffix("- ZZZ")
             .unwrap_or(title_tag_contents)
             .trim()
             .to_owned()

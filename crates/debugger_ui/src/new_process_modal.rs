@@ -22,7 +22,7 @@ use i18n::tr;
 use itertools::Itertools as _;
 use picker::{Picker, PickerDelegate, highlighted_match_with_paths::HighlightedMatch};
 use project::{DebugScenarioContext, Project, TaskContexts, TaskSourceKind, task_store::TaskStore};
-use task::{DebugScenario, RevealTarget, SharedTaskContext, VariableName, ZedDebugConfig};
+use task::{DebugScenario, RevealTarget, SharedTaskContext, VariableName, ZZZDebugConfig};
 use ui::{
     ContextMenu, DropdownMenu, IconWithIndicator, Indicator, KeyBinding, ListItem, ListItemSpacing,
     Switch, SwitchLabelPosition, ToggleButtonGroup, ToggleButtonSimple, ToggleState, Tooltip,
@@ -331,7 +331,7 @@ impl NewProcessModal {
             None
         };
 
-        let session_scenario = ZedDebugConfig {
+        let session_scenario = ZZZDebugConfig {
             adapter: debugger.to_owned().into(),
             label,
             request,
@@ -342,7 +342,7 @@ impl NewProcessModal {
             .global::<DapRegistry>()
             .adapter(&session_scenario.adapter);
 
-        cx.spawn(async move |_| adapter?.config_from_zed_format(session_scenario).await.ok())
+        cx.spawn(async move |_| adapter?.config_from_zzz_format(session_scenario).await.ok())
     }
 
     fn start_new_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -913,7 +913,7 @@ impl ConfigureMode {
             let placeholder = tr(
                 cx,
                 "debugger_ui.new_process_modal.working_directory_placeholder",
-                "Ex: $ZED_WORKTREE_ROOT",
+                "Ex: $ZZZ_WORKTREE_ROOT",
             );
 
             InputField::new(window, cx, &placeholder)
@@ -1055,7 +1055,7 @@ impl ConfigureMode {
 
 #[derive(Clone)]
 pub(super) struct AttachMode {
-    pub(super) definition: ZedDebugConfig,
+    pub(super) definition: ZZZDebugConfig,
     pub(super) attach_picker: Entity<AttachModal>,
 }
 
@@ -1067,7 +1067,7 @@ impl AttachMode {
         window: &mut Window,
         cx: &mut Context<NewProcessModal>,
     ) -> Entity<Self> {
-        let definition = ZedDebugConfig {
+        let definition = ZZZDebugConfig {
             adapter: debugger.unwrap_or(DebugAdapterName("".into())).0,
             label: tr(
                 cx,
@@ -1169,7 +1169,7 @@ impl DebugDelegate {
                     };
 
                     match path.components().next_back() {
-                        Some(".zed") => {
+                        Some(".zzz") => {
                             path.push(RelPath::unix("debug.json").unwrap());
                         }
                         Some(".vscode") => {
@@ -1266,7 +1266,7 @@ impl DebugDelegate {
                         id: _,
                         directory_in_worktree: dir,
                         id_base: _,
-                    } => dir.ends_with(RelPath::unix(".zed").unwrap()),
+                    } => dir.ends_with(RelPath::unix(".zzz").unwrap()),
                     _ => false,
                 });
 
@@ -1601,7 +1601,7 @@ impl PickerDelegate for DebugDelegate {
                     )
                     .on_click(cx.listener(|_picker, _, window, cx| {
                         window
-                            .dispatch_action(zed_actions::OpenProjectDebugTasks.boxed_clone(), cx);
+                            .dispatch_action(zzz_actions::OpenProjectDebugTasks.boxed_clone(), cx);
                         cx.emit(DismissEvent);
                     }))
                 } else {
@@ -1737,7 +1737,7 @@ pub(crate) fn resolve_path(path: &mut String) {
         *path = trimmed_path.replacen('~', &home, 1);
     } else if let Some(strip_path) = path.strip_prefix(&format!(".{}", std::path::MAIN_SEPARATOR)) {
         *path = format!(
-            "$ZED_WORKTREE_ROOT{}{}",
+            "$ZZZ_WORKTREE_ROOT{}{}",
             std::path::MAIN_SEPARATOR,
             &strip_path
         );

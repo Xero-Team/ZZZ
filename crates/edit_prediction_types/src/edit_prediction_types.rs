@@ -23,10 +23,10 @@ impl EditPredictionIconSet {
     pub fn new(base: IconName) -> Self {
         Self {
             base,
-            disabled: IconName::ZedPredictDisabled,
-            up: IconName::ZedPredictUp,
-            down: IconName::ZedPredictDown,
-            error: IconName::ZedPredictError,
+            disabled: IconName::ZZZPredictDisabled,
+            up: IconName::ZZZPredictUp,
+            down: IconName::ZZZPredictDown,
+            error: IconName::ZZZPredictError,
         }
     }
 
@@ -377,14 +377,14 @@ mod tests {
     fn icon_set_builder_overrides_only_requested_icons() {
         let icon_set = EditPredictionIconSet::new(IconName::Copilot)
             .with_disabled(IconName::CopilotDisabled)
-            .with_up(IconName::ZedPredictUp)
-            .with_down(IconName::ZedPredictDown)
+            .with_up(IconName::ZZZPredictUp)
+            .with_down(IconName::ZZZPredictDown)
             .with_error(IconName::CopilotError);
 
         assert_eq!(icon_set.base, IconName::Copilot);
         assert_eq!(icon_set.disabled, IconName::CopilotDisabled);
-        assert_eq!(icon_set.up, IconName::ZedPredictUp);
-        assert_eq!(icon_set.down, IconName::ZedPredictDown);
+        assert_eq!(icon_set.up, IconName::ZZZPredictUp);
+        assert_eq!(icon_set.down, IconName::ZZZPredictDown);
         assert_eq!(icon_set.error, IconName::CopilotError);
     }
 

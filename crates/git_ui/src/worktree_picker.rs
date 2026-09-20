@@ -28,7 +28,7 @@ use workspace::{
 
 use crate::git_panel::show_error_toast;
 use crate::worktree_service::{RemoteBranchName, WorktreeCreateTarget, worktree_create_targets};
-use zed_actions::{
+use zzz_actions::{
     CreateWorktree, NewWorktreeBranchTarget, OpenWorktreeInNewWindow, SwitchWorktree,
 };
 
@@ -1619,14 +1619,14 @@ mod tests {
     #[test]
     fn bare_repository_worktree_uses_generated_name() {
         let worktree = GitWorktree {
-            path: PathBuf::from("/worktrees/zed/plum-warbler/zed"),
+            path: PathBuf::from("/worktrees/zzz/plum-warbler/zzz"),
             ref_name: None,
             sha: "8ee36b68".into(),
             is_main: false,
             is_bare: false,
         };
         let worktrees = [worktree.clone()];
-        let name_anchor = worktree_name_anchor(&worktrees, Some(Path::new("/repos/zed")));
+        let name_anchor = worktree_name_anchor(&worktrees, Some(Path::new("/repos/zzz")));
 
         assert_eq!(worktree.directory_name(name_anchor), "plum-warbler");
     }

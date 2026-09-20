@@ -1530,7 +1530,7 @@ impl Render for LspButton {
                 .anchor(Anchor::BottomLeft)
                 .with_handle(self.popover_menu_handle.clone())
                 .trigger_with_tooltip(
-                    IconButton::new("zed-lsp-tool-button", IconName::BoltOutlined)
+                    IconButton::new("zzz-lsp-tool-button", IconName::BoltOutlined)
                         .when_some(indicator, IconButton::indicator)
                         .icon_size(IconSize::Small)
                         .indicator_border_color(Some(cx.theme().colors().status_bar_background)),
@@ -1715,14 +1715,14 @@ mod tests {
         let node_server = lsp::LanguageServerBinary {
             path: "/usr/bin/node".into(),
             arguments: vec![
-                "/zed/languages/basedpyright/langserver.index.js".into(),
+                "/zzz/languages/basedpyright/langserver.index.js".into(),
                 "--stdio".into(),
             ],
             env: None,
         };
         assert_eq!(
             tooltip_for_server_binary(&node_server, PathStyle::Posix),
-            "/zed/languages/basedpyright/langserver.index.js (node)"
+            "/zzz/languages/basedpyright/langserver.index.js (node)"
         );
 
         let node_server_windows = lsp::LanguageServerBinary {
@@ -1740,12 +1740,12 @@ mod tests {
 
         let python_server = lsp::LanguageServerBinary {
             path: "/usr/bin/python3".into(),
-            arguments: vec!["/zed/languages/pylsp/pylsp".into(), "--stdio".into()],
+            arguments: vec!["/zzz/languages/pylsp/pylsp".into(), "--stdio".into()],
             env: None,
         };
         assert_eq!(
             tooltip_for_server_binary(&python_server, PathStyle::Posix),
-            "/zed/languages/pylsp/pylsp (python)"
+            "/zzz/languages/pylsp/pylsp (python)"
         );
 
         let standalone_server = lsp::LanguageServerBinary {

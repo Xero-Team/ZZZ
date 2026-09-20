@@ -17,7 +17,7 @@ requiring installing an extension. Those languages can be found under
 Support for all other languages is done via extensions. This directory
 ([`extensions/`](./)) contains some of the officially maintained
 extensions. These extensions use the same
-[zed_extension_api](https://docs.rs/zed_extension_api/latest/zed_extension_api/)
+[zzz_extension_api](https://docs.rs/zzz_extension_api/latest/zzz_extension_api/)
 available to other extensions for providing
 [language servers](../docs/src/extensions/languages.md#language-servers),
 [tree-sitter grammars](../docs/src/extensions/languages.md#grammar) and

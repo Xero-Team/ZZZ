@@ -28,7 +28,7 @@ use ui::{
 };
 use ui_input::{ErasedEditor, ErasedEditorEvent};
 use workspace::{ModalView, item::Settings};
-use zed_actions::editor::{MoveDown, MoveUp};
+use zzz_actions::editor::{MoveDown, MoveUp};
 
 pub use footer::PickerAction;
 pub use preview::Update as PreviewUpdate;

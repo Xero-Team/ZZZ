@@ -14,7 +14,7 @@ use gpui::BackgroundExecutor;
 use language::LanguageName;
 use lsp::LanguageServerName;
 use release_channel::ReleaseChannel;
-use task::{DebugScenario, SpawnInTerminal, TaskTemplate, ZedDebugConfig};
+use task::{DebugScenario, SpawnInTerminal, TaskTemplate, ZZZDebugConfig};
 
 use latest::dap::StartDebuggingRequestArgumentsRequest;
 
@@ -46,11 +46,11 @@ impl<T> ToAnyhowResult<T> for wasmtime::Result<T> {
 pub use latest::CodeLabelSpanLiteral;
 pub use latest::{
     CodeLabel, CodeLabelSpan, Command, DebugAdapterBinary, ExtensionProject, Range, SlashCommand,
-    zed::extension::context_server::ContextServerConfiguration,
-    zed::extension::lsp::{
+    zzz::extension::context_server::ContextServerConfiguration,
+    zzz::extension::lsp::{
         Completion, CompletionKind, CompletionLabelDetails, InsertTextFormat, Symbol, SymbolKind,
     },
-    zed::extension::slash_command::{SlashCommandArgumentCompletion, SlashCommandOutput},
+    zzz::extension::slash_command::{SlashCommandArgumentCompletion, SlashCommandOutput},
 };
 pub use since_v0_0_4::LanguageServerConfig;
 
@@ -99,7 +99,7 @@ pub fn authorize_access_to_unreleased_wasm_api_version(
 
     anyhow::ensure!(
         allow_unreleased_version,
-        "unreleased versions of the extension API can only be used on development builds of Zed"
+        "unreleased versions of the extension API can only be used on development builds of ZZZ"
     );
 
     Ok(())
@@ -1169,7 +1169,7 @@ impl Extension {
     pub async fn call_dap_config_to_scenario(
         &self,
         store: &mut Store<WasmState>,
-        config: ZedDebugConfig,
+        config: ZZZDebugConfig,
     ) -> Result<Result<DebugScenario, String>> {
         match self {
             Extension::V0_8_0(ext) => {

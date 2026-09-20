@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use settings::{DefaultOpenBehavior, Settings};
 use ui::{ButtonLike, Divider, DividerColor, KeyBinding, Vector, VectorName, prelude::*};
 use util::ResultExt;
-use zed_actions::{
+use zzz_actions::{
     Extensions, OpenKeymap, OpenOnboarding, OpenSettings, assistant::ToggleFocus, command_palette,
 };
 
@@ -31,9 +31,9 @@ pub struct OpenRecentProject {
 }
 
 actions!(
-    zed,
+    zzz,
     [
-        /// Show the Zed welcome screen
+        /// Show the ZZZ welcome screen
         ShowWelcome
     ]
 );
@@ -340,7 +340,7 @@ impl WelcomePage {
                         })
                         .log_err();
                 } else {
-                    use zed_actions::OpenRecent;
+                    use zzz_actions::OpenRecent;
                     window.dispatch_action(OpenRecent::default().boxed_clone(), cx);
                 }
             }
@@ -372,7 +372,7 @@ impl WelcomePage {
                 h_flex()
                     .gap_1p5()
                     .child(
-                        Icon::new(IconName::ZedAssistant)
+                        Icon::new(IconName::ZZZAssistant)
                             .color(Color::Muted)
                             .size(IconSize::Small),
                     )
@@ -517,7 +517,7 @@ impl Render for WelcomePage {
                             .justify_center()
                             .mb_4()
                             .gap_4()
-                            .child(Vector::square(VectorName::ZedLogo, rems_from_px(45.)))
+                            .child(Vector::square(VectorName::ZZZLogo, rems_from_px(45.)))
                             .child(
                                 v_flex().child(Headline::new(welcome_label)).child(
                                     Label::new(tr(
@@ -733,8 +733,8 @@ mod tests {
     #[test]
     fn test_project_name_multiple() {
         // PathList sorts lexicographically, so filenames appear in alpha order
-        let paths = PathList::new(&["/home/user/zed", "/home/user/api"]);
-        assert_eq!(project_name(&paths, "Untitled"), "api, zed");
+        let paths = PathList::new(&["/home/user/zzz", "/home/user/api"]);
+        assert_eq!(project_name(&paths, "Untitled"), "api, zzz");
     }
 
     #[test]

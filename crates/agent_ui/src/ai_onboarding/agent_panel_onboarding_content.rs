@@ -4,7 +4,7 @@ use gpui::{IntoElement, ParentElement};
 use language_model::LanguageModelRegistry;
 use ui::prelude::*;
 
-use super::{AgentPanelOnboardingCard, ApiKeysWithoutProviders, ZedAiOnboarding};
+use super::{AgentPanelOnboardingCard, ApiKeysWithoutProviders, ZZZAiOnboarding};
 
 pub struct AgentPanelOnboarding {
     has_configured_providers: bool,
@@ -43,7 +43,7 @@ impl AgentPanelOnboarding {
 
 impl Render for AgentPanelOnboarding {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let onboarding = ZedAiOnboarding::new().with_dismiss({
+        let onboarding = ZZZAiOnboarding::new().with_dismiss({
             let callback = self.dismiss.clone();
             move |window, cx| callback(window, cx)
         });

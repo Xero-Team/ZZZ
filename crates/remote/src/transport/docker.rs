@@ -411,7 +411,7 @@ impl DockerExecConnection {
         let stderr = String::from_utf8_lossy(&output.stderr);
         log::debug!("failed to change ownership for via chown: {stderr}",);
         anyhow::bail!(
-            "failed to change ownership for zed_remote_server via chown: {}",
+            "failed to change ownership for zzz_remote_server via chown: {}",
             stderr,
         );
     }
@@ -549,7 +549,7 @@ impl RemoteConnection for DockerExecConnection {
         let mut docker_args = vec!["exec".to_owned()];
 
         push_environment(&mut docker_args, &self.connection_options.remote_env);
-        for env_var in ["RUST_LOG", "RUST_BACKTRACE", "ZED_GENERATE_MINIDUMPS"] {
+        for env_var in ["RUST_LOG", "RUST_BACKTRACE", "ZZZ_GENERATE_MINIDUMPS"] {
             if let Ok(value) = std::env::var(env_var) {
                 docker_args.push("-e".to_owned());
                 docker_args.push(format!("{env_var}={value}"));
@@ -849,13 +849,13 @@ mod tests {
                 connection.docker_cli(),
                 "exec",
                 &args,
-                "sh: 1: /usr/local/cargo/bin/zed-remote-server: not found\nGH_TOKEN=ghp_supersecret run",
+                "sh: 1: /usr/local/cargo/bin/zzz-remote-server: not found\nGH_TOKEN=ghp_supersecret run",
             ),
             concat!(
                 "failed to run command \"docker\" \"exec\" \"-u\" \"user\"",
                 " \"-e\" \"API_KEY=<redacted>\" \"-e\" \"COMMAND_SECRET=<redacted>\"",
                 " \"container_id\" \"sh\" \"-c\" \"echo hi\"",
-                ": sh: 1: /usr/local/cargo/bin/zed-remote-server: not found\nGH_TOKEN=\"[REDACTED]\" run"
+                ": sh: 1: /usr/local/cargo/bin/zzz-remote-server: not found\nGH_TOKEN=\"[REDACTED]\" run"
             )
         );
     }
@@ -903,7 +903,7 @@ mod tests {
     fn connection(remote_env: &[(&str, &str)]) -> DockerExecConnection {
         DockerExecConnection {
             proxy_process: Mutex::new(None),
-            remote_dir_for_server: "/tmp/zed".to_string(),
+            remote_dir_for_server: "/tmp/zzz".to_string(),
             remote_binary_relpath: None,
             connection_options: DockerConnectionOptions {
                 name: "container".to_string(),

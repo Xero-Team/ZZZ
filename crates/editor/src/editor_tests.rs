@@ -21168,7 +21168,7 @@ async fn test_completion_can_run_commands(cx: &mut TestAppContext) {
     assert_eq!(
         command_calls.load(atomic::Ordering::Acquire),
         1,
-        "For completion with a registered command, Zed should send a command execution request",
+        "For completion with a registered command, ZZZ should send a command execution request",
     );
 
     editor.update_in(cx, |editor, window, cx| {
@@ -21207,7 +21207,7 @@ async fn test_completion_can_run_commands(cx: &mut TestAppContext) {
     assert_eq!(
         command_calls.load(atomic::Ordering::Acquire),
         1,
-        "For completion with an unregistered command, Zed should not send a command execution request",
+        "For completion with an unregistered command, ZZZ should not send a command execution request",
     );
 }
 
@@ -23050,7 +23050,7 @@ async fn test_toggle_block_comment(cx: &mut TestAppContext) {
     cx.update_editor(|editor, window, cx| {
         editor.toggle_comments(&ToggleComments::default(), window, cx)
     });
-    // TODO this is how it actually worked in Zed Stable, which is not very ergonomic.
+    // TODO this is how it actually worked in ZZZ Stable, which is not very ergonomic.
     // Uncommenting and commenting from this position brings in even more wrong artifacts.
     cx.assert_editor_state(
         &r#"
@@ -27037,7 +27037,7 @@ struct Row10;"#};
         &mut cx,
     );
 
-    // Deletion hunks are ephemeral, so it's impossible to place the caret into them — Zed triggers reverts for lines, adjacent to carets and selections.
+    // Deletion hunks are ephemeral, so it's impossible to place the caret into them — ZZZ triggers reverts for lines, adjacent to carets and selections.
     assert_hunk_revert(
         indoc! {r#"struct Row;
                    ˇstruct Row2;
@@ -37271,7 +37271,7 @@ async fn test_paste_url_from_other_app_creates_markdown_link_over_selected_text(
 
     let mut cx = EditorTestContext::new(cx).await;
     cx.update_buffer(|buffer, cx| buffer.set_language(Some(markdown_language), cx));
-    cx.set_state("Hello, «editorˇ».\nZed is «ˇgreat» (see this link: ˇ)");
+    cx.set_state("Hello, «editorˇ».\nZZZ is «ˇgreat» (see this link: ˇ)");
 
     cx.update_editor(|editor, window, cx| {
         cx.write_to_clipboard(ClipboardItem::new_string(url.to_string()));
@@ -37279,7 +37279,7 @@ async fn test_paste_url_from_other_app_creates_markdown_link_over_selected_text(
     });
 
     cx.assert_editor_state(&format!(
-        "Hello, [editor]({url})ˇ.\nZed is [great]({url})ˇ (see this link: {url}ˇ)"
+        "Hello, [editor]({url})ˇ.\nZZZ is [great]({url})ˇ (see this link: {url}ˇ)"
     ));
 }
 
@@ -37412,7 +37412,7 @@ async fn test_markdown_indents(cx: &mut gpui::TestAppContext) {
 }
 
 #[gpui::test]
-async fn test_paste_url_from_zed_copy_creates_markdown_link_over_selected_text(
+async fn test_paste_url_from_zzz_copy_creates_markdown_link_over_selected_text(
     cx: &mut gpui::TestAppContext,
 ) {
     init_test(cx, |_| {});
@@ -37430,7 +37430,7 @@ async fn test_paste_url_from_zed_copy_creates_markdown_link_over_selected_text(
     let mut cx = EditorTestContext::new(cx).await;
     cx.update_buffer(|buffer, cx| buffer.set_language(Some(markdown_language), cx));
     cx.set_state(&format!(
-        "Hello, editor.\nZed is great (see this link: )\n«{url}ˇ»"
+        "Hello, editor.\nZZZ is great (see this link: )\n«{url}ˇ»"
     ));
 
     cx.update_editor(|editor, window, cx| {
@@ -37438,7 +37438,7 @@ async fn test_paste_url_from_zed_copy_creates_markdown_link_over_selected_text(
     });
 
     cx.set_state(&format!(
-        "Hello, «editorˇ».\nZed is «ˇgreat» (see this link: ˇ)\n{url}"
+        "Hello, «editorˇ».\nZZZ is «ˇgreat» (see this link: ˇ)\n{url}"
     ));
 
     cx.update_editor(|editor, window, cx| {
@@ -37446,7 +37446,7 @@ async fn test_paste_url_from_zed_copy_creates_markdown_link_over_selected_text(
     });
 
     cx.assert_editor_state(&format!(
-        "Hello, [editor]({url})ˇ.\nZed is [great]({url})ˇ (see this link: {url}ˇ)\n{url}"
+        "Hello, [editor]({url})ˇ.\nZZZ is [great]({url})ˇ (see this link: {url}ˇ)\n{url}"
     ));
 }
 
@@ -37468,14 +37468,14 @@ async fn test_paste_url_from_other_app_replaces_existing_url_without_creating_ma
 
     let mut cx = EditorTestContext::new(cx).await;
     cx.update_buffer(|buffer, cx| buffer.set_language(Some(markdown_language), cx));
-    cx.set_state("Please visit zed's homepage: «https://www.apple.comˇ»");
+    cx.set_state("Please visit zzz's homepage: «https://www.apple.comˇ»");
 
     cx.update_editor(|editor, window, cx| {
         cx.write_to_clipboard(ClipboardItem::new_string(url.to_string()));
         editor.paste(&Paste, window, cx);
     });
 
-    cx.assert_editor_state(&format!("Please visit zed's homepage: {url}ˇ"));
+    cx.assert_editor_state(&format!("Please visit zzz's homepage: {url}ˇ"));
 }
 
 #[gpui::test]
@@ -37496,14 +37496,14 @@ async fn test_paste_plain_text_from_other_app_replaces_selection_without_creatin
 
     let mut cx = EditorTestContext::new(cx).await;
     cx.update_buffer(|buffer, cx| buffer.set_language(Some(markdown_language), cx));
-    cx.set_state("Hello, «editorˇ».\nZed is «ˇgreat»");
+    cx.set_state("Hello, «editorˇ».\nZZZ is «ˇgreat»");
 
     cx.update_editor(|editor, window, cx| {
         cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
         editor.paste(&Paste, window, cx);
     });
 
-    cx.assert_editor_state(&format!("Hello, {text}ˇ.\nZed is {text}ˇ"));
+    cx.assert_editor_state(&format!("Hello, {text}ˇ.\nZZZ is {text}ˇ"));
 }
 
 #[gpui::test]
@@ -37554,7 +37554,7 @@ async fn test_paste_url_from_other_app_without_creating_markdown_link_in_non_mar
 
     let mut cx = EditorTestContext::new(cx).await;
     cx.update_buffer(|buffer, cx| buffer.set_language(Some(markdown_language), cx));
-    cx.set_state("// Hello, «editorˇ».\n// Zed is «ˇgreat» (see this link: ˇ)");
+    cx.set_state("// Hello, «editorˇ».\n// ZZZ is «ˇgreat» (see this link: ˇ)");
 
     cx.update_editor(|editor, window, cx| {
         cx.write_to_clipboard(ClipboardItem::new_string(url.to_string()));
@@ -37562,7 +37562,7 @@ async fn test_paste_url_from_other_app_without_creating_markdown_link_in_non_mar
     });
 
     cx.assert_editor_state(&format!(
-        "// Hello, {url}ˇ.\n// Zed is {url}ˇ (see this link: {url}ˇ)"
+        "// Hello, {url}ˇ.\n// ZZZ is {url}ˇ (see this link: {url}ˇ)"
     ));
 }
 

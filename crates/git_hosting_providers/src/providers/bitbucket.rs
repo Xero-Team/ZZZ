@@ -341,7 +341,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             }
         );
     }
@@ -356,7 +356,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             }
         );
     }
@@ -371,7 +371,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             }
         );
     }
@@ -389,7 +389,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             }
         );
     }
@@ -407,7 +407,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             }
         );
 
@@ -423,7 +423,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             }
         );
 
@@ -439,7 +439,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "scm".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             }
         );
     }
@@ -457,7 +457,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             }
         );
     }
@@ -467,7 +467,7 @@ mod tests {
         let permalink = Bitbucket::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             },
             BuildPermalinkParams::new("f00b4r", &repo_path("main.rs"), None),
         );
@@ -484,7 +484,7 @@ mod tests {
                 .build_permalink(
                     ParsedGitRemote {
                         owner: "zed-industries".into(),
-                        repo: "zed".into(),
+                        repo: "zzz".into(),
                     },
                     BuildPermalinkParams::new("f00b4r", &repo_path("main.rs"), None),
                 );
@@ -498,7 +498,7 @@ mod tests {
         let permalink = Bitbucket::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             },
             BuildPermalinkParams::new("f00b4r", &repo_path("main.rs"), Some(6..6)),
         );
@@ -515,7 +515,7 @@ mod tests {
                 .build_permalink(
                     ParsedGitRemote {
                         owner: "zed-industries".into(),
-                        repo: "zed".into(),
+                        repo: "zzz".into(),
                     },
                     BuildPermalinkParams::new("f00b4r", &repo_path("main.rs"), Some(6..6)),
                 );
@@ -529,7 +529,7 @@ mod tests {
         let permalink = Bitbucket::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zed".into(),
+                repo: "zzz".into(),
             },
             BuildPermalinkParams::new("f00b4r", &repo_path("main.rs"), Some(23..47)),
         );
@@ -547,7 +547,7 @@ mod tests {
                 .build_permalink(
                     ParsedGitRemote {
                         owner: "zed-industries".into(),
-                        repo: "zed".into(),
+                        repo: "zzz".into(),
                     },
                     BuildPermalinkParams::new("f00b4r", &repo_path("main.rs"), Some(23..47)),
                 );
@@ -560,7 +560,7 @@ mod tests {
     fn test_build_bitbucket_create_pr_url() {
         let remote = ParsedGitRemote {
             owner: "zed-industries".into(),
-            repo: "zed".into(),
+            repo: "zzz".into(),
         };
 
         let url = Bitbucket::public_instance()
@@ -577,7 +577,7 @@ mod tests {
     fn test_build_bitbucket_self_hosted_create_pr_url() {
         let remote = ParsedGitRemote {
             owner: "zed-industries".into(),
-            repo: "zed".into(),
+            repo: "zzz".into(),
         };
 
         let url =
@@ -598,7 +598,7 @@ mod tests {
 
         let remote = ParsedGitRemote {
             owner: "zed-industries".into(),
-            repo: "zed".into(),
+            repo: "zzz".into(),
         };
 
         let bitbucket = Bitbucket::public_instance();
@@ -628,7 +628,7 @@ mod tests {
 
         let remote = ParsedGitRemote {
             owner: "zed-industries".into(),
-            repo: "zed".into(),
+            repo: "zzz".into(),
         };
 
         let bitbucket =

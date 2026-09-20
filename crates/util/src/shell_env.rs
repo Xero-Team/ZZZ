@@ -41,7 +41,7 @@ pub async fn capture(
 /// Try to parse the environment output before checking the exit status.
 /// The user's shell rc files may contain commands that fail (e.g. editor
 /// integrations that call posix_spawnp outside a real PTY), causing a
-/// non-zero exit status even though `zed --printenv` ran successfully and
+/// non-zero exit status even though `zzz --printenv` ran successfully and
 /// produced valid output on its separate fd.
 fn parse_env_output(
     env_output: &str,
@@ -82,7 +82,7 @@ async fn capture_unix(
     use crate::command::new_std_command;
 
     let shell_kind = ShellKind::new(shell_path, false);
-    let quoted_zed_path = super::get_shell_safe_zed_path(shell_kind)?;
+    let quoted_zzz_path = super::get_shell_safe_zzz_path(shell_kind)?;
 
     let mut command_string = String::new();
     let mut command = new_std_command(shell_path);
@@ -143,7 +143,7 @@ async fn capture_unix(
     if let Some(prefix) = shell_kind.command_prefix() {
         command_string.push(prefix);
     }
-    command_string.push_str(&format!("{} --printenv {}", quoted_zed_path, redir));
+    command_string.push_str(&format!("{} --printenv {}", quoted_zzz_path, redir));
 
     if let ShellKind::Nushell = shell_kind {
         command_string.push_str("; exit");
@@ -212,8 +212,8 @@ async fn capture_windows(
 ) -> Result<collections::HashMap<String, String>> {
     use std::process::Stdio;
 
-    let zed_path =
-        std::env::current_exe().context("Failed to determine current zed executable path.")?;
+    let zzz_path =
+        std::env::current_exe().context("Failed to determine current zzz executable path.")?;
 
     let shell_kind = ShellKind::new(shell_path, true);
     // Prefix with "./" if the path starts with "-" to prevent cd from interpreting it as a flag
@@ -223,7 +223,7 @@ async fn capture_windows(
     } else {
         directory_string
     };
-    let zed_path_string = zed_path.display().to_string();
+    let zzz_path_string = zzz_path.display().to_string();
     let quote_for_shell = |value: &str| {
         shell_kind
             .try_quote(value)
@@ -233,7 +233,7 @@ async fn capture_windows(
     let mut cmd = crate::command::new_command(shell_path);
     cmd.args(args);
     let quoted_directory = quote_for_shell(&directory_string)?;
-    let quoted_zed_path = quote_for_shell(&zed_path_string)?;
+    let quoted_zzz_path = quote_for_shell(&zzz_path_string)?;
     let cmd = match shell_kind {
         ShellKind::Csh
         | ShellKind::Tcsh
@@ -244,7 +244,7 @@ async fn capture_windows(
             "-l",
             "-i",
             "-c",
-            &format!("cd {}; {} --printenv", quoted_directory, quoted_zed_path),
+            &format!("cd {}; {} --printenv", quoted_directory, quoted_zzz_path),
         ]),
         ShellKind::PowerShell | ShellKind::Pwsh => cmd.args([
             "-NonInteractive",
@@ -252,25 +252,25 @@ async fn capture_windows(
             "-Command",
             &format!(
                 "Set-Location {}; & {} --printenv",
-                quoted_directory, quoted_zed_path
+                quoted_directory, quoted_zzz_path
             ),
         ]),
         ShellKind::Elvish => cmd.args([
             "-c",
-            &format!("cd {}; {} --printenv", quoted_directory, quoted_zed_path),
+            &format!("cd {}; {} --printenv", quoted_directory, quoted_zzz_path),
         ]),
         ShellKind::Nushell => {
-            let zed_command = shell_kind
-                .prepend_command_prefix(&quoted_zed_path)
+            let zzz_command = shell_kind
+                .prepend_command_prefix(&quoted_zzz_path)
                 .into_owned();
             cmd.args([
                 "-c",
-                &format!("cd {}; {} --printenv", quoted_directory, zed_command),
+                &format!("cd {}; {} --printenv", quoted_directory, zzz_command),
             ])
         }
         ShellKind::Cmd => {
             let dir = directory_string.trim_end_matches('\\');
-            cmd.args(["/d", "/c", "cd", dir, "&&", &zed_path_string, "--printenv"])
+            cmd.args(["/d", "/c", "cd", dir, "&&", &zzz_path_string, "--printenv"])
         }
     }
     .stdin(Stdio::null())

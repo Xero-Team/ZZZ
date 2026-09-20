@@ -17,7 +17,7 @@ use settings::{
     MinimumContrast,
 };
 use ui::{Tooltip, prelude::*};
-use zed_actions::editor::{MoveDown, MoveUp};
+use zzz_actions::editor::{MoveDown, MoveUp};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NumberFieldMode {

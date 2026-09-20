@@ -1293,7 +1293,7 @@ where
                         display.push('.');
                     }
                     let detail = f(err, window, cx).unwrap_or(display);
-                    let ok = tr(cx, "zed.common.ok", "Ok");
+                    let ok = tr(cx, "zzz.common.ok", "Ok");
                     window.prompt(
                         PromptLevel::Critical,
                         &msg,

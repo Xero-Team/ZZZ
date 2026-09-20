@@ -63,8 +63,8 @@ util.workspace = true
 uuid.workspace = true
 workspace.workspace = true
 worktree.workspace = true
-zed_actions.workspace = true
-zed_credentials_provider.workspace = true
+zzz_actions.workspace = true
+zzz_credentials_provider.workspace = true
 zeta_prompt.workspace = true
 zstd.workspace = true
 

@@ -482,7 +482,7 @@ impl LineWrapper {
         // the next line. `/` and `?` stay break opportunities so long paths
         // and URLs (`a/b`, `foo?b=2`) can wrap.
         matches!(c, '!' | ')' | ']' | '}' | '"' | '”' | '»' | '…') ||
-        // `⋯` character is special used in Zed, to keep this at the end of the line.
+        // `⋯` character is special used in ZZZ, to keep this at the end of the line.
         matches!(c, '⋯') ||
 
         // Non-breaking glue characters
@@ -694,7 +694,7 @@ mod tests {
     fn build_wrapper() -> LineWrapper {
         let dispatcher = TestDispatcher::new(0);
         let cx = TestAppContext::build(dispatcher, None);
-        let id = cx.text_system().resolve_font(&font(".ZedMono"));
+        let id = cx.text_system().resolve_font(&font(".ZZZMono"));
         LineWrapper::new(id, px(16.), cx.text_system().clone())
     }
 
@@ -1174,7 +1174,7 @@ mod tests {
         // URL case
         assert_word("github.com");
         assert_not_word("zed-industries/zed");
-        assert_not_word("zed-industries\\zed");
+        assert_not_word("zed-industries\\zzz");
         assert_not_word("a=1&b=2");
         assert_not_word("foo?b=2");
 
@@ -1272,7 +1272,7 @@ mod tests {
     fn test_multiline_truncation_fits_within_wrapped_lines() {
         let mut wrapper = build_wrapper();
 
-        // With .ZedMono at 16px, each char is 9.6px wide.
+        // With .ZZZMono at 16px, each char is 9.6px wide.
         // wrap_width = 72px fits ~7 chars per line.
         //
         // "aa bbbbbb cccccc dddddd eeee ffff" with wrap_width=72px wraps as:

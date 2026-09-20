@@ -51,7 +51,7 @@ use terminal_view::{TerminalView, terminal_panel::TerminalPanel};
 use ui::prelude::*;
 use util::{RangeExt, ResultExt, maybe};
 use workspace::{Toast, Workspace, dock::Panel, notifications::NotificationId};
-use zed_actions::agent::OpenSettings;
+use zzz_actions::agent::OpenSettings;
 
 fn tr(cx: &App, key: &'static str, fallback: &'static str) -> String {
     app_i18n::tr(cx, key, fallback)
@@ -210,7 +210,7 @@ impl InlineAssistant {
 
     pub fn inline_assist(
         workspace: &mut Workspace,
-        action: &zed_actions::assistant::InlineAssist,
+        action: &zzz_actions::assistant::InlineAssist,
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
@@ -2058,7 +2058,7 @@ pub mod evals {
                 prompt.clone(),
                 |cx| {
                     // Reconfigure to use a real model instead of the fake one
-                    let model_name = std::env::var("ZED_AGENT_MODEL")
+                    let model_name = std::env::var("ZZZ_AGENT_MODEL")
                         .unwrap_or("anthropic/claude-sonnet-4-latest".into());
 
                     let selected_model = SelectedModel::from_str(&model_name)

@@ -675,7 +675,7 @@ enum RemoteEntry {
 }
 
 impl RemoteEntry {
-    fn is_from_zed(&self) -> bool {
+    fn is_from_zzz(&self) -> bool {
         matches!(self, Self::Project { .. })
     }
 
@@ -1819,7 +1819,7 @@ impl RemoteServerProjects {
     ) -> impl IntoElement {
         let entry = visible.entry;
         let create_new_window = self.create_new_window;
-        let is_from_zed = server.is_from_zed();
+        let is_from_zzz = server.is_from_zzz();
         let element_id_base = SharedString::from(format!(
             "remote-project-{}",
             match server_ix {
@@ -1878,7 +1878,7 @@ impl RemoteServerProjects {
                             })
                             .unwrap_or_else(|_| "Failed to connect".to_owned());
                         let ok_label = cx
-                            .update(|_, cx| i18n::tr(cx, "zed.common.ok", "Ok"))
+                            .update(|_, cx| i18n::tr(cx, "zzz.common.ok", "Ok"))
                             .unwrap_or_else(|_| "Ok".to_owned());
                         cx.prompt(
                             gpui::PromptLevel::Critical,
@@ -1932,7 +1932,7 @@ impl RemoteServerProjects {
                         callback(this, secondary_confirm, window, cx)
                     }))
                     .tooltip(Tooltip::text(entry.project.paths.join("\n")))
-                    .when(is_from_zed, |server_list_item| {
+                    .when(is_from_zzz, |server_list_item| {
                         server_list_item
                             .end_slot(
                                 div()
@@ -2191,7 +2191,7 @@ impl RemoteServerProjects {
                                 "Failed to start Dev Container. See logs for details".to_owned()
                             });
                         let ok_label = cx
-                            .update(|_, cx| i18n::tr(cx, "zed.common.ok", "Ok"))
+                            .update(|_, cx| i18n::tr(cx, "zzz.common.ok", "Ok"))
                             .unwrap_or_else(|_| "Ok".to_owned());
                         cx.prompt(
                             gpui::PromptLevel::Critical,
@@ -2258,7 +2258,7 @@ impl RemoteServerProjects {
                     })
                     .unwrap_or_else(|_| "Failed to connect".to_owned());
                 let ok_label = cx
-                    .update(|_, cx| i18n::tr(cx, "zed.common.ok", "Ok"))
+                    .update(|_, cx| i18n::tr(cx, "zzz.common.ok", "Ok"))
                     .unwrap_or_else(|_| "Ok".to_owned());
                 cx.prompt(
                     gpui::PromptLevel::Critical,

@@ -44,8 +44,8 @@ impl Pasteboard {
         // outlive the autorelease pool in which it was created.
         Self {
             inner: unsafe { StrongPtr::retain(inner) },
-            text_hash_type: unsafe { StrongPtr::retain(ns_string("zed-text-hash")) },
-            metadata_type: unsafe { StrongPtr::retain(ns_string("zed-metadata")) },
+            text_hash_type: unsafe { StrongPtr::retain(ns_string("zzz-text-hash")) },
+            metadata_type: unsafe { StrongPtr::retain(ns_string("zzz-metadata")) },
         }
     }
 
@@ -476,8 +476,8 @@ mod tests {
         unsafe {
             let text_hash_type = CStr::from_ptr(NSString::UTF8String(*pasteboard.text_hash_type));
             let metadata_type = CStr::from_ptr(NSString::UTF8String(*pasteboard.metadata_type));
-            assert_eq!(text_hash_type.to_bytes(), b"zed-text-hash");
-            assert_eq!(metadata_type.to_bytes(), b"zed-metadata");
+            assert_eq!(text_hash_type.to_bytes(), b"zzz-text-hash");
+            assert_eq!(metadata_type.to_bytes(), b"zzz-metadata");
         }
     }
 

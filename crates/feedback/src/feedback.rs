@@ -3,19 +3,19 @@ use gpui::{App, ClipboardItem, PromptLevel, actions};
 use system_specs::{CopySystemSpecsIntoClipboard, SystemSpecs};
 use util::ResultExt;
 use workspace::Workspace;
-use zed_actions::feedback::{FileBugReport, RequestFeature};
+use zzz_actions::feedback::{FileBugReport, RequestFeature};
 
 actions!(
-    zed,
+    zzz,
     [
-        /// Opens the Zed repository on GitHub.
-        OpenZedRepo,
+        /// Opens the ZZZ repository on GitHub.
+        OpenZZZRepo,
         /// Copies installed extensions to the clipboard for bug reports.
         CopyInstalledExtensionsIntoClipboard
     ]
 );
 
-const ZED_REPO_URL: &str = "https://codeberg.org/ZZZEditor/ZZZ";
+const ZZZ_REPO_URL: &str = "https://codeberg.org/ZZZEditor/ZZZ";
 
 const REQUEST_FEATURE_URL: &str = "https://codeberg.org/ZZZEditor/ZZZ/issues/new";
 
@@ -93,8 +93,8 @@ pub fn init(cx: &mut App) {
                 })
                 .detach();
             })
-            .register_action(move |_, _: &OpenZedRepo, _, cx| {
-                cx.open_url(ZED_REPO_URL);
+            .register_action(move |_, _: &OpenZZZRepo, _, cx| {
+                cx.open_url(ZZZ_REPO_URL);
             });
     })
     .detach();

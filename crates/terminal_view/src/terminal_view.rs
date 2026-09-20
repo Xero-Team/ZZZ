@@ -64,7 +64,7 @@ use workspace::{
         Direction, SearchEvent, SearchOptions, SearchToken, SearchableItem, SearchableItemHandle,
     },
 };
-use zed_actions::{agent::AddSelectionToThread, assistant::InlineAssist};
+use zzz_actions::{agent::AddSelectionToThread, assistant::InlineAssist};
 
 struct ImeState {
     marked_text: String,
@@ -534,14 +534,14 @@ impl TerminalView {
                     |menu| {
                         menu.separator()
                             .action(
-                                tr(cx, "zed.quick_action_bar.inline_assist", "Inline Assist"),
+                                tr(cx, "zzz.quick_action_bar.inline_assist", "Inline Assist"),
                                 Box::new(InlineAssist::default()),
                             )
                             .when(has_selection, |menu| {
                                 menu.action(
                                     tr(
                                         cx,
-                                        "zed.quick_action_bar.add_to_agent_thread",
+                                        "zzz.quick_action_bar.add_to_agent_thread",
                                         "Add to Agent Thread",
                                     ),
                                     Box::new(AddSelectionToThread),
@@ -1097,8 +1097,8 @@ impl TerminalView {
     }
 }
 
-fn terminal_rerun_override(task: &TaskId) -> zed_actions::Rerun {
-    zed_actions::Rerun {
+fn terminal_rerun_override(task: &TaskId) -> zzz_actions::Rerun {
+    zzz_actions::Rerun {
         task_id: Some(task.0.clone()),
         allow_concurrent_runs: Some(true),
         use_new_terminal: Some(false),
@@ -2342,7 +2342,7 @@ mod tests {
         assert_eq!(
             terminal.update(&mut cx, |terminal, _| terminal.take_input_log()),
             vec![vec![0x11]],
-            "ctrl-q in a focused terminal should send 0x11 to the PTY, not trigger zed::Quit",
+            "ctrl-q in a focused terminal should send 0x11 to the PTY, not trigger zzz::Quit",
         );
     }
 

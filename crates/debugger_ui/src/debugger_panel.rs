@@ -45,7 +45,7 @@ use workspace::{
     Item, Pane, Workspace,
     dock::{DockPosition, Panel, PanelEvent},
 };
-use zed_actions::debug_panel::ToggleFocus;
+use zzz_actions::debug_panel::ToggleFocus;
 
 pub struct DebuggerHistoryFeatureFlag;
 
@@ -513,8 +513,8 @@ impl DebugPanel {
             "debugger_ui.debug_panel.terminate_running_session",
             "This Debug Session is still running. Are you sure you want to terminate it?",
         );
-        let yes = tr(cx, "zed.common.yes", "Yes");
-        let no = tr(cx, "zed.common.no", "No");
+        let yes = tr(cx, "zzz.common.yes", "Yes");
+        let no = tr(cx, "zzz.common.no", "No");
 
         cx.spawn_in(window, async move |this, cx| {
             if should_prompt {
@@ -669,7 +669,7 @@ impl DebugPanel {
             IconButton::new("debug-edit-debug-json", IconName::Code)
                 .icon_size(IconSize::Small)
                 .on_click(|_, window, cx| {
-                    window.dispatch_action(zed_actions::OpenProjectDebugTasks.boxed_clone(), cx);
+                    window.dispatch_action(zzz_actions::OpenProjectDebugTasks.boxed_clone(), cx);
                 })
                 .tooltip(Tooltip::text(edit_debug_json_label))
         };
@@ -1901,7 +1901,7 @@ impl Render for DebugPanel {
                             )
                             .on_click(|_, window, cx| {
                                 window.dispatch_action(
-                                    zed_actions::OpenProjectDebugTasks.boxed_clone(),
+                                    zzz_actions::OpenProjectDebugTasks.boxed_clone(),
                                     cx,
                                 );
                             }),
@@ -1934,9 +1934,9 @@ impl Render for DebugPanel {
                             )
                             .on_click(|_, window, cx| {
                                 window.dispatch_action(
-                                    zed_actions::Extensions {
+                                    zzz_actions::Extensions {
                                         category_filter: Some(
-                                            zed_actions::ExtensionCategoryFilter::DebugAdapters,
+                                            zzz_actions::ExtensionCategoryFilter::DebugAdapters,
                                         ),
                                         id: None,
                                     }

@@ -25,7 +25,7 @@ use util::{ResultExt as _, debug_panic, maybe, paths::PathExt, shell::ShellKind}
 /// Path to the program used for askpass
 ///
 /// On Unix and remote servers, this defaults to the current executable
-/// On Windows, this is set to the CLI variant of zed
+/// On Windows, this is set to the CLI variant of zzz
 static ASKPASS_PROGRAM: OnceLock<std::path::PathBuf> = OnceLock::new();
 
 #[derive(PartialEq, Eq)]
@@ -210,11 +210,11 @@ impl PasswordProxy {
         >,
         executor: BackgroundExecutor,
     ) -> Result<Self> {
-        let temp_dir = tempfile::Builder::new().prefix("zed-askpass").tempdir()?;
+        let temp_dir = tempfile::Builder::new().prefix("zzz-askpass").tempdir()?;
         let askpass_socket = temp_dir.path().join("askpass.sock");
         let askpass_script_path = temp_dir.path().join(ASKPASS_SCRIPT_NAME);
         let current_exec =
-            std::env::current_exe().context("Failed to determine current zed executable path.")?;
+            std::env::current_exe().context("Failed to determine current zzz executable path.")?;
 
         // TODO: inferred from the use of powershell.exe in askpass_helper_script
         let shell_kind = if cfg!(windows) {
@@ -298,8 +298,8 @@ impl PasswordProxy {
         }
     }
 }
-/// The main function for when Zed is running in netcat mode for use in askpass.
-/// Called from both the remote server binary and the zed binary in their respective main functions.
+/// The main function for when ZZZ is running in netcat mode for use in askpass.
+/// Called from both the remote server binary and the zzz binary in their respective main functions.
 pub fn main(socket: &str) {
     use net::UnixStream;
     use std::io::{self, Read, Write};
@@ -413,19 +413,19 @@ mod tests {
         let shell_kind = ShellKind::Posix;
 
         #[cfg(target_os = "windows")]
-        let askpass_program = std::path::Path::new(r"C:\Program Files\Zed\zed.exe");
+        let askpass_program = std::path::Path::new(r"C:\Program Files\ZZZ\zzz.exe");
         #[cfg(not(target_os = "windows"))]
-        let askpass_program = std::path::Path::new("/opt/zed/bin/zed");
+        let askpass_program = std::path::Path::new("/opt/zzz/bin/zzz");
 
         #[cfg(target_os = "windows")]
-        let askpass_socket = std::path::Path::new(r"C:\Temp\zed askpass.sock");
+        let askpass_socket = std::path::Path::new(r"C:\Temp\zzz askpass.sock");
         #[cfg(not(target_os = "windows"))]
-        let askpass_socket = std::path::Path::new("/tmp/zed askpass.sock");
+        let askpass_socket = std::path::Path::new("/tmp/zzz askpass.sock");
 
         let script = generate_askpass_script(shell_kind, askpass_program, askpass_socket).unwrap();
 
         assert!(script.contains("--askpass="));
-        assert!(script.contains("zed"));
+        assert!(script.contains("zzz"));
 
         #[cfg(target_os = "windows")]
         {

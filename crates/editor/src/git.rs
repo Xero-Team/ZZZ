@@ -2813,7 +2813,7 @@ pub(super) fn render_diff_hunk_controls(
                                 Tooltip::for_action_in(
                                     &tr(
                                         cx,
-                                        "zed.quick_action_bar.next_hunk",
+                                        "zzz.quick_action_bar.next_hunk",
                                         "Next Hunk",
                                     ),
                                     &GoToHunk,
@@ -2853,7 +2853,7 @@ pub(super) fn render_diff_hunk_controls(
                                 Tooltip::for_action_in(
                                     &tr(
                                         cx,
-                                        "zed.quick_action_bar.previous_hunk",
+                                        "zzz.quick_action_bar.previous_hunk",
                                         "Previous Hunk",
                                     ),
                                     &GoToPreviousHunk,

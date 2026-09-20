@@ -1,6 +1,6 @@
 use std::fs;
-use zed::settings::LspSettings;
-use zed_extension_api::{self as zed, LanguageServerId, Result, serde_json};
+use zzz::settings::LspSettings;
+use zzz_extension_api::{self as zzz, LanguageServerId, Result, serde_json};
 
 struct GlslExtension {
     cached_binary_path: Option<String>,
@@ -10,7 +10,7 @@ impl GlslExtension {
     fn language_server_binary_path(
         &mut self,
         language_server_id: &LanguageServerId,
-        worktree: &zed::Worktree,
+        worktree: &zzz::Worktree,
     ) -> Result<String> {
         if let Some(path) = worktree.which("glsl_analyzer") {
             return Ok(path);
@@ -22,30 +22,29 @@ impl GlslExtension {
             return Ok(path.clone());
         }
 
-        zed::set_language_server_installation_status(
+        zzz::set_language_server_installation_status(
             language_server_id,
-            &zed::LanguageServerInstallationStatus::CheckingForUpdate,
+            &zzz::LanguageServerInstallationStatus::CheckingForUpdate,
         );
-        let release = zed::latest_github_release(
+        let release = zzz::latest_github_release(
             "nolanderc/glsl_analyzer",
-            zed::GithubReleaseOptions {
+            zzz::GithubReleaseOptions {
                 require_assets: true,
                 pre_release: false,
             },
         )?;
 
-        let (platform, arch) = zed::current_platform();
+        let (platform, arch) = zzz::current_platform();
         let asset_name = format!(
             "{arch}-{os}.zip",
             arch = match arch {
-                zed::Architecture::Aarch64 => "aarch64",
-                zed::Architecture::X86 => "x86",
-                zed::Architecture::X8664 => "x86_64",
+                zzz::Architecture::Aarch64 => "aarch64",
+                zzz::Architecture::X8664 => "x86_64",
             },
             os = match platform {
-                zed::Os::Mac => "macos",
-                zed::Os::Linux => "linux-musl",
-                zed::Os::Windows => "windows",
+                zzz::Os::Mac => "macos",
+                zzz::Os::Linux => "linux-musl",
+                zzz::Os::Windows => "windows",
             }
         );
 
@@ -61,22 +60,22 @@ impl GlslExtension {
         let binary_path = format!("{version_dir}/bin/glsl_analyzer");
 
         if fs::metadata(&binary_path).map_or(true, |stat| !stat.is_file()) {
-            zed::set_language_server_installation_status(
+            zzz::set_language_server_installation_status(
                 language_server_id,
-                &zed::LanguageServerInstallationStatus::Downloading,
+                &zzz::LanguageServerInstallationStatus::Downloading,
             );
 
-            zed::download_file(
+            zzz::download_file(
                 &asset.download_url,
                 &version_dir,
                 match platform {
-                    zed::Os::Mac | zed::Os::Linux => zed::DownloadedFileType::Zip,
-                    zed::Os::Windows => zed::DownloadedFileType::Zip,
+                    zzz::Os::Mac | zzz::Os::Linux => zzz::DownloadedFileType::Zip,
+                    zzz::Os::Windows => zzz::DownloadedFileType::Zip,
                 },
             )
             .map_err(|e| format!("failed to download file: {e}"))?;
 
-            zed::make_file_executable(&binary_path)?;
+            zzz::make_file_executable(&binary_path)?;
 
             let entries =
                 fs::read_dir(".").map_err(|e| format!("failed to list working directory {e}"))?;
@@ -93,7 +92,7 @@ impl GlslExtension {
     }
 }
 
-impl zed::Extension for GlslExtension {
+impl zzz::Extension for GlslExtension {
     fn new() -> Self {
         Self {
             cached_binary_path: None,
@@ -102,10 +101,10 @@ impl zed::Extension for GlslExtension {
 
     fn language_server_command(
         &mut self,
-        language_server_id: &zed::LanguageServerId,
-        worktree: &zed::Worktree,
-    ) -> Result<zed::Command> {
-        Ok(zed::Command {
+        language_server_id: &zzz::LanguageServerId,
+        worktree: &zzz::Worktree,
+    ) -> Result<zzz::Command> {
+        Ok(zzz::Command {
             command: self.language_server_binary_path(language_server_id, worktree)?,
             args: vec![],
             env: Default::default(),
@@ -114,8 +113,8 @@ impl zed::Extension for GlslExtension {
 
     fn language_server_workspace_configuration(
         &mut self,
-        _language_server_id: &zed::LanguageServerId,
-        worktree: &zed::Worktree,
+        _language_server_id: &zzz::LanguageServerId,
+        worktree: &zzz::Worktree,
     ) -> Result<Option<serde_json::Value>> {
         let settings = LspSettings::for_worktree("glsl_analyzer", worktree)
             .ok()
@@ -128,4 +127,4 @@ impl zed::Extension for GlslExtension {
     }
 }
 
-zed::register_extension!(GlslExtension);
+zzz::register_extension!(GlslExtension);

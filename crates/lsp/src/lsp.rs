@@ -893,7 +893,7 @@ impl LanguageServer {
                                     "command".to_owned(),
                                     "detail".to_owned(),
                                     "documentation".to_owned(),
-                                    // NB: Do not have this resolved, otherwise Zed becomes slow to complete things
+                                    // NB: Do not have this resolved, otherwise ZZZ becomes slow to complete things
                                     // "textEdit".to_string(),
                                 ],
                             }),

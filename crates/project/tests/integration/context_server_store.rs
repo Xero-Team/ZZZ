@@ -743,7 +743,7 @@ async fn test_multi_worktree_context_server_settings(cx: &mut TestAppContext) {
     fs.insert_tree(
         path!("/project_a"),
         json!({
-            ".zed": {
+            ".zzz": {
                 "settings.json": serde_json::to_string(&json!({
                     "context_servers": {
                         "server-from-project-a": {
@@ -760,7 +760,7 @@ async fn test_multi_worktree_context_server_settings(cx: &mut TestAppContext) {
     fs.insert_tree(
         path!("/project_b"),
         json!({
-            ".zed": {
+            ".zzz": {
                 "settings.json": serde_json::to_string(&json!({
                     "context_servers": {
                         "server-from-project-b": {
@@ -837,7 +837,7 @@ async fn test_multi_worktree_duplicate_context_server_first_wins(cx: &mut TestAp
     fs.insert_tree(
         path!("/project_a"),
         json!({
-            ".zed": {
+            ".zzz": {
                 "settings.json": serde_json::to_string(&json!({
                     "context_servers": {
                         "shared-server": {
@@ -854,7 +854,7 @@ async fn test_multi_worktree_duplicate_context_server_first_wins(cx: &mut TestAp
     fs.insert_tree(
         path!("/project_b"),
         json!({
-            ".zed": {
+            ".zzz": {
                 "settings.json": serde_json::to_string(&json!({
                     "context_servers": {
                         "shared-server": {

@@ -219,10 +219,10 @@ pub struct HttpClientWithUrl {
 }
 
 impl HttpClientWithUrl {
-    /// Public Zed extension marketplace. User-initiated gallery traffic only:
+    /// Public ZZZ extension marketplace. User-initiated gallery traffic only:
     /// extensions, themes, icon themes, languages, and other gallery items.
     /// Independent of collab `server_url`.
-    pub const ZED_EXTENSION_MARKETPLACE_API: &'static str = "https://api.zed.dev";
+    pub const ZZZ_EXTENSION_MARKETPLACE_API: &'static str = "https://api.zed.dev";
 
     /// Returns a new [`HttpClientWithUrl`] with the given base URL.
     pub fn new(
@@ -267,8 +267,8 @@ impl HttpClientWithUrl {
         format!("{}{}", self.base_url(), path)
     }
 
-    /// Builds a Zed API URL using the given path.
-    pub fn build_zed_api_url(&self, path: &str, query: &[(&str, &str)]) -> Result<Url> {
+    /// Builds a ZZZ API URL using the given path.
+    pub fn build_zzz_api_url(&self, path: &str, query: &[(&str, &str)]) -> Result<Url> {
         let base_url = self.base_url();
         let base_api_url = match base_url.as_ref() {
             "https://zed.dev" => "https://api.zed.dev",
@@ -283,23 +283,23 @@ impl HttpClientWithUrl {
         )?)
     }
 
-    /// Builds a URL against the public Zed extension marketplace.
+    /// Builds a URL against the public ZZZ extension marketplace.
     ///
     /// This is independent of collab `server_url`, so a local-first default
     /// still lists and downloads extensions from the upstream gallery.
-    pub fn build_zed_extension_marketplace_url(
+    pub fn build_zzz_extension_marketplace_url(
         &self,
         path: &str,
         query: &[(&str, &str)],
     ) -> Result<Url> {
         Ok(Url::parse_with_params(
-            &format!("{}{path}", Self::ZED_EXTENSION_MARKETPLACE_API),
+            &format!("{}{path}", Self::ZZZ_EXTENSION_MARKETPLACE_API),
             query,
         )?)
     }
 
-    /// Builds a Zed Cloud URL using the given path.
-    pub fn build_zed_cloud_url(&self, path: &str) -> Result<Url> {
+    /// Builds a ZZZ Cloud URL using the given path.
+    pub fn build_zzz_cloud_url(&self, path: &str) -> Result<Url> {
         let base_url = self.base_url();
         let base_api_url = match base_url.as_ref() {
             "https://zed.dev" => "https://cloud.zed.dev",
@@ -311,8 +311,8 @@ impl HttpClientWithUrl {
         Ok(Url::parse(&format!("{}{}", base_api_url, path))?)
     }
 
-    /// Builds a Zed Cloud URL using the given path and query params.
-    pub fn build_zed_cloud_url_with_query(&self, path: &str, query: impl Serialize) -> Result<Url> {
+    /// Builds a ZZZ Cloud URL using the given path and query params.
+    pub fn build_zzz_cloud_url_with_query(&self, path: &str, query: impl Serialize) -> Result<Url> {
         let base_url = self.base_url();
         let base_api_url = match base_url.as_ref() {
             "https://zed.dev" => "https://cloud.zed.dev",
@@ -324,8 +324,8 @@ impl HttpClientWithUrl {
         Ok(Url::parse(&format!("{}{}?{}", base_api_url, path, query))?)
     }
 
-    /// Builds a Zed LLM URL using the given path.
-    pub fn build_zed_llm_url(&self, path: &str, query: &[(&str, &str)]) -> Result<Url> {
+    /// Builds a ZZZ LLM URL using the given path.
+    pub fn build_zzz_llm_url(&self, path: &str, query: &[(&str, &str)]) -> Result<Url> {
         let base_url = self.base_url();
         let base_api_url = match base_url.as_ref() {
             "https://zed.dev" => "https://cloud.zed.dev",
@@ -579,25 +579,25 @@ mod tests {
     }
 
     #[test]
-    fn url_builder_maps_zed_hosts_to_api_cloud_and_llm_hosts() {
+    fn url_builder_maps_zzz_hosts_to_api_cloud_and_llm_hosts() {
         let client =
             HttpClientWithUrl::new(Arc::new(BlockedHttpClient::new()), "https://zed.dev", None);
 
         assert_eq!(client.build_url("/rpc"), "https://zed.dev/rpc");
         assert_eq!(
             client
-                .build_zed_api_url("/v1/models", &[("limit", "10")])
+                .build_zzz_api_url("/v1/models", &[("limit", "10")])
                 .unwrap()
                 .as_str(),
             "https://api.zed.dev/v1/models?limit=10"
         );
         assert_eq!(
-            client.build_zed_cloud_url("/v1/files").unwrap().as_str(),
+            client.build_zzz_cloud_url("/v1/files").unwrap().as_str(),
             "https://cloud.zed.dev/v1/files"
         );
         assert_eq!(
             client
-                .build_zed_llm_url("/v1/completions", &[("provider", "openai")])
+                .build_zzz_llm_url("/v1/completions", &[("provider", "openai")])
                 .unwrap()
                 .as_str(),
             "https://cloud.zed.dev/v1/completions?provider=openai"
@@ -619,21 +619,21 @@ mod tests {
 
         assert_eq!(
             localhost
-                .build_zed_api_url("/status", &[])
+                .build_zzz_api_url("/status", &[])
                 .unwrap()
                 .as_str(),
             "http://localhost:8080/status?"
         );
         assert_eq!(
-            localhost.build_zed_cloud_url("/health").unwrap().as_str(),
+            localhost.build_zzz_cloud_url("/health").unwrap().as_str(),
             "http://localhost:8787/health"
         );
         assert_eq!(
-            staging.build_zed_api_url("/status", &[]).unwrap().as_str(),
+            staging.build_zzz_api_url("/status", &[]).unwrap().as_str(),
             "https://api-staging.zed.dev/status?"
         );
         assert_eq!(
-            staging.build_zed_llm_url("/v1/chat", &[]).unwrap().as_str(),
+            staging.build_zzz_llm_url("/v1/chat", &[]).unwrap().as_str(),
             "https://llm-staging.zed.dev/v1/chat?"
         );
     }
@@ -648,14 +648,14 @@ mod tests {
 
         assert_eq!(
             local
-                .build_zed_extension_marketplace_url("/extensions", &[("max_schema_version", "1")])
+                .build_zzz_extension_marketplace_url("/extensions", &[("max_schema_version", "1")])
                 .unwrap()
                 .as_str(),
             "https://api.zed.dev/extensions?max_schema_version=1"
         );
         assert_eq!(
             local
-                .build_zed_extension_marketplace_url("/extensions/html/1.0.0/download", &[])
+                .build_zzz_extension_marketplace_url("/extensions/html/1.0.0/download", &[])
                 .unwrap()
                 .as_str(),
             "https://api.zed.dev/extensions/html/1.0.0/download?"

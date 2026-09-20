@@ -75,10 +75,10 @@ fn archived_worktree_ref_name(id: i64) -> String {
     format!("refs/archived-worktrees/{}", id)
 }
 
-/// Resolves the Zed-managed worktrees base directory for a given repo.
+/// Resolves the ZZZ-managed worktrees base directory for a given repo.
 ///
 /// This intentionally reads the *global* `git.worktree_directory` setting
-/// rather than any project-local override, because Zed always uses the
+/// rather than any project-local override, because ZZZ always uses the
 /// global value when creating worktrees and the archive check must match.
 fn worktrees_base_for_repo(
     main_repo_path: &Path,
@@ -169,7 +169,7 @@ pub fn build_root_plan(
     let (linked_snapshot, repo) = linked_repo?;
     let main_repo_path = linked_snapshot.main_worktree_abs_path()?.to_path_buf();
 
-    // Only archive worktrees that live inside the Zed-managed worktrees
+    // Only archive worktrees that live inside the ZZZ-managed worktrees
     // directory (configured via `git.worktree_directory`). Worktrees the
     // user created outside that directory should be left untouched.
     let worktrees_base = worktrees_base_for_repo(&main_repo_path, linked_snapshot.path_style, cx)?;
@@ -925,12 +925,12 @@ mod tests {
         });
     }
 
-    async fn record_zed_created_worktree(
+    async fn record_zzz_created_worktree(
         fs: &FakeFs,
         worktree_path: &Path,
         cx: &mut TestAppContext,
     ) {
-        crate::test_support::record_zed_created_worktree(fs, worktree_path, None, cx).await
+        crate::test_support::record_zzz_created_worktree(fs, worktree_path, None, cx).await
     }
 
     #[gpui::test]
@@ -1001,7 +1001,7 @@ mod tests {
             },
         )
         .await;
-        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx).await;
+        record_zzz_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx).await;
 
         let project = Project::test(
             fs.clone(),
@@ -1117,7 +1117,7 @@ mod tests {
             assert!(
                 plan.is_none(),
                 "build_root_plan should return None for a linked worktree \
-                 outside the Zed-managed worktrees directory",
+                 outside the ZZZ-managed worktrees directory",
             );
         });
     }
@@ -1163,7 +1163,7 @@ mod tests {
             },
         )
         .await;
-        record_zed_created_worktree(
+        record_zzz_created_worktree(
             &fs,
             Path::new("/custom-worktrees/project/feature/project"),
             cx,
@@ -1334,7 +1334,7 @@ mod tests {
             },
         )
         .await;
-        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx).await;
+        record_zzz_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx).await;
 
         let project = Project::test(
             fs.clone(),
@@ -1416,7 +1416,7 @@ mod tests {
             },
         )
         .await;
-        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx).await;
+        record_zzz_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx).await;
 
         let project = Project::test(
             fs.clone(),
@@ -1509,7 +1509,7 @@ mod tests {
             },
         )
         .await;
-        record_zed_created_worktree(&fs, worktree_path, cx).await;
+        record_zzz_created_worktree(&fs, worktree_path, cx).await;
 
         let project = Project::test(fs.clone(), [Path::new("/project"), worktree_path], cx).await;
         project
@@ -1593,7 +1593,7 @@ mod tests {
             },
         )
         .await;
-        record_zed_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx).await;
+        record_zzz_created_worktree(&fs, Path::new("/worktrees/project/feature/project"), cx).await;
 
         let project = Project::test(
             fs.clone(),

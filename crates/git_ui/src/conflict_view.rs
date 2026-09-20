@@ -20,7 +20,7 @@ use std::{ops::Range, sync::Arc};
 use ui::{ButtonLike, Divider, Tooltip, prelude::*};
 use util::{debug_panic, maybe};
 use workspace::{StatusItemView, Workspace, item::ItemHandle};
-use zed_actions::agent::{
+use zzz_actions::agent::{
     ConflictContent, ResolveConflictedFilesWithAgent, ResolveConflictsWithAgent,
 };
 
@@ -425,7 +425,7 @@ fn render_conflict_buttons(
                 )
                 .label_size(LabelSize::Small)
                 .start_icon(
-                    Icon::new(IconName::ZedAssistant)
+                    Icon::new(IconName::ZZZAssistant)
                         .size(IconSize::Small)
                         .color(Color::Muted),
                 )

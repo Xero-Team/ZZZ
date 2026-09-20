@@ -1,6 +1,6 @@
-# Zed Schema Generator
+# ZZZ Schema Generator
 
-Prints various Zed schemas to stdout.
+Prints various ZZZ schemas to stdout.
 
 ## Usage
 

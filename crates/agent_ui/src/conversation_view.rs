@@ -72,8 +72,8 @@ use workspace::PathList;
 use workspace::{
     CollaboratorId, MultiWorkspace, NewTerminal, Workspace, path_link::sanitize_path_text,
 };
-use zed_actions::agent::{Chat, ToggleModelSelector};
-use zed_actions::assistant::OpenRulesLibrary;
+use zzz_actions::agent::{Chat, ToggleModelSelector};
+use zzz_actions::assistant::OpenRulesLibrary;
 
 use super::config_options::ConfigOptionsView;
 use super::entry_view_state::EntryViewState;
@@ -1560,7 +1560,7 @@ impl ConversationView {
                         } else {
                             tr(cx, "agent_ui.conversation.new_message", "New message")
                         },
-                        IconName::ZedAssistant,
+                        IconName::ZZZAssistant,
                         window,
                         cx,
                     );
@@ -1901,7 +1901,7 @@ impl ConversationView {
         window.spawn(cx, async move |cx| {
             let mut task = login.clone();
             if let Some(cmd) = &task.command {
-                // Have "node" command use Zed's managed Node runtime by default
+                // Have "node" command use ZZZ's managed Node runtime by default
                 if cmd == "node" {
                     let resolved_node_runtime = project.update(cx, |project, cx| {
                         let agent_server_store = project.agent_server_store().clone();
@@ -2938,7 +2938,7 @@ fn loading_contents_spinner(size: IconSize) -> AnyElement {
 }
 
 fn placeholder_text(agent_name: &str, has_commands: bool, cx: &App) -> String {
-    if agent_name == agent::ZED_AGENT_ID.as_ref() {
+    if agent_name == agent::ZZZ_AGENT_ID.as_ref() {
         app_i18n::tr(
             cx,
             "agent_ui.conversation.placeholder_message_the_agent",
@@ -4906,7 +4906,7 @@ pub(crate) mod tests {
         C: 'static + AgentConnection + Send + Clone,
     {
         fn logo(&self) -> ui::IconName {
-            ui::IconName::ZedAgent
+            ui::IconName::ZZZAgent
         }
 
         fn agent_id(&self) -> AgentId {
@@ -4982,7 +4982,7 @@ pub(crate) mod tests {
 
     impl AgentServer for FlakyAgentServer {
         fn logo(&self) -> ui::IconName {
-            ui::IconName::ZedAgent
+            ui::IconName::ZZZAgent
         }
 
         fn agent_id(&self) -> AgentId {
@@ -8172,7 +8172,7 @@ pub(crate) mod tests {
         cx.focus(&editor);
 
         editor.update_in(cx, |_editor, window, cx| {
-            window.dispatch_action(Box::new(zed_actions::editor::MoveUp), cx);
+            window.dispatch_action(Box::new(zzz_actions::editor::MoveUp), cx);
         });
         cx.run_until_parked();
 
@@ -8189,7 +8189,7 @@ pub(crate) mod tests {
         );
 
         editor.update_in(cx, |_editor, window, cx| {
-            window.dispatch_action(Box::new(zed_actions::editor::MoveUp), cx);
+            window.dispatch_action(Box::new(zzz_actions::editor::MoveUp), cx);
         });
         cx.run_until_parked();
 

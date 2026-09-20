@@ -41,7 +41,7 @@ use ui::{ContextMenu, prelude::*};
 use util::paths::PathStyle;
 use util::{ResultExt, debug_panic};
 use workspace::{CollaboratorId, Workspace};
-use zed_actions::agent::{Chat, PasteRaw};
+use zzz_actions::agent::{Chat, PasteRaw};
 
 #[derive(Default)]
 pub struct SessionCapabilities {
@@ -2071,7 +2071,7 @@ mod tests {
     #[test]
     fn test_parse_mention_links() {
         // Single file mention
-        let text = "[@bundle-mac](file:///Users/test/zed/script/bundle-mac)";
+        let text = "[@bundle-mac](file:///Users/test/zzz/script/bundle-mac)";
         let mentions = parse_mention_links(text, PathStyle::local());
         assert_eq!(mentions.len(), 1);
         assert_eq!(mentions[0].0, 0..text.len());
@@ -2254,7 +2254,7 @@ mod tests {
         fs.insert_tree(
             "/test",
             json!({
-                ".zed": {
+                ".zzz": {
                     "tasks.json": r#"[{"label": "test", "command": "echo"}]"#
                 },
                 "src": {
@@ -4926,8 +4926,8 @@ mod tests {
             .decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
             .expect("decode png");
         let file_name = match extension {
-            Some(extension) => format!("zed-agent-ui-test-{}.{}", uuid::Uuid::new_v4(), extension),
-            None => format!("zed-agent-ui-test-{}", uuid::Uuid::new_v4()),
+            Some(extension) => format!("zzz-agent-ui-test-{}.{}", uuid::Uuid::new_v4(), extension),
+            None => format!("zzz-agent-ui-test-{}", uuid::Uuid::new_v4()),
         };
         let path = std::env::temp_dir().join(file_name);
         std::fs::write(&path, bytes).expect("write temp png");

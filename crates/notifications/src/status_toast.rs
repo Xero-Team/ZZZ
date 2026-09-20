@@ -4,7 +4,7 @@ use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, IntoEleme
 use i18n::tr;
 use ui::{Tooltip, prelude::*};
 use workspace::{ToastAction, ToastView};
-use zed_actions::toast;
+use zzz_actions::toast;
 
 #[derive(RegisterComponent)]
 pub struct StatusToast {
@@ -177,7 +177,7 @@ impl Component for StatusToast {
             },
         );
 
-        let success_example = StatusToast::new("Pushed 4 changes to `zed/main`", cx, |this, _| {
+        let success_example = StatusToast::new("Pushed 4 changes to `zzz/main`", cx, |this, _| {
             this.icon(
                 Icon::new(IconName::Check)
                     .size(IconSize::Small)
@@ -186,7 +186,7 @@ impl Component for StatusToast {
         });
 
         let error_example = StatusToast::new(
-            "git push: Couldn't find remote origin `iamnbutler/zed`",
+            "git push: Couldn't find remote origin `iamnbutler/zzz`",
             cx,
             |this, _cx| {
                 this.icon(
@@ -208,7 +208,7 @@ impl Component for StatusToast {
         });
 
         let pr_example =
-            StatusToast::new("`zed/new-notification-system` created!", cx, |this, _cx| {
+            StatusToast::new("`zzz/new-notification-system` created!", cx, |this, _cx| {
                 this.icon(
                     Icon::new(IconName::GitBranch)
                         .size(IconSize::Small)

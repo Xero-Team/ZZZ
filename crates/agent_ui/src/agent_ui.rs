@@ -82,8 +82,8 @@ pub use thread_import::{
     AcpThreadImportOnboarding, CrossChannelImportOnboarding, ThreadImportModal,
     channels_with_threads, import_threads_from_other_channels,
 };
-use zed_actions;
-pub use zed_actions::{CreateWorktree, NewWorktreeBranchTarget, SwitchWorktree};
+use zzz_actions;
+pub use zzz_actions::{CreateWorktree, NewWorktreeBranchTarget, SwitchWorktree};
 
 pub(crate) fn resolve_agent_image(
     dest_url: &str,
@@ -284,7 +284,7 @@ actions!(
         ScrollOutputToPreviousMessage,
         /// Scroll the output to the next user message.
         ScrollOutputToNextMessage,
-        /// Import agent threads from other Zed release channels (e.g. Preview, Nightly).
+        /// Import agent threads from other ZZZ release channels (e.g. Preview, Nightly).
         ImportThreadsFromOtherChannels,
     ]
 );
@@ -412,7 +412,7 @@ pub enum Agent {
 
 impl From<AgentId> for Agent {
     fn from(id: AgentId) -> Self {
-        if id.as_ref() == agent::ZED_AGENT_ID.as_ref() {
+        if id.as_ref() == agent::ZZZ_AGENT_ID.as_ref() {
             Self::Absent
         } else {
             Self::Custom { id }
@@ -423,7 +423,7 @@ impl From<AgentId> for Agent {
 impl Agent {
     pub fn id(&self) -> AgentId {
         match self {
-            Self::Absent => agent::ZED_AGENT_ID.clone(),
+            Self::Absent => agent::ZZZ_AGENT_ID.clone(),
             Self::Custom { id } => id.clone(),
             #[cfg(any(test, feature = "test-support"))]
             Self::Stub => "stub".into(),
@@ -432,7 +432,7 @@ impl Agent {
 
     /// Returns `true` if this is the legacy `NativeAgent` variant.
     ///
-    /// The built-in Zed Agent runtime has been removed. This method exists only to detect stale
+    /// The built-in ZZZ Agent runtime has been removed. This method exists only to detect stale
     /// serialized data that still references the old agent so it can be handled safely.
     pub fn is_native(&self) -> bool {
         matches!(self, Self::Absent)
@@ -593,7 +593,7 @@ pub fn init(
     cx.observe_new(|workspace: &mut Workspace, _window, _cx| {
         workspace.register_action(
             move |workspace: &mut Workspace,
-                  _: &zed_actions::AcpRegistry,
+                  _: &zzz_actions::AcpRegistry,
                   window: &mut Window,
                   cx: &mut Context<Workspace>| {
                 let existing = workspace

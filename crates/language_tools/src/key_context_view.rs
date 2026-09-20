@@ -83,7 +83,7 @@ impl KeyContextView {
                         "".to_owned()
                     };
                     let mut name = binding.action().name();
-                    if name == "zed::NoAction" {
+                    if name == "zzz::NoAction" {
                         name = "(null)"
                     }
 
@@ -136,7 +136,7 @@ impl KeyContextView {
         if let Some(last_action) = a {
             last_action.partial_eq(b)
         } else {
-            b.name() == "zed::NoAction"
+            b.name() == "zzz::NoAction"
         }
     }
 }
@@ -209,7 +209,7 @@ impl Render for KeyContextView {
             .child(Label::new(tr(
                 cx,
                 "language_tools.key_context.description",
-                "This view lets you determine the current context stack for creating custom key bindings in Zed. When a keyboard shortcut is triggered, it also shows all the possible contexts it could have triggered in, and which one matched.",
+                "This view lets you determine the current context stack for creating custom key bindings in ZZZ. When a keyboard shortcut is triggered, it also shows all the possible contexts it could have triggered in, and which one matched.",
             )))
             .child(
                 h_flex()
@@ -240,11 +240,11 @@ impl Render for KeyContextView {
                         )
                             .style(ButtonStyle::Filled)
                             .key_binding(ui::KeyBinding::for_action(
-                                &zed_actions::OpenDefaultKeymap,
+                                &zzz_actions::OpenDefaultKeymap,
                                 cx
                             ))
                             .on_click(|_, window, cx| {
-                                window.dispatch_action(zed_actions::OpenDefaultKeymap.boxed_clone(), cx);
+                                window.dispatch_action(zzz_actions::OpenDefaultKeymap.boxed_clone(), cx);
                             }),
                     )
                     .child(
@@ -257,9 +257,9 @@ impl Render for KeyContextView {
                             ),
                         )
                             .style(ButtonStyle::Filled)
-                            .key_binding(ui::KeyBinding::for_action(&zed_actions::OpenKeymapFile, cx))
+                            .key_binding(ui::KeyBinding::for_action(&zzz_actions::OpenKeymapFile, cx))
                             .on_click(|_, window, cx| {
-                                window.dispatch_action(zed_actions::OpenKeymapFile.boxed_clone(), cx);
+                                window.dispatch_action(zzz_actions::OpenKeymapFile.boxed_clone(), cx);
                             }),
                     ),
             )

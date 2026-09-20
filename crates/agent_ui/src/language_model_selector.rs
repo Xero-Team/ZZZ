@@ -16,7 +16,7 @@ use ordered_float::OrderedFloat;
 use picker::{Picker, PickerDelegate};
 use settings::Settings;
 use ui::prelude::*;
-use zed_actions::agent::OpenSettings;
+use zzz_actions::agent::OpenSettings;
 
 use crate::ui::{ModelSelectorFooter, ModelSelectorHeader, ModelSelectorListItem};
 
@@ -685,7 +685,7 @@ mod tests {
                     .any(|(fav_provider, fav_name)| *fav_provider == provider && *fav_name == name);
                 ModelInfo {
                     model: Arc::new(TestLanguageModel::new(name, provider)),
-                    icon: IconOrSvg::Icon(IconName::ZedAgent),
+                    icon: IconOrSvg::Icon(IconName::ZZZAgent),
                     is_favorite,
                 }
             })
@@ -712,10 +712,10 @@ mod tests {
     #[gpui::test]
     fn test_exact_match(cx: &mut TestAppContext) {
         let models = create_models(vec![
-            ("zed", "Claude 3.7 Sonnet"),
-            ("zed", "Claude 3.7 Sonnet Thinking"),
-            ("zed", "gpt-5"),
-            ("zed", "gpt-5-mini"),
+            ("zzz", "Claude 3.7 Sonnet"),
+            ("zzz", "Claude 3.7 Sonnet Thinking"),
+            ("zzz", "gpt-5"),
+            ("zzz", "gpt-5-mini"),
             ("openai", "gpt-3.5-turbo"),
             ("openai", "gpt-5"),
             ("openai", "gpt-5-mini"),
@@ -733,8 +733,8 @@ mod tests {
         assert_models_eq(
             results,
             vec![
-                "zed/gpt-5",
-                "zed/gpt-5-mini",
+                "zzz/gpt-5",
+                "zzz/gpt-5-mini",
                 "openai/gpt-5",
                 "openai/gpt-5-mini",
             ],
@@ -744,10 +744,10 @@ mod tests {
     #[gpui::test]
     fn test_fuzzy_match(cx: &mut TestAppContext) {
         let models = create_models(vec![
-            ("zed", "Claude 3.7 Sonnet"),
-            ("zed", "Claude 3.7 Sonnet Thinking"),
-            ("zed", "gpt-5"),
-            ("zed", "gpt-5-mini"),
+            ("zzz", "Claude 3.7 Sonnet"),
+            ("zzz", "Claude 3.7 Sonnet Thinking"),
+            ("zzz", "gpt-5"),
+            ("zzz", "gpt-5-mini"),
             ("openai", "gpt-3.5-turbo"),
             ("openai", "gpt-5"),
             ("openai", "gpt-5-mini"),
@@ -761,11 +761,11 @@ mod tests {
         );
 
         // Results should preserve models order whenever possible.
-        // In the case below, `zed/gpt-5-mini` and `openai/gpt-5-mini` have identical
-        // similarity scores, but `zed/gpt-5-mini` was higher in the models list,
+        // In the case below, `zzz/gpt-5-mini` and `openai/gpt-5-mini` have identical
+        // similarity scores, but `zzz/gpt-5-mini` was higher in the models list,
         // so it should appear first in the results.
         let results = matcher.fuzzy_search("mini");
-        assert_models_eq(results, vec!["zed/gpt-5-mini", "openai/gpt-5-mini"]);
+        assert_models_eq(results, vec!["zzz/gpt-5-mini", "openai/gpt-5-mini"]);
 
         // Model provider should be searchable as well
         let results = matcher.fuzzy_search("ol"); // meaning "ollama"
@@ -773,15 +773,15 @@ mod tests {
 
         // Fuzzy search - search for Claude to get the Thinking variant
         let results = matcher.fuzzy_search("thinking");
-        assert_models_eq(results, vec!["zed/Claude 3.7 Sonnet Thinking"]);
+        assert_models_eq(results, vec!["zzz/Claude 3.7 Sonnet Thinking"]);
     }
 
     #[gpui::test]
     fn test_recommended_models_also_appear_in_other(_cx: &mut TestAppContext) {
-        let recommended_models = create_models(vec![("zed", "claude")]);
+        let recommended_models = create_models(vec![("zzz", "claude")]);
         let all_models = create_models(vec![
-            ("zed", "claude"), // Should also appear in "other"
-            ("zed", "gemini"),
+            ("zzz", "claude"), // Should also appear in "other"
+            ("zzz", "gemini"),
             ("copilot", "o3"),
         ]);
 
@@ -797,16 +797,16 @@ mod tests {
         // Recommended models should also appear in "all"
         assert_models_eq(
             actual_all_models,
-            vec!["zed/claude", "zed/gemini", "copilot/o3"],
+            vec!["zzz/claude", "zzz/gemini", "copilot/o3"],
         );
     }
 
     #[gpui::test]
     fn test_models_from_different_providers(_cx: &mut TestAppContext) {
-        let recommended_models = create_models(vec![("zed", "claude")]);
+        let recommended_models = create_models(vec![("zzz", "claude")]);
         let all_models = create_models(vec![
-            ("zed", "claude"), // Should also appear in "other"
-            ("zed", "gemini"),
+            ("zzz", "claude"), // Should also appear in "other"
+            ("zzz", "gemini"),
             ("copilot", "claude"), // Different provider, should appear in "other"
         ]);
 
@@ -822,16 +822,16 @@ mod tests {
         // All models should appear in "all" regardless of recommended status
         assert_models_eq(
             actual_all_models,
-            vec!["zed/claude", "zed/gemini", "copilot/claude"],
+            vec!["zzz/claude", "zzz/gemini", "copilot/claude"],
         );
     }
 
     #[gpui::test]
     fn test_favorites_section_appears_when_favorites_exist(_cx: &mut TestAppContext) {
-        let recommended_models = create_models(vec![("zed", "claude")]);
+        let recommended_models = create_models(vec![("zzz", "claude")]);
         let all_models = create_models_with_favorites(
-            vec![("zed", "claude"), ("zed", "gemini"), ("openai", "gpt-4")],
-            vec![("zed", "gemini")],
+            vec![("zzz", "claude"), ("zzz", "gemini"), ("openai", "gpt-4")],
+            vec![("zzz", "gemini")],
         );
 
         let grouped_models = GroupedModels::new(all_models, recommended_models);
@@ -842,13 +842,13 @@ mod tests {
             Some(LanguageModelPickerEntry::Separator(s)) if s == "Favorite"
         ));
 
-        assert_models_eq(grouped_models.favorites, vec!["zed/gemini"]);
+        assert_models_eq(grouped_models.favorites, vec!["zzz/gemini"]);
     }
 
     #[gpui::test]
     fn test_no_favorites_section_when_no_favorites(_cx: &mut TestAppContext) {
-        let recommended_models = create_models(vec![("zed", "claude")]);
-        let all_models = create_models(vec![("zed", "claude"), ("zed", "gemini")]);
+        let recommended_models = create_models(vec![("zzz", "claude")]);
+        let all_models = create_models(vec![("zzz", "claude"), ("zzz", "gemini")]);
 
         let grouped_models = GroupedModels::new(all_models, recommended_models);
         let entries = grouped_models.entries();
@@ -864,10 +864,10 @@ mod tests {
     #[gpui::test]
     fn test_models_have_correct_actions(_cx: &mut TestAppContext) {
         let recommended_models =
-            create_models_with_favorites(vec![("zed", "claude")], vec![("zed", "claude")]);
+            create_models_with_favorites(vec![("zzz", "claude")], vec![("zzz", "claude")]);
         let all_models = create_models_with_favorites(
-            vec![("zed", "claude"), ("zed", "gemini"), ("openai", "gpt-4")],
-            vec![("zed", "claude")],
+            vec![("zzz", "claude"), ("zzz", "gemini"), ("openai", "gpt-4")],
+            vec![("zzz", "claude")],
         );
 
         let grouped_models = GroupedModels::new(all_models, recommended_models);
@@ -875,8 +875,8 @@ mod tests {
 
         for entry in &entries {
             if let LanguageModelPickerEntry::Model(info) = entry {
-                if info.model.telemetry_id() == "zed/claude" {
-                    assert!(info.is_favorite, "zed/claude should be a favorite");
+                if info.model.telemetry_id() == "zzz/claude" {
+                    assert!(info.is_favorite, "zzz/claude should be a favorite");
                 } else {
                     assert!(
                         !info.is_favorite,
@@ -890,15 +890,15 @@ mod tests {
 
     #[gpui::test]
     fn test_favorites_appear_in_other_sections(_cx: &mut TestAppContext) {
-        let favorites = vec![("zed", "gemini"), ("openai", "gpt-4")];
+        let favorites = vec![("zzz", "gemini"), ("openai", "gpt-4")];
 
         let recommended_models =
-            create_models_with_favorites(vec![("zed", "claude")], favorites.clone());
+            create_models_with_favorites(vec![("zzz", "claude")], favorites.clone());
 
         let all_models = create_models_with_favorites(
             vec![
-                ("zed", "claude"),
-                ("zed", "gemini"),
+                ("zzz", "claude"),
+                ("zzz", "gemini"),
                 ("openai", "gpt-4"),
                 ("openai", "gpt-3.5"),
             ],
@@ -907,11 +907,11 @@ mod tests {
 
         let grouped_models = GroupedModels::new(all_models, recommended_models);
 
-        assert_models_eq(grouped_models.favorites, vec!["zed/gemini", "openai/gpt-4"]);
-        assert_models_eq(grouped_models.recommended, vec!["zed/claude"]);
+        assert_models_eq(grouped_models.favorites, vec!["zzz/gemini", "openai/gpt-4"]);
+        assert_models_eq(grouped_models.recommended, vec!["zzz/claude"]);
         assert_models_eq(
             grouped_models.all.values().flatten().cloned().collect(),
-            vec!["zed/claude", "zed/gemini", "openai/gpt-4", "openai/gpt-3.5"],
+            vec!["zzz/claude", "zzz/gemini", "openai/gpt-4", "openai/gpt-3.5"],
         );
     }
 }

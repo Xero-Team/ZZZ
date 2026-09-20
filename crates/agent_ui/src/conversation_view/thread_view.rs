@@ -19,7 +19,7 @@ use workspace::{OpenOptions, SERIALIZATION_THROTTLE_TIME};
 
 use super::thread_search_bar::{ThreadSearchBar, ThreadSearchBarEvent};
 use super::*;
-use zed_actions::agent::OpenSettings;
+use zzz_actions::agent::OpenSettings;
 
 fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()
@@ -368,7 +368,7 @@ mod numbered_code_block_tests {
     #[test]
     fn parses_cat_numbered_markdown_code_block() {
         let parsed = parse_cat_numbered_markdown_code_block(
-            "```rs zed/crates/example.rs\n     2\tfn main() {\n     3\t    println!(\"hi\");\n     4\t}\n```\n",
+            "```rs zzz/crates/example.rs\n     2\tfn main() {\n     3\t    println!(\"hi\");\n     4\t}\n```\n",
         )
         .expect("cat-numbered block should parse");
 
@@ -1738,7 +1738,7 @@ impl ThreadView {
 
     fn handle_message_editor_move_up(
         &mut self,
-        _: &zed_actions::editor::MoveUp,
+        _: &zzz_actions::editor::MoveUp,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -4183,7 +4183,7 @@ impl ThreadView {
                     .handler({
                         move |window, cx| {
                             window.dispatch_action(
-                                zed_actions::agent::AddSelectionToThread.boxed_clone(),
+                                zzz_actions::agent::AddSelectionToThread.boxed_clone(),
                                 cx,
                             );
                         }
@@ -4215,7 +4215,7 @@ impl ThreadView {
 
         let tooltip_label =
             if following {
-                if self.agent_id.as_ref() == agent::ZED_AGENT_ID.as_ref() {
+                if self.agent_id.as_ref() == agent::ZZZ_AGENT_ID.as_ref() {
                     app_i18n::tr(
                         cx,
                         "agent_ui.thread_view.stop_following_the_agent",
@@ -4231,7 +4231,7 @@ impl ThreadView {
                     .replacen("{}", self.agent_id.as_ref(), 1)
                 }
             } else {
-                if self.agent_id.as_ref() == agent::ZED_AGENT_ID.as_ref() {
+                if self.agent_id.as_ref() == agent::ZZZ_AGENT_ID.as_ref() {
                     app_i18n::tr(cx, "agent_ui.thread_view.follow_the_agent", "Follow the {}")
                         .replacen("{}", self.agent_id.as_ref(), 1)
                 } else {
@@ -9247,7 +9247,7 @@ impl ThreadView {
                     move |_, _, _window, cx| {
                         #[cfg(windows)]
                         _window.dispatch_action(
-                            zed_actions::wsl_actions::OpenWsl::default().boxed_clone(),
+                            zzz_actions::wsl_actions::OpenWsl::default().boxed_clone(),
                             cx,
                         );
                         cx.notify();

@@ -22,7 +22,7 @@ system_specs.workspace = true
 urlencoding.workspace = true
 util.workspace = true
 workspace.workspace = true
-zed_actions.workspace = true
+zzz_actions.workspace = true
 
 [dev-dependencies]
 release_channel.workspace = true

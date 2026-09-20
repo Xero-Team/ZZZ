@@ -99,7 +99,7 @@ impl AgentProfile {
     }
 }
 
-/// A profile for the Zed Agent that controls its behavior.
+/// A profile for the ZZZ Agent that controls its behavior.
 #[derive(Debug, Clone)]
 pub struct AgentProfileSettings {
     /// The name of the profile.
