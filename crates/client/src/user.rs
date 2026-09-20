@@ -1,7 +1,7 @@
 use super::{Client, Status, proto};
 use anyhow::{Context as _, Result};
 use collections::HashMap;
-use futures::{StreamExt, channel::mpsc};
+use futures::StreamExt;
 use gpui::{Context, EventEmitter, SharedString, SharedUri, Task};
 use postage::{sink::Sink, watch};
 use rpc::proto::{RequestMessage, UsersResponse};
@@ -68,7 +68,6 @@ pub struct UserStore {
     current_user: watch::Receiver<Option<Arc<User>>>,
     client: Weak<Client>,
     _maintain_current_user: Task<Result<()>>,
-    _handle_sign_out: Task<()>,
 }
 
 #[derive(Clone)]
@@ -86,9 +85,6 @@ impl EventEmitter<Event> for UserStore {}
 impl UserStore {
     pub fn new(client: Arc<Client>, cx: &Context<Self>) -> Self {
         let (mut current_user_tx, current_user_rx) = watch::channel();
-        let (sign_out_tx, mut sign_out_rx) = mpsc::unbounded();
-
-        client.sign_out_tx.lock().replace(sign_out_tx);
 
         Self {
             users: Default::default(),
@@ -121,19 +117,6 @@ impl UserStore {
                     }
                 }
                 Ok(())
-            }),
-            _handle_sign_out: cx.spawn(async move |this, cx| {
-                while let Some(()) = sign_out_rx.next().await {
-                    let Some(client) = this
-                        .read_with(cx, |this, _cx| this.client.upgrade())
-                        .ok()
-                        .flatten()
-                    else {
-                        break;
-                    };
-
-                    client.sign_out(cx).await;
-                }
             }),
         }
     }

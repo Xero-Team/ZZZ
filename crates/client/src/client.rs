@@ -1,8 +1,8 @@
 #[cfg(any(test, feature = "test-support"))]
 pub mod test;
 
+pub mod platform_info;
 mod proxy;
-pub mod telemetry;
 pub mod user;
 pub mod zed_urls;
 
@@ -13,13 +13,9 @@ use async_tungstenite::tungstenite::{
     http::{HeaderValue, StatusCode},
 };
 use clock::SystemClock;
-use cloud_api_client::CloudApiClient;
 use credentials_provider::CredentialsProvider;
-use feature_flags::FeatureFlagAppExt as _;
 use futures::{
-    FutureExt, SinkExt, Stream, StreamExt, TryFutureExt as _, TryStreamExt,
-    channel::{mpsc, oneshot},
-    future::BoxFuture,
+    FutureExt, SinkExt, Stream, StreamExt, TryFutureExt as _, TryStreamExt, future::BoxFuture,
 };
 use gpui::{App, AsyncApp, Entity, Global, Task, WeakEntity, actions};
 use http_client::{HttpClient, HttpClientWithUrl, http, read_proxy_from_env};
@@ -29,13 +25,12 @@ use proxy::connect_proxy_stream;
 use rand::prelude::*;
 use release_channel::{AppVersion, ReleaseChannel};
 use rpc::proto::{AnyTypedEnvelope, EnvelopedMessage, PeerId, RequestMessage};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 #[cfg(test)]
 use settings::SettingsContent;
 use settings::{RegisterSetting, Settings};
 use std::{
     any::TypeId,
-    convert::TryFrom,
     future::Future,
     marker::PhantomData,
     path::PathBuf,
@@ -71,10 +66,6 @@ pub const CONNECTION_TIMEOUT: Duration = Duration::from_secs(20);
 actions!(
     client,
     [
-        /// Signs in to Zed account.
-        SignIn,
-        /// Signs out of Zed account.
-        SignOut,
         /// Reconnects to the collaboration server.
         Reconnect
     ]
@@ -184,11 +175,9 @@ pub struct Client {
     id: AtomicU64,
     peer: Arc<Peer>,
     http: Arc<HttpClientWithUrl>,
-    cloud_client: Arc<CloudApiClient>,
     credentials_provider: ClientCredentialsProvider,
     state: RwLock<ClientState>,
     handler_set: Mutex<ProtoMessageHandlerSet>,
-    sign_out_tx: Mutex<Option<mpsc::UnboundedSender<()>>>,
 
     #[allow(clippy::type_complexity)]
     #[cfg(any(test, feature = "test-support"))]
@@ -364,39 +353,6 @@ impl ClientCredentialsProvider {
         }
         .boxed_local()
     }
-
-    /// Writes the credentials to the provider.
-    fn write_credentials<'a>(
-        &'a self,
-        user_id: u64,
-        access_token: String,
-        cx: &'a AsyncApp,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
-        async move {
-            let credentials_url = self.credentials_url(cx)?;
-            self.provider
-                .write_credentials(
-                    &credentials_url,
-                    &user_id.to_string(),
-                    access_token.as_bytes(),
-                    cx,
-                )
-                .await
-        }
-        .boxed_local()
-    }
-
-    /// Deletes the credentials from the provider.
-    fn delete_credentials<'a>(
-        &'a self,
-        cx: &'a AsyncApp,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
-        async move {
-            let credentials_url = self.credentials_url(cx)?;
-            self.provider.delete_credentials(&credentials_url, cx).await
-        }
-        .boxed_local()
-    }
 }
 
 impl Default for ClientState {
@@ -509,12 +465,10 @@ impl Client {
         Arc::new(Self {
             id: AtomicU64::new(0),
             peer: Peer::new(0),
-            cloud_client: Arc::new(CloudApiClient::new(http.clone())),
             http,
             credentials_provider: ClientCredentialsProvider::new(cx),
             state: Default::default(),
             handler_set: Default::default(),
-            sign_out_tx: Mutex::new(None),
 
             #[cfg(any(test, feature = "test-support"))]
             authenticate: Default::default(),
@@ -545,10 +499,6 @@ impl Client {
 
     pub fn credentials_provider(&self) -> Arc<dyn CredentialsProvider> {
         self.credentials_provider.provider.clone()
-    }
-
-    pub fn cloud_client(&self) -> Arc<CloudApiClient> {
-        self.cloud_client.clone()
     }
 
     pub fn set_id(&self, id: u64) -> &Self {
@@ -803,13 +753,6 @@ impl Client {
         }
     }
 
-    pub async fn has_credentials(&self, cx: &AsyncApp) -> bool {
-        self.credentials_provider
-            .read_credentials(cx)
-            .await
-            .is_some()
-    }
-
     pub async fn sign_in(
         self: &Arc<Self>,
         try_provider: bool,
@@ -823,27 +766,13 @@ impl Client {
             true
         };
 
-        let mut credentials = None;
-
-        let old_credentials = self.state.read().credentials.clone();
-        if let Some(old_credentials) = old_credentials
-            && self.validate_credentials(&old_credentials, cx).await?
-        {
-            credentials = Some(old_credentials);
-        }
+        let mut credentials = self.state.read().credentials.clone();
 
         if credentials.is_none()
             && try_provider
             && let Some(stored_credentials) = self.credentials_provider.read_credentials(cx).await
         {
-            if self.validate_credentials(&stored_credentials, cx).await? {
-                credentials = Some(stored_credentials);
-            } else {
-                self.credentials_provider
-                    .delete_credentials(cx)
-                    .await
-                    .log_err();
-            }
+            credentials = Some(stored_credentials);
         }
 
         if credentials.is_none() {
@@ -852,14 +781,7 @@ impl Client {
             futures::select_biased! {
                 authenticate = self.authenticate(cx).fuse() => {
                     match authenticate {
-                        Ok(creds) => {
-                            self.credentials_provider
-                                .write_credentials(creds.user_id, creds.access_token.clone(), cx)
-                                .await
-                                .log_err();
-
-                            credentials = Some(creds);
-                        },
+                        Ok(creds) => credentials = Some(creds),
                         Err(err) => {
                             self.set_status(Status::AuthenticationError, cx);
                             return Err(err);
@@ -874,8 +796,6 @@ impl Client {
 
         let credentials = credentials.unwrap();
         self.set_id(credentials.user_id);
-        self.cloud_client
-            .set_credentials(credentials.user_id as u32, credentials.access_token.clone());
         self.state.write().credentials = Some(credentials.clone());
         self.set_status(
             if is_reauthenticating {
@@ -887,77 +807,6 @@ impl Client {
         );
 
         Ok(credentials)
-    }
-
-    async fn validate_credentials(
-        self: &Arc<Self>,
-        credentials: &Credentials,
-        cx: &AsyncApp,
-    ) -> Result<bool> {
-        match self
-            .cloud_client
-            .validate_credentials(credentials.user_id as u32, &credentials.access_token)
-            .await
-        {
-            Ok(valid) => Ok(valid),
-            Err(err) => {
-                self.set_status(Status::AuthenticationError, cx);
-                Err(anyhow!("failed to validate credentials: {}", err))
-            }
-        }
-    }
-
-    /// Performs a sign-in and also (optionally) connects to Collab.
-    ///
-    /// Only Zed staff automatically connect to Collab.
-    pub async fn sign_in_with_optional_connect(
-        self: &Arc<Self>,
-        try_provider: bool,
-        cx: &AsyncApp,
-    ) -> Result<()> {
-        if !cx.update(|cx| ClientSettings::get_global(cx).remote_server_enabled()) && !cfg!(test) {
-            return Ok(());
-        }
-        // Don't try to sign in again if we're already connected to Collab, as it will temporarily disconnect us.
-        if self.status().borrow().is_connected() {
-            return Ok(());
-        }
-
-        let (is_staff_tx, is_staff_rx) = oneshot::channel::<bool>();
-        let mut is_staff_tx = Some(is_staff_tx);
-        cx.update(|cx| {
-            cx.on_flags_ready(move |state, _cx| {
-                if let Some(is_staff_tx) = is_staff_tx.take() {
-                    is_staff_tx.send(state.is_staff).log_err();
-                }
-            })
-            .detach();
-        });
-
-        let credentials = self.sign_in(try_provider, cx).await?;
-
-        cx.update(move |cx| {
-            cx.spawn({
-                let client = self.clone();
-                async move |cx| {
-                    let is_staff = is_staff_rx.await?;
-                    if is_staff {
-                        match client.connect_with_credentials(credentials, cx).await {
-                            ConnectionResult::Timeout => Err(anyhow!("connection timed out")),
-                            ConnectionResult::ConnectionReset => Err(anyhow!("connection reset")),
-                            ConnectionResult::Result(result) => {
-                                result.context("client auth and connect")
-                            }
-                        }
-                    } else {
-                        Ok(())
-                    }
-                }
-            })
-            .detach_and_log_err(cx);
-        });
-
-        Ok(())
     }
 
     pub async fn connect(
@@ -1030,6 +879,7 @@ impl Client {
                         }
                     }
                     Err(EstablishConnectionError::Unauthorized) => {
+                        self.state.write().credentials = None;
                         self.set_status(Status::ConnectionError, cx);
                         ConnectionResult::Result(Err(EstablishConnectionError::Unauthorized).context("client auth and connect"))
                     }
@@ -1140,7 +990,10 @@ impl Client {
             return callback(cx);
         }
 
-        self.authenticate_with_browser(cx)
+        let _ = cx;
+        Task::ready(Err(anyhow!(
+            "no stored credentials for the configured remote server"
+        )))
     }
 
     fn establish_connection(
@@ -1291,144 +1144,6 @@ impl Client {
                     .sink_map_err(|error| anyhow!(error)),
             ))
         })
-    }
-
-    pub fn authenticate_with_browser(self: &Arc<Self>, cx: &AsyncApp) -> Task<Result<Credentials>> {
-        let http = self.http.clone();
-        cx.spawn(async move |cx| {
-            let background = cx.background_executor().clone();
-
-            let (open_url_tx, open_url_rx) = oneshot::channel::<String>();
-            cx.update(|cx| {
-                cx.spawn(async move |cx| {
-                    if let Ok(url) = open_url_rx.await {
-                        cx.update(|cx| cx.open_url(&url));
-                    }
-                })
-                .detach();
-            });
-
-            let credentials = background
-                .clone()
-                .spawn(async move {
-                    // Generate a pair of asymmetric encryption keys. The public key will be used by the
-                    // zed server to encrypt the user's access token, so that it can'be intercepted by
-                    // any other app running on the user's device.
-                    let (public_key, private_key) =
-                        rpc::auth::keypair().context("failed to generate keypair for auth")?;
-                    let public_key = String::try_from(public_key)
-                        .context("failed to serialize public key for auth")?;
-
-                    // Start an HTTP server to receive the redirect from Zed's sign-in page.
-                    let server = tiny_http::Server::http("127.0.0.1:0")
-                        .map_err(|e| anyhow!(e).context("failed to bind callback port"))?;
-                    let port = server
-                        .server_addr()
-                        .to_ip()
-                        .context("server not bound to a TCP address")?
-                        .port();
-
-                    #[derive(Serialize)]
-                    struct NativeAppSignInQueryParams {
-                        native_app_port: u16,
-                        native_app_public_key: String,
-                        system_id: Option<Arc<str>>,
-                    }
-
-                    // Open the Zed sign-in page in the user's browser, with query parameters that indicate
-                    // that the user is signing in from a Zed app running on the same device.
-                    let url = http.build_url(&format!(
-                        "/native_app_signin?{}",
-                        serde_urlencoded::to_string(&NativeAppSignInQueryParams {
-                            native_app_port: port,
-                            native_app_public_key: public_key,
-                            system_id: None,
-                        })?
-                    ));
-
-                    open_url_tx.send(url).log_err();
-
-                    #[derive(Deserialize)]
-                    struct CallbackParams {
-                        pub user_id: String,
-                        pub access_token: String,
-                    }
-
-                    // Receive the HTTP request from the user's browser. Retrieve the user id and encrypted
-                    // access token from the query params.
-                    //
-                    // TODO - Avoid ever starting more than one HTTP server. Maybe switch to using a
-                    // custom URL scheme instead of this local HTTP server.
-                    let (user_id, access_token) = background
-                        .spawn(async move {
-                            for _ in 0..100 {
-                                if let Some(req) = server.recv_timeout(Duration::from_secs(1))? {
-                                    let path = req.url();
-                                    let url = Url::parse(&format!("http://example.com{}", path))
-                                        .context("failed to parse login notification url")?;
-                                    let callback_params: CallbackParams =
-                                        serde_urlencoded::from_str(url.query().unwrap_or_default())
-                                            .context(
-                                                "failed to parse sign-in callback query parameters",
-                                            )?;
-
-                                    let post_auth_url =
-                                        http.build_url("/native_app_signin_succeeded");
-                                    req.respond(
-                                        tiny_http::Response::empty(302).with_header(
-                                            tiny_http::Header::from_bytes(
-                                                &b"Location"[..],
-                                                post_auth_url.as_bytes(),
-                                            )
-                                            .unwrap(),
-                                        ),
-                                    )
-                                    .context("failed to respond to login http request")?;
-                                    return Ok((
-                                        callback_params.user_id,
-                                        callback_params.access_token,
-                                    ));
-                                }
-                            }
-
-                            anyhow::bail!("didn't receive login redirect");
-                        })
-                        .await?;
-
-                    let access_token = private_key
-                        .decrypt_string(&access_token)
-                        .context("failed to decrypt access token")?;
-
-                    anyhow::Ok(Credentials {
-                        user_id: user_id.parse()?,
-                        access_token,
-                    })
-                })
-                .await?;
-
-            cx.update(|cx| cx.activate(true));
-            Ok(credentials)
-        })
-    }
-
-    pub async fn sign_out(self: &Arc<Self>, cx: &AsyncApp) {
-        self.state.write().credentials = None;
-        self.cloud_client.clear_credentials();
-        self.disconnect(cx);
-
-        if self.has_credentials(cx).await {
-            self.credentials_provider
-                .delete_credentials(cx)
-                .await
-                .log_err();
-        }
-    }
-
-    /// Requests a sign out to be performed asynchronously.
-    pub fn request_sign_out(&self) {
-        if let Some(sign_out_tx) = self.sign_out_tx.lock().clone() {
-            sign_out_tx.unbounded_send(()).ok();
-        }
     }
 
     pub fn disconnect(self: &Arc<Self>, cx: &AsyncApp) {
@@ -1641,7 +1356,7 @@ pub fn parse_zed_link(_link: &str, _cx: &App) -> Option<ZedLink> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test::{FakeServer, parse_authorization_header};
+    use crate::test::FakeServer;
 
     use clock::FakeSystemClock;
     use gpui::{AppContext as _, BackgroundExecutor, TestAppContext};
@@ -1721,46 +1436,6 @@ mod tests {
     }
 
     #[gpui::test(iterations = 10)]
-    async fn test_auth_failure_during_reconnection(cx: &mut TestAppContext) {
-        init_test(cx);
-        let http_client = FakeHttpClient::with_200_response();
-        let client =
-            cx.update(|cx| Client::new(Arc::new(FakeSystemClock::new()), http_client.clone(), cx));
-        let server = FakeServer::for_client(42, &client, cx).await;
-        let mut status = client.status();
-        assert!(matches!(
-            status.next().await,
-            Some(Status::Connected { .. })
-        ));
-        assert_eq!(server.auth_count(), 1);
-
-        // Simulate an auth failure during reconnection.
-        http_client
-            .as_fake()
-            .replace_handler(|_, _request| async move {
-                Ok(http_client::Response::builder()
-                    .status(503)
-                    .body("".into())
-                    .unwrap())
-            });
-        server.disconnect();
-        while !matches!(status.next().await, Some(Status::ReconnectionError { .. })) {}
-
-        // Restore the ability to authenticate.
-        http_client
-            .as_fake()
-            .replace_handler(|_, _request| async move {
-                Ok(http_client::Response::builder()
-                    .status(200)
-                    .body("".into())
-                    .unwrap())
-            });
-        cx.executor().advance_clock(Duration::from_secs(10));
-        while !matches!(status.next().await, Some(Status::Connected { .. })) {}
-        assert_eq!(server.auth_count(), 1); // Client reused the cached credentials when reconnecting
-    }
-
-    #[gpui::test(iterations = 10)]
     async fn test_connection_timeout(executor: BackgroundExecutor, cx: &mut TestAppContext) {
         init_test(cx);
         let user_id = 5;
@@ -1778,7 +1453,7 @@ mod tests {
             cx.background_spawn(async move {
                 Ok(Credentials {
                     user_id,
-                    access_token: "token".into(),
+                    access_token: "0".into(),
                 })
             })
         });
@@ -1830,17 +1505,16 @@ mod tests {
     }
 
     #[gpui::test(iterations = 10)]
-    async fn test_reauthenticate_only_if_unauthorized(cx: &mut TestAppContext) {
+    async fn test_sign_in_reuses_cached_credentials(cx: &mut TestAppContext) {
         init_test(cx);
         let auth_count = Arc::new(Mutex::new(0));
-        let http_client = FakeHttpClient::create(|_request| async move {
-            Ok(http_client::Response::builder()
-                .status(200)
-                .body("".into())
-                .unwrap())
+        let client = cx.update(|cx| {
+            Client::new(
+                Arc::new(FakeSystemClock::new()),
+                FakeHttpClient::with_404_response(),
+                cx,
+            )
         });
-        let client =
-            cx.update(|cx| Client::new(Arc::new(FakeSystemClock::new()), http_client.clone(), cx));
         client.override_authenticate({
             let auth_count = auth_count.clone();
             move |cx| {
@@ -1859,43 +1533,10 @@ mod tests {
         assert_eq!(*auth_count.lock(), 1);
         assert_eq!(credentials.access_token, "1");
 
-        // If credentials are still valid, signing in doesn't trigger authentication.
+        // Cached credentials are reused without triggering authentication again.
         let credentials = client.sign_in(false, &cx.to_async()).await.unwrap();
         assert_eq!(*auth_count.lock(), 1);
         assert_eq!(credentials.access_token, "1");
-
-        // If the server is unavailable, signing in doesn't trigger authentication.
-        http_client
-            .as_fake()
-            .replace_handler(|_, _request| async move {
-                Ok(http_client::Response::builder()
-                    .status(503)
-                    .body("".into())
-                    .unwrap())
-            });
-        client.sign_in(false, &cx.to_async()).await.unwrap_err();
-        assert_eq!(*auth_count.lock(), 1);
-
-        // If credentials became invalid, signing in triggers authentication.
-        http_client
-            .as_fake()
-            .replace_handler(|_, request| async move {
-                let credentials = parse_authorization_header(&request).unwrap();
-                if credentials.access_token == "2" {
-                    Ok(http_client::Response::builder()
-                        .status(200)
-                        .body("".into())
-                        .unwrap())
-                } else {
-                    Ok(http_client::Response::builder()
-                        .status(401)
-                        .body("".into())
-                        .unwrap())
-                }
-            });
-        let credentials = client.sign_in(false, &cx.to_async()).await.unwrap();
-        assert_eq!(*auth_count.lock(), 2);
-        assert_eq!(credentials.access_token, "2");
     }
 
     #[gpui::test(iterations = 10)]

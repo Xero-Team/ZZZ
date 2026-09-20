@@ -377,10 +377,33 @@ check_no_inline_rating_actions() {
         "$root/crates" "$root/assets/keymaps" --glob '*.rs' --glob '*.json'
 }
 
+check_no_account_signin_flow() {
+    ! rg -n 'native_app_signin|authenticate_with_browser' "$root/crates" --glob '*.rs' \
+        && ! rg -n 'sign_out_tx|request_sign_out|validate_credentials' "$root/crates/client/src" \
+        && ! rg -n 'SignIn|SignOut' "$root/crates/client/src/client.rs"
+}
+
+check_no_cloud_api_client() {
+    ! test -d "$root/crates/cloud_api_client" \
+        && ! rg -n 'cloud_api_client|CloudApiClient|cloud_client' "$root/crates" --glob '*.rs' --glob 'Cargo.toml' \
+        && ! rg -n 'cloud_api_client' "$root/Cargo.toml"
+}
+
+check_no_internal_user_api() {
+    ! test -f "$root/crates/cloud_api_types/src/internal_api.rs" \
+        && ! rg -n 'internal_api|FuzzySearchUsersBody|LookUpUserByGithubLogin|ChannelMember' \
+            "$root/crates/cloud_api_types" --glob '*.rs'
+}
+
+check_orphan_and_telemetry_dirs_absent() {
+    ! test -d "$root/crates/crashes" \
+        && ! test -f "$root/crates/client/src/telemetry.rs"
+}
+
 check_allowlisted_hosts() {
     local urls
     urls=$(rg --no-filename -o 'https?://[^"` )]+' "$root/assets/settings/default.json" "$root/crates/client/src/client.rs" \
-        "$root/crates/cloud_api_client/src" 2>/dev/null | sed -E 's#https?://([^/:]+).*#\1#; s/[][{}]//g' | sort -u)
+        2>/dev/null | sed -E 's#https?://([^/:]+).*#\1#; s/[][{}]//g' | sort -u)
     while read -r host; do
         [[ -z "$host" ]] && continue
         if ! rg -qxF "$host" "$allowlist"; then
@@ -452,6 +475,10 @@ check "hosted cloud websocket is absent" check_no_cloud_websocket
 check "admin impersonation backdoor is absent" check_no_impersonation_backdoor
 check "collab UI components are absent" check_no_collab_ui_components
 check "inline prompt rating actions are absent" check_no_inline_rating_actions
+check "account sign-in flow is absent" check_no_account_signin_flow
+check "cloud API client crate is absent" check_no_cloud_api_client
+check "internal user search API is absent" check_no_internal_user_api
+check "orphan and telemetry directories are absent" check_orphan_and_telemetry_dirs_absent
 check "network hosts are allowlisted" check_allowlisted_hosts
 
 if (( failures > 0 )); then

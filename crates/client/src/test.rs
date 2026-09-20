@@ -3,7 +3,6 @@ use std::sync::Arc;
 use anyhow::{Context as _, Result, anyhow};
 use futures::{StreamExt, stream::BoxStream};
 use gpui::{AppContext as _, TestAppContext};
-use http_client::{AsyncBody, Request, http};
 use parking_lot::Mutex;
 use rpc::{ConnectionId, Peer, Receipt, TypedEnvelope, proto};
 
@@ -185,19 +184,4 @@ impl Drop for FakeServer {
     fn drop(&mut self) {
         self.disconnect();
     }
-}
-
-pub fn parse_authorization_header(req: &Request<AsyncBody>) -> Option<Credentials> {
-    let mut auth_header = req
-        .headers()
-        .get(http::header::AUTHORIZATION)?
-        .to_str()
-        .ok()?
-        .split_whitespace();
-    let user_id = auth_header.next()?.parse().ok()?;
-    let access_token = auth_header.next()?;
-    Some(Credentials {
-        user_id,
-        access_token: access_token.to_owned(),
-    })
 }

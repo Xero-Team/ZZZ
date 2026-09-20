@@ -1,5 +1,5 @@
 [package]
-description = "The fast, collaborative code editor."
+description = "A local-first, open-source code editor."
 edition.workspace = true
 name = "zzz"
 version = "1.22.0"

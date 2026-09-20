@@ -1,5 +1,4 @@
 mod extension;
-pub mod internal_api;
 mod known_or_unknown;
 
 pub use crate::extension::*;

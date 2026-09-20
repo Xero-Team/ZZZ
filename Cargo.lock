@@ -2565,8 +2565,6 @@ dependencies = [
  "async-tungstenite",
  "base64 0.22.1",
  "clock",
- "cloud_api_client",
- "cloud_llm_client",
  "collections",
  "credentials_provider",
  "feature_flags",
@@ -2590,14 +2588,12 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "serde_urlencoded",
  "settings",
  "sha2 0.11.0",
  "smol",
  "text",
  "thiserror 2.0.18",
  "time",
- "tiny_http",
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.26.4",
@@ -2616,18 +2612,6 @@ dependencies = [
  "parking_lot",
  "serde",
  "smallvec",
-]
-
-[[package]]
-name = "cloud_api_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cloud_api_types",
- "futures 0.3.32",
- "http_client",
- "parking_lot",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -4592,7 +4576,6 @@ dependencies = [
  "buffer_diff",
  "client",
  "clock",
- "cloud_api_client",
  "cloud_llm_client",
  "collections",
  "copilot",

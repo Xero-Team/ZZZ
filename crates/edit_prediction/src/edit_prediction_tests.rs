@@ -2588,7 +2588,6 @@ fn init_test_with_fake_client(
         });
 
         let client = client::Client::new(Arc::new(FakeSystemClock::new()), http_client, cx);
-        client.cloud_client().set_credentials(1, "test".into());
 
         let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));
         language_model::init(cx);
