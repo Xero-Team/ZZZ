@@ -1,6 +1,6 @@
 use gpui::{Action, IntoElement, ParentElement, RenderOnce, point};
 use i18n as app_i18n;
-use language_model::{IconOrSvg, LanguageModelRegistry, ZED_CLOUD_PROVIDER_ID};
+use language_model::{IconOrSvg, LanguageModelRegistry};
 use ui::{Divider, List, ListBulletItem, prelude::*};
 
 fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
@@ -36,9 +36,7 @@ impl ApiKeysWithProviders {
         LanguageModelRegistry::read_global(cx)
             .visible_providers()
             .iter()
-            .filter(|provider| {
-                provider.is_authenticated(cx) && provider.id() != ZED_CLOUD_PROVIDER_ID
-            })
+            .filter(|provider| provider.is_authenticated(cx))
             .map(|provider| (provider.icon(), provider.name().0))
             .collect()
     }

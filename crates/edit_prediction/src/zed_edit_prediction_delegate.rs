@@ -74,10 +74,6 @@ impl EditPredictionDelegate for ZedEditPredictionDelegate {
         let _ = cx;
     }
 
-    fn usage(&self, cx: &App) -> Option<client::EditPredictionUsage> {
-        self.store.read(cx).usage(cx)
-    }
-
     fn is_enabled(
         &self,
         _buffer: &Entity<language::Buffer>,

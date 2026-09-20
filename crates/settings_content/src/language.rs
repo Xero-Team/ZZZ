@@ -113,7 +113,6 @@ pub enum EditPredictionProvider {
     #[default]
     None,
     Copilot,
-    Codestral,
     Ollama,
     OpenAiCompatibleApi,
 }
@@ -122,7 +121,6 @@ impl EditPredictionProvider {
     pub fn display_name(&self) -> Option<&'static str> {
         match self {
             EditPredictionProvider::Copilot => Some("GitHub Copilot"),
-            EditPredictionProvider::Codestral => Some("Codestral"),
             EditPredictionProvider::None => None,
             EditPredictionProvider::Ollama => Some("Ollama"),
             EditPredictionProvider::OpenAiCompatibleApi => Some("OpenAI-Compatible API"),
@@ -145,8 +143,6 @@ pub struct EditPredictionSettingsContent {
     pub mode: Option<EditPredictionsMode>,
     /// Settings specific to GitHub Copilot.
     pub copilot: Option<CopilotSettingsContent>,
-    /// Settings specific to Codestral.
-    pub codestral: Option<CodestralSettingsContent>,
     /// Settings specific to Ollama.
     pub ollama: Option<OllamaEditPredictionSettingsContent>,
     /// Settings specific to using custom OpenAI-compatible servers for edit prediction.
@@ -230,23 +226,6 @@ pub struct CopilotSettingsContent {
     ///
     /// Default: true
     pub enable_next_edit_suggestions: Option<bool>,
-}
-
-#[with_fallible_options]
-#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
-pub struct CodestralSettingsContent {
-    /// Model to use for completions.
-    ///
-    /// Default: "codestral-latest"
-    pub model: Option<String>,
-    /// Maximum tokens to generate.
-    ///
-    /// Default: 150
-    pub max_tokens: Option<u32>,
-    /// Api URL to use for completions.
-    ///
-    /// Default: "https://codestral.mistral.ai"
-    pub api_url: Option<String>,
 }
 
 /// Ollama model name for edit predictions.

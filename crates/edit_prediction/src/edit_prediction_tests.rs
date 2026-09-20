@@ -1,9 +1,8 @@
 use super::*;
 use crate::udiff::apply_diff_to_string;
-use client::{RefreshLlmTokenListener, UserStore, test::FakeServer};
+use client::{UserStore, test::FakeServer};
 use clock::FakeSystemClock;
 use clock::ReplicaId;
-use cloud_api_types::{CreateLlmTokenResponse, LlmToken};
 use cloud_llm_client::{
     EditPredictionRejectReason, EditPredictionRejection, RejectEditPredictionsBody,
     predict_edits_v3::{PredictEditsV3Request, PredictEditsV3Response},
@@ -2593,7 +2592,6 @@ fn init_test_with_fake_client(
 
         let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));
         language_model::init(cx);
-        RefreshLlmTokenListener::register(client.clone(), user_store.clone(), cx);
         let ep_store = EditPredictionStore::global(&client, &user_store, cx);
 
         (
@@ -2967,16 +2965,6 @@ async fn make_test_ep_store(
             let mut body = req.into_body();
             async move {
                 match (method, uri.as_str()) {
-                    (Method::POST, "/client/llm_tokens") => Ok(http_client::Response::builder()
-                        .status(200)
-                        .body(
-                            serde_json::to_string(&CreateLlmTokenResponse {
-                                token: LlmToken("the-llm-token".to_string()),
-                            })
-                            .unwrap()
-                            .into(),
-                        )
-                        .unwrap()),
                     (Method::POST, "/predict_edits/v3") => {
                         let mut buf = Vec::new();
                         body.read_to_end(&mut buf).await.ok();
@@ -3010,10 +2998,6 @@ async fn make_test_ep_store(
     });
 
     let client = cx.update(|cx| Client::new(Arc::new(FakeSystemClock::new()), http_client, cx));
-    let user_store = cx.update(|cx| cx.new(|cx| client::UserStore::new(client.clone(), cx)));
-    cx.update(|cx| {
-        RefreshLlmTokenListener::register(client.clone(), user_store.clone(), cx);
-    });
     let _server = FakeServer::for_client(42, &client, cx).await;
 
     let ep_store = cx.new(|cx| {
@@ -3084,10 +3068,6 @@ async fn test_unauthenticated_without_custom_url_blocks_prediction_impl(cx: &mut
 
     let client =
         cx.update(|cx| client::Client::new(Arc::new(FakeSystemClock::new()), http_client, cx));
-    let user_store = cx.update(|cx| cx.new(|cx| client::UserStore::new(client.clone(), cx)));
-    cx.update(|cx| {
-        RefreshLlmTokenListener::register(client.clone(), user_store.clone(), cx);
-    });
 
     let ep_store = cx.new(|cx| EditPredictionStore::new(client, project.read(cx).user_store(), cx));
 

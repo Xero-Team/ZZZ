@@ -1,8 +1,5 @@
 use anyhow::Result;
-use client::{Client, EditPredictionUsage, NeedsLlmTokenRefresh, UserStore, global_llm_token};
-use cloud_api_client::LlmApiToken;
-use cloud_api_types::{OrganizationId, SubmitEditPredictionFeedbackBody};
-use cloud_llm_client::predict_edits_v3::{RawCompletionRequest, RawCompletionResponse};
+use client::{Client, UserStore};
 use cloud_llm_client::{
     EditPredictionRejectReason, EditPredictionRejection,
     MAX_EDIT_PREDICTION_REJECTIONS_PER_REQUEST, MINIMUM_REQUIRED_VERSION_HEADER_NAME,
@@ -18,7 +15,6 @@ use futures::{
     select_biased,
 };
 use gpui::BackgroundExecutor;
-use gpui::http_client::Url;
 use gpui::{
     App, AsyncApp, Entity, EntityId, Global, SharedString, Task, WeakEntity, actions,
     http_client::{self, AsyncBody, Method},
@@ -35,10 +31,8 @@ use semver::Version;
 use serde::de::DeserializeOwned;
 use settings::{EditPredictionProvider, Settings as _, update_settings_file};
 use std::collections::{VecDeque, hash_map};
-use std::env;
 use text::{AnchorRangeExt, Edit};
 use workspace::{AppState, Workspace};
-use zeta_prompt::ZetaFormat;
 
 use std::mem;
 use std::ops::Range;
@@ -114,24 +108,10 @@ struct EditPredictionStoreGlobal(Entity<EditPredictionStore>);
 
 impl Global for EditPredictionStoreGlobal {}
 
-/// Configuration for using the raw Zeta2 endpoint.
-/// When set, the client uses the raw endpoint and constructs the prompt itself.
-/// The version is also used as the Baseten environment name (lowercased).
-#[derive(Clone)]
-pub struct Zeta2RawConfig {
-    pub model_id: Option<String>,
-    pub environment: Option<String>,
-    pub format: ZetaFormat,
-}
-
 pub struct EditPredictionStore {
-    client: Arc<Client>,
-    user_store: Entity<UserStore>,
-    llm_token: LlmApiToken,
     projects: HashMap<EntityId, ProjectState>,
     update_required: bool,
     edit_prediction_model: EditPredictionModel,
-    zeta2_raw_config: Option<Zeta2RawConfig>,
     reject_predictions_tx: mpsc::UnboundedSender<EditPredictionRejectionPayload>,
     shown_predictions: VecDeque<EditPrediction>,
     rated_predictions: HashSet<EditPredictionId>,
@@ -139,7 +119,6 @@ pub struct EditPredictionStore {
 
 pub(crate) struct EditPredictionRejectionPayload {
     rejection: EditPredictionRejection,
-    organization_id: Option<OrganizationId>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -700,20 +679,20 @@ impl EditPredictionStore {
             })
     }
 
-    pub fn new(client: Arc<Client>, user_store: Entity<UserStore>, cx: &mut Context<Self>) -> Self {
-        let llm_token = global_llm_token(cx);
-
+    pub fn new(
+        client: Arc<Client>,
+        _user_store: Entity<UserStore>,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let (reject_tx, reject_rx) = mpsc::unbounded();
         cx.background_spawn({
             let client = client.clone();
-            let llm_token = llm_token.clone();
             let app_version = AppVersion::global(cx);
             let background_executor = cx.background_executor().clone();
             async move {
                 Self::handle_rejected_predictions(
                     reject_rx,
                     client,
-                    llm_token,
                     app_version,
                     background_executor,
                 )
@@ -724,40 +703,16 @@ impl EditPredictionStore {
 
         Self {
             projects: HashMap::default(),
-            client,
-            user_store,
-            llm_token,
             update_required: false,
             edit_prediction_model: EditPredictionModel::Zeta,
-            zeta2_raw_config: Self::zeta2_raw_config_from_env(),
             reject_predictions_tx: reject_tx,
             rated_predictions: Default::default(),
             shown_predictions: Default::default(),
         }
     }
 
-    fn zeta2_raw_config_from_env() -> Option<Zeta2RawConfig> {
-        let version_str = env::var("ZED_ZETA_FORMAT").ok()?;
-        let format = ZetaFormat::parse(&version_str).ok()?;
-        let model_id = env::var("ZED_ZETA_MODEL").ok();
-        let environment = env::var("ZED_ZETA_ENVIRONMENT").ok();
-        Some(Zeta2RawConfig {
-            model_id,
-            environment,
-            format,
-        })
-    }
-
     pub fn set_edit_prediction_model(&mut self, model: EditPredictionModel) {
         self.edit_prediction_model = model;
-    }
-
-    pub fn set_zeta2_raw_config(&mut self, config: Zeta2RawConfig) {
-        self.zeta2_raw_config = Some(config);
-    }
-
-    pub fn zeta2_raw_config(&self) -> Option<&Zeta2RawConfig> {
-        self.zeta2_raw_config.as_ref()
     }
 
     pub fn icons(&self, cx: &App) -> edit_prediction_types::EditPredictionIconSet {
@@ -878,14 +833,6 @@ impl EditPredictionStore {
                 })
             })
             .unwrap_or_default()
-    }
-
-    pub fn usage(&self, cx: &App) -> Option<EditPredictionUsage> {
-        if matches!(self.edit_prediction_model, EditPredictionModel::Zeta) {
-            self.user_store.read(cx).edit_prediction_usage()
-        } else {
-            None
-        }
     }
 
     pub fn register_project(&mut self, project: &Entity<Project>, cx: &mut Context<Self>) {
@@ -1302,18 +1249,13 @@ impl EditPredictionStore {
     async fn handle_rejected_predictions(
         rx: UnboundedReceiver<EditPredictionRejectionPayload>,
         client: Arc<Client>,
-        llm_token: LlmApiToken,
         app_version: Version,
         background_executor: BackgroundExecutor,
     ) {
         let mut rx = std::pin::pin!(rx.peekable());
         let mut batched = Vec::new();
 
-        while let Some(EditPredictionRejectionPayload {
-            rejection,
-            organization_id,
-        }) = rx.next().await
-        {
+        while let Some(EditPredictionRejectionPayload { rejection }) = rx.next().await {
             batched.push(rejection);
 
             if batched.len() < MAX_EDIT_PREDICTION_REJECTIONS_PER_REQUEST / 2 {
@@ -1350,10 +1292,7 @@ impl EditPredictionStore {
                     anyhow::Ok(req?)
                 },
                 client.clone(),
-                llm_token.clone(),
-                organization_id,
                 app_version.clone(),
-                true,
             )
             .await;
 
@@ -1439,12 +1378,6 @@ impl EditPredictionStore {
                 );
 
                 if is_cloud {
-                    let organization_id = self
-                        .user_store
-                        .read(cx)
-                        .current_organization()
-                        .map(|organization| organization.id.clone());
-
                     self.reject_predictions_tx
                         .unbounded_send(EditPredictionRejectionPayload {
                             rejection: EditPredictionRejection {
@@ -1454,7 +1387,6 @@ impl EditPredictionStore {
                                 model_version,
                                 e2e_latency_ms: e2e_latency.map(|latency| latency.as_millis()),
                             },
-                            organization_id,
                         })
                         .log_err();
                 }
@@ -1685,9 +1617,7 @@ fn currently_following(project: &Entity<Project>, cx: &App) -> bool {
 fn is_ep_store_provider(provider: EditPredictionProvider) -> bool {
     match provider {
         EditPredictionProvider::Ollama | EditPredictionProvider::OpenAiCompatibleApi => true,
-        EditPredictionProvider::None
-        | EditPredictionProvider::Copilot
-        | EditPredictionProvider::Codestral => false,
+        EditPredictionProvider::None | EditPredictionProvider::Copilot => false,
     }
 }
 
@@ -1724,9 +1654,7 @@ impl EditPredictionStore {
             match edit_prediction_settings.provider {
                 EditPredictionProvider::Ollama => (false, 1),
                 EditPredictionProvider::OpenAiCompatibleApi => (false, 2),
-                EditPredictionProvider::None
-                | EditPredictionProvider::Copilot
-                | EditPredictionProvider::Codestral => {
+                EditPredictionProvider::None | EditPredictionProvider::Copilot => {
                     log::error!("queue_prediction_refresh called with non-store provider");
                     return;
                 }
@@ -2106,76 +2034,22 @@ impl EditPredictionStore {
         anyhow::Ok(jump_location)
     }
 
-    async fn send_raw_llm_request(
-        request: RawCompletionRequest,
-        client: Arc<Client>,
-        custom_url: Option<Arc<Url>>,
-        llm_token: LlmApiToken,
-        organization_id: Option<OrganizationId>,
-        app_version: Version,
-    ) -> Result<(RawCompletionResponse, Option<EditPredictionUsage>)> {
-        let url = if let Some(custom_url) = custom_url {
-            custom_url.as_ref().clone()
-        } else {
-            client
-                .http_client()
-                .build_zed_llm_url("/predict_edits/raw", &[])?
-        };
-
-        Self::send_api_request(
-            |builder| {
-                let req = builder
-                    .uri(url.as_ref())
-                    .body(serde_json::to_string(&request)?.into());
-                Ok(req?)
-            },
-            client,
-            llm_token,
-            organization_id,
-            app_version,
-            true,
-        )
-        .await
-    }
-
     async fn send_api_request<Res>(
         build: impl Fn(http_client::http::request::Builder) -> Result<http_client::Request<AsyncBody>>,
         client: Arc<Client>,
-        llm_token: LlmApiToken,
-        organization_id: Option<OrganizationId>,
         app_version: Version,
-        require_auth: bool,
-    ) -> Result<(Res, Option<EditPredictionUsage>)>
+    ) -> Result<Res>
     where
         Res: DeserializeOwned,
     {
         let http_client = client.http_client();
-        let mut token = if require_auth {
-            Some(
-                client
-                    .acquire_llm_token(&llm_token, organization_id.clone())
-                    .await?,
-            )
-        } else {
-            client
-                .acquire_llm_token(&llm_token, organization_id.clone())
-                .await
-                .ok()
-        };
-        let mut did_retry = false;
 
         loop {
             let request_builder = http_client::Request::builder().method(Method::POST);
 
-            let mut request_builder = request_builder
+            let request_builder = request_builder
                 .header("Content-Type", "application/json")
                 .header(ZED_VERSION_HEADER_NAME, app_version.to_string());
-
-            // Only add Authorization header if we have a token
-            if let Some(ref token_value) = token {
-                request_builder =
-                    request_builder.header("Authorization", format!("Bearer {}", token_value));
-            }
 
             let request = build(request_builder)?;
 
@@ -2195,18 +2069,9 @@ impl EditPredictionStore {
             }
 
             if response.status().is_success() {
-                let usage = EditPredictionUsage::from_headers(response.headers()).ok();
-
                 let mut body = Vec::new();
                 response.body_mut().read_to_end(&mut body).await?;
-                return Ok((serde_json::from_slice(&body)?, usage));
-            } else if !did_retry && token.is_some() && response.needs_llm_token_refresh() {
-                did_retry = true;
-                token = Some(
-                    client
-                        .refresh_llm_token(&llm_token, organization_id.clone())
-                        .await?,
-                );
+                return Ok(serde_json::from_slice(&body)?);
             } else {
                 let mut body = String::new();
                 response.body_mut().read_to_string(&mut body).await?;
@@ -2268,50 +2133,6 @@ impl EditPredictionStore {
 
     pub fn is_prediction_rated(&self, id: &EditPredictionId) -> bool {
         self.rated_predictions.contains(id)
-    }
-
-    pub fn rate_prediction(
-        &mut self,
-        prediction: &EditPrediction,
-        rating: EditPredictionRating,
-        feedback: String,
-        expected_output: Option<String>,
-        cx: &mut Context<Self>,
-    ) {
-        let organization = self.user_store.read(cx).current_organization();
-
-        self.rated_predictions.insert(prediction.id.clone());
-
-        cx.background_spawn({
-            let client = self.client.clone();
-            let prediction_id = prediction.id.to_string();
-            let inputs = serde_json::to_value(&prediction.inputs);
-            let output = prediction
-                .edit_preview
-                .as_unified_diff(prediction.snapshot.file(), &prediction.edits);
-            async move {
-                client
-                    .cloud_client()
-                    .submit_edit_prediction_feedback(SubmitEditPredictionFeedbackBody {
-                        organization_id: organization.map(|organization| organization.id.clone()),
-                        request_id: prediction_id,
-                        rating: match rating {
-                            EditPredictionRating::Positive => "positive".to_owned(),
-                            EditPredictionRating::Negative => "negative".to_owned(),
-                        },
-                        inputs: inputs?,
-                        output,
-                        expected_output,
-                        feedback,
-                    })
-                    .await?;
-
-                anyhow::Ok(())
-            }
-        })
-        .detach_and_log_err(cx);
-
-        cx.notify();
     }
 }
 

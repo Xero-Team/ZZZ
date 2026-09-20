@@ -1,4 +1,3 @@
-use codestral::{CODESTRAL_API_URL, codestral_api_key_state, codestral_api_url};
 use edit_prediction::{
     ApiKeyState,
     open_ai_compatible::{open_ai_compatible_api_token, open_ai_compatible_api_url},
@@ -9,7 +8,7 @@ use i18n as app_i18n;
 use language::language_settings::{AllLanguageSettings, EditPredictionProvider};
 
 use settings::Settings as _;
-use ui::{ButtonLink, ConfiguredApiCard, ContextMenu, DropdownMenu, DropdownStyle, prelude::*};
+use ui::{ConfiguredApiCard, ContextMenu, DropdownMenu, DropdownStyle, prelude::*};
 use workspace::AppState;
 
 const OLLAMA_API_URL_PLACEHOLDER: &str = "http://localhost:11434";
@@ -39,30 +38,6 @@ pub(crate) fn render_edit_prediction_setup_page(
     let providers = [
         Some(render_provider_dropdown(window, cx)),
         render_github_copilot_provider(window, cx).map(IntoElement::into_any_element),
-        Some(
-            render_api_key_provider(
-                IconName::AiMistral,
-                "Codestral",
-                ApiKeyDocs::Link {
-                    dashboard_url: "https://console.mistral.ai/codestral".into(),
-                },
-                codestral_api_key_state(cx),
-                |cx| codestral_api_url(cx),
-                Some(
-                    settings_window
-                        .render_sub_page_items_section(
-                            codestral_settings().iter().enumerate(),
-                            true,
-                            window,
-                            cx,
-                        )
-                        .into_any_element(),
-                ),
-                window,
-                cx,
-            )
-            .into_any_element(),
-        ),
         Some(render_ollama_provider(settings_window, window, cx).into_any_element()),
         Some(
             render_api_key_provider(
@@ -209,7 +184,6 @@ fn render_provider_dropdown(window: &mut Window, cx: &mut App) -> AnyElement {
 }
 
 enum ApiKeyDocs {
-    Link { dashboard_url: SharedString },
     Custom { message: UiText },
 }
 
@@ -272,50 +246,12 @@ fn render_api_key_provider(
     let header = SettingsSectionHeader::new(title)
         .icon(icon)
         .no_padding(true);
-    let button_link_label = format!(
-        "{} {}",
-        title,
-        tr(
-            cx,
-            "settings_ui.edit_prediction_provider_setup.dashboard",
-            "Dashboard",
-        )
-    );
     let description = match docs {
         ApiKeyDocs::Custom { message } => div().min_w_0().w_full().child(
             Label::new(message.resolve(cx))
                 .size(LabelSize::Small)
                 .color(Color::Muted),
         ),
-        ApiKeyDocs::Link { dashboard_url } => h_flex()
-            .w_full()
-            .min_w_0()
-            .flex_wrap()
-            .gap_0p5()
-            .child(
-                Label::new(tr(
-                    cx,
-                    "settings_ui.edit_prediction_provider_setup.visit_the",
-                    "Visit the",
-                ))
-                .size(LabelSize::Small)
-                .color(Color::Muted),
-            )
-            .child(
-                ButtonLink::new(button_link_label, dashboard_url)
-                    .no_icon(true)
-                    .label_size(LabelSize::Small)
-                    .label_color(Color::Muted),
-            )
-            .child(
-                Label::new(tr(
-                    cx,
-                    "settings_ui.edit_prediction_provider_setup.to_generate_api_key",
-                    "to generate an API key.",
-                ))
-                .size(LabelSize::Small)
-                .color(Color::Muted),
-            ),
     };
     let configured_card_label = if is_from_env_var {
         tr(
@@ -824,125 +760,6 @@ fn open_ai_compatible_settings() -> Box<[SettingsPageItem]> {
                 json_path: Some("edit_predictions.open_ai_compatible_api.prediction_debounce"),
             }),
             metadata: None,
-            files: USER,
-        }),
-    ])
-}
-
-fn codestral_settings() -> Box<[SettingsPageItem]> {
-    Box::new([
-        SettingsPageItem::SettingItem(SettingItem {
-            title: lt(
-                "settings_ui.edit_prediction_provider_setup.title.api.url",
-                "API URL",
-            ),
-            description: lt(
-                "settings_ui.edit_prediction_provider_setup.description.the.api.url.to.use.for.codestral",
-                "The API URL to use for Codestral.",
-            ),
-            field: Box::new(SettingField {
-                pick: |settings| {
-                    settings
-                        .project
-                        .all_languages
-                        .edit_predictions
-                        .as_ref()?
-                        .codestral
-                        .as_ref()?
-                        .api_url
-                        .as_ref()
-                },
-                write: |settings, value, _app: &App| {
-                    settings
-                        .project
-                        .all_languages
-                        .edit_predictions
-                        .get_or_insert_default()
-                        .codestral
-                        .get_or_insert_default()
-                        .api_url = value;
-                },
-                json_path: Some("edit_predictions.codestral.api_url"),
-            }),
-            metadata: Some(Box::new(SettingsFieldMetadata {
-                placeholder: Some(CODESTRAL_API_URL),
-                ..Default::default()
-            })),
-            files: USER,
-        }),
-        SettingsPageItem::SettingItem(SettingItem {
-            title: lt(
-                "settings_ui.edit_prediction_provider_setup.title.max.tokens",
-                "Max Tokens",
-            ),
-            description: lt(
-                "settings_ui.edit_prediction_provider_setup.description.the.maximum.number.of.tokens.to.generate",
-                "The maximum number of tokens to generate.",
-            ),
-            field: Box::new(SettingField {
-                pick: |settings| {
-                    settings
-                        .project
-                        .all_languages
-                        .edit_predictions
-                        .as_ref()?
-                        .codestral
-                        .as_ref()?
-                        .max_tokens
-                        .as_ref()
-                },
-                write: |settings, value, _app: &App| {
-                    settings
-                        .project
-                        .all_languages
-                        .edit_predictions
-                        .get_or_insert_default()
-                        .codestral
-                        .get_or_insert_default()
-                        .max_tokens = value;
-                },
-                json_path: Some("edit_predictions.codestral.max_tokens"),
-            }),
-            metadata: None,
-            files: USER,
-        }),
-        SettingsPageItem::SettingItem(SettingItem {
-            title: lt(
-                "settings_ui.edit_prediction_provider_setup.title.model",
-                "Model",
-            ),
-            description: lt(
-                "settings_ui.edit_prediction_provider_setup.description.the.codestral.model.id.to.use",
-                "The Codestral model id to use.",
-            ),
-            field: Box::new(SettingField {
-                pick: |settings| {
-                    settings
-                        .project
-                        .all_languages
-                        .edit_predictions
-                        .as_ref()?
-                        .codestral
-                        .as_ref()?
-                        .model
-                        .as_ref()
-                },
-                write: |settings, value, _app: &App| {
-                    settings
-                        .project
-                        .all_languages
-                        .edit_predictions
-                        .get_or_insert_default()
-                        .codestral
-                        .get_or_insert_default()
-                        .model = value;
-                },
-                json_path: Some("edit_predictions.codestral.model"),
-            }),
-            metadata: Some(Box::new(SettingsFieldMetadata {
-                placeholder: Some("codestral-latest"),
-                ..Default::default()
-            })),
             files: USER,
         }),
     ])

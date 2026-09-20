@@ -5,7 +5,6 @@ use client::{Client, UserStore};
 use collections::HashSet;
 use credentials_provider::CredentialsProvider;
 use gpui::{App, Context, Entity};
-use language_model::ZED_CLOUD_PROVIDER_ID;
 use language_model::{ConfiguredModel, LanguageModelProviderId, LanguageModelRegistry};
 use provider::deepseek::DeepSeekLanguageModelProvider;
 
@@ -19,7 +18,6 @@ pub use crate::extension::init_proxy as init_extension_proxy;
 
 use crate::provider::anthropic::AnthropicLanguageModelProvider;
 use crate::provider::bedrock::BedrockLanguageModelProvider;
-use crate::provider::cloud::CloudLanguageModelProvider;
 use crate::provider::copilot_chat::CopilotChatLanguageModelProvider;
 use crate::provider::google::GoogleLanguageModelProvider;
 use crate::provider::llama_cpp::LlamaCppLanguageModelProvider;
@@ -34,52 +32,17 @@ use crate::provider::vercel_ai_gateway::VercelAiGatewayLanguageModelProvider;
 use crate::provider::x_ai::XAiLanguageModelProvider;
 pub use crate::settings::*;
 
-pub fn init(user_store: Entity<UserStore>, client: Arc<Client>, cx: &mut App) {
+pub fn init(_user_store: Entity<UserStore>, client: Arc<Client>, cx: &mut App) {
     let credentials_provider = client.credentials_provider();
     let registry = LanguageModelRegistry::global(cx);
     registry.update(cx, |registry, cx| {
         register_language_model_providers(
             registry,
-            user_store.clone(),
             client.clone(),
             credentials_provider.clone(),
             cx,
         );
     });
-
-    let mut cloud_enabled = client::ClientSettings::get_global(cx).remote_server_enabled();
-    if !cloud_enabled {
-        registry.update(cx, |registry, cx| {
-            registry.unregister_provider(ZED_CLOUD_PROVIDER_ID, cx);
-        });
-    }
-
-    let cloud_registry = registry.clone();
-    let cloud_user_store = user_store.clone();
-    let cloud_client = client.clone();
-    cx.observe_global::<SettingsStore>(move |cx| {
-        let enabled = client::ClientSettings::get_global(cx).remote_server_enabled();
-        if enabled == cloud_enabled {
-            return;
-        }
-        cloud_registry.update(cx, |registry, cx| {
-            if enabled {
-                registry.register_provider(
-                    Arc::new(CloudLanguageModelProvider::new(
-                        cloud_user_store.clone(),
-                        cloud_client.clone(),
-                        cx,
-                    )),
-                    cx,
-                );
-            } else {
-                registry.unregister_provider(ZED_CLOUD_PROVIDER_ID, cx);
-            }
-        });
-        cloud_enabled = enabled;
-        update_environment_fallback_model(cx);
-    })
-    .detach();
 
     // Local model discovery changes provider state asynchronously. Recompute the
     // fallback whenever any provider reports a state change, so discovered Ollama
@@ -235,9 +198,8 @@ mod tests {
     }
 
     #[test]
-    fn hosted_provider_is_not_an_environment_fallback() {
-        let hosted_id = language_model::ZED_CLOUD_PROVIDER_ID.to_string();
-        assert!(!ENVIRONMENT_FALLBACK_PROVIDER_IDS.contains(&hosted_id.as_str()));
+    fn environment_fallback_providers_are_local() {
+        assert!(ENVIRONMENT_FALLBACK_PROVIDER_IDS.contains(&"ollama"));
     }
 }
 
@@ -272,23 +234,10 @@ fn register_openai_compatible_providers(
 
 fn register_language_model_providers(
     registry: &mut LanguageModelRegistry,
-    user_store: Entity<UserStore>,
     client: Arc<Client>,
     credentials_provider: Arc<dyn CredentialsProvider>,
     cx: &mut Context<LanguageModelRegistry>,
 ) {
-    // Do not even register the hosted provider on a fresh install. This keeps
-    // cloud models out of provider listings and avoids account discovery work.
-    if client::ClientSettings::get_global(cx).remote_server_enabled() {
-        registry.register_provider(
-            Arc::new(CloudLanguageModelProvider::new(
-                user_store,
-                client.clone(),
-                cx,
-            )),
-            cx,
-        );
-    }
     registry.register_provider(
         Arc::new(AnthropicLanguageModelProvider::new(
             client.http_client(),

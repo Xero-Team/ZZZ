@@ -2760,27 +2760,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "codestral"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "edit_prediction",
- "edit_prediction_types",
- "futures 0.3.32",
- "gpui",
- "http_client",
- "icons",
- "language",
- "language_model",
- "log",
- "serde",
- "serde_json",
- "text",
- "zed_credentials_provider",
- "zeta_prompt",
-]
-
-[[package]]
 name = "collections"
 version = "0.1.0"
 dependencies = [
@@ -4623,7 +4602,6 @@ dependencies = [
  "client",
  "clock",
  "cloud_api_client",
- "cloud_api_types",
  "cloud_llm_client",
  "collections",
  "copilot",
@@ -4725,7 +4703,6 @@ dependencies = [
 name = "edit_prediction_types"
 version = "0.1.0"
 dependencies = [
- "client",
  "gpui",
  "icons",
  "language",
@@ -4739,7 +4716,6 @@ dependencies = [
  "anyhow",
  "client",
  "cloud_llm_client",
- "codestral",
  "collections",
  "command_palette_hooks",
  "copilot",
@@ -8492,8 +8468,6 @@ dependencies = [
  "bedrock",
  "client",
  "clock",
- "cloud_api_client",
- "cloud_api_types",
  "collections",
  "component",
  "convert_case 0.11.0",
@@ -8515,7 +8489,6 @@ dependencies = [
  "i18n",
  "language",
  "language_model",
- "language_models_cloud",
  "llama_cpp",
  "lmstudio",
  "log",
@@ -8537,26 +8510,6 @@ dependencies = [
  "ui_input",
  "util",
  "x_ai",
-]
-
-[[package]]
-name = "language_models_cloud"
-version = "0.1.0"
-dependencies = [
- "anthropic",
- "anyhow",
- "cloud_llm_client",
- "futures 0.3.32",
- "google_ai",
- "gpui",
- "http_client",
- "language_model",
- "open_ai",
- "schemars 1.2.1",
- "semver",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -14385,7 +14338,6 @@ dependencies = [
  "agent_settings",
  "anyhow",
  "audio",
- "codestral",
  "component",
  "copilot",
  "copilot_ui",
@@ -20881,7 +20833,6 @@ dependencies = [
  "cli",
  "client",
  "clock",
- "codestral",
  "collections",
  "command_palette",
  "component",

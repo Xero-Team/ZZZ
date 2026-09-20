@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use gpui::{IntoElement, ParentElement};
-use language_model::{LanguageModelRegistry, ZED_CLOUD_PROVIDER_ID};
+use language_model::LanguageModelRegistry;
 use ui::prelude::*;
 
 use crate::{AgentPanelOnboardingCard, ApiKeysWithoutProviders, ZedAiOnboarding};
@@ -37,7 +37,7 @@ impl AgentPanelOnboarding {
         LanguageModelRegistry::read_global(cx)
             .visible_providers()
             .iter()
-            .any(|provider| provider.is_authenticated(cx) && provider.id() != ZED_CLOUD_PROVIDER_ID)
+            .any(|provider| provider.is_authenticated(cx))
     }
 }
 

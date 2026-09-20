@@ -43,8 +43,8 @@ The [Inline Assistant](./inline-assistant.md) works differently: select code or 
 [Edit Prediction](./edit-prediction.md) provides AI code completions on every keystroke. Each keypress sends a request to the prediction provider, which returns single or multi-line suggestions you accept with `tab`.
 
 There is no default hosted prediction model. Prefer a local provider such
-as Ollama or llama.cpp. GitHub Copilot and Codestral are optional and only
-used after you select them.
+as Ollama or llama.cpp. GitHub Copilot is optional and only
+used after you select it.
 
 ## Getting started
 

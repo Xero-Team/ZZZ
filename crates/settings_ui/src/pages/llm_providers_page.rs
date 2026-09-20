@@ -6,7 +6,7 @@ use gpui::{AnyView, Entity, ScrollHandle, prelude::*};
 use i18n as app_i18n;
 use language_model::{
     ConfigurationViewTargetAgent, IconOrSvg, LanguageModelProvider, LanguageModelProviderId,
-    LanguageModelRegistry, ZED_CLOUD_PROVIDER_ID,
+    LanguageModelRegistry,
 };
 use settings::{
     OpenAiCompatibleAvailableModel, OpenAiCompatibleModelCapabilities,
@@ -32,7 +32,6 @@ pub(crate) fn render_llm_providers_page(
     let providers = LanguageModelRegistry::read_global(cx)
         .visible_providers()
         .into_iter()
-        .filter(|provider| provider.id() != ZED_CLOUD_PROVIDER_ID)
         .collect::<Vec<_>>();
 
     v_flex()

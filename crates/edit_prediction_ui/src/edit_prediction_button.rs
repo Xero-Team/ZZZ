@@ -1,5 +1,4 @@
 use anyhow::Result;
-use codestral::{self, CodestralEditPredictionDelegate};
 use copilot::Status;
 use edit_prediction::EditPredictionStore;
 use edit_prediction_types::EditPredictionDelegateHandle;
@@ -190,65 +189,6 @@ impl Render for EditPredictionButton {
                         .with_handle(self.popover_menu_handle.clone()),
                 )
             }
-            EditPredictionProvider::Codestral => {
-                let enabled = self.editor_enabled.unwrap_or(true);
-                let has_api_key = codestral::codestral_api_key(cx).is_some();
-                let this = cx.weak_entity();
-
-                let tooltip_meta = if has_api_key {
-                    tr(
-                        cx,
-                        "edit_prediction_ui.button.powered_by_codestral",
-                        "Powered by Codestral",
-                    )
-                } else {
-                    tr(
-                        cx,
-                        "edit_prediction_ui.button.missing_api_key.codestral",
-                        "Missing API key for Codestral",
-                    )
-                };
-
-                div().child(
-                    PopoverMenu::new("codestral")
-                        .menu(move |window, cx| {
-                            this.update(cx, |this, cx| {
-                                this.build_codestral_context_menu(window, cx)
-                            })
-                            .ok()
-                        })
-                        .anchor(Anchor::BottomRight)
-                        .trigger_with_tooltip(
-                            IconButton::new("codestral-icon", IconName::AiMistral)
-                                .shape(IconButtonShape::Square)
-                                .when(!has_api_key, |this| {
-                                    this.indicator(Indicator::dot().color(Color::Error))
-                                        .indicator_border_color(Some(
-                                            cx.theme().colors().status_bar_background,
-                                        ))
-                                })
-                                .when(has_api_key && !enabled, |this| {
-                                    this.indicator(Indicator::dot().color(Color::Ignored))
-                                        .indicator_border_color(Some(
-                                            cx.theme().colors().status_bar_background,
-                                        ))
-                                }),
-                            move |_window, cx| {
-                                Tooltip::with_meta(
-                                    tr(
-                                        cx,
-                                        "edit_prediction_ui.button.edit_prediction",
-                                        "Edit Prediction",
-                                    ),
-                                    Some(&ToggleMenu),
-                                    tooltip_meta.clone(),
-                                    cx,
-                                )
-                            },
-                        )
-                        .with_handle(self.popover_menu_handle.clone()),
-                )
-            }
             EditPredictionProvider::OpenAiCompatibleApi => {
                 let enabled = self.editor_enabled.unwrap_or(true);
                 let this = cx.weak_entity();
@@ -393,8 +333,6 @@ impl EditPredictionButton {
             .ok();
         })
         .detach();
-
-        CodestralEditPredictionDelegate::ensure_api_key_loaded(cx);
 
         Self {
             editor_subscription: None,
@@ -839,21 +777,6 @@ impl EditPredictionButton {
         })
     }
 
-    fn build_codestral_context_menu(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Entity<ContextMenu> {
-        ContextMenu::build(window, cx, |menu, window, cx| {
-            let menu = self.build_language_settings_menu(menu, window, cx);
-            let menu =
-                self.add_provider_switching_section(menu, EditPredictionProvider::Codestral, cx);
-
-            let menu = self.add_configure_providers_item(menu, cx);
-            menu
-        })
-    }
-
     fn build_edit_prediction_context_menu(
         &self,
         provider: EditPredictionProvider,
@@ -1047,10 +970,6 @@ pub fn get_available_providers(cx: &mut App) -> Vec<EditPredictionProvider> {
         && copilot.0.read(cx).is_authenticated()
     {
         providers.push(EditPredictionProvider::Copilot);
-    }
-
-    if codestral::codestral_api_key(cx).is_some() {
-        providers.push(EditPredictionProvider::Codestral);
     }
 
     if all_language_settings(None, cx)

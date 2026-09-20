@@ -11,8 +11,8 @@ ZZZ supports two sources for completions:
    explicitly, or via [ZZZ Language Extensions](languages.md). Language
    servers are not downloaded when you open a buffer.
 2. "Edit Predictions" from a provider you configure. Prefer a local
-   endpoint such as Ollama or llama.cpp. GitHub Copilot and Codestral are
-   optional and only used after you select them.
+   endpoint such as Ollama or llama.cpp. GitHub Copilot is
+   optional and only used after you select it.
 
 ## Language Server Code Completions {#code-completions}
 
