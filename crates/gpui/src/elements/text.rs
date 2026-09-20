@@ -1,9 +1,9 @@
 use crate::{
     ActiveTooltip, AnyView, App, Bounds, DispatchPhase, Element, ElementId, GlobalElementId,
-    HighlightStyle, Hitbox, HitboxBehavior, InspectorElementId, IntoElement, LayoutId,
+    HighlightStyle, Hitbox, HitboxBehavior, InspectorElementId, IntoElement, LayoutId, LineLayout,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString, Size, TextOverflow,
-    TextRun, TextStyle, TooltipId, TruncateFrom, WhiteSpace, Window, WrappedLine,
-    WrappedLineLayout, register_tooltip_mouse_handlers, set_tooltip_on_window,
+    TextRun, TextStyle, TooltipId, TruncateFrom, WhiteSpace, Window, WrapBoundary, WrappedLine,
+    WrappedLineLayout, px, register_tooltip_mouse_handlers, set_tooltip_on_window,
 };
 use anyhow::Context as _;
 use gpui_util::ResultExt;
@@ -38,7 +38,7 @@ impl Element for &'static str {
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
         let mut state = TextLayout::default();
-        let layout_id = state.layout(SharedString::from(*self), None, window, cx);
+        let layout_id = state.layout(SharedString::from(*self), None, None, window, cx);
         (layout_id, state)
     }
 
@@ -112,7 +112,7 @@ impl Element for SharedString {
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
         let mut state = TextLayout::default();
-        let layout_id = state.layout(self.clone(), None, window, cx);
+        let layout_id = state.layout(self.clone(), None, None, window, cx);
         (layout_id, state)
     }
 
@@ -161,6 +161,18 @@ pub struct StyledText {
     delayed_highlights: Option<Vec<(Range<usize>, HighlightStyle)>>,
     delayed_font_family_overrides: Option<Vec<(Range<usize>, SharedString)>>,
     layout: TextLayout,
+    line_breaking: Option<TextLineBreaking>,
+}
+
+/// Optional paragraph line-breaking strategy for a styled text element.
+///
+/// The default is `None`, which preserves GPUI's existing greedy wrapping.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextLineBreaking {
+    /// Choose line breaks by minimizing paragraph raggedness.
+    Balanced,
+    /// Choose balanced breaks and distribute extra space across non-final lines.
+    Justified,
 }
 
 impl StyledText {
@@ -172,6 +184,7 @@ impl StyledText {
             delayed_highlights: None,
             delayed_font_family_overrides: None,
             layout: TextLayout::default(),
+            line_breaking: None,
         }
     }
 
@@ -304,6 +317,12 @@ impl StyledText {
         self.runs = Some(runs);
         self
     }
+
+    /// Use balanced paragraph line breaking for this text element.
+    pub fn with_line_breaking(mut self, line_breaking: TextLineBreaking) -> Self {
+        self.line_breaking = Some(line_breaking);
+        self
+    }
 }
 
 impl Element for StyledText {
@@ -338,7 +357,9 @@ impl Element for StyledText {
             Self::apply_font_family_overrides(runs, overrides);
         }
 
-        let layout_id = self.layout.layout(self.text.clone(), runs, window, cx);
+        let layout_id = self
+            .layout
+            .layout(self.text.clone(), runs, self.line_breaking, window, cx);
         (layout_id, ())
     }
 
@@ -389,11 +410,163 @@ struct TextLayoutInner {
     bounds: Option<Bounds<Pixels>>,
 }
 
+fn apply_line_breaking(line: &mut WrappedLine, wrap_width: Pixels, mode: TextLineBreaking) {
+    let source_layout = &line.layout.unwrapped_layout;
+    let mut glyphs = Vec::new();
+    let mut widths = Vec::new();
+    let mut breakable = Vec::new();
+    let mut stretchable = Vec::new();
+
+    for (run_ix, run) in source_layout.runs.iter().enumerate() {
+        for (glyph_ix, glyph) in run.glyphs.iter().enumerate() {
+            let character = line.text[glyph.index..].chars().next().unwrap_or(' ');
+            let next_x = run
+                .glyphs
+                .get(glyph_ix + 1)
+                .map(|next| next.position.x)
+                .or_else(|| {
+                    source_layout
+                        .runs
+                        .get(run_ix + 1)
+                        .and_then(|next| next.glyphs.first().map(|glyph| glyph.position.x))
+                })
+                .unwrap_or(source_layout.width);
+            glyphs.push((run_ix, glyph_ix));
+            widths.push((next_x - glyph.position.x).max(px(0.)).0);
+            breakable.push(is_line_break_opportunity(character));
+            stretchable.push(character.is_whitespace());
+        }
+    }
+
+    let breaks = balanced_breaks(&widths, &breakable, wrap_width.0);
+    let boundaries: SmallVec<[WrapBoundary; 1]> = breaks
+        .iter()
+        .filter_map(|&index| glyphs.get(index).copied())
+        .map(|(run_ix, glyph_ix)| WrapBoundary { run_ix, glyph_ix })
+        .collect();
+
+    if mode == TextLineBreaking::Justified && !boundaries.is_empty() {
+        let mut adjusted_runs = source_layout.runs.clone();
+        let mut starts = vec![0];
+        starts.extend(breaks.iter().copied());
+        starts.push(glyphs.len());
+        for segment in starts.windows(2).take(starts.len().saturating_sub(2)) {
+            let start = segment[0];
+            let end = segment[1];
+            let natural_width: f32 = widths[start..end].iter().sum();
+            let spaces = (start..end)
+                .filter(|&index| stretchable[index] && widths[index] < 20.0)
+                .count();
+            if spaces == 0 || natural_width >= wrap_width.0 {
+                continue;
+            }
+            let extra = (wrap_width.0 - natural_width) / spaces as f32;
+            let average_space_width = (start..end)
+                .filter(|&index| stretchable[index] && widths[index] < 20.0)
+                .map(|index| widths[index])
+                .sum::<f32>()
+                / spaces as f32;
+            if extra > average_space_width * 3.0 {
+                continue;
+            }
+            let mut shift = 0.0;
+            for index in start..end {
+                let (run_ix, glyph_ix) = glyphs[index];
+                adjusted_runs[run_ix].glyphs[glyph_ix].position.x += px(shift);
+                if stretchable[index] && widths[index] < 20.0 {
+                    shift += extra;
+                }
+            }
+        }
+        let adjusted_layout = LineLayout {
+            font_size: source_layout.font_size,
+            width: source_layout.width,
+            ascent: source_layout.ascent,
+            descent: source_layout.descent,
+            runs: adjusted_runs,
+            len: source_layout.len,
+        };
+        line.layout = Arc::new(WrappedLineLayout {
+            unwrapped_layout: Arc::new(adjusted_layout),
+            wrap_boundaries: boundaries,
+            wrap_width: Some(wrap_width),
+        });
+    } else {
+        line.layout = Arc::new(WrappedLineLayout {
+            unwrapped_layout: Arc::clone(&line.layout.unwrapped_layout),
+            wrap_boundaries: boundaries,
+            wrap_width: Some(wrap_width),
+        });
+    }
+}
+
+fn is_line_break_opportunity(character: char) -> bool {
+    character.is_whitespace()
+        || (!character.is_ascii()
+            && !matches!(
+                character,
+                '\u{3001}'
+                    | '\u{3002}'
+                    | '\u{ff0c}'
+                    | '\u{ff0e}'
+                    | '\u{ff01}'
+                    | '\u{ff1f}'
+                    | '\u{3009}'
+                    | '\u{300b}'
+                    | '\u{300d}'
+                    | '\u{300f}'
+                    | '\u{3011}'
+            ))
+}
+
+fn balanced_breaks(widths: &[f32], breakable: &[bool], target_width: f32) -> Vec<usize> {
+    let mut prefix = vec![0.0; widths.len() + 1];
+    for (index, width) in widths.iter().enumerate() {
+        prefix[index + 1] = prefix[index] + *width;
+    }
+    let mut cost = vec![f32::INFINITY; widths.len() + 1];
+    let mut previous = vec![None; widths.len() + 1];
+    cost[0] = 0.0;
+    for end in 1..=widths.len() {
+        for start in 0..end {
+            if end < widths.len() && !breakable[end - 1] {
+                continue;
+            }
+            let width = prefix[end] - prefix[start];
+            if width > target_width && start + 1 < end {
+                continue;
+            }
+            let remainder = (target_width - width).max(0.0);
+            let penalty = if end == widths.len() {
+                0.0
+            } else {
+                remainder * remainder
+            };
+            let candidate = cost[start] + penalty;
+            if candidate < cost[end] {
+                cost[end] = candidate;
+                previous[end] = Some(start);
+            }
+        }
+    }
+    let mut breaks = Vec::new();
+    let mut end = widths.len();
+    while let Some(start) = previous[end] {
+        if start > 0 {
+            breaks.push(start);
+        }
+        end = start;
+    }
+    breaks.reverse();
+    breaks
+}
+
 impl TextLayout {
     fn layout(
         &self,
         text: SharedString,
         runs: Option<Vec<TextRun>>,
+        line_breaking: Option<TextLineBreaking>,
         window: &mut Window,
         _: &mut App,
     ) -> LayoutId {
@@ -481,14 +654,21 @@ impl TextLayout {
                     (text.clone(), Cow::Borrowed(&*runs))
                 };
                 let len = text.len();
+                const MAX_BALANCED_TEXT_BYTES: usize = 32 * 1024;
+                let use_custom_line_breaking =
+                    line_breaking.is_some() && text.len() <= MAX_BALANCED_TEXT_BYTES;
 
-                let Some(lines) = window
+                let Some(mut lines) = window
                     .text_system()
                     .shape_text(
                         text,
                         font_size,
                         &runs,
-                        wrap_width,            // Wrap if we know the width.
+                        if use_custom_line_breaking {
+                            None
+                        } else {
+                            wrap_width
+                        },
                         text_style.line_clamp, // Limit the number of lines if line_clamp is set.
                     )
                     .log_err()
@@ -503,6 +683,15 @@ impl TextLayout {
                     });
                     return Size::default();
                 };
+
+                if let (Some(line_breaking), Some(wrap_width)) = (
+                    line_breaking.filter(|_| use_custom_line_breaking),
+                    wrap_width,
+                ) {
+                    for line in &mut lines {
+                        apply_line_breaking(line, wrap_width, line_breaking);
+                    }
+                }
 
                 let mut size: Size<Pixels> = Size::default();
                 for line in &lines {
@@ -1016,6 +1205,15 @@ impl IntoElement for InteractiveText {
 
 #[cfg(test)]
 mod tests {
+    use super::balanced_breaks;
+
+    #[test]
+    fn balanced_breaks_minimize_raggedness() {
+        let widths = [4.0, 1.0, 4.0, 1.0, 4.0];
+        let breakable = [false, true, false, true, false];
+        assert_eq!(balanced_breaks(&widths, &breakable, 6.0), vec![2, 4]);
+    }
+
     #[test]
     fn test_into_element_for() {
         use crate::{ParentElement as _, SharedString, div};

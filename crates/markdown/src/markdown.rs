@@ -9,6 +9,7 @@ use base64::Engine as _;
 use futures::FutureExt as _;
 use gpui::EdgesRefinement;
 use gpui::HitboxBehavior;
+use gpui::TextLineBreaking;
 use gpui::UnderlineStyle;
 use language::LanguageName;
 
@@ -125,6 +126,17 @@ pub struct MarkdownStyle {
     pub prevent_mouse_interaction: bool,
     pub table_columns_min_size: bool,
     pub soft_break_as_hard_break: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MarkdownLineBreaking {
+    /// Preserve the existing GPUI greedy wrapping behavior.
+    Greedy,
+    #[default]
+    /// Select paragraph breaks globally to reduce raggedness.
+    Balanced,
+    /// Select balanced breaks and stretch spaces on non-final lines.
+    Justified,
 }
 
 impl Default for MarkdownStyle {
@@ -439,6 +451,7 @@ pub struct Markdown {
     search_highlights: Vec<Range<usize>>,
     active_search_highlight: Option<usize>,
     clipboard_image_src_resolver: Option<ClipboardImageSrcResolver>,
+    line_breaking: MarkdownLineBreaking,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -623,9 +636,26 @@ impl Markdown {
             search_highlights: Vec::new(),
             active_search_highlight: None,
             clipboard_image_src_resolver: None,
+            line_breaking: MarkdownLineBreaking::Balanced,
         };
         this.parse(cx);
         this
+    }
+
+    /// Set the line-breaking strategy used by Markdown elements that do not
+    /// provide an element-level override.
+    pub fn set_line_breaking(
+        &mut self,
+        line_breaking: MarkdownLineBreaking,
+        cx: &mut Context<Self>,
+    ) {
+        self.line_breaking = line_breaking;
+        cx.notify();
+    }
+
+    /// Return the current paragraph line-breaking strategy.
+    pub fn line_breaking(&self) -> MarkdownLineBreaking {
+        self.line_breaking
     }
 
     pub fn new_text(source: SharedString, cx: &mut Context<Self>) -> Self {
@@ -1397,6 +1427,7 @@ pub struct MarkdownElement {
     image_resolver: Option<Box<dyn Fn(&str) -> Option<ImageSource>>>,
     show_root_block_markers: bool,
     autoscroll: AutoscrollBehavior,
+    line_breaking: Option<MarkdownLineBreaking>,
 }
 
 impl MarkdownElement {
@@ -1416,7 +1447,14 @@ impl MarkdownElement {
             image_resolver: None,
             show_root_block_markers: false,
             autoscroll: AutoscrollBehavior::Propagate,
+            line_breaking: None,
         }
+    }
+
+    /// Override paragraph line breaking for this element.
+    pub fn line_breaking(mut self, line_breaking: MarkdownLineBreaking) -> Self {
+        self.line_breaking = Some(line_breaking);
+        self
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -1641,6 +1679,13 @@ impl MarkdownElement {
             ..Default::default()
         });
         builder.push_div(paragraph, range, markdown_end);
+        if let Some(entry) = builder.div_stack.last_mut() {
+            entry.text_line_breaking = match builder.line_breaking {
+                MarkdownLineBreaking::Greedy => None,
+                MarkdownLineBreaking::Balanced => Some(TextLineBreaking::Balanced),
+                MarkdownLineBreaking::Justified => Some(TextLineBreaking::Justified),
+            };
+        }
     }
 
     fn pop_markdown_paragraph(&self, builder: &mut MarkdownElementBuilder) {
@@ -2257,6 +2302,8 @@ impl Element for MarkdownElement {
             &self.style.container_style,
             self.style.base_text_style.clone(),
             self.style.syntax.clone(),
+            self.line_breaking
+                .unwrap_or_else(|| self.markdown.read(cx).line_breaking),
         );
         let (parsed_markdown, images, active_root_block, render_mermaid_diagrams, mermaid_state) = {
             let markdown = self.markdown.read(cx);
@@ -3314,11 +3361,13 @@ struct MarkdownElementBuilder {
     list_stack: Vec<ListStackEntry>,
     table: TableState,
     syntax_theme: Arc<SyntaxTheme>,
+    line_breaking: MarkdownLineBreaking,
 }
 
 struct DivStackEntry {
     div: AnyDiv,
     line_break_mode: LineBreakMode,
+    text_line_breaking: Option<TextLineBreaking>,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -3332,6 +3381,7 @@ impl DivStackEntry {
         Self {
             div: div.into(),
             line_break_mode: LineBreakMode::TextLayout,
+            text_line_breaking: None,
         }
     }
 }
@@ -3352,6 +3402,7 @@ impl MarkdownElementBuilder {
         container_style: &StyleRefinement,
         base_text_style: TextStyle,
         syntax_theme: Arc<SyntaxTheme>,
+        line_breaking: MarkdownLineBreaking,
     ) -> Self {
         Self {
             div_stack: vec![{
@@ -3373,6 +3424,7 @@ impl MarkdownElementBuilder {
             list_stack: Vec::new(),
             table: TableState::default(),
             syntax_theme,
+            line_breaking,
         }
     }
 
@@ -3689,7 +3741,14 @@ impl MarkdownElementBuilder {
             return;
         }
 
-        let text = StyledText::new(line.text).with_runs(line.runs);
+        let mut text = StyledText::new(line.text).with_runs(line.runs);
+        if let Some(line_breaking) = self
+            .div_stack
+            .last()
+            .and_then(|entry| entry.text_line_breaking)
+        {
+            text = text.with_line_breaking(line_breaking);
+        }
         let text_align = self.text_style().text_align;
         self.rendered_lines.push(RenderedLine {
             layout: text.layout().clone(),
