@@ -199,19 +199,7 @@ impl LanguageModelRegistry {
     }
 
     pub fn providers(&self) -> Vec<Arc<dyn LanguageModelProvider>> {
-        let zed_provider_id = LanguageModelProviderId("zed.dev".into());
-        let mut providers = Vec::with_capacity(self.providers.len());
-        if let Some(provider) = self.providers.get(&zed_provider_id) {
-            providers.push(provider.clone());
-        }
-        providers.extend(self.providers.values().filter_map(|p| {
-            if p.id() != zed_provider_id {
-                Some(p.clone())
-            } else {
-                None
-            }
-        }));
-        providers
+        self.providers.values().cloned().collect()
     }
 
     /// Returns providers, filtering out hidden built-in providers.

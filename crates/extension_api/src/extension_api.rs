@@ -1,4 +1,4 @@
-//! The Zed Rust Extension API allows you write extensions for [Zed](https://zed.dev/) in Rust.
+//! The ZZZ Rust Extension API allows you write extensions for ZZZ in Rust.
 
 pub mod http_client;
 pub mod process;

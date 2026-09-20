@@ -552,7 +552,7 @@ fn main() {
         AppState::set_global(app_state.clone(), cx);
 
         dap_adapters::init(cx);
-        reliability::init(client.clone(), cx);
+        reliability::init(cx);
         extension_host::init(
             extension_host_proxy.clone(),
             app_state.fs.clone(),

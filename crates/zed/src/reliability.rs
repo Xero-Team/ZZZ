@@ -1,23 +1,20 @@
 use anyhow::Context as _;
-use client::Client;
 use futures::StreamExt;
 use gpui::{App, SerializedThreadTaskTimings};
 use log::info;
-use std::{sync::Arc, thread::ThreadId, time::Duration};
+use std::{thread::ThreadId, time::Duration};
 use util::ResultExt;
 
 use crate::STARTUP_TIME;
 
 const MAX_HANG_TRACES: usize = 3;
 
-pub fn init(client: Arc<Client>, cx: &mut App) {
+pub fn init(cx: &mut App) {
     if cfg!(debug_assertions) {
         log::info!("Debug assertions enabled, skipping hang monitoring");
     } else {
         monitor_hangs(cx);
     }
-
-    let _ = client;
 }
 
 fn monitor_hangs(cx: &App) {
