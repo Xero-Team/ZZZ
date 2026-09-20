@@ -1,20 +1,12 @@
-mod websocket;
-
 use std::sync::Arc;
 
-use anyhow::{Context, Result, anyhow};
-use cloud_api_types::websocket_protocol::{PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER_NAME};
+use anyhow::{Result, anyhow};
 pub use cloud_api_types::*;
 use futures::AsyncReadExt as _;
-use gpui::{App, Task};
-use gpui_tokio::Tokio;
 use http_client::http::request;
 use http_client::{AsyncBody, HttpClientWithUrl, Method, Request, StatusCode};
 use parking_lot::RwLock;
 use thiserror::Error;
-use yawc::WebSocket;
-
-use crate::websocket::Connection;
 
 struct Credentials {
     user_id: u32,
@@ -81,45 +73,6 @@ impl CloudApiClient {
         *self.credentials.write() = None;
     }
 
-    fn build_request(
-        &self,
-        req: request::Builder,
-        body: impl Into<AsyncBody>,
-    ) -> Result<Request<AsyncBody>, ClientApiError> {
-        let credentials = self.credentials.read();
-        let credentials = credentials.as_ref().ok_or(ClientApiError::NotSignedIn)?;
-        build_request(req, body, credentials).map_err(ClientApiError::RequestBuildFailed)
-    }
-
-    pub fn connect(&self, cx: &App) -> Result<Task<Result<Connection>>> {
-        let mut connect_url = self
-            .http_client
-            .build_zed_cloud_url("/client/users/connect")?;
-        connect_url
-            .set_scheme(match connect_url.scheme() {
-                "https" => "wss",
-                "http" => "ws",
-                scheme => Err(anyhow!("invalid URL scheme: {scheme}"))?,
-            })
-            .map_err(|_| anyhow!("failed to set URL scheme"))?;
-
-        let credentials = self.credentials.read();
-        let credentials = credentials.as_ref().context("no credentials provided")?;
-        let authorization_header = format!("{} {}", credentials.user_id, credentials.access_token);
-
-        Ok(Tokio::spawn_result(cx, async move {
-            let ws = WebSocket::connect(connect_url)
-                .with_request(
-                    request::Builder::new()
-                        .header("Authorization", authorization_header)
-                        .header(PROTOCOL_VERSION_HEADER_NAME, PROTOCOL_VERSION.to_string()),
-                )
-                .await?;
-
-            Ok(Connection::new(ws))
-        }))
-    }
-
     pub async fn validate_credentials(&self, user_id: u32, access_token: &str) -> Result<bool> {
         let request = build_request(
             Request::builder().method(Method::GET).uri(
@@ -150,59 +103,6 @@ impl CloudApiClient {
                 ))
             }
         }
-    }
-
-    pub async fn submit_agent_feedback(&self, body: SubmitAgentThreadFeedbackBody) -> Result<()> {
-        let request = self.build_request(
-            Request::builder().method(Method::POST).uri(
-                self.http_client
-                    .build_zed_cloud_url("/client/feedback/agent_thread")?
-                    .as_ref(),
-            ),
-            AsyncBody::from(serde_json::to_string(&body)?),
-        )?;
-
-        let mut response = self.http_client.send(request).await?;
-
-        if !response.status().is_success() {
-            let mut body = String::new();
-            response.body_mut().read_to_string(&mut body).await?;
-
-            anyhow::bail!(
-                "Failed to submit agent feedback.\nStatus: {:?}\nBody: {body}",
-                response.status()
-            )
-        }
-
-        Ok(())
-    }
-
-    pub async fn submit_agent_feedback_comments(
-        &self,
-        body: SubmitAgentThreadFeedbackCommentsBody,
-    ) -> Result<()> {
-        let request = self.build_request(
-            Request::builder().method(Method::POST).uri(
-                self.http_client
-                    .build_zed_cloud_url("/client/feedback/agent_thread_comments")?
-                    .as_ref(),
-            ),
-            AsyncBody::from(serde_json::to_string(&body)?),
-        )?;
-
-        let mut response = self.http_client.send(request).await?;
-
-        if !response.status().is_success() {
-            let mut body = String::new();
-            response.body_mut().read_to_string(&mut body).await?;
-
-            anyhow::bail!(
-                "Failed to submit agent feedback comments.\nStatus: {:?}\nBody: {body}",
-                response.status()
-            )
-        }
-
-        Ok(())
     }
 }
 

@@ -10,15 +10,14 @@ use anyhow::{Context as _, Result, anyhow};
 use async_tungstenite::tungstenite::{
     client::IntoClientRequest,
     error::Error as WebsocketError,
-    http::{HeaderValue, Request, StatusCode},
+    http::{HeaderValue, StatusCode},
 };
 use clock::SystemClock;
 use cloud_api_client::CloudApiClient;
-use cloud_api_client::websocket_protocol::MessageToClient;
 use credentials_provider::CredentialsProvider;
 use feature_flags::FeatureFlagAppExt as _;
 use futures::{
-    AsyncReadExt, FutureExt, SinkExt, Stream, StreamExt, TryFutureExt as _, TryStreamExt,
+    FutureExt, SinkExt, Stream, StreamExt, TryFutureExt as _, TryStreamExt,
     channel::{mpsc, oneshot},
     future::BoxFuture,
 };
@@ -58,20 +57,6 @@ pub use user::*;
 static ZED_SERVER_URL: LazyLock<Option<String>> =
     LazyLock::new(|| std::env::var("ZED_SERVER_URL").ok());
 static ZED_RPC_URL: LazyLock<Option<String>> = LazyLock::new(|| std::env::var("ZED_RPC_URL").ok());
-
-pub static IMPERSONATE_LOGIN: LazyLock<Option<String>> = LazyLock::new(|| {
-    std::env::var("ZED_IMPERSONATE")
-        .ok()
-        .and_then(|s| if s.is_empty() { None } else { Some(s) })
-});
-
-pub static USE_WEB_LOGIN: LazyLock<bool> = LazyLock::new(|| std::env::var("ZED_WEB_LOGIN").is_ok());
-
-pub static ADMIN_API_TOKEN: LazyLock<Option<String>> = LazyLock::new(|| {
-    std::env::var("ZED_ADMIN_API_TOKEN")
-        .ok()
-        .and_then(|s| if s.is_empty() { None } else { Some(s) })
-});
 
 pub static ZED_APP_PATH: LazyLock<Option<PathBuf>> =
     LazyLock::new(|| std::env::var("ZED_APP_PATH").ok().map(PathBuf::from));
@@ -191,8 +176,6 @@ pub fn init(client: &Arc<Client>, cx: &mut App) {
     });
 }
 
-pub type MessageToClientHandler = Box<dyn Fn(&MessageToClient, &mut App) + Send + Sync + 'static>;
-
 struct GlobalClient(Arc<Client>);
 
 impl Global for GlobalClient {}
@@ -205,7 +188,6 @@ pub struct Client {
     credentials_provider: ClientCredentialsProvider,
     state: RwLock<ClientState>,
     handler_set: Mutex<ProtoMessageHandlerSet>,
-    message_to_client_handlers: Mutex<Vec<MessageToClientHandler>>,
     sign_out_tx: Mutex<Option<mpsc::UnboundedSender<()>>>,
 
     #[allow(clippy::type_complexity)]
@@ -326,7 +308,6 @@ struct ClientState {
     credentials: Option<Credentials>,
     status: (watch::Sender<Status>, watch::Receiver<Status>),
     _reconnect_task: Option<Task<()>>,
-    _cloud_connection_task: Option<Task<()>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -368,10 +349,6 @@ impl ClientCredentialsProvider {
         cx: &'a AsyncApp,
     ) -> Pin<Box<dyn Future<Output = Option<Credentials>> + 'a>> {
         async move {
-            if IMPERSONATE_LOGIN.is_some() {
-                return None;
-            }
-
             let credentials_url = self.credentials_url(cx).ok()?;
             let (user_id, access_token) = self
                 .provider
@@ -428,7 +405,6 @@ impl Default for ClientState {
             credentials: None,
             status: watch::channel_with(Status::SignedOut),
             _reconnect_task: None,
-            _cloud_connection_task: None,
         }
     }
 }
@@ -538,7 +514,6 @@ impl Client {
             credentials_provider: ClientCredentialsProvider::new(cx),
             state: Default::default(),
             handler_set: Default::default(),
-            message_to_client_handlers: Mutex::new(Vec::new()),
             sign_out_tx: Mutex::new(None),
 
             #[cfg(any(test, feature = "test-support"))]
@@ -585,7 +560,6 @@ impl Client {
     pub fn teardown(&self) {
         let mut state = self.state.write();
         state._reconnect_task.take();
-        state._cloud_connection_task.take();
         self.handler_set.lock().clear();
         self.peer.teardown();
     }
@@ -702,7 +676,6 @@ impl Client {
             }
             Status::SignedOut | Status::UpgradeRequired => {
                 state._reconnect_task.take();
-                state._cloud_connection_task.take();
             }
             _ => {}
         }
@@ -880,12 +853,10 @@ impl Client {
                 authenticate = self.authenticate(cx).fuse() => {
                     match authenticate {
                         Ok(creds) => {
-                            if IMPERSONATE_LOGIN.is_none() {
-                                self.credentials_provider
-                                    .write_credentials(creds.user_id, creds.access_token.clone(), cx)
-                                    .await
-                                    .log_err();
-                            }
+                            self.credentials_provider
+                                .write_credentials(creds.user_id, creds.access_token.clone(), cx)
+                                .await
+                                .log_err();
 
                             credentials = Some(creds);
                         },
@@ -936,64 +907,6 @@ impl Client {
         }
     }
 
-    /// Maintains a WebSocket connection with Cloud for receiving updates from the server.
-    ///
-    /// The connection is re-established with exponential backoff if it drops or fails to
-    /// establish.
-    fn connect_to_cloud(self: &Arc<Self>, cx: &AsyncApp) {
-        let remote_enabled = cx.update(|cx| ClientSettings::get_global(cx).remote_server_enabled());
-        if !remote_enabled && !cfg!(test) {
-            return;
-        }
-        let this = self.clone();
-        let task = cx.spawn(async move |cx| {
-            #[cfg(any(test, feature = "test-support"))]
-            let mut rng = StdRng::seed_from_u64(0);
-            #[cfg(not(any(test, feature = "test-support")))]
-            let mut rng = StdRng::from_rng(&mut rand::rng());
-
-            let mut delay = INITIAL_RECONNECTION_DELAY;
-            loop {
-                match Self::run_cloud_connection(&this, cx).await {
-                    Ok(()) => {
-                        log::info!("cloud websocket disconnected, will reconnect");
-                        delay = INITIAL_RECONNECTION_DELAY;
-                    }
-                    Err(err) => {
-                        log::warn!(
-                            "cloud websocket connect failed: {err:#}; retrying in {delay:?}"
-                        );
-                    }
-                }
-
-                let jitter = Duration::from_millis(rng.random_range(0..delay.as_millis() as u64));
-                cx.background_executor().timer(delay + jitter).await;
-                delay = cmp::min(delay * 2, MAX_RECONNECTION_DELAY);
-            }
-        });
-        self.state.write()._cloud_connection_task = Some(task);
-    }
-
-    /// Runs a single attempt of the cloud websocket connection, returning once the connection
-    /// closes (cleanly or otherwise) or fails to establish.
-    async fn run_cloud_connection(self: &Arc<Self>, cx: &mut AsyncApp) -> Result<()> {
-        let connect_task = cx.update({
-            let cloud_client = self.cloud_client.clone();
-            move |cx| cloud_client.connect(cx)
-        })?;
-        let connection = connect_task.await?;
-
-        let (mut messages, _cloud_io_task) = cx.update(|cx| connection.spawn(cx));
-
-        while let Some(message) = messages.next().await {
-            if let Some(message) = message.log_err() {
-                self.handle_message_to_client(message, cx);
-            }
-        }
-
-        Ok(())
-    }
-
     /// Performs a sign-in and also (optionally) connects to Collab.
     ///
     /// Only Zed staff automatically connect to Collab.
@@ -1022,8 +935,6 @@ impl Client {
         });
 
         let credentials = self.sign_in(try_provider, cx).await?;
-
-        self.connect_to_cloud(cx);
 
         cx.update(move |cx| {
             cx.spawn({
@@ -1384,7 +1295,6 @@ impl Client {
 
     pub fn authenticate_with_browser(self: &Arc<Self>, cx: &AsyncApp) -> Task<Result<Credentials>> {
         let http = self.http.clone();
-        let this = self.clone();
         cx.spawn(async move |cx| {
             let background = cx.background_executor().clone();
 
@@ -1408,18 +1318,6 @@ impl Client {
                         rpc::auth::keypair().context("failed to generate keypair for auth")?;
                     let public_key = String::try_from(public_key)
                         .context("failed to serialize public key for auth")?;
-
-                    if let Some((login, token)) =
-                        IMPERSONATE_LOGIN.as_ref().zip(ADMIN_API_TOKEN.as_ref())
-                    {
-                        if !*USE_WEB_LOGIN {
-                            eprintln!("authenticate as admin {login}, {token}");
-
-                            return this
-                                .authenticate_as_admin(http, login.clone(), token.clone())
-                                .await;
-                        }
-                    }
 
                     // Start an HTTP server to receive the redirect from Zed's sign-in page.
                     let server = tiny_http::Server::http("127.0.0.1:0")
@@ -1501,7 +1399,7 @@ impl Client {
                         .decrypt_string(&access_token)
                         .context("failed to decrypt access token")?;
 
-                    Ok(Credentials {
+                    anyhow::Ok(Credentials {
                         user_id: user_id.parse()?,
                         access_token,
                     })
@@ -1510,53 +1408,6 @@ impl Client {
 
             cx.update(|cx| cx.activate(true));
             Ok(credentials)
-        })
-    }
-
-    async fn authenticate_as_admin(
-        self: &Arc<Self>,
-        http: Arc<HttpClientWithUrl>,
-        login: String,
-        api_token: String,
-    ) -> Result<Credentials> {
-        #[derive(Serialize)]
-        struct ImpersonateUserBody {
-            github_login: String,
-        }
-
-        #[derive(Deserialize)]
-        struct ImpersonateUserResponse {
-            user_id: u64,
-            access_token: String,
-        }
-
-        let url = self
-            .http
-            .build_zed_cloud_url("/internal/users/impersonate")?;
-        let request = Request::post(url.as_str())
-            .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {api_token}"))
-            .body(
-                serde_json::to_string(&ImpersonateUserBody {
-                    github_login: login,
-                })?
-                .into(),
-            )?;
-
-        let mut response = http.send(request).await?;
-        let mut body = String::new();
-        response.body_mut().read_to_string(&mut body).await?;
-        anyhow::ensure!(
-            response.status().is_success(),
-            "admin user request failed {} - {}",
-            response.status().as_u16(),
-            body,
-        );
-        let response: ImpersonateUserResponse = serde_json::from_str(&body)?;
-
-        Ok(Credentials {
-            user_id: response.user_id,
-            access_token: response.access_token,
         })
     }
 
@@ -1718,23 +1569,6 @@ impl Client {
                 .respond_with_unhandled_message(sender_id.into(), request_id, type_name)
                 .log_err();
         }
-    }
-
-    pub fn add_message_to_client_handler(
-        self: &Arc<Client>,
-        handler: impl Fn(&MessageToClient, &mut App) + Send + Sync + 'static,
-    ) {
-        self.message_to_client_handlers
-            .lock()
-            .push(Box::new(handler));
-    }
-
-    fn handle_message_to_client(self: &Arc<Client>, message: MessageToClient, cx: &AsyncApp) {
-        cx.update(|cx| {
-            for handler in self.message_to_client_handlers.lock().iter() {
-                handler(&message, cx);
-            }
-        });
     }
 }
 
