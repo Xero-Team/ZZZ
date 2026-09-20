@@ -28,7 +28,7 @@ Create a theme JSON file for [local use](./themes.md#local-themes) or for
 ## Configuring a Theme
 
 Your selected theme is stored in your settings file.
-You can open your settings file from the command palette with {#action zed::OpenSettingsFile} (bound to {#kb zed::OpenSettingsFile}).
+You can open your settings file from the command palette with {#action zzz::OpenSettingsFile} (bound to {#kb zzz::OpenSettingsFile}).
 
 By default, ZZZ maintains two themes: one for light mode and one for dark mode.
 You can set the mode to `"dark"` or `"light"` to ignore the current system mode.

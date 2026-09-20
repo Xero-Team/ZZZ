@@ -170,7 +170,7 @@ There are a few different ways to force ZZZ to use a specific GPU:
 
 ##### Option A
 
-You can use the `ZED_DEVICE_ID={device_id}` environment variable to specify the device ID of the GPU you wish to have ZZZ use.
+You can use the `ZZZ_DEVICE_ID={device_id}` environment variable to specify the device ID of the GPU you wish to have ZZZ use.
 
 You can obtain the device ID of your GPU by running `lspci -nn | grep VGA` which will output each GPU on one line like:
 
@@ -181,7 +181,7 @@ You can obtain the device ID of your GPU by running `lspci -nn | grep VGA` which
 where the device ID here is `2484`. This value is in hexadecimal, so to force ZZZ to use this specific GPU you would set the environment variable like so:
 
 ```
-ZED_DEVICE_ID=0x2484 zzz
+ZZZ_DEVICE_ID=0x2484 zzz
 ```
 
 Make sure to export the variable if you choose to define it globally in a `.bashrc` or similar.
@@ -212,7 +212,7 @@ Additionally, it is extremely beneficial to provide the contents of your ZZZ log
 
 ```sh
 truncate -s 0 ~/.local/share/zzz/logs/ZZZ.log # Clear the log file
-ZED_LOG=wgpu=info zzz .
+ZZZ_LOG=wgpu=info zzz .
 cat ~/.local/share/zzz/logs/ZZZ.log
 # copy the output
 ```
@@ -220,7 +220,7 @@ cat ~/.local/share/zzz/logs/ZZZ.log
 Or, if you have the ZZZ cli setup, you can do
 
 ```sh
-ZED_LOG=wgpu=info /path/to/zed/cli --foreground .
+ZZZ_LOG=wgpu=info /path/to/zzz/cli --foreground .
 # copy the output
 ```
 
@@ -232,7 +232,7 @@ It is also highly recommended when pasting the log into a github issue, to do so
 <details><summary>ZZZ Log</summary>
 
 ```
-{zed log contents}
+{zzz log contents}
 ```
 
 </details>
@@ -359,7 +359,7 @@ Restart ZZZ for the changes to take effect.
 This ZZZ-specific environment variable directly sets the scale factor, bypassing all automatic detection.
 
 ```sh
-GPUI_X11_SCALE_FACTOR=1.5 zed
+GPUI_X11_SCALE_FACTOR=1.5 zzz
 ```
 
 You can use decimal values (e.g., `1.25`, `1.5`, `2.0`) or set `GPUI_X11_SCALE_FACTOR=randr` to force RandR-based detection even when `Xft.dpi` is set.
@@ -380,12 +380,12 @@ Replace `192` with your desired DPI value. This affects the system globally and 
 
 ### Font rendering parameters
 
-On Linux, ZZZ reads `ZED_FONTS_GRAYSCALE_ENHANCED_CONTRAST` and `ZED_FONTS_GRAYSCALE_ENHANCED_CONTRAST` environment variables for the values to use for font rendering.
+On Linux, ZZZ reads `ZZZ_FONTS_GRAYSCALE_ENHANCED_CONTRAST` and `ZZZ_FONTS_GRAYSCALE_ENHANCED_CONTRAST` environment variables for the values to use for font rendering.
 
-`ZED_FONTS_GAMMA` corresponds to [getgamma](https://learn.microsoft.com/en-us/windows/win32/api/dwrite/nf-dwrite-idwriterenderingparams-getgamma) values.
+`ZZZ_FONTS_GAMMA` corresponds to [getgamma](https://learn.microsoft.com/en-us/windows/win32/api/dwrite/nf-dwrite-idwriterenderingparams-getgamma) values.
 Allowed range [1.0, 2.2], other values are clipped.
 Default: 1.8
 
-`ZED_FONTS_GRAYSCALE_ENHANCED_CONTRAST` corresponds to [getgrayscaleenhancedcontrast](https://learn.microsoft.com/en-us/windows/win32/api/dwrite_1/nf-dwrite_1-idwriterenderingparams1-getgrayscaleenhancedcontrast) values.
+`ZZZ_FONTS_GRAYSCALE_ENHANCED_CONTRAST` corresponds to [getgrayscaleenhancedcontrast](https://learn.microsoft.com/en-us/windows/win32/api/dwrite_1/nf-dwrite_1-idwriterenderingparams1-getgrayscaleenhancedcontrast) values.
 Allowed range: [0.0, ..), other values are clipped.
 Default: 1.0

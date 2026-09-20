@@ -293,13 +293,13 @@ decrease_indent_patterns = [
 ```
 
 A line beginning with `else` aligns with the most recent `@start.if` at the same
-or a lower indentation level. If Zed finds no matching block, it leaves the
+or a lower indentation level. If ZZZ finds no matching block, it leaves the
 indentation unchanged.
 
 Named captures such as `@start.if` mark blocks for these rules. Unlike
 `@start`, they do not change an `@indent` range.
 
-Zed checks rules in order and stops after the first matching `pattern`. Put
+ZZZ checks rules in order and stops after the first matching `pattern`. Put
 more specific patterns before overlapping general patterns.
 
 ### Code injections
@@ -457,7 +457,7 @@ Here's an example from a `runnables.scm` file for JSON:
 
 This query detects runnable scripts in package.json and composer.json files.
 
-The `@run` capture specifies where the run button should appear in the editor. Other captures, except those prefixed with an underscore, are exposed as environment variables with a prefix of `ZED_CUSTOM_$(capture_name)` when running the code.
+The `@run` capture specifies where the run button should appear in the editor. Other captures, except those prefixed with an underscore, are exposed as environment variables with a prefix of `ZZZ_CUSTOM_$(capture_name)` when running the code.
 
 | Capture | Description                                            |
 | ------- | ------------------------------------------------------ |
@@ -484,13 +484,13 @@ languages = ["My Language"]
 Then, in the Rust code for your extension, implement the `language_server_command` method on your extension:
 
 ```rust
-impl zed::Extension for MyExtension {
+impl zzz::Extension for MyExtension {
     fn language_server_command(
         &mut self,
         language_server_id: &LanguageServerId,
-        worktree: &zed::Worktree,
-    ) -> Result<zed::Command> {
-        Ok(zed::Command {
+        worktree: &zzz::Worktree,
+    ) -> Result<zzz::Command> {
+        Ok(zzz::Command {
             command: get_path_to_language_server_executable()?,
             args: get_args_for_language_server()?,
             env: get_env_for_language_server()?,
@@ -499,7 +499,7 @@ impl zed::Extension for MyExtension {
 }
 ```
 
-You can customize the handling of the language server using several optional methods in the `Extension` trait. For example, you can control how completions are styled using the `label_for_completion` method. For a complete list of methods, see the [API docs for the ZZZ extension API](https://docs.rs/zed_extension_api).
+You can customize the handling of the language server using several optional methods in the `Extension` trait. For example, you can control how completions are styled using the `label_for_completion` method. For a complete list of methods, see the [API docs for the ZZZ extension API](https://docs.rs/zzz_extension_api).
 
 ### Syntax Highlighting with Semantic Tokens
 

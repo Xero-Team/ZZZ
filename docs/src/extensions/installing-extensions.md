@@ -7,7 +7,7 @@ description: "Browse, install, and manage extensions from the ZZZ Extension Gall
 
 Extensions add functionality to ZZZ, including languages, themes, and AI tools. Browse and install them from the Extension Gallery.
 
-Open the Extension Gallery with {#kb zed::Extensions}, or select "ZZZ > Extensions" from the menu bar.
+Open the Extension Gallery with {#kb zzz::Extensions}, or select "ZZZ > Extensions" from the menu bar.
 
 The gallery lists and downloads extensions from the public Zed marketplace at `https://api.zed.dev`. ZZZ auto-installs the HTML extension on startup and auto-updates installed extensions unless you disable those settings.
 

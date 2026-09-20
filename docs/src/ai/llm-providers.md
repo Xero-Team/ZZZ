@@ -189,7 +189,7 @@ ZZZ will also use the `ANTHROPIC_API_KEY` environment variable if it's defined.
 
 #### Custom Models {#anthropic-custom-models}
 
-You can add custom models to the Anthropic provider by adding the following to your ZZZ settings file ([how to edit](../configuring-zed.md#settings-files)):
+You can add custom models to the Anthropic provider by adding the following to your ZZZ settings file ([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json [settings]
 {
@@ -238,7 +238,7 @@ ZZZ will also use the `DEEPSEEK_API_KEY` environment variable if it's defined.
 #### Custom Models {#deepseek-custom-models}
 
 The ZZZ agent comes pre-configured to use DeepSeek V4.1 Flash and DeepSeek V4 Pro.
-If you wish to use alternate models or customize the API endpoint, you can do so by adding the following to your ZZZ settings file ([how to edit](../configuring-zed.md#settings-files)):
+If you wish to use alternate models or customize the API endpoint, you can do so by adding the following to your ZZZ settings file ([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json [settings]
 {
@@ -302,7 +302,7 @@ ZZZ will also use the `GEMINI_API_KEY` environment variable if it's defined. See
 
 By default, ZZZ will use `stable` versions of models, but you can use specific versions of models, including [experimental models](https://ai.google.dev/gemini-api/docs/models/experimental-models). You can configure a model to use [thinking mode](https://ai.google.dev/gemini-api/docs/thinking) (if it supports it) by adding a `mode` configuration to your model. This is useful for controlling reasoning token usage and response speed. If not specified, Gemini will automatically choose the thinking budget.
 
-Here is an example of a custom Google AI model you could add to your ZZZ settings file ([how to edit](../configuring-zed.md#settings-files)):
+Here is an example of a custom Google AI model you could add to your ZZZ settings file ([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json [settings]
 {
@@ -366,7 +366,7 @@ ZZZ will also use the `MISTRAL_API_KEY` environment variable if it's defined.
 
 The ZZZ agent comes pre-configured to use the latest version for common Mistral models (Large, Medium, Small, Codestral, Devstral, and others).
 All the default models support tool use.
-If you wish to use alternate models or customize their parameters, you can do so by adding the following to your ZZZ settings file ([how to edit](../configuring-zed.md#settings-files)):
+If you wish to use alternate models or customize their parameters, you can do so by adding the following to your ZZZ settings file ([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json [settings]
 {
@@ -516,7 +516,7 @@ ZZZ will also use the `OPENAI_API_KEY` environment variable if it's defined.
 #### Custom Models {#openai-custom-models}
 
 The ZZZ agent comes pre-configured to use the latest version for common OpenAI models (GPT-5.2, GPT-5 mini, GPT-5.2 Codex, and others).
-To use alternate models, perhaps a preview release, or if you wish to control the request parameters, you can do so by adding the following to your ZZZ settings file ([how to edit](../configuring-zed.md#settings-files)):
+To use alternate models, perhaps a preview release, or if you wish to control the request parameters, you can do so by adding the following to your ZZZ settings file ([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json [settings]
 {
@@ -567,7 +567,7 @@ You can add a custom, OpenAI-compatible model either via the UI or by editing yo
 To do it via the UI, go to the Agent Panel settings (`agent: open settings`) and look for the "Add Provider" button to the right of the "LLM Providers" section title.
 Then, fill up the input fields available in the modal.
 
-To do it via your settings file ([how to edit](../configuring-zed.md#settings-files)), add the following snippet under `language_models`:
+To do it via your settings file ([how to edit](../configuring-zzz.md#settings-files)), add the following snippet under `language_models`:
 
 ```json [settings]
 {
@@ -692,7 +692,7 @@ The `openrouter/auto` model automatically routes your requests to the most appro
 
 #### Custom Models {#openrouter-custom-models}
 
-You can add custom models to the OpenRouter provider by adding the following to your ZZZ settings file ([how to edit](../configuring-zed.md#settings-files)):
+You can add custom models to the OpenRouter provider by adding the following to your ZZZ settings file ([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json [settings]
 {
@@ -818,7 +818,7 @@ The xAI API key will be saved in your keychain. ZZZ will also use the `XAI_API_K
 
 #### Custom Models {#xai-custom-models}
 
-The ZZZ agent comes pre-configured with common Grok models. If you wish to use alternate models or customize their parameters, you can do so by adding the following to your ZZZ settings file ([how to edit](../configuring-zed.md#settings-files)):
+The ZZZ agent comes pre-configured with common Grok models. If you wish to use alternate models or customize their parameters, you can do so by adding the following to your ZZZ settings file ([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json [settings]
 {
@@ -848,7 +848,7 @@ The ZZZ agent comes pre-configured with common Grok models. If you wish to use a
 ## Custom Provider Endpoints {#custom-provider-endpoint}
 
 You can use a custom API endpoint for different providers, as long as it's compatible with the provider's API structure.
-To do so, add the following to your settings file ([how to edit](../configuring-zed.md#settings-files)):
+To do so, add the following to your settings file ([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json
 {

@@ -20,7 +20,7 @@ More icon themes are available from the Extensions page, which you can access vi
 ## Configuring Icon Themes
 
 Your selected icon theme is stored in your settings file.
-You can open your settings file from the command palette with {#action zed::OpenSettingsFile} (bound to {#kb zed::OpenSettingsFile}).
+You can open your settings file from the command palette with {#action zzz::OpenSettingsFile} (bound to {#kb zzz::OpenSettingsFile}).
 
 Just like with themes, ZZZ allows for configuring different icon themes for light and dark mode.
 You can set the mode to `"light"` or `"dark"` to ignore the current system mode.

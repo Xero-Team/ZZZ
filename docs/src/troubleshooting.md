@@ -15,24 +15,24 @@ Other times, troubleshooting means gathering the right information (logs, profil
 
 When reporting issues or seeking help, it's useful to know your ZZZ version and system specifications. You can retrieve this information using the following actions from the command palette:
 
-- {#action zed::About}: Find your ZZZ version number
-- {#action zed::CopySystemSpecsIntoClipboard}: Populate your clipboard with ZZZ version number, operating system version, and hardware specs
-- {#action zed::CopyInstalledExtensionsIntoClipboard}: Populate your clipboard with a list of your installed extensions and versions
+- {#action zzz::About}: Find your ZZZ version number
+- {#action zzz::CopySystemSpecsIntoClipboard}: Populate your clipboard with ZZZ version number, operating system version, and hardware specs
+- {#action zzz::CopyInstalledExtensionsIntoClipboard}: Populate your clipboard with a list of your installed extensions and versions
 
 ## ZZZ Log
 
 Often, a good first place to look when troubleshooting any issue in ZZZ is the ZZZ log, which might contain clues about what's going wrong.
-You can review the most recent 1000 lines of the log by running the {#action zed::OpenLog} action from the command palette.
-If you want to view the full file, you can reveal it in your operating system's native file manager via {#action zed::RevealLogInFileManager} from the command palette.
+You can review the most recent 1000 lines of the log by running the {#action zzz::OpenLog} action from the command palette.
+If you want to view the full file, you can reveal it in your operating system's native file manager via {#action zzz::RevealLogInFileManager} from the command palette.
 
 You'll find the ZZZ log in the respective location on each operating system:
 
-- macOS: `~/Library/Logs/Zed/Zed.log`
-- Windows: `C:\Users\YOU\AppData\Local\Zed\logs\Zed.log`
+- macOS: `~/Library/Logs/ZZZ/ZZZ.log`
+- Windows: `C:\Users\YOU\AppData\Local\ZZZ\logs\ZZZ.log`
 - Linux: `~/.local/share/zzz/logs/ZZZ.log` or `$XDG_DATA_HOME`
 
 > **Note:** In some cases, it might be useful to monitor the log live, such as when [developing a ZZZ extension](./extensions/developing-extensions.md).
-> Example: `tail -f ~/Library/Logs/Zed/Zed.log`
+> Example: `tail -f ~/Library/Logs/ZZZ/ZZZ.log`
 
 The log may contain enough context to help you debug the issue yourself, or you may find specific errors that are useful when filing an [issue](https://codeberg.org/ZZZEditor/ZZZ/issues/new).
 
@@ -62,11 +62,11 @@ Xcode Instruments (which comes bundled with your [Xcode](https://apps.apple.com/
 
 ZZZ creates local SQLite databases to persist data relating to its workspace and your projects. These databases store, for instance, the tabs and panes you have open in a project, the scroll position of each open file, the list of all projects you've opened (for the recent projects modal picker), etc. You can find and explore these databases in the following locations:
 
-- macOS: `~/Library/Application Support/Zed/db`
+- macOS: `~/Library/Application Support/ZZZ/db`
 - Linux and FreeBSD: `~/.local/share/zzz/db` (or within `XDG_DATA_HOME` or `FLATPAK_XDG_DATA_HOME`)
-- Windows: `%LOCALAPPDATA%\Zed\db`
+- Windows: `%LOCALAPPDATA%\ZZZ\db`
 
-The naming convention of these databases takes on the form of `0-<zed_channel>`:
+The naming convention of these databases takes on the form of `0-<zzz_channel>`:
 
 - Stable: `0-stable`
 - Dev: `0-dev`

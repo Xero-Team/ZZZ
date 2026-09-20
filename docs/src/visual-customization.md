@@ -5,20 +5,20 @@ description: "Various aspects of ZZZ's visual layout can be configured in the Se
 
 # Visual Customization
 
-Various aspects of ZZZ's visual layout can be configured in the Settings Editor ({#kb zed::OpenSettings}) or in your settings file ({#kb zed::OpenSettingsFile}).
+Various aspects of ZZZ's visual layout can be configured in the Settings Editor ({#kb zzz::OpenSettings}) or in your settings file ({#kb zzz::OpenSettingsFile}).
 
 See [All Settings](./reference/all-settings.md) for additional information and other non-visual settings.
 
 ## Themes
 
-You can install many [themes](./themes.md) and [icon themes](./icon-themes.md) in form of extensions by running {#action zed::Extensions} from the command palette.
+You can install many [themes](./themes.md) and [icon themes](./icon-themes.md) in form of extensions by running {#action zzz::Extensions} from the command palette.
 
 You can preview/choose amongst your installed themes and icon themes with {#action theme_selector::Toggle} ({#kb theme_selector::Toggle}) and {#action icon_theme_selector::Toggle} which will modify the following settings:
 
 ```json [settings]
 {
   "theme": "One Dark",
-  "icon_theme": "Zed (Default)"
+  "icon_theme": "ZZZ (Default)"
 }
 ```
 
@@ -33,8 +33,8 @@ If you would like to use distinct themes for light mode/dark mode that can be se
     "mode": "system"
   },
   "icon_theme": {
-    "dark": "Zed (Default)",
-    "light": "Zed (Default)",
+    "dark": "ZZZ (Default)",
+    "light": "ZZZ (Default)",
     // Mode to use (dark, light) or "system" to follow the OS's light/dark mode (default)
     "mode": "system"
   }
@@ -45,13 +45,13 @@ If you would like to use distinct themes for light mode/dark mode that can be se
 
 ```json [settings]
   // UI Font. Use ".SystemUIFont" to use the default system font (SF Pro on macOS),
-  // or ".ZedSans" for the bundled default (currently IBM Plex)
+  // or ".ZZZSans" for the bundled default (currently IBM Plex)
   "ui_font_family": ".SystemUIFont",
   "ui_font_weight": 400, // Font weight in standard CSS units from 100 to 900.
   "ui_font_size": 16,
 
   // Buffer Font - Used by editor buffers
-  // use ".ZedMono" for the bundled default monospace (currently Lilex)
+  // use ".ZZZMono" for the bundled default monospace (currently Lilex)
   "buffer_font_family": "Berkeley Mono", // Font name for editor buffers
   "buffer_font_size": 15,                 // Font size for editor buffers
   "buffer_font_weight": 400,              // Font weight in CSS units [100-900]

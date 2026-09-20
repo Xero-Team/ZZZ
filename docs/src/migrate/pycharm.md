@@ -35,7 +35,7 @@ This maps familiar shortcuts like `Shift Shift` for Search Everywhere, `Cmd+O` f
 
 ## Set Up Editor Preferences
 
-You can configure most settings in the Settings Editor ({#kb zed::OpenSettings}). For advanced settings, run `zzz: open settings file` from the Command Palette to edit your settings file directly.
+You can configure most settings in the Settings Editor ({#kb zzz::OpenSettings}). For advanced settings, run `zzz: open settings file` from the Command Palette to edit your settings file directly.
 
 Settings PyCharm users typically configure first:
 
@@ -215,7 +215,7 @@ This means:
   },
   {
     "label": "test current file",
-    "command": "pytest $ZED_FILE"
+    "command": "pytest $ZZZ_FILE"
   }
 ]
 ```
@@ -275,7 +275,7 @@ For more control, create a `.ZZZ/debug.json` file:
   {
     "label": "Debug Current File",
     "adapter": "Debugpy",
-    "program": "$ZED_FILE",
+    "program": "$ZZZ_FILE",
     "request": "launch"
   },
   {

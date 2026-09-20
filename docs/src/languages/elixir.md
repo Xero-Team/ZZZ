@@ -22,7 +22,7 @@ Furthermore, the extension provides support for [EEx](https://hexdocs.pm/eex/EEx
 
 ## Language Servers
 
-The Elixir extension offers language server support for ElixirLS, Expert, Dexter, Next LS, and Lexical. By default, only ElixirLS is enabled. You can change or disable the enabled language servers in your settings ({#kb zed::OpenSettings}) under Languages > Elixir/EEx/HEEx or directly within your settings file.
+The Elixir extension offers language server support for ElixirLS, Expert, Dexter, Next LS, and Lexical. By default, only ElixirLS is enabled. You can change or disable the enabled language servers in your settings ({#kb zzz::OpenSettings}) under Languages > Elixir/EEx/HEEx or directly within your settings file.
 
 The extension will try to find and use local binaries in your `$PATH` for the enabled language servers. If it cannot find them there, it will fallback to installing them for you instead.
 
@@ -30,7 +30,7 @@ Alternatively, you can provide your own custom binaries by passing the path and 
 
 Some of the language servers can also accept initialization or workspace configuration options. See the sections below for an outline of what each server supports. The configuration can be passed in your settings file via `lsp.{language-server-id}.initialization_options` and `lsp.{language-server-id}.settings` respectively.
 
-Visit the [Configuring ZZZ](../configuring-zed.md#settings-files) guide for more information on how to edit your settings file.
+Visit the [Configuring ZZZ](../configuring-zzz.md#settings-files) guide for more information on how to edit your settings file.
 
 ### Using ElixirLS
 
@@ -296,7 +296,7 @@ The Elixir extension also provides a debug adapter via ElixirLS. Like the langua
 
 Alternatively, you can provide your own custom binary by passing the path and arguments in your settings file via `dap.ElixirLS.binary` and `dap.ElixirLS.args` respectively.
 
-Refer to the [Debugger](../debugger.md#getting-started) documentation for more information on how debugging works in Zed.
+Refer to the [Debugger](../debugger.md#getting-started) documentation for more information on how debugging works in ZZZ.
 
 ### Using ElixirLS
 
@@ -308,7 +308,7 @@ The following example allows you to debug the test files of a project:
     "label": "Debug tests",
     "adapter": "ElixirLS",
     "request": "launch",
-    "projectDir": "$ZED_WORKTREE_ROOT",
+    "projectDir": "$ZZZ_WORKTREE_ROOT",
     "task": "test",
     "taskArgs": ["--trace"],
     "requireFiles": ["test/**/test_helper.exs", "test/**/*_test.exs"]
@@ -324,7 +324,7 @@ The following example allows you to debug a Phoenix server:
     "label": "Debug Phoenix server",
     "adapter": "ElixirLS",
     "request": "launch",
-    "projectDir": "$ZED_WORKTREE_ROOT",
+    "projectDir": "$ZZZ_WORKTREE_ROOT",
     "task": "phx.server",
     "debugAutoInterpretAllModules": false,
     "debugInterpretModulesPatterns": ["MyApp*", "MyAppWeb*"],

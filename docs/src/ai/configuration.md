@@ -17,7 +17,7 @@ You can configure multiple dimensions of AI usage in ZZZ:
 
 ## Turning AI Off Entirely
 
-To disable all AI features, add the following to your settings file ([how to edit](../configuring-zed.md#settings-files)):
+To disable all AI features, add the following to your settings file ([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json [settings]
 {

@@ -109,7 +109,7 @@ When your changes affect UI, consult this checklist:
 - How does it work in offline vs. online states?
 - How does it work in unauthenticated vs. authenticated states?
 - How does it behave if data is missing, corrupted, or delayed?
-- Are error messages actionable and consistent with Zed’s voice?
+- Are error messages actionable and consistent with ZZZ’s voice?
 
 **Discoverability & Learning**
 - Can a first-time user figure it out without docs?
@@ -123,32 +123,32 @@ When your changes affect UI, consult this checklist:
 Although there are few hard and fast rules, typically we don't merge:
 
 - Anything that can be provided by an extension. For example a new language, or theme. See the local extension documentation for details.
-- New file icons. Zed's default icon theme consists of icons that are hand-designed to fit together in a cohesive manner, please don't submit PRs with off-the-shelf SVGs.
+- New file icons. ZZZ's default icon theme consists of icons that are hand-designed to fit together in a cohesive manner, please don't submit PRs with off-the-shelf SVGs.
 - Features where (in our subjective opinion) the extra complexity isn't worth it for the number of people who will benefit.
 - Giant refactorings.
 - Non-trivial changes with no tests.
 - Stylistic code changes that do not alter any app logic. Reducing allocations, removing `.unwrap()`s, fixing typos is great; making code "more readable" — maybe not so much.
 - Anything that seems AI-generated without understanding the output.
 
-## Bird's-eye view of Zed
+## Bird's-eye view of ZZZ
 
 We suggest you keep the [ZZZ glossary](docs/src/development/glossary.md) at your side when starting out. It lists and explains some of the structures and terms you will see throughout the codebase.
 
 ZZZ is made up of several smaller crates - let's go over those you're most likely to interact with:
 
-- [`gpui`](/crates/gpui) is a GPU-accelerated UI framework which provides all of the building blocks for Zed. **We recommend familiarizing yourself with the root level GPUI documentation.**
-- [`editor`](/crates/editor) contains the core `Editor` type that drives both the code editor and all various input fields within Zed. It also handles a display layer for LSP features such as Inlay Hints or code completions.
-- [`project`](/crates/project) manages files and navigation within the filetree. It is also Zed's side of communication with LSP.
+- [`gpui`](/crates/gpui) is a GPU-accelerated UI framework which provides all of the building blocks for ZZZ. **We recommend familiarizing yourself with the root level GPUI documentation.**
+- [`editor`](/crates/editor) contains the core `Editor` type that drives both the code editor and all various input fields within ZZZ. It also handles a display layer for LSP features such as Inlay Hints or code completions.
+- [`project`](/crates/project) manages files and navigation within the filetree. It is also ZZZ's side of communication with LSP.
 - [`workspace`](/crates/workspace) handles local state serialization and groups projects together.
 - [`vim`](/crates/vim) is a thin implementation of Vim workflow over `editor`.
 - [`lsp`](/crates/lsp) handles communication with external LSP server.
 - [`language`](/crates/language) drives `editor`'s understanding of language - from providing a list of symbols to the syntax map.
 - [`rpc`](/crates/rpc) defines messages exchanged with remote servers.
 - [`theme`](/crates/theme) defines the theme system and provides a default theme.
-- [`ui`](/crates/ui) is a collection of UI components and common patterns used throughout Zed.
-- [`cli`](/crates/cli) is the CLI crate which invokes the Zed binary.
-- [`zed`](/crates/zed) is where all things come together, and the `main` entry point for Zed.
+- [`ui`](/crates/ui) is a collection of UI components and common patterns used throughout ZZZ.
+- [`cli`](/crates/cli) is the CLI crate which invokes the ZZZ binary.
+- [`zzz`](/crates/zzz) is where all things come together, and the `main` entry point for ZZZ.
 
-## Packaging Zed
+## Packaging ZZZ
 
 Check the packaging notes in `docs/src/development/linux.md`.

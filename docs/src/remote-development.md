@@ -39,14 +39,14 @@ The remote machine must be able to run ZZZ's server. The following platforms sho
 
 ## Configuration
 
-The list of remote servers is stored in your settings file {#kb zed::OpenSettings}. You can edit this list using the Remote Projects dialog {#kb projects::OpenRemote}, which provides some robustness - for example it checks that the connection can be established before writing it to the settings file.
+The list of remote servers is stored in your settings file {#kb zzz::OpenSettings}. You can edit this list using the Remote Projects dialog {#kb projects::OpenRemote}, which provides some robustness - for example it checks that the connection can be established before writing it to the settings file.
 
 ```json [settings]
 {
   "ssh_connections": [
     {
       "host": "192.168.1.10",
-      "projects": [{ "paths": ["~/code/zed/zed"] }]
+      "projects": [{ "paths": ["~/code/zzz/zzz"] }]
     }
   ]
 }
@@ -59,7 +59,7 @@ ZZZ shells out to the `ssh` on your path, and so it will inherit any configurati
   "ssh_connections": [
     {
       "host": "192.168.1.10",
-      "projects": [{ "paths": ["~/code/zed/zed"] }],
+      "projects": [{ "paths": ["~/code/zzz/zzz"] }],
       // any argument to pass to the ssh master process
       "args": ["-i", "~/.ssh/work_id_file"],
       "port": 22, // defaults to 22
@@ -77,7 +77,7 @@ There is one additional ZZZ-specific option per connection, `nickname`:
   "ssh_connections": [
     {
       "host": "192.168.1.10",
-      "projects": [{ "paths": ["~/code/zed/zed"] }],
+      "projects": [{ "paths": ["~/code/zzz/zzz"] }],
       // Shown in the ZZZ UI to help distinguish multiple hosts.
       "nickname": "lil-linux"
     }
@@ -230,7 +230,7 @@ Linux downloads a macOS SDK into a temporary directory when `zig` and
 
 If no matching archive is embedded, ZZZ errors unless the binary is already on
 the remote, or a debug `cargo run` compiles `remote_server` from source
-(`ZED_BUILD_REMOTE_SERVER`, default `nocompress`). Force embedding in a debug
+(`ZZZ_BUILD_REMOTE_SERVER`, default `nocompress`). Force embedding in a debug
 or Dev build with `ZZZ_EMBED_REMOTE_SERVERS=1`.
 
 Debug `cargo run` builds do not embed archives.
@@ -280,6 +280,6 @@ Note that we deliberately disallow some options (for example `-t` or `-T`) that 
 - [Git Worktrees](./git.md#git-worktrees): Create and switch between linked
   Git worktrees. ZZZ supports the worktree picker in remote projects when the
   remote connection is active.
-- [Configuring ZZZ](./configuring-zed.md): Manage shared and project settings,
+- [Configuring ZZZ](./configuring-zzz.md): Manage shared and project settings,
   including `.ZZZ/settings.json`.
 - [Agent Panel](./ai/agent-panel.md): Use AI workflows in remote projects.

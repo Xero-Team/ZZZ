@@ -26,9 +26,9 @@ Before starting to develop an extension for ZZZ, be sure to [install Rust via ru
 
 When developing an extension, you can use it in ZZZ without needing to publish it by installing it as a _dev extension_.
 
-From the extensions page, click the `Install Dev Extension` button (or the {#action zed::InstallDevExtension} action) and select the directory containing your extension.
+From the extensions page, click the `Install Dev Extension` button (or the {#action zzz::InstallDevExtension} action) and select the directory containing your extension.
 
-If you need to troubleshoot, check ZZZ.log ({#action zed::OpenLog}) for additional output. For debug output, close and relaunch ZZZ from the command line with `zzz --foreground`, which shows more verbose INFO-level logs.
+If you need to troubleshoot, check ZZZ.log ({#action zzz::OpenLog}) for additional output. For debug output, close and relaunch ZZZ from the command line with `zzz --foreground`, which shows more verbose INFO-level logs.
 
 If you already have the published version of the extension installed, the published version will be uninstalled prior to the installation of the dev extension. After successful installation, the `Extensions` page will indicate that the upstream extension is "Overridden by dev extension".
 
@@ -80,25 +80,25 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-zed_extension_api = "0.1.0"
+zzz_extension_api = "0.1.0"
 ```
 
-Use the latest version of the [`zed_extension_api`](https://github.com/zed-industries/zed/blob/main/crates/extension_api#compatible-zed-versions) available on crates.io. Make sure it's still [compatible with ZZZ versions](https://github.com/zed-industries/zed/blob/main/crates/extension_api#compatible-zed-versions) you want to support.
+Use the latest version of the [`zzz_extension_api`](https://github.com/zed-industries/zed/blob/main/crates/extension_api#compatible-zed-versions) available on crates.io. Make sure it's still [compatible with ZZZ versions](https://github.com/zed-industries/zed/blob/main/crates/extension_api#compatible-zed-versions) you want to support.
 
 In the `src/lib.rs` file in your Rust crate you will need to define a struct for your extension and implement the `Extension` trait, as well as use the `register_extension!` macro to register your extension:
 
 ```rs
-use zed_extension_api as zed;
+use zzz_extension_api as zzz;
 
 struct MyExtension {
     // ... state
 }
 
-impl zed::Extension for MyExtension {
+impl zzz::Extension for MyExtension {
     // ...
 }
 
-zed::register_extension!(MyExtension);
+zzz::register_extension!(MyExtension);
 ```
 
 > `stdout`/`stderr` is forwarded directly to the ZZZ process. In order to see `println!`/`dbg!` output from your extension, you can start ZZZ in your terminal with a `--foreground` flag.
@@ -145,17 +145,17 @@ Your license file should be at the root of your extension repository. Any filena
 
 ## Extension Publishing Prerequisites
 
-Before publishing your extension, make sure that you have chosen a unique extension ID for your extension in the [extension manifest](#directory-structure-of-a-zed-extension).
+Before publishing your extension, make sure that you have chosen a unique extension ID for your extension in the [extension manifest](#directory-structure-of-a-zzz-extension).
 This will be the primary identifier for your extension and cannot be changed after your extension has been published.
 Also, ensure that you have filled out all the required fields in the manifest.
 
 Furthermore, please make sure that your extension fulfills the following preconditions before you move on to publishing your extension:
 
-- Extension IDs and names must not contain the words `zed`, `ZZZ` or `extension`, since they are all ZZZ extensions.
+- Extension IDs and names must not contain the words `zzz`, `ZZZ` or `extension`, since they are all ZZZ extensions.
 - Your extension ID should provide some information on what your extension tries to accomplish. E.g. for themes, it should be suffixed with `-theme`, snippet extensions should be suffixed with `-snippets` and so on. An exception to that rule are extension that provide support for languages or popular tooling that people would expect to find under that ID. You can take a look at the list of [existing extensions](https://github.com/zed-industries/extensions/blob/main/extensions.toml) to get a grasp on how this usually is enforced.
 - Extensions should provide something that is not yet available in the marketplace as opposed to fixing something that could be resolved within an existing extension. For example, if you find that an existing extension's support for a language server is not functioning properly, first try contributing a fix to the existing extension as opposed to submitting a new extension immediately.
   - If you receive no response or reaction within the upstream repository within a reasonable amount of time, feel free to submit a pull request that aims to fix said issue. Please ensure that you provide your previous efforts within the pull request to the extensions repository for adding your extension. ZZZ maintainers will then decide on how to proceed on a case by case basis.
-- Extensions that intend to provide a language, debugger or MCP server must not ship the language server as part of the extension. Instead, the extension should either download the language server or check for the availability of the language server in the users environment using the APIs as provided by the [ZZZ Rust Extension API](https://docs.rs/zed_extension_api/latest/zed_extension_api/).
+- Extensions that intend to provide a language, debugger or MCP server must not ship the language server as part of the extension. Instead, the extension should either download the language server or check for the availability of the language server in the users environment using the APIs as provided by the [ZZZ Rust Extension API](https://docs.rs/zzz_extension_api/latest/zzz_extension_api/).
 - Themes and icon themes should not be published as part of extensions that provide other features, e.g. language support. Instead, they should be published as a distinct extension. This also applies to theme and icon themes living in the same repository.
 
 Non-compliance with these rules will be raised during the publishing process by reviewers. If you fail to comply with the laid out guidelines, the publishing of your extension will either be delayed or rejected.
@@ -190,7 +190,7 @@ If your extension is in a subdirectory within the submodule, you can use the `pa
 ```toml
 [my-extension]
 submodule = "extensions-my-extension"
-path = "packages/zed"
+path = "packages/zzz"
 version = "0.0.1"
 ```
 

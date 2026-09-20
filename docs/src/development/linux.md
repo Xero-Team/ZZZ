@@ -72,11 +72,11 @@ ZZZ has two main binaries:
 
 - You will need to build `crates/cli` and make its binary available in `$PATH` with the name `zzz`.
 - You will need to build `~/.local/lib/zzz/zzz-editor` and put it at `~/.local/lib/zzz/zzz-editor`. For example, if you are going to put the CLI at `~/.local/lib/zzz/zzz-editor`, put `zzz` at `~/.local/lib/zzz/zzz-editor`. As some Linux distributions (notably Arch) discourage the use of `libexec`, you can also put this binary at `~/.local/lib/zzz/zzz-editor` instead.
-- If you are going to provide a `.desktop` file you can find a template in `crates/zed/resources/zed.desktop.in`, and use `envsubst` to populate it with the values required. This file should also be renamed to `$APP_ID.desktop` so that the file [follows the FreeDesktop standards](`crates/zed/resources/zed.desktop.in`). You should also make this desktop file executable (`chmod 755`).
+- If you are going to provide a `.desktop` file you can find a template in `crates/zzz/resources/zzz.desktop.in`, and use `envsubst` to populate it with the values required. This file should also be renamed to `$APP_ID.desktop` so that the file [follows the FreeDesktop standards](`crates/zzz/resources/zzz.desktop.in`). You should also make this desktop file executable (`chmod 755`).
 - You will need to ensure that the necessary libraries are installed. You can get the current list by inspecting the built binary; see [`script/bundle-linux`](../../script/bundle-linux).
 - For an example of a complete build script, see [`script/bundle-linux`](../../script/bundle-linux).
-- You can disable ZZZ's auto updates and provide instructions for users who try to update ZZZ manually by building (or running) ZZZ with the environment variable `ZED_UPDATE_EXPLANATION`. For example: ZED_UPDATE_EXPLANATION.
-- Make sure to update the contents of the `crates/zed/RELEASE_CHANNEL` file to `stable` or `dev`, with no newline. Packaged builds that should use the system credentials manager should use `stable`.
+- You can disable ZZZ's auto updates and provide instructions for users who try to update ZZZ manually by building (or running) ZZZ with the environment variable `ZZZ_UPDATE_EXPLANATION`. For example: ZZZ_UPDATE_EXPLANATION.
+- Make sure to update the contents of the `crates/zzz/RELEASE_CHANNEL` file to `stable` or `dev`, with no newline. Packaged builds that should use the system credentials manager should use `stable`.
 
 ### Other things to note
 

@@ -345,7 +345,7 @@ commits.
 
 ### Rejected work
 
-- `7a7c3e1d` needs Zed's auto-update download state. Its generic GPUI
+- `7a7c3e1d` needs ZZZ's auto-update download state. Its generic GPUI
   system-wake subscription is already present locally, but the requested
   restart behavior has no allowed updater caller.
 - `99f4c21c` configures subscription-bound OpenCode Go and Zen model catalogs

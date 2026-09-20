@@ -24,7 +24,7 @@ Or manually download and install [OpenJDK 23](https://jdk.java.net/23/).
 
 ## Extension Install
 
-You can install by opening {#action zed::Extensions}({#kb zed::Extensions}) and searching for `java`.
+You can install by opening {#action zzz::Extensions}({#kb zzz::Extensions}) and searching for `java`.
 
 ## Quick start and configuration
 
@@ -71,7 +71,7 @@ To get started with Java, click the `edit debug.json` button in the Debug menu, 
     // this effectively sets a breakpoint at your program entry:
     "stopOnEntry": true,
     // the working directory for the debug process
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZZZ_WORKTREE_ROOT",
   },
 ]
 ```
@@ -96,7 +96,7 @@ JDTLS provides many configuration options that can be passed via the `initialize
         // this will be sent to JDTLS as initializationOptions:
         "initialization_options": {
           "bundles": [],
-          // use this if your zed project root folder is not the same as the java project root:
+          // use this if your zzz project root folder is not the same as the java project root:
           "workspaceFolders": ["file:///home/snjeza/Project"],
           "settings": {
             "java": {

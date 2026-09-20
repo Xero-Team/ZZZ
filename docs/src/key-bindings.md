@@ -9,7 +9,7 @@ ZZZ's key binding system is fully customizable. You can rebind any action, creat
 
 ## Predefined Keymaps
 
-If you're used to a specific editor's defaults, you can change your `base_keymap` through the settings window ({#kb zed::OpenSettings}) or directly through your `settings.json` file ({#kb zed::OpenSettingsFile}).
+If you're used to a specific editor's defaults, you can change your `base_keymap` through the settings window ({#kb zzz::OpenSettings}) or directly through your `settings.json` file ({#kb zzz::OpenSettingsFile}).
 We currently support:
 
 - VS Code (default)
@@ -28,7 +28,7 @@ For more information, see the documentation for [Vim mode](./vim.md) and [Helix 
 
 ## Keymap Editor
 
-You can access the keymap editor through the {#kb zed::OpenKeymap} action or by running {#action zed::OpenKeymap} action from the command palette. You can easily add or change a keybind for an action with the `Change Keybinding` or `Add Keybinding` button on the command pallets left bottom corner.
+You can access the keymap editor through the {#kb zzz::OpenKeymap} action or by running {#action zzz::OpenKeymap} action from the command palette. You can easily add or change a keybind for an action with the `Change Keybinding` or `Add Keybinding` button on the command pallets left bottom corner.
 
 In there, you can see all of the existing actions in ZZZ as well as the associated keybindings set to them by default.
 
@@ -43,7 +43,7 @@ The keymap file is stored in the following locations for each platform:
 - macOS/Linux: `~/.config/ZZZ/keymap.json`
 - Windows: `~\AppData\Roaming\ZZZ/keymap.json`
 
-You can open the keymap with the {#action zed::OpenKeymapFile} action from the command palette.
+You can open the keymap with the {#action zzz::OpenKeymapFile} action from the command palette.
 
 This file contains a JSON array of objects with `"bindings"`.
 If no `"context"` is set, the bindings are always active.
@@ -102,7 +102,7 @@ A few examples:
 ```json [keymap]
 {
   "bindings": {
-    "cmd-k cmd-s": "zed::OpenKeymap", // matches ⌘-k then ⌘-s
+    "cmd-k cmd-s": "zzz::OpenKeymap", // matches ⌘-k then ⌘-s
     "space e": "editor::ShowCompletions", // type space then e
     "ç": "editor::ShowCompletions", // matches ⌥-c
     "shift shift": "file_finder::Toggle" // matches pressing and releasing shift twice

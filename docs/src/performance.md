@@ -33,7 +33,7 @@ fn should_appear_in_profile(kitty: Cat) {
 }
 ```
 
-Then either compile ZZZ with `ZTRACING=1 cargo r --features tracy --release`. The release build is optional but highly recommended as like every program Zeds performance characteristics change dramatically with optimizations. You do not want to chase slowdowns that do not exist in release.
+Then either compile ZZZ with `ZTRACING=1 cargo r --features tracy --release`. The release build is optional but highly recommended as like every program ZZZs performance characteristics change dramatically with optimizations. You do not want to chase slowdowns that do not exist in release.
 
 ## One time Setup/Building the profiler:
 
@@ -51,7 +51,7 @@ Download the profiler:
 
 ## Usage
 
-Open the profiler (tracy-profiler), you should see zed in the list of `Discovered clients` click it.
+Open the profiler (tracy-profiler), you should see zzz in the list of `Discovered clients` click it.
 
 <img width="392" height="auto" alt="image" src="https://github.com/user-attachments/assets/b6f06fc3-6b25-41c7-ade9-558cc93d6033" style="display: block; margin: 0 auto;"/>
 
@@ -96,7 +96,7 @@ let _enter = span.enter(); // span guard, when this is dropped the span ends (an
 
 # Task/Async profiling
 
-Get a profile of the zed foreground executor and background executors. Check if
+Get a profile of the zzz foreground executor and background executors. Check if
 anything is blocking the foreground too long or taking too much (clock) time in
 the background.
 
@@ -122,7 +122,7 @@ Download the importer
 
 ## To Save a Trace:
 
-- Run the action: `zed open performance profiler`
+- Run the action: `zzz open performance profiler`
 - Hit the save button. This opens a save dialog or if that fails to open the trace gets saved in your working directory.
 - Convert the profile so it can be imported in tracy using the importer: `./tracy-import-miniprofiler <path to performance_profile.miniprof.json> output.tracy`
 - Go to <https://tracy.nereid.pl/> hit the 'power button' in the top left and then open saved trace.

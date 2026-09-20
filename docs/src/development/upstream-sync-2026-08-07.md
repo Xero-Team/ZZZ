@@ -777,7 +777,7 @@ PASS git diff --check
   Added `variable.parameter` colors to all local Gruvbox variants after a
   cherry-pick conflict caused by independently changed theme data.
 - `779c35d256a320ddc7611706cb54c2df93618e68`: B, local commit `754161d05b`.
-  Centralized `PAGER` and `GIT_PAGER` overrides for ACP terminals; native Zed
+  Centralized `PAGER` and `GIT_PAGER` overrides for ACP terminals; native ZZZ
   agent framing was omitted.
 - `5e03f2d387e629237c10a4e4fed881b64abd8fea`: B, local commit `bd5077b303`.
   Solo diff searches no longer expose the generic multibuffer fold control;

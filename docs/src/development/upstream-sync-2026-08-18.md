@@ -47,7 +47,7 @@ The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
 | 4e8057d7 | C     | --           | CI assignee workflow.                                          |
 | d4010e91 | C     | --           | Project-panel undo trash confirm unisolatable.                 |
 | 4bd19937 | C     | --           | Mermaid `~~~` fences; local markdown diverged.                 |
-| e4671f71 | C     | --           | Malformed-task toast conflicts in `zed.rs`.                    |
+| e4671f71 | C     | --           | Malformed-task toast conflicts in `zzz.rs`.                    |
 | 069449ab | C     | --           | mdBook smart-punctuation docs infra.                           |
 | c65e08a8 | A     | 3d24720f     | Cherry-picked with `-x -s`.                                    |
 | 9e236090 | C     | --           | Unused per-window histogram APIs.                              |
@@ -152,7 +152,7 @@ commit was created with `git cherry-pick -x -s`; B commits retain their full
 `Upstream:` trailer and explain omissions. No remote branch, pull request, or
 upstream remote was created.
 
-App version followed upstream: `crates/zed` is now `1.17.0`.
+App version followed upstream: `crates/zzz` is now `1.17.0`.
 
 `9bde578e` was cherry-picked then fully reverted after `cargo check` failed on
 absent `SchedulerLocalExecutor` / `spawn_dedicated`. `4efba716` was adapted to

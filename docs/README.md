@@ -26,7 +26,7 @@ cd docs && pnpm dlx prettier@3.5.0 . --write && cd ..
 
 We have a custom mdBook preprocessor for interfacing with our crates (`crates/docs_preprocessor`).
 
-If for some reason you need to bypass the docs preprocessor, you can comment out `[preprocessor.zed_docs_preprocessor]` from the `book.toml`.
+If for some reason you need to bypass the docs preprocessor, you can comment out `[preprocessor.zzz_docs_preprocessor]` from the `book.toml`.
 
 ## Images and videos
 
@@ -52,7 +52,7 @@ When referencing keybindings or actions, use the following formats:
 
 ### Keybindings
 
-`{#kb scope::Action}` - e.g., `{#kb zed::OpenSettings}`.
+`{#kb scope::Action}` - e.g., `{#kb zzz::OpenSettings}`.
 
 This will output a code element like: `<code>Cmd + , | Ctrl + ,</code>`. We then use a client-side plugin to show the actual keybinding based on the user's platform.
 
@@ -68,9 +68,9 @@ Supported overlays: `jetbrains`.
 
 ### Actions
 
-`{#action scope::Action}` - e.g., `{#action zed::OpenSettings}`.
+`{#action scope::Action}` - e.g., `{#action zzz::OpenSettings}`.
 
-This will render a human-readable version of the action name, e.g., "zed: open settings", and will allow us to implement things like additional context on hover, etc.
+This will render a human-readable version of the action name, e.g., "zzz: open settings", and will allow us to implement things like additional context on hover, etc.
 
 ### Creating New Templates
 

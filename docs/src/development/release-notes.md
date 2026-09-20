@@ -5,7 +5,7 @@ description: "Guide to release notes for ZZZ development."
 
 # Release Notes
 
-ZZZ does not run hosted Zed preview or stable release automation. There is
+ZZZ does not run hosted ZZZ preview or stable release automation. There is
 no weekly preview-channel collector and no `zed.dev/releases` publication
 step for this repository.
 

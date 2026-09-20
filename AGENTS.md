@@ -1,8 +1,8 @@
 # ZZZ agent notes
 
 ## Workspace
-- Root is a Rust workspace; default member is `crates/zed`.
-- Main app entrypoint lives in `crates/zed`; common touchpoints are `crates/gpui`, `crates/editor`, `crates/project`, `crates/workspace`, `crates/vim`, `crates/lsp`, `crates/rpc`, and `crates/ui`.
+- Root is a Rust workspace; default member is `crates/zzz`.
+- Main app entrypoint lives in `crates/zzz`; common touchpoints are `crates/gpui`, `crates/editor`, `crates/project`, `crates/workspace`, `crates/vim`, `crates/lsp`, `crates/rpc`, and `crates/ui`.
 - Extensions live under `extensions/`; rebuild generated workflow files with `cargo xtask workflows`.
 - Docs live in `docs/` and have their own `docs/AGENTS.md`.
 

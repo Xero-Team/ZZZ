@@ -39,7 +39,7 @@ See the local build guides for system dependencies:
 - [Windows](./development/windows.md)
 
 To confirm auto-update stays off, open the Settings Editor
-({#kb zed::OpenSettings}) and search for `Auto Update` under General
+({#kb zzz::OpenSettings}) and search for `Auto Update` under General
 Settings.
 
 Or add this to your settings.json:

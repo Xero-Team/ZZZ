@@ -361,7 +361,7 @@ To configure command mnemonics, add the `command_aliases` key to your settings f
 ```json [settings]
 {
   "command_aliases": {
-    "zlog": "zed::OpenLog",
+    "zlog": "zzz::OpenLog",
     "newf": "workspace::NewFile",
     "diffs": "editor::ToggleSelectedDiffHunks",
     "crp": "workspace::CopyRelativePath",

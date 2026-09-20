@@ -1,6 +1,6 @@
 ---
 title: Building ZZZ for Windows
-description: "Guide to building zed for windows for ZZZ development."
+description: "Guide to building zzz for windows for ZZZ development."
 ---
 
 # Building ZZZ for Windows
@@ -195,7 +195,7 @@ Or, create a new `.cargo/config.toml` in the parent directory of the ZZZ repo (s
 upper_dir
 ├── .cargo          // <-- Make this folder
 │   └── config.toml // <-- Make this file
-└── zed
+└── zzz
     ├── .cargo
     │   └── config.toml
     └── crates
@@ -227,13 +227,13 @@ See upstream Zed issue [#12041](https://github.com/zed-industries/zed/issues/120
 Sometimes, depending on the security rules applied to your laptop, you may get the following error while compiling ZZZ:
 
 ```
-error: failed to run custom build command for `zed(C:\Users\USER\src\zed\crates\zed)`
+error: failed to run custom build command for `zzz(C:\Users\USER\src\zzz\crates\zzz)`
 
 Caused by:
-  process didn't exit successfully: `C:\Users\USER\src\zed\target\debug\build\zed-b24f1e9300107efc\build-script-build` (exit code: 1)
+  process didn't exit successfully: `C:\Users\USER\src\zzz\target\debug\build\zzz-b24f1e9300107efc\build-script-build` (exit code: 1)
   --- stdout
   cargo:rerun-if-changed=../../.git/logs/HEAD
-  cargo:rustc-env=ZED_COMMIT_SHA=25e2e9c6727ba9b77415588cfa11fd969612adb7
+  cargo:rustc-env=ZZZ_COMMIT_SHA=25e2e9c6727ba9b77415588cfa11fd969612adb7
   cargo:rustc-link-arg=/stack:8388608
   cargo:rerun-if-changed=resources/windows/app-icon.ico
   package.metadata.winresource does not exist
@@ -244,7 +244,7 @@ Caused by:
 warning: build failed, waiting for other jobs to finish...
 ```
 
-To fix this issue, manually set the `ZED_RC_TOOLKIT_PATH` environment variable to the RC toolkit path. Usually this is:
+To fix this issue, manually set the `ZZZ_RC_TOOLKIT_PATH` environment variable to the RC toolkit path. Usually this is:
 `C:\Program Files (x86)\Windows Kits\10\bin\<SDK_version>\x64`.
 
 See upstream Zed issue [#18393](https://github.com/zed-industries/zed/issues/18393) for more information.
@@ -254,7 +254,7 @@ See upstream Zed issue [#18393](https://github.com/zed-industries/zed/issues/183
 You may receive an error like the following when building
 
 ```
-error: failed to get `pet` as a dependency of package `languages v0.1.0 (D:\a\zed-windows-builds\zed-windows-builds\crates\languages)`
+error: failed to get `pet` as a dependency of package `languages v0.1.0 (D:\a\zzz-windows-builds\zzz-windows-builds\crates\languages)`
 
 Caused by:
   failed to load source for dependency `pet`
@@ -287,7 +287,7 @@ For more information on this, please see [win32 docs](https://learn.microsoft.co
 ZZZ currently uses Vulkan as its graphics API on Windows. If ZZZ fails to launch, Vulkan is a common cause.
 
 You can check the ZZZ log at:
-`C:\Users\YOU\AppData\Local\Zed\logs\Zed.log`
+`C:\Users\YOU\AppData\Local\ZZZ\logs\ZZZ.log`
 
 If you see messages like:
 

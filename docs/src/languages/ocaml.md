@@ -12,7 +12,7 @@ OCaml support is available through the [OCaml extension](https://github.com/zed-
 
 ## Setup Instructions
 
-If you have the development environment already setup, you can skip to [Launching ZZZ](#launching-zed)
+If you have the development environment already setup, you can skip to [Launching ZZZ](#launching-zzz)
 
 ### Using Opam
 
@@ -35,7 +35,7 @@ With that aside, we can now launch ZZZ. Given how the OCaml package manager work
 Once you have the cli, simply from a terminal, navigate to your project and run
 
 ```sh
-zed .
+zzz .
 ```
 
 You should now have ZZZ running with OCaml support, with no additional setup required.

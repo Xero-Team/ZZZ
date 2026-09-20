@@ -2,7 +2,7 @@
 
 > Zedless, Zeroed, Zen. — ZZZ, without the noise.
 
-![ZZZ Logo](crates/zed/resources/app-icon.png)
+![ZZZ Logo](crates/zzz/resources/app-icon.png)
 
 ZZZ is a community-maintained code editor,
 a high-performance code editor originally built by the creators of

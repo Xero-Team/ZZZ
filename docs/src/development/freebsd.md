@@ -1,6 +1,6 @@
 ---
 title: Building ZZZ for FreeBSD
-description: "Guide to building zed for freebsd for ZZZ development."
+description: "Guide to building zzz for freebsd for ZZZ development."
 ---
 
 # Building ZZZ for FreeBSD

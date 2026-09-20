@@ -19,7 +19,7 @@ TBD: Document the difference between Language servers
 ## Language servers
 
 By default ZZZ uses [vtsls](https://github.com/yioneko/vtsls) for TypeScript, TSX, and JavaScript files.
-Configure language servers in Settings ({#kb zed::OpenSettings}) under Languages > TypeScript/TSX/JavaScript, or add to your settings file:
+Configure language servers in Settings ({#kb zzz::OpenSettings}) under Languages > TypeScript/TSX/JavaScript, or add to your settings file:
 
 ```json [settings]
 {
@@ -37,7 +37,7 @@ Configure language servers in Settings ({#kb zed::OpenSettings}) under Languages
 }
 ```
 
-Prettier will also be used for TypeScript files by default. To disable this, configure in Settings ({#kb zed::OpenSettings}) under Languages > TypeScript, or add to your settings file:
+Prettier will also be used for TypeScript files by default. To disable this, configure in Settings ({#kb zzz::OpenSettings}) under Languages > TypeScript, or add to your settings file:
 
 ```json [settings]
 {
@@ -270,8 +270,8 @@ Given an externally-ran web server (e.g., with `npx serve` or `npx live-server`)
     "type": "chrome",
     "request": "launch",
     "url": "http://localhost:5500",
-    "program": "$ZED_FILE",
-    "webRoot": "${ZED_WORKTREE_ROOT}",
+    "program": "$ZZZ_FILE",
+    "webRoot": "${ZZZ_WORKTREE_ROOT}",
     "build": {
       "command": "npx",
       "args": ["tsc"]

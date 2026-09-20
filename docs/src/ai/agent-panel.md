@@ -194,12 +194,12 @@ OpenCode can update terminal titles automatically. For ZZZ
 notifications, add an OpenCode plugin that emits a terminal bell when
 OpenCode needs your attention.
 
-Create `.opencode/plugins/zed-bell.js` in your project, or
-`~/.config/opencode/plugins/zed-bell.js` to use it globally. OpenCode
+Create `.opencode/plugins/zzz-bell.js` in your project, or
+`~/.config/opencode/plugins/zzz-bell.js` to use it globally. OpenCode
 loads files in those directories automatically:
 
 ```js
-export const ZedBell = async ({ project, client, $, directory, worktree }) => {
+export const ZZZBell = async ({ project, client, $, directory, worktree }) => {
   return {
     event: async ({ event }) => {
       if (process.env.OPENCODE_CLIENT === "acp") return;
@@ -216,7 +216,7 @@ Restart OpenCode after adding the plugin.
 
 ### Pi Notifications {#pi-notifications}
 
-Pi can use an extension to emit a notification when it finishes a turn. Create `~/.pi/agent/extensions/zed-bell.ts` in your project, or `~/.pi/agent/extensions/zed-bell.ts` to use it globally:
+Pi can use an extension to emit a notification when it finishes a turn. Create `~/.pi/agent/extensions/zzz-bell.ts` in your project, or `~/.pi/agent/extensions/zzz-bell.ts` to use it globally:
 
 ```ts
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";

@@ -393,11 +393,11 @@ Note that a save will be triggered when an unsaved tab is closed, even if this i
 
 - Description: The name of a font to use for rendering text in the editor.
 - Setting: `buffer_font_family`
-- Default: `.ZedMono`. This currently aliases to [Lilex](https://lilex.myrt.co).
+- Default: `.ZZZMono`. This currently aliases to [Lilex](https://lilex.myrt.co).
 
 **Options**
 
-The name of any font family installed on the user's system, or `".ZedMono"`.
+The name of any font family installed on the user's system, or `".ZZZMono"`.
 
 ## Buffer Font Features
 
@@ -688,9 +688,9 @@ For the case of "open", regular selection behavior can be achieved by holding `a
       "**/*.crt",
       "**/.dev.vars",
       "**/secrets.yml",
-      "**/.zed/settings.json",
-      "/**/zed/settings.json",
-      "/**/zed/keymap.json"
+      "**/.zzz/settings.json",
+      "/**/zzz/settings.json",
+      "/**/zzz/keymap.json"
     ]
   }
 ```
@@ -739,7 +739,7 @@ For the case of "open", regular selection behavior can be achieved by holding `a
 
 - Description: A list of globs for which edit predictions should be disabled for. This list adds to a pre-existing, sensible default set of globs. Any additional ones you add are combined with them.
 - Setting: `disabled_globs`
-- Default: `["**/.env*", "**/*.pem", "**/*.key", "**/*.cert", "**/*.crt", "**/.dev.vars", "**/secrets.yml", "**/.zed/settings.json", "/**/zed/settings.json", "/**/zed/keymap.json"]`
+- Default: `["**/.env*", "**/*.pem", "**/*.key", "**/*.cert", "**/*.crt", "**/.dev.vars", "**/secrets.yml", "**/.zzz/settings.json", "/**/zzz/settings.json", "/**/zzz/keymap.json"]`
 
 **Options**
 
@@ -2015,7 +2015,7 @@ Non-negative `integer` values
 - Setting: `format_on_save`
 - Default: `off`
 
-Zed ships `"format_on_save": "on"` as a per-language default for Astro, Dart, EEx, Elixir, Elm, Go, GraphQL, HEEx, Kotlin, Rust, Starlark, and Zig. Every other language uses the top-level default above. Use [`languages`](#languages) to configure individual languages differently.
+ZZZ ships `"format_on_save": "on"` as a per-language default for Astro, Dart, EEx, Elixir, Elm, Go, GraphQL, HEEx, Kotlin, Rust, Starlark, and Zig. Every other language uses the top-level default above. Use [`languages`](#languages) to configure individual languages differently.
 
 **Options**
 
@@ -2064,7 +2064,7 @@ Zed ships `"format_on_save": "on"` as a per-language default for Astro, Dart, EE
 }
 ```
 
-Tools that rewrite files on disk instead of printing the formatted contents to stdout (such as `cargo fmt`) are not compatible with `"external"`: since Zed reads the formatted buffer from stdout, a formatter that emits nothing there will not update the buffer. For Rust, use `"formatter": "language_server"` or invoke `rustfmt` directly (which supports stdin/stdout via `--emit stdout`) instead of `cargo fmt`.
+Tools that rewrite files on disk instead of printing the formatted contents to stdout (such as `cargo fmt`) are not compatible with `"external"`: since ZZZ reads the formatted buffer from stdout, a formatter that emits nothing there will not update the buffer. For Rust, use `"formatter": "language_server"` or invoke `rustfmt` directly (which supports stdin/stdout via `--emit stdout`) instead of `cargo fmt`.
 
 3. External formatters may optionally include a `{buffer_path}` placeholder which at runtime will include the path of the buffer being formatted. Formatters operate by receiving file content via standard input, reformatting it and then outputting it to standard output and so normally don't know the filename of what they are formatting. Tools like Prettier support receiving the file path via a command line argument which can then used to impact formatting decisions.
 
@@ -2215,8 +2215,8 @@ Inherited patterns are inserted at `"..."`, and duplicates keep their first occu
 {
   "file_types": {
     "JSONC": [
-      "**/.zed/**/*.json",
-      "**/zed/**/*.json",
+      "**/.zzz/**/*.json",
+      "**/zzz/**/*.json",
       "**/ZZZ/**/*.json",
       "**/.vscode/**/*.json"
     ],
@@ -2778,7 +2778,7 @@ Customizing `hidden_files` replaces the default patterns. To hide `*.log` files 
 
 - Description: The icon theme setting can be specified in two forms - either as the name of an icon theme or as an object containing the `mode`, `dark`, and `light` icon themes for files/folders inside ZZZ.
 - Setting: `icon_theme`
-- Default: `Zed (Default)`
+- Default: `ZZZ (Default)`
 
 ### Icon Theme Object
 
@@ -2790,8 +2790,8 @@ Customizing `hidden_files` replaces the default patterns. To hide `*.log` files 
 {
   "icon_theme": {
     "mode": "system",
-    "dark": "Zed (Default)",
-    "light": "Zed (Default)"
+    "dark": "ZZZ (Default)",
+    "light": "ZZZ (Default)"
   }
 }
 ```
@@ -2810,8 +2810,8 @@ Customizing `hidden_files` replaces the default patterns. To hide `*.log` files 
 {
   "icon_theme": {
     "mode": "dark",
-    "dark": "Zed (Default)",
-    "light": "Zed (Default)"
+    "dark": "ZZZ (Default)",
+    "light": "ZZZ (Default)"
   }
 }
 ```
@@ -2822,8 +2822,8 @@ Customizing `hidden_files` replaces the default patterns. To hide `*.log` files 
 {
   "icon_theme": {
     "mode": "light",
-    "dark": "Zed (Default)",
-    "light": "Zed (Default)"
+    "dark": "ZZZ (Default)",
+    "light": "ZZZ (Default)"
   }
 }
 ```
@@ -2834,8 +2834,8 @@ Customizing `hidden_files` replaces the default patterns. To hide `*.log` files 
 {
   "icon_theme": {
     "mode": "system",
-    "dark": "Zed (Default)",
-    "light": "Zed (Default)"
+    "dark": "ZZZ (Default)",
+    "light": "ZZZ (Default)"
   }
 }
 ```
@@ -2844,7 +2844,7 @@ Customizing `hidden_files` replaces the default patterns. To hide `*.log` files 
 
 - Description: The name of the dark icon theme.
 - Setting: `dark`
-- Default: `Zed (Default)`
+- Default: `ZZZ (Default)`
 
 **Options**
 
@@ -2854,7 +2854,7 @@ Run the {#action icon_theme_selector::Toggle} action in the command palette to s
 
 - Description: The name of the light icon theme.
 - Setting: `light`
-- Default: `Zed (Default)`
+- Default: `ZZZ (Default)`
 
 **Options**
 
@@ -4493,7 +4493,7 @@ List of `integer` column numbers
 {
   "terminal": {
     "env": {
-      "ZED": "1",
+      "ZZZ": "1",
       "KEY": "value1:value2"
     }
   }
@@ -4855,7 +4855,7 @@ Example command to set the title: `echo -e "\e]2;New Title\007";`
   "terminal": {
     "working_directory": {
       "always": {
-        "directory": "~/zed/projects/"
+        "directory": "~/zzz/projects/"
       }
     }
   }
@@ -5592,14 +5592,14 @@ See the [debugger page](../debugger.md) for more information about debugging sup
 - Setting: `git.worktree_directory`
 - Default: `"../worktrees"`
 
-When the resolved directory falls outside the project root, the project's directory name is automatically appended so that sibling repos don't collide. For example, with the default `"../worktrees"` and a project at `~/code/worktrees/zed/`, worktrees are created under `~/code/worktrees/zed/`.
+When the resolved directory falls outside the project root, the project's directory name is automatically appended so that sibling repos don't collide. For example, with the default `"../worktrees"` and a project at `~/code/worktrees/zzz/`, worktrees are created under `~/code/worktrees/zzz/`.
 
 When the resolved directory is inside the project root, no extra component is added (it's already project-scoped).
 
 **Examples**:
 
 - `"../worktrees"` — `~/code/worktrees/<project>/` (default)
-- `<project>/.git/zed-worktrees/` — `<project>/.git/zed-worktrees/`
+- `<project>/.git/zzz-worktrees/` — `<project>/.git/zzz-worktrees/`
 - `"my-worktrees"` — `<project>/my-worktrees/`
 
 Trailing slashes are ignored.
@@ -5705,11 +5705,11 @@ Float values between `0.0` and `0.9`, where:
 
 - Description: The name of the font to use for text in the UI.
 - Setting: `ui_font_family`
-- Default: `.ZedSans`. This currently aliases to [IBM Plex](https://www.ibm.com/plex/).
+- Default: `.ZZZSans`. This currently aliases to [IBM Plex](https://www.ibm.com/plex/).
 
 **Options**
 
-The name of any font family installed on the system, `".ZedSans"` to use the ZZZ-provided default, or `".SystemUIFont"` to use the system's default UI font (on macOS and Windows).
+The name of any font family installed on the system, `".ZZZSans"` to use the ZZZ-provided default, or `".SystemUIFont"` to use the system's default UI font (on macOS and Windows).
 
 ## UI Font Features
 
@@ -5845,7 +5845,7 @@ To preview and enable a settings profile, open the command palette via {#kb comm
   "soft_wrap": "none",
 
   "buffer_font_size": 18,
-  "buffer_font_family": ".ZedMono",
+  "buffer_font_family": ".ZZZMono",
 
   "autosave": "on_focus_change",
   "format_on_save": "off",

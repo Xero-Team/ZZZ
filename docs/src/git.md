@@ -76,7 +76,7 @@ ZZZ displays diffs in two modes: **split** (side-by-side comparison) or **unifie
 
 #### Changing the diff view
 
-Open the Settings Editor ({#kb zed::OpenSettings}) and search for "diff view style". Select either **Split** or **Unified**.
+Open the Settings Editor ({#kb zzz::OpenSettings}) and search for "diff view style". Select either **Split** or **Unified**.
 
 To change the default, add this to your `settings.json`:
 
@@ -86,7 +86,7 @@ To change the default, add this to your `settings.json`:
 }
 ```
 
-See [Configuring ZZZ](./configuring-zed.md) for more about the Settings Editor.
+See [Configuring ZZZ](./configuring-zzz.md) for more about the Settings Editor.
 
 #### Split vs unified
 

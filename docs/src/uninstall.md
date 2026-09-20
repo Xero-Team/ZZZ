@@ -23,7 +23,7 @@ If you installed a local ZZZ.app build into Applications:
 If you installed ZZZ using Homebrew, use the following command:
 
 ```sh
-brew uninstall --cask zed
+brew uninstall --cask zzz
 ```
 
 ### Removing User Data (Optional)
@@ -36,7 +36,7 @@ To completely remove all ZZZ configuration files and data:
    - `~/Library/Application Support/ZZZ`
    - `~/Library/Saved Application State/dev.zzz.ZZZ.savedState`
    - `~/Library/Logs/ZZZ`
-   - `~/Library/Caches/dev.zed.Zed`
+   - `~/Library/Caches/dev.zzz.ZZZ`
    - `~/Library/Caches/ZZZ`
    - `~/.config/ZZZ`
    - `~/.local/state/ZZZ`

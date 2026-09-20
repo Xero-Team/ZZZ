@@ -73,7 +73,7 @@ You can skip step 1 and force using the system executable by setting `use_bundle
 
 ### Using `ruby-lsp`
 
-Configure language servers in Settings ({#kb zed::OpenSettings}) under Languages > Ruby, or add to your settings file:
+Configure language servers in Settings ({#kb zzz::OpenSettings}) under Languages > Ruby, or add to your settings file:
 
 ```json [settings]
 {
@@ -103,7 +103,7 @@ That disables `solargraph` and `rubocop` and uses `ruby-lsp`.
 
 The Ruby extension also provides support for `rubocop` language server for offense detection and autocorrection.
 
-Configure language servers in Settings ({#kb zed::OpenSettings}) under Languages > Ruby, or add to your settings file:
+Configure language servers in Settings ({#kb zzz::OpenSettings}) under Languages > Ruby, or add to your settings file:
 
 ```json [settings]
 {
@@ -223,7 +223,7 @@ Rubocop has unsafe autocorrection disabled by default. We can tell ZZZ to enable
 
 To enable Sorbet, add `\"sorbet\"` to the `language_servers` list for Ruby. You may want to disable other language servers if Sorbet is intended to be your primary LSP, or if you plan to use it alongside another LSP for specific features like type checking.
 
-Configure language servers in Settings ({#kb zed::OpenSettings}) under Languages > Ruby, or add to your settings file:
+Configure language servers in Settings ({#kb zzz::OpenSettings}) under Languages > Ruby, or add to your settings file:
 
 ```json [settings]
 {
@@ -249,7 +249,7 @@ For all aspects of installing Sorbet, setting it up in your project, and configu
 
 To enable Steep, add `\"steep\"` to the `language_servers` list for Ruby. You may need to adjust the order or disable other LSPs depending on your desired setup.
 
-Configure language servers in Settings ({#kb zed::OpenSettings}) under Languages > Ruby, or add to your settings file:
+Configure language servers in Settings ({#kb zzz::OpenSettings}) under Languages > Ruby, or add to your settings file:
 
 ```json [settings]
 {
@@ -313,15 +313,15 @@ To run tests in your Ruby project, you can set up custom tasks in your local `.Z
 ```json [tasks]
 [
   {
-    "label": "test $ZED_CUSTOM_RUBY_TEST_NAME -n /$ZED_CUSTOM_RUBY_TEST_NAME/",
+    "label": "test $ZZZ_CUSTOM_RUBY_TEST_NAME -n /$ZZZ_CUSTOM_RUBY_TEST_NAME/",
     "command": "bin/rails",
     "args": [
       "test",
-      "$ZED_RELATIVE_FILE",
+      "$ZZZ_RELATIVE_FILE",
       "-n",
-      "\"$ZED_CUSTOM_RUBY_TEST_NAME\""
+      "\"$ZZZ_CUSTOM_RUBY_TEST_NAME\""
     ],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZZZ_WORKTREE_ROOT",
     "tags": ["ruby-test"]
   }
 ]
@@ -329,22 +329,22 @@ To run tests in your Ruby project, you can set up custom tasks in your local `.Z
 
 ### Minitest
 
-Plain minitest does not support running tests by line number, only by name, so we need to use `$ZED_CUSTOM_RUBY_TEST_NAME` instead:
+Plain minitest does not support running tests by line number, only by name, so we need to use `$ZZZ_CUSTOM_RUBY_TEST_NAME` instead:
 
 ```json [tasks]
 [
   {
-    "label": "-Itest $ZED_CUSTOM_RUBY_TEST_NAME -n /$ZED_CUSTOM_RUBY_TEST_NAME/",
+    "label": "-Itest $ZZZ_CUSTOM_RUBY_TEST_NAME -n /$ZZZ_CUSTOM_RUBY_TEST_NAME/",
     "command": "bundle",
     "args": [
       "exec",
       "ruby",
       "-Itest",
-      "$ZED_RELATIVE_FILE",
+      "$ZZZ_RELATIVE_FILE",
       "-n",
-      "\"$ZED_CUSTOM_RUBY_TEST_NAME\""
+      "\"$ZZZ_CUSTOM_RUBY_TEST_NAME\""
     ],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZZZ_WORKTREE_ROOT",
     "tags": ["ruby-test"]
   }
 ]
@@ -355,10 +355,10 @@ Plain minitest does not support running tests by line number, only by name, so w
 ```json [tasks]
 [
   {
-    "label": "test $ZED_ROW:$ZED_ROW",
+    "label": "test $ZZZ_ROW:$ZZZ_ROW",
     "command": "bundle",
-    "args": ["exec", "rspec", "\"$ZED_ROW:$ZED_ROW\""],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "args": ["exec", "rspec", "\"$ZZZ_ROW:$ZZZ_ROW\""],
+    "cwd": "$ZZZ_WORKTREE_ROOT",
     "tags": ["ruby-test"]
   }
 ]
@@ -380,8 +380,8 @@ The Ruby extension provides a debug adapter for debugging Ruby code. ZZZ's name 
     "label": "Debug current file",
     "adapter": "rdbg",
     "request": "launch",
-    "script": "$ZED_FILE",
-    "cwd": "$ZED_WORKTREE_ROOT"
+    "script": "$ZZZ_FILE",
+    "cwd": "$ZZZ_WORKTREE_ROOT"
   }
 ]
 ```
@@ -396,7 +396,7 @@ The Ruby extension provides a debug adapter for debugging Ruby code. ZZZ's name 
     "request": "launch",
     "command": "./bin/rails",
     "args": ["server"],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZZZ_WORKTREE_ROOT",
     "env": {
       "RUBY_DEBUG_OPEN": "true"
     }
@@ -410,7 +410,7 @@ The Ruby extension provides a debug adapter for debugging Ruby code. ZZZ's name 
 
 To format ERB templates, you can use the `erb-formatter` formatter. This formatter uses the [`erb-formatter`](https://rubygems.org/gems/erb-formatter) gem to format ERB templates.
 
-Configure formatting in Settings ({#kb zed::OpenSettings}) under Languages > HTML+ERB, or add to your settings file:
+Configure formatting in Settings ({#kb zzz::OpenSettings}) under Languages > HTML+ERB, or add to your settings file:
 
 ```json [settings]
 {

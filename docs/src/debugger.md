@@ -64,7 +64,7 @@ ZZZ will also load debug configurations from `.vscode/launch.json`, and show the
 
 #### Global debug configurations
 
-If you run the same launch profiles across multiple projects, you can store them once in your user configuration. Invoke {#action zed::OpenDebugTasks} from the command palette to open the global `debug.json` file; ZZZ creates it next to your user `settings.json` and keeps it in sync with the debugger UI. The file lives at:
+If you run the same launch profiles across multiple projects, you can store them once in your user configuration. Invoke {#action zzz::OpenDebugTasks} from the command palette to open the global `debug.json` file; ZZZ creates it next to your user `settings.json` and keeps it in sync with the debugger UI. The file lives at:
 
 - **macOS:** `~/Library/Application Support/ZZZ/debug.json`
 - **Linux/BSD:** `~/.config/ZZZ/debug.json` (falls back to `~/.config/ZZZ/debug.json`)
@@ -101,8 +101,8 @@ All other fields are provided by the debug adapter and can contain [task variabl
     "request": "launch",
     // The program to debug. This field supports path resolution with ~ or . symbols.
     "program": "path_to_program",
-    // cwd: defaults to the current working directory of your project ($ZED_WORKTREE_ROOT)
-    "cwd": "$ZED_WORKTREE_ROOT"
+    // cwd: defaults to the current working directory of your project ($ZZZ_WORKTREE_ROOT)
+    "cwd": "$ZZZ_WORKTREE_ROOT"
   }
 ]
 ```
@@ -137,7 +137,7 @@ Build tasks can also refer to the existing tasks by unsubstituted label:
     "adapter": "CodeLLDB",
     "program": "path_to_program",
     "request": "launch",
-    "build": "my build task" // Or "my build task for $ZED_FILE"
+    "build": "my build task" // Or "my build task for $ZZZ_FILE"
   }
 ]
 ```

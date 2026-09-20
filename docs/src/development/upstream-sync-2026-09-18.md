@@ -61,7 +61,7 @@ queried live head.
 | d12e456b | B     | 0b35237d     | Raise Unix `RLIMIT_NOFILE` at startup; omit diverged `prevent_root_execution` copy.               |
 | fffb52c6 | C     | --           | Zed Pro upgrade prompts and payment-error telemetry.                                              |
 | 5b4a2153 | B     | 69ef4cd7     | `all_font_names` lists platform families only, without fallback / `.SystemUIFont`.                |
-| a936ce01 | C     | --           | Upstream `.zed/settings.json` inherit syntax for native-agent eval fixtures.                      |
+| a936ce01 | C     | --           | Upstream `.zzz/settings.json` inherit syntax for native-agent eval fixtures.                      |
 | fb38178d | B     | d8ae5c81     | Headless Metal `render_scene_to_image` runs in an autorelease pool.                               |
 | d2074f4e | C     | --           | `PowerRequest` UAF fix; ZZZ `gpui_windows` has no power-request path.                             |
 | a9cdfc99 | A     | --           | Already equivalent: migrator tests already use raw strings / `unindent`, not `indoc`.             |
@@ -503,7 +503,7 @@ Actions, guild, or release metadata.
 
 ### b0db8327
 
-Follow upstream app version to 1.22.0 in `crates/zed` and `Cargo.lock`.
+Follow upstream app version to 1.22.0 in `crates/zzz` and `Cargo.lock`.
 Package name stays `zzz`. No other release-channel metadata was
 imported.
 
@@ -783,7 +783,7 @@ Work remains on `sync/upstream-2026-09-18` and has not been merged to
 ## Follow-up: v1.22.0 version bump
 
 `b0db8327` was reclassified from C to B so the local app version tracks
-upstream. Local commit `57b5799a` updates `crates/zed` and `Cargo.lock`
+upstream. Local commit `57b5799a` updates `crates/zzz` and `Cargo.lock`
 from 1.20.0 to 1.22.0.
 
 ```text

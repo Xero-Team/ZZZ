@@ -6,7 +6,7 @@ description: "Configure which folders ZZZ trusts for running code and extensions
 # ZZZ and trusted worktrees
 
 A worktree in ZZZ is either a directory or a single file that ZZZ opens as a standalone "project".
-ZZZ opens a worktree each time you run `zed some/path`, drag a file or directory into ZZZ, or open your user settings file.
+ZZZ opens a worktree each time you run `zzz some/path`, drag a file or directory into ZZZ, or open your user settings file.
 
 > Note: This is broader than a [Git worktree](./git.md#git-worktrees). A Git worktree is a linked checkout managed by Git; ZZZ's trust model applies to every opened file or folder root, including Git worktrees.
 
@@ -35,7 +35,7 @@ Restricted Mode prevents:
 
 ## Configuring broad worktree trust
 
-By default, ZZZ does not trust new worktrees. Users must trust each new worktree individually. Though not recommended, users can trust all worktrees with this setting ([how to edit](./configuring-zed.md#settings-files)):
+By default, ZZZ does not trust new worktrees. Users must trust each new worktree individually. Though not recommended, users can trust all worktrees with this setting ([how to edit](./configuring-zzz.md#settings-files)):
 
 ```json [settings]
 "session": {

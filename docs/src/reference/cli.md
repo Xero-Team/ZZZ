@@ -87,10 +87,10 @@ zzz -r ~/projects/different-project
 
 ### `-e`, `--existing`
 
-Open paths in an existing Zed window instead of creating a new one:
+Open paths in an existing ZZZ window instead of creating a new one:
 
 ```sh
-zed -e myfile.txt
+zzz -e myfile.txt
 ```
 
 By default (without `-n`, `-a`, `-r`, or `-e`), directories open in the current window's sidebar. You can change this default with the `cli_default_open_behavior` setting. See [Windows & Projects](../windows-and-projects.md) for more details.

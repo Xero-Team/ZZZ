@@ -18,7 +18,7 @@ After installation, ZZZ checks for updates automatically and prompts you when a 
 You can also install ZZZ using Homebrew:
 
 ```sh
-brew install --cask zed
+brew install --cask zzz
 ```
 
 ### Building from Source

@@ -13,7 +13,7 @@ Deno support is available through the [Deno extension](https://github.com/zed-ex
 
 To use the Deno Language Server with TypeScript and TSX files, you will likely wish to disable the default language servers and enable Deno.
 
-Configure language servers and formatters in Settings ({#kb zed::OpenSettings}) under Languages > JavaScript/TypeScript/TSX, or add to your settings file:
+Configure language servers and formatters in Settings ({#kb zzz::OpenSettings}) under Languages > JavaScript/TypeScript/TSX, or add to your settings file:
 
 ```json [settings]
 {
@@ -66,7 +66,7 @@ TBD: Deno TypeScript REPL instructions [docs/repl#typescript-deno](../repl.md#ty
 
 ## Configuration completion
 
-To get completions for `deno.json` or `package.json`, add the following to your settings file ([how to edit](../configuring-zed.md#settings-files)). For more details, see [JSON](./json.md).
+To get completions for `deno.json` or `package.json`, add the following to your settings file ([how to edit](../configuring-zzz.md#settings-files)). For more details, see [JSON](./json.md).
 
 ```json [settings]
 "lsp": {
@@ -105,8 +105,8 @@ To debug deno programs, add this to `.ZZZ/debug.json`
     "label": "Deno",
     "request": "launch",
     "type": "pwa-node",
-    "cwd": "$ZED_WORKTREE_ROOT",
-    "program": "$ZED_FILE",
+    "cwd": "$ZZZ_WORKTREE_ROOT",
+    "program": "$ZZZ_FILE",
     "runtimeExecutable": "deno",
     "runtimeArgs": ["run", "--allow-all", "--inspect-wait"],
     "attachSimplePort": 9229
@@ -122,7 +122,7 @@ To run deno tasks like tests from the ui, add this to `.ZZZ/tasks.json`
 [
   {
     "label": "deno test",
-    "command": "deno test -A $ZED_FILE",
+    "command": "deno test -A $ZZZ_FILE",
     "tags": ["js-test"]
   }
 ]

@@ -30,7 +30,7 @@ Examples include Context7, GitHub, Puppeteer, Brave Search, Prisma, Figma, and o
 ### As Custom Servers
 
 Creating an extension is not the only way to use MCP servers in ZZZ.
-You can connect them by adding their commands directly to your settings file ([how to edit](../configuring-zed.md#settings-files)), like so:
+You can connect them by adding their commands directly to your settings file ([how to edit](../configuring-zzz.md#settings-files)), like so:
 
 ```json [settings]
 {

@@ -19,7 +19,7 @@ account; remote providers use credentials that you enter explicitly. Once a
 provider is configured, predictions appear as you type.
 
 Open the [Settings Editor](zzz://settings/edit_predictions.providers)
-({#kb zed::OpenSettings}) and search for `edit_predictions`. Prefer
+({#kb zzz::OpenSettings}) and search for `edit_predictions`. Prefer
 `ollama` or `open_ai_compatible_api` pointed at a local server. The default
 is no hosted provider.
 
@@ -78,7 +78,7 @@ In `eager` mode, you can also use the `tab` key to accept edit predictions, unle
 
 To always use `tab` for accepting edit predictions, regardless of whether the LSP completions menu is open, you can add the following to your keymap:
 
-Open the keymap editor with {#action zed::OpenKeymap} ({#kb zed::OpenKeymap}), search for `AcceptEditPrediction`, right click on the binding for `tab` and hit `edit`. Then change the context the binding is active in to just `Editor && edit_prediction` and save it.
+Open the keymap editor with {#action zzz::OpenKeymap} ({#kb zzz::OpenKeymap}), search for `AcceptEditPrediction`, right click on the binding for `tab` and hit `edit`. Then change the context the binding is active in to just `Editor && edit_prediction` and save it.
 
 Alternatively, you can put the following in your `keymap.json`:
 
@@ -99,7 +99,7 @@ After that, {#kb editor::ComposeCompletion} remains available for accepting LSP 
 
 To stop using `tab` for accepting edit predictions and always use `alt-tab` instead, unbind the default `tab` binding in the eager edit prediction context:
 
-Open the keymap editor with {#action zed::OpenKeymap} ({#kb zed::OpenKeymap}), search for `AcceptEditPrediction`, right click on the binding for `tab` and delete it.
+Open the keymap editor with {#action zzz::OpenKeymap} ({#kb zzz::OpenKeymap}), search for `AcceptEditPrediction`, right click on the binding for `tab` and delete it.
 
 Alternatively, you can put the following in your `keymap.json`:
 
@@ -120,7 +120,7 @@ After that, `alt-tab` remains available for accepting edit predictions, and on L
 
 To move both default accept bindings to something else, unbind them and add your replacement:
 
-Open the keymap editor with {#action zed::OpenKeymap} ({#kb zed::OpenKeymap}), search for `AcceptEditPrediction`, right click on the binding for `tab` and delete it. Then right click on the binding for `alt-tab`, select "Edit", and record your desired keystrokes before hitting saving.
+Open the keymap editor with {#action zzz::OpenKeymap} ({#kb zzz::OpenKeymap}), search for `AcceptEditPrediction`, right click on the binding for `tab` and delete it. Then right click on the binding for `alt-tab`, select "Edit", and record your desired keystrokes before hitting saving.
 
 Alternatively, you can put the following in your `keymap.json`:
 
@@ -159,7 +159,7 @@ Alternatively, consider [using Subtle Mode](#switching-modes).
 
 ### On Buffers
 
-To not have predictions appear automatically as you type, set this in your settings file ([how to edit](../configuring-zed.md#settings-files)):
+To not have predictions appear automatically as you type, set this in your settings file ([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json [settings]
 {
@@ -172,7 +172,7 @@ Still, you can trigger edit predictions manually by executing {#action editor::S
 
 ### For Specific Languages
 
-To not have predictions appear automatically as you type when working with a specific language, set this in your settings file ([how to edit](../configuring-zed.md#settings-files)):
+To not have predictions appear automatically as you type when working with a specific language, set this in your settings file ([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json [settings]
 {
@@ -186,7 +186,7 @@ To not have predictions appear automatically as you type when working with a spe
 
 ### In Specific Directories
 
-To disable edit predictions for specific directories or files, set this in your settings file ([how to edit](../configuring-zed.md#settings-files)):
+To disable edit predictions for specific directories or files, set this in your settings file ([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json [settings]
 {
@@ -218,7 +218,7 @@ GitHub Copilot is optional. Select it only after you decide to use a
 Copilot subscription. It is not a getting-started path.
 
 To use GitHub Copilot as your provider, set this in your settings file
-([how to edit](../configuring-zed.md#settings-files)):
+([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json [settings]
 {
@@ -232,7 +232,7 @@ To sign in to GitHub Copilot, click on the Copilot icon in the status bar. A pop
 
 #### Using GitHub Copilot Enterprise
 
-If your organization uses GitHub Copilot Enterprise, you can configure ZZZ to use your enterprise instance by specifying the enterprise URI in your settings file ([how to edit](../configuring-zed.md#settings-files)):
+If your organization uses GitHub Copilot Enterprise, you can configure ZZZ to use your enterprise instance by specifying the enterprise URI in your settings file ([how to edit](../configuring-zzz.md#settings-files)):
 
 ```json [settings]
 {

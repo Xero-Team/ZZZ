@@ -99,7 +99,7 @@ See [Clang-Format Style Options](https://clang.llvm.org/docs/ClangFormatStyleOpt
 
 You can trigger formatting via {#kb editor::Format} or the `editor: format` action from the command palette or by enabling format on save.
 
-Configure formatting in Settings ({#kb zed::OpenSettings}) under Languages > C++, or add to your settings file:
+Configure formatting in Settings ({#kb zzz::OpenSettings}) under Languages > C++, or add to your settings file:
 
 ```json [settings]
   "languages": {
@@ -157,9 +157,9 @@ You can use CodeLLDB or GDB to debug native binaries. (Make sure that your build
     "build": {
       "command": "make",
       "args": ["-j8"],
-      "cwd": "$ZED_WORKTREE_ROOT"
+      "cwd": "$ZZZ_WORKTREE_ROOT"
     },
-    "program": "$ZED_WORKTREE_ROOT/build/prog",
+    "program": "$ZZZ_WORKTREE_ROOT/build/prog",
     "request": "launch",
     "adapter": "CodeLLDB"
   }

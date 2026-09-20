@@ -35,7 +35,7 @@ This maps familiar shortcuts like `Shift Shift` for Search Everywhere, `Cmd+O` f
 
 ## Set Up Editor Preferences
 
-You can configure most settings in the Settings Editor ({#kb zed::OpenSettings}). For advanced settings, run `zzz: open settings file` from the Command Palette to edit your settings file directly.
+You can configure most settings in the Settings Editor ({#kb zzz::OpenSettings}). For advanced settings, run `zzz: open settings file` from the Command Palette to edit your settings file directly.
 
 Settings RustRover users typically configure first:
 

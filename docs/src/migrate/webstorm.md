@@ -27,7 +27,7 @@ current directory in ZZZ.
 
 If you're coming from WebStorm, the fastest way to feel at home is to use the JetBrains keymap. During onboarding, you can select it as your base keymap. If you missed that step, you can change it anytime:
 
-1. Open Settings with {#kb zed::OpenSettings}
+1. Open Settings with {#kb zzz::OpenSettings}
 2. Search for `Base Keymap`
 3. Select `JetBrains`
 
@@ -35,7 +35,7 @@ This maps familiar shortcuts like {#kb:jetbrains project_symbols::Toggle} for Go
 
 ## Set Up Editor Preferences
 
-You can configure most settings in the Settings Editor ({#kb zed::OpenSettings}). For advanced settings, run `zzz: open settings file` from the Command Palette to edit your settings file directly.
+You can configure most settings in the Settings Editor ({#kb zzz::OpenSettings}). For advanced settings, run `zzz: open settings file` from the Command Palette to edit your settings file directly.
 
 Settings WebStorm users typically configure first:
 
@@ -190,7 +190,7 @@ What this means in practice:
   },
   {
     "label": "test current file",
-    "command": "npm test -- $ZED_FILE"
+    "command": "npm test -- $ZZZ_FILE"
   }
 ]
 ```
@@ -254,7 +254,7 @@ For more control, create a `.ZZZ/debug.json` file:
   {
     "label": "Debug Current File",
     "adapter": "JavaScript",
-    "program": "$ZED_FILE",
+    "program": "$ZZZ_FILE",
     "request": "launch"
   },
   {
@@ -331,7 +331,7 @@ optional after you configure it. There is no ZZZ Pro plan.
 
 ### Configuring a local provider
 
-1. Open Settings with {#kb zed::OpenSettings}
+1. Open Settings with {#kb zzz::OpenSettings}
 2. Navigate to **AI → Edit Predictions**
 3. Click **Configure** next to "Configure Providers"
 4. Point the provider at a local Ollama or llama.cpp endpoint

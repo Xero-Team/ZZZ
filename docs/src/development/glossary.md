@@ -1,6 +1,6 @@
 ---
 title: "ZZZ Development: Glossary"
-description: "Guide to zed development: glossary for ZZZ development."
+description: "Guide to zzz development: glossary for ZZZ development."
 ---
 
 # ZZZ Development: Glossary
@@ -14,7 +14,7 @@ TBD: Glossary Improvement
 
 Questions:
 
-- Can we generate this list from doc comments throughout zed?
+- Can we generate this list from doc comments throughout zzz?
 - We should have a section that shows the various UI parts and their names. (Can't do that in the channel.)
 -->
 
@@ -79,7 +79,7 @@ h_flex()
 - `Modal`: A UI element that floats on top of the rest of the UI
 - `Picker`: A struct representing a list of items floating on top of the UI (Modal). You can select an item and confirm. What happens on select or confirm is determined by the picker's delegate. (The 'Modal' in the image below is a picker.)
 - `PickerDelegate`: A trait used to specialize behavior for a `Picker`. The `Picker` stores the `PickerDelegate` in the field delegate.
-- `Center`: The middle of the zed window, the center is split into multiple `Pane`s. In the codebase this is a field on the `Workspace` struct. (see image below).
+- `Center`: The middle of the zzz window, the center is split into multiple `Pane`s. In the codebase this is a field on the `Workspace` struct. (see image below).
 - `Pane`: An area in the `Center` where we can place items, such as an editor, multi-buffer or terminal (see image below).
 - `Panel`: An `Entity` implementing the `Panel` trait. Panels can be placed in a `Dock`. In the image below: `ProjectPanel` is in the left dock, `DebugPanel` is in the bottom dock, and `AgentPanel` is in the right dock. `Editor` does not implement `Panel`.
 - `Dock`: A UI element similar to a `Pane` that can be opened and hidden. Up to three docks can be open at once: left, right, and bottom. A dock contains one or more `Panel`s, not `Pane`s.
@@ -106,8 +106,8 @@ h_flex()
 ## Collab
 
 - `Collab session`: Multiple users working in a shared `Project`
-- `Upstream client`: The zed client which has shared their workspace
-- `Downstream client`: The zed client joining a shared workspace
+- `Upstream client`: The zzz client which has shared their workspace
+- `Downstream client`: The zzz client joining a shared workspace
 
 ## Debugger
 

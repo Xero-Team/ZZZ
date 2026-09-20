@@ -61,7 +61,7 @@ Open ZZZ.
 From the menu bar, choose File > Open Folder, or launch from the terminal:
 
 ```bash
-zed path/to/your/project
+zzz path/to/your/project
 ```
 
 ZZZ will recognize `.py` files automatically using its native tree-sitter-python parser, with no plugins or manual setup required.
@@ -82,7 +82,7 @@ Other built-in language servers are:
 
 These are disabled by default, but can be enabled in your settings.
 
-Configure language servers in Settings ({#kb zed::OpenSettings}) under Languages > Python, or add to your settings file:
+Configure language servers in Settings ({#kb zzz::OpenSettings}) under Languages > Python, or add to your settings file:
 
 ```json [settings]
 {
@@ -203,7 +203,7 @@ ZZZ uses [Ruff](https://github.com/astral-sh/ruff) for formatting and linting Py
 
 Formatting in ZZZ follows a two-phase pipeline: first, code actions on format (`code_actions_on_format`) are executed, followed by the configured formatter.
 
-Configure formatting in Settings ({#kb zed::OpenSettings}) under Languages > Python, or add to your settings file:
+Configure formatting in Settings ({#kb zzz::OpenSettings}) under Languages > Python, or add to your settings file:
 
 ```json [settings]
 {
@@ -224,7 +224,7 @@ Configure formatting in Settings ({#kb zed::OpenSettings}) under Languages > Pyt
 
 These two phases are independent. For example, if you prefer [Black](https://github.com/psf/black) for code formatting, but want to keep Ruff's import sorting, you only need to change the formatter phase.
 
-Configure in Settings ({#kb zed::OpenSettings}) under Languages > Python, or add to your settings file:
+Configure in Settings ({#kb zzz::OpenSettings}) under Languages > Python, or add to your settings file:
 
 ```json [settings]
 {
@@ -250,7 +250,7 @@ To completely switch to another tool and prevent Ruff from modifying your code a
 
 To prevent any formatting actions when you save, you can disable format-on-save for Python files.
 
-Configure in Settings ({#kb zed::OpenSettings}) under Languages > Python, or add to your settings file:
+Configure in Settings ({#kb zzz::OpenSettings}) under Languages > Python, or add to your settings file:
 
 ```json [settings]
 {
@@ -343,7 +343,7 @@ For reusable setups, create a `.ZZZ/debug.json` file in your project root. This 
   {
     "label": "Python Active File",
     "adapter": "Debugpy",
-    "program": "$ZED_FILE",
+    "program": "$ZZZ_FILE",
     "request": "launch"
   }
 ]
@@ -377,7 +377,7 @@ requirements.txt
     "adapter": "Debugpy",
     "request": "launch",
     "module": "app",
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZZZ_WORKTREE_ROOT",
     "env": {
       "FLASK_APP": "app",
       "FLASK_DEBUG": "1"
@@ -437,7 +437,7 @@ Issues with Python in ZZZ typically involve virtual environments, language serve
 
 If a language server isn't responding or features like diagnostics or autocomplete aren't available:
 
-- Check your ZZZ log (using the {#action zed::OpenLog} action) for errors related to the language server you're trying to use. This is where you're likely to find useful information if the language server failed to start up at all.
+- Check your ZZZ log (using the {#action zzz::OpenLog} action) for errors related to the language server you're trying to use. This is where you're likely to find useful information if the language server failed to start up at all.
 - Use the language server logs view to understand the lifecycle of the affected language server. You can access this view using the {#action dev::OpenLanguageServerLogs} action, or by clicking the lightning bolt icon in the status bar and selecting your language server. The most useful pieces of data in this view are:
   - "Server Logs", which shows any errors printed by the language server
   - "Server Info", which shows details about how the language server was started

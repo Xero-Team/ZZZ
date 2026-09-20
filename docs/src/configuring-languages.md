@@ -452,7 +452,7 @@ Create custom themes by creating a JSON file in `~/.config/ZZZ/themes/`. ZZZ wil
 
 ### Using Theme Extensions
 
-ZZZ supports theme extensions. Browse and install theme extensions from the Extensions panel ({#kb zed::Extensions}).
+ZZZ supports theme extensions. Browse and install theme extensions from the Extensions panel ({#kb zzz::Extensions}).
 
 To create your own theme extension, refer to the [Developing Theme Extensions](./extensions/themes.md) guide.
 
