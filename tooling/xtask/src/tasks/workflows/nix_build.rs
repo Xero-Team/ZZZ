@@ -28,7 +28,7 @@ pub(crate) fn build_nix(
             "cachix-action",
             "0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad", // v16
         )
-        .add_with(("name", "zed"))
+        .add_with(("name", "zzz"))
         .add_with(("authToken", vars::CACHIX_AUTH_TOKEN))
         .add_with(("cachixArgs", "-v"));
         if let Some(cachix_filter) = cachix_filter {
@@ -80,11 +80,11 @@ pub(crate) fn build_nix(
         .continue_on_error(true)
         .with_repository_owner_guard()
         .runs_on(runner)
-        .add_env(("ZED_CLIENT_CHECKSUM_SEED", vars::ZED_CLIENT_CHECKSUM_SEED))
-        .add_env(("ZED_MINIDUMP_ENDPOINT", vars::ZED_SENTRY_MINIDUMP_ENDPOINT))
+        .add_env(("ZZZ_CLIENT_CHECKSUM_SEED", vars::ZZZ_CLIENT_CHECKSUM_SEED))
+        .add_env(("ZZZ_MINIDUMP_ENDPOINT", vars::ZZZ_SENTRY_MINIDUMP_ENDPOINT))
         .add_env((
-            "ZED_CLOUD_PROVIDER_ADDITIONAL_MODELS_JSON",
-            vars::ZED_CLOUD_PROVIDER_ADDITIONAL_MODELS_JSON,
+            "ZZZ_CLOUD_PROVIDER_ADDITIONAL_MODELS_JSON",
+            vars::ZZZ_CLOUD_PROVIDER_ADDITIONAL_MODELS_JSON,
         ))
         .add_env(("GIT_LFS_SKIP_SMUDGE", "1"))
         .add_step(steps::checkout_repo());

@@ -83,13 +83,13 @@ let
   gpu-lib = if withGLES then libglvnd else vulkan-loader;
   commonArgs =
     let
-      zedCargoLock = builtins.fromTOML (builtins.readFile ../crates/zed/Cargo.toml);
+      zzzCargoLock = builtins.fromTOML (builtins.readFile ../crates/zzz/Cargo.toml);
       stdenv' = stdenv;
     in
     rec {
       pname = "zed-editor";
       version =
-        zedCargoLock.package.version
+        zzzCargoLock.package.version
         + "-nightly"
         + lib.optionalString (commitSha != null) "+${builtins.substring 0 7 commitSha}";
       src = builtins.path {
@@ -228,9 +228,9 @@ let
             ../assets/fonts/ibm-plex-sans
           ];
         };
-        ZED_UPDATE_EXPLANATION = "ZZZ has been installed using Nix. Auto-updates have thus been disabled.";
+        ZZZ_UPDATE_EXPLANATION = "ZZZ has been installed using Nix. Auto-updates have thus been disabled.";
         RELEASE_VERSION = version;
-        ZED_COMMIT_SHA = lib.optionalString (commitSha != null) "${commitSha}";
+        ZZZ_COMMIT_SHA = lib.optionalString (commitSha != null) "${commitSha}";
         PROTOC = "${protobuf}/bin/protoc";
 
         CARGO_PROFILE = profile;
@@ -298,7 +298,7 @@ craneLib.buildPackage (
     # TODO: put this in a separate derivation that depends on src to avoid running it on every build
     preBuild = ''
       ALLOW_MISSING_LICENSES=yes bash script/generate-licenses
-      echo nightly > crates/zed/RELEASE_CHANNEL
+      echo nightly > crates/zzz/RELEASE_CHANNEL
     '';
 
     installPhase =
@@ -306,7 +306,7 @@ craneLib.buildPackage (
         ''
           runHook preInstall
 
-          pushd crates/zed
+          pushd crates/zzz
           sed -i "s/package.metadata.bundle-nightly/package.metadata.bundle/" Cargo.toml
           export CARGO_BUNDLE_SKIP_BUILD=true
           app_path="$(cargo bundle --profile $CARGO_PROFILE | xargs)"
@@ -334,12 +334,12 @@ craneLib.buildPackage (
           ln -s $out/bin/zzz $out/bin/zeditor  # home-manager expects the CLI binary to be here
 
 
-          install -D "crates/zed/resources/app-icon-nightly@2x.png" \
+          install -D "crates/zzz/resources/app-icon-nightly@2x.png" \
             "$out/share/icons/hicolor/1024x1024@2x/apps/zzz.png"
-          install -D crates/zed/resources/app-icon-nightly.png \
+          install -D crates/zzz/resources/app-icon-nightly.png \
             $out/share/icons/hicolor/512x512/apps/zzz.png
 
-          # TODO: icons should probably be named "zed-nightly"
+          # TODO: icons should probably be named "zzz-nightly"
           (
             export DO_STARTUP_NOTIFY="true"
             export APP_CLI="zzz"
@@ -347,7 +347,7 @@ craneLib.buildPackage (
             export APP_NAME="ZZZ Nightly"
             export APP_ARGS="%U"
             mkdir -p "$out/share/applications"
-            ${lib.getExe envsubst} < "crates/zed/resources/zed.desktop.in" > "$out/share/applications/dev.zzz.ZZZ-Nightly.desktop"
+            ${lib.getExe envsubst} < "crates/zzz/resources/zzz.desktop.in" > "$out/share/applications/dev.zzz.ZZZ-Nightly.desktop"
             chmod +x "$out/share/applications/dev.zzz.ZZZ-Nightly.desktop"
           )
 

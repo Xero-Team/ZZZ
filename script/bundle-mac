@@ -10,7 +10,7 @@ local_install=false
 can_code_sign=false
 
 # This must match the team in the provisioning profile.
-IDENTITY="Zed Industries, Inc."
+IDENTITY="Xero Team"
 APPLE_NOTARIZATION_TEAM="MQ55VZLNZQ"
 
 # Function for displaying help info
@@ -52,12 +52,12 @@ shift $((OPTIND-1))
 
 
 # Get release channel
-pushd crates/zed
+pushd crates/zzz
 channel=$(<RELEASE_CHANNEL)
-export ZED_RELEASE_CHANNEL="${channel}"
+export ZZZ_RELEASE_CHANNEL="${channel}"
 popd
 
-export ZED_BUNDLE=true
+export ZZZ_BUNDLE=true
 
 cargo_bundle_version=$(cargo -q bundle --help 2>&1 | head -n 1 || echo "")
 if [ "$cargo_bundle_version" != "cargo-bundle v0.6.1-zed" ]; then
@@ -89,7 +89,7 @@ script/generate-licenses
 
 rustup target add $target_triple
 
-echo "Compiling zed binaries"
+echo "Compiling zzz binaries"
 # Build remote_server first so the editor can embed the archives.
 export ZZZ_BUILDING_REMOTE_SERVER=1
 cargo build ${build_flag} --package remote_server --target $target_triple
@@ -149,7 +149,7 @@ export ZZZ_EMBED_REMOTE_SERVER_DIR="$(cd target && pwd)"
 cargo build ${build_flag} --package zzz --package cli --target $target_triple
 
 echo "Creating application bundle"
-pushd crates/zed
+pushd crates/zzz
 manifest_path="Cargo.toml"
 manifest_backup_path="$(mktemp)"
 cp "${manifest_path}" "${manifest_backup_path}"
@@ -158,7 +158,7 @@ sed \
     "s/package.metadata.bundle-${channel}/package.metadata.bundle/" \
     "${manifest_path}"
 
-# `--bin zzz` is required because crates/zed also has zed_visual_test_runner.
+# `--bin zzz` is required because crates/zzz also has zzz_visual_test_runner.
 # cargo-bundle then uses [package.metadata.bundle.bin.zzz], not the parent
 # [package.metadata.bundle] table. That bin table must stay in sync or the
 # generated Info.plist becomes a stub (`zzz.zzz`) and the macOS menu bar
@@ -197,7 +197,7 @@ fi
 
 # DocumentTypes.plist references CFBundleTypeIconFile "Document", so the bundle must contain Document.icns.
 # We use the app icon as a placeholder document icon for now.
-document_icon_source="crates/zed/resources/Document.icns"
+document_icon_source="crates/zzz/resources/Document.icns"
 document_icon_target="${app_path}/Contents/Resources/Document.icns"
 if [[ -f "${document_icon_source}" ]]; then
     mkdir -p "$(dirname "${document_icon_target}")"
@@ -210,20 +210,20 @@ if [[ -n "${MACOS_CERTIFICATE:-}" && -n "${MACOS_CERTIFICATE_PASSWORD:-}" && -n 
     can_code_sign=true
 
     echo "Setting up keychain for code signing..."
-    security create-keychain -p "$MACOS_CERTIFICATE_PASSWORD" zed.keychain || echo ""
-    security default-keychain -s zed.keychain
-    security unlock-keychain -p "$MACOS_CERTIFICATE_PASSWORD" zed.keychain
+    security create-keychain -p "$MACOS_CERTIFICATE_PASSWORD" zzz.keychain || echo ""
+    security default-keychain -s zzz.keychain
+    security unlock-keychain -p "$MACOS_CERTIFICATE_PASSWORD" zzz.keychain
     # Calling set-keychain-settings without `-t` disables the auto-lock timeout
-    security set-keychain-settings zed.keychain
-    echo "$MACOS_CERTIFICATE" | base64 --decode > /tmp/zed-certificate.p12
-    security import /tmp/zed-certificate.p12 -k zed.keychain -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-    rm /tmp/zed-certificate.p12
-    security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$MACOS_CERTIFICATE_PASSWORD" zed.keychain
+    security set-keychain-settings zzz.keychain
+    echo "$MACOS_CERTIFICATE" | base64 --decode > /tmp/zzz-certificate.p12
+    security import /tmp/zzz-certificate.p12 -k zzz.keychain -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+    rm /tmp/zzz-certificate.p12
+    security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$MACOS_CERTIFICATE_PASSWORD" zzz.keychain
 
     function cleanup() {
         echo "Cleaning up keychain"
         security default-keychain -s login.keychain
-        security delete-keychain zed.keychain
+        security delete-keychain zzz.keychain
     }
 
     trap cleanup EXIT
@@ -285,15 +285,15 @@ function sign_app_binaries() {
     download_git "${target_triple}" "${app_path}/Contents/MacOS/git"
 
     # Note: The app identifier for our development builds is the same as the app identifier for nightly.
-    cp crates/zed/contents/$channel/embedded.provisionprofile "${app_path}/Contents/"
+    cp crates/zzz/contents/$channel/embedded.provisionprofile "${app_path}/Contents/"
 
     if [[ $can_code_sign = true ]]; then
         echo "Code signing binaries"
         # sequence of codesign commands modeled after this example: https://developer.apple.com/forums/thread/701514
         /usr/bin/codesign --deep --force --timestamp --options runtime --sign "$IDENTITY" "${app_path}/Contents/MacOS/cli" -v
         /usr/bin/codesign --deep --force --timestamp --options runtime --sign "$IDENTITY" "${app_path}/Contents/MacOS/git" -v
-        /usr/bin/codesign --deep --force --timestamp --options runtime --entitlements crates/zed/resources/zed.entitlements --sign "$IDENTITY" "${app_path}/Contents/MacOS/zzz" -v
-        /usr/bin/codesign --force --timestamp --options runtime --entitlements crates/zed/resources/zed.entitlements --sign "$IDENTITY" "${app_path}" -v
+        /usr/bin/codesign --deep --force --timestamp --options runtime --entitlements crates/zzz/resources/zzz.entitlements --sign "$IDENTITY" "${app_path}/Contents/MacOS/zzz" -v
+        /usr/bin/codesign --force --timestamp --options runtime --entitlements crates/zzz/resources/zzz.entitlements --sign "$IDENTITY" "${app_path}" -v
     else
         echo "One or more of the following variables are missing: MACOS_CERTIFICATE, MACOS_CERTIFICATE_PASSWORD, APPLE_NOTARIZATION_KEY, APPLE_NOTARIZATION_KEY_ID, APPLE_NOTARIZATION_ISSUER_ID"
 
@@ -306,9 +306,9 @@ function sign_app_binaries() {
         # - get a signing key for the MQ55VZLNZQ team from Nathan.
         # - create your own signing key, and update references to MQ55VZLNZQ to your own team ID
         # then comment out this line.
-        cat crates/zed/resources/zed.entitlements | sed '/com.apple.developer.associated-domains/,+1d' > "${app_path}/Contents/Resources/zed.entitlements"
+        cat crates/zzz/resources/zzz.entitlements | sed '/com.apple.developer.associated-domains/,+1d' > "${app_path}/Contents/Resources/zzz.entitlements"
 
-        codesign --force --deep --entitlements "${app_path}/Contents/Resources/zed.entitlements" --sign ${MACOS_SIGNING_KEY:- -} "${app_path}" -v
+        codesign --force --deep --entitlements "${app_path}/Contents/Resources/zzz.entitlements" --sign ${MACOS_SIGNING_KEY:- -} "${app_path}" -v
     fi
 
     bundle_name=$(basename "$app_path")
@@ -348,10 +348,10 @@ function sign_app_binaries() {
         ln -s /Applications ${dmg_source_directory}
 
         echo "Creating final DMG at ${dmg_file_path} using ${dmg_source_directory}"
-        hdiutil create -volname Zed -srcfolder "${dmg_source_directory}" -ov -format UDZO "${dmg_file_path}"
+        hdiutil create -volname ZZZ -srcfolder "${dmg_source_directory}" -ov -format UDZO "${dmg_file_path}"
 
         # If someone runs this bundle script locally, a symlink will be placed in `dmg_source_directory`.
-        # This symlink causes CPU issues with Zed if the Zed codebase is the project being worked on, so we simply remove it for now.
+        # This symlink causes CPU issues with ZZZ if the ZZZ codebase is the project being worked on, so we simply remove it for now.
         echo "Removing symlink to /Applications from ${dmg_source_directory}"
         rm ${dmg_source_directory}/Applications
 
@@ -379,7 +379,7 @@ function sign_binary() {
 
     if [[ $can_code_sign = true ]]; then
         echo "Code signing executable $binary_path"
-        /usr/bin/codesign --deep --force --timestamp --options runtime --entitlements crates/zed/resources/zed.entitlements --sign "$IDENTITY" "${binary_path}" -v
+        /usr/bin/codesign --deep --force --timestamp --options runtime --entitlements crates/zzz/resources/zzz.entitlements --sign "$IDENTITY" "${binary_path}" -v
     fi
 }
 
@@ -391,7 +391,7 @@ function upload_debug_symbols() {
     elif [ -z "${SENTRY_AUTH_TOKEN:-}" ]; then
         echo "SENTRY_AUTH_TOKEN is missing; skipped sentry upload."
     elif [[ -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
-        echo "Uploading zed debug symbols to sentry..."
+        echo "Uploading zzz debug symbols to sentry..."
         exe_path="target/${target_triple}/release/ZZZ"
         if ! dsymutil --flat "target/${target_triple}/${target_dir}/zzz" 2> target/dsymutil.log; then
             echo "dsymutil failed"

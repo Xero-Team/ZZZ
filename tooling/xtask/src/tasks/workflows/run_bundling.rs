@@ -244,13 +244,13 @@ fn set_release_channel_to_nightly(platform: Platform) -> Step<Run> {
             set -eu
             version=$(git rev-parse --short HEAD)
             echo "Publishing version: ${version} on release channel nightly"
-            echo "nightly" > crates/zed/RELEASE_CHANNEL
+            echo "nightly" > crates/zzz/RELEASE_CHANNEL
         "#}),
         Platform::Windows => named::pwsh(indoc::indoc! {r#"
             $ErrorActionPreference = "Stop"
             $version = git rev-parse --short HEAD
             Write-Host "Publishing version: $version on release channel nightly"
-            "nightly" | Set-Content -Path "crates/zed/RELEASE_CHANNEL"
+            "nightly" | Set-Content -Path "crates/zzz/RELEASE_CHANNEL"
         "#}),
     }
 }
@@ -260,12 +260,12 @@ fn set_release_channel_to_preview(platform: Platform) -> Step<Run> {
         Platform::Linux | Platform::Mac => named::bash(indoc::indoc! {r#"
             set -eu
             echo "Publishing preview release"
-            echo "preview" > crates/zed/RELEASE_CHANNEL
+            echo "preview" > crates/zzz/RELEASE_CHANNEL
         "#}),
         Platform::Windows => named::pwsh(indoc::indoc! {r#"
             $ErrorActionPreference = "Stop"
             Write-Host "Publishing preview release"
-            "preview" | Set-Content -Path "crates/zed/RELEASE_CHANNEL"
+            "preview" | Set-Content -Path "crates/zzz/RELEASE_CHANNEL"
         "#}),
     }
 }

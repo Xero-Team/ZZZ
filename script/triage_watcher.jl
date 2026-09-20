@@ -1,5 +1,5 @@
 ## Triage Watcher v0.1
-# This is a small script to watch for new issues on the Zed repository and open them in a new browser tab interactively.
+# This is a small script to watch for new issues on the ZZZ repository and open them in a new browser tab interactively.
 #
 ## Installing Julia
 #
@@ -8,7 +8,7 @@
 #
 ## Running this script:
 # 1. It only works on Macos/Linux
-# Open a new Julia repl with `julia` inside the `zed` repo
+# Open a new Julia repl with `julia` inside the `zzz` repo
 # 2. Paste the following code
 # 3. Whenever you close your computer, just type the Up arrow on the REPL + enter to rerun the loop again to resume
 function get_issues()

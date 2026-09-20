@@ -68,8 +68,8 @@ internal static class WindowsMsiBuilder
             var stagedFiles = await StageFilesAsync(workspaceRoot, releaseDirectory, stagingDirectory, cacheDirectory, architecture, channelConfig);
 
             Console.WriteLine("Generating WiX source");
-            var fileAssociations = ParseFileAssociations(Path.Combine(workspaceRoot, "crates", "zed", "resources", "windows", "zed.iss"));
-            var wixSourcePath = Path.Combine(generatedDirectory, "Zed.Generated.wxs");
+            var fileAssociations = ParseFileAssociations(Path.Combine(workspaceRoot, "crates", "zzz", "resources", "windows", "zzz.iss"));
+            var wixSourcePath = Path.Combine(generatedDirectory, "ZZZ.Generated.wxs");
             GenerateWixSource(
                 wixSourcePath,
                 stagedFiles,
@@ -176,23 +176,23 @@ internal static class WindowsMsiBuilder
             stagedFiles.Add(new StagedFile(stagedPath, Path.Combine("bin", "zzz.exe")));
         }
 
-        var zedShPath = Path.Combine(workspaceRoot, "crates", "zed", "resources", "windows", "zed.sh");
-        if (File.Exists(zedShPath))
+        var zzzShPath = Path.Combine(workspaceRoot, "crates", "zzz", "resources", "windows", "zzz.sh");
+        if (File.Exists(zzzShPath))
         {
             var stagedPath = Path.Combine(stagingDirectory, "bin", "zzz");
-            CopyFile(zedShPath, stagedPath);
+            CopyFile(zzzShPath, stagedPath);
             stagedFiles.Add(new StagedFile(stagedPath, Path.Combine("bin", "zzz")));
         }
 
-        var zedCmdPath = Path.Combine(workspaceRoot, "crates", "zed", "resources", "windows", "zed.cmd");
-        if (File.Exists(zedCmdPath))
+        var zzzCmdPath = Path.Combine(workspaceRoot, "crates", "zzz", "resources", "windows", "zzz.cmd");
+        if (File.Exists(zzzCmdPath))
         {
             var stagedPath = Path.Combine(stagingDirectory, "bin", "zzz.cmd");
-            CopyFile(zedCmdPath, stagedPath);
+            CopyFile(zzzCmdPath, stagedPath);
             stagedFiles.Add(new StagedFile(stagedPath, Path.Combine("bin", "zzz.cmd")));
         }
 
-        var iconPath = Path.Combine(workspaceRoot, "crates", "zed", "resources", "windows", channelConfig.AppIconName + ".ico");
+        var iconPath = Path.Combine(workspaceRoot, "crates", "zzz", "resources", "windows", channelConfig.AppIconName + ".ico");
         if (File.Exists(iconPath))
         {
             var stagedPath = Path.Combine(stagingDirectory, Path.GetFileName(iconPath));
@@ -246,7 +246,7 @@ internal static class WindowsMsiBuilder
 
             if (!architecture.Equals("aarch64", StringComparison.OrdinalIgnoreCase))
             {
-                var fallbackConsolePath = Path.Combine(workspaceRoot, "crates", "zed", "resources", "windows", "bin", "x64", "OpenConsole.exe");
+                var fallbackConsolePath = Path.Combine(workspaceRoot, "crates", "zzz", "resources", "windows", "bin", "x64", "OpenConsole.exe");
                 if (File.Exists(fallbackConsolePath))
                 {
                     var resourceConsoleDestinationPath = Path.Combine(stagingDirectory, "arm64", "OpenConsole.exe");
@@ -285,7 +285,7 @@ internal static class WindowsMsiBuilder
             return;
         }
 
-        var resourceConsolePath = Path.Combine(workspaceRoot, "crates", "zed", "resources", "windows", "bin", "x64", "OpenConsole.exe");
+        var resourceConsolePath = Path.Combine(workspaceRoot, "crates", "zzz", "resources", "windows", "bin", "x64", "OpenConsole.exe");
         var x64ConsoleSourcePath = File.Exists(resourceConsolePath)
             ? resourceConsolePath
             : Path.Combine(extractDirectory, "build", "native", "runtimes", "x64", "OpenConsole.exe");
@@ -340,9 +340,9 @@ internal static class WindowsMsiBuilder
         var appxDirectory = Path.Combine(stagingDirectory, "appx");
         Directory.CreateDirectory(appxDirectory);
 
-        var stagedExplorerDllPath = Path.Combine(appxDirectory, "zed_explorer_command_injector.dll");
+        var stagedExplorerDllPath = Path.Combine(appxDirectory, "zzz_explorer_command_injector.dll");
         CopyFile(explorerDllPath, stagedExplorerDllPath);
-        stagedFiles.Add(new StagedFile(stagedExplorerDllPath, Path.Combine("appx", "zed_explorer_command_injector.dll")));
+        stagedFiles.Add(new StagedFile(stagedExplorerDllPath, Path.Combine("appx", "zzz_explorer_command_injector.dll")));
 
         var manifestSourcePath = Path.Combine(
             workspaceRoot,
@@ -371,13 +371,13 @@ internal static class WindowsMsiBuilder
         RecreateDirectory(workingDirectory);
         CopyFile(manifestSourcePath, Path.Combine(workingDirectory, "AppxManifest.xml"));
 
-        var appxPath = Path.Combine(appxDirectory, "zed_explorer_command_injector.appx");
+        var appxPath = Path.Combine(appxDirectory, "zzz_explorer_command_injector.appx");
         RunProcess(
             makeAppxPath,
             ["pack", "/d", workingDirectory, "/p", appxPath, "/nv"],
             stagingDirectory,
             "makeAppx packaging");
-        stagedFiles.Add(new StagedFile(appxPath, Path.Combine("appx", "zed_explorer_command_injector.appx")));
+        stagedFiles.Add(new StagedFile(appxPath, Path.Combine("appx", "zzz_explorer_command_injector.appx")));
     }
 
     private static async Task<string> DiscoverVersionAsync(string workspaceRoot)
@@ -402,12 +402,12 @@ internal static class WindowsMsiBuilder
             }
         }
 
-        throw new InvalidOperationException("Unable to resolve the Zed crate version from cargo metadata.");
+        throw new InvalidOperationException("Unable to resolve the ZZZ crate version from cargo metadata.");
     }
 
     private static string DiscoverReleaseChannel(string workspaceRoot)
     {
-        var releaseChannelPath = Path.Combine(workspaceRoot, "crates", "zed", "RELEASE_CHANNEL");
+        var releaseChannelPath = Path.Combine(workspaceRoot, "crates", "zzz", "RELEASE_CHANNEL");
         if (!File.Exists(releaseChannelPath))
         {
             throw new InvalidOperationException($"Release channel file was not found: {releaseChannelPath}");
@@ -562,14 +562,14 @@ internal static class WindowsMsiBuilder
         var package = new XElement(
             ns + "Package",
             new XAttribute("Name", channelConfig.DisplayName),
-            new XAttribute("Manufacturer", "Zed Industries"),
+            new XAttribute("Manufacturer", "Xero Team"),
             new XAttribute("Version", packageVersion),
             new XAttribute("UpgradeCode", channelConfig.UpgradeCode));
 
         package.Add(new XElement(
             ns + "SummaryInformation",
             new XAttribute("Description", "!(loc.SummaryDescription)"),
-            new XAttribute("Manufacturer", "Zed Industries")));
+            new XAttribute("Manufacturer", "Xero Team")));
         package.Add(new XElement(
             ns + "MajorUpgrade",
             new XAttribute("DowngradeErrorMessage", "!(loc.DowngradeErrorMessage)")));
@@ -607,7 +607,7 @@ internal static class WindowsMsiBuilder
                 ns + "RegistrySearch",
                 new XAttribute("Id", "RememberedInstallDir"),
                 new XAttribute("Root", "HKCU"),
-                new XAttribute("Key", $"Software\\Zed Industries\\{channelConfig.RegValueName}"),
+                new XAttribute("Key", $"Software\\Xero Team\\{channelConfig.RegValueName}"),
                 new XAttribute("Name", "InstallDir"),
                 new XAttribute("Type", "directory"))));
         package.Add(new XElement(
@@ -619,7 +619,7 @@ internal static class WindowsMsiBuilder
                 ns + "RegistrySearch",
                 new XAttribute("Id", "RememberedDesktopShortcut"),
                 new XAttribute("Root", "HKCU"),
-                new XAttribute("Key", $"Software\\Zed Industries\\{channelConfig.RegValueName}"),
+                new XAttribute("Key", $"Software\\Xero Team\\{channelConfig.RegValueName}"),
                 new XAttribute("Name", "DesktopShortcut"),
                 new XAttribute("Type", "raw"))));
 
@@ -717,7 +717,7 @@ internal static class WindowsMsiBuilder
             ns + "Fragment",
             new XElement(
                 ns + "UI",
-                new XAttribute("Id", "ZedWixUI_InstallDir"),
+                new XAttribute("Id", "ZZZWixUI_InstallDir"),
                 new XElement(ns + "TextStyle", new XAttribute("Id", "WixUI_Font_Normal"), new XAttribute("FaceName", "Tahoma"), new XAttribute("Size", "8")),
                 new XElement(ns + "TextStyle", new XAttribute("Id", "WixUI_Font_Bigger"), new XAttribute("FaceName", "Tahoma"), new XAttribute("Size", "12")),
                 new XElement(ns + "TextStyle", new XAttribute("Id", "WixUI_Font_Title"), new XAttribute("FaceName", "Tahoma"), new XAttribute("Size", "9"), new XAttribute("Bold", "yes")),
@@ -992,7 +992,7 @@ internal static class WindowsMsiBuilder
                     new XElement(
                         ns + "RegistryValue",
                         new XAttribute("Root", "HKCU"),
-                        new XAttribute("Key", $"Software\\Zed Industries\\{channelConfig.RegValueName}"),
+                        new XAttribute("Key", $"Software\\Xero Team\\{channelConfig.RegValueName}"),
                         new XAttribute("Name", "DesktopShortcutInstalled"),
                         new XAttribute("Type", "string"),
                         new XAttribute("Value", "1"),
@@ -1013,7 +1013,7 @@ internal static class WindowsMsiBuilder
                     new XElement(
                         ns + "RegistryValue",
                         new XAttribute("Root", "HKCU"),
-                        new XAttribute("Key", $"Software\\Zed Industries\\{channelConfig.RegValueName}"),
+                        new XAttribute("Key", $"Software\\Xero Team\\{channelConfig.RegValueName}"),
                         new XAttribute("Name", "InstallDir"),
                         new XAttribute("Type", "string"),
                         new XAttribute("Value", "[INSTALLFOLDER]"),
@@ -1021,7 +1021,7 @@ internal static class WindowsMsiBuilder
                     new XElement(
                         ns + "RegistryValue",
                         new XAttribute("Root", "HKCU"),
-                        new XAttribute("Key", $"Software\\Zed Industries\\{channelConfig.RegValueName}"),
+                        new XAttribute("Key", $"Software\\Xero Team\\{channelConfig.RegValueName}"),
                         new XAttribute("Name", "DesktopShortcut"),
                         new XAttribute("Type", "string"),
                         new XAttribute("Value", "[DESKTOP_SHORTCUT]")))));
@@ -1042,7 +1042,7 @@ internal static class WindowsMsiBuilder
 
         foreach (var language in languages)
         {
-            var localizationPath = Path.Combine(generatedDirectory, $"Zed.{language}.wxl");
+            var localizationPath = Path.Combine(generatedDirectory, $"ZZZ.{language}.wxl");
             switch (language)
             {
                 case "en-US":
@@ -1149,7 +1149,7 @@ internal static class WindowsMsiBuilder
             new XElement(
                 ns + "RegistryValue",
                 new XAttribute("Root", "HKCU"),
-                new XAttribute("Key", $"Software\\Zed Industries\\{channelConfig.RegValueName}"),
+                new XAttribute("Key", $"Software\\Xero Team\\{channelConfig.RegValueName}"),
                 new XAttribute("Name", "AddToPath"),
                 new XAttribute("Type", "integer"),
                 new XAttribute("Value", "1"),
@@ -1564,7 +1564,7 @@ internal sealed class ChannelConfig
                 "ZZZIndustries.ZZZ",
                 "Z&ZZ",
                 "2DB0DA96-CA55-49BB-AF4F-64AF36A86712",
-                "Zed"),
+                "ZZZ"),
             "preview" => new ChannelConfig(
                 "preview",
                 "app-icon-preview",
@@ -1573,7 +1573,7 @@ internal sealed class ChannelConfig
                 "ZZZIndustries.ZZZ.Preview",
                 "Z&ZZ Preview",
                 "F70E4811-D0E2-4D88-AC99-D63752799F95",
-                "ZedPreview"),
+                "ZZZPreview"),
             "nightly" => new ChannelConfig(
                 "nightly",
                 "app-icon-nightly",
@@ -1582,7 +1582,7 @@ internal sealed class ChannelConfig
                 "ZZZIndustries.ZZZ.Nightly",
                 "Z&ZZ Editor Nightly",
                 "1BDB21D3-14E7-433C-843C-9C97382B2FE0",
-                "ZedNightly"),
+                "ZZZNightly"),
             "dev" => new ChannelConfig(
                 "dev",
                 "app-icon-dev",
@@ -1591,7 +1591,7 @@ internal sealed class ChannelConfig
                 "ZZZIndustries.ZZZ.Dev",
                 "Z&ZZ Dev",
                 "8357632E-24A4-4F32-BA97-E575B4D1FE5D",
-                "ZedDev"),
+                "ZZZDev"),
             _ => throw new InvalidOperationException($"Unsupported release channel: {channel}"),
         };
     }

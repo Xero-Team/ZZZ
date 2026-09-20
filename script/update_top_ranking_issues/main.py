@@ -16,7 +16,7 @@ ISSUES_PER_SECTION: int = 50
 ISSUES_TO_FETCH: int = 100
 
 REPO_OWNER = "zed-industries"
-REPO_NAME = "zed"
+REPO_NAME = "zzz"
 GITHUB_API_BASE_URL = "https://api.github.com"
 
 EXCLUDE_LABEL = "ignore top-ranking issues"

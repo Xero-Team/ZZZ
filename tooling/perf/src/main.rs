@@ -16,7 +16,7 @@
     clippy::missing_safety_doc
 )]
 
-//! Perf profiler for Zed tests. Outputs timings of tests marked with the `#[perf]`
+//! Perf profiler for ZZZ tests. Outputs timings of tests marked with the `#[perf]`
 //! attribute to stdout in Markdown. See the documentation of `util_macros::perf`
 //! for usage details on the actual attribute.
 //!

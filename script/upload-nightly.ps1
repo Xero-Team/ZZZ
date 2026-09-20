@@ -8,10 +8,10 @@ $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\lib\blob-store.ps1"
 . "$PSScriptRoot\lib\workspace.ps1"
 
-ParseZedWorkspace
+ParseZZZWorkspace
 Write-Host "Uploading nightly for target: $target"
 
-$bucketName = "zed-nightly-host"
+$bucketName = "zzz-nightly-host"
 $releaseVersion = & "$PSScriptRoot\get-crate-version.ps1" zzz
 $version = "$releaseVersion+nightly.$env:GITHUB_RUN_NUMBER.$env:GITHUB_SHA"
 

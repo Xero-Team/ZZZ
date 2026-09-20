@@ -1,5 +1,5 @@
 
-function ParseZedWorkspace {
+function ParseZZZWorkspace {
     $standardOutputPath = [System.IO.Path]::GetTempFileName()
     $standardErrorPath = [System.IO.Path]::GetTempFileName()
 
@@ -23,6 +23,6 @@ function ParseZedWorkspace {
     }
 
     $metadata = $metadataJson | ConvertFrom-Json
-    $env:ZED_WORKSPACE = $metadata.workspace_root
+    $env:ZZZ_WORKSPACE = $metadata.workspace_root
     $env:RELEASE_VERSION = $metadata.packages | Where-Object { $_.name -eq "zzz" } | Select-Object -ExpandProperty version
 }

@@ -2,7 +2,7 @@
 set -eu
 
 # ZZZ does not ship hosted binaries. This script unpacks a local tarball
-# when ZED_BUNDLE_PATH is set (used by script/install-linux). It must not
+# when ZZZ_BUNDLE_PATH is set (used by script/install-linux). It must not
 # download a remote release.
 
 print_no_hosted_binaries() {
@@ -27,20 +27,20 @@ EOF
 }
 
 main() {
-    if [ -z "${ZED_BUNDLE_PATH:-}" ]; then
+    if [ -z "${ZZZ_BUNDLE_PATH:-}" ]; then
         print_no_hosted_binaries
         exit 1
     fi
 
-    if [ ! -f "$ZED_BUNDLE_PATH" ]; then
-        echo "Local bundle not found: $ZED_BUNDLE_PATH" >&2
+    if [ ! -f "$ZZZ_BUNDLE_PATH" ]; then
+        echo "Local bundle not found: $ZZZ_BUNDLE_PATH" >&2
         echo "Build one with ./script/install-linux" >&2
         exit 1
     fi
 
     platform="$(uname -s)"
     arch="$(uname -m)"
-    channel="${ZED_CHANNEL:-stable}"
+    channel="${ZZZ_CHANNEL:-stable}"
     if [ -n "${TMPDIR:-}" ] && [ -d "${TMPDIR}" ]; then
         temp="$(mktemp -d "$TMPDIR/zzz-XXXXXX")"
     else
@@ -96,7 +96,7 @@ main() {
 }
 
 linux() {
-    cp "$ZED_BUNDLE_PATH" "$temp/zzz-linux-$arch.tar.gz"
+    cp "$ZZZ_BUNDLE_PATH" "$temp/zzz-linux-$arch.tar.gz"
 
     suffix=""
     if [ "$channel" != "stable" ]; then
@@ -150,7 +150,7 @@ linux() {
     if [ -f "$src_dir/${appid}.desktop" ]; then
         cp "$src_dir/${appid}.desktop" "${desktop_file_path}"
     else
-        cp "$src_dir/zed$suffix.desktop" "${desktop_file_path}"
+        cp "$src_dir/zzz$suffix.desktop" "${desktop_file_path}"
     fi
     sed -i "s|Icon=zzz|Icon=$HOME/.local/zzz$suffix.app/share/icons/hicolor/512x512/apps/zzz.png|g" "${desktop_file_path}"
     sed -i "s|Exec=zzz|Exec=$HOME/.local/zzz$suffix.app/bin/zzz|g" "${desktop_file_path}"

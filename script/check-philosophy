@@ -26,11 +26,11 @@ check_default_settings() {
 # contact the public Zed marketplace. Collab server_url stays local and must
 # not be reused for that gallery.
 check_extension_marketplace_uses_upstream() {
-    rg -q 'ZED_EXTENSION_MARKETPLACE_API: .*"https://api\.zed\.dev"' \
+    rg -q 'ZZZ_EXTENSION_MARKETPLACE_API: .*"https://api\.zed\.dev"' \
         "$root/crates/http_client/src/http_client.rs" \
-        && rg -q 'build_zed_extension_marketplace_url' \
+        && rg -q 'build_zzz_extension_marketplace_url' \
             "$root/crates/extension_host/src/extension_host.rs" \
-        && ! rg -n 'build_zed_api_url' "$root/crates/extension_host/src/extension_host.rs"
+        && ! rg -n 'build_zzz_api_url' "$root/crates/extension_host/src/extension_host.rs"
 }
 
 check_no_telemetry_endpoint() {
@@ -58,7 +58,7 @@ check_no_commercial_identifiers() {
 }
 
 check_help_menu() {
-    ! rg -ni 'twitter|join the team|zed\.dev/docs|email us' "$root/crates/zed/src/zed/app_menus.rs" \
+    ! rg -ni 'twitter|join the team|zed\.dev/docs|email us' "$root/crates/zzz/src/zzz/app_menus.rs" \
         && ! rg -ni '"menu\.help\.(zed_twitter|join_the_team|email_us)"\s*:\s*"(.*twitter|.*join the team|.*email|.*招聘)' \
             "$root/assets/locales/en.json" "$root/assets/locales/zh-CN.json"
 }
@@ -80,13 +80,13 @@ check_no_default_cloud_hosts() {
 
 check_product_defaults_no_zed_host() {
     ! rg -ni '"provider"\s*:\s*"zed\.dev"|"server_url"\s*:\s*"https?://(zed\.dev|cloud\.zed\.dev|api\.zed\.dev|collab\.zed\.dev)"' \
-        "$root/assets/settings/default.json" "$root/crates/zed/src/zed/app_menus.rs" \
-        "$root/crates/client/src/zed_urls.rs"
+        "$root/assets/settings/default.json" "$root/crates/zzz/src/zzz/app_menus.rs" \
+        "$root/crates/client/src/zzz_urls.rs"
 }
 
 check_product_surfaces_no_hosted_docs() {
     ! rg -n 'https?://(www\.)?zed\.dev/docs|https?://(www\.)?zed\.dev/(download|releases|pricing|account|terms)' \
-        "$root/crates/zed/src" "$root/crates/onboarding" \
+        "$root/crates/zzz/src" "$root/crates/onboarding" \
         "$root/crates/title_bar" "$root/crates/edit_prediction_ui" "$root/crates/edit_prediction/src" \
         "$root/crates/agent_ui" "$root/crates/settings_ui/src" "$root/crates/language_tools/src" \
         "$root/crates/theme_selector/src" "$root/crates/debugger_ui/src" "$root/crates/repl/src" \
@@ -223,7 +223,7 @@ check_no_cloud_web_search() {
 }
 
 check_no_client_signin_product_entry() {
-    ! rg -n 'client::SignIn' "$root/crates/title_bar" "$root/crates/zed/src/zed/app_menus.rs"
+    ! rg -n 'client::SignIn' "$root/crates/title_bar" "$root/crates/zzz/src/zzz/app_menus.rs"
 }
 
 check_no_zed_agent_configuration_target() {
@@ -239,9 +239,9 @@ check_no_native_agent_production_ui() {
 }
 
 check_no_live_zed_agent_id() {
-    ! rg -n 'ZED_AGENT_ID' \
+    ! rg -n 'ZZZ_AGENT_ID' \
         "$root/crates/agent_ui/src/agent_configuration.rs" \
-        && ! rg -n 'ZED_AGENT_ID' "$root/crates/agent_ui/src/agent_panel.rs"
+        && ! rg -n 'ZZZ_AGENT_ID' "$root/crates/agent_ui/src/agent_panel.rs"
 }
 
 check_registry_init_no_refresh() {
@@ -255,7 +255,7 @@ check_no_default_refresh_if_stale() {
 }
 
 check_no_unconditional_copilot_chat_init() {
-    ! rg -n 'copilot_chat::init' "$root/crates/zed/src/main.rs"
+    ! rg -n 'copilot_chat::init' "$root/crates/zzz/src/main.rs"
 }
 
 check_no_unconditional_copilot_chat_register() {
@@ -451,7 +451,7 @@ check "cloud web search provider is absent" check_no_cloud_web_search
 check "client SignIn is absent from title bar and app menus" check_no_client_signin_product_entry
 check "agent configuration does not default to ZedAgent" check_no_zed_agent_configuration_target
 check "NativeAgent is absent from production agent UI" check_no_native_agent_production_ui
-check "ZED_AGENT_ID is not a live selectable agent" check_no_live_zed_agent_id
+check "ZZZ_AGENT_ID is not a live selectable agent" check_no_live_zed_agent_id
 check "agent registry init does not refresh when empty" check_registry_init_no_refresh
 check "default agent registry paths do not refresh_if_stale" check_no_default_refresh_if_stale
 check "copilot_chat::init is not unconditional in main.rs" check_no_unconditional_copilot_chat_init

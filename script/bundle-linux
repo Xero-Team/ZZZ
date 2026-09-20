@@ -11,7 +11,7 @@ Build a release .tar.gz for Linux.
 
 Options:
   -h, --help     Display this help and exit.
-  --flatpak      Set ZED_BUNDLE_TYPE=flatpak so that this can be included in system info
+  --flatpak      Set ZZZ_BUNDLE_TYPE=flatpak so that this can be included in system info
   --native       Build the local app with the linux-native profile and target-cpu=native
 
 Environment:
@@ -35,7 +35,7 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         --flatpak)
-            export ZED_BUNDLE_TYPE=flatpak
+            export ZZZ_BUNDLE_TYPE=flatpak
             shift
             ;;
         --native)
@@ -60,9 +60,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-export ZED_BUNDLE=true
+export ZZZ_BUNDLE=true
 
-channel=$(<crates/zed/RELEASE_CHANNEL)
+channel=$(<crates/zzz/RELEASE_CHANNEL)
 target_dir="${CARGO_TARGET_DIR:-target}"
 host_artifact_dir=""
 remote_artifact_dir=""
@@ -305,7 +305,7 @@ elif ! command -v sentry-cli >/dev/null 2>&1; then
     echo "sentry-cli not found. skipping sentry upload."
     echo "install with: 'curl -sL https://sentry.io/get-cli | bash'"
 else
-    echo "Uploading zed debug symbols to sentry..."
+    echo "Uploading zzz debug symbols to sentry..."
         # note: this uploads the unstripped binary which is needed because it contains
         # .eh_frame data for stack unwinding. see https://github.com/getsentry/symbolic/issues/783
     for attempt in 1 2 3; do
@@ -348,12 +348,12 @@ fi
 # Move everything that should end up in the final package
 # into a temp directory.
 temp_dir=$(mktemp -d)
-zed_dir="${temp_dir}/zzz$suffix.app"
+zzz_dir="${temp_dir}/zzz$suffix.app"
 
 # Binary
-mkdir -p "${zed_dir}/bin" "${zed_dir}/libexec"
-cp "${host_artifact_dir}/zzz" "${zed_dir}/libexec/zzz-editor"
-cp "${host_artifact_dir}/cli" "${zed_dir}/bin/zzz"
+mkdir -p "${zzz_dir}/bin" "${zzz_dir}/libexec"
+cp "${host_artifact_dir}/zzz" "${zzz_dir}/libexec/zzz-editor"
+cp "${host_artifact_dir}/cli" "${zzz_dir}/bin/zzz"
 
 # Libs
 # Bundle libstdc++ so older supported systems can run binaries built with our
@@ -369,15 +369,15 @@ find_libs() {
         grep -v '\<\(libglib-2.0.so\|libgobject-2.0.so\|libgio-2.0.so\|libgmodule-2.0.so\|libpcre.so\|libpcre2-8.so\|libmount.so\|libblkid.so\|libselinux.so\|libffi.so\|libresolv.so\|libz.so\)'
 }
 
-mkdir -p "${zed_dir}/lib"
-rm -rf "${zed_dir}/lib/*"
-cp $(find_libs) "${zed_dir}/lib"
+mkdir -p "${zzz_dir}/lib"
+rm -rf "${zzz_dir}/lib/*"
+cp $(find_libs) "${zzz_dir}/lib"
 
 # Icons
-mkdir -p "${zed_dir}/share/icons/hicolor/512x512/apps"
-cp "crates/zed/resources/app-icon$suffix.png" "${zed_dir}/share/icons/hicolor/512x512/apps/zzz.png"
-mkdir -p "${zed_dir}/share/icons/hicolor/1024x1024/apps"
-cp "crates/zed/resources/app-icon$suffix@2x.png" "${zed_dir}/share/icons/hicolor/1024x1024/apps/zzz.png"
+mkdir -p "${zzz_dir}/share/icons/hicolor/512x512/apps"
+cp "crates/zzz/resources/app-icon$suffix.png" "${zzz_dir}/share/icons/hicolor/512x512/apps/zzz.png"
+mkdir -p "${zzz_dir}/share/icons/hicolor/1024x1024/apps"
+cp "crates/zzz/resources/app-icon$suffix@2x.png" "${zzz_dir}/share/icons/hicolor/1024x1024/apps/zzz.png"
 
 # .desktop
 export DO_STARTUP_NOTIFY="true"
@@ -398,12 +398,12 @@ else
   APP_ID="dev.zzz.ZZZ"
 fi
 
-mkdir -p "${zed_dir}/share/applications"
-envsubst < "crates/zed/resources/zed.desktop.in" > "${zed_dir}/share/applications/$APP_ID.desktop"
-chmod +x "${zed_dir}/share/applications/$APP_ID.desktop"
+mkdir -p "${zzz_dir}/share/applications"
+envsubst < "crates/zzz/resources/zzz.desktop.in" > "${zzz_dir}/share/applications/$APP_ID.desktop"
+chmod +x "${zzz_dir}/share/applications/$APP_ID.desktop"
 
 # Copy generated licenses so they'll end up in archive too
-cp "assets/licenses.md" "${zed_dir}/licenses.md"
+cp "assets/licenses.md" "${zzz_dir}/licenses.md"
 
 # Create archive out of everything that's in the temp directory
 arch=$(uname -m)

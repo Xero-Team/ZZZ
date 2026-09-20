@@ -376,12 +376,12 @@ CONVENTIONS
 
 ### Preview Release Callouts
 
-This change is going into Zed Preview first. Use the appropriate callout based on the type of change:
+This change is going into ZZZ Preview first. Use the appropriate callout based on the type of change:
 
 #### For NEW/ADDITIVE features (new commands, new settings, new UI elements):
 
 \`\`\`markdown
-> **Preview:** This feature is available in Zed Preview. It will be included in the next Stable release.
+> **Preview:** This feature is available in ZZZ Preview. It will be included in the next Stable release.
 \`\`\`
 
 #### For BEHAVIOR MODIFICATIONS (changed defaults, altered behavior of existing features):

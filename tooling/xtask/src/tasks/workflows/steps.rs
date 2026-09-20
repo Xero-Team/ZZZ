@@ -12,7 +12,7 @@ pub(crate) fn use_clang(job: Job) -> Job {
         .add_env(Env::new("CXX", "clang++"))
 }
 
-const SCCACHE_R2_BUCKET: &str = "sccache-zed";
+const SCCACHE_R2_BUCKET: &str = "sccache-zzz";
 
 pub(crate) const BASH_SHELL: &str = "bash -euxo pipefail {0}";
 // https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsshell
@@ -655,7 +655,7 @@ pub(crate) fn generate_token<'a>(
 }
 
 pub fn authenticate_as_zippy() -> GenerateAppToken<'static> {
-    generate_token_with_job_name(vars::ZED_ZIPPY_APP_ID, vars::ZED_ZIPPY_APP_PRIVATE_KEY)
+    generate_token_with_job_name(vars::ZZZ_ZIPPY_APP_ID, vars::ZZZ_ZIPPY_APP_PRIVATE_KEY)
 }
 
 fn generate_token_with_job_name<'a>(
@@ -826,7 +826,7 @@ pub(crate) fn update_ref(
     }
 }
 
-const ZED_ZIPPY_COMMITTER: &str =
+const ZZZ_ZIPPY_COMMITTER: &str =
     "zed-zippy[bot] <234243425+zed-zippy[bot]@users.noreply.github.com>";
 
 pub(crate) struct CreatePrStep {
@@ -895,8 +895,8 @@ impl From<CreatePrStep> for Step<Use> {
             .add_with(("body", step.body))
             .add_with(("commit-message", step.title))
             .add_with(("branch", step.branch))
-            .add_with(("committer", ZED_ZIPPY_COMMITTER))
-            .add_with(("author", ZED_ZIPPY_COMMITTER))
+            .add_with(("committer", ZZZ_ZIPPY_COMMITTER))
+            .add_with(("author", ZZZ_ZIPPY_COMMITTER))
             .add_with(("base", step.base))
             .add_with(("delete-branch", true))
             .add_with(("token", step.token))

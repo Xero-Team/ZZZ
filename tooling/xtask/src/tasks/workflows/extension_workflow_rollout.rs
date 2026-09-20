@@ -85,10 +85,10 @@ fn fetch_extension_repos(filter_repos_input: &WorkflowInput) -> (NamedJob, JobOu
         (step, filtered_repos)
     }
 
-    fn checkout_zed_repo() -> CheckoutStep {
+    fn checkout_zzz_repo() -> CheckoutStep {
         steps::checkout_repo()
             .with_full_history()
-            .with_custom_name("checkout_zed_repo")
+            .with_custom_name("checkout_zzz_repo")
     }
 
     fn get_previous_tag_commit() -> (Step<Run>, StepOutput) {
@@ -171,7 +171,7 @@ fn fetch_extension_repos(filter_repos_input: &WorkflowInput) -> (NamedJob, JobOu
             ("removed_ci".to_owned(), removed_ci.to_string()),
             ("removed_shared".to_owned(), removed_shared.to_string()),
         ])
-        .add_step(checkout_zed_repo())
+        .add_step(checkout_zzz_repo())
         .add_step(get_prev_tag)
         .add_step(calc_changes)
         .add_step(get_org_repositories)
@@ -266,7 +266,7 @@ fn rollout_workflows_to_extension(
         let title = format!("Update CI workflows to `{short_sha}`");
 
         let body = formatdoc! {r#"
-            This PR updates the CI workflow files from the main Zed repository
+            This PR updates the CI workflow files from the main ZZZ repository
             based on the commit zed-industries/zed@${{{{ github.sha }}}}
 
             {context_input}
@@ -300,7 +300,7 @@ fn rollout_workflows_to_extension(
     }
 
     let (authenticate, token) =
-        generate_token(vars::ZED_ZIPPY_APP_ID, vars::ZED_ZIPPY_APP_PRIVATE_KEY)
+        generate_token(vars::ZZZ_ZIPPY_APP_ID, vars::ZZZ_ZIPPY_APP_PRIVATE_KEY)
             .for_repository(RepositoryTarget::new(
                 "zed-extensions",
                 &["${{ matrix.repo }}"],
@@ -342,7 +342,7 @@ fn rollout_workflows_to_extension(
 }
 
 fn create_rollout_tag(rollout_job: &NamedJob, filter_repos_input: &WorkflowInput) -> NamedJob {
-    fn checkout_zed_repo(token: &StepOutput) -> CheckoutStep {
+    fn checkout_zzz_repo(token: &StepOutput) -> CheckoutStep {
         steps::checkout_repo().with_full_history().with_token(token)
     }
 
@@ -367,7 +367,7 @@ fn create_rollout_tag(rollout_job: &NamedJob, filter_repos_input: &WorkflowInput
     }
 
     let (authenticate, token) =
-        generate_token(vars::ZED_ZIPPY_APP_ID, vars::ZED_ZIPPY_APP_PRIVATE_KEY)
+        generate_token(vars::ZZZ_ZIPPY_APP_ID, vars::ZZZ_ZIPPY_APP_PRIVATE_KEY)
             .for_repository(RepositoryTarget::current())
             .with_permissions([(TokenPermissions::Contents, Level::Write)])
             .into();
@@ -381,7 +381,7 @@ fn create_rollout_tag(rollout_job: &NamedJob, filter_repos_input: &WorkflowInput
         .runs_on(runners::LINUX_SMALL)
         .timeout_minutes(1u32)
         .add_step(authenticate)
-        .add_step(checkout_zed_repo(&token))
+        .add_step(checkout_zzz_repo(&token))
         .add_step(configure_git())
         .add_step(update_rollout_tag());
 

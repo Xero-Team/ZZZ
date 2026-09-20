@@ -78,8 +78,8 @@ pub(crate) fn extension_bump() -> Workflow {
         .add_env(("RUST_BACKTRACE", 1))
         .add_env(("CARGO_INCREMENTAL", 0))
         .add_env((
-            "ZED_EXTENSION_CLI_SHA",
-            extension_tests::ZED_EXTENSION_CLI_SHA,
+            "ZZZ_EXTENSION_CLI_SHA",
+            extension_tests::ZZZ_EXTENSION_CLI_SHA,
         ))
         .add_job(check_version_changed.name, check_version_changed.job)
         .add_job(bump_version.name, bump_version.job)
@@ -380,7 +380,7 @@ fn release_action(
 ) -> (Step<Use>, StepOutput) {
     let step = named::uses(
         "huacnlee",
-        "zed-extension-action",
+        "zzz-extension-action",
         "82920ff0876879f65ffbcfa3403589114a8919c6",
     )
     .id("extension-update")

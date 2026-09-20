@@ -5,8 +5,8 @@
     let
       # NOTE: Duplicated because this is in a separate flake-parts partition
       # than ./packages.nix
-      mkZed = import ../toolchain.nix { inherit inputs; };
-      zed-editor = mkZed pkgs;
+      mkZZZ = import ../toolchain.nix { inherit inputs; };
+      zed-editor = mkZZZ pkgs;
 
       rustBin = inputs.rust-overlay.lib.mkRustBin { } pkgs;
       rustToolchain = rustBin.fromRustupToolchainFile ../../rust-toolchain.toml;
@@ -46,7 +46,7 @@
             cargo-hakari
             cargo-machete
             cargo-zigbuild
-            # TODO: package protobuf-language-server for editing zed.proto
+            # TODO: package protobuf-language-server for editing zzz.proto
             # TODO: add other tools used in our scripts
 
             # `build.nix` adds this to the `zed-editor` wrapper (see `postFixup`)
@@ -66,7 +66,7 @@
 
         env =
           (removeAttrs baseEnv [
-            "ZED_UPDATE_EXPLANATION" # allow auto-updates
+            "ZZZ_UPDATE_EXPLANATION" # allow auto-updates
             "CARGO_PROFILE" # let you specify the profile
             "TARGET_DIR"
           ])
@@ -80,7 +80,7 @@
               ];
             };
             PROTOC = "${pkgs.protobuf}/bin/protoc";
-            ZED_ZSTD_MUSL_LIB = "${pkgs.pkgsCross.musl64.pkgsStatic.zstd.out}/lib";
+            ZZZ_ZSTD_MUSL_LIB = "${pkgs.pkgsCross.musl64.pkgsStatic.zstd.out}/lib";
             # For aws-lc-sys musl cross-compilation
             CC_x86_64_unknown_linux_musl = "${muslCross.stdenv.cc}/bin/x86_64-unknown-linux-musl-gcc";
           };

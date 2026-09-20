@@ -3,8 +3,8 @@
   perSystem =
     { pkgs, ... }:
     let
-      mkZed = import ../toolchain.nix { inherit inputs; };
-      zed-editor = mkZed pkgs;
+      mkZZZ = import ../toolchain.nix { inherit inputs; };
+      zed-editor = mkZZZ pkgs;
     in
     {
       packages = {

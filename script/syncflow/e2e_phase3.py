@@ -74,7 +74,7 @@ def main() -> None:
     run(["git", "add", str(workflow_path.relative_to(temp_root))], cwd=temp_root)
     run(["git", "commit", "-m", "phase3 workflow route"], cwd=temp_root)
 
-    rust_path = temp_root / "crates" / "zed" / "src" / "phase3_e2e.rs"
+    rust_path = temp_root / "crates" / "zzz" / "src" / "phase3_e2e.rs"
     rust_path.write_text("pub fn phase3_e2e() {}\n", encoding="utf-8")
     run(["git", "add", str(rust_path.relative_to(temp_root))], cwd=temp_root)
     run(["git", "commit", "-m", "phase3 rust route"], cwd=temp_root)
@@ -295,7 +295,7 @@ def main() -> None:
         "--applied-summary",
         "rust path handled manually",
         "--applied-path",
-        "crates/zed/src/phase3_e2e.rs",
+        "crates/zzz/src/phase3_e2e.rs",
         "--git-commit-sha",
         upstream_sha,
     )

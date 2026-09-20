@@ -44,7 +44,7 @@ $failFlag = if ($env:ALLOW_MISSING_LICENSES) {
 } else {
     ""
 }
-$args = @('about', 'generate', $failFlag, '-c', 'script/licenses/zed-licenses.toml', $templateFile, '-o', $outputFile) | Where-Object { $_ }
+$args = @('about', 'generate', $failFlag, '-c', 'script/licenses/zzz-licenses.toml', $templateFile, '-o', $outputFile) | Where-Object { $_ }
 cargo @args
 
 Write-Host "Applying replacements"

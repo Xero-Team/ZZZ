@@ -10,9 +10,9 @@ use crate::tasks::workflows::{
 /// Controls which features `orchestrate_impl` includes in the generated script.
 #[derive(PartialEq, Eq)]
 enum OrchestrateTarget {
-    /// For the main Zed repo: includes the cargo package filter and extension
+    /// For the main ZZZ repo: includes the cargo package filter and extension
     /// change detection, but no working-directory scoping.
-    ZedRepo,
+    ZZZRepo,
     /// For individual extension repos: scopes changed-file detection to the
     /// working directory, with no package filter or extension detection.
     Extension,
@@ -21,7 +21,7 @@ enum OrchestrateTarget {
 // Generates a bash script that checks changed files against regex patterns
 // and sets GitHub output variables accordingly
 pub fn orchestrate(rules: &[&PathCondition]) -> NamedJob {
-    orchestrate_impl(rules, OrchestrateTarget::ZedRepo)
+    orchestrate_impl(rules, OrchestrateTarget::ZZZRepo)
 }
 
 pub fn orchestrate_for_extension(rules: &[&PathCondition]) -> NamedJob {
@@ -75,7 +75,7 @@ fn orchestrate_impl(rules: &[&PathCondition], target: OrchestrateTarget) -> Name
 
     let mut outputs = IndexMap::new();
 
-    if target == OrchestrateTarget::ZedRepo {
+    if target == OrchestrateTarget::ZZZRepo {
         script.push_str(indoc::indoc! {r#"
         # Check for changes that require full rebuild (no filter)
         # Direct pushes to main/stable/preview always run full suite
@@ -161,7 +161,7 @@ fn orchestrate_impl(rules: &[&PathCondition], target: OrchestrateTarget) -> Name
         ));
     }
 
-    if target == OrchestrateTarget::ZedRepo {
+    if target == OrchestrateTarget::ZZZRepo {
         script.push_str(DETECT_CHANGED_EXTENSIONS_SCRIPT);
         script.push_str("echo \"changed_extensions=$EXTENSIONS_JSON\" >> \"$GITHUB_OUTPUT\"\n");
 

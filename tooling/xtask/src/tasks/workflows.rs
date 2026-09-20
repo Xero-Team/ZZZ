@@ -101,10 +101,10 @@ struct WorkflowFile {
 }
 
 impl WorkflowFile {
-    fn zed(f: fn() -> Workflow) -> WorkflowFile {
+    fn zzz(f: fn() -> Workflow) -> WorkflowFile {
         WorkflowFile {
             source: WorkflowSource::Contextless(f),
-            r#type: WorkflowType::Zed,
+            r#type: WorkflowType::ZZZ,
         }
     }
 
@@ -157,8 +157,8 @@ impl WorkflowFile {
 
 #[derive(PartialEq, Eq, strum::EnumIter)]
 pub enum WorkflowType {
-    /// Workflows living in the Zed repository
-    Zed,
+    /// Workflows living in the ZZZ repository
+    ZZZ,
     /// Workflows living in the `zed-extensions/workflows` repository that are
     /// required workflows for PRs to the extension organization
     ExtensionCi,
@@ -178,15 +178,15 @@ impl WorkflowType {
             ),
             preamble = Self::PREAMBLE,
             workflow_name = workflow_name,
-            external_disclaimer = (*self != WorkflowType::Zed)
-                .then_some(" within the Zed repository.")
+            external_disclaimer = (*self != WorkflowType::ZZZ)
+                .then_some(" within the ZZZ repository.")
                 .unwrap_or_default(),
         )
     }
 
     pub fn folder_path(&self) -> PathBuf {
         match self {
-            WorkflowType::Zed => PathBuf::from(".github/workflows"),
+            WorkflowType::ZZZ => PathBuf::from(".github/workflows"),
             WorkflowType::ExtensionCi => PathBuf::from("extensions/workflows"),
             WorkflowType::ExtensionsShared => PathBuf::from("extensions/workflows/shared"),
         }
@@ -217,7 +217,7 @@ impl WorkflowType {
 }
 
 pub fn run_workflows(args: GenerateWorkflowArgs) -> Result<()> {
-    if !Path::new("crates/zed/").is_dir() {
+    if !Path::new("crates/zzz/").is_dir() {
         anyhow::bail!("xtask workflows must be ran from the project root");
     }
 
@@ -225,9 +225,9 @@ pub fn run_workflows(args: GenerateWorkflowArgs) -> Result<()> {
     WorkflowType::remove_generated_workflows()?;
 
     let workflows = [
-        WorkflowFile::zed(compliance_check::compliance_check),
-        WorkflowFile::zed(extension_tests::extension_tests),
-        WorkflowFile::zed(release::release),
+        WorkflowFile::zzz(compliance_check::compliance_check),
+        WorkflowFile::zzz(extension_tests::extension_tests),
+        WorkflowFile::zzz(release::release),
     ];
 
     for workflow_file in workflows {

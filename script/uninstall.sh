@@ -106,7 +106,7 @@ prompt_remove_preferences() {
 
 main() {
     platform="$(uname -s)"
-    channel="${ZED_CHANNEL:-stable}"
+    channel="${ZZZ_CHANNEL:-stable}"
 
     case "$channel" in
         stable|nightly|preview|dev) ;;
@@ -170,7 +170,7 @@ linux() {
 
     if ! scope_has_remaining_installation "$db_scope"; then
         rm -rf "$data_dir/db/0-$db_scope"
-        rm -f "$data_dir/zed-$db_scope.sock"
+        rm -f "$data_dir/zzz-$db_scope.sock"
     fi
 
     if check_remaining_installations; then

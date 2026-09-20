@@ -129,8 +129,8 @@ if ($env:CARGO_HOME) {
 }
 
 $CargoOutDir = "./target/$Architecture-pc-windows-msvc/release"
-$CargoBuildJobs = if ($env:ZED_WINDOWS_BUNDLE_JOBS) {
-    $env:ZED_WINDOWS_BUNDLE_JOBS
+$CargoBuildJobs = if ($env:ZZZ_WINDOWS_BUNDLE_JOBS) {
+    $env:ZZZ_WINDOWS_BUNDLE_JOBS
 } elseif (-not $env:CI) {
     '32'
 } else {
@@ -209,9 +209,9 @@ if ($Help) {
     exit 0
 }
 
-Push-Location -Path crates/zed
+Push-Location -Path crates/zzz
 $channel = Get-Content "RELEASE_CHANNEL"
-$env:ZED_RELEASE_CHANNEL = $channel
+$env:ZZZ_RELEASE_CHANNEL = $channel
 $env:RELEASE_CHANNEL = $channel
 Pop-Location
 
@@ -221,7 +221,7 @@ function CheckEnvironmentVariables {
     }
 
     $requiredVars = @(
-        'ZED_WORKSPACE', 'RELEASE_VERSION', 'ZED_RELEASE_CHANNEL',
+        'ZZZ_WORKSPACE', 'RELEASE_VERSION', 'ZZZ_RELEASE_CHANNEL',
         'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET',
         'ACCOUNT_NAME', 'CERT_PROFILE_NAME', 'ENDPOINT',
         'FILE_DIGEST', 'TIMESTAMP_DIGEST', 'TIMESTAMP_SERVER'
@@ -240,7 +240,7 @@ function PrepareForBundle {
         Remove-Item -Path "$innoDir" -Recurse -Force
     }
     New-Item -Path "$innoDir" -ItemType Directory -Force
-    Copy-Item -Path "$env:ZED_WORKSPACE\crates\zed\resources\windows\*" -Destination "$innoDir" -Recurse -Force
+    Copy-Item -Path "$env:ZZZ_WORKSPACE\crates\zzz\resources\windows\*" -Destination "$innoDir" -Recurse -Force
     New-Item -Path "$innoDir\make_appx" -ItemType Directory -Force
     New-Item -Path "$innoDir\appx" -ItemType Directory -Force
     New-Item -Path "$innoDir\bin" -ItemType Directory -Force
@@ -253,10 +253,10 @@ function GenerateLicenses {
     . $PSScriptRoot/generate-licenses.ps1
 }
 
-function BuildZedAndItsFriends {
-    Write-Output "Building Zed and its friends, for channel: $channel"
+function BuildZZZAndItsFriends {
+    Write-Output "Building ZZZ and its friends, for channel: $channel"
     # Build zzz.exe and cli.exe after remote_server so the archive can be embedded.
-    $env:ZZZ_EMBED_REMOTE_SERVER_DIR = Join-Path $env:ZED_WORKSPACE 'target'
+    $env:ZZZ_EMBED_REMOTE_SERVER_DIR = Join-Path $env:ZZZ_WORKSPACE 'target'
     Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'zzz', '--package', 'cli', '--target', $target)) -Description "Build zzz and cli for $target"
     Copy-Item -Path ".\$CargoOutDir\zzz.exe" -Destination "$innoDir\ZZZ.exe" -Force
     Copy-Item -Path ".\$CargoOutDir\cli.exe" -Destination "$innoDir\cli.exe" -Force
@@ -272,7 +272,7 @@ function BuildZedAndItsFriends {
             Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'explorer_command_injector', '--target', $target)) -Description "Build explorer_command_injector for $target"
         }
     }
-    Copy-Item -Path ".\$CargoOutDir\explorer_command_injector.dll" -Destination "$innoDir\zed_explorer_command_injector.dll" -Force
+    Copy-Item -Path ".\$CargoOutDir\explorer_command_injector.dll" -Destination "$innoDir\zzz_explorer_command_injector.dll" -Force
 }
 
 function BuildRemoteServer {
@@ -293,22 +293,22 @@ function BuildRemoteServer {
         & "$innoDir\sign.ps1" $remoteServerSrc
     }
 
-    $remoteServerDst = "$env:ZED_WORKSPACE\target\zzz-remote-server-windows-$Architecture.zip"
+    $remoteServerDst = "$env:ZZZ_WORKSPACE\target\zzz-remote-server-windows-$Architecture.zip"
     Write-Output "Compressing remote_server to $remoteServerDst"
     Compress-Archive -Path $remoteServerSrc -DestinationPath $remoteServerDst -Force
 
     Write-Output "Remote server compressed successfully"
 }
 
-function ZipZedAndItsFriendsDebug {
+function ZipZZZAndItsFriendsDebug {
     $items = @(
-        ".\$CargoOutDir\zed.pdb",
+        ".\$CargoOutDir\zzz.pdb",
         ".\$CargoOutDir\cli.pdb",
         ".\$CargoOutDir\explorer_command_injector.pdb",
         ".\$CargoOutDir\remote_server.pdb"
     )
 
-    Compress-Archive -Path $items -DestinationPath ".\$CargoOutDir\zed-$env:RELEASE_VERSION-$env:ZED_RELEASE_CHANNEL.dbg.zip" -Force
+    Compress-Archive -Path $items -DestinationPath ".\$CargoOutDir\zzz-$env:RELEASE_VERSION-$env:ZZZ_RELEASE_CHANNEL.dbg.zip" -Force
 }
 
 
@@ -326,7 +326,7 @@ function UploadToSentry {
         Write-Output "SENTRY_AUTH_TOKEN is missing; skipped sentry upload."
         return
     }
-    Write-Output "Uploading zed debug symbols to sentry..."
+    Write-Output "Uploading zzz debug symbols to sentry..."
     for ($i = 1; $i -le 3; $i++) {
         try {
             sentry-cli debug-files upload --include-sources --wait -p zed -o zed-dev $CargoOutDir
@@ -346,28 +346,28 @@ function UploadToSentry {
 function MakeAppx {
     switch ($channel) {
         "stable" {
-            $manifestFile = "$env:ZED_WORKSPACE\crates\explorer_command_injector\AppxManifest.xml"
+            $manifestFile = "$env:ZZZ_WORKSPACE\crates\explorer_command_injector\AppxManifest.xml"
         }
         "preview" {
-            $manifestFile = "$env:ZED_WORKSPACE\crates\explorer_command_injector\AppxManifest-Preview.xml"
+            $manifestFile = "$env:ZZZ_WORKSPACE\crates\explorer_command_injector\AppxManifest-Preview.xml"
         }
         default {
-            $manifestFile = "$env:ZED_WORKSPACE\crates\explorer_command_injector\AppxManifest-Nightly.xml"
+            $manifestFile = "$env:ZZZ_WORKSPACE\crates\explorer_command_injector\AppxManifest-Nightly.xml"
         }
     }
     Copy-Item -Path "$manifestFile" -Destination "$innoDir\make_appx\AppxManifest.xml"
     # Add makeAppx.exe to Path
     $sdk = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
     $env:Path += ';' + $sdk
-    Invoke-NativeCommand -FilePath 'makeAppx.exe' -ArgumentList @('pack', '/d', "$innoDir\make_appx", '/p', "$innoDir\zed_explorer_command_injector.appx", '/nv') -Description "Pack explorer command injector AppX"
+    Invoke-NativeCommand -FilePath 'makeAppx.exe' -ArgumentList @('pack', '/d', "$innoDir\make_appx", '/p', "$innoDir\zzz_explorer_command_injector.appx", '/nv') -Description "Pack explorer command injector AppX"
 }
 
-function SignZedAndItsFriends {
+function SignZZZAndItsFriends {
     if (-not $env:CI) {
         return
     }
 
-    $files = "$innoDir\ZZZ.exe,$innoDir\cli.exe,$innoDir\zed_explorer_command_injector.dll,$innoDir\zed_explorer_command_injector.appx"
+    $files = "$innoDir\ZZZ.exe,$innoDir\cli.exe,$innoDir\zzz_explorer_command_injector.dll,$innoDir\zzz_explorer_command_injector.appx"
     & "$innoDir\sign.ps1" $files
 }
 
@@ -389,11 +389,11 @@ function DownloadConpty {
 }
 
 function CollectFiles {
-    Move-Item -Path "$innoDir\zed_explorer_command_injector.appx" -Destination "$innoDir\appx\zed_explorer_command_injector.appx" -Force
-    Move-Item -Path "$innoDir\zed_explorer_command_injector.dll" -Destination "$innoDir\appx\zed_explorer_command_injector.dll" -Force
+    Move-Item -Path "$innoDir\zzz_explorer_command_injector.appx" -Destination "$innoDir\appx\zzz_explorer_command_injector.appx" -Force
+    Move-Item -Path "$innoDir\zzz_explorer_command_injector.dll" -Destination "$innoDir\appx\zzz_explorer_command_injector.dll" -Force
     Move-Item -Path "$innoDir\cli.exe" -Destination "$innoDir\bin\zzz.exe" -Force
-    Move-Item -Path "$innoDir\zed.sh" -Destination "$innoDir\bin\zzz" -Force
-    Move-Item -Path "$innoDir\zed.cmd" -Destination "$innoDir\bin\zzz.cmd" -Force
+    Move-Item -Path "$innoDir\zzz.sh" -Destination "$innoDir\bin\zzz" -Force
+    Move-Item -Path "$innoDir\zzz.cmd" -Destination "$innoDir\bin\zzz.cmd" -Force
     if($Architecture -eq "aarch64") {
         New-Item -Type Directory -Path "$innoDir\arm64" -Force
         Move-Item -Path ".\conpty\build\native\runtimes\arm64\OpenConsole.exe" -Destination "$innoDir\arm64\OpenConsole.exe" -Force
@@ -410,7 +410,7 @@ function CollectFiles {
 }
 
 function BuildInstaller {
-    $issFilePath = "$innoDir\zed.iss"
+    $issFilePath = "$innoDir\zzz.iss"
     switch ($channel) {
         "stable" {
             $appId = "{{2DB0DA96-CA55-49BB-AF4F-64AF36A86712}"
@@ -418,7 +418,7 @@ function BuildInstaller {
             $appName = "ZZZ"
             $appDisplayName = "ZZZ"
             $appSetupName = "ZZZ-$Architecture"
-            # The mutex name here should match the mutex name in crates\zed\src\zed\windows_only_instance.rs
+            # The mutex name here should match the mutex name in crates\zzz\src\zzz\windows_only_instance.rs
             $appMutex = "ZZZ-Stable-Instance-Mutex"
             $appExeName = "ZZZ"
             $regValueName = "ZZZ"
@@ -432,7 +432,7 @@ function BuildInstaller {
             $appName = "ZZZ Preview"
             $appDisplayName = "ZZZ Preview"
             $appSetupName = "ZZZ-$Architecture"
-            # The mutex name here should match the mutex name in crates\zed\src\zed\windows_only_instance.rs
+            # The mutex name here should match the mutex name in crates\zzz\src\zzz\windows_only_instance.rs
             $appMutex = "ZZZ-Preview-Instance-Mutex"
             $appExeName = "ZZZ"
             $regValueName = "ZZZPreview"
@@ -446,7 +446,7 @@ function BuildInstaller {
             $appName = "ZZZ Nightly"
             $appDisplayName = "ZZZ Nightly"
             $appSetupName = "ZZZ-$Architecture"
-            # The mutex name here should match the mutex name in crates\zed\src\zed\windows_only_instance.rs
+            # The mutex name here should match the mutex name in crates\zzz\src\zzz\windows_only_instance.rs
             $appMutex = "ZZZ-Nightly-Instance-Mutex"
             $appExeName = "ZZZ"
             $regValueName = "ZZZNightly"
@@ -460,7 +460,7 @@ function BuildInstaller {
             $appName = "ZZZ Dev"
             $appDisplayName = "ZZZ Dev"
             $appSetupName = "ZZZ-$Architecture"
-            # The mutex name here should match the mutex name in crates\zed\src\zed\windows_only_instance.rs
+            # The mutex name here should match the mutex name in crates\zzz\src\zzz\windows_only_instance.rs
             $appMutex = "ZZZ-Dev-Instance-Mutex"
             $appExeName = "ZZZ"
             $regValueName = "ZZZDev"
@@ -482,7 +482,7 @@ function BuildInstaller {
     $definitions = @{
         "AppId"          = $appId
         "AppIconName"    = $appIconName
-        "OutputDir"      = "$env:ZED_WORKSPACE\target"
+        "OutputDir"      = "$env:ZZZ_WORKSPACE\target"
         "AppSetupName"   = $appSetupName
         "AppName"        = $appName
         "AppDisplayName" = $appDisplayName
@@ -493,7 +493,7 @@ function BuildInstaller {
         "ShellNameShort" = $appShellNameShort
         "AppUserId"      = $appUserId
         "Version"        = "$env:RELEASE_VERSION"
-        "SourceDir"      = "$env:ZED_WORKSPACE"
+        "SourceDir"      = "$env:ZZZ_WORKSPACE"
         "AppxFullName"   = $appAppxFullName
     }
 
@@ -523,19 +523,19 @@ function BuildInstaller {
     }
 }
 
-ParseZedWorkspace
-$innoDir = "$env:ZED_WORKSPACE\inno\$Architecture"
-$debugArchive = "$CargoOutDir\zed-$env:RELEASE_VERSION-$env:ZED_RELEASE_CHANNEL.dbg.zip"
-$debugStoreKey = "$env:ZED_RELEASE_CHANNEL/zed-$env:RELEASE_VERSION-$env:ZED_RELEASE_CHANNEL.dbg.zip"
+ParseZZZWorkspace
+$innoDir = "$env:ZZZ_WORKSPACE\inno\$Architecture"
+$debugArchive = "$CargoOutDir\zzz-$env:RELEASE_VERSION-$env:ZZZ_RELEASE_CHANNEL.dbg.zip"
+$debugStoreKey = "$env:ZZZ_RELEASE_CHANNEL/zzz-$env:RELEASE_VERSION-$env:ZZZ_RELEASE_CHANNEL.dbg.zip"
 
 CheckEnvironmentVariables
 PrepareForBundle
 GenerateLicenses
 BuildRemoteServer
-BuildZedAndItsFriends
+BuildZZZAndItsFriends
 MakeAppx
-SignZedAndItsFriends
-ZipZedAndItsFriendsDebug
+SignZZZAndItsFriends
+ZipZZZAndItsFriendsDebug
 DownloadAMDGpuServices
 DownloadConpty
 CollectFiles
@@ -549,7 +549,7 @@ if ($buildSuccess) {
     Write-Output "Build successful"
     if ($Install) {
         Write-Output "Installing ZZZ..."
-        Start-Process -FilePath "$env:ZED_WORKSPACE/target/ZZZ-x64.exe"
+        Start-Process -FilePath "$env:ZZZ_WORKSPACE/target/ZZZ-x64.exe"
     }
     exit 0
 }

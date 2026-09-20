@@ -9,7 +9,7 @@ use crate::tasks::workflows::{
 
 pub fn publish_extension_cli() -> Workflow {
     let publish = publish_job();
-    let update_sha_in_zed = update_sha_in_zed(&publish);
+    let update_sha_in_zzz = update_sha_in_zzz(&publish);
     let update_sha_in_extensions = update_sha_in_extensions(&publish);
 
     named::workflow()
@@ -17,7 +17,7 @@ pub fn publish_extension_cli() -> Workflow {
         .add_env(("CARGO_TERM_COLOR", "always"))
         .add_env(("CARGO_INCREMENTAL", 0))
         .add_job(publish.name, publish.job)
-        .add_job(update_sha_in_zed.name, update_sha_in_zed.job)
+        .add_job(update_sha_in_zzz.name, update_sha_in_zzz.job)
         .add_job(update_sha_in_extensions.name, update_sha_in_extensions.job)
 }
 
@@ -50,13 +50,13 @@ fn publish_job() -> NamedJob {
     )
 }
 
-fn update_sha_in_zed(publish_job: &NamedJob) -> NamedJob {
+fn update_sha_in_zzz(publish_job: &NamedJob) -> NamedJob {
     let (generate_token, generated_token) =
-        generate_token(vars::ZED_ZIPPY_APP_ID, vars::ZED_ZIPPY_APP_PRIVATE_KEY).into();
+        generate_token(vars::ZZZ_ZIPPY_APP_ID, vars::ZZZ_ZIPPY_APP_PRIVATE_KEY).into();
 
     fn replace_sha() -> Step<Run> {
         named::bash(indoc! {r#"
-            sed -i "s/ZED_EXTENSION_CLI_SHA: &str = \"[a-f0-9]*\"/ZED_EXTENSION_CLI_SHA: \&str = \"$GITHUB_SHA\"/" \
+            sed -i "s/ZZZ_EXTENSION_CLI_SHA: &str = \"[a-f0-9]*\"/ZZZ_EXTENSION_CLI_SHA: \&str = \"$GITHUB_SHA\"/" \
                 tooling/xtask/src/tasks/workflows/extension_tests.rs
         "#})
     }
@@ -78,11 +78,11 @@ fn update_sha_in_zed(publish_job: &NamedJob) -> NamedJob {
             .add_step(get_short_sha_step)
             .add_step(replace_sha())
             .add_step(regenerate_workflows())
-            .add_step(create_pull_request_zed(&generated_token, &short_sha)),
+            .add_step(create_pull_request_zzz(&generated_token, &short_sha)),
     )
 }
 
-fn create_pull_request_zed(generated_token: &StepOutput, short_sha: &StepOutput) -> Step<Use> {
+fn create_pull_request_zzz(generated_token: &StepOutput, short_sha: &StepOutput) -> Step<Use> {
     let title = format!(
         "extension_ci: Bump extension CLI version to `{}`",
         short_sha
@@ -102,7 +102,7 @@ fn create_pull_request_zed(generated_token: &StepOutput, short_sha: &StepOutput)
 fn update_sha_in_extensions(publish_job: &NamedJob) -> NamedJob {
     let extensions_repo = RepositoryTarget::new("zed-industries", &["extensions"]);
     let (generate_token, generated_token) =
-        generate_token(vars::ZED_ZIPPY_APP_ID, vars::ZED_ZIPPY_APP_PRIVATE_KEY)
+        generate_token(vars::ZZZ_ZIPPY_APP_ID, vars::ZZZ_ZIPPY_APP_PRIVATE_KEY)
             .for_repository(extensions_repo)
             .into();
 
@@ -118,7 +118,7 @@ fn update_sha_in_extensions(publish_job: &NamedJob) -> NamedJob {
 
     fn replace_sha() -> Step<Run> {
         named::bash(indoc! {r#"
-            sed -i "s/ZED_EXTENSION_CLI_SHA: [a-f0-9]*/ZED_EXTENSION_CLI_SHA: $GITHUB_SHA/" \
+            sed -i "s/ZZZ_EXTENSION_CLI_SHA: [a-f0-9]*/ZZZ_EXTENSION_CLI_SHA: $GITHUB_SHA/" \
                 .github/workflows/ci.yml
         "#})
     }

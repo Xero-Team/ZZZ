@@ -27,9 +27,9 @@
 .perf-runs
 /assets/*licenses.*
 /crates/theme/schemas/theme.json
-/crates/zed/resources/flatpak/flatpak-cargo-sources.json
+/crates/zzz/resources/flatpak/flatpak-cargo-sources.json
 /crates/project_panel/benches/linux_repo_snapshot.txt
-/dev.zed.Zed*.json
+/dev.zzz.ZZZ*.json
 /node_modules/
 /.opencode/
 /plugins/bin
@@ -38,7 +38,7 @@
 /tooling/windows_msi_builder/bin/
 /tooling/windows_msi_builder/obj/
 /snap
-/zed.xcworkspace
+/zzz.xcworkspace
 DerivedData/
 Packages
 xcuserdata/
@@ -54,7 +54,7 @@ crates/docs_preprocessor/actions.json
 # Visual test baseline images (these will be stored outside
 # the repo in the future, but we don't haven't decided exactly
 # where yet, so for now they get generated into a gitignored dir.)
-/crates/zed/test_fixtures/visual_tests/
+/crates/zzz/test_fixtures/visual_tests/
 
 # Local documentation audit files
 /december-2025-releases.md
