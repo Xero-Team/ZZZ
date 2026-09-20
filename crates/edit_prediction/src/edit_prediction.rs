@@ -686,7 +686,6 @@ impl EditPredictionStore {
     ) -> Self {
         let (reject_tx, reject_rx) = mpsc::unbounded();
         cx.background_spawn({
-            let client = client.clone();
             let app_version = AppVersion::global(cx);
             let background_executor = cx.background_executor().clone();
             async move {
@@ -2044,44 +2043,41 @@ impl EditPredictionStore {
     {
         let http_client = client.http_client();
 
-        loop {
-            let request_builder = http_client::Request::builder().method(Method::POST);
+        let request_builder = http_client::Request::builder()
+            .method(Method::POST)
+            .header("Content-Type", "application/json")
+            .header(ZED_VERSION_HEADER_NAME, app_version.to_string());
 
-            let request_builder = request_builder
-                .header("Content-Type", "application/json")
-                .header(ZED_VERSION_HEADER_NAME, app_version.to_string());
+        let request = build(request_builder)?;
 
-            let request = build(request_builder)?;
+        let mut response = http_client.send(request).await?;
 
-            let mut response = http_client.send(request).await?;
-
-            if let Some(minimum_required_version) = response
-                .headers()
-                .get(MINIMUM_REQUIRED_VERSION_HEADER_NAME)
-                .and_then(|version| Version::from_str(version.to_str().ok()?).ok())
-            {
-                anyhow::ensure!(
-                    app_version >= minimum_required_version,
-                    ZedUpdateRequiredError {
-                        minimum_version: minimum_required_version
-                    }
-                );
-            }
-
-            if response.status().is_success() {
-                let mut body = Vec::new();
-                response.body_mut().read_to_end(&mut body).await?;
-                return Ok(serde_json::from_slice(&body)?);
-            } else {
-                let mut body = String::new();
-                response.body_mut().read_to_string(&mut body).await?;
-                anyhow::bail!(
-                    "Request failed with status: {:?}\nBody: {}",
-                    response.status(),
-                    body
-                );
-            }
+        if let Some(minimum_required_version) = response
+            .headers()
+            .get(MINIMUM_REQUIRED_VERSION_HEADER_NAME)
+            .and_then(|version| Version::from_str(version.to_str().ok()?).ok())
+        {
+            anyhow::ensure!(
+                app_version >= minimum_required_version,
+                ZedUpdateRequiredError {
+                    minimum_version: minimum_required_version
+                }
+            );
         }
+
+        if response.status().is_success() {
+            let mut body = Vec::new();
+            response.body_mut().read_to_end(&mut body).await?;
+            return Ok(serde_json::from_slice(&body)?);
+        }
+
+        let mut body = String::new();
+        response.body_mut().read_to_string(&mut body).await?;
+        anyhow::bail!(
+            "Request failed with status: {:?}\nBody: {}",
+            response.status(),
+            body
+        );
     }
 
     pub fn refresh_context(
