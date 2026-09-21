@@ -4,7 +4,7 @@ description = "Embedded ZZZ remote server archives for SSH/WSL/Docker uploads"
 edition.workspace = true
 version = "0.1.0"
 publish.workspace = true
-license = "GPL-3.0-or-later"
+license = "AGPL-3.0-or-later"
 
 [lib]
 path = "src/remote_server_embed.rs"

@@ -3,7 +3,7 @@ name = "perf"
 version = "0.1.0"
 publish = false
 edition.workspace = true
-license = "Apache-2.0"
+license = "AGPL-3.0-or-later"
 description = "A tool for measuring ZZZ test performance, with too many Clippy lints"
 
 [lib]

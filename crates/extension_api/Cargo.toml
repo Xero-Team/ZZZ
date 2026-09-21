@@ -8,7 +8,7 @@ keywords = ["zzz", "extension"]
 edition.workspace = true
 # Change back to `true` when we're ready to publish v0.8.0.
 publish = false
-license = "Apache-2.0"
+license = "AGPL-3.0-or-later"
 
 [lints]
 workspace = true

@@ -3,7 +3,7 @@ name = "action_log"
 version = "0.1.0"
 edition.workspace = true
 publish.workspace = true
-license = "GPL-3.0-or-later"
+license = "AGPL-3.0-or-later"
 
 [lib]
 path = "src/action_log.rs"

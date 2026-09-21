@@ -5,9 +5,11 @@ slug: terms
 
 **Last Updated**: September 5, 2026
 
-ZZZ is community-maintained, open-source software provided under the licenses
-included in this repository. ZZZ does not provide accounts, subscriptions,
-trials, payments, hosted AI, or hosted collaboration by default.
+ZZZ is community-maintained, open-source software distributed under the GNU
+Affero General Public License, version 3.0 or later (AGPL-3.0-or-later). ZZZ
+does not provide accounts, subscriptions, trials, payments, hosted AI, or
+hosted collaboration by default. Upstream Zed components remain available
+under their original licenses, which are retained in this repository.
 
 ## Local operation
 
@@ -26,10 +28,9 @@ action and are governed by the destination's terms and privacy policy.
 
 ## License and warranty
 
-ZZZ is provided under the open-source licenses in this repository, without
-warranty to the extent permitted by law. You are responsible for complying
-with the licenses and terms of any third-party software or service that you
-choose to connect.
+ZZZ is provided under AGPL-3.0-or-later, without warranty to the extent
+permitted by law. You are responsible for complying with the licenses and
+terms of any third-party software or service that you choose to connect.
 
 ## Contact
 

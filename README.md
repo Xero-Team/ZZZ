@@ -98,7 +98,14 @@ If you’d like to support the project, please give it a star. : )
 
 ## Licensing
 
-ZZZ inherits Zed's license structure.
-See [LICENSE-GPL](./LICENSE-GPL) and [LICENSE-APACHE](./LICENSE-APACHE).
+ZZZ is distributed under the
+[GNU Affero General Public License v3.0 or later](./LICENSE-AGPL)
+(AGPL-3.0-or-later).
+
+Upstream Zed source is licensed primarily under GPL-3.0-or-later, with
+Apache-2.0 components where marked. Those license texts are retained in
+this repository as [LICENSE-GPL](./LICENSE-GPL) and
+[LICENSE-APACHE](./LICENSE-APACHE) so the origin of each part stays
+clear. Modifications made in this repository are offered under the AGPL.
 
 The original Zed README is preserved at [README.ORIGINAL.md](./README.ORIGINAL.md).
