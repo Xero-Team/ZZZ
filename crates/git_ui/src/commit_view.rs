@@ -33,7 +33,7 @@ use std::{
     sync::Arc,
 };
 use theme::ActiveTheme;
-use ui::{ContextMenu, DiffStat, Disclosure, Divider, Tooltip, prelude::*};
+use ui::{AvatarStyle, ContextMenu, DiffStat, Disclosure, Divider, Tooltip, prelude::*};
 use util::{ResultExt, paths::PathStyle, rel_path::RelPath, truncate_and_trailoff};
 use workspace::item::TabTooltipContent;
 use workspace::{
@@ -532,6 +532,7 @@ impl CommitView {
         let commit = &self.commit;
         let author_name = commit.author_name.clone();
         let author_email = commit.author_email.clone();
+        let avatar_style = AvatarStyle::new(&author_email);
         let commit_sha = commit.sha.clone();
         let commit_date = time::OffsetDateTime::from_unix_timestamp(commit.commit_timestamp)
             .unwrap_or_else(|_| time::OffsetDateTime::now_utc());
@@ -618,24 +619,30 @@ impl CommitView {
                             )
                             .child(
                                 v_flex()
-                                    .child(h_flex().gap_1().child(Label::new(author_name)).when(
-                                        has_more,
-                                        |this| {
-                                            this.child(
-                                                Disclosure::new(
-                                                    "commit-message-disclosure",
-                                                    is_expanded,
-                                                )
-                                                .closed_icon(IconName::ExpandVertical)
-                                                .opened_icon(IconName::FoldVertical)
-                                                .tooltip(Tooltip::text(expand_tooltip))
-                                                .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.message_expanded = !this.message_expanded;
-                                                    cx.notify();
-                                                })),
+                                    .child(
+                                        h_flex()
+                                            .gap_1()
+                                            .child(
+                                                Label::new(author_name)
+                                                    .color(avatar_style.foreground(Color::Default)),
                                             )
-                                        },
-                                    ))
+                                            .when(has_more, |this| {
+                                                this.child(
+                                                    Disclosure::new(
+                                                        "commit-message-disclosure",
+                                                        is_expanded,
+                                                    )
+                                                    .closed_icon(IconName::ExpandVertical)
+                                                    .opened_icon(IconName::FoldVertical)
+                                                    .tooltip(Tooltip::text(expand_tooltip))
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.message_expanded =
+                                                            !this.message_expanded;
+                                                        cx.notify();
+                                                    })),
+                                                )
+                                            }),
+                                    )
                                     .child(
                                         h_flex()
                                             .gap_1p5()

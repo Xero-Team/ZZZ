@@ -2,6 +2,47 @@ use crate::prelude::*;
 
 use documented::Documented;
 use gpui::{AnyElement, Hsla, ImageSource, Img, IntoElement, Styled, img};
+use std::hash::{DefaultHasher, Hash, Hasher};
+
+/// A stable accent color derived from an identity string.
+///
+/// Used to give each git author a consistent color without fetching an
+/// avatar from a hosting provider, which would disclose the author's email
+/// to that provider.
+#[derive(Default, Debug, Clone, Copy)]
+pub struct AvatarStyle {
+    pub accent_foreground: Option<Hsla>,
+    pub accent_background: Option<Hsla>,
+}
+
+impl AvatarStyle {
+    /// Generate a "unique" color based on an identity string (usually an
+    /// email address).
+    pub fn new(identity: &str) -> Self {
+        let mut hasher = DefaultHasher::new();
+        identity.hash(&mut hasher);
+        let id = hasher.finish();
+        Self {
+            accent_foreground: Some(Hsla {
+                h: ((id % 32) as f32) / 32.0,
+                s: 0.66,
+                l: 0.66,
+                a: 1.0,
+            }),
+            accent_background: None,
+        }
+    }
+
+    pub fn foreground(&self, fallback: Color) -> Color {
+        self.accent_foreground
+            .map(Color::Custom)
+            .unwrap_or(fallback)
+    }
+
+    pub fn background(&self, fallback: Hsla) -> Hsla {
+        self.accent_background.unwrap_or(fallback)
+    }
+}
 
 /// An element that renders a user avatar with customizable appearance options.
 ///

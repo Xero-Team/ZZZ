@@ -33,6 +33,11 @@ ZZZ has not cut a versioned release yet, so the changes below are unreleased.
 - Add code outline support for diff files (gram#524).
 - Add a `project_panel.auto_open.should_focus` setting so a pasted file
   can open without taking focus from the project panel (gram#487).
+- Give each git author a stable color derived from their email, so
+  commit views can distinguish authors without fetching an avatar
+  (gram#488).
+- Suggest how to build and upload a remote server when none is found on
+  the remote host (gram#485).
 
 ### Changed
 

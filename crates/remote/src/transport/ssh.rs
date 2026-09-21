@@ -889,10 +889,12 @@ impl SshRemoteConnection {
         }
 
         anyhow::bail!(
-            "no embedded remote server for {}-{} and no remote server exists at ({:?})",
+            "no embedded remote server for {}-{} and no remote server exists at ({dst_path:?}). \
+             Build one with `cargo build -p remote_server --release` and upload it to that path \
+             on the remote host, or enable the `build-remote-server-binary` feature to build and \
+             upload it automatically.",
             self.ssh_platform.os,
             self.ssh_platform.arch,
-            dst_path
         )
     }
 

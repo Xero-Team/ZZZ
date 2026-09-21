@@ -16,7 +16,7 @@ use settings::Settings;
 use std::hash::Hash;
 use theme_settings::ThemeSettings;
 use time::{OffsetDateTime, UtcOffset};
-use ui::{Avatar, Chip, CopyButton, Divider, Tooltip, prelude::*, tooltip_container};
+use ui::{Avatar, AvatarStyle, Chip, CopyButton, Divider, Tooltip, prelude::*, tooltip_container};
 use workspace::Workspace;
 
 #[derive(Clone, Debug)]
@@ -114,6 +114,11 @@ impl<'a> CommitAvatar<'a> {
     pub fn render(&'a self, window: &mut Window, cx: &mut App) -> AnyElement {
         let border_color = cx.theme().colors().border_variant;
         let border_width = px(1.);
+        let avatar_style = self
+            .author_email
+            .as_deref()
+            .map(AvatarStyle::new)
+            .unwrap_or_default();
 
         match self.avatar(window, cx) {
             None => {
@@ -127,10 +132,10 @@ impl<'a> CommitAvatar<'a> {
                     .rounded_full()
                     .border(border_width)
                     .border_color(border_color)
-                    .bg(cx.theme().colors().element_disabled)
+                    .bg(avatar_style.background(cx.theme().colors().element_disabled))
                     .child(
                         Icon::new(IconName::Person)
-                            .color(Color::Muted)
+                            .color(avatar_style.foreground(Color::Muted))
                             .size(IconSize::XSmall),
                     )
                     .into_any_element()
