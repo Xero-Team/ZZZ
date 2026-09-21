@@ -124,6 +124,42 @@ impl InitialGraphCommitData {
             })
             .collect()
     }
+
+    /// Local and remote branch names pointing at this commit, without their
+    /// `refs/heads/` or `refs/remotes/` prefixes.
+    pub fn branch_names(&self) -> Vec<&str> {
+        self.ref_names
+            .iter()
+            .filter_map(|ref_name| {
+                let ref_name = ref_name.as_ref();
+                // `git log --decorate` renders the checked-out branch as
+                // `HEAD -> <branch>`.
+                let ref_name = ref_name.strip_prefix("HEAD -> ").unwrap_or(ref_name);
+
+                if ref_name == "HEAD"
+                    || ref_name.starts_with("tag: ")
+                    || ref_name.starts_with("refs/tags/")
+                {
+                    return None;
+                }
+
+                let branch_name = ref_name
+                    .strip_prefix("refs/heads/")
+                    .or_else(|| ref_name.strip_prefix("refs/remotes/"))
+                    .unwrap_or(ref_name);
+
+                // Skip anything left in an unhandled namespace, e.g. `refs/stash`.
+                if branch_name.is_empty()
+                    || branch_name.starts_with("refs/")
+                    || branch_name.ends_with("/HEAD")
+                {
+                    return None;
+                }
+
+                Some(branch_name)
+            })
+            .collect()
+    }
 }
 
 struct CommitDataRequest {
@@ -4458,6 +4494,29 @@ mod tests {
         };
 
         assert_eq!(commit.tag_names(), ["v1.0.0", "v1.1.0"]);
+    }
+
+    #[test]
+    fn test_initial_graph_commit_data_branch_names() {
+        let commit = InitialGraphCommitData {
+            sha: Oid::from_bytes(&[0; 20]).unwrap(),
+            parents: SmallVec::new(),
+            ref_names: vec![
+                SharedString::from("HEAD -> main"),
+                SharedString::from("origin/main"),
+                SharedString::from("tag: v1.0.0"),
+                SharedString::from("refs/heads/feature"),
+                SharedString::from("refs/remotes/upstream/release"),
+                SharedString::from("refs/remotes/origin/HEAD"),
+                SharedString::from("refs/stash"),
+                SharedString::from("HEAD"),
+            ],
+        };
+
+        assert_eq!(
+            commit.branch_names(),
+            ["main", "origin/main", "feature", "upstream/release"]
+        );
     }
 
     #[gpui::test]

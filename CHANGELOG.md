@@ -34,12 +34,12 @@ ZZZ has not cut a versioned release yet, so the changes below are unreleased.
 - Add a `project_panel.auto_open.should_focus` setting so a pasted file
   can open without taking focus from the project panel (gram#487).
 - Give each git author a stable color derived from their email, so
-  commit views can distinguish authors without fetching an avatar
-  (gram#488).
+  commit views can distinguish authors without fetching an avatar.
 - Suggest how to build and upload a remote server when none is found on
   the remote host (gram#485).
 - Add built-in Typst support, including syntax highlighting, outlines,
   and the tinymist language server (gram#517).
+- Show local and remote branch names on entries in the git history list.
 
 ### Changed
 

@@ -851,6 +851,7 @@ struct BulkStaging {
 struct CommitHistoryEntry {
     sha: Oid,
     tag_names: Vec<SharedString>,
+    branch_names: Vec<SharedString>,
 }
 
 impl From<&Arc<InitialGraphCommitData>> for CommitHistoryEntry {
@@ -861,6 +862,11 @@ impl From<&Arc<InitialGraphCommitData>> for CommitHistoryEntry {
                 .tag_names()
                 .into_iter()
                 .map(|tag_name| SharedString::from(tag_name.to_string()))
+                .collect(),
+            branch_names: commit
+                .branch_names()
+                .into_iter()
+                .map(|branch_name| SharedString::from(branch_name.to_string()))
                 .collect(),
         }
     }
@@ -6206,6 +6212,7 @@ impl GitPanel {
                                     let short_sha: SharedString =
                                         sha_string[..7.min(sha_string.len())].to_string().into();
                                     let tag_names = entry.tag_names.clone();
+                                    let branch_names = entry.branch_names.clone();
 
                                     let (subject, author_name, author_email, timestamp): (
                                         SharedString,
@@ -6287,6 +6294,40 @@ impl GitPanel {
                                                 .w_full()
                                                 .min_w_0()
                                                 .child(Label::new(subject).truncate())
+                                                .children((!branch_names.is_empty()).then(|| {
+                                                    let hidden_branch_count = branch_names
+                                                        .len()
+                                                        .saturating_sub(MAX_HISTORY_TAG_CHIPS);
+                                                    h_flex()
+                                                        .gap_1()
+                                                        .min_w_0()
+                                                        .children(
+                                                            branch_names
+                                                                .iter()
+                                                                .take(MAX_HISTORY_TAG_CHIPS)
+                                                                .cloned()
+                                                                .map(|branch_name| {
+                                                                    Chip::new(branch_name.clone())
+                                                                        .truncate()
+                                                                        .tooltip(Tooltip::text(
+                                                                            branch_name,
+                                                                        ))
+                                                                }),
+                                                        )
+                                                        .when(hidden_branch_count > 0, |this| {
+                                                            let hidden_branch_names = branch_names
+                                                                [MAX_HISTORY_TAG_CHIPS..]
+                                                                .join(", ");
+                                                            this.child(
+                                                                Chip::new(format!(
+                                                                    "+{hidden_branch_count}"
+                                                                ))
+                                                                .tooltip(Tooltip::text(
+                                                                    hidden_branch_names,
+                                                                )),
+                                                            )
+                                                        })
+                                                }))
                                                 .children((!tag_names.is_empty()).then(|| {
                                                     let hidden_tag_count = tag_names
                                                         .len()
@@ -8912,6 +8953,7 @@ mod tests {
                 CommitHistory::Loaded(Rc::from([CommitHistoryEntry {
                     sha,
                     tag_names: Vec::new(),
+                    branch_names: Vec::new(),
                 }]))
             );
         });
@@ -8968,6 +9010,7 @@ mod tests {
         let entries: Rc<[CommitHistoryEntry]> = Rc::from([CommitHistoryEntry {
             sha,
             tag_names: Vec::new(),
+            branch_names: Vec::new(),
         }]);
         let no_entries: Rc<[CommitHistoryEntry]> = Rc::from([]);
 
