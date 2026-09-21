@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest a change to ZZZ.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before investing effort in a large feature, read
+        docs/src/development/feature-process.md. Confirm the project wants
+        the feature before opening a pull request.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the problem, not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: checkboxes
+    id: philosophy
+    attributes:
+      label: Philosophy check
+      description: ZZZ removes some surfaces by design. See docs/src/mission.md.
+      options:
+        - label: This does not reintroduce telemetry, accounts, billing, hosted AI defaults, or auto-updates.
+          required: true

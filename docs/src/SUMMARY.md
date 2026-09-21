@@ -2,6 +2,7 @@
 
 # Welcome
 
+- [The Mission](./mission.md)
 - [Getting Started](./getting-started.md)
 - [Installation](./installation.md)
   - [Update](./update.md)
@@ -162,6 +163,7 @@
 
 # Coming From…
 
+- [Zed](./migrate/zed.md)
 - [VS Code](./migrate/vs-code.md)
 - [IntelliJ IDEA](./migrate/intellij.md)
 - [PyCharm](./migrate/pycharm.md)
@@ -190,6 +192,8 @@
   - [Using Debuggers](./development/debuggers.md)
   - [Performance](./performance.md)
   - [Glossary](./development/glossary.md)
+  - [Keeping ZZZ Lean](./development/bloat.md)
+  - [GPUI: Ownership and Data Flow](./development/ownership-and-data-flow.md)
   - [Upstream Sync 2026-07-03](./development/upstream-sync-2026-07-03.md)
   - [Upstream Sync 2026-08-07](./development/upstream-sync-2026-08-07.md)
   - [Upstream Sync 2026-08-18](./development/upstream-sync-2026-08-18.md)
@@ -197,6 +201,6 @@
   - [Upstream Sync 2026-09-02](./development/upstream-sync-2026-09-02.md)
   - [Upstream Sync 2026-09-04](./development/upstream-sync-2026-09-04.md)
   - [Upstream Sync 2026-09-06](./development/upstream-sync-2026-09-06.md)
-   - [Upstream Sync 2026-09-17](./development/upstream-sync-2026-09-17.md)
-   - [Upstream Sync 2026-09-18](./development/upstream-sync-2026-09-18.md)
+  - [Upstream Sync 2026-09-17](./development/upstream-sync-2026-09-17.md)
+  - [Upstream Sync 2026-09-18](./development/upstream-sync-2026-09-18.md)
 - [Release Notes](./development/release-notes.md)

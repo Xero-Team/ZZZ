@@ -39,6 +39,17 @@ Examples of unacceptable behavior:
 - Other conduct which could reasonably be considered inappropriate in a
   professional setting
 
+## AI Participation
+
+ZZZ requires AI-assisted review for every contribution, and original
+features additionally require human review. This is a project rule, not a
+preference. If it conflicts with your values, the appropriate response is to
+fork the repository; see [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+Reports, reviews, and contributions produced with AI assistance are welcome
+and expected. They are held to the same standard of conduct as any other
+contribution.
+
 ## Enforcement
 
 Report unacceptable behavior through this repository's issue tracker:

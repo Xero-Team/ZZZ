@@ -20,6 +20,9 @@ This fork exists because some things should not be configurable — they should 
 > Strip away the telemetry, the upsells, the proprietary coupling —
 > what remains is the editor.
 
+Read [The Mission](./docs/src/mission.md) for the full reasoning: what ZZZ
+keeps, what it removes, and how those boundaries are enforced.
+
 ---
 
 ## How ZZZ differs from upstream Zed
@@ -69,6 +72,11 @@ No CLA. No copyright assignment.
 Contributions are accepted under the
 [Developer Certificate of Origin (DCO)](https://developercertificate.org/).
 Sign your commits with `git commit -s` and you're done.
+
+ZZZ requires AI-assisted review for every contribution. Original features
+additionally require human review. See the
+[AI-assisted contributions](./CONTRIBUTING.md#ai-assisted-contributions)
+policy.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full workflow.
 

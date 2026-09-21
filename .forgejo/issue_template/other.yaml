@@ -1,0 +1,9 @@
+name: Other
+description: Anything that is not a bug report or a feature request.
+body:
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+    validations:
+      required: true

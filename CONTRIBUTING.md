@@ -4,7 +4,23 @@ Thank you for helping us make ZZZ better!
 
 All activity in ZZZ forums is subject to our [Code of
 Conduct](./CODE_OF_CONDUCT.md). ZZZ accepts contributions under the Developer
-Certificate of Origin; no CLA or copyright assignment is required.
+Certificate of Origin; no CLA or copyright assignment is required. For why the
+fork exists, read [The Mission](./docs/src/mission.md).
+
+## AI-assisted contributions
+
+ZZZ requires AI assistance for every contribution.
+
+- Every pull request must include at least one AI review of the change,
+  recorded in the pull request. A review from an agent counts.
+- Commits absorbed from upstream Zed need only the AI review.
+- Original features and fixes authored in this repository need both the AI
+  review and a human review before merge.
+- The author remains responsible for understanding the change and defending
+  it in review, however it was produced.
+
+If you disagree with mandatory AI participation, you are free to fork this
+repository.
 
 ## Contribution ideas
 
@@ -48,8 +64,8 @@ submitted. If you'd like your PR to have the best chance of being merged:
 - If it changes the UI, attach **screenshots** or screen recordings.
 - Make the PR about **one thing only**, e.g. if it's a bugfix, don't add two
   features and a refactoring on top of that.
-- Keep AI assistance under your judgement and responsibility: it's unlikely
-  we'll merge a vibe-coded PR that the author doesn't understand.
+- Include the required AI review, and be ready to explain the change
+  yourself. See [AI-assisted contributions](#ai-assisted-contributions).
 
 The internal advice for reviewers is as follows:
 
@@ -128,7 +144,8 @@ Although there are few hard and fast rules, typically we don't merge:
 - Giant refactorings.
 - Non-trivial changes with no tests.
 - Stylistic code changes that do not alter any app logic. Reducing allocations, removing `.unwrap()`s, fixing typos is great; making code "more readable" — maybe not so much.
-- Anything that seems AI-generated without understanding the output.
+- Changes that skip the required AI review, or that the author cannot
+  explain.
 
 ## Bird's-eye view of ZZZ
 
