@@ -88,8 +88,19 @@ impl OpenPathDelegate {
             dyn Fn(&mut Window, &mut Context<Picker<Self>>) -> Option<AnyElement> + 'static,
         >,
     ) -> Self {
-        self.render_footer = footer;
+        self.set_footer(footer);
         self
+    }
+
+    /// Set the footer after the containing [`Picker`] has been constructed, so
+    /// callers can capture the picker's focus handle outside of its render.
+    pub fn set_footer(
+        &mut self,
+        footer: Arc<
+            dyn Fn(&mut Window, &mut Context<Picker<Self>>) -> Option<AnyElement> + 'static,
+        >,
+    ) {
+        self.render_footer = footer;
     }
 
     pub fn show_hidden(mut self) -> Self {

@@ -427,9 +427,26 @@ impl ProjectPicker {
     ) -> Entity<Self> {
         let (tx, rx) = oneshot::channel();
         let lister = project::DirectoryLister::Project(project.clone());
+        let delegate = open_path_prompt::OpenPathDelegate::new(tx, lister, false, cx).show_hidden();
+
+        let home_query = home_dir.to_string();
+        let path_style = home_dir.path_style();
+        let recent_connection = connection.clone();
+
+        let picker = cx.new(|cx| {
+            let picker = Picker::uniform_list(delegate, window, cx)
+                .width(rems(34.))
+                .modal(false);
+            picker.set_query(&home_query, window, cx);
+            picker
+        });
+
+        // Capture the picker's focus handle here rather than inside the footer,
+        // which renders while the picker entity is already leased.
+        let picker_focus_handle = picker.read(cx).focus_handle(cx);
         let footer = Arc::new(
-            |_window: &mut Window, cx: &mut Context<Picker<OpenPathDelegate>>| {
-                let focus_handle = cx.entity().read(cx).focus_handle(cx);
+            move |_window: &mut Window, cx: &mut Context<Picker<OpenPathDelegate>>| {
+                let focus_handle = picker_focus_handle.clone();
                 Some(
                     h_flex()
                         .w_full()
@@ -506,21 +523,7 @@ impl ProjectPicker {
                 )
             },
         );
-        let delegate = open_path_prompt::OpenPathDelegate::new(tx, lister, false, cx)
-            .show_hidden()
-            .with_footer(footer);
-
-        let home_query = home_dir.to_string();
-        let path_style = home_dir.path_style();
-        let recent_connection = connection.clone();
-
-        let picker = cx.new(|cx| {
-            let picker = Picker::uniform_list(delegate, window, cx)
-                .width(rems(34.))
-                .modal(false);
-            picker.set_query(&home_query, window, cx);
-            picker
-        });
+        picker.update(cx, |picker, _| picker.delegate.set_footer(footer));
 
         let data = match &connection {
             RemoteConnectionOptions::Ssh(connection) => ProjectPickerData::Ssh {
