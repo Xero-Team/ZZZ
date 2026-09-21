@@ -99,6 +99,7 @@ impl DebugAdapter for ExtensionDapAdapter {
         self.extension
             .get_dap_binary(
                 self.debug_adapter_name.clone(),
+                delegate.allow_binary_download(),
                 config.clone(),
                 user_installed_path,
                 Arc::new(WorktreeDelegateAdapter(delegate.clone())),

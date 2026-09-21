@@ -41,6 +41,9 @@ ZZZ has not cut a versioned release yet, so the changes below are unreleased.
   review.
 - Distribute ZZZ under AGPL-3.0-or-later. Upstream Zed license texts are
   retained for the parts they cover.
+- Require an extension to honor the user's language server and debug
+  adapter binary permissions before it can look up or download a binary
+  (gram#507).
 
 ### Removed
 

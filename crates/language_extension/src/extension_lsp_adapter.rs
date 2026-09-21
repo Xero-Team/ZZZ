@@ -161,7 +161,7 @@ impl DynLspInstaller for ExtensionLspAdapter {
         self: Arc<Self>,
         delegate: Arc<dyn LspAdapterDelegate>,
         _: Option<Toolchain>,
-        _: LanguageServerBinaryOptions,
+        binary_options: LanguageServerBinaryOptions,
         _: OwnedMutexGuard<Option<(bool, LanguageServerBinary)>>,
         _: AsyncApp,
     ) -> LanguageServerBinaryLocations {
@@ -173,6 +173,7 @@ impl DynLspInstaller for ExtensionLspAdapter {
                     .language_server_command(
                         self.language_server_id.clone(),
                         self.language_name.clone(),
+                        binary_options,
                         delegate,
                     )
                     .await?;

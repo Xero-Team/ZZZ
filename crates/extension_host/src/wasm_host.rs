@@ -1,6 +1,6 @@
 pub mod wit;
 
-use crate::capability_granter::CapabilityGranter;
+use crate::capability_granter::{BinaryOptions, CapabilityGranter};
 use crate::{ExtensionManifest, ExtensionSettings};
 use anyhow::{Context as _, Result, anyhow, bail};
 use async_trait::async_trait;
@@ -24,7 +24,7 @@ use futures::{
 use gpui::{App, AsyncApp, BackgroundExecutor, Task};
 use http_client::HttpClient;
 use language::LanguageName;
-use lsp::LanguageServerName;
+use lsp::{LanguageServerBinaryOptions, LanguageServerName};
 use moka::sync::Cache;
 use node_runtime::NodeRuntime;
 use release_channel::ReleaseChannel;
@@ -89,10 +89,15 @@ impl extension::Extension for WasmExtension {
         &self,
         language_server_id: LanguageServerName,
         language_name: LanguageName,
+        binary_options: LanguageServerBinaryOptions,
         worktree: Arc<dyn WorktreeDelegate>,
     ) -> Result<Command> {
-        self.call(|extension, store| {
+        self.call(move |extension, store| {
             async move {
+                store
+                    .data()
+                    .capability_granter
+                    .set_binary_options((&binary_options).into());
                 let resource = store.data_mut().table.push(worktree)?;
                 let command = extension
                     .call_language_server_command(
@@ -438,12 +443,20 @@ impl extension::Extension for WasmExtension {
     async fn get_dap_binary(
         &self,
         dap_name: Arc<str>,
+        allow_binary_download: bool,
         config: DebugTaskDefinition,
         user_installed_path: Option<PathBuf>,
         worktree: Arc<dyn WorktreeDelegate>,
     ) -> Result<DebugAdapterBinary> {
-        self.call(|extension, store| {
+        self.call(move |extension, store| {
             async move {
+                store
+                    .data()
+                    .capability_granter
+                    .set_binary_options(BinaryOptions {
+                        allow_path_lookup: true,
+                        allow_binary_download,
+                    });
                 let resource = store.data_mut().table.push(worktree)?;
                 let dap_binary = extension
                     .call_get_dap_binary(store, dap_name, config, user_installed_path, resource)
