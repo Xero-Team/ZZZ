@@ -889,8 +889,9 @@ fn face_info_into_properties(
 }
 
 fn check_is_known_emoji_font(postscript_name: &str) -> bool {
-    // TODO: Include other common emoji fonts
-    postscript_name == "NotoColorEmoji"
+    // OpenMoji is bundled as a fallback for platforms that do not ship a
+    // color emoji font.
+    matches!(postscript_name, "NotoColorEmoji" | "OpenMojiBlack")
 }
 #[cfg(test)]
 mod tests {

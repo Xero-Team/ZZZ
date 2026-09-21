@@ -22,6 +22,7 @@ const EMOJI_FONT_FAMILIES: &[&str] = &[
     "Emoji One",
     "Twitter Color Emoji",
     "JoyPixels",
+    "OpenMoji",
 ];
 
 #[cfg(not(any(
