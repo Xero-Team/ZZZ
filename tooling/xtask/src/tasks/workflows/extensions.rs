@@ -3,9 +3,6 @@ use indexmap::IndexMap;
 
 use crate::tasks::workflows::vars;
 
-pub(crate) mod bump_version;
-pub(crate) mod run_tests;
-
 pub(crate) trait WithAppSecrets: Sized {
     fn with_app_secrets(self) -> Self;
 }

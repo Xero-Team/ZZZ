@@ -20,12 +20,10 @@ mod deploy_docs;
 mod extension_auto_bump;
 mod extension_bump;
 mod extension_tests;
-mod extension_workflow_rollout;
 mod extensions;
 mod job_summary;
 mod nix_build;
 mod platform_checks;
-mod publish_extension_cli;
 mod run_bundling;
 
 mod release;
@@ -108,20 +106,6 @@ impl WorkflowFile {
         }
     }
 
-    fn extension(f: fn(&GenerateWorkflowArgs) -> Workflow) -> WorkflowFile {
-        WorkflowFile {
-            source: WorkflowSource::WithContext(f),
-            r#type: WorkflowType::ExtensionCi,
-        }
-    }
-
-    fn extension_shared(f: fn(&GenerateWorkflowArgs) -> Workflow) -> WorkflowFile {
-        WorkflowFile {
-            source: WorkflowSource::WithContext(f),
-            r#type: WorkflowType::ExtensionsShared,
-        }
-    }
-
     fn generate_file(&self, workflow_args: &GenerateWorkflowArgs) -> Result<()> {
         let workflow = match &self.source {
             WorkflowSource::Contextless(f) => f(),
@@ -159,12 +143,6 @@ impl WorkflowFile {
 pub enum WorkflowType {
     /// Workflows living in the ZZZ repository
     ZZZ,
-    /// Workflows living in the `zed-extensions/workflows` repository that are
-    /// required workflows for PRs to the extension organization
-    ExtensionCi,
-    /// Workflows living in each of the extensions to perform checks and version
-    /// bumps until a better, more centralized system for that is in place.
-    ExtensionsShared,
 }
 
 impl WorkflowType {
@@ -173,28 +151,26 @@ impl WorkflowType {
     fn disclaimer(&self, workflow_name: &str) -> String {
         format!(
             concat!(
-                "{preamble}{workflow_name}{external_disclaimer}\n",
+                "{preamble}{workflow_name}\n",
                 "# Rebuild with `cargo xtask workflows`.",
             ),
             preamble = Self::PREAMBLE,
             workflow_name = workflow_name,
-            external_disclaimer = (*self != WorkflowType::ZZZ)
-                .then_some(" within the ZZZ repository.")
-                .unwrap_or_default(),
         )
     }
 
     pub fn folder_path(&self) -> PathBuf {
         match self {
             WorkflowType::ZZZ => PathBuf::from(".github/workflows"),
-            WorkflowType::ExtensionCi => PathBuf::from("extensions/workflows"),
-            WorkflowType::ExtensionsShared => PathBuf::from("extensions/workflows/shared"),
         }
     }
 
     fn remove_generated_workflows() -> Result<()> {
         for workflow_type in Self::iter() {
-            for path in fs::read_dir(workflow_type.folder_path())? {
+            let Ok(entries) = fs::read_dir(workflow_type.folder_path()) else {
+                continue;
+            };
+            for path in entries {
                 let entry = path?;
                 if entry
                     .file_type()
