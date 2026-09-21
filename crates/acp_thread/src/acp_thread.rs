@@ -588,6 +588,12 @@ impl ToolCall {
         let buffer = project
             .update(cx, |project, cx| {
                 if let Some(path) = project.project_path_for_absolute_path(&location.path, cx) {
+                    if project
+                        .entry_for_path(&path, cx)
+                        .is_some_and(|entry| entry.is_dir())
+                    {
+                        return None;
+                    }
                     Some(project.open_buffer(path, cx))
                 } else if is_absolute(
                     location.path.to_string_lossy().as_ref(),

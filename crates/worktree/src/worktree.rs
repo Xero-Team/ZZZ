@@ -1616,6 +1616,11 @@ impl LocalWorktree {
             const FILE_SIZE_MAX: u64 = 6 * 1024 * 1024 * 1024; // 6GB
             let metadata = fs.metadata(&abs_path).await?;
             if let Some(metadata) = metadata.as_ref()
+                && metadata.is_dir
+            {
+                anyhow::bail!("Cannot load directories as files: {abs_path:?}");
+            }
+            if let Some(metadata) = metadata.as_ref()
                 && metadata.len >= FILE_SIZE_MAX
             {
                 anyhow::bail!("File is too large to load");
