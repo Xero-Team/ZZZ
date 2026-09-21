@@ -7,7 +7,7 @@ use settings::CommandAliasTarget;
 pub use settings::{
     AutosaveSetting, BottomDockLayout, DisplayLanguage, EncodingDisplayOptions, InactiveOpacity,
     PaneSplitDirectionHorizontal, PaneSplitDirectionVertical, RegisterSetting,
-    RestoreOnStartupBehavior, Settings,
+    RestoreOnStartupBehavior, Settings, StatusBarPosition,
 };
 
 #[derive(RegisterSetting)]
@@ -171,6 +171,7 @@ pub struct StatusBarSettings {
     pub cursor_position_button: bool,
     pub line_endings_button: bool,
     pub active_encoding_button: EncodingDisplayOptions,
+    pub position: StatusBarPosition,
 }
 
 impl Settings for StatusBarSettings {
@@ -183,6 +184,7 @@ impl Settings for StatusBarSettings {
             cursor_position_button: status_bar.cursor_position_button.unwrap(),
             line_endings_button: status_bar.line_endings_button.unwrap(),
             active_encoding_button: status_bar.active_encoding_button.unwrap(),
+            position: status_bar.position.unwrap(),
         }
     }
 }

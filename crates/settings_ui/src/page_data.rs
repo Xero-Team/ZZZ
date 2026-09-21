@@ -4334,7 +4334,7 @@ fn search_and_files_page() -> SettingsPage {
 }
 
 fn window_and_layout_page() -> SettingsPage {
-    fn status_bar_section() -> [SettingsPageItem; 11] {
+    fn status_bar_section() -> [SettingsPageItem; 12] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.status.bar",
@@ -4415,6 +4415,27 @@ fn window_and_layout_page() -> SettingsPage {
                             .status_bar
                             .get_or_insert_default()
                             .active_encoding_button = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt("settings_ui.page_data.title.position", "Position"),
+                description: lt(
+                    "settings_ui.page_data.description.where.to.show.the.status.bar.in.the.workspace",
+                    "Where to show the status bar in the workspace.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("status_bar.position"),
+                    pick: |settings_content| {
+                        settings_content.status_bar.as_ref()?.position.as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .status_bar
+                            .get_or_insert_default()
+                            .position = value;
                     },
                 }),
                 metadata: None,

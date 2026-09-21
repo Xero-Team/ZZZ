@@ -1800,6 +1800,9 @@
     "line_endings_button": false,
     // Control when to show the active encoding in the status bar.
     "active_encoding_button": "non_utf8",
+    // Where to show the status bar in the workspace.
+    // One of: ["bottom", "top"]
+    "position": "bottom",
   },
   // Settings specific to the terminal
   "terminal": {

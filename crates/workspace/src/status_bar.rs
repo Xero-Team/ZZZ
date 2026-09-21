@@ -1,6 +1,6 @@
 use crate::{
-    ItemHandle, MultiWorkspace, Pane, SidebarSide, ToggleWorkspaceSidebar,
-    sidebar_side_context_menu,
+    ItemHandle, MultiWorkspace, Pane, SidebarSide, StatusBarPosition, StatusBarSettings,
+    ToggleWorkspaceSidebar, sidebar_side_context_menu,
 };
 use gpui::{
     Anchor, AnyView, App, Context, Decorations, Entity, IntoElement, ParentElement, Render, Styled,
@@ -8,6 +8,7 @@ use gpui::{
 };
 use i18n::tr;
 use std::any::TypeId;
+use settings::Settings as _;
 use theme::CLIENT_SIDE_DECORATION_ROUNDING;
 use ui::{Divider, Indicator, Tooltip, prelude::*};
 
@@ -70,6 +71,8 @@ pub struct StatusBar {
 impl Render for StatusBar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let sidebar = SidebarStatus::query(&self.multi_workspace, cx);
+        let position = StatusBarSettings::get_global(cx).position;
+        let at_top = position == StatusBarPosition::Top;
 
         h_flex()
             .w_full()
@@ -81,30 +84,48 @@ impl Render for StatusBar {
                 Decorations::Server => el,
                 Decorations::Client { tiling, .. } => el
                     .when(
-                        !(tiling.bottom
-                            || tiling.right
-                            || (sidebar.open && sidebar.side == SidebarSide::Right)),
+                        !at_top
+                            && !(tiling.bottom
+                                || tiling.right
+                                || (sidebar.open && sidebar.side == SidebarSide::Right)),
                         |el| el.rounded_br(CLIENT_SIDE_DECORATION_ROUNDING),
                     )
                     .when(
-                        !(tiling.bottom
-                            || tiling.left
-                            || (sidebar.open && sidebar.side == SidebarSide::Left)),
+                        !at_top
+                            && !(tiling.bottom
+                                || tiling.left
+                                || (sidebar.open && sidebar.side == SidebarSide::Left)),
                         |el| el.rounded_bl(CLIENT_SIDE_DECORATION_ROUNDING),
                     )
+                    .when(
+                        at_top
+                            && !(tiling.top
+                                || tiling.right
+                                || (sidebar.open && sidebar.side == SidebarSide::Right)),
+                        |el| el.rounded_tr(CLIENT_SIDE_DECORATION_ROUNDING),
+                    )
+                    .when(
+                        at_top
+                            && !(tiling.top
+                                || tiling.left
+                                || (sidebar.open && sidebar.side == SidebarSide::Left)),
+                        |el| el.rounded_tl(CLIENT_SIDE_DECORATION_ROUNDING),
+                    )
                     // This border is to avoid a transparent gap in the rounded corners
-                    .mb(px(-1.))
-                    .mt({
-                        #[cfg(target_os = "linux")]
-                        let needs_gap_fix = {
-                            // Running on Wayland and using some scaling levels other than 100% causes a
-                            // 1px gap above the status bar; adding a margin avoids this.
-                            gpui::guess_compositor() == "Wayland" && window.scale_factor() != 1.0
-                        };
-                        #[cfg(not(target_os = "linux"))]
-                        let needs_gap_fix = false;
-                        if needs_gap_fix { px(-1.) } else { px(0.) }
+                    .when(!at_top, |el| {
+                        el.mb(px(-1.)).mt({
+                            #[cfg(target_os = "linux")]
+                            let needs_gap_fix = {
+                                // Running on Wayland and using some scaling levels other than 100% causes a
+                                // 1px gap above the status bar; adding a margin avoids this.
+                                gpui::guess_compositor() == "Wayland" && window.scale_factor() != 1.0
+                            };
+                            #[cfg(not(target_os = "linux"))]
+                            let needs_gap_fix = false;
+                            if needs_gap_fix { px(-1.) } else { px(0.) }
+                        })
                     })
+                    .when(at_top, |el| el.mt(px(-1.)))
                     .border_b(px(1.0))
                     .border_color(cx.theme().colors().status_bar_background),
             })
