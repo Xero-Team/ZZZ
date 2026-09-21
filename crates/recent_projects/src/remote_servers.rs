@@ -420,6 +420,7 @@ impl ProjectPicker {
         connection: RemoteConnectionOptions,
         project: Entity<Project>,
         home_dir: RemotePathBuf,
+        app_fs: Arc<dyn Fs>,
         workspace: WeakEntity<Workspace>,
         window: &mut Window,
         cx: &mut Context<RemoteServerProjects>,
@@ -511,9 +512,6 @@ impl ProjectPicker {
 
         let home_query = home_dir.to_string();
         let path_style = home_dir.path_style();
-        let app_fs = workspace
-            .read_with(cx, |workspace, _| workspace.app_state().fs.clone())
-            .ok();
         let recent_connection = connection.clone();
 
         let picker = cx.new(|cx| {
@@ -685,56 +683,53 @@ impl ProjectPicker {
             home_query,
         });
 
-        if let Some(fs) = app_fs {
-            let db = WorkspaceDb::global(cx);
-            cx.spawn_in(window, {
-                let entity = entity.clone();
-                async move |_this, cx| {
-                    let workspaces = db
-                        .recent_project_workspaces(fs.as_ref())
-                        .await
-                        .log_err()
-                        .unwrap_or_default();
-                    let recent_projects = workspaces
-                        .into_iter()
-                        .filter_map(|workspace| match &workspace.location {
-                            SerializedWorkspaceLocation::Remote(options)
-                                if same_remote_connection_identity(
-                                    Some(options),
-                                    Some(&recent_connection),
-                                ) =>
-                            {
-                                let paths = workspace.paths.paths().to_vec();
-                                (!paths.is_empty()).then_some(paths)
-                            }
-                            _ => None,
-                        })
-                        .collect::<Vec<_>>();
+        let db = WorkspaceDb::global(cx);
+        cx.spawn_in(window, {
+            let entity = entity.clone();
+            async move |_this, cx| {
+                let workspaces = db
+                    .recent_project_workspaces(app_fs.as_ref())
+                    .await
+                    .log_err()
+                    .unwrap_or_default();
+                let recent_projects = workspaces
+                    .into_iter()
+                    .filter_map(|workspace| match &workspace.location {
+                        SerializedWorkspaceLocation::Remote(options)
+                            if same_remote_connection_identity(
+                                Some(options),
+                                Some(&recent_connection),
+                            ) =>
+                        {
+                            let paths = workspace.paths.paths().to_vec();
+                            (!paths.is_empty()).then_some(paths)
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
 
-                    entity
-                        .update_in(cx, |this, window, cx| {
-                            this.recent_projects = recent_projects;
-                            if let Some(most_recent) =
-                                this.recent_projects.first().and_then(|paths| paths.first())
-                            {
-                                let query = RemotePathBuf::new(
-                                    most_recent.to_string_lossy().into_owned(),
-                                    path_style,
-                                )
-                                .to_string();
-                                if this.picker.read(cx).query(cx) == this.home_query {
-                                    this.picker.update(cx, |picker, cx| {
-                                        picker.set_query(&query, window, cx)
-                                    });
-                                }
+                entity
+                    .update_in(cx, |this, window, cx| {
+                        this.recent_projects = recent_projects;
+                        if let Some(most_recent) =
+                            this.recent_projects.first().and_then(|paths| paths.first())
+                        {
+                            let query = RemotePathBuf::new(
+                                most_recent.to_string_lossy().into_owned(),
+                                path_style,
+                            )
+                            .to_string();
+                            if this.picker.read(cx).query(cx) == this.home_query {
+                                this.picker
+                                    .update(cx, |picker, cx| picker.set_query(&query, window, cx));
                             }
-                            cx.notify();
-                        })
-                        .ok();
-                }
-            })
-            .detach();
-        }
+                        }
+                        cx.notify();
+                    })
+                    .ok();
+            }
+        })
+        .detach();
 
         entity
     }
@@ -1306,6 +1301,7 @@ impl RemoteServerProjects {
         workspace: WeakEntity<Workspace>,
     ) -> Self {
         let fs = project.read(cx).fs().clone();
+        let app_fs = fs.clone();
         let mut this = Self::new(create_new_window, fs, window, workspace.clone(), cx);
         this.mode = Mode::ProjectPicker(ProjectPicker::new(
             create_new_window,
@@ -1313,6 +1309,7 @@ impl RemoteServerProjects {
             connection_options,
             project,
             home_dir,
+            app_fs,
             workspace,
             window,
             cx,
