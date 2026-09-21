@@ -3422,6 +3422,7 @@ Examples:
 - Description:
   Preview tabs allow you to open files in preview mode. A pane keeps at most one preview tab at a time, so opening another file in preview mode takes over that slot. Switching to a file that is already open does not close the preview tab. This is useful for quickly viewing files without cluttering your workspace. Preview tabs display their file names in italics. \
   There are several ways to convert a preview tab into a regular tab:
+
   - Double-clicking on the file
   - Double-clicking on the tab header
   - Using the {#action project_panel::OpenPermanent} action

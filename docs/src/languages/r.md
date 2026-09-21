@@ -8,6 +8,7 @@ description: "Configure R language support in ZZZ, including language servers, f
 R support is available via multiple R ZZZ extensions:
 
 - [ocsmit/zed-r](https://github.com/ocsmit/zed-r)
+
   - Tree-sitter: [r-lib/tree-sitter-r](https://github.com/r-lib/tree-sitter-r)
   - Language-Server: [REditorSupport/languageserver](https://github.com/REditorSupport/languageserver)
 

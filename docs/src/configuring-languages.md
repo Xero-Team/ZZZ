@@ -100,6 +100,7 @@ ZZZ simplifies language server management for users:
 1. Automatic Download: When you open a file with a matching file type, ZZZ automatically downloads the appropriate language server. ZZZ may prompt you to install an extension for known file types.
 
 2. Storage Location:
+
    - macOS: `~/Library/Application Support/ZZZ/languages`
    - Linux: `$HOME/.local/share/zzz/languages`, `$HOME/.local/share/zzz/languages`, or `$HOME/.local/share/zzz/languages`
 
