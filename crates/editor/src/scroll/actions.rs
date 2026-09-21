@@ -5,6 +5,7 @@ use crate::{
     ScrollCursorCenterTopBottom, ScrollCursorTop, display_map::DisplayRow, scroll::ScrollOffset,
 };
 use gpui::{Context, Point, Window};
+use settings::Settings as _;
 
 impl Editor {
     pub fn next_screen(&mut self, _: &NextScreen, window: &mut Window, cx: &mut Context<Editor>) {
@@ -30,8 +31,17 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !crate::EditorSettings::get_global(cx).smooth_scroll.enabled {
+            self.scroll_manager.update_ongoing_scroll(axis);
+            self.set_scroll_position(scroll_position, window, cx);
+            return;
+        }
+
+        let current_position = self.scroll_position(cx);
         self.scroll_manager.update_ongoing_scroll(axis);
-        self.set_scroll_position(scroll_position, window, cx);
+        self.scroll_manager.start_animation(current_position, scroll_position);
+
+        cx.notify();
     }
 
     pub fn scroll_cursor_center_top_bottom(

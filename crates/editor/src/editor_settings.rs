@@ -20,6 +20,7 @@ pub struct EditorSettings {
     pub cursor_blink: bool,
     pub cursor_shape: Option<CursorShape>,
     pub cursor_animation: CursorAnimationSettings,
+    pub smooth_scroll: SmoothScrollSettings,
     pub current_line_highlight: CurrentLineHighlight,
     pub selection_highlight: bool,
     pub rounded_selection: bool,
@@ -76,6 +77,12 @@ pub struct EditorSettings {
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct CursorAnimationSettings {
     pub enabled: bool,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct SmoothScrollSettings {
+    pub enabled: bool,
+    pub duration: settings::DelayMs,
 }
 
 #[derive(Debug, Clone)]
@@ -206,6 +213,7 @@ impl Settings for EditorSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let editor = content.editor.clone();
         let cursor_animation = editor.cursor_animation.unwrap();
+        let smooth_scroll = editor.smooth_scroll.unwrap();
         let scrollbar = editor.scrollbar.unwrap();
         let minimap = editor.minimap.unwrap();
         let gutter = editor.gutter.unwrap();
@@ -219,6 +227,10 @@ impl Settings for EditorSettings {
             cursor_shape: editor.cursor_shape.map(Into::into),
             cursor_animation: CursorAnimationSettings {
                 enabled: cursor_animation.enabled.unwrap(),
+            },
+            smooth_scroll: SmoothScrollSettings {
+                enabled: smooth_scroll.enabled.unwrap(),
+                duration: smooth_scroll.duration.unwrap(),
             },
             current_line_highlight: editor.current_line_highlight.unwrap(),
             selection_highlight: editor.selection_highlight.unwrap(),

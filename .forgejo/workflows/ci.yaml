@@ -104,9 +104,11 @@ jobs:
       - name: Collect artifacts
         id: artifacts
         shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          version="-${FORGEJO_REF_NAME:-dev}"
+          version="-${REF_NAMEREF_NAME:-dev}"
           arch="$(uname -m)"
           tarball="zzz-linux-${arch}.tar.gz"
           remote_server="zzz-remote-server-linux-${arch}.gz"

@@ -287,6 +287,13 @@
     // Whether cursor movement animation is enabled.
     "enabled": false,
   },
+  // Smooth scroll related settings.
+  "smooth_scroll": {
+    // Whether smooth scrolling is enabled.
+    "enabled": false,
+    // Scroll animation duration in milliseconds.
+    "duration": 125,
+  },
   // Determines when the mouse cursor should be hidden in response to keyboard
   // input.
   //

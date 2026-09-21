@@ -8001,7 +8001,11 @@ impl EditorElement {
                                 }
                             };
 
-                            let current_scroll_position = position_map.snapshot.scroll_position();
+                            let current_scroll_position = editor
+                                .scroll_manager
+                                .scroll_animation()
+                                .map(|animation| animation.target)
+                                .unwrap_or_else(|| position_map.snapshot.scroll_position());
                             let x = (current_scroll_position.x
                                 * ScrollPixelOffset::from(glyph_width)
                                 - ScrollPixelOffset::from(delta.x * scroll_sensitivity))
@@ -10201,6 +10205,11 @@ impl Element for EditorElement {
                             cx,
                         );
                         editor.set_visible_column_count(f64::from(editor_width / em_advance));
+
+                        if let Some(target) = editor.scroll_manager.update_animation() {
+                            editor.set_scroll_position_internal(target, true, false, window, cx);
+                            window.request_animation_frame();
+                        }
 
                         if matches!(
                             editor.mode,

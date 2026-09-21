@@ -24,6 +24,8 @@ pub struct EditorSettingsContent {
     pub cursor_shape: Option<CursorShape>,
     /// Cursor movement animation settings.
     pub cursor_animation: Option<CursorAnimationSettingsContent>,
+    /// Smooth scroll related settings.
+    pub smooth_scroll: Option<SmoothScrollContent>,
     /// Determines how snippets are sorted relative to other completion items.
     ///
     /// Default: inline
@@ -394,6 +396,20 @@ pub struct CursorAnimationSettingsContent {
     ///
     /// Default: false
     pub enabled: Option<bool>,
+}
+
+/// Smooth scroll related settings.
+#[with_fallible_options]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
+pub struct SmoothScrollContent {
+    /// Whether smooth scrolling is enabled.
+    ///
+    /// Default: false
+    pub enabled: Option<bool>,
+    /// Scroll animation duration in milliseconds.
+    ///
+    /// Default: 125
+    pub duration: Option<DelayMs>,
 }
 
 // Toolbar related settings

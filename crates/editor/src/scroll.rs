@@ -32,6 +32,13 @@ const SCROLLBAR_SHOW_INTERVAL: Duration = Duration::from_secs(1);
 
 pub struct WasScrolled(pub(crate) bool);
 
+#[derive(Clone, Copy, Debug)]
+pub struct ScrollAnimation {
+    pub current: gpui::Point<ScrollOffset>,
+    pub target: gpui::Point<ScrollOffset>,
+    pub updated_at: Instant,
+}
+
 pub type ScrollOffset = f64;
 pub type ScrollPixelOffset = f64;
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -229,6 +236,8 @@ pub struct ScrollManager {
     forbid_vertical_scroll: bool,
     notified_top_overscroll: bool,
     minimap_thumb_state: Option<ScrollbarThumbState>,
+    pub(crate) scroll_animation: Option<ScrollAnimation>,
+    pub(crate) scroll_animation_duration: Duration,
     _save_scroll_position_task: Task<()>,
 }
 
@@ -253,6 +262,10 @@ impl ScrollManager {
             forbid_vertical_scroll: false,
             notified_top_overscroll: false,
             minimap_thumb_state: None,
+            scroll_animation: None,
+            scroll_animation_duration: Duration::from_millis(
+                EditorSettings::get_global(cx).smooth_scroll.duration.0,
+            ),
             _save_scroll_position_task: Task::ready(()),
         }
     }
@@ -367,6 +380,53 @@ impl ScrollManager {
     pub fn update_ongoing_scroll(&mut self, axis: Option<Axis>) {
         self.ongoing.last_event = Instant::now();
         self.ongoing.axis = axis;
+    }
+
+    pub fn scroll_animation(&self) -> Option<&ScrollAnimation> {
+        self.scroll_animation.as_ref()
+    }
+
+    pub fn start_animation(
+        &mut self,
+        current: gpui::Point<ScrollOffset>,
+        target: gpui::Point<ScrollOffset>,
+    ) {
+        if let Some(animation) = self.scroll_animation.as_mut() {
+            animation.target = target;
+        } else {
+            self.scroll_animation = Some(ScrollAnimation {
+                current,
+                target,
+                updated_at: Instant::now(),
+            });
+        }
+    }
+
+    pub fn cancel_animation(&mut self) {
+        self.scroll_animation = None;
+    }
+
+    pub fn update_animation(&mut self) -> Option<gpui::Point<ScrollOffset>> {
+        let animation = self.scroll_animation.as_mut()?;
+        let current = animation.current;
+        let target = animation.target;
+
+        const EPSILON: f64 = 0.001;
+        let delta_x = target.x - current.x;
+        let delta_y = target.y - current.y;
+        if delta_x.abs() < EPSILON && delta_y.abs() < EPSILON {
+            self.cancel_animation();
+            return Some(target);
+        }
+
+        let now = Instant::now();
+        let dt = now.duration_since(animation.updated_at).as_secs_f64();
+        let speed = 3.0 / self.scroll_animation_duration.as_secs_f64();
+        let decay = if dt > 0.0 { 1.0 - (-speed * dt).exp() } else { 1.0 };
+        animation.updated_at = now;
+        animation.current.x += delta_x * decay;
+        animation.current.y += delta_y * decay;
+        Some(animation.current)
     }
 
     pub fn should_notify_top_overscroll(&mut self, axis: Option<Axis>) -> bool {
@@ -746,6 +806,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> WasScrolled {
+        self.scroll_manager.cancel_animation();
         let mut position = scroll_position;
         if self.scroll_manager.forbid_vertical_scroll {
             let current_position = self.scroll_position(cx);
@@ -842,6 +903,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.scroll_manager.cancel_animation();
         hide_hover(self, cx);
         let workspace_id = self.workspace.as_ref().and_then(|workspace| workspace.1);
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
