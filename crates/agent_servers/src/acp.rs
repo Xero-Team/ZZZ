@@ -295,8 +295,10 @@ impl<T> FlattenAcpResult<T> for Result<Result<T, acp::Error>, anyhow::Error> {
 }
 
 /// Holds state needed by foreground work dispatched from background handler closures.
+#[derive(Clone)]
 struct ClientContext {
     sessions: Rc<RefCell<HashMap<acp::SessionId, AcpSession>>>,
+    pending_sessions: Rc<RefCell<HashMap<acp::SessionId, PendingAcpSession>>>,
     session_list: Rc<RefCell<Option<Rc<AcpSessionList>>>>,
 }
 
@@ -797,6 +799,7 @@ impl AcpConnection {
         log::trace!("Spawned (pid: {})", child.id());
 
         let sessions = Rc::new(RefCell::new(HashMap::default()));
+        let pending_sessions = Rc::new(RefCell::new(HashMap::default()));
         let debug_log = AcpDebugLog::default();
 
         let (release_channel, version): (Option<&str>, String) = cx.update(|cx| {
@@ -897,6 +900,7 @@ impl AcpConnection {
         // Set up the foreground dispatch loop to process work items from handlers.
         let dispatch_context = ClientContext {
             sessions: sessions.clone(),
+            pending_sessions: pending_sessions.clone(),
             session_list: client_session_list.clone(),
         };
         let dispatch_task = cx.spawn({
@@ -1019,7 +1023,7 @@ impl AcpConnection {
             telemetry_id,
             agent_version,
             sessions,
-            pending_sessions: Rc::new(RefCell::new(HashMap::default())),
+            pending_sessions,
             agent_capabilities: response.agent_capabilities,
             default_mode,
             default_model,
@@ -1042,6 +1046,7 @@ impl AcpConnection {
     fn new_for_test(
         connection: ConnectionTo<Agent>,
         sessions: Rc<RefCell<HashMap<acp::SessionId, AcpSession>>>,
+        pending_sessions: Rc<RefCell<HashMap<acp::SessionId, PendingAcpSession>>>,
         agent_capabilities: acp::AgentCapabilities,
         agent_server_store: WeakEntity<AgentServerStore>,
         io_task: Task<()>,
@@ -1054,7 +1059,7 @@ impl AcpConnection {
             agent_version: None,
             connection,
             sessions,
-            pending_sessions: Rc::new(RefCell::new(HashMap::default())),
+            pending_sessions,
             auth_methods: vec![],
             agent_server_store,
             agent_capabilities,
@@ -2371,6 +2376,8 @@ pub mod test_support {
         let logout_count = Arc::new(AtomicUsize::new(0));
         let sessions: Rc<RefCell<HashMap<acp::SessionId, AcpSession>>> =
             Rc::new(RefCell::new(HashMap::default()));
+        let pending_sessions: Rc<RefCell<HashMap<acp::SessionId, PendingAcpSession>>> =
+            Rc::new(RefCell::new(HashMap::default()));
         let client_session_list: Rc<RefCell<Option<Rc<AcpSessionList>>>> =
             Rc::new(RefCell::new(None));
 
@@ -2484,6 +2491,7 @@ pub mod test_support {
 
         let dispatch_context = ClientContext {
             sessions: sessions.clone(),
+            pending_sessions: pending_sessions.clone(),
             session_list: client_session_list.clone(),
         };
         let dispatch_task = cx.spawn({
@@ -2502,6 +2510,7 @@ pub mod test_support {
             AcpConnection::new_for_test(
                 client_conn,
                 sessions,
+                pending_sessions,
                 agent_capabilities,
                 agent_server_store,
                 client_io_task,
@@ -3198,6 +3207,8 @@ mod tests {
 
         let sessions: Rc<RefCell<HashMap<acp::SessionId, AcpSession>>> =
             Rc::new(RefCell::new(HashMap::default()));
+        let pending_sessions: Rc<RefCell<HashMap<acp::SessionId, PendingAcpSession>>> =
+            Rc::new(RefCell::new(HashMap::default()));
         let client_session_list: Rc<RefCell<Option<Rc<AcpSessionList>>>> =
             Rc::new(RefCell::new(None));
 
@@ -3326,6 +3337,7 @@ mod tests {
 
         let dispatch_context = ClientContext {
             sessions: sessions.clone(),
+            pending_sessions: pending_sessions.clone(),
             session_list: client_session_list.clone(),
         };
         // `TestAppContext::spawn` hands out an `AsyncApp` by value, whereas the
@@ -3349,6 +3361,7 @@ mod tests {
             AcpConnection::new_for_test(
                 client_conn,
                 sessions,
+                pending_sessions,
                 agent_capabilities,
                 agent_server_store,
                 client_io_task,
@@ -4096,21 +4109,42 @@ fn handle_session_notification(
     // Extract everything we need from the session while briefly borrowing.
     let (thread, session_modes, config_opts_data) = {
         let sessions = ctx.sessions.borrow();
-        let Some(session) = sessions.get(&notification.session_id) else {
-            log::warn!(
-                "Received session notification for unknown session: {:?}",
-                notification.session_id
-            );
-            return;
-        };
-        (
-            session.thread.clone(),
-            session.session_modes.clone(),
-            session
-                .config_options
-                .as_ref()
-                .map(|opts| (opts.config_options.clone(), opts.tx.clone())),
-        )
+        match sessions.get(&notification.session_id) {
+            Some(session) => (
+                session.thread.clone(),
+                session.session_modes.clone(),
+                session
+                    .config_options
+                    .as_ref()
+                    .map(|opts| (opts.config_options.clone(), opts.tx.clone())),
+            ),
+            None => {
+                // A session is only registered once `open_or_create_session` builds
+                // its thread on the foreground executor, so a notification can arrive
+                // while the session is still pending. Wait for the pending load instead
+                // of dropping the notification.
+                let pending_task = ctx
+                    .pending_sessions
+                    .borrow()
+                    .get(&notification.session_id)
+                    .map(|pending| pending.task.clone());
+                if let Some(pending_task) = pending_task {
+                    let ctx = ctx.clone();
+                    cx.spawn(async move |cx| {
+                        if pending_task.await.is_ok() {
+                            handle_session_notification(notification, cx, &ctx);
+                        }
+                    })
+                    .detach();
+                } else {
+                    log::warn!(
+                        "Received session notification for unknown session: {:?}",
+                        notification.session_id
+                    );
+                }
+                return;
+            }
+        }
     };
     // Borrow is dropped here.
 
