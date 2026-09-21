@@ -4657,6 +4657,21 @@ impl LspStore {
         if !self.is_capable_for_proto_request(&buffer, &request, cx) {
             return Task::ready(Ok(R::Response::default()));
         }
+
+        // A buffer can outlive the project that created it (for example when
+        // the workspace switches to another remote folder while an editor for
+        // the previous project is still open). Sending such a buffer's
+        // `remote_id` upstream makes the host fail with "unknown buffer id",
+        // so only forward requests for buffers this project actually stores.
+        let buffer_id = buffer.read(cx).remote_id();
+        if self.buffer_store.read(cx).get(buffer_id).is_none() {
+            log::debug!(
+                "skipping LSP request {:?} for buffer {buffer_id} that is not part of this project",
+                request.display_name()
+            );
+            return Task::ready(Ok(R::Response::default()));
+        }
+
         let message = request.to_proto(upstream_project_id, buffer.read(cx));
         cx.spawn(async move |this, cx| {
             let response = client.request(message).await?;
