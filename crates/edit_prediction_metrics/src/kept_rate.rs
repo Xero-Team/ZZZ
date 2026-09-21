@@ -11,12 +11,6 @@ pub enum TokenAnnotation {
     Discarded,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct AnnotatedToken {
-    pub token: String,
-    pub annotation: TokenAnnotation,
-}
-
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 pub struct KeptRateResult {
@@ -417,22 +411,6 @@ pub fn compute_kept_rate(base: &str, candidate: &str, reference: &str) -> KeptRa
         recall_rate,
         token_annotations,
     }
-}
-
-pub fn annotate_kept_rate_tokens(
-    base: &str,
-    candidate: &str,
-    reference: &str,
-) -> Vec<AnnotatedToken> {
-    let result = compute_kept_rate(base, candidate, reference);
-    tokenize(candidate)
-        .into_iter()
-        .zip(result.token_annotations)
-        .map(|(token, annotation)| AnnotatedToken {
-            token: token.to_owned(),
-            annotation,
-        })
-        .collect()
 }
 
 #[cfg(test)]
