@@ -2432,6 +2432,8 @@
     "file_finder.split_left": "向左拆分",
     "file_finder.split_right": "向右拆分",
     "file_finder.split_up": "向上拆分",
+    "recent_files.no_matches": "没有最近打开的文件",
+    "recent_files.placeholder": "打开最近的文件…",
     "recent_projects.actions": "操作",
     "recent_projects.activate": "激活",
     "recent_projects.add_folder_to_project": "将文件夹添加到此项目",

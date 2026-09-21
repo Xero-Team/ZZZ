@@ -2432,6 +2432,8 @@
     "file_finder.split_left": "Split Left",
     "file_finder.split_right": "Split Right",
     "file_finder.split_up": "Split Up",
+    "recent_files.no_matches": "No recent files",
+    "recent_files.placeholder": "Open recent files...",
     "recent_projects.actions": "Actions",
     "recent_projects.activate": "Activate",
     "recent_projects.add_folder_to_project": "Add Folder to this Project",

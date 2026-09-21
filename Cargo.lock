@@ -12741,6 +12741,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "recent_files"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "file_icons",
+ "gpui",
+ "i18n",
+ "picker",
+ "ui",
+ "util",
+ "workspace",
+]
+
+[[package]]
 name = "recent_projects"
 version = "0.1.0"
 dependencies = [
@@ -20587,6 +20601,7 @@ dependencies = [
  "prompt_store",
  "proto",
  "rayon",
+ "recent_files",
  "recent_projects",
  "release_channel",
  "remote",

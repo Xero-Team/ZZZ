@@ -620,6 +620,7 @@ fn main() {
         );
 
         repl::init(app_state.fs.clone(), cx);
+        recent_files::init(cx);
         recent_projects::init(cx);
         dev_container::init(cx);
 

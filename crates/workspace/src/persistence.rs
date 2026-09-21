@@ -1077,6 +1077,12 @@ impl Domain for WorkspaceDb {
                 ON UPDATE CASCADE
             ) STRICT;
         ),
+        sql! (
+            CREATE TABLE recent_files (
+                path TEXT PRIMARY KEY NOT NULL,
+                timestamp INTEGER NOT NULL DEFAULT (unixepoch())
+            ) STRICT;
+        ),
     ];
 
     // Allow recovering from bad migration that was initially shipped to nightly
@@ -1957,6 +1963,30 @@ impl WorkspaceDb {
         pub fn clear_breakpoints(file_path: &Path) -> Result<()> {
             DELETE FROM breakpoints
             WHERE file_path = ?2
+        }
+    }
+
+    /// Records `path` as the most recently opened file.
+    pub async fn update_recent_file(&self, path: PathBuf) -> Result<()> {
+        let path = path.to_string_lossy().to_string();
+        self.write(move |conn| {
+            let mut statement = Statement::prepare(
+                conn,
+                "INSERT INTO recent_files(path, timestamp) VALUES (?1, unixepoch())
+                 ON CONFLICT(path) DO UPDATE SET timestamp = unixepoch()",
+            )?;
+            statement.bind(&path, 1)?;
+            statement.exec()
+        })
+        .await
+    }
+
+    query! {
+        pub fn recent_files(limit: i64) -> Result<Vec<String>> {
+            SELECT path
+            FROM recent_files
+            ORDER BY timestamp DESC
+            LIMIT ?1
         }
     }
 

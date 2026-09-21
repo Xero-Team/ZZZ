@@ -5790,6 +5790,15 @@ impl Workspace {
             project.set_active_path(active_entry.clone(), cx)
         });
 
+        if active_project_path_changed
+            && let Some(project_path) = active_entry.as_ref()
+            && let Some(abs_path) = self.project.read(cx).absolute_path(project_path, cx)
+        {
+            let db = WorkspaceDb::global(cx);
+            cx.background_spawn(async move { db.update_recent_file(abs_path).await })
+                .detach();
+        }
+
         if focus_changed && let Some(project_path) = &active_entry {
             let git_store_entity = self.project.read(cx).git_store().clone();
             git_store_entity.update(cx, |git_store, cx| {
