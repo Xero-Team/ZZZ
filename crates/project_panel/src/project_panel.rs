@@ -3798,7 +3798,8 @@ impl ProjectPanel {
                                     if settings.auto_open.should_open_on_paste() {
                                         project_panel.open_entry(
                                             entry.id,
-                                            disambiguation_range.is_none(),
+                                            disambiguation_range.is_none()
+                                                && settings.auto_open.should_focus_on_open(),
                                             false,
                                             cx,
                                         );

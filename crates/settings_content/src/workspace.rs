@@ -835,6 +835,10 @@ pub struct ProjectPanelAutoOpenSettings {
     ///
     /// Default: true
     pub on_drop: Option<bool>,
+    /// Whether to focus on files automatically opened.
+    ///
+    /// Default: true
+    pub should_focus: Option<bool>,
 }
 
 #[with_fallible_options]

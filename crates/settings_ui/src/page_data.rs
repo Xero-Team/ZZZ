@@ -5750,7 +5750,7 @@ fn window_and_layout_page() -> SettingsPage {
 }
 
 fn panels_page() -> SettingsPage {
-    fn project_panel_section() -> [SettingsPageItem; 30] {
+    fn project_panel_section() -> [SettingsPageItem; 32] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.project.panel",
@@ -6496,6 +6496,64 @@ fn panels_page() -> SettingsPage {
                             .auto_open
                             .get_or_insert_default()
                             .on_drop = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt("settings_ui.page_data.title.should.focus", "Should Focus"),
+                description: lt(
+                    "settings_ui.page_data.description.whether.to.focus.on.files.automatically.opened",
+                    "Whether to focus on files automatically opened.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("project_panel.auto_open.should_focus"),
+                    pick: |settings_content| {
+                        settings_content
+                            .project_panel
+                            .as_ref()?
+                            .auto_open
+                            .as_ref()?
+                            .should_focus
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .project_panel
+                            .get_or_insert_default()
+                            .auto_open
+                            .get_or_insert_default()
+                            .should_focus = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt("settings_ui.page_data.title.should.focus", "Should Focus"),
+                description: lt(
+                    "settings_ui.page_data.description.whether.to.focus.on.files.automatically.opened",
+                    "Whether to focus on files automatically opened.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("project_panel.auto_open.should_focus"),
+                    pick: |settings_content| {
+                        settings_content
+                            .project_panel
+                            .as_ref()?
+                            .auto_open
+                            .as_ref()?
+                            .should_focus
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .project_panel
+                            .get_or_insert_default()
+                            .auto_open
+                            .get_or_insert_default()
+                            .should_focus = value;
                     },
                 }),
                 metadata: None,

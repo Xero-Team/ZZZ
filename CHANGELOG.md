@@ -30,6 +30,9 @@ ZZZ has not cut a versioned release yet, so the changes below are unreleased.
   [GPUI: Ownership and Data Flow](./docs/src/development/ownership-and-data-flow.md).
 - Add Forgejo pull request and issue templates.
 - Add a changelog.
+- Add code outline support for diff files (gram#524).
+- Add a `project_panel.auto_open.should_focus` setting so a pasted file
+  can open without taking focus from the project panel (gram#487).
 
 ### Changed
 
