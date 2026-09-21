@@ -329,9 +329,9 @@ fn open_doc_url(
     let base = Path::new(current_path.as_ref()).parent();
     let resolved = match base {
         Some(base) if !url.starts_with('/') => {
-            let mut joined = base.join(url);
-            joined = normalize_path(&joined);
-            joined.to_string_lossy().into_owned()
+            normalize_path(&base.join(url))
+                .to_string_lossy()
+                .into_owned()
         }
         _ => url.trim_start_matches('/').to_string(),
     };

@@ -84,17 +84,17 @@ impl Render for StatusBar {
                 Decorations::Server => el,
                 Decorations::Client { tiling, .. } => el
                     .when(
-                        !at_top
-                            && !(tiling.bottom
-                                || tiling.right
-                                || (sidebar.open && sidebar.side == SidebarSide::Right)),
+                        !(at_top
+                            || tiling.bottom
+                            || tiling.right
+                            || (sidebar.open && sidebar.side == SidebarSide::Right)),
                         |el| el.rounded_br(CLIENT_SIDE_DECORATION_ROUNDING),
                     )
                     .when(
-                        !at_top
-                            && !(tiling.bottom
-                                || tiling.left
-                                || (sidebar.open && sidebar.side == SidebarSide::Left)),
+                        !(at_top
+                            || tiling.bottom
+                            || tiling.left
+                            || (sidebar.open && sidebar.side == SidebarSide::Left)),
                         |el| el.rounded_bl(CLIENT_SIDE_DECORATION_ROUNDING),
                     )
                     .when(
