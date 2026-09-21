@@ -1,21 +1,18 @@
 use crate::{
     DebugEvent, EditPredictionFinishedDebugEvent, EditPredictionId, EditPredictionModelInput,
-    EditPredictionStartedDebugEvent, EditPredictionStore, ZZZUpdateRequiredError,
-    buffer_path_with_id_fallback,
+    EditPredictionStartedDebugEvent, EditPredictionStore, buffer_path_with_id_fallback,
     cursor_excerpt::{self, compute_cursor_excerpt, compute_syntax_ranges},
     prediction::EditPredictionResult,
 };
 use anyhow::Result;
 use cloud_llm_client::EditPredictionRejectReason;
 use edit_prediction_types::PredictedCursorPosition;
-use gpui::{AppContext as _, Entity, Task, WeakEntity, prelude::*};
+use gpui::{Entity, Task, prelude::*};
 use language::{
     Buffer, BufferSnapshot, DiagnosticSeverity, EditPredictionPromptFormat, OffsetRangeExt as _,
     ToOffset as _, ZetaVersion, language_settings::all_language_settings, text_diff,
 };
 use text::{Anchor, Bias, Point};
-use ui::SharedString;
-use workspace::notifications::{ErrorMessagePrompt, NotificationId, show_app_notification};
 use zeta_prompt::{ParsedOutput, ZetaPromptInput};
 
 use std::{ops::Range, path::Path, sync::Arc};
@@ -260,10 +257,8 @@ pub fn request_prediction_with_zeta(
         }
     });
 
-    cx.spawn(async move |this, cx| {
-        let Some((id, prediction, model_version)) =
-            handle_api_response(&this, request_task.await, cx)?
-        else {
+    cx.spawn(async move |_this, cx| {
+        let Some((id, prediction, model_version)) = request_task.await? else {
             return Ok(None);
         };
         let request_duration = cx.background_executor().now() - request_start;
@@ -302,41 +297,6 @@ pub fn request_prediction_with_zeta(
 
         Ok(Some(result))
     })
-}
-
-fn handle_api_response<T>(
-    this: &WeakEntity<EditPredictionStore>,
-    response: Result<T>,
-    cx: &mut gpui::AsyncApp,
-) -> Result<T> {
-    match response {
-        Ok(data) => Ok(data),
-        Err(err) => {
-            if err.is::<ZZZUpdateRequiredError>() {
-                cx.update(|cx| {
-                    this.update(cx, |this, _cx| {
-                        this.update_required = true;
-                    })
-                    .ok();
-
-                    let error_message: SharedString = err.to_string().into();
-                    show_app_notification(
-                        NotificationId::unique::<ZZZUpdateRequiredError>(),
-                        cx,
-                        move |cx| {
-                            cx.new(|cx| {
-                                ErrorMessagePrompt::new(error_message.clone(), cx).with_link_button(
-                                    "Update ZZZ",
-                                    "https://codeberg.org/ZZZEditor/ZZZ",
-                                )
-                            })
-                        },
-                    );
-                });
-            }
-            Err(err)
-        }
-    }
 }
 
 const ACTIVE_BUFFER_DIAGNOSTIC_ADDITIONAL_CONTEXT_TOKEN_COUNT: usize = 100;

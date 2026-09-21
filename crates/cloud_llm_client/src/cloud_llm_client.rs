@@ -58,9 +58,6 @@ pub const SERVER_SUPPORTS_STATUS_MESSAGES_HEADER_NAME: &str =
 /// The name of the header used by the client to indicate that it supports receiving xAI models.
 pub const CLIENT_SUPPORTS_X_AI_HEADER_NAME: &str = "x-zed-client-supports-x-ai";
 
-/// The maximum number of edit predictions that can be rejected per request.
-pub const MAX_EDIT_PREDICTION_REJECTIONS_PER_REQUEST: usize = 100;
-
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UsageLimit {
@@ -144,37 +141,6 @@ pub struct PredictEditsGitInfo {
 pub struct PredictEditsResponse {
     pub request_id: String,
     pub output_excerpt: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AcceptEditPredictionBody {
-    pub request_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model_version: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub e2e_latency_ms: Option<u128>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct RejectEditPredictionsBody {
-    pub rejections: Vec<EditPredictionRejection>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct RejectEditPredictionsBodyRef<'a> {
-    pub rejections: &'a [EditPredictionRejection],
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct EditPredictionRejection {
-    pub request_id: String,
-    #[serde(default)]
-    pub reason: EditPredictionRejectReason,
-    pub was_shown: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model_version: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub e2e_latency_ms: Option<u128>,
 }
 
 #[derive(
@@ -368,19 +334,6 @@ mod tests {
         let status =
             serde_json::from_value::<CompletionRequestStatus>(json!("new_status")).unwrap();
         assert_eq!(status, CompletionRequestStatus::Unknown);
-    }
-
-    #[test]
-    fn reject_reason_defaults_to_discarded_when_missing() {
-        let rejection = serde_json::from_value::<EditPredictionRejection>(json!({
-            "request_id": "req-1",
-            "was_shown": true
-        }))
-        .unwrap();
-
-        assert_eq!(rejection.reason, EditPredictionRejectReason::Discarded);
-        assert!(rejection.model_version.is_none());
-        assert!(rejection.e2e_latency_ms.is_none());
     }
 
     #[test]

@@ -1,24 +1,13 @@
 use anyhow::Result;
 use client::{Client, UserStore};
-use cloud_llm_client::{
-    EditPredictionRejectReason, EditPredictionRejection,
-    MAX_EDIT_PREDICTION_REJECTIONS_PER_REQUEST, MINIMUM_REQUIRED_VERSION_HEADER_NAME,
-    PredictEditsRequestTrigger, RejectEditPredictionsBodyRef, ZZZ_VERSION_HEADER_NAME,
-};
+use cloud_llm_client::{EditPredictionRejectReason, PredictEditsRequestTrigger};
 use collections::{HashMap, HashSet};
 use copilot::{Copilot, Reinstall, SignIn, SignOut};
 use edit_prediction_context::{RelatedExcerptStore, RelatedExcerptStoreEvent, RelatedFile};
 use feature_flags::{FeatureFlag, FeatureFlagAppExt as _, PresenceFlag, register_feature_flag};
-use futures::{
-    AsyncReadExt as _, FutureExt as _, StreamExt as _,
-    channel::mpsc::{self, UnboundedReceiver},
-    select_biased,
-};
-use gpui::BackgroundExecutor;
+use futures::channel::mpsc;
 use gpui::{
-    App, AsyncApp, Entity, EntityId, Global, SharedString, Task, WeakEntity, actions,
-    http_client::{self, AsyncBody, Method},
-    prelude::*,
+    App, AsyncApp, Entity, EntityId, Global, SharedString, Task, WeakEntity, actions, prelude::*,
 };
 use heapless::Vec as ArrayVec;
 use language::{
@@ -26,9 +15,6 @@ use language::{
     TextBufferSnapshot, ToOffset, ToPoint, language_settings::all_language_settings,
 };
 use project::{DisableAiSettings, Project, ProjectPath};
-use release_channel::AppVersion;
-use semver::Version;
-use serde::de::DeserializeOwned;
 use settings::{EditPredictionProvider, Settings as _, update_settings_file};
 use std::collections::{VecDeque, hash_map};
 use text::{AnchorRangeExt, Edit};
@@ -37,11 +23,9 @@ use workspace::{AppState, Workspace};
 use std::mem;
 use std::ops::Range;
 use std::path::Path;
-use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use thiserror::Error;
 use util::{RangeExt as _, ResultExt as _, rel_path::RelPath};
 
 pub mod cursor_excerpt;
@@ -93,7 +77,6 @@ const CHANGE_GROUPING_LINE_SPAN: u32 = 8;
 const EDIT_HISTORY_DIFF_SIZE_LIMIT: usize = 2048 * 3; // ~2048 tokens or ~50% of typical prompt budget
 const COLLABORATOR_EDIT_LOCALITY_CONTEXT_TOKENS: usize = 512;
 const LAST_CHANGE_GROUPING_TIME: Duration = Duration::from_secs(1);
-const REJECT_REQUEST_DEBOUNCE: Duration = Duration::from_secs(15);
 
 pub struct EditPredictionJumpsFeatureFlag;
 
@@ -110,15 +93,9 @@ impl Global for EditPredictionStoreGlobal {}
 
 pub struct EditPredictionStore {
     projects: HashMap<EntityId, ProjectState>,
-    update_required: bool,
     edit_prediction_model: EditPredictionModel,
-    reject_predictions_tx: mpsc::UnboundedSender<EditPredictionRejectionPayload>,
     shown_predictions: VecDeque<EditPrediction>,
     rated_predictions: HashSet<EditPredictionId>,
-}
-
-pub(crate) struct EditPredictionRejectionPayload {
-    rejection: EditPredictionRejection,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -290,35 +267,9 @@ impl ProjectState {
             .collect()
     }
 
-    fn cancel_pending_prediction(
-        &mut self,
-        pending_prediction: PendingPrediction,
-        cx: &mut Context<EditPredictionStore>,
-    ) {
+    fn cancel_pending_prediction(&mut self, pending_prediction: PendingPrediction) {
         self.cancelled_predictions.insert(pending_prediction.id);
-
-        if pending_prediction.drop_on_cancel {
-            drop(pending_prediction.task);
-        } else {
-            cx.spawn(async move |this, cx| {
-                let Some((prediction_id, model_version)) = pending_prediction.task.await else {
-                    return;
-                };
-
-                this.update(cx, |this, cx| {
-                    this.reject_prediction(
-                        prediction_id,
-                        EditPredictionRejectReason::Canceled,
-                        false,
-                        model_version,
-                        None,
-                        cx,
-                    );
-                })
-                .ok();
-            })
-            .detach()
-        }
+        drop(pending_prediction.task);
     }
 
     fn active_buffer(
@@ -340,7 +291,6 @@ struct CurrentEditPrediction {
     pub prediction: EditPrediction,
     pub was_shown: bool,
     pub shown_with: Option<edit_prediction_types::SuggestionDisplayType>,
-    pub e2e_latency: std::time::Duration,
 }
 
 impl CurrentEditPrediction {
@@ -409,9 +359,6 @@ pub enum DiagnosticSearchScope {
 struct PendingPrediction {
     id: usize,
     task: Task<Option<(EditPredictionId, Option<String>)>>,
-    /// If true, the task is dropped immediately on cancel (cancelling the HTTP request).
-    /// If false, the task is awaited to completion so rejection can be reported.
-    drop_on_cancel: bool,
 }
 
 /// A prediction from the perspective of a buffer.
@@ -680,31 +627,13 @@ impl EditPredictionStore {
     }
 
     pub fn new(
-        client: Arc<Client>,
+        _client: Arc<Client>,
         _user_store: Entity<UserStore>,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) -> Self {
-        let (reject_tx, reject_rx) = mpsc::unbounded();
-        cx.background_spawn({
-            let app_version = AppVersion::global(cx);
-            let background_executor = cx.background_executor().clone();
-            async move {
-                Self::handle_rejected_predictions(
-                    reject_rx,
-                    client,
-                    app_version,
-                    background_executor,
-                )
-                .await
-            }
-        })
-        .detach();
-
         Self {
             projects: HashMap::default(),
-            update_required: false,
             edit_prediction_model: EditPredictionModel::Zeta,
-            reject_predictions_tx: reject_tx,
             rated_predictions: Default::default(),
             shown_predictions: Default::default(),
         }
@@ -1237,7 +1166,7 @@ impl EditPredictionStore {
         };
 
         for pending_prediction in mem::take(&mut project_state.pending_predictions) {
-            project_state.cancel_pending_prediction(pending_prediction, cx);
+            project_state.cancel_pending_prediction(pending_prediction);
         }
 
         match self.edit_prediction_model {
@@ -1245,81 +1174,15 @@ impl EditPredictionStore {
         }
     }
 
-    async fn handle_rejected_predictions(
-        rx: UnboundedReceiver<EditPredictionRejectionPayload>,
-        client: Arc<Client>,
-        app_version: Version,
-        background_executor: BackgroundExecutor,
-    ) {
-        let mut rx = std::pin::pin!(rx.peekable());
-        let mut batched = Vec::new();
-
-        while let Some(EditPredictionRejectionPayload { rejection }) = rx.next().await {
-            batched.push(rejection);
-
-            if batched.len() < MAX_EDIT_PREDICTION_REJECTIONS_PER_REQUEST / 2 {
-                select_biased! {
-                    next = rx.as_mut().peek().fuse() => {
-                        if next.is_some() {
-                            continue;
-                        }
-                    }
-                    () = background_executor.timer(REJECT_REQUEST_DEBOUNCE).fuse() => {},
-                }
-            }
-
-            let url = client
-                .http_client()
-                .build_zzz_llm_url("/predict_edits/reject", &[])
-                .unwrap();
-
-            let flush_count = batched
-                .len()
-                // in case items have accumulated after failure
-                .min(MAX_EDIT_PREDICTION_REJECTIONS_PER_REQUEST);
-            let start = batched.len() - flush_count;
-
-            let body = RejectEditPredictionsBodyRef {
-                rejections: &batched[start..],
-            };
-
-            let result = Self::send_api_request::<()>(
-                |builder| {
-                    let req = builder
-                        .uri(url.as_ref())
-                        .body(serde_json::to_string(&body)?.into());
-                    anyhow::Ok(req?)
-                },
-                client.clone(),
-                app_version.clone(),
-            )
-            .await;
-
-            if result.log_err().is_some() {
-                batched.drain(start..);
-            }
-        }
-    }
-
     fn reject_current_prediction(
         &mut self,
-        reason: EditPredictionRejectReason,
+        _reason: EditPredictionRejectReason,
         project: &Entity<Project>,
-        cx: &App,
+        _cx: &App,
     ) {
         if let Some(project_state) = self.projects.get_mut(&project.entity_id()) {
             project_state.pending_predictions.clear();
-            if let Some(prediction) = project_state.current_prediction.take() {
-                let model_version = prediction.prediction.model_version.clone();
-                self.reject_prediction(
-                    prediction.prediction.id,
-                    reason,
-                    prediction.was_shown,
-                    model_version,
-                    Some(prediction.e2e_latency),
-                    cx,
-                );
-            }
+            project_state.current_prediction.take();
         };
     }
 
@@ -1357,40 +1220,6 @@ impl EditPredictionStore {
                 let completion = self.shown_predictions.pop_back().unwrap();
                 self.rated_predictions.remove(&completion.id);
             }
-        }
-    }
-
-    fn reject_prediction(
-        &mut self,
-        prediction_id: EditPredictionId,
-        reason: EditPredictionRejectReason,
-        was_shown: bool,
-        model_version: Option<String>,
-        e2e_latency: Option<std::time::Duration>,
-        cx: &App,
-    ) {
-        match self.edit_prediction_model {
-            EditPredictionModel::Zeta => {
-                let is_cloud = !matches!(
-                    all_language_settings(None, cx).edit_predictions.provider,
-                    EditPredictionProvider::Ollama | EditPredictionProvider::OpenAiCompatibleApi
-                );
-
-                if is_cloud {
-                    self.reject_predictions_tx
-                        .unbounded_send(EditPredictionRejectionPayload {
-                            rejection: EditPredictionRejection {
-                                request_id: prediction_id.to_string(),
-                                reason,
-                                was_shown,
-                                model_version,
-                                e2e_latency_ms: e2e_latency.map(|latency| latency.as_millis()),
-                            },
-                        })
-                        .log_err();
-                }
-            }
-            EditPredictionModel::Fim { .. } => {}
         }
     }
 
@@ -1649,17 +1478,15 @@ impl EditPredictionStore {
         let edit_prediction_settings = &all_language_settings(None, cx).edit_predictions;
         let debounce_duration =
             edit_prediction_settings.debounce_for(edit_prediction_settings.provider);
-        let (needs_acceptance_tracking, max_pending_predictions) =
-            match edit_prediction_settings.provider {
-                EditPredictionProvider::Ollama => (false, 1),
-                EditPredictionProvider::OpenAiCompatibleApi => (false, 2),
-                EditPredictionProvider::None | EditPredictionProvider::Copilot => {
-                    log::error!("queue_prediction_refresh called with non-store provider");
-                    return;
-                }
-            };
+        let max_pending_predictions = match edit_prediction_settings.provider {
+            EditPredictionProvider::Ollama => 1,
+            EditPredictionProvider::OpenAiCompatibleApi => 2,
+            EditPredictionProvider::None | EditPredictionProvider::Copilot => {
+                log::error!("queue_prediction_refresh called with non-store provider");
+                return;
+            }
+        };
 
-        let drop_on_cancel = !needs_acceptance_tracking;
         let throttle_timeout = Self::THROTTLE_TIMEOUT;
         let project_state = self.get_or_init_project(&project, cx);
         let pending_prediction_id = project_state.next_pending_prediction_id;
@@ -1742,7 +1569,6 @@ impl EditPredictionStore {
                                 prediction,
                                 was_shown: false,
                                 shown_with: None,
-                                e2e_latency: prediction_result.e2e_latency,
                             };
 
                             if let Some(current_prediction) =
@@ -1758,31 +1584,13 @@ impl EditPredictionStore {
 
                                     Some(new_prediction)
                                 } else {
-                                    this.reject_prediction(
-                                        new_prediction.prediction.id,
-                                        EditPredictionRejectReason::CurrentPreferred,
-                                        false,
-                                        new_prediction.prediction.model_version,
-                                        Some(new_prediction.e2e_latency),
-                                        cx,
-                                    );
                                     None
                                 }
                             } else {
                                 Some(new_prediction)
                             }
                         }
-                        Err(reject_reason) => {
-                            this.reject_prediction(
-                                prediction_result.id,
-                                reject_reason,
-                                false,
-                                prediction_result.model_version,
-                                Some(prediction_result.e2e_latency),
-                                cx,
-                            );
-                            None
-                        }
+                        Err(_) => None,
                     }
                 } else {
                     None
@@ -1799,7 +1607,7 @@ impl EditPredictionStore {
                     if pending_prediction.id == pending_prediction_id {
                         pending_predictions.remove(ix);
                         for pending_prediction in pending_predictions.drain(0..ix) {
-                            project_state.cancel_pending_prediction(pending_prediction, cx)
+                            project_state.cancel_pending_prediction(pending_prediction)
                         }
                         break;
                     }
@@ -1818,7 +1626,6 @@ impl EditPredictionStore {
                 .push(PendingPrediction {
                     id: pending_prediction_id,
                     task,
-                    drop_on_cancel,
                 })
                 .unwrap();
         } else {
@@ -1828,10 +1635,9 @@ impl EditPredictionStore {
                 .push(PendingPrediction {
                     id: pending_prediction_id,
                     task,
-                    drop_on_cancel,
                 })
                 .unwrap();
-            project_state.cancel_pending_prediction(pending_prediction, cx);
+            project_state.cancel_pending_prediction(pending_prediction);
         }
     }
 
@@ -2033,53 +1839,6 @@ impl EditPredictionStore {
         anyhow::Ok(jump_location)
     }
 
-    async fn send_api_request<Res>(
-        build: impl Fn(http_client::http::request::Builder) -> Result<http_client::Request<AsyncBody>>,
-        client: Arc<Client>,
-        app_version: Version,
-    ) -> Result<Res>
-    where
-        Res: DeserializeOwned,
-    {
-        let http_client = client.http_client();
-
-        let request_builder = http_client::Request::builder()
-            .method(Method::POST)
-            .header("Content-Type", "application/json")
-            .header(ZZZ_VERSION_HEADER_NAME, app_version.to_string());
-
-        let request = build(request_builder)?;
-
-        let mut response = http_client.send(request).await?;
-
-        if let Some(minimum_required_version) = response
-            .headers()
-            .get(MINIMUM_REQUIRED_VERSION_HEADER_NAME)
-            .and_then(|version| Version::from_str(version.to_str().ok()?).ok())
-        {
-            anyhow::ensure!(
-                app_version >= minimum_required_version,
-                ZZZUpdateRequiredError {
-                    minimum_version: minimum_required_version
-                }
-            );
-        }
-
-        if response.status().is_success() {
-            let mut body = Vec::new();
-            response.body_mut().read_to_end(&mut body).await?;
-            return Ok(serde_json::from_slice(&body)?);
-        }
-
-        let mut body = String::new();
-        response.body_mut().read_to_string(&mut body).await?;
-        anyhow::bail!(
-            "Request failed with status: {:?}\nBody: {}",
-            response.status(),
-            body
-        );
-    }
-
     pub fn refresh_context(
         &mut self,
         project: &Entity<Project>,
@@ -2257,14 +2016,6 @@ fn merge_anchor_ranges(
         right.end
     };
     start..end
-}
-
-#[derive(Error, Debug)]
-#[error(
-    "You must update to ZZZ version {minimum_version} or higher to continue using edit predictions."
-)]
-pub struct ZZZUpdateRequiredError {
-    minimum_version: Version,
 }
 
 pub fn init(cx: &mut App) {
