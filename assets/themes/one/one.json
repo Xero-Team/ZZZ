@@ -209,6 +209,21 @@
             "font_style": null,
             "font_weight": null
           },
+          "comment.todo": {
+            "color": "#61afef",
+            "font_style": null,
+            "font_weight": null
+          },
+          "comment.note": {
+            "color": "#98c379",
+            "font_style": null,
+            "font_weight": null
+          },
+          "comment.warning": {
+            "color": "#e5c07b",
+            "font_style": null,
+            "font_weight": null
+          },
           "constant": {
             "color": "#dfc184ff",
             "font_style": null,
@@ -618,6 +633,21 @@
           },
           "comment.doc": {
             "color": "#7c7e86ff",
+            "font_style": null,
+            "font_weight": null
+          },
+          "comment.todo": {
+            "color": "#61afef",
+            "font_style": null,
+            "font_weight": null
+          },
+          "comment.note": {
+            "color": "#98c379",
+            "font_style": null,
+            "font_weight": null
+          },
+          "comment.warning": {
+            "color": "#e5c07b",
             "font_style": null,
             "font_weight": null
           },

@@ -1,0 +1,132 @@
+# Continuous integration for ZZZ, run by Forgejo Actions.
+#
+# Branch pushes run the checks and the test suite. Tags additionally build a
+# release tarball (with the embedded remote server) and upload it as an
+# artifact.
+
+name: CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_rust_build:
+        description: Skip the Rust build and only run the release job
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+      - test/*
+      - test-release/*
+    tags:
+      - "*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+  CARGO_INCREMENTAL: "0"
+  RUSTUP_MAX_RETRIES: "10"
+  CARGO_NET_RETRY: "10"
+
+jobs:
+  checks:
+    name: Checks
+    if: github.ref_type == 'branch' && !inputs.skip_rust_build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: ./script/linux
+
+      - name: Check licenses
+        run: ./script/check-licenses
+
+      - name: Check philosophy boundary
+        run: ./script/check-philosophy
+
+  test:
+    name: Test
+    if: github.ref_type == 'branch' && !inputs.skip_rust_build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: ./script/linux
+
+      - name: Configure CI cargo settings
+        run: cp .cargo/ci-config.toml .cargo/config.toml
+
+      - name: Install cargo-nextest
+        run: |
+          if ! command -v cargo-nextest >/dev/null; then
+            curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ~/.cargo/bin
+          fi
+
+      - name: Run tests
+        run: cargo nextest run --workspace --no-fail-fast --success-output never --show-progress none
+
+  release:
+    name: Release
+    if: github.ref_type == 'tag' || inputs.skip_rust_build
+    runs-on: ubuntu-22.04
+    env:
+      REMOTE_SERVER_TARGET: x86_64-unknown-linux-musl
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: ./script/linux
+
+      - name: Configure CI cargo settings
+        run: cp .cargo/ci-config.toml .cargo/config.toml
+
+      - name: Bundle Linux tarball
+        run: ./script/bundle-linux
+
+      - name: Collect artifacts
+        id: artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="-${FORGEJO_REF_NAME:-dev}"
+          arch="$(uname -m)"
+          tarball="zzz-linux-${arch}.tar.gz"
+          remote_server="zzz-remote-server-linux-${arch}.gz"
+          mv "target/${tarball}" "./zzz-linux-${arch}${version}.tar.gz"
+          mv "target/${remote_server}" "./zzz-remote-server-linux-${arch}${version}.gz"
+          {
+            echo "tarball=zzz-linux-${arch}${version}.tar.gz"
+            echo "remote_server=zzz-remote-server-linux-${arch}${version}.gz"
+          } >> "$FORGEJO_OUTPUT"
+
+      - name: Upload tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifacts.outputs.tarball }}
+          path: ${{ steps.artifacts.outputs.tarball }}
+          compression-level: 0
+
+      - name: Upload remote server
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifacts.outputs.remote_server }}
+          path: ${{ steps.artifacts.outputs.remote_server }}
+          compression-level: 0

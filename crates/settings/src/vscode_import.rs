@@ -319,6 +319,7 @@ impl VsCodeSettings {
             completion_menu_item_kind: None,
             diff_view_style: None,
             minimum_split_diff_width: None,
+            line_number_scale: None,
         }
     }
 
@@ -755,6 +756,7 @@ impl VsCodeSettings {
                         ShowCloseButton::Hidden
                     }
                 }),
+            show_unsaved_indicator: None,
         })
     }
 

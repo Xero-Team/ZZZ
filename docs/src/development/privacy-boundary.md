@@ -18,6 +18,10 @@ hosted ZZZ service, send telemetry, or upload crash data.
   the public Zed marketplace (`https://api.zed.dev`). The HTML extension is
   installed on startup unless you disable it.
 - User-initiated Git, LSP, MCP, and browser actions.
+- Author avatars in git views (inline blame, the git graph, commit tooltips,
+  and the git panel). These are fetched from the hosting provider's avatar
+  service, which discloses the commit author's email address to it. Disable
+  them with the `git.show_avatar` setting to keep author emails local.
 - Providers configured explicitly by the user, including OpenAI-compatible
   endpoints.
 

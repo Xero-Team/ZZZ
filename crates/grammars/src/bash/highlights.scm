@@ -164,3 +164,17 @@
   value: (_) @string.regex)
 
 (special_variable_name) @variable.special
+
+; Highlight TODO/NOTE/WARNING markers inside comments.
+(
+  (comment) @comment.todo
+  (#match? @comment.todo "TODO:")
+)
+(
+  (comment) @comment.note
+  (#match? @comment.note "NOTE:")
+)
+(
+  (comment) @comment.warning
+  (#match? @comment.warning "WARNING:|WARN:|ATTENTION:")
+)

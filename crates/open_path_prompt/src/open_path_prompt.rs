@@ -978,7 +978,9 @@ fn path_candidates(
 
     children.sort_by(|a, b| {
         let (a_is_file, b_is_file) = match sort_mode {
-            ProjectPanelSortMode::DirectoriesFirst => (!a.is_dir, !b.is_dir),
+            ProjectPanelSortMode::DirectoriesFirst | ProjectPanelSortMode::SmartSort => {
+                (!a.is_dir, !b.is_dir)
+            }
             ProjectPanelSortMode::FilesFirst => (a.is_dir, b.is_dir),
             ProjectPanelSortMode::Mixed => (true, true),
         };

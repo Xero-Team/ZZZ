@@ -1296,6 +1296,9 @@ pub enum SortMode {
     Mixed,
     /// Files are listed before directories at each level.
     FilesFirst,
+    /// Directories are listed before files, and `mod.rs` is listed before
+    /// other files within the same directory.
+    SmartSort,
 }
 
 fn case_group_key(name: &str, order: SortOrder) -> u8 {
@@ -1367,13 +1370,24 @@ pub fn compare_rel_paths_by(
                 let b_leaf_file = b_is_file && components_b.rest().is_empty();
 
                 let file_dir_ordering = match mode {
-                    SortMode::DirectoriesFirst => a_leaf_file.cmp(&b_leaf_file),
+                    SortMode::DirectoriesFirst | SortMode::SmartSort => {
+                        a_leaf_file.cmp(&b_leaf_file)
+                    }
                     SortMode::FilesFirst => b_leaf_file.cmp(&a_leaf_file),
                     SortMode::Mixed => Ordering::Equal,
                 };
 
                 if !file_dir_ordering.is_eq() {
                     return file_dir_ordering;
+                }
+
+                if mode == SortMode::SmartSort && a_leaf_file && b_leaf_file {
+                    let a_is_mod_rs = component_a == "mod.rs";
+                    let b_is_mod_rs = component_b == "mod.rs";
+                    let mod_rs_ordering = b_is_mod_rs.cmp(&a_is_mod_rs);
+                    if !mod_rs_ordering.is_eq() {
+                        return mod_rs_ordering;
+                    }
                 }
 
                 let (a_stem, a_ext) = a_leaf_file
@@ -1822,6 +1836,48 @@ mod tests {
     ) -> Vec<(&'static RelPath, bool)> {
         paths.sort_by(|&a, &b| compare_rel_paths_by(a, b, mode, order));
         paths
+    }
+
+    #[test]
+    fn smart_sort_lists_mod_rs_before_other_files() {
+        let sorted = sorted_rel_paths(
+            vec![
+                rel_path_entry("src/main.rs", true),
+                rel_path_entry("src/lib.rs", true),
+                rel_path_entry("src/mod.rs", true),
+                rel_path_entry("src/nested", false),
+            ],
+            SortMode::SmartSort,
+            SortOrder::Default,
+        );
+        assert_eq!(
+            sorted,
+            vec![
+                rel_path_entry("src/nested", false),
+                rel_path_entry("src/mod.rs", true),
+                rel_path_entry("src/lib.rs", true),
+                rel_path_entry("src/main.rs", true),
+            ]
+        );
+    }
+
+    #[test]
+    fn smart_sort_keeps_directories_first() {
+        let sorted = sorted_rel_paths(
+            vec![
+                rel_path_entry("src/alpha", false),
+                rel_path_entry("src/beta.rs", true),
+            ],
+            SortMode::SmartSort,
+            SortOrder::Default,
+        );
+        assert_eq!(
+            sorted,
+            vec![
+                rel_path_entry("src/alpha", false),
+                rel_path_entry("src/beta.rs", true),
+            ]
+        );
     }
 
     #[perf]

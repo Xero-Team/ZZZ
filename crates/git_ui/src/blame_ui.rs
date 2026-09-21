@@ -45,7 +45,11 @@ impl BlameRenderer for GitBlameRenderer {
         let author_name = blame_entry.author.as_deref().unwrap_or("<no name>");
         let name = util::truncate_and_trailoff(author_name, GIT_BLAME_MAX_AUTHOR_CHARS_DISPLAYED);
 
-        let avatar = if ProjectSettings::get_global(cx).git.blame.show_avatar {
+        let show_avatar = {
+            let git = &ProjectSettings::get_global(cx).git;
+            git.show_avatar && git.blame.show_avatar
+        };
+        let avatar = if show_avatar {
             let author_email = blame_entry.author_mail.as_ref().map(|email| {
                 SharedString::from(
                     email

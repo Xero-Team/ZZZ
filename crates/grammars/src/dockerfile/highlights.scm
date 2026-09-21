@@ -61,3 +61,16 @@
 
 ((variable) @constant
  (#match? @constant "^[A-Z][A-Z_0-9]*$"))
+; Highlight TODO/NOTE/WARNING markers inside comments.
+(
+  (comment) @comment.todo
+  (#match? @comment.todo "TODO:")
+)
+(
+  (comment) @comment.note
+  (#match? @comment.note "NOTE:")
+)
+(
+  (comment) @comment.warning
+  (#match? @comment.warning "WARNING:|WARN:|ATTENTION:")
+)

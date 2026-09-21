@@ -564,6 +564,16 @@ pub struct GitSettings {
     ///
     /// Default: on
     pub inline_blame: Option<InlineBlameSettings>,
+    /// Whether to show author avatars in git views (inline blame, the git
+    /// graph, commit tooltips, and the git panel).
+    ///
+    /// Avatars are loaded from the hosting provider's avatar service, which
+    /// discloses the commit author's email address to that service. Set this
+    /// to `false` to keep author emails local; avatars are then replaced with
+    /// a neutral placeholder.
+    ///
+    /// Default: true
+    pub show_avatar: Option<bool>,
     /// Git blame settings.
     pub blame: Option<BlameSettings>,
     /// Which information to show in the branch picker.

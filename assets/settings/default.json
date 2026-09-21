@@ -391,6 +391,9 @@
   //
   // Default: 100
   "minimum_split_diff_width": 100,
+  // Scale of the line number font size, relative to the buffer font size.
+  // One of: ["default", "small", "x_small"]
+  "line_number_scale": "default",
   // Show method signatures in the editor, when inside parentheses.
   "auto_signature_help": false,
   // Whether to automatically detect the language of an untitled buffer from its contents.
@@ -1374,6 +1377,8 @@
     // 3. Activate the left neighbour tab if present
     //     "left_neighbour"
     "activate_on_close": "history",
+    // Whether to show the unsaved changes indicator on tabs.
+    "show_unsaved_indicator": true,
     // Which files containing diagnostic errors/warnings to mark in the tabs.
     // Diagnostics are only shown when file icons are also active.
     // This setting only works when can take the following three values:
@@ -1661,7 +1666,15 @@
       // The minimum column number to show the inline blame information at
       "min_column": 0,
     },
+    // Whether to show author avatars in git views (inline blame, the git
+    // graph, commit tooltips, and the git panel).
+    // Avatars are loaded from the hosting provider's avatar service, which
+    // discloses the commit author's email address to that service. Set this
+    // to false to keep author emails local.
+    "show_avatar": true,
     "blame": {
+      // Whether to show the author avatar in inline blame. Also requires
+      // the top-level "show_avatar" setting to be enabled.
       "show_avatar": true,
     },
     // Control which information is shown in the branch picker.

@@ -207,6 +207,10 @@ pub struct ItemSettingsContent {
     ///
     /// Default: false
     pub show_close_button: Option<ShowCloseButton>,
+    /// Whether to show the unsaved changes indicator on tabs.
+    ///
+    /// Default: true
+    pub show_unsaved_indicator: Option<bool>,
 }
 
 #[with_fallible_options]
@@ -986,6 +990,8 @@ pub enum ProjectPanelSortMode {
     Mixed,
     /// Show files first, then directories
     FilesFirst,
+    /// Show directories first, and sort `mod.rs` before other files
+    SmartSort,
 }
 
 #[derive(
@@ -1025,6 +1031,7 @@ impl From<ProjectPanelSortMode> for util::paths::SortMode {
             ProjectPanelSortMode::DirectoriesFirst => Self::DirectoriesFirst,
             ProjectPanelSortMode::Mixed => Self::Mixed,
             ProjectPanelSortMode::FilesFirst => Self::FilesFirst,
+            ProjectPanelSortMode::SmartSort => Self::SmartSort,
         }
     }
 }

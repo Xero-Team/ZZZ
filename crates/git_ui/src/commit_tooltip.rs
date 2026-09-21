@@ -11,6 +11,7 @@ use gpui::{
 use i18n::tr;
 use markdown::{Markdown, MarkdownElement};
 use project::git_store::Repository;
+use project::project_settings::ProjectSettings;
 use settings::Settings;
 use std::hash::Hash;
 use theme_settings::ThemeSettings;
@@ -142,6 +143,12 @@ impl<'a> CommitAvatar<'a> {
     }
 
     pub fn avatar(&'a self, window: &mut Window, cx: &mut App) -> Option<Avatar> {
+        // Avatars disclose the author's email to the hosting provider's
+        // avatar service. Respect the user's choice to keep it local.
+        if !ProjectSettings::get_global(cx).git.show_avatar {
+            return None;
+        }
+
         // Bail early if the email isn't available yet. Without it,
         // the GitHub provider skips the fast CDN path and falls back
         // to an unauthenticated per-commit API call that is slow and

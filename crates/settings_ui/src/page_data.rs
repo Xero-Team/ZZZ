@@ -2352,7 +2352,7 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
-    fn gutter_section() -> [SettingsPageItem; 10] {
+    fn gutter_section() -> [SettingsPageItem; 11] {
         [
             SettingsPageItem::SectionHeader(lt("settings_ui.page_data.section.gutter", "Gutter")),
             SettingsPageItem::SettingItem(SettingItem {
@@ -2427,6 +2427,25 @@ fn editor_page() -> SettingsPage {
                     pick: |settings_content| settings_content.editor.relative_line_numbers.as_ref(),
                     write: |settings_content, value, _| {
                         settings_content.editor.relative_line_numbers = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.line.number.scale",
+                    "Line Number Scale",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.scale.of.the.line.number.font.size.relative.to.the.buffer.font.size",
+                    "Scale of the line number font size, relative to the buffer font size.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("line_number_scale"),
+                    pick: |settings_content| settings_content.editor.line_number_scale.as_ref(),
+                    write: |settings_content, value, _| {
+                        settings_content.editor.line_number_scale = value;
                     },
                 }),
                 metadata: None,
@@ -5000,7 +5019,7 @@ fn window_and_layout_page() -> SettingsPage {
         ]
     }
 
-    fn tab_settings_section() -> [SettingsPageItem; 4] {
+    fn tab_settings_section() -> [SettingsPageItem; 5] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.tab.settings",
@@ -5073,6 +5092,34 @@ fn window_and_layout_page() -> SettingsPage {
                             .tabs
                             .get_or_insert_default()
                             .show_close_button = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.show.unsaved.indicator",
+                    "Show Unsaved Indicator",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.show.an.indicator.on.tabs.with.unsaved.changes",
+                    "Show an indicator on tabs with unsaved changes.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("tabs.show_unsaved_indicator"),
+                    pick: |settings_content| {
+                        settings_content
+                            .tabs
+                            .as_ref()?
+                            .show_unsaved_indicator
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .tabs
+                            .get_or_insert_default()
+                            .show_unsaved_indicator = value;
                     },
                 }),
                 metadata: None,
@@ -8778,6 +8825,31 @@ fn version_control_page() -> SettingsPage {
         ]
     }
 
+    fn git_avatars_section() -> [SettingsPageItem; 2] {
+        [
+            SettingsPageItem::SectionHeader(lt(
+                "settings_ui.page_data.section.git.avatars",
+                "Git Avatars",
+            )),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt("settings_ui.page_data.title.show.avatars", "Show Avatars"),
+                description: lt(
+                    "settings_ui.page_data.description.show.avatar.images.for.commit.authors.in.git.views",
+                    "Show avatar images for commit authors in git views. Avatars are loaded from the hosting provider and disclose the author's email address to it.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("git.show_avatar"),
+                    pick: |settings_content| settings_content.git.as_ref()?.show_avatar.as_ref(),
+                    write: |settings_content, value, _| {
+                        settings_content.git.get_or_insert_default().show_avatar = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+        ]
+    }
+
     fn git_blame_view_section() -> [SettingsPageItem; 2] {
         [
             SettingsPageItem::SectionHeader(lt(
@@ -8935,6 +9007,7 @@ fn version_control_page() -> SettingsPage {
             git_integration_section(),
             git_gutter_section(),
             inline_git_blame_section(),
+            git_avatars_section(),
             git_blame_view_section(),
             branch_picker_section(),
             git_hunks_section(),

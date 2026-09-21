@@ -279,6 +279,35 @@ pub struct EditorSettingsContent {
     ///
     /// Default: 100
     pub minimum_split_diff_width: Option<f32>,
+    /// Scale of the line number font size, relative to the buffer font size.
+    ///
+    /// Default: default
+    pub line_number_scale: Option<LineNumberScale>,
+}
+
+#[derive(
+    Debug,
+    Default,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    MergeFrom,
+    PartialEq,
+    Eq,
+    strum::VariantArray,
+    strum::VariantNames,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum LineNumberScale {
+    /// Same as the buffer font size.
+    #[default]
+    Default,
+    /// 0.875 * buffer font size.
+    Small,
+    /// 0.75 * buffer font size.
+    XSmall,
 }
 
 #[derive(
