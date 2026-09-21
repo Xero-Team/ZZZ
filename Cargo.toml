@@ -535,6 +535,7 @@ clap_complete = { version = "4.4" }
 clap_complete_nushell = { version = "4.4" }
 cocoa = "=0.26.1"
 cocoa-foundation = "=0.2.1"
+codebook-tree-sitter-typst = "0.12.1"
 const_format = "0.2"
 convert_case = "0.11.0"
 core-foundation = "=0.10.1"

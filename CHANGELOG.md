@@ -38,6 +38,8 @@ ZZZ has not cut a versioned release yet, so the changes below are unreleased.
   (gram#488).
 - Suggest how to build and upload a remote server when none is found on
   the remote host (gram#485).
+- Add built-in Typst support, including syntax highlighting, outlines,
+  and the tinymist language server (gram#517).
 
 ### Changed
 

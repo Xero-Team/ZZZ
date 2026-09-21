@@ -30,6 +30,7 @@ mod rust;
 mod tailwind;
 mod tailwindcss;
 mod typescript;
+mod typst;
 mod vtsls;
 mod yaml;
 
@@ -86,6 +87,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
         node.clone(),
         fs.clone(),
     ));
+    let typst_lsp_adapter = Arc::new(typst::TypstLspAdapter);
     let vtsls_adapter = Arc::new(vtsls::VtslsLspAdapter::new(node.clone(), fs.clone()));
     let yaml_lsp_adapter = Arc::new(yaml::YamlLspAdapter::new(node));
 
@@ -255,6 +257,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
             name: "typescript",
             adapters: vec![typescript_lsp_adapter.clone(), vtsls_adapter.clone()],
             context: Some(typescript_context.clone()),
+            ..Default::default()
+        },
+        LanguageInfo {
+            name: "typst",
+            adapters: vec![typst_lsp_adapter],
             ..Default::default()
         },
         LanguageInfo {
