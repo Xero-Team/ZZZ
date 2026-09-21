@@ -3195,7 +3195,8 @@ impl AgentPanel {
             use_v2_empty_toolbar.then(|| {
                 self.active_thread_id(cx)
                     .and_then(|thread_id| self.editor_text(thread_id, cx))
-                    .map(|text| Label::new(text).truncate().into_any_element())
+                    .and_then(|text| crate::thread_title_from_prompt(&text))
+                    .map(|title| Label::new(title).truncate().into_any_element())
                     .unwrap_or_else(|| {
                         Label::new(
                             tr(cx, "agent_ui.panel.new_thread_for_agent", "New {} Thread")

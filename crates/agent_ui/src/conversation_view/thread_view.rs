@@ -1,7 +1,7 @@
 use crate::{
     DEFAULT_THREAD_TITLE, SelectPermissionGranularity,
     agent_configuration::configure_context_server_modal::default_markdown_style,
-    default_thread_title, open_abs_path_at_point,
+    default_thread_title, open_abs_path_at_point, thread_title_from_prompt,
 };
 use agent_client_protocol::schema as acp;
 use std::cell::RefCell;
@@ -84,72 +84,9 @@ fn localize_permission_label(cx: &App, label: &str) -> SharedString {
     }
 }
 
-/// Maximum number of characters kept when deriving a provisional thread title from the first
-/// user prompt. Kept short so the title stays readable in the panel toolbar and sidebar.
-const PROVISIONAL_TITLE_MAX_CHARS: usize = 60;
-
 /// Maximum number of characters shown on the permission granularity dropdown trigger before it
 /// is truncated. The full label is still available in the dropdown menu.
 const PERMISSION_DROPDOWN_LABEL_MAX_CHARS: usize = 32;
-
-/// Derives a readable provisional title from the first user prompt.
-///
-/// Prompts are frequently multi-line or contain markdown and code, which makes poor titles.
-/// This picks the first line with visible content, strips a leading markdown marker, collapses
-/// runs of whitespace, and truncates the result. Returns `None` when nothing usable remains.
-fn provisional_title_from_prompt(text: &str) -> Option<SharedString> {
-    let line = text
-        .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty() && !is_code_fence(line))?;
-
-    let mut normalized = String::with_capacity(line.len());
-    let mut previous_was_space = false;
-    for character in strip_leading_markdown_marker(line).chars() {
-        if character.is_whitespace() {
-            if !previous_was_space && !normalized.is_empty() {
-                normalized.push(' ');
-            }
-            previous_was_space = true;
-        } else {
-            normalized.push(character);
-            previous_was_space = false;
-        }
-    }
-
-    let normalized = normalized.trim();
-    if normalized.is_empty() {
-        return None;
-    }
-
-    Some(util::truncate_and_trailoff(normalized, PROVISIONAL_TITLE_MAX_CHARS).into())
-}
-
-/// Returns whether `line` is a markdown code fence delimiter (``` or ~~~).
-fn is_code_fence(line: &str) -> bool {
-    line.starts_with("```") || line.starts_with("~~~")
-}
-
-/// Removes a leading markdown heading, block quote, or list marker so titles read naturally.
-fn strip_leading_markdown_marker(line: &str) -> &str {
-    let trimmed = line.trim_start();
-
-    if let Some(rest) = trimmed.strip_prefix('#') {
-        return rest.trim_start_matches('#').trim_start();
-    }
-    if let Some(rest) = trimmed.strip_prefix('>') {
-        return rest.trim_start();
-    }
-    for marker in ['-', '*', '+'] {
-        if let Some(rest) = trimmed.strip_prefix(marker)
-            && rest.starts_with(char::is_whitespace)
-        {
-            return rest.trim_start();
-        }
-    }
-
-    trimmed
-}
 
 struct GeneratingSpinner {
     variant: SpinnerVariant,
@@ -431,6 +368,7 @@ fn highlight_code_runs(
 #[cfg(test)]
 mod numbered_code_block_tests {
     use super::*;
+    use crate::PROVISIONAL_TITLE_MAX_CHARS;
 
     #[test]
     fn parses_cat_numbered_markdown_code_block() {
@@ -472,7 +410,7 @@ mod numbered_code_block_tests {
     #[test]
     fn provisional_title_uses_first_non_empty_line() {
         assert_eq!(
-            provisional_title_from_prompt("\n\n  Refactor the parser  \nsecond line").as_deref(),
+            thread_title_from_prompt("\n\n  Refactor the parser  \nsecond line").as_deref(),
             Some("Refactor the parser")
         );
     }
@@ -480,7 +418,7 @@ mod numbered_code_block_tests {
     #[test]
     fn provisional_title_collapses_whitespace() {
         assert_eq!(
-            provisional_title_from_prompt("Refactor\t\t the   parser").as_deref(),
+            thread_title_from_prompt("Refactor\t\t the   parser").as_deref(),
             Some("Refactor the parser")
         );
     }
@@ -488,15 +426,15 @@ mod numbered_code_block_tests {
     #[test]
     fn provisional_title_strips_leading_markdown_markers() {
         assert_eq!(
-            provisional_title_from_prompt("## Fix the build").as_deref(),
+            thread_title_from_prompt("## Fix the build").as_deref(),
             Some("Fix the build")
         );
         assert_eq!(
-            provisional_title_from_prompt("- Fix the build").as_deref(),
+            thread_title_from_prompt("- Fix the build").as_deref(),
             Some("Fix the build")
         );
         assert_eq!(
-            provisional_title_from_prompt("> quoted prompt").as_deref(),
+            thread_title_from_prompt("> quoted prompt").as_deref(),
             Some("quoted prompt")
         );
     }
@@ -504,7 +442,7 @@ mod numbered_code_block_tests {
     #[test]
     fn provisional_title_skips_code_fence_lines() {
         assert_eq!(
-            provisional_title_from_prompt("```rust\nfn main() {}\n```").as_deref(),
+            thread_title_from_prompt("```rust\nfn main() {}\n```").as_deref(),
             Some("fn main() {}")
         );
     }
@@ -512,16 +450,15 @@ mod numbered_code_block_tests {
     #[test]
     fn provisional_title_truncates_long_prompts() {
         let prompt = "a".repeat(500);
-        let title =
-            provisional_title_from_prompt(&prompt).expect("long prompt should yield a title");
+        let title = thread_title_from_prompt(&prompt).expect("long prompt should yield a title");
         assert!(title.ends_with("..."));
         assert_eq!(title.chars().count(), PROVISIONAL_TITLE_MAX_CHARS + 3);
     }
 
     #[test]
     fn provisional_title_returns_none_without_visible_content() {
-        assert_eq!(provisional_title_from_prompt("   \n\n  "), None);
-        assert_eq!(provisional_title_from_prompt("```\n~~~\n```"), None);
+        assert_eq!(thread_title_from_prompt("   \n\n  "), None);
+        assert_eq!(thread_title_from_prompt("```\n~~~\n```"), None);
     }
 }
 
@@ -1379,7 +1316,7 @@ impl ThreadView {
                     })
                     .collect::<Vec<_>>()
                     .join(" ");
-                if let Some(title) = provisional_title_from_prompt(&text) {
+                if let Some(title) = thread_title_from_prompt(&text) {
                     thread.update(cx, |thread, cx| {
                         thread.set_provisional_title(title, cx);
                     })?;

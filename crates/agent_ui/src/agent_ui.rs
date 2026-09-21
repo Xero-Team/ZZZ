@@ -178,6 +178,69 @@ pub(crate) fn default_thread_title(cx: &App) -> SharedString {
     app_i18n::tr(cx, "agent_ui.default_thread_title", DEFAULT_THREAD_TITLE).into()
 }
 
+/// Maximum number of characters kept when deriving a thread title from a user prompt.
+/// Kept short so the title stays readable in the panel toolbar and sidebar.
+pub(crate) const PROVISIONAL_TITLE_MAX_CHARS: usize = 60;
+
+/// Derives a readable single-line title from a user prompt.
+///
+/// Prompts are frequently multi-line or contain markdown and code, which makes poor titles.
+/// This picks the first line with visible content, strips a leading markdown marker, collapses
+/// runs of whitespace, and truncates the result. Returns `None` when nothing usable remains.
+pub(crate) fn thread_title_from_prompt(text: &str) -> Option<SharedString> {
+    let line = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && !is_code_fence(line))?;
+
+    let mut normalized = String::with_capacity(line.len());
+    let mut previous_was_space = false;
+    for character in strip_leading_markdown_marker(line).chars() {
+        if character.is_whitespace() {
+            if !previous_was_space && !normalized.is_empty() {
+                normalized.push(' ');
+            }
+            previous_was_space = true;
+        } else {
+            normalized.push(character);
+            previous_was_space = false;
+        }
+    }
+
+    let normalized = normalized.trim();
+    if normalized.is_empty() {
+        return None;
+    }
+
+    Some(util::truncate_and_trailoff(normalized, PROVISIONAL_TITLE_MAX_CHARS).into())
+}
+
+/// Returns whether `line` is a markdown code fence delimiter (``` or ~~~).
+fn is_code_fence(line: &str) -> bool {
+    line.starts_with("```") || line.starts_with("~~~")
+}
+
+/// Removes a leading markdown heading, block quote, or list marker so titles read naturally.
+fn strip_leading_markdown_marker(line: &str) -> &str {
+    let trimmed = line.trim_start();
+
+    if let Some(rest) = trimmed.strip_prefix('#') {
+        return rest.trim_start_matches('#').trim_start();
+    }
+    if let Some(rest) = trimmed.strip_prefix('>') {
+        return rest.trim_start();
+    }
+    for marker in ['-', '*', '+'] {
+        if let Some(rest) = trimmed.strip_prefix(marker)
+            && rest.starts_with(char::is_whitespace)
+        {
+            return rest.trim_start();
+        }
+    }
+
+    trimmed
+}
+
 const PARALLEL_AGENT_LAYOUT_BACKFILL_KEY: &str = "parallel_agent_layout_backfilled";
 actions!(
     agent,
