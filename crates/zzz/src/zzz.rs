@@ -5081,9 +5081,18 @@ mod tests {
         }
     }
 
+    fn force_english_test_locale(cx: &mut App) {
+        SettingsStore::update_global(cx, |store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.workspace.display_language = Some(settings::DisplayLanguage::En);
+            });
+        });
+    }
+
     fn init_keymap_test(cx: &mut TestAppContext) -> Arc<AppState> {
         cx.update(|cx| {
             let app_state = AppState::test(cx);
+            force_english_test_locale(cx);
 
             i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
@@ -5456,11 +5465,9 @@ mod tests {
                 "bedrock",
                 "branches",
                 "buffer_search",
-                "channel_modal",
                 "cli",
                 "client",
                 "collab",
-                "collab_panel",
                 "command_palette",
                 "console",
                 "context_server",
@@ -5484,7 +5491,6 @@ mod tests {
                 "highlights_tree_view",
                 "icon_theme_selector",
                 "image_viewer",
-                "inline_assistant",
                 "journal",
                 "keymap_editor",
                 "keystroke_input",
@@ -5524,6 +5530,7 @@ mod tests {
                 "task",
                 "terminal",
                 "terminal_panel",
+                "text_finder",
                 "theme",
                 "theme_selector",
                 "toast",
@@ -5535,8 +5542,6 @@ mod tests {
                 "worktree_picker",
                 "zzz",
                 "zzz_actions",
-                "zzz_predict_onboarding",
-                "zeta",
             ];
             assert_eq!(
                 all_namespaces,
@@ -5704,6 +5709,7 @@ mod tests {
 
             gpui_tokio::init(cx);
             AppState::set_global(app_state.clone(), cx);
+            force_english_test_locale(cx);
             i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             audio::init(cx);
