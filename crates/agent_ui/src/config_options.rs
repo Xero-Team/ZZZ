@@ -302,6 +302,8 @@ impl Render for ConfigOptionsView {
         }
 
         h_flex()
+            .min_w_0()
+            .flex_wrap()
             .gap_1()
             .children(self.selectors.iter().cloned())
             .into_any_element()
@@ -459,6 +461,7 @@ impl ConfigOptionSelector {
         )
         .label_size(LabelSize::Small)
         .color(Color::Muted)
+        .truncate(true)
         .when(
             option.category == Some(acp::SessionConfigOptionCategory::ThoughtLevel),
             |button| {

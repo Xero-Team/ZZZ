@@ -84,6 +84,73 @@ fn localize_permission_label(cx: &App, label: &str) -> SharedString {
     }
 }
 
+/// Maximum number of characters kept when deriving a provisional thread title from the first
+/// user prompt. Kept short so the title stays readable in the panel toolbar and sidebar.
+const PROVISIONAL_TITLE_MAX_CHARS: usize = 60;
+
+/// Maximum number of characters shown on the permission granularity dropdown trigger before it
+/// is truncated. The full label is still available in the dropdown menu.
+const PERMISSION_DROPDOWN_LABEL_MAX_CHARS: usize = 32;
+
+/// Derives a readable provisional title from the first user prompt.
+///
+/// Prompts are frequently multi-line or contain markdown and code, which makes poor titles.
+/// This picks the first line with visible content, strips a leading markdown marker, collapses
+/// runs of whitespace, and truncates the result. Returns `None` when nothing usable remains.
+fn provisional_title_from_prompt(text: &str) -> Option<SharedString> {
+    let line = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && !is_code_fence(line))?;
+
+    let mut normalized = String::with_capacity(line.len());
+    let mut previous_was_space = false;
+    for character in strip_leading_markdown_marker(line).chars() {
+        if character.is_whitespace() {
+            if !previous_was_space && !normalized.is_empty() {
+                normalized.push(' ');
+            }
+            previous_was_space = true;
+        } else {
+            normalized.push(character);
+            previous_was_space = false;
+        }
+    }
+
+    let normalized = normalized.trim();
+    if normalized.is_empty() {
+        return None;
+    }
+
+    Some(util::truncate_and_trailoff(normalized, PROVISIONAL_TITLE_MAX_CHARS).into())
+}
+
+/// Returns whether `line` is a markdown code fence delimiter (``` or ~~~).
+fn is_code_fence(line: &str) -> bool {
+    line.starts_with("```") || line.starts_with("~~~")
+}
+
+/// Removes a leading markdown heading, block quote, or list marker so titles read naturally.
+fn strip_leading_markdown_marker(line: &str) -> &str {
+    let trimmed = line.trim_start();
+
+    if let Some(rest) = trimmed.strip_prefix('#') {
+        return rest.trim_start_matches('#').trim_start();
+    }
+    if let Some(rest) = trimmed.strip_prefix('>') {
+        return rest.trim_start();
+    }
+    for marker in ['-', '*', '+'] {
+        if let Some(rest) = trimmed.strip_prefix(marker)
+            && rest.starts_with(char::is_whitespace)
+        {
+            return rest.trim_start();
+        }
+    }
+
+    trimmed
+}
+
 struct GeneratingSpinner {
     variant: SpinnerVariant,
 }
@@ -400,6 +467,61 @@ mod numbered_code_block_tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn provisional_title_uses_first_non_empty_line() {
+        assert_eq!(
+            provisional_title_from_prompt("\n\n  Refactor the parser  \nsecond line").as_deref(),
+            Some("Refactor the parser")
+        );
+    }
+
+    #[test]
+    fn provisional_title_collapses_whitespace() {
+        assert_eq!(
+            provisional_title_from_prompt("Refactor\t\t the   parser").as_deref(),
+            Some("Refactor the parser")
+        );
+    }
+
+    #[test]
+    fn provisional_title_strips_leading_markdown_markers() {
+        assert_eq!(
+            provisional_title_from_prompt("## Fix the build").as_deref(),
+            Some("Fix the build")
+        );
+        assert_eq!(
+            provisional_title_from_prompt("- Fix the build").as_deref(),
+            Some("Fix the build")
+        );
+        assert_eq!(
+            provisional_title_from_prompt("> quoted prompt").as_deref(),
+            Some("quoted prompt")
+        );
+    }
+
+    #[test]
+    fn provisional_title_skips_code_fence_lines() {
+        assert_eq!(
+            provisional_title_from_prompt("```rust\nfn main() {}\n```").as_deref(),
+            Some("fn main() {}")
+        );
+    }
+
+    #[test]
+    fn provisional_title_truncates_long_prompts() {
+        let prompt = "a".repeat(500);
+        let title =
+            provisional_title_from_prompt(&prompt).expect("long prompt should yield a title");
+        assert!(title.ends_with("..."));
+        assert_eq!(title.chars().count(), PROVISIONAL_TITLE_MAX_CHARS + 3);
+    }
+
+    #[test]
+    fn provisional_title_returns_none_without_visible_content() {
+        assert_eq!(provisional_title_from_prompt("   \n\n  "), None);
+        assert_eq!(provisional_title_from_prompt("```\n~~~\n```"), None);
     }
 }
 
@@ -1257,9 +1379,7 @@ impl ThreadView {
                     })
                     .collect::<Vec<_>>()
                     .join(" ");
-                let text = text.lines().next().unwrap_or("").trim();
-                if !text.is_empty() {
-                    let title: SharedString = util::truncate_and_trailoff(text, 200).into();
+                if let Some(title) = provisional_title_from_prompt(&text) {
                     thread.update(cx, |thread, cx| {
                         thread.set_provisional_title(title, cx);
                     })?;
@@ -3406,6 +3526,7 @@ impl ThreadView {
                 v_flex()
                     .when_some(max_content_width, |this, max_w| this.flex_basis(max_w))
                     .when(max_content_width.is_none(), |this| this.w_full())
+                    .min_w_0()
                     .when(fills_container, |this| this.h_full())
                     .px_2()
                     .flex_shrink()
@@ -3457,11 +3578,14 @@ impl ThreadView {
                     .child(
                         h_flex()
                             .w_full()
+                            .min_w_0()
                             .flex_none()
                             .flex_wrap()
                             .justify_between()
                             .child(
                                 h_flex()
+                                    .min_w_0()
+                                    .flex_wrap()
                                     .gap_0p5()
                                     .child(self.render_add_context_button(cx))
                                     .child(self.render_follow_toggle(cx))
@@ -3470,6 +3594,7 @@ impl ThreadView {
                             )
                             .child(
                                 h_flex()
+                                    .min_w_0()
                                     .flex_wrap()
                                     .gap_1()
                                     .children(self.render_token_usage(cx))
@@ -7063,7 +7188,7 @@ impl ThreadView {
             .and_then(|s| s.choice_index())
             .unwrap_or_else(|| choices.len().saturating_sub(1));
 
-        let dropdown_label: SharedString =
+        let raw_dropdown_label: SharedString =
             if matches!(selection, Some(PermissionSelection::SelectedPatterns(_))) {
                 tr(
                     cx,
@@ -7079,6 +7204,9 @@ impl ThreadView {
                         tr(cx, "agent_ui.thread_view.only_this_time", "Only this time")
                     })
             };
+        let dropdown_label: SharedString =
+            util::truncate_and_trailoff(&raw_dropdown_label, PERMISSION_DROPDOWN_LABEL_MAX_CHARS)
+                .into();
 
         let dropdown = if let Some((pattern_list, tool_name)) = patterns {
             self.render_permission_granularity_dropdown_with_patterns(
@@ -7105,6 +7233,8 @@ impl ThreadView {
 
         h_flex()
             .w_full()
+            .min_w_0()
+            .flex_wrap()
             .p_1()
             .gap_2()
             .justify_between()
@@ -7207,6 +7337,7 @@ impl ThreadView {
             .with_handle(permission_dropdown_handle)
             .trigger(
                 Button::new(("granularity-trigger", entry_ix), current_label)
+                    .truncate(true)
                     .end_icon(
                         Icon::new(IconName::ChevronDown)
                             .size(IconSize::XSmall)
@@ -7303,6 +7434,7 @@ impl ThreadView {
             .attach(gpui::Anchor::BottomRight)
             .trigger(
                 Button::new(("granularity-trigger", entry_ix), current_label)
+                    .truncate(true)
                     .end_icon(
                         Icon::new(IconName::ChevronDown)
                             .size(IconSize::XSmall)

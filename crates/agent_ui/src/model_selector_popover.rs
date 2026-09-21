@@ -67,6 +67,9 @@ impl Render for ModelSelectorPopover {
                     "Select a Model",
                 )
             });
+        // The trigger lives in the message editor toolbar, which can get very narrow. Truncate
+        // long model names so they cannot push the rest of the toolbar past the panel width.
+        let model_name: SharedString = util::truncate_and_trailoff(&model_name, 32).into();
 
         let model_icon = model.as_ref().and_then(|model| model.icon.clone());
 
@@ -91,6 +94,7 @@ impl Render for ModelSelectorPopover {
             Button::new("active-model", model_name)
                 .label_size(LabelSize::Small)
                 .color(color)
+                .truncate(true)
                 .when_some(model_icon, |this, icon| {
                     this.start_icon(
                         match icon {

@@ -5943,6 +5943,40 @@ mod tests {
     }
 
     #[gpui::test]
+    fn test_long_unbreakable_tokens_wrap_with_balanced_line_breaking(cx: &mut TestAppContext) {
+        ensure_theme_initialized(cx);
+
+        let long_code = format!("`{}`", "a".repeat(300));
+        let long_url = format!("<https://example.com/{}>", "b".repeat(300));
+        let source = format!("{long_code}\n\n{long_url}");
+
+        let (_, cx) = cx.add_window_view(|_, _| TestWindow);
+        let markdown = cx.new(|cx| Markdown::new(source.into(), None, None, cx));
+        cx.run_until_parked();
+        let (rendered, _) = cx.draw(
+            Default::default(),
+            size(px(600.0), px(600.0)),
+            |_window, _cx| {
+                MarkdownElement::new(markdown, MarkdownStyle::default())
+                    .w(px(200.0))
+                    .code_block_renderer(CodeBlockRenderer::Default {
+                        copy_button_visibility: CopyButtonVisibility::Hidden,
+                        wrap_button_visibility: WrapButtonVisibility::Hidden,
+                        border: false,
+                    })
+            },
+        );
+
+        for (ix, line) in rendered.text.lines.iter().enumerate() {
+            assert!(
+                line.layout.wrapped_text().contains('\n'),
+                "line {ix} should wrap a long unbreakable token, got {:?}",
+                line.layout.wrapped_text(),
+            );
+        }
+    }
+
+    #[gpui::test]
     fn test_markdown_preview_follows_ui_font_size_setting_when_unset(cx: &mut TestAppContext) {
         ensure_theme_initialized(cx);
 

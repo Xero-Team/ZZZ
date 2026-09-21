@@ -438,6 +438,11 @@ fn apply_line_breaking(line: &mut WrappedLine, wrap_width: Pixels, mode: TextLin
         }
     }
 
+    // Words with no break opportunities (URLs, long inline code, paths, ...) still need to
+    // wrap, otherwise they overflow their container. Add emergency breaks inside runs that
+    // are wider than the target so the balanced algorithm can split them as a fallback.
+    add_emergency_breaks(&mut breakable, &widths, wrap_width.0);
+
     let breaks = balanced_breaks(&widths, &breakable, wrap_width.0);
     let boundaries: SmallVec<[WrapBoundary; 1]> = breaks
         .iter()
@@ -517,6 +522,33 @@ fn is_line_break_opportunity(character: char) -> bool {
                     | '\u{300f}'
                     | '\u{3011}'
             ))
+}
+
+/// Mark additional break opportunities inside runs of unbreakable characters that are wider
+/// than `target_width`. This lets long tokens without spaces (URLs, inline code, paths) wrap
+/// instead of overflowing, while still preferring the natural break opportunities provided by
+/// `breakable`.
+fn add_emergency_breaks(breakable: &mut [bool], widths: &[f32], target_width: f32) {
+    if target_width <= 0. {
+        return;
+    }
+
+    let mut run_width = 0.;
+    for index in 0..widths.len() {
+        if breakable[index] {
+            run_width = 0.;
+            continue;
+        }
+
+        if run_width > 0. && run_width + widths[index] > target_width {
+            // Break before `index`, so the current line ends at `index` without exceeding the
+            // target width. The glyph at `index` starts the next line.
+            breakable[index - 1] = true;
+            run_width = widths[index];
+        } else {
+            run_width += widths[index];
+        }
+    }
 }
 
 fn balanced_breaks(widths: &[f32], breakable: &[bool], target_width: f32) -> Vec<usize> {
@@ -1205,13 +1237,40 @@ impl IntoElement for InteractiveText {
 
 #[cfg(test)]
 mod tests {
-    use super::balanced_breaks;
+    use super::{add_emergency_breaks, balanced_breaks};
 
     #[test]
     fn balanced_breaks_minimize_raggedness() {
         let widths = [4.0, 1.0, 4.0, 1.0, 4.0];
         let breakable = [false, true, false, true, false];
         assert_eq!(balanced_breaks(&widths, &breakable, 6.0), vec![2, 4]);
+    }
+
+    #[test]
+    fn emergency_breaks_split_unbreakable_runs() {
+        let widths = [4.0; 6];
+        let mut breakable = [false; 6];
+        add_emergency_breaks(&mut breakable, &widths, 10.0);
+        assert_eq!(breakable, [false, true, false, true, false, false]);
+    }
+
+    #[test]
+    fn emergency_breaks_reset_at_natural_breaks() {
+        let widths = [4.0, 4.0, 4.0, 1.0, 2.0, 2.0];
+        let mut breakable = [false, false, false, true, false, false];
+        add_emergency_breaks(&mut breakable, &widths, 10.0);
+        // The space at index 3 resets the accumulated width, so the short run after it
+        // never reaches the target width and gets no emergency break.
+        assert_eq!(breakable, [false, true, false, true, false, false]);
+    }
+
+    #[test]
+    fn emergency_breaks_allow_long_run_to_wrap() {
+        let widths = [7.0; 40];
+        let mut breakable = [false; 40];
+        add_emergency_breaks(&mut breakable, &widths, 100.0);
+        let breaks = balanced_breaks(&widths, &breakable, 100.0);
+        assert!(!breaks.is_empty());
     }
 
     #[test]
