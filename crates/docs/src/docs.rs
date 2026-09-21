@@ -8,12 +8,12 @@
 use std::{path::Path, sync::Arc};
 
 use assets::{all_docs, lookup_docs_text};
-use language::LanguageRegistry;
 use gpui::{
     Action, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, IntoElement,
     ParentElement, Render, ScrollHandle, SharedString, Styled, Task, WeakEntity, Window, actions,
     div, point, prelude::*, px,
 };
+use language::LanguageRegistry;
 use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownOptions, MarkdownStyle};
 use picker::{Picker, PickerDelegate};
 use schemars::JsonSchema;
@@ -104,9 +104,8 @@ impl DocumentationView {
         }
 
         let language_registry = workspace.project().read(cx).languages().clone();
-        let view = cx.new(|cx| {
-            Self::new(path, workspace.weak_handle(), language_registry, window, cx)
-        });
+        let view =
+            cx.new(|cx| Self::new(path, workspace.weak_handle(), language_registry, window, cx));
         workspace.add_item_to_active_pane(Box::new(view), None, true, window, cx);
     }
 
@@ -328,11 +327,9 @@ fn open_doc_url(
     }
     let base = Path::new(current_path.as_ref()).parent();
     let resolved = match base {
-        Some(base) if !url.starts_with('/') => {
-            normalize_path(&base.join(url))
-                .to_string_lossy()
-                .into_owned()
-        }
+        Some(base) if !url.starts_with('/') => normalize_path(&base.join(url))
+            .to_string_lossy()
+            .into_owned(),
         _ => url.trim_start_matches('/').to_string(),
     };
     let resolved = if resolved.ends_with(".md") {
