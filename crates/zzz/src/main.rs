@@ -672,6 +672,7 @@ fn main() {
         language_tools::init(cx);
         git_ui::init(cx);
         git_graph::init(cx);
+        docs::init(cx);
         feedback::init(cx);
         markdown_preview::init(cx);
         csv_preview::init(cx);

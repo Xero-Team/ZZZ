@@ -1080,7 +1080,7 @@ impl Domain for WorkspaceDb {
         sql! (
             CREATE TABLE recent_files (
                 path TEXT PRIMARY KEY NOT NULL,
-                timestamp INTEGER NOT NULL DEFAULT (unixepoch())
+                timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             ) STRICT;
         ),
     ];
@@ -1972,8 +1972,9 @@ impl WorkspaceDb {
         self.write(move |conn| {
             let mut statement = Statement::prepare(
                 conn,
-                "INSERT INTO recent_files(path, timestamp) VALUES (?1, unixepoch())
-                 ON CONFLICT(path) DO UPDATE SET timestamp = unixepoch()",
+                "INSERT INTO recent_files(path, timestamp)
+                 VALUES (?1, CURRENT_TIMESTAMP)
+                 ON CONFLICT(path) DO UPDATE SET timestamp = CURRENT_TIMESTAMP",
             )?;
             statement.bind(&path, 1)?;
             statement.exec()
