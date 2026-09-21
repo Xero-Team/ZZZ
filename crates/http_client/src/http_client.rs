@@ -12,7 +12,6 @@ use http::{HeaderName, HeaderValue};
 
 use futures::future::BoxFuture;
 use parking_lot::Mutex;
-use serde::Serialize;
 use std::sync::Arc;
 #[cfg(feature = "test-support")]
 use std::{any::type_name, fmt};
@@ -267,22 +266,6 @@ impl HttpClientWithUrl {
         format!("{}{}", self.base_url(), path)
     }
 
-    /// Builds a ZZZ API URL using the given path.
-    pub fn build_zzz_api_url(&self, path: &str, query: &[(&str, &str)]) -> Result<Url> {
-        let base_url = self.base_url();
-        let base_api_url = match base_url.as_ref() {
-            "https://zed.dev" => "https://api.zed.dev",
-            "https://staging.zed.dev" => "https://api-staging.zed.dev",
-            "http://localhost:3000" => "http://localhost:8080",
-            other => other,
-        };
-
-        Ok(Url::parse_with_params(
-            &format!("{}{}", base_api_url, path),
-            query,
-        )?)
-    }
-
     /// Builds a URL against the public ZZZ extension marketplace.
     ///
     /// This is independent of collab `server_url`, so a local-first default
@@ -294,48 +277,6 @@ impl HttpClientWithUrl {
     ) -> Result<Url> {
         Ok(Url::parse_with_params(
             &format!("{}{path}", Self::ZZZ_EXTENSION_MARKETPLACE_API),
-            query,
-        )?)
-    }
-
-    /// Builds a ZZZ Cloud URL using the given path.
-    pub fn build_zzz_cloud_url(&self, path: &str) -> Result<Url> {
-        let base_url = self.base_url();
-        let base_api_url = match base_url.as_ref() {
-            "https://zed.dev" => "https://cloud.zed.dev",
-            "https://staging.zed.dev" => "https://cloud.zed.dev",
-            "http://localhost:3000" => "http://localhost:8787",
-            other => other,
-        };
-
-        Ok(Url::parse(&format!("{}{}", base_api_url, path))?)
-    }
-
-    /// Builds a ZZZ Cloud URL using the given path and query params.
-    pub fn build_zzz_cloud_url_with_query(&self, path: &str, query: impl Serialize) -> Result<Url> {
-        let base_url = self.base_url();
-        let base_api_url = match base_url.as_ref() {
-            "https://zed.dev" => "https://cloud.zed.dev",
-            "https://staging.zed.dev" => "https://cloud.zed.dev",
-            "http://localhost:3000" => "http://localhost:8787",
-            other => other,
-        };
-        let query = serde_urlencoded::to_string(&query)?;
-        Ok(Url::parse(&format!("{}{}?{}", base_api_url, path, query))?)
-    }
-
-    /// Builds a ZZZ LLM URL using the given path.
-    pub fn build_zzz_llm_url(&self, path: &str, query: &[(&str, &str)]) -> Result<Url> {
-        let base_url = self.base_url();
-        let base_api_url = match base_url.as_ref() {
-            "https://zed.dev" => "https://cloud.zed.dev",
-            "https://staging.zed.dev" => "https://llm-staging.zed.dev",
-            "http://localhost:3000" => "http://localhost:8787",
-            other => other,
-        };
-
-        Ok(Url::parse_with_params(
-            &format!("{}{}", base_api_url, path),
             query,
         )?)
     }
@@ -576,66 +517,6 @@ mod tests {
             "Bearer token"
         );
         assert_eq!(request.headers().get("x-test").unwrap(), "ok");
-    }
-
-    #[test]
-    fn url_builder_maps_zzz_hosts_to_api_cloud_and_llm_hosts() {
-        let client =
-            HttpClientWithUrl::new(Arc::new(BlockedHttpClient::new()), "https://zed.dev", None);
-
-        assert_eq!(client.build_url("/rpc"), "https://zed.dev/rpc");
-        assert_eq!(
-            client
-                .build_zzz_api_url("/v1/models", &[("limit", "10")])
-                .unwrap()
-                .as_str(),
-            "https://api.zed.dev/v1/models?limit=10"
-        );
-        assert_eq!(
-            client.build_zzz_cloud_url("/v1/files").unwrap().as_str(),
-            "https://cloud.zed.dev/v1/files"
-        );
-        assert_eq!(
-            client
-                .build_zzz_llm_url("/v1/completions", &[("provider", "openai")])
-                .unwrap()
-                .as_str(),
-            "https://cloud.zed.dev/v1/completions?provider=openai"
-        );
-    }
-
-    #[test]
-    fn url_builder_uses_localhost_and_staging_overrides() {
-        let localhost = HttpClientWithUrl::new(
-            Arc::new(BlockedHttpClient::new()),
-            "http://localhost:3000",
-            None,
-        );
-        let staging = HttpClientWithUrl::new(
-            Arc::new(BlockedHttpClient::new()),
-            "https://staging.zed.dev",
-            None,
-        );
-
-        assert_eq!(
-            localhost
-                .build_zzz_api_url("/status", &[])
-                .unwrap()
-                .as_str(),
-            "http://localhost:8080/status?"
-        );
-        assert_eq!(
-            localhost.build_zzz_cloud_url("/health").unwrap().as_str(),
-            "http://localhost:8787/health"
-        );
-        assert_eq!(
-            staging.build_zzz_api_url("/status", &[]).unwrap().as_str(),
-            "https://api-staging.zed.dev/status?"
-        );
-        assert_eq!(
-            staging.build_zzz_llm_url("/v1/chat", &[]).unwrap().as_str(),
-            "https://llm-staging.zed.dev/v1/chat?"
-        );
     }
 
     #[test]
