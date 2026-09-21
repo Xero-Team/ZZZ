@@ -49,7 +49,6 @@ use language_tools::lsp_log_view::LspLogToolbarItemView;
 use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownStyle};
 use migrate::{MigrationBanner, MigrationEvent, MigrationNotification, MigrationType};
 use migrator::migrate_keymap;
-use onboarding::DOCS_URL;
 use onboarding::multibuffer_hint::MultibufferHint;
 pub use open_listener::*;
 use outline_panel::OutlinePanel;
@@ -99,7 +98,7 @@ use workspace::{
 };
 use workspace::{Pane, notifications::DetachAndPromptErr};
 use zzz_actions::{
-    About, OpenBrowser, OpenDocs, OpenServerSettings, OpenSettingsFile, OpenZZZUrl, Quit,
+    About, OpenBrowser, OpenServerSettings, OpenSettingsFile, OpenZZZUrl, Quit,
 };
 
 actions!(
@@ -886,7 +885,6 @@ fn register_actions(
     cx: &mut Context<Workspace>,
 ) {
     workspace
-        .register_action(|_, _: &OpenDocs, _, cx| cx.open_url(DOCS_URL))
         .register_action(
             |workspace: &mut Workspace,
              _: &input_latency_ui::DumpInputLatencyHistogram,
@@ -5718,6 +5716,7 @@ mod tests {
             command_palette::init(cx);
             editor::init(cx);
             git_ui::init(cx);
+            docs::init(cx);
             project_panel::init(cx);
             outline_panel::init(cx);
             terminal_view::init(cx);

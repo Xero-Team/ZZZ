@@ -4421,6 +4421,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "docs"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assets",
+ "collections",
+ "gpui",
+ "i18n",
+ "markdown",
+ "picker",
+ "schemars 1.2.1",
+ "serde",
+ "ui",
+ "util",
+ "workspace",
+ "zzz_actions",
+]
+
+[[package]]
 name = "docs_preprocessor"
 version = "0.1.0"
 dependencies = [
@@ -20500,6 +20519,7 @@ dependencies = [
  "debugger_ui",
  "dev_container",
  "diagnostics",
+ "docs",
  "edit_prediction",
  "edit_prediction_ui",
  "editor",

@@ -64,6 +64,49 @@ impl Assets {
     }
 }
 
+/// The built-in documentation, embedded so that it is available offline.
+#[derive(RustEmbed)]
+#[folder = "../../docs/src"]
+#[include = "**/*.md"]
+#[exclude = "*.DS_Store"]
+pub struct Docs;
+
+impl AssetSource for Docs {
+    fn load(&self, path: &str) -> Result<Option<std::borrow::Cow<'static, [u8]>>> {
+        Self::get(path)
+            .map(|file| Some(file.data))
+            .with_context(|| format!("loading docs at path {path:?}"))
+    }
+
+    fn list(&self, path: &str) -> Result<Vec<SharedString>> {
+        Ok(Self::iter()
+            .filter_map(|p| {
+                if p.starts_with(path) {
+                    Some(p.into())
+                } else {
+                    None
+                }
+            })
+            .collect())
+    }
+}
+
+/// Looks up an embedded documentation file, trying `path` and then `path.md`.
+pub fn lookup_docs(path: &str) -> Option<rust_embed::EmbeddedFile> {
+    Docs::get(path).or_else(|| Docs::get(&format!("{path}.md")))
+}
+
+/// Returns the paths of every embedded documentation file.
+pub fn all_docs() -> Vec<SharedString> {
+    Docs::iter().map(|path| SharedString::from(path.to_string())).collect()
+}
+
+/// Returns the contents of an embedded documentation file as UTF-8 text.
+pub fn lookup_docs_text(path: &str) -> Option<String> {
+    let file = lookup_docs(path)?;
+    String::from_utf8(file.data.into_owned()).ok()
+}
+
 #[cfg(test)]
 mod tests {
     use gpui::AssetSource as _;
