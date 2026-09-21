@@ -176,6 +176,9 @@ impl ExternalAgentEntry {
 pub struct AgentServerStore {
     state: AgentServerStoreState,
     pub external_agents: HashMap<AgentId, ExternalAgentEntry>,
+    /// Whether the downstream client has had a chance to register its message
+    /// handlers. See `AgentServerStore::shared`.
+    downstream_ready: bool,
 }
 
 pub struct AgentServersUpdated;
@@ -433,7 +436,9 @@ impl AgentServerStore {
 
         *old_settings = Some(new_settings);
 
-        if let Some((project_id, downstream_client)) = downstream_client {
+        if let Some((project_id, downstream_client)) = downstream_client
+            && self.downstream_ready
+        {
             downstream_client
                 .send(proto::ExternalAgentsUpdated {
                     project_id: *project_id,
@@ -481,6 +486,7 @@ impl AgentServerStore {
                 _subscriptions: subscriptions,
             },
             external_agents: HashMap::default(),
+            downstream_ready: false,
         };
         this.agent_servers_settings_changed(cx);
         this
@@ -498,6 +504,7 @@ impl AgentServerStore {
                 worktree_store,
             },
             external_agents: HashMap::default(),
+            downstream_ready: false,
         }
     }
 
@@ -505,10 +512,12 @@ impl AgentServerStore {
         Self {
             state: AgentServerStoreState::Collab,
             external_agents: HashMap::default(),
+            downstream_ready: false,
         }
     }
 
     pub fn shared(&mut self, project_id: u64, client: AnyProtoClient, cx: &mut Context<Self>) {
+        self.downstream_ready = false;
         match &mut self.state {
             AgentServerStoreState::Local {
                 downstream_client, ..
@@ -520,6 +529,7 @@ impl AgentServerStore {
                 cx.spawn(async move |this, cx| {
                     cx.background_executor().timer(Duration::from_secs(1)).await;
                     let names = this.update(cx, |this, _| {
+                        this.downstream_ready = true;
                         this.external_agents()
                             .map(|name| name.to_string())
                             .collect()
