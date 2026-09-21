@@ -8,15 +8,16 @@
 use std::{path::Path, sync::Arc};
 
 use assets::{all_docs, lookup_docs_text};
+use language::LanguageRegistry;
 use gpui::{
-    Action, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
-    IntoElement, ParentElement, Render, ScrollHandle, SharedString, Styled, Task, WeakEntity,
-    Window, actions, div, point, prelude::*, px,
+    Action, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, IntoElement,
+    ParentElement, Render, ScrollHandle, SharedString, Styled, Task, WeakEntity, Window, actions,
+    div, point, prelude::*, px,
 };
 use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownOptions, MarkdownStyle};
+use picker::{Picker, PickerDelegate};
 use schemars::JsonSchema;
 use serde::Deserialize;
-use picker::{Picker, PickerDelegate};
 use ui::{IconButton, IconName, ListItem, ListItemSpacing, Tooltip, prelude::*};
 use util::ResultExt as _;
 use workspace::{Item, ModalView, Workspace, item::ItemEvent};
@@ -102,20 +103,24 @@ impl DocumentationView {
             return;
         }
 
-        let view = cx.new(|cx| Self::new(path, workspace.weak_handle(), window, cx));
+        let language_registry = workspace.project().read(cx).languages().clone();
+        let view = cx.new(|cx| {
+            Self::new(path, workspace.weak_handle(), language_registry, window, cx)
+        });
         workspace.add_item_to_active_pane(Box::new(view), None, true, window, cx);
     }
 
     fn new(
         path: SharedString,
         workspace: WeakEntity<Workspace>,
+        language_registry: Arc<LanguageRegistry>,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let markdown = cx.new(|cx| {
             Markdown::new_with_options(
                 SharedString::default(),
-                None,
+                Some(language_registry),
                 None,
                 MarkdownOptions {
                     parse_heading_slugs: true,

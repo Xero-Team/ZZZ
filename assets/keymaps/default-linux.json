@@ -1584,4 +1584,12 @@
       "shift-tab": "git_graph::FocusPreviousTabStop",
     },
   },
+  {
+    // Documentation and recent files
+    "bindings": {
+      "alt-shift-h": "zzz::OpenDocs",
+      "alt-shift-d": "docs::SearchDocs",
+      "alt-shift-e": "recent_files::Toggle",
+    },
+  },
 ]

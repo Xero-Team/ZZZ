@@ -7,8 +7,8 @@ use gpui::{
     Subscription, WeakEntity, Window,
 };
 use i18n::tr;
-use std::any::TypeId;
 use settings::Settings as _;
+use std::any::TypeId;
 use theme::CLIENT_SIDE_DECORATION_ROUNDING;
 use ui::{Divider, Indicator, Tooltip, prelude::*};
 

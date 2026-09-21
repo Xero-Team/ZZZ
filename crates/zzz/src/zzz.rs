@@ -97,9 +97,7 @@ use workspace::{
     CloseIntent, CloseProject, CloseWindow, RestoreBanner, with_active_or_new_workspace,
 };
 use workspace::{Pane, notifications::DetachAndPromptErr};
-use zzz_actions::{
-    About, OpenBrowser, OpenServerSettings, OpenSettingsFile, OpenZZZUrl, Quit,
-};
+use zzz_actions::{About, OpenBrowser, OpenServerSettings, OpenSettingsFile, OpenZZZUrl, Quit};
 
 actions!(
     zzz,

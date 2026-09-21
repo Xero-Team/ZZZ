@@ -19,6 +19,7 @@ assets.workspace = true
 collections.workspace = true
 gpui.workspace = true
 i18n.workspace = true
+language.workspace = true
 markdown.workspace = true
 picker.workspace = true
 schemars.workspace = true

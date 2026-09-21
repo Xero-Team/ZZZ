@@ -1366,7 +1366,12 @@ fn appearance_page() -> SettingsPage {
                 field: Box::new(SettingField {
                     json_path: Some("smooth_scroll.enabled"),
                     pick: |settings_content| {
-                        settings_content.editor.smooth_scroll.as_ref()?.enabled.as_ref()
+                        settings_content
+                            .editor
+                            .smooth_scroll
+                            .as_ref()?
+                            .enabled
+                            .as_ref()
                     },
                     write: |settings_content, value, _| {
                         settings_content
@@ -4457,10 +4462,7 @@ fn window_and_layout_page() -> SettingsPage {
                         settings_content.status_bar.as_ref()?.position.as_ref()
                     },
                     write: |settings_content, value, _| {
-                        settings_content
-                            .status_bar
-                            .get_or_insert_default()
-                            .position = value;
+                        settings_content.status_bar.get_or_insert_default().position = value;
                     },
                 }),
                 metadata: None,

@@ -422,7 +422,11 @@ impl ScrollManager {
         let now = Instant::now();
         let dt = now.duration_since(animation.updated_at).as_secs_f64();
         let speed = 3.0 / self.scroll_animation_duration.as_secs_f64();
-        let decay = if dt > 0.0 { 1.0 - (-speed * dt).exp() } else { 1.0 };
+        let decay = if dt > 0.0 {
+            1.0 - (-speed * dt).exp()
+        } else {
+            1.0
+        };
         animation.updated_at = now;
         animation.current.x += delta_x * decay;
         animation.current.y += delta_y * decay;

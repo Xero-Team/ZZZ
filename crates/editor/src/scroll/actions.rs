@@ -39,7 +39,8 @@ impl Editor {
 
         let current_position = self.scroll_position(cx);
         self.scroll_manager.update_ongoing_scroll(axis);
-        self.scroll_manager.start_animation(current_position, scroll_position);
+        self.scroll_manager
+            .start_animation(current_position, scroll_position);
 
         cx.notify();
     }

@@ -98,7 +98,9 @@ pub fn lookup_docs(path: &str) -> Option<rust_embed::EmbeddedFile> {
 
 /// Returns the paths of every embedded documentation file.
 pub fn all_docs() -> Vec<SharedString> {
-    Docs::iter().map(|path| SharedString::from(path.to_string())).collect()
+    Docs::iter()
+        .map(|path| SharedString::from(path.to_string()))
+        .collect()
 }
 
 /// Returns the contents of an embedded documentation file as UTF-8 text.

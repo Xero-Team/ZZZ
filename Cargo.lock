@@ -4429,6 +4429,7 @@ dependencies = [
  "collections",
  "gpui",
  "i18n",
+ "language",
  "markdown",
  "picker",
  "schemars 1.2.1",
