@@ -1463,6 +1463,7 @@ impl AgentDiff {
         cx: &mut Context<Self>,
     ) {
         match event {
+            AcpThreadEvent::ElicitationRequested(_) | AcpThreadEvent::ElicitationResponded(_) => {}
             AcpThreadEvent::NewEntry => {
                 if thread
                     .read(cx)

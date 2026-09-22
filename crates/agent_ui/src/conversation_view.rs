@@ -1,8 +1,9 @@
 use acp_thread::{
     AcpThread, AcpThreadEvent, AgentThreadEntry, AssistantMessage, AssistantMessageChunk,
-    AuthRequired, LoadError, MaxOutputTokensError, MentionUri, PermissionOptionChoice,
-    PermissionOptions, PermissionPattern, RetryStatus, SelectedPermissionOutcome, ThreadStatus,
-    ToolCall, ToolCallContent, ToolCallStatus, UserMessageId,
+    AuthRequired, ElicitationEntryId, LoadError, MaxOutputTokensError, MentionUri,
+    PermissionOptionChoice, PermissionOptions, PermissionPattern, RetryStatus,
+    SelectedPermissionOutcome, ThreadStatus, ToolCall, ToolCallContent, ToolCallStatus,
+    UserMessageId,
 };
 use acp_thread::{AgentConnection, Plan};
 use action_log::{ActionLog, ActionLogTelemetry, DiffStats};
@@ -104,6 +105,7 @@ use crate::{
 const STOPWATCH_THRESHOLD: Duration = Duration::from_secs(30);
 const TOKEN_THRESHOLD: u64 = 250;
 
+pub(crate) mod elicitation;
 mod thread_search_bar;
 mod thread_view;
 pub use thread_view::*;
@@ -267,12 +269,28 @@ impl Conversation {
                     | AcpThreadEvent::ModeUpdated(_)
                     | AcpThreadEvent::ConfigOptionsUpdated(_)
                     | AcpThreadEvent::WorkingDirectoriesUpdated
+                    | AcpThreadEvent::ElicitationRequested(_)
+                    | AcpThreadEvent::ElicitationResponded(_)
                     | AcpThreadEvent::PromptUpdated => {}
                 }
             }
         });
         self.subscriptions.push(subscription);
         self.threads.insert(session_id, thread);
+    }
+
+    pub fn respond_to_elicitation(
+        &mut self,
+        session_id: acp::SessionId,
+        elicitation_id: ElicitationEntryId,
+        response: acp::CreateElicitationResponse,
+        cx: &mut Context<Self>,
+    ) -> Option<()> {
+        let thread = self.threads.get(&session_id)?.clone();
+        thread.update(cx, |thread, cx| {
+            thread.respond_to_elicitation(&elicitation_id, response, cx);
+        });
+        Some(())
     }
 
     pub fn permission_options_for_tool_call<'a>(
@@ -453,7 +471,9 @@ fn affects_thread_metadata(event: &AcpThreadEvent) -> bool {
         | AcpThreadEvent::Error
         | AcpThreadEvent::LoadError(_)
         | AcpThreadEvent::Refusal
-        | AcpThreadEvent::WorkingDirectoriesUpdated => true,
+        | AcpThreadEvent::WorkingDirectoriesUpdated
+        | AcpThreadEvent::ElicitationRequested(_)
+        | AcpThreadEvent::ElicitationResponded(_) => true,
         // --
         AcpThreadEvent::EntryUpdated(_)
         | AcpThreadEvent::EntriesRemoved(_)
@@ -1486,6 +1506,8 @@ impl ConversationView {
                 );
             }
             AcpThreadEvent::ToolAuthorizationReceived(_) => {}
+            AcpThreadEvent::ElicitationRequested(_) => {}
+            AcpThreadEvent::ElicitationResponded(_) => {}
             AcpThreadEvent::Retry(retry) => {
                 if let Some(active) = self.thread_view(&session_id) {
                     active.update(cx, |active, _cx| {

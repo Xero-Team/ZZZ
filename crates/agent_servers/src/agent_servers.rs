@@ -98,7 +98,6 @@ pub trait AgentServer: Send {
         _cx: &App,
     ) {
     }
-
 }
 
 impl dyn AgentServer {

@@ -912,6 +912,7 @@ fn collect_markdowns(
     let mut out = Vec::new();
     match entry {
         AgentThreadEntry::UserMessage(_) => {}
+        AgentThreadEntry::Elicitation(_) => {}
         AgentThreadEntry::AssistantMessage(message) => {
             for (chunk_ix, chunk) in message.chunks.iter().enumerate() {
                 match chunk {

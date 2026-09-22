@@ -6,13 +6,13 @@ use acp_thread::{
 
 use anyhow::Result;
 use collections::{HashSet, IndexMap};
-use i18n as app_i18n;
 use futures::FutureExt;
 use fuzzy::{StringMatchCandidate, match_strings};
 use gpui::{
     Action, AsyncWindowContext, BackgroundExecutor, DismissEvent, FocusHandle, Subscription, Task,
     WeakEntity,
 };
+use i18n as app_i18n;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
 use picker::{Picker, PickerDelegate};

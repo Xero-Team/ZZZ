@@ -72,6 +72,7 @@ impl EntryViewState {
         };
 
         match thread_entry {
+            AgentThreadEntry::Elicitation(_) => {}
             AgentThreadEntry::UserMessage(message) => {
                 let can_rewind = thread.read(cx).supports_truncate(cx);
                 let has_id = message.id.is_some();

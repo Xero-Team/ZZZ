@@ -107,6 +107,7 @@ theme_settings.workspace = true
 time.workspace = true
 ui.workspace = true
 ui_input.workspace = true
+idna.workspace = true
 url.workspace = true
 util.workspace = true
 uuid.workspace = true

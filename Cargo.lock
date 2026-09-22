@@ -387,6 +387,7 @@ dependencies = [
  "html_to_markdown",
  "http_client",
  "i18n",
+ "idna",
  "image",
  "indoc",
  "itertools 0.14.0",
