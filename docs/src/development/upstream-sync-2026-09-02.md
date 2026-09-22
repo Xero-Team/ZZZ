@@ -231,7 +231,7 @@ Work remains on `sync/upstream-2026-09-02` and has not been merged to `main`.
 - Reviewed range: `c3cf80c0..00382632`
 
 This continuation reviewed the remaining 17 commits from the previous
-baseline. Counts: 1 A, 3 B, and 13 C. The reviewed baseline is now
+baseline. Counts: 1 A, 4 B, and 12 C. The reviewed baseline is now
 `003826320f320dace212a67e82b0db92cb457081`; no upstream commits remain in
 the queried range.
 
@@ -241,7 +241,7 @@ the queried range.
 | -------- | ----- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 8514ce3b | C     | --           | Broad language-model stream/schema rewrite conflicts across ZZZ's provider APIs and deleted test surfaces; not isolatable in this batch.                |
 | 2b0562a8 | A     | 04ec646d     | Cherry-picked with `-x -s`; keybinding labels can be hidden while bindings remain active.                                                               |
-| ff68a64c | C     | --           | Upstream release-version metadata and lockfile churn only.                                                                                              |
+| ff68a64c | B     | f36e6093a5   | Version follow to v1.20.0; local version bump retained.                                                                                                 |
 | cff4edce | C     | --           | Nix/Corgi build-source plumbing with no independent ZZZ product behavior.                                                                               |
 | 810c6a04 | B     | 2c51323b     | Added the `on_new_window` setting and launchpad behavior, adapting the settings UI to ZZZ's localized page-data API.                                    |
 | 769d0bef | C     | --           | Emmet wrap-with-abbreviation requires a large new inline-input/protocol architecture and collab changes absent from ZZZ.                                |

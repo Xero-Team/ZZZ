@@ -288,34 +288,34 @@ Work remains on `sync/upstream-2026-08-27` and has not been merged to
 - Query time: `2026-08-28T00:29:32+02:00`
 
 This continuation reviewed the next 20 commits after `4c724479`. Counts:
-4 A, 9 B, 7 C. The reviewed baseline is now
+4 A, 10 B, 6 C. The reviewed baseline is now
 `582e6a5789570f9abf9eab17bff027eaf18a0e3c`; 135 commits remain through the
 queried live head.
 
 ### Decisions
 
-| Upstream | Class | Local commit | Disposition                                                             |
-| -------- | ----- | ------------ | ----------------------------------------------------------------------- |
-| fa852694 | B     | 4b90cbaa     | Enable the existing CSV preview without an upstream feature flag.       |
-| 7a7c3e1d | C     | --           | Requires the removed auto-update downloader.                            |
-| 1a332533 | A     | 4bc1f8df     | Cherry-picked with `-x -s`.                                             |
-| 28c0f4ae | B     | 01bf9f79     | Collapse the nearest Git tree parent.                                   |
-| 99f4c21c | C     | --           | OpenCode Go/Zen subscription-model catalog and settings.                |
-| c43e2d97 | B     | 2a9c84a0     | Reject failed XKB context initialization.                               |
-| 45ae0572 | B     | 1450b072     | Stream web Fetch responses.                                             |
-| d70c45e5 | C     | --           | Needs absent web clipboard and external-drag GPUI APIs.                 |
-| fa00dccc | C     | --           | Large `crates/path` migration conflicts with ZZZ `paths`.               |
-| 9bb47879 | B     | 79a0a31d     | Hide Markdown syntax that does not render from find matches.            |
-| 0f84a49e | C     | --           | Native cloud websocket belongs to rejected account/collaboration paths. |
-| 71507659 | B     | ffbd393f     | Preserve `--user-data-dir` on normal restart.                           |
-| 242fe31a | A     | fe810e97     | Cherry-picked with `-x -s`.                                             |
-| f1cdbaad | B     | c9eded99     | Disable invalid Git-panel discard action.                               |
-| 7b48fc68 | A     | 6623fd1d     | Cherry-picked with `-x -s`.                                             |
-| 82854434 | B     | 8263bdc4     | Preserve lookaround context during regex replacement.                   |
-| 0cfb1ca1 | B     | c14c6130     | Normalize Pyright and basedpyright analysis settings.                   |
-| 0a4a4a95 | C     | --           | Upstream release-version and lockfile metadata only.                    |
-| badd2157 | A     | 7e7bf33b     | Cherry-picked with `-x -s`.                                             |
-| 582e6a57 | C     | --           | Broad async language-loader and query API rewrite.                      |
+| Upstream | Class | Local commit | Disposition                                                               |
+| -------- | ----- | ------------ | ------------------------------------------------------------------------- |
+| fa852694 | B     | 4b90cbaa     | Enable the existing CSV preview without an upstream feature flag.         |
+| 7a7c3e1d | C     | --           | Requires the removed auto-update downloader.                              |
+| 1a332533 | A     | 4bc1f8df     | Cherry-picked with `-x -s`.                                               |
+| 28c0f4ae | B     | 01bf9f79     | Collapse the nearest Git tree parent.                                     |
+| 99f4c21c | C     | --           | OpenCode Go/Zen subscription-model catalog and settings.                  |
+| c43e2d97 | B     | 2a9c84a0     | Reject failed XKB context initialization.                                 |
+| 45ae0572 | B     | 1450b072     | Stream web Fetch responses.                                               |
+| d70c45e5 | C     | --           | Needs absent web clipboard and external-drag GPUI APIs.                   |
+| fa00dccc | C     | --           | Large `crates/path` migration conflicts with ZZZ `paths`.                 |
+| 9bb47879 | B     | 79a0a31d     | Hide Markdown syntax that does not render from find matches.              |
+| 0f84a49e | C     | --           | Native cloud websocket belongs to rejected account/collaboration paths.   |
+| 71507659 | B     | ffbd393f     | Preserve `--user-data-dir` on normal restart.                             |
+| 242fe31a | A     | fe810e97     | Cherry-picked with `-x -s`.                                               |
+| f1cdbaad | B     | c9eded99     | Disable invalid Git-panel discard action.                                 |
+| 7b48fc68 | A     | 6623fd1d     | Cherry-picked with `-x -s`.                                               |
+| 82854434 | B     | 8263bdc4     | Preserve lookaround context during regex replacement.                     |
+| 0cfb1ca1 | B     | c14c6130     | Normalize Pyright and basedpyright analysis settings.                     |
+| 0a4a4a95 | B     | --           | Version follow to v1.18.0; superseded by the v1.19.0 follow `36ec8c40d7`. |
+| badd2157 | A     | 7e7bf33b     | Cherry-picked with `-x -s`.                                               |
+| 582e6a57 | C     | --           | Broad async language-loader and query API rewrite.                        |
 
 ### Applied work
 
@@ -357,7 +357,8 @@ commits.
   not isolatable from its broader Windows remote-path rewrite.
 - `0f84a49e` optimizes an account/collaboration cloud websocket route, which
   ZZZ does not retain as a product surface.
-- `0a4a4a95` is upstream release metadata with no independent ZZZ behavior.
+- `0a4a4a95` is a version follow to v1.18.0, superseded by the v1.19.0
+  follow `36ec8c40d7`.
 - `582e6a57` adds public async language-loader and query-selection APIs across
   extension and grammar loading. It is an unisolatable architecture rewrite,
   not a current ZZZ caller fix.
@@ -906,7 +907,7 @@ Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
 - Query time: `2026-08-28T14:46:58+02:00`
 
 This continuation reviewed the next 20 commits after `5dd0666d`. Counts:
-5 A, 0 B, 15 C. The reviewed baseline is now
+5 A, 1 B, 14 C. The reviewed baseline is now
 `5ed5bf95e518f1b35386a8787b512c99b90509f7`; 25 commits remain through the
 queried live head.
 
@@ -931,15 +932,15 @@ queried live head.
 | 34241d5f | C     | --           | LLVM/settings deserializer rewrite failed on removed ZZZ fields.          |
 | ea701d40 | C     | --           | Agent persistence worker targets deleted/diverged native-agent paths.     |
 | 4a9a863c | C     | --           | Auto-indentation patch requires deleted `editor/src/input.rs`.            |
-| ac099b4a | C     | --           | Release-version and lockfile metadata only.                               |
+| ac099b4a | B     | 36ec8c40d7   | Version follow to v1.19.0; local version bump retained.                   |
 | 7ecab315 | C     | --           | Depends on the rejected project-search rewrite from `1475887f`.           |
 | 5ed5bf95 | C     | --           | Stream-mapping rewrite spans deleted and conflicting provider APIs.       |
 
 ### Applied work
 
 Direct A commits `74490dac`, `4278ff36`, `1d7e5f1d`, `45cd77bb`, and
-`4ccbcabf` were absorbed with `git cherry-pick -x -s`. No B port was retained
-in this batch.
+`4ccbcabf` were absorbed with `git cherry-pick -x -s`. The `ac099b4a` version
+follow was retained as B in this batch.
 
 - `74490dac`: implemented Windows DirectX headless `render_to_image` under
   the existing test-support surface.
@@ -967,7 +968,8 @@ in this batch.
   attempt was fully reverted and reclassified C.
 - `ea701d40` targets native-agent session structures deleted or substantially
   diverged in ZZZ. `4a9a863c` targets the deleted upstream `editor/src/input.rs`.
-- `ac099b4a` only bumps release metadata. `7ecab315` depends on the rejected
+- `ac099b4a` is a version follow to v1.19.0 and is retained as B.
+  `7ecab315` depends on the rejected
   project-search rewrite. `5ed5bf95` cannot be isolated across the deleted
   Copilot/subscribed providers and conflicting local stream APIs.
 
