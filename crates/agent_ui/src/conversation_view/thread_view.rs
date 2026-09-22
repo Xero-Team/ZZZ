@@ -3,7 +3,7 @@ use crate::{
     agent_configuration::configure_context_server_modal::default_markdown_style,
     default_thread_title, open_abs_path_at_point, thread_title_from_prompt,
 };
-use agent_client_protocol::schema as acp;
+use agent_client_protocol::schema::v1 as acp;
 use std::cell::RefCell;
 
 use crate::message_editor::SharedSessionCapabilities;

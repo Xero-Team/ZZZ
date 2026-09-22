@@ -1,8 +1,8 @@
 use crate::AcpThread;
-use agent_client_protocol::schema as acp;
+use agent_client_protocol::schema::v1 as acp;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use collections::{HashMap, IndexMap};
+use collections::{HashMap, HashSet, IndexMap};
 use gpui::{Entity, SharedString, Task};
 use language_model::LanguageModelProviderId;
 use project::{AgentId, Project};
@@ -19,6 +19,53 @@ pub struct UserMessageId(Arc<str>);
 impl UserMessageId {
     pub fn new() -> Self {
         Self(Uuid::new_v4().to_string().into())
+    }
+}
+
+/// Identifier for a language model exposed by an ACP agent.
+///
+/// This is a local newtype rather than a protocol type because agents are free
+/// to use their own model identifiers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub struct AgentModelId(SharedString);
+
+impl AgentModelId {
+    pub fn new(id: impl Into<Self>) -> Self {
+        id.into()
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<str> for AgentModelId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for AgentModelId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<SharedString> for AgentModelId {
+    fn from(id: SharedString) -> Self {
+        Self(id)
+    }
+}
+
+impl From<String> for AgentModelId {
+    fn from(id: String) -> Self {
+        Self(SharedString::from(id))
+    }
+}
+
+impl From<&str> for AgentModelId {
+    fn from(id: &str) -> Self {
+        Self(SharedString::from(id.to_owned()))
     }
 }
 
@@ -404,7 +451,7 @@ pub trait AgentModelSelector: 'static {
     ///
     /// # Returns
     /// A task resolving to `Ok(())` on success or an error.
-    fn select_model(&self, model_id: acp::ModelId, cx: &mut App) -> Task<Result<()>>;
+    fn select_model(&self, model_id: AgentModelId, cx: &mut App) -> Task<Result<()>>;
 
     /// Retrieves the currently selected model for a specific session (thread).
     ///
@@ -414,6 +461,13 @@ pub trait AgentModelSelector: 'static {
     /// # Returns
     /// A task resolving to the selected model (always set) or an error (e.g., session not found).
     fn selected_model(&self, cx: &mut App) -> Task<Result<AgentModelInfo>>;
+
+    fn favorite_model_ids(&self, _cx: &mut App) -> HashSet<AgentModelId> {
+        HashSet::default()
+    }
+
+    fn toggle_favorite_model(&self, _model_id: AgentModelId, _should_be_favorite: bool, _cx: &App) {
+    }
 
     /// Whenever the model list is updated the receiver will be notified.
     /// Optional for agents that don't update their model list.
@@ -438,25 +492,12 @@ pub enum AgentModelIcon {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentModelInfo {
-    pub id: acp::ModelId,
+    pub id: AgentModelId,
     pub name: SharedString,
     pub description: Option<SharedString>,
     pub icon: Option<AgentModelIcon>,
     pub is_latest: bool,
     pub cost: Option<SharedString>,
-}
-
-impl From<acp::ModelInfo> for AgentModelInfo {
-    fn from(info: acp::ModelInfo) -> Self {
-        Self {
-            id: info.model_id,
-            name: info.name.into(),
-            description: info.description.map(|desc| desc.into()),
-            icon: None,
-            is_latest: false,
-            cost: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1019,7 +1060,7 @@ mod test_support {
         fn new() -> Self {
             Self {
                 selected_model: Arc::new(Mutex::new(AgentModelInfo {
-                    id: acp::ModelId::new("visual-test-model"),
+                    id: AgentModelId::new("visual-test-model"),
                     name: "Visual Test Model".into(),
                     description: Some("A stub model for visual testing".into()),
                     icon: Some(AgentModelIcon::Named(ui::IconName::ZZZAssistant)),
@@ -1036,7 +1077,7 @@ mod test_support {
             Task::ready(Ok(AgentModelList::Flat(vec![model])))
         }
 
-        fn select_model(&self, model_id: acp::ModelId, _cx: &mut App) -> Task<Result<()>> {
+        fn select_model(&self, model_id: AgentModelId, _cx: &mut App) -> Task<Result<()>> {
             self.selected_model.lock().id = model_id;
             Task::ready(Ok(()))
         }

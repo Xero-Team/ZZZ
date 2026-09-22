@@ -1,5 +1,5 @@
 use acp_thread::{MentionUri, UserMessageId};
-use agent_client_protocol::schema as acp;
+use agent_client_protocol::schema::v1 as acp;
 use collections::IndexMap;
 use language_model::{
     LanguageModelImage, LanguageModelRequestMessage, LanguageModelToolResult,

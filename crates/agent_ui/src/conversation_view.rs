@@ -7,7 +7,7 @@ use acp_thread::{
 use acp_thread::{AgentConnection, Plan};
 use action_log::{ActionLog, ActionLogTelemetry, DiffStats};
 use agent::ThreadStore;
-use agent_client_protocol::schema as acp;
+use agent_client_protocol::schema::v1 as acp;
 #[cfg(test)]
 use agent_servers::AgentServerDelegate;
 use agent_servers::{AgentServer, GEMINI_TERMINAL_AUTH_METHOD_ID};
@@ -1082,13 +1082,9 @@ impl ConversationView {
             // Fall back to legacy mode/model selectors
             config_options_view = None;
             model_selector = connection.model_selector(&session_id).map(|selector| {
-                let agent_server = self.agent.clone();
-                let fs = self.project.read(cx).fs().clone();
                 cx.new(|cx| {
                     ModelSelectorPopover::new(
                         selector,
-                        agent_server,
-                        fs,
                         PopoverMenuHandle::default(),
                         self.focus_handle(cx),
                         window,

@@ -1,5 +1,5 @@
 use action_log::DiffStats;
-use agent_client_protocol::schema as acp;
+use agent_client_protocol::schema::v1 as acp;
 use agent_ui::thread_metadata_store::ThreadMetadata;
 use gpui::{
     Action as _, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Modifiers,

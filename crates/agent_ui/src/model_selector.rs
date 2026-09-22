@@ -1,19 +1,18 @@
 use std::{cmp::Reverse, rc::Rc, sync::Arc};
 
-use acp_thread::{AgentModelIcon, AgentModelInfo, AgentModelList, AgentModelSelector};
-use agent_client_protocol::schema as acp;
-use agent_servers::AgentServer;
+use acp_thread::{
+    AgentModelIcon, AgentModelId, AgentModelInfo, AgentModelList, AgentModelSelector,
+};
 
 use anyhow::Result;
 use collections::{HashSet, IndexMap};
-use fs::Fs;
+use i18n as app_i18n;
 use futures::FutureExt;
 use fuzzy::{StringMatchCandidate, match_strings};
 use gpui::{
     Action, AsyncWindowContext, BackgroundExecutor, DismissEvent, FocusHandle, Subscription, Task,
     WeakEntity,
 };
-use i18n as app_i18n;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
 use picker::{Picker, PickerDelegate};
@@ -23,11 +22,8 @@ use util::ResultExt;
 use zzz_actions::agent::OpenSettings;
 
 use crate::ui::{
-    HoldForDefault, ModelSelectorFooter, ModelSelectorHeader, ModelSelectorListItem,
-    documentation_aside_side,
+    ModelSelectorFooter, ModelSelectorHeader, ModelSelectorListItem, documentation_aside_side,
 };
-
-pub type ModelSelector = Picker<ModelPickerDelegate>;
 
 fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()
@@ -46,15 +42,15 @@ fn model_group_label(title: &SharedString, cx: &App) -> SharedString {
     }
 }
 
+pub type ModelSelector = Picker<ModelPickerDelegate>;
+
 pub fn acp_model_selector(
     selector: Rc<dyn AgentModelSelector>,
-    agent_server: Rc<dyn AgentServer>,
-    fs: Arc<dyn Fs>,
     focus_handle: FocusHandle,
     window: &mut Window,
     cx: &mut Context<ModelSelector>,
 ) -> ModelSelector {
-    let delegate = ModelPickerDelegate::new(selector, agent_server, fs, focus_handle, window, cx);
+    let delegate = ModelPickerDelegate::new(selector, focus_handle, window, cx);
     Picker::list(delegate, window, cx)
         .show_scrollbar(true)
         .width(rems(20.))
@@ -68,14 +64,12 @@ enum ModelPickerEntry {
 
 pub struct ModelPickerDelegate {
     selector: Rc<dyn AgentModelSelector>,
-    agent_server: Rc<dyn AgentServer>,
-    fs: Arc<dyn Fs>,
     filtered_entries: Vec<ModelPickerEntry>,
     models: Option<AgentModelList>,
     selected_index: usize,
-    selected_description: Option<(usize, SharedString, bool)>,
+    selected_description: Option<(usize, SharedString)>,
     selected_model: Option<AgentModelInfo>,
-    favorites: HashSet<acp::ModelId>,
+    favorites: HashSet<AgentModelId>,
     _refresh_models_task: Task<()>,
     _settings_subscription: Subscription,
     focus_handle: FocusHandle,
@@ -84,8 +78,6 @@ pub struct ModelPickerDelegate {
 impl ModelPickerDelegate {
     fn new(
         selector: Rc<dyn AgentModelSelector>,
-        agent_server: Rc<dyn AgentServer>,
-        fs: Arc<dyn Fs>,
         focus_handle: FocusHandle,
         window: &mut Window,
         cx: &mut Context<ModelSelector>,
@@ -125,23 +117,21 @@ impl ModelPickerDelegate {
             })
         };
 
-        let agent_server_for_subscription = agent_server.clone();
+        let selector_for_subscription = selector.clone();
         let settings_subscription =
             cx.observe_global_in::<SettingsStore>(window, move |picker, window, cx| {
                 // Only refresh if the favorites actually changed to avoid redundant work
                 // when other settings are modified (e.g., user editing settings.json)
-                let new_favorites = agent_server_for_subscription.favorite_model_ids(cx);
+                let new_favorites = selector_for_subscription.favorite_model_ids(cx);
                 if new_favorites != picker.delegate.favorites {
                     picker.delegate.favorites = new_favorites;
                     picker.refresh(window, cx);
                 }
             });
-        let favorites = agent_server.favorite_model_ids(cx);
+        let favorites = selector.favorite_model_ids(cx);
 
         Self {
             selector,
-            agent_server,
-            fs,
             filtered_entries: Vec::new(),
             models: None,
             selected_model: None,
@@ -299,21 +289,6 @@ impl PickerDelegate for ModelPickerDelegate {
         if let Some(ModelPickerEntry::Model(model_info, _)) =
             self.filtered_entries.get(self.selected_index)
         {
-            if window.modifiers().secondary() {
-                let default_model = self.agent_server.default_model(cx);
-                let is_default = default_model.as_ref() == Some(&model_info.id);
-
-                self.agent_server.set_default_model(
-                    if is_default {
-                        None
-                    } else {
-                        Some(model_info.id.clone())
-                    },
-                    self.fs.clone(),
-                    cx,
-                );
-            }
-
             self.selector
                 .select_model(model_info.id.clone(), cx)
                 .detach_and_log_err(cx);
@@ -344,22 +319,14 @@ impl PickerDelegate for ModelPickerDelegate {
             ),
             ModelPickerEntry::Model(model_info, is_favorite) => {
                 let is_selected = Some(model_info) == self.selected_model.as_ref();
-                let default_model = self.agent_server.default_model(cx);
-                let is_default = default_model.as_ref() == Some(&model_info.id);
 
                 let is_favorite = *is_favorite;
                 let handle_action_click = {
                     let model_id = model_info.id.clone();
-                    let fs = self.fs.clone();
-                    let agent_server = self.agent_server.clone();
+                    let selector = self.selector.clone();
 
                     cx.listener(move |_, _, _, cx| {
-                        agent_server.toggle_favorite_model(
-                            model_id.clone(),
-                            !is_favorite,
-                            fs.clone(),
-                            cx,
-                        );
+                        selector.toggle_favorite_model(model_id.clone(), !is_favorite, cx);
                     })
                 };
 
@@ -372,8 +339,8 @@ impl PickerDelegate for ModelPickerDelegate {
                             this.on_hover(cx.listener(move |menu, hovered, _, cx| {
                                 if *hovered {
                                     menu.delegate.selected_description =
-                                        Some((ix, description.clone(), is_default));
-                                } else if matches!(menu.delegate.selected_description, Some((id, _, _)) if id == ix) {
+                                        Some((ix, description.clone()));
+                                } else if matches!(menu.delegate.selected_description, Some((id, _)) if id == ix) {
                                     menu.delegate.selected_description = None;
                                 }
                                 cx.notify();
@@ -404,29 +371,20 @@ impl PickerDelegate for ModelPickerDelegate {
         _window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<ui::DocumentationAside> {
-        self.selected_description
-            .as_ref()
-            .map(|(_, description, is_default)| {
-                let description = description.clone();
-                let is_default = *is_default;
+        self.selected_description.as_ref().map(|(_, description)| {
+            let description = description.clone();
 
-                let side = documentation_aside_side(cx);
+            let side = documentation_aside_side(cx);
 
-                DocumentationAside::new(
-                    side,
-                    Rc::new(move |_| {
-                        v_flex()
-                            .gap_1()
-                            .child(Label::new(description.clone()))
-                            .child(HoldForDefault::new(is_default))
-                            .into_any_element()
-                    }),
-                )
-            })
+            DocumentationAside::new(
+                side,
+                Rc::new(move |_| Label::new(description.clone()).into_any_element()),
+            )
+        })
     }
 
     fn documentation_aside_index(&self) -> Option<usize> {
-        self.selected_description.as_ref().map(|(ix, _, _)| *ix)
+        self.selected_description.as_ref().map(|(ix, _)| *ix)
     }
 
     fn render_footer(
@@ -446,7 +404,7 @@ impl PickerDelegate for ModelPickerDelegate {
 
 fn info_list_to_picker_entries(
     model_list: AgentModelList,
-    favorites: &HashSet<acp::ModelId>,
+    favorites: &HashSet<AgentModelId>,
 ) -> Vec<ModelPickerEntry> {
     let mut entries = Vec::new();
 
@@ -552,7 +510,8 @@ async fn fuzzy_search(
 
 #[cfg(test)]
 mod tests {
-    use gpui::TestAppContext;
+    use gpui::{App, TestAppContext, VisualTestContext};
+    use std::cell::RefCell;
 
     use super::*;
 
@@ -564,7 +523,7 @@ mod tests {
                     models
                         .into_iter()
                         .map(|model| acp_thread::AgentModelInfo {
-                            id: acp::ModelId::new(model.to_string()),
+                            id: AgentModelId::new(model),
                             name: model.to_string().into(),
                             description: None,
                             icon: None,
@@ -613,28 +572,112 @@ mod tests {
         }
     }
 
-    fn create_favorites(models: Vec<&str>) -> HashSet<acp::ModelId> {
-        models
-            .into_iter()
-            .map(|m| acp::ModelId::new(m.to_string()))
-            .collect()
+    fn create_favorites(models: Vec<&str>) -> HashSet<AgentModelId> {
+        models.into_iter().map(AgentModelId::new).collect()
     }
 
     fn get_entry_model_ids(entries: &[ModelPickerEntry]) -> Vec<&str> {
         entries
             .iter()
             .filter_map(|entry| match entry {
-                ModelPickerEntry::Model(info, _) => Some(info.id.0.as_ref()),
+                ModelPickerEntry::Model(info, _) => Some(info.id.as_ref()),
                 _ => None,
             })
             .collect()
+    }
+
+    #[gpui::test]
+    fn confirming_model_selects_model(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let settings_store = settings::SettingsStore::test(cx);
+            cx.set_global(settings_store);
+            theme_settings::init(theme::LoadThemes::JustBase, cx);
+            editor::init(cx);
+        });
+
+        let model_selector = Rc::new(TestModelSelector::new());
+
+        let window_handle = cx.add_window({
+            let model_selector = model_selector.clone();
+            move |window, cx| {
+                let selector: Rc<dyn AgentModelSelector> = model_selector;
+                acp_model_selector(selector, cx.focus_handle(), window, cx)
+            }
+        });
+        cx.run_until_parked();
+
+        let mut cx = VisualTestContext::from_window(window_handle.into(), cx);
+        window_handle
+            .update(&mut cx, |picker, window, cx| {
+                picker.delegate.set_selected_index(1, window, cx);
+                picker.delegate.confirm(false, window, cx);
+            })
+            .unwrap();
+
+        assert_eq!(
+            model_selector.selected_models.borrow().as_slice(),
+            &[AgentModelId::new("manual")]
+        );
+    }
+
+    struct TestModelSelector {
+        models: Vec<AgentModelInfo>,
+        selected_model: RefCell<AgentModelInfo>,
+        selected_models: RefCell<Vec<AgentModelId>>,
+    }
+
+    impl TestModelSelector {
+        fn new() -> Self {
+            let models = vec![
+                AgentModelInfo {
+                    id: AgentModelId::new("auto"),
+                    name: "Auto".into(),
+                    description: None,
+                    icon: None,
+                    is_latest: false,
+                    cost: None,
+                },
+                AgentModelInfo {
+                    id: AgentModelId::new("manual"),
+                    name: "Manual".into(),
+                    description: None,
+                    icon: None,
+                    is_latest: false,
+                    cost: None,
+                },
+            ];
+
+            Self {
+                selected_model: RefCell::new(models[0].clone()),
+                models,
+                selected_models: RefCell::new(Vec::new()),
+            }
+        }
+    }
+
+    impl AgentModelSelector for TestModelSelector {
+        fn list_models(&self, _cx: &mut App) -> Task<Result<AgentModelList>> {
+            Task::ready(Ok(AgentModelList::Flat(self.models.clone())))
+        }
+
+        fn select_model(&self, model_id: AgentModelId, _cx: &mut App) -> Task<Result<()>> {
+            self.selected_models.borrow_mut().push(model_id.clone());
+            if let Some(model) = self.models.iter().find(|model| model.id == model_id) {
+                *self.selected_model.borrow_mut() = model.clone();
+            }
+            Task::ready(Ok(()))
+        }
+
+        fn selected_model(&self, _cx: &mut App) -> Task<Result<AgentModelInfo>> {
+            Task::ready(Ok(self.selected_model.borrow().clone()))
+        }
     }
 
     fn get_entry_labels(entries: &[ModelPickerEntry]) -> Vec<&str> {
         entries
             .iter()
             .map(|entry| match entry {
-                ModelPickerEntry::Model(info, _) => info.id.0.as_ref(),
+                ModelPickerEntry::Model(info, _) => info.id.as_ref(),
                 ModelPickerEntry::Separator(s) => &s,
             })
             .collect()
@@ -644,7 +687,7 @@ mod tests {
     async fn test_fuzzy_match(cx: &mut TestAppContext) {
         let models = create_model_list(vec![
             (
-                "zzz",
+                "zed",
                 vec![
                     "Claude 3.7 Sonnet",
                     "Claude 3.7 Sonnet Thinking",
@@ -657,13 +700,13 @@ mod tests {
         ]);
 
         // Results should preserve models order whenever possible.
-        // In the case below, `zzz/gpt-5-mini` and `openai/gpt-5-mini` have identical
-        // similarity scores, but `zzz/gpt-5-mini` was higher in the models list,
+        // In the case below, `zed/gpt-5-mini` and `openai/gpt-5-mini` have identical
+        // similarity scores, but `zed/gpt-5-mini` was higher in the models list,
         // so it should appear first in the results.
         let results = fuzzy_search(models.clone(), "mini".into(), cx.executor()).await;
         assert_models_eq(
             results,
-            vec![("zzz", vec!["gpt-5-mini"]), ("openai", vec!["gpt-5-mini"])],
+            vec![("zed", vec!["gpt-5-mini"]), ("openai", vec!["gpt-5-mini"])],
         );
 
         // Fuzzy search - test with specific model name
@@ -674,10 +717,10 @@ mod tests {
     #[gpui::test]
     fn test_favorites_section_appears_when_favorites_exist(_cx: &mut TestAppContext) {
         let models = create_model_list(vec![
-            ("zzz", vec!["zzz/claude", "zzz/gemini"]),
+            ("zed", vec!["zed/claude", "zed/gemini"]),
             ("openai", vec!["openai/gpt-5"]),
         ]);
-        let favorites = create_favorites(vec!["zzz/gemini"]);
+        let favorites = create_favorites(vec!["zed/gemini"]);
 
         let entries = info_list_to_picker_entries(models, &favorites);
 
@@ -687,38 +730,38 @@ mod tests {
         ));
 
         let model_ids = get_entry_model_ids(&entries);
-        assert_eq!(model_ids[0], "zzz/gemini");
+        assert_eq!(model_ids[0], "zed/gemini");
     }
 
     #[gpui::test]
     fn test_no_favorites_section_when_no_favorites(_cx: &mut TestAppContext) {
-        let models = create_model_list(vec![("zzz", vec!["zzz/claude", "zzz/gemini"])]);
+        let models = create_model_list(vec![("zed", vec!["zed/claude", "zed/gemini"])]);
         let favorites = create_favorites(vec![]);
 
         let entries = info_list_to_picker_entries(models, &favorites);
 
         assert!(matches!(
             entries.first(),
-            Some(ModelPickerEntry::Separator(s)) if s == "zzz"
+            Some(ModelPickerEntry::Separator(s)) if s == "zed"
         ));
     }
 
     #[gpui::test]
     fn test_models_have_correct_actions(_cx: &mut TestAppContext) {
         let models = create_model_list(vec![
-            ("zzz", vec!["zzz/claude", "zzz/gemini"]),
+            ("zed", vec!["zed/claude", "zed/gemini"]),
             ("openai", vec!["openai/gpt-5"]),
         ]);
-        let favorites = create_favorites(vec!["zzz/claude"]);
+        let favorites = create_favorites(vec!["zed/claude"]);
 
         let entries = info_list_to_picker_entries(models, &favorites);
 
         for entry in &entries {
             if let ModelPickerEntry::Model(info, is_favorite) = entry {
-                if info.id.0.as_ref() == "zzz/claude" {
-                    assert!(is_favorite, "zzz/claude should be a favorite");
+                if info.id.as_ref() == "zed/claude" {
+                    assert!(is_favorite, "zed/claude should be a favorite");
                 } else {
-                    assert!(!is_favorite, "{} should not be a favorite", info.id.0);
+                    assert!(!is_favorite, "{} should not be a favorite", info.id);
                 }
             }
         }
@@ -727,31 +770,31 @@ mod tests {
     #[gpui::test]
     fn test_favorites_appear_in_both_sections(_cx: &mut TestAppContext) {
         let models = create_model_list(vec![
-            ("zzz", vec!["zzz/claude", "zzz/gemini"]),
+            ("zed", vec!["zed/claude", "zed/gemini"]),
             ("openai", vec!["openai/gpt-5", "openai/gpt-4"]),
         ]);
-        let favorites = create_favorites(vec!["zzz/gemini", "openai/gpt-5"]);
+        let favorites = create_favorites(vec!["zed/gemini", "openai/gpt-5"]);
 
         let entries = info_list_to_picker_entries(models, &favorites);
         let model_ids = get_entry_model_ids(&entries);
 
-        assert_eq!(model_ids[0], "zzz/gemini");
+        assert_eq!(model_ids[0], "zed/gemini");
         assert_eq!(model_ids[1], "openai/gpt-5");
 
-        assert!(model_ids[2..].contains(&"zzz/gemini"));
+        assert!(model_ids[2..].contains(&"zed/gemini"));
         assert!(model_ids[2..].contains(&"openai/gpt-5"));
     }
 
     #[gpui::test]
     fn test_favorites_are_not_duplicated_when_repeated_in_other_sections(_cx: &mut TestAppContext) {
         let models = create_model_list(vec![
-            ("Recommended", vec!["zzz/claude", "anthropic/claude"]),
-            ("ZZZ", vec!["zzz/claude", "zzz/gpt-5"]),
+            ("Recommended", vec!["zed/claude", "anthropic/claude"]),
+            ("Zed", vec!["zed/claude", "zed/gpt-5"]),
             ("Antropic", vec!["anthropic/claude"]),
             ("OpenAI", vec!["openai/gpt-5"]),
         ]);
 
-        let favorites = create_favorites(vec!["zzz/claude"]);
+        let favorites = create_favorites(vec!["zed/claude"]);
 
         let entries = info_list_to_picker_entries(models, &favorites);
         let labels = get_entry_labels(&entries);
@@ -760,13 +803,13 @@ mod tests {
             labels,
             vec![
                 "Favorite",
-                "zzz/claude",
+                "zed/claude",
                 "Recommended",
-                "zzz/claude",
+                "zed/claude",
                 "anthropic/claude",
-                "ZZZ",
-                "zzz/claude",
-                "zzz/gpt-5",
+                "Zed",
+                "zed/claude",
+                "zed/gpt-5",
                 "Antropic",
                 "anthropic/claude",
                 "OpenAI",
@@ -779,7 +822,7 @@ mod tests {
     fn test_flat_model_list_with_favorites(_cx: &mut TestAppContext) {
         let models = AgentModelList::Flat(vec![
             acp_thread::AgentModelInfo {
-                id: acp::ModelId::new("zzz/claude".to_string()),
+                id: AgentModelId::new("zed/claude"),
                 name: "Claude".into(),
                 description: None,
                 icon: None,
@@ -787,7 +830,7 @@ mod tests {
                 cost: None,
             },
             acp_thread::AgentModelInfo {
-                id: acp::ModelId::new("zzz/gemini".to_string()),
+                id: AgentModelId::new("zed/gemini"),
                 name: "Gemini".into(),
                 description: None,
                 icon: None,
@@ -795,7 +838,7 @@ mod tests {
                 cost: None,
             },
         ]);
-        let favorites = create_favorites(vec!["zzz/gemini"]);
+        let favorites = create_favorites(vec!["zed/gemini"]);
 
         let entries = info_list_to_picker_entries(models, &favorites);
 
@@ -812,7 +855,7 @@ mod tests {
 
     #[gpui::test]
     fn test_favorites_count_returns_correct_count(_cx: &mut TestAppContext) {
-        let empty_favorites: HashSet<acp::ModelId> = HashSet::default();
+        let empty_favorites: HashSet<AgentModelId> = HashSet::default();
         assert_eq!(empty_favorites.len(), 0);
 
         let one_favorite = create_favorites(vec!["model-a"]);
@@ -829,7 +872,7 @@ mod tests {
     fn test_is_favorite_flag_set_correctly_in_entries(_cx: &mut TestAppContext) {
         let models = AgentModelList::Flat(vec![
             acp_thread::AgentModelInfo {
-                id: acp::ModelId::new("favorite-model".to_string()),
+                id: AgentModelId::new("favorite-model"),
                 name: "Favorite".into(),
                 description: None,
                 icon: None,
@@ -837,7 +880,7 @@ mod tests {
                 cost: None,
             },
             acp_thread::AgentModelInfo {
-                id: acp::ModelId::new("regular-model".to_string()),
+                id: AgentModelId::new("regular-model"),
                 name: "Regular".into(),
                 description: None,
                 icon: None,
@@ -851,9 +894,9 @@ mod tests {
 
         for entry in &entries {
             if let ModelPickerEntry::Model(info, is_favorite) = entry {
-                if info.id.0.as_ref() == "favorite-model" {
+                if info.id.as_ref() == "favorite-model" {
                     assert!(*is_favorite, "favorite-model should have is_favorite=true");
-                } else if info.id.0.as_ref() == "regular-model" {
+                } else if info.id.as_ref() == "regular-model" {
                     assert!(!*is_favorite, "regular-model should have is_favorite=false");
                 }
             }

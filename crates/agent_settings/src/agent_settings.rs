@@ -3,8 +3,7 @@ mod agent_profile;
 use std::path::{Component, Path};
 use std::sync::{Arc, LazyLock};
 
-use agent_client_protocol::schema as acp;
-use collections::{HashSet, IndexMap};
+use collections::IndexMap;
 use fs::Fs;
 use futures::channel::oneshot;
 use gpui::{App, Pixels, px};
@@ -191,12 +190,6 @@ impl AgentSettings {
         self.message_editor_min_lines * 2
     }
 
-    pub fn favorite_model_ids(&self) -> HashSet<acp::ModelId> {
-        self.favorite_models
-            .iter()
-            .map(|sel| acp::ModelId::new(format!("{}/{}", sel.provider.0, sel.model)))
-            .collect()
-    }
 }
 
 pub fn language_model_to_selection(

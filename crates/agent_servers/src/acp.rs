@@ -3,7 +3,7 @@ use acp_thread::{
     AgentSessionListResponse,
 };
 use action_log::ActionLog;
-use agent_client_protocol::schema::{self as acp, ErrorCode};
+use agent_client_protocol::schema::{ProtocolVersion, v1::{self as acp, ErrorCode}};
 use agent_client_protocol::{
     Agent, Client, ConnectionTo, JsonRpcResponse, Lines, Responder, SentRequest,
 };
@@ -352,7 +352,6 @@ where
     Notif: Send + 'static,
 {
     notification: Notif,
-    connection: ConnectionTo<Agent>,
     handler: fn(Notif, &mut AsyncApp, &ClientContext),
 }
 
@@ -370,11 +369,7 @@ where
     }
 
     fn reject(self: Box<Self>) {
-        let Self { connection, .. } = *self;
         log::error!("ACP foreground dispatch queue closed while handling inbound notification");
-        connection
-            .send_error_notification(dispatch_queue_closed_error())
-            .log_err();
     }
 }
 
@@ -400,14 +395,12 @@ fn enqueue_request<Req, Res>(
 fn enqueue_notification<Notif>(
     dispatch_tx: &mpsc::UnboundedSender<ForegroundWork>,
     notification: Notif,
-    connection: ConnectionTo<Agent>,
     handler: fn(Notif, &mut AsyncApp, &ClientContext),
 ) where
     Notif: Send + 'static,
 {
     let work: ForegroundWork = Box::new(NotificationForegroundWork {
         notification,
-        connection,
         handler,
     });
     if let Err(err) = dispatch_tx.unbounded_send(work) {
@@ -426,7 +419,6 @@ pub struct AcpConnection {
     agent_server_store: WeakEntity<AgentServerStore>,
     agent_capabilities: acp::AgentCapabilities,
     default_mode: Option<acp::SessionModeId>,
-    default_model: Option<acp::ModelId>,
     default_config_options: HashMap<String, AgentConfigOptionValue>,
     child: Option<Child>,
     session_list: Option<Rc<AcpSessionList>>,
@@ -444,7 +436,6 @@ struct PendingAcpSession {
 
 struct SessionConfigResponse {
     modes: Option<acp::SessionModeState>,
-    models: Option<acp::SessionModelState>,
     config_options: Option<Vec<acp::SessionConfigOption>>,
 }
 
@@ -469,7 +460,6 @@ impl ConfigOptions {
 pub struct AcpSession {
     thread: WeakEntity<AcpThread>,
     suppress_abort_err: bool,
-    models: Option<Rc<RefCell<acp::SessionModelState>>>,
     session_modes: Option<Rc<RefCell<acp::SessionModeState>>>,
     config_options: Option<ConfigOptions>,
     ref_count: usize,
@@ -592,7 +582,6 @@ pub async fn connect(
     command: AgentServerCommand,
     agent_server_store: WeakEntity<AgentServerStore>,
     default_mode: Option<acp::SessionModeId>,
-    default_model: Option<acp::ModelId>,
     default_config_options: HashMap<String, AgentConfigOptionValue>,
     cx: &mut AsyncApp,
 ) -> Result<Rc<dyn AgentConnection>> {
@@ -602,7 +591,6 @@ pub async fn connect(
         command.clone(),
         agent_server_store,
         default_mode,
-        default_model,
         default_config_options,
         cx,
     )
@@ -610,7 +598,7 @@ pub async fn connect(
     Ok(Rc::new(conn) as _)
 }
 
-const MINIMUM_SUPPORTED_VERSION: acp::ProtocolVersion = acp::ProtocolVersion::V1;
+const MINIMUM_SUPPORTED_VERSION: ProtocolVersion = ProtocolVersion::V1;
 
 /// Build a `Client` connection over `transport` with ZZZ's full
 /// agent→client handler set wired up.
@@ -643,8 +631,8 @@ fn connect_client_future(
     macro_rules! on_notification {
         ($handler:ident) => {{
             let dispatch_tx = dispatch_tx.clone();
-            async move |notif, connection| {
-                enqueue_notification(&dispatch_tx, notif, connection, $handler);
+            async move |notif, _connection| {
+                enqueue_notification(&dispatch_tx, notif, $handler);
                 Ok(())
             }
         }};
@@ -741,8 +729,7 @@ impl AcpConnection {
         command: AgentServerCommand,
         agent_server_store: WeakEntity<AgentServerStore>,
         default_mode: Option<acp::SessionModeId>,
-        default_model: Option<acp::ModelId>,
-        default_config_options: HashMap<String, AgentConfigOptionValue>,
+            default_config_options: HashMap<String, AgentConfigOptionValue>,
         cx: &mut AsyncApp,
     ) -> Result<Self> {
         let root_dir = project.read_with(cx, |project, cx| {
@@ -913,7 +900,7 @@ impl AcpConnection {
         });
 
         let initialize_response = connection.send_request(
-            acp::InitializeRequest::new(acp::ProtocolVersion::V1)
+            acp::InitializeRequest::new(ProtocolVersion::V1)
                 .client_capabilities(client_capabilities_for_agent(
                     &agent_id,
                     cx.update(|cx| cx.has_flag::<AcpBetaFeatureFlag>()),
@@ -1026,8 +1013,7 @@ impl AcpConnection {
             pending_sessions,
             agent_capabilities: response.agent_capabilities,
             default_mode,
-            default_model,
-            default_config_options,
+                default_config_options,
             session_list,
             debug_log,
             _io_task: io_task,
@@ -1064,7 +1050,6 @@ impl AcpConnection {
             agent_server_store,
             agent_capabilities,
             default_mode: None,
-            default_model: None,
             default_config_options: HashMap::default(),
             child: None,
             session_list: None,
@@ -1157,7 +1142,6 @@ impl AcpConnection {
                             thread: thread.downgrade(),
                             suppress_abort_err: false,
                             session_modes: None,
-                            models: None,
                             config_options: None,
                             ref_count: 1,
                         },
@@ -1175,8 +1159,8 @@ impl AcpConnection {
                             }
                         };
 
-                    let (modes, models, config_options) =
-                        config_state(response.modes, response.models, response.config_options);
+                    let (modes, config_options) =
+                        config_state(response.modes, response.config_options);
 
                     if let Some(config_opts) = config_options.as_ref() {
                         this.apply_default_config_options(&session_id, config_opts, cx);
@@ -1201,7 +1185,6 @@ impl AcpConnection {
                             )));
                         };
                         session.session_modes = modes;
-                        session.models = models;
                         session.config_options = config_options.map(ConfigOptions::new);
                         session.ref_count = ref_count;
                     }
@@ -1420,7 +1403,6 @@ fn meta_terminal_auth_task(
     }
 
     let meta = match method {
-        acp::AuthMethod::EnvVar(env_var) => env_var.meta.as_ref(),
         acp::AuthMethod::Terminal(terminal) => terminal.meta.as_ref(),
         acp::AuthMethod::Agent(agent) => agent.meta.as_ref(),
         _ => None,
@@ -1542,8 +1524,8 @@ impl AgentConnection for AcpConnection {
             .await
             .map_err(map_acp_error)?;
 
-            let (modes, models, config_options) =
-                config_state(response.modes, response.models, response.config_options);
+            let (modes, config_options) =
+                config_state(response.modes, response.config_options);
 
             if let Some(default_mode) = self.default_mode.clone() {
                 if let Some(modes) = modes.as_ref() {
@@ -1594,55 +1576,6 @@ impl AgentConnection for AcpConnection {
                 }
             }
 
-            if let Some(default_model) = self.default_model.clone() {
-                if let Some(models) = models.as_ref() {
-                    let mut models_ref = models.borrow_mut();
-                    let has_model = models_ref
-                        .available_models
-                        .iter()
-                        .any(|model| model.model_id == default_model);
-
-                    if has_model {
-                        let initial_model_id = models_ref.current_model_id.clone();
-
-                        cx.spawn({
-                            let default_model = default_model.clone();
-                            let session_id = response.session_id.clone();
-                            let models = models.clone();
-                            let conn = self.connection.clone();
-                            async move |_| {
-                                let result = into_foreground_future(
-                                    conn.send_request(acp::SetSessionModelRequest::new(
-                                        session_id,
-                                        default_model,
-                                    )),
-                                )
-                                .await
-                                .log_err();
-
-                                if result.is_none() {
-                                    models.borrow_mut().current_model_id = initial_model_id;
-                                }
-                            }
-                        })
-                        .detach();
-
-                        models_ref.current_model_id = default_model;
-                    } else {
-                        let available_models = models_ref
-                            .available_models
-                            .iter()
-                            .map(|model| format!("- `{}`: {}", model.model_id, model.name))
-                            .collect::<Vec<_>>()
-                            .join("\n");
-
-                        log::warn!(
-                            "`{default_model}` is not a valid {name} model. Available options:\n{available_models}",
-                        );
-                    }
-                }
-            }
-
             if let Some(config_opts) = config_options.as_ref() {
                 self.apply_default_config_options(&response.session_id, config_opts, cx);
             }
@@ -1671,7 +1604,6 @@ impl AgentConnection for AcpConnection {
                     thread: thread.downgrade(),
                     suppress_abort_err: false,
                     session_modes: modes,
-                    models,
                     config_options: config_options.map(ConfigOptions::new),
                     ref_count: 1,
                 },
@@ -1728,7 +1660,6 @@ impl AgentConnection for AcpConnection {
                     .map_err(map_acp_error)?;
                     Ok(SessionConfigResponse {
                         modes: response.modes,
-                        models: response.models,
                         config_options: response.config_options,
                     })
                 })
@@ -1771,7 +1702,6 @@ impl AgentConnection for AcpConnection {
                     .map_err(map_acp_error)?;
                     Ok(SessionConfigResponse {
                         modes: response.modes,
-                        models: response.models,
                         config_options: response.config_options,
                     })
                 })
@@ -2004,27 +1934,6 @@ impl AgentConnection for AcpConnection {
                 session_id: session_id.clone(),
                 state: modes.clone(),
             }) as _)
-        } else {
-            None
-        }
-    }
-
-    fn model_selector(
-        &self,
-        session_id: &acp::SessionId,
-    ) -> Option<Rc<dyn acp_thread::AgentModelSelector>> {
-        let sessions = self.sessions.clone();
-        let sessions_ref = sessions.borrow();
-        let Some(session) = sessions_ref.get(session_id) else {
-            return None;
-        };
-
-        if let Some(models) = session.models.as_ref() {
-            Some(Rc::new(AcpModelSelector::new(
-                session_id.clone(),
-                self.connection.clone(),
-                models.clone(),
-            )) as _)
         } else {
             None
         }
@@ -2483,7 +2392,7 @@ pub mod test_support {
             .context("failed to receive fake ACP connection handle")?;
 
         let response = into_foreground_future(
-            client_conn.send_request(acp::InitializeRequest::new(acp::ProtocolVersion::V1)),
+            client_conn.send_request(acp::InitializeRequest::new(ProtocolVersion::V1)),
         )
         .await?;
 
@@ -3328,7 +3237,7 @@ mod tests {
             .expect("failed to receive ACP connection handle");
 
         let response = into_foreground_future(
-            client_conn.send_request(acp::InitializeRequest::new(acp::ProtocolVersion::V1)),
+            client_conn.send_request(acp::InitializeRequest::new(ProtocolVersion::V1)),
         )
         .await
         .expect("failed to initialize ACP connection");
@@ -3794,20 +3703,17 @@ fn mcp_servers_for_project(project: &Entity<Project>, cx: &App) -> Vec<acp::McpS
 
 fn config_state(
     modes: Option<acp::SessionModeState>,
-    models: Option<acp::SessionModelState>,
     config_options: Option<Vec<acp::SessionConfigOption>>,
 ) -> (
     Option<Rc<RefCell<acp::SessionModeState>>>,
-    Option<Rc<RefCell<acp::SessionModelState>>>,
     Option<Rc<RefCell<Vec<acp::SessionConfigOption>>>>,
 ) {
     if let Some(opts) = config_options {
-        return (None, None, Some(Rc::new(RefCell::new(opts))));
+        return (None, Some(Rc::new(RefCell::new(opts))));
     }
 
     let modes = modes.map(|modes| Rc::new(RefCell::new(modes)));
-    let models = models.map(|models| Rc::new(RefCell::new(models)));
-    (modes, models, None)
+    (modes, None)
 }
 
 struct AcpSessionModes {
@@ -3849,79 +3755,6 @@ impl acp_thread::AgentSessionModes for AcpSessionModes {
 
             Ok(())
         })
-    }
-}
-
-struct AcpModelSelector {
-    session_id: acp::SessionId,
-    connection: ConnectionTo<Agent>,
-    state: Rc<RefCell<acp::SessionModelState>>,
-}
-
-impl AcpModelSelector {
-    fn new(
-        session_id: acp::SessionId,
-        connection: ConnectionTo<Agent>,
-        state: Rc<RefCell<acp::SessionModelState>>,
-    ) -> Self {
-        Self {
-            session_id,
-            connection,
-            state,
-        }
-    }
-}
-
-impl acp_thread::AgentModelSelector for AcpModelSelector {
-    fn list_models(&self, _cx: &mut App) -> Task<Result<acp_thread::AgentModelList>> {
-        Task::ready(Ok(acp_thread::AgentModelList::Flat(
-            self.state
-                .borrow()
-                .available_models
-                .clone()
-                .into_iter()
-                .map(acp_thread::AgentModelInfo::from)
-                .collect(),
-        )))
-    }
-
-    fn select_model(&self, model_id: acp::ModelId, cx: &mut App) -> Task<Result<()>> {
-        let connection = self.connection.clone();
-        let session_id = self.session_id.clone();
-        let old_model_id;
-        {
-            let mut state = self.state.borrow_mut();
-            old_model_id = state.current_model_id.clone();
-            state.current_model_id = model_id.clone();
-        };
-        let state = self.state.clone();
-        cx.foreground_executor().spawn(async move {
-            let result = into_foreground_future(
-                connection.send_request(acp::SetSessionModelRequest::new(session_id, model_id)),
-            )
-            .await;
-
-            if result.is_err() {
-                state.borrow_mut().current_model_id = old_model_id;
-            }
-
-            result?;
-
-            Ok(())
-        })
-    }
-
-    fn selected_model(&self, _cx: &mut App) -> Task<Result<acp_thread::AgentModelInfo>> {
-        let state = self.state.borrow();
-        Task::ready(
-            state
-                .available_models
-                .iter()
-                .find(|m| m.model_id == state.current_model_id)
-                .cloned()
-                .map(acp_thread::AgentModelInfo::from)
-                .ok_or_else(|| anyhow::anyhow!("Model not found")),
-        )
     }
 }
 
