@@ -1,9 +1,12 @@
+use crate::conversation_view::elicitation::{
+    ElicitationCard, ElicitationCardHandlers, ElicitationFormState, should_render_elicitation,
+};
 use acp_thread::{
     AcpThread, AcpThreadEvent, AgentThreadEntry, AssistantMessage, AssistantMessageChunk,
-    AuthRequired, ElicitationEntryId, LoadError, MaxOutputTokensError, MentionUri,
-    PermissionOptionChoice, PermissionOptions, PermissionPattern, RetryStatus,
-    SelectedPermissionOutcome, ThreadStatus, ToolCall, ToolCallContent, ToolCallStatus,
-    UserMessageId,
+    AuthRequired, ElicitationEntryId, ElicitationStatus, ElicitationStore, LoadError,
+    MaxOutputTokensError, MentionUri, PermissionOptionChoice, PermissionOptions, PermissionPattern,
+    RetryStatus, SelectedPermissionOutcome, ThreadStatus, ToolCall, ToolCallContent,
+    ToolCallStatus, UserMessageId,
 };
 use acp_thread::{AgentConnection, Plan};
 use action_log::{ActionLog, ActionLogTelemetry, DiffStats};
@@ -27,11 +30,11 @@ use file_icons::FileIcons;
 use fs::Fs;
 use futures::FutureExt as _;
 use gpui::{
-    Action, Animation, AnimationExt, AnyView, App, ClickEvent, ClipboardItem, CursorStyle,
-    ElementId, Empty, Entity, EventEmitter, FocusHandle, Focusable, Hsla, ListOffset, ListState,
-    ObjectFit, PlatformDisplay, ScrollHandle, SharedString, StyledText, Subscription, Task,
-    TextRun, TextStyle, WeakEntity, Window, WindowHandle, div, ease_in_out, img, linear_color_stop,
-    linear_gradient, list, point, pulsating_between,
+    Action, Animation, AnimationExt, AnyElement, AnyView, App, ClickEvent, ClipboardItem,
+    CursorStyle, ElementId, Empty, Entity, EventEmitter, FocusHandle, Focusable, Hsla, ListOffset,
+    ListState, ObjectFit, PlatformDisplay, ScrollHandle, SharedString, StyledText, Subscription,
+    Task, TextRun, TextStyle, WeakEntity, Window, WindowHandle, div, ease_in_out, img,
+    linear_color_stop, linear_gradient, list, point, pulsating_between,
 };
 use i18n as app_i18n;
 use language::{Buffer, Language, Rope};
@@ -513,6 +516,8 @@ pub struct ConversationView {
     /// Cache + worktree snapshot for resolving paths in markdown code spans.
     /// Shared with the child [`ThreadView`] when one is constructed.
     pub(crate) code_span_resolver: AgentCodeSpanResolver,
+    request_elicitation_form_states: HashMap<ElicitationEntryId, ElicitationFormState>,
+    request_elicitation_subscription: Option<Subscription>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -782,6 +787,8 @@ impl ConversationView {
             notification_subscriptions: HashMap::default(),
             auth_task: None,
             code_span_resolver,
+            request_elicitation_form_states: HashMap::default(),
+            request_elicitation_subscription: None,
             _subscriptions: subscriptions,
             focus_handle: cx.focus_handle(),
         }
@@ -791,6 +798,14 @@ impl ConversationView {
         if let Some(connected) = self.as_connected() {
             connected.close_all_sessions(cx).detach();
         }
+
+        self.request_elicitation_form_states.clear();
+        self.request_elicitation_subscription = match &state {
+            ServerState::Connected(connected) => {
+                Self::request_elicitation_subscription(&connected.connection, cx)
+            }
+            _ => None,
+        };
 
         self.server_state = state;
         cx.emit(AcpServerViewEvent::ActiveThreadChanged);
@@ -2987,6 +3002,361 @@ impl Focusable for ConversationView {
 }
 
 impl ConversationView {
+    fn request_elicitation_subscription(
+        connection: &Rc<dyn AgentConnection>,
+        cx: &mut Context<Self>,
+    ) -> Option<Subscription> {
+        let store = connection.request_elicitations()?;
+        Some(cx.observe(&store, |this, _store, cx| {
+            if let Some(active_thread) = this.active_thread().cloned() {
+                active_thread.update(cx, |_thread, cx| cx.notify());
+            }
+            cx.notify();
+        }))
+    }
+
+    fn request_elicitation_connection(&self) -> Option<Rc<dyn AgentConnection>> {
+        Self::request_elicitation_connection_for_state(&self.server_state)
+    }
+
+    fn active_thread_renders_request_elicitations(&self) -> bool {
+        match &self.server_state {
+            ServerState::Connected(connected) => {
+                connected.auth_state.is_ok() && connected.active_view().is_some()
+            }
+            _ => false,
+        }
+    }
+
+    fn request_elicitation_connection_for_state(
+        state: &ServerState,
+    ) -> Option<Rc<dyn AgentConnection>> {
+        match state {
+            ServerState::Connected(connected) => Some(connected.connection.clone()),
+            ServerState::Loading { .. } | ServerState::LoadError { .. } => None,
+        }
+    }
+
+    fn request_elicitation_store(&self) -> Option<Entity<ElicitationStore>> {
+        self.request_elicitation_connection()?
+            .request_elicitations()
+    }
+
+    fn sync_request_elicitation_states(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(store) = self.request_elicitation_store() else {
+            self.request_elicitation_form_states.clear();
+            return;
+        };
+
+        let elicitations = store
+            .read(cx)
+            .elicitations()
+            .iter()
+            .map(|elicitation| {
+                let is_pending = matches!(elicitation.status, ElicitationStatus::Pending { .. });
+                let schema = match &elicitation.request.mode {
+                    acp::ElicitationMode::Form(mode) => Some(mode.requested_schema.clone()),
+                    _ => None,
+                };
+                (elicitation.id.clone(), is_pending, schema)
+            })
+            .collect::<Vec<_>>();
+
+        let known_ids = elicitations
+            .iter()
+            .map(|(id, _, _)| id.clone())
+            .collect::<HashSet<_>>();
+        self.request_elicitation_form_states
+            .retain(|id, _| known_ids.contains(id));
+
+        for (id, is_pending, schema) in elicitations {
+            if is_pending
+                && let Some(schema) = schema
+                && !self.request_elicitation_form_states.contains_key(&id)
+            {
+                self.request_elicitation_form_states
+                    .insert(id, ElicitationFormState::new(&schema, window, cx));
+            } else if !is_pending {
+                self.request_elicitation_form_states.remove(&id);
+            }
+        }
+    }
+
+    fn render_request_elicitations(
+        &self,
+        connection: &Rc<dyn AgentConnection>,
+        view: WeakEntity<Self>,
+        cx: &App,
+    ) -> Vec<AnyElement> {
+        let Some(store) = connection.request_elicitations() else {
+            return Vec::new();
+        };
+
+        let handlers = Self::request_elicitation_card_handlers(view);
+        let agent_display_name = self
+            .agent_server_store
+            .read(cx)
+            .agent_display_name(&self.agent.agent_id())
+            .unwrap_or_else(|| self.agent.agent_id().0);
+
+        store
+            .read(cx)
+            .elicitations()
+            .iter()
+            .enumerate()
+            .filter(|(_, elicitation)| should_render_elicitation(elicitation))
+            .map(|(ix, elicitation)| {
+                ElicitationCard::new(
+                    ix,
+                    elicitation,
+                    agent_display_name.clone(),
+                    self.request_elicitation_form_states.get(&elicitation.id),
+                    handlers.clone(),
+                )
+                .render(cx)
+                .into_any_element()
+            })
+            .collect()
+    }
+
+    fn request_elicitation_card_handlers(view: WeakEntity<Self>) -> ElicitationCardHandlers {
+        ElicitationCardHandlers::new(
+            {
+                let view = view.clone();
+                move |elicitation_id, window, cx| {
+                    view.update(cx, |this, cx| {
+                        this.submit_request_elicitation(elicitation_id, window, cx);
+                    })
+                    .log_err();
+                }
+            },
+            {
+                let view = view.clone();
+                move |elicitation_id, window, cx| {
+                    view.update(cx, |this, cx| {
+                        this.decline_request_elicitation(elicitation_id, window, cx);
+                    })
+                    .log_err();
+                }
+            },
+            {
+                let view = view.clone();
+                move |elicitation_id, window, cx| {
+                    view.update(cx, |this, cx| {
+                        this.cancel_request_elicitation(elicitation_id, window, cx);
+                    })
+                    .log_err();
+                }
+            },
+            {
+                let view = view.clone();
+                move |elicitation_id, _window, cx| {
+                    view.update(cx, |this, cx| {
+                        this.dismiss_request_url_elicitation(elicitation_id, cx);
+                    })
+                    .log_err();
+                }
+            },
+            move |_elicitation_id, url, _window, cx| cx.open_url(&url),
+            {
+                let view = view.clone();
+                move |elicitation_id, field_name, value, cx| {
+                    view.update(cx, |this, cx| {
+                        this.update_request_elicitation_form_state(
+                            &elicitation_id,
+                            |form| form.set_boolean(&field_name, value),
+                            cx,
+                        );
+                    })
+                    .log_err();
+                }
+            },
+            {
+                let view = view.clone();
+                move |elicitation_id, field_name, value, cx| {
+                    view.update(cx, |this, cx| {
+                        this.update_request_elicitation_form_state(
+                            &elicitation_id,
+                            |form| form.set_single_select(&field_name, value),
+                            cx,
+                        );
+                    })
+                    .log_err();
+                }
+            },
+            move |elicitation_id, field_name, value, selected, cx| {
+                view.update(cx, |this, cx| {
+                    this.update_request_elicitation_form_state(
+                        &elicitation_id,
+                        |form| form.set_multi_select(&field_name, value, selected),
+                        cx,
+                    );
+                })
+                .log_err();
+            },
+        )
+    }
+
+    fn update_request_elicitation_form_state(
+        &mut self,
+        elicitation_id: &ElicitationEntryId,
+        update: impl FnOnce(&mut ElicitationFormState),
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(form) = self.request_elicitation_form_states.get_mut(elicitation_id) {
+            update(form);
+            self.notify_request_elicitation_renderers(cx);
+        }
+    }
+
+    fn notify_request_elicitation_renderers(&self, cx: &mut Context<Self>) {
+        if let Some(active_thread) = self.active_thread().cloned() {
+            active_thread.update(cx, |_thread, cx| cx.notify());
+        }
+        cx.notify();
+    }
+
+    fn submit_request_elicitation(
+        &mut self,
+        elicitation_id: ElicitationEntryId,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(store) = self.request_elicitation_store() else {
+            return;
+        };
+
+        let mode = store
+            .read(cx)
+            .elicitation(&elicitation_id)
+            .map(|(_, elicitation)| elicitation.request.mode.clone());
+        let Some(mode) = mode else {
+            return;
+        };
+
+        match mode {
+            acp::ElicitationMode::Form(mode) => {
+                let Some(state) = self
+                    .request_elicitation_form_states
+                    .get_mut(&elicitation_id)
+                else {
+                    return;
+                };
+                let Some(submission) = state.begin_submission(cx) else {
+                    return;
+                };
+                let schema = mode.requested_schema;
+                let validation_task = cx.background_spawn(async move {
+                    let result = submission.validate(&schema);
+                    (submission, result)
+                });
+                self.notify_request_elicitation_renderers(cx);
+                cx.spawn(async move |this, cx| {
+                    let (submission, result) = validation_task.await;
+                    this.update(cx, |this, cx| {
+                        let is_current = this
+                            .request_elicitation_form_states
+                            .get_mut(&elicitation_id)
+                            .is_some_and(|state| {
+                                state.validation_matches_current_values(&submission, cx)
+                            });
+                        if !is_current {
+                            this.notify_request_elicitation_renderers(cx);
+                            return;
+                        }
+                        match result {
+                            Ok(content) => {
+                                this.respond_to_request_elicitation(
+                                    elicitation_id,
+                                    acp::CreateElicitationResponse::new(
+                                        acp::ElicitationAction::Accept(
+                                            acp::ElicitationAcceptAction::new().content(content),
+                                        ),
+                                    ),
+                                    cx,
+                                );
+                            }
+                            Err(errors) => {
+                                this.update_request_elicitation_form_state(
+                                    &elicitation_id,
+                                    |state| state.set_errors(errors),
+                                    cx,
+                                );
+                            }
+                        }
+                    })
+                    .log_err();
+                })
+                .detach();
+            }
+            acp::ElicitationMode::Url(_) => {
+                self.respond_to_request_elicitation(
+                    elicitation_id,
+                    acp::CreateElicitationResponse::new(acp::ElicitationAction::Accept(
+                        acp::ElicitationAcceptAction::new(),
+                    )),
+                    cx,
+                );
+            }
+            _ => {}
+        }
+    }
+
+    fn decline_request_elicitation(
+        &mut self,
+        elicitation_id: ElicitationEntryId,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.respond_to_request_elicitation(
+            elicitation_id,
+            acp::CreateElicitationResponse::new(acp::ElicitationAction::Decline),
+            cx,
+        );
+    }
+
+    fn cancel_request_elicitation(
+        &mut self,
+        elicitation_id: ElicitationEntryId,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.respond_to_request_elicitation(
+            elicitation_id,
+            acp::CreateElicitationResponse::new(acp::ElicitationAction::Cancel),
+            cx,
+        );
+    }
+
+    fn dismiss_request_url_elicitation(
+        &mut self,
+        elicitation_id: ElicitationEntryId,
+        cx: &mut Context<Self>,
+    ) {
+        self.request_elicitation_form_states.remove(&elicitation_id);
+        if let Some(store) = self.request_elicitation_store() {
+            store.update(cx, |store, cx| {
+                store.cancel_elicitation(&elicitation_id, cx);
+            });
+        }
+        self.notify_request_elicitation_renderers(cx);
+    }
+
+    fn respond_to_request_elicitation(
+        &mut self,
+        elicitation_id: ElicitationEntryId,
+        response: acp::CreateElicitationResponse,
+        cx: &mut Context<Self>,
+    ) {
+        self.request_elicitation_form_states.remove(&elicitation_id);
+        if let Some(store) = self.request_elicitation_store() {
+            store.update(cx, |store, cx| {
+                store.respond_to_elicitation(&elicitation_id, response, cx);
+            });
+        }
+        cx.notify();
+    }
+
     pub(crate) fn activation_focus_handle(&self, cx: &App) -> FocusHandle {
         self.active_thread()
             .map(|thread| thread.read(cx).activation_focus_handle(cx))
@@ -3022,6 +3392,10 @@ impl ConversationView {
 impl Render for ConversationView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_queued_message_editors(window, cx);
+        self.sync_request_elicitation_states(window, cx);
+        let request_elicitation_connection = self.request_elicitation_connection();
+        let active_thread_renders_request_elicitations =
+            self.active_thread_renders_request_elicitations();
 
         v_flex()
             .track_focus(&self.focus_handle)
@@ -3083,6 +3457,14 @@ impl Render for ConversationView {
                         div().into_any_element()
                     }
                 }
+            })
+            .when(!active_thread_renders_request_elicitations, |this| {
+                this.children(request_elicitation_connection.as_ref().map_or_else(
+                    Vec::new,
+                    |connection| {
+                        self.render_request_elicitations(connection, cx.entity().downgrade(), cx)
+                    },
+                ))
             })
     }
 }
