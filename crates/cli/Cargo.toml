@@ -28,7 +28,7 @@ clap_complete_nushell.workspace = true
 collections.workspace = true
 console.workspace = true
 dialoguer.workspace = true
-ipc-channel = "0.22"
+ipc-channel = "0.23"
 parking_lot.workspace = true
 paths.workspace = true
 release_channel.workspace = true
@@ -49,7 +49,7 @@ fork.workspace = true
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation.workspace = true
 core-services = "1.0"
-plist = "1.9"
+plist = "1.10"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows.workspace = true

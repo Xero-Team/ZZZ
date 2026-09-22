@@ -16,7 +16,7 @@ zlog.workspace = true
 tracing.workspace = true
 
 tracing-subscriber = "0.3.23"
-tracing-tracy = { version = "0.11.4", optional = true, features = ["enable", "ondemand"] }
-tracy-client = { version = "0.18.4", optional = true, features = ["enable", "ondemand"] }
+tracing-tracy = { version = "0.12.0", optional = true, features = ["enable", "ondemand"] }
+tracy-client = { version = "0.19.0", optional = true, features = ["enable", "ondemand"] }
 
 ztracing_macro.workspace = true

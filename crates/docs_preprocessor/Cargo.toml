@@ -11,10 +11,10 @@ collections.workspace = true
 jsonschema.workspace = true
 # We are specifically pinning this version of mdbook, as later versions introduce issues with double-nested subdirectories.
 # Ask @maxdeviant about this before bumping.
-mdbook-core = "=0.5.2"
-mdbook-html = "=0.5.2"
-mdbook-preprocessor = "=0.5.2"
-mdbook-renderer = "=0.5.2"
+mdbook-core = "=0.5.4"
+mdbook-html = "=0.5.4"
+mdbook-preprocessor = "=0.5.4"
+mdbook-renderer = "=0.5.4"
 regex.workspace = true
 schemars.workspace = true
 serde.workspace = true

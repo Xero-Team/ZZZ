@@ -57,7 +57,7 @@ ui.workspace = true
 util.workspace = true
 workspace.workspace = true
 zzz_actions.workspace = true
-arrayvec = "0.7.6"
+arrayvec = "0.7.8"
 
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true

@@ -41,7 +41,7 @@ tempfile.workspace = true
 text.workspace = true
 time.workspace = true
 util.workspace = true
-is_executable = "1.0.5"
+is_executable = "1.0.6"
 notify = "8.2.0"
 trash = { git = "https://github.com/zed-industries/trash-rs", rev = "41c6c800d884a89351f3b8856d12894cccee261d" }
 
