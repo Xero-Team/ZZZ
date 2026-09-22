@@ -1,4 +1,4 @@
-msrv = "1.95.0"
+msrv = "1.98.0"
 allow-private-module-inception = true
 avoid-breaking-exported-api = false
 # This workspace is predominantly application code; when enabling additional

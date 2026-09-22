@@ -1024,6 +1024,10 @@ codegen-units = 16
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "allow" }
+# New in Rust 1.98: flags unsuffixed float literals that fall back to `f32`.
+# GPUI APIs take `impl Into<f32>` and intentionally rely on this fallback, so
+# the lint is noise here rather than an error to fix.
+float_literal_f32_fallback = { level = "allow" }
 
 [workspace.lints.clippy]
 dbg_macro = "deny"
