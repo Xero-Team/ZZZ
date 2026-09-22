@@ -10,7 +10,9 @@ use std::{
 use crossbeam::queue::ArrayQueue;
 use log::warn;
 use rodio::{
-    ChannelCount, Sample, SampleRate, Source, conversions::SampleRateConverter, nz,
+    ChannelCount, Sample, SampleRate, Source,
+    conversions::{ResampleConfig, SampleRateConverter},
+    nz,
     source::UniformSourceIterator,
 };
 
@@ -141,9 +143,8 @@ pub struct ConstantSampleRate<S: Source> {
 
 impl<S: Source> ConstantSampleRate<S> {
     fn new(source: S, target_rate: SampleRate) -> Self {
-        let input_sample_rate = source.sample_rate();
         let channels = source.channels();
-        let inner = SampleRateConverter::new(source, input_sample_rate, target_rate, channels);
+        let inner = SampleRateConverter::new(source, target_rate, ResampleConfig::default());
         Self {
             inner,
             channels,

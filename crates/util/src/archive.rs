@@ -17,6 +17,9 @@ fn archive_path_is_normal(filename: &str) -> bool {
 }
 
 #[cfg(windows)]
+// `async_zip` deprecated `base::read` in favor of `base::read1`, but `read1`
+// has no streaming reader yet, so keep using the deprecated stream reader.
+#[allow(deprecated)]
 pub async fn extract_zip<R: AsyncRead + Unpin>(destination: &Path, reader: R) -> Result<()> {
     let mut reader = read::stream::ZipFileReader::new(BufReader::new(reader));
 
@@ -83,6 +86,7 @@ pub async fn extract_zip<R: AsyncRead + Unpin>(destination: &Path, reader: R) ->
 }
 
 #[cfg(unix)]
+#[allow(deprecated)] // see note on the Windows `extract_zip` above
 pub async fn extract_seekable_zip<R: AsyncRead + AsyncSeek + Unpin>(
     destination: &Path,
     reader: R,

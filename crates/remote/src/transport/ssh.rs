@@ -1725,7 +1725,7 @@ fn build_command_posix(
         )?;
         for arg in input_args {
             let arg = ssh_shell_kind.try_quote(&arg).context("shell quoting")?;
-            write!(exec, " {}", &arg)?;
+            write!(exec, " {}", arg)?;
         }
     } else {
         write!(exec, "{ssh_shell} -l")?;
@@ -1819,7 +1819,7 @@ fn build_command_windows(
         )?;
         for arg in input_args {
             let arg = shell_kind.try_quote(arg).context("shell quoting")?;
-            write!(exec, " {}", &arg)?;
+            write!(exec, " {}", arg)?;
         }
     } else {
         // Launch an interactive shell session

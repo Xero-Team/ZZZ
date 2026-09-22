@@ -473,7 +473,7 @@ mod tests {
         let mut header_captures = Vec::new();
 
         while let Some(query_match) = captures.next() {
-            for capture in query_match.captures.iter() {
+            for capture in query_match.captures().iter() {
                 if capture.index as usize == header_capture_index {
                     header_captures.push(&source[capture.node.byte_range()]);
                 }

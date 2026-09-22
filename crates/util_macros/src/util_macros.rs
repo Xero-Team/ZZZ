@@ -216,6 +216,7 @@ pub fn perf(our_attr: TokenStream, input: TokenStream) -> TokenStream {
     let ItemFn {
         attrs: mut attrs_main,
         vis,
+        modifiers,
         sig: mut sig_main,
         block,
     } = parse_macro_input!(input as ItemFn);
@@ -286,6 +287,7 @@ pub fn perf(our_attr: TokenStream, input: TokenStream) -> TokenStream {
             ItemFn {
                 attrs: attrs_main,
                 vis: vis.clone(),
+                modifiers,
                 sig: sig_main,
                 block: block_main,
             },
@@ -293,6 +295,7 @@ pub fn perf(our_attr: TokenStream, input: TokenStream) -> TokenStream {
             ItemFn {
                 attrs: attrs_meta,
                 vis,
+                modifiers: syn::FnModifiers::default(),
                 sig: sig_meta,
                 block: block_meta,
             },
@@ -301,6 +304,7 @@ pub fn perf(our_attr: TokenStream, input: TokenStream) -> TokenStream {
         vec![ItemFn {
             attrs: attrs_main,
             vis,
+            modifiers,
             sig: sig_main,
             block,
         }]

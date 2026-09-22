@@ -407,7 +407,7 @@ impl KeymapFile {
             Err(InvalidKeystrokeError { keystroke }) => {
                 return Err(format!(
                     "invalid keystroke {}. {}",
-                    MarkdownInlineCode(&format!("\"{}\"", &keystroke)),
+                    MarkdownInlineCode(&format!("\"{}\"", keystroke)),
                     KEYSTROKE_PARSE_EXPECTED_MESSAGE
                 ));
             }
@@ -460,7 +460,7 @@ impl KeymapFile {
         .map_err(|InvalidKeystrokeError { keystroke }| {
             format!(
                 "invalid keystroke {}. {}",
-                MarkdownInlineCode(&format!("\"{}\"", &keystroke)),
+                MarkdownInlineCode(&format!("\"{}\"", keystroke)),
                 KEYSTROKE_PARSE_EXPECTED_MESSAGE
             )
         })
@@ -541,14 +541,14 @@ impl KeymapFile {
             Err(ActionBuildError::NotFound { name }) => {
                 return Err(format!(
                     "didn't find an action named {}.",
-                    MarkdownInlineCode(&format!("\"{}\"", &name))
+                    MarkdownInlineCode(&format!("\"{}\"", name))
                 ));
             }
             Err(ActionBuildError::BuildError { name, error }) => match action_input_string {
                 Some(action_input_string) => {
                     return Err(format!(
                         "can't build {} action from input value {}: {}",
-                        MarkdownInlineCode(&format!("\"{}\"", &name)),
+                        MarkdownInlineCode(&format!("\"{}\"", name)),
                         MarkdownInlineCode(&action_input_string),
                         MarkdownEscaped(&error.to_string())
                     ));
@@ -556,7 +556,7 @@ impl KeymapFile {
                 None => {
                     return Err(format!(
                         "can't build {} action - it requires input data via [name, input]: {}",
-                        MarkdownInlineCode(&format!("\"{}\"", &name)),
+                        MarkdownInlineCode(&format!("\"{}\"", name)),
                         MarkdownEscaped(&error.to_string())
                     ));
                 }

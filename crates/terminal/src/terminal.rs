@@ -1082,8 +1082,8 @@ impl Terminal {
                     .unwrap_or_else(|| to_alac_rgb(get_color_at_index(index, cx.theme().as_ref())));
                 self.write_to_pty(format(color).into_bytes());
             }
-            AlacTermEvent::ChildExit(raw_status) => {
-                self.register_task_finished(Some(raw_status), cx);
+            AlacTermEvent::ChildExit(exit_code) => {
+                self.register_task_finished(Some(exit_code), cx);
             }
         }
     }
@@ -2500,11 +2500,11 @@ impl Terminal {
         Task::ready(None)
     }
 
-    fn register_task_finished(&mut self, raw_status: Option<i32>, cx: &mut Context<Terminal>) {
-        let exit_status: Option<ExitStatus> = raw_status.map(|value| {
+    fn register_task_finished(&mut self, exit_code: Option<i32>, cx: &mut Context<Terminal>) {
+        let exit_status: Option<ExitStatus> = exit_code.map(|value| {
             #[cfg(unix)]
             {
-                std::os::unix::process::ExitStatusExt::from_raw(value)
+                std::os::unix::process::ExitStatusExt::from_raw(value << 8)
             }
             #[cfg(windows)]
             {

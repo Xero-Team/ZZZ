@@ -745,8 +745,7 @@ impl WasmHost {
             .await
             .context("failed to create extension work dir")?;
 
-        let file_perms = wasmtime_wasi::FilePerms::all();
-        let dir_perms = wasmtime_wasi::DirPerms::all();
+        let perms = wasmtime_wasi::FsPerms::ReadWrite;
         let path = SanitizedPath::new(&extension_work_dir).to_string();
         #[cfg(target_os = "windows")]
         let path = path.replace('\\', "/");
@@ -756,9 +755,9 @@ impl WasmHost {
             .env("PWD", &path)
             .env("RUST_BACKTRACE", "full");
 
-        ctx.preopened_dir(&path, ".", dir_perms, file_perms)
+        ctx.preopened_dir(&path, ".", perms)
             .map_err(|error| anyhow!("{error}"))?;
-        ctx.preopened_dir(&path, &path, dir_perms, file_perms)
+        ctx.preopened_dir(&path, &path, perms)
             .map_err(|error| anyhow!("{error}"))?;
 
         Ok(ctx.build())

@@ -1207,7 +1207,7 @@ impl VariableList {
                                 },
                             )
                             .child(
-                                Label::new(format!("=  {}", &value))
+                                Label::new(format!("=  {}", value))
                                     .single_line()
                                     .truncate()
                                     .size(LabelSize::Small)

@@ -1,12 +1,13 @@
 #![allow(clippy::disallowed_methods, reason = "build scripts are exempt")]
 
+#[cfg(target_os = "macos")]
 use std::{env, path::PathBuf, process::Command};
 
-fn main() {
-    if env::var("CARGO_CFG_TARGET_OS").unwrap_or_default() != "macos" {
-        return;
-    }
+#[cfg(not(target_os = "macos"))]
+fn main() {}
 
+#[cfg(target_os = "macos")]
+fn main() {
     println!("cargo:rerun-if-changed=src/bindings.h");
     println!("cargo:rerun-if-env-changed=SDKROOT");
     clear_zig_bindgen_args();
@@ -47,6 +48,7 @@ fn main() {
         .expect("couldn't write dispatch bindings");
 }
 
+#[cfg(target_os = "macos")]
 fn clear_zig_bindgen_args() {
     unsafe {
         env::remove_var("BINDGEN_EXTRA_CLANG_ARGS");
@@ -60,6 +62,7 @@ fn clear_zig_bindgen_args() {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn macos_sdk_path() -> String {
     if let Ok(path) = env::var("SDKROOT") {
         let path = path.trim().to_string();

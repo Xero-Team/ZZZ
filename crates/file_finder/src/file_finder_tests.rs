@@ -13,7 +13,7 @@ use workspace::{
     AppState, CloseActiveItem, MultiWorkspace, OpenOptions, ToggleFileFinder, Workspace, open_paths,
 };
 
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn init_logger() {
     zlog::init_test();
 }

@@ -1,3 +1,7 @@
+// The rich HTTP error variants below are intentionally returned by value; the
+// `result_large_err` lint would require boxing them across the public API.
+#![allow(clippy::result_large_err)]
+
 pub mod batches;
 pub mod completion;
 pub mod responses;

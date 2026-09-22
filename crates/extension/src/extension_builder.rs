@@ -566,9 +566,13 @@ impl ExtensionBuilder {
                 continue;
             }
             if let Some((id, range)) = payload.as_section() {
+                let start = usize::try_from(range.start)
+                    .expect("wasm section start offset should fit in usize");
+                let end = usize::try_from(range.end)
+                    .expect("wasm section end offset should fit in usize");
                 RawSection {
                     id,
-                    data: &input[range],
+                    data: &input[start..end],
                 }
                 .append_to(&mut output);
             }

@@ -93,7 +93,7 @@ impl ProtoLs {
             .ok_or_else(|| {
                 format!(
                     "Could not find asset with name {} in Protols release",
-                    &release_name
+                    release_name
                 )
             })?;
 

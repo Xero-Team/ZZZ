@@ -5628,11 +5628,8 @@ impl EditorElement {
             let horizontal_offset =
                 (hitbox.top_right().x - POPOVER_RIGHT_OFFSET - (hovered_point.x + size.width))
                     .min(Pixels::ZERO);
-            match position {
-                itertools::Position::Middle | itertools::Position::Last => {
-                    overall_height += HOVER_POPOVER_GAP
-                }
-                _ => {}
+            if !position.is_first() {
+                overall_height += HOVER_POPOVER_GAP
             }
             overall_height += size.height;
             measured_hover_popovers.push(MeasuredHoverPopover {
@@ -5672,7 +5669,7 @@ impl EditorElement {
                 );
 
                 window.defer_draw(popover.element, popover_origin, 2, None);
-                if position != itertools::Position::Last {
+                if !position.is_last() || position.is_exactly_one() {
                     let origin = point(popover_origin.x, popover_origin.y - HOVER_POPOVER_GAP);
                     draw_occluder(size.width, origin, window, cx);
                 }
@@ -5694,7 +5691,7 @@ impl EditorElement {
                 let popover_origin = point(hovered_point.x + popover.horizontal_offset, current_y);
 
                 window.defer_draw(popover.element, popover_origin, 2, None);
-                if position != itertools::Position::Last {
+                if !position.is_last() || position.is_exactly_one() {
                     let origin = point(popover_origin.x, popover_origin.y + size.height);
                     draw_occluder(size.width, origin, window, cx);
                 }
@@ -5796,7 +5793,7 @@ impl EditorElement {
                     let popover_origin = point(origin.x, current_y);
 
                     window.defer_draw(popover.element, popover_origin, 2, None);
-                    if position != itertools::Position::Last {
+                    if !position.is_last() || position.is_exactly_one() {
                         let origin = point(popover_origin.x, popover_origin.y + size.height);
                         draw_occluder(size.width, origin, window, cx);
                     }

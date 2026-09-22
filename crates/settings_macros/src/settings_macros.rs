@@ -122,10 +122,11 @@ fn apply_on_fields(fields: &mut Fields) {
 
 fn add_if_option(field: &mut Field) {
     match &field.ty {
-        Type::Path(syn::TypePath { qself: None, path })
-            if path.leading_colon.is_none()
-                && path.segments.len() == 1
-                && path.segments[0].ident == "Option" => {}
+        Type::Path(syn::TypePath {
+            qself: None, path, ..
+        }) if path.leading_colon.is_none()
+            && path.segments.len() == 1
+            && path.segments[0].ident == "Option" => {}
         _ => return,
     }
     let attr = parse_quote!(

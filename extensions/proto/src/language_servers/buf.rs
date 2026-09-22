@@ -87,7 +87,7 @@ impl BufLsp {
             .ok_or_else(|| {
                 format!(
                     "Could not find asset with name {} in buf CLI release",
-                    &release_name
+                    release_name
                 )
             })?;
 

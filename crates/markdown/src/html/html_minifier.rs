@@ -3,7 +3,7 @@ use html5ever::{
     tendril::{Tendril, TendrilSink, fmt::UTF8},
 };
 use markup5ever_rcdom::{Node, NodeData, RcDom};
-use std::{cell::RefCell, io, rc::Rc, str};
+use std::{cell::RefCell, io, str, sync::Arc};
 
 #[derive(Default)]
 pub(crate) struct MinifierOptions {
@@ -65,7 +65,7 @@ where
                 let (skip_collapse_whitespace, contains_code) =
                     ctx.as_ref().map_or((false, false), |ctx| {
                         if let NodeData::Element { name, .. } = &ctx.parent.data {
-                            let name = name.local.as_ref();
+                            let name = &*name.local;
 
                             (preserve_whitespace(name), contains_code(name))
                         } else {
@@ -128,7 +128,7 @@ where
 
             NodeData::Element { name, attrs, .. } => {
                 let attrs = attrs.borrow();
-                let tag = name.local.as_ref();
+                let tag = &*name.local;
 
                 if is_self_closing(tag) {
                     return self.write_start_tag(name, &attrs);
@@ -156,7 +156,7 @@ where
 
     fn next_is_comment<'b, I>(&self, v: I) -> bool
     where
-        I: IntoIterator<Item = &'b Rc<Node>>,
+        I: IntoIterator<Item = &'b Arc<Node>>,
     {
         v.into_iter()
             .find_map(|node| match &node.data {
@@ -259,7 +259,7 @@ where
                         .find_map(|node| match &node.data {
                             NodeData::Text { contents } => self.is_whitespace(contents),
                             NodeData::Element { name, .. } => {
-                                Some(!matches!(name.local.as_ref(), "script" | "style"))
+                                Some(!matches!(&*name.local, "script" | "style"))
                             }
                             NodeData::Comment { .. } => {
                                 if self.options.preserve_comments {
@@ -280,7 +280,7 @@ where
                 let omit_end = ctx.next_element().map_or(true, |node| {
                     if let NodeData::Element { name, .. } = &node.data {
                         matches!(
-                            name.local.as_ref().to_ascii_lowercase().as_str(),
+                            name.local.to_ascii_lowercase().as_str(),
                             "address"
                                 | "article"
                                 | "aside"
@@ -347,13 +347,11 @@ where
 
     fn write_qualified_name(&mut self, name: &QualName) -> io::Result<()> {
         if let Some(prefix) = &name.prefix {
-            self.w
-                .write_all(prefix.as_ref().to_ascii_lowercase().as_bytes())?;
+            self.w.write_all(prefix.to_ascii_lowercase().as_bytes())?;
             self.w.write_all(b":")?;
         }
 
-        self.w
-            .write_all(name.local.as_ref().to_ascii_lowercase().as_bytes())
+        self.w.write_all(name.local.to_ascii_lowercase().as_bytes())
     }
 
     fn write_start_tag(&mut self, name: &QualName, attrs: &[Attribute]) -> io::Result<()> {
@@ -492,8 +490,8 @@ where
 struct Context<'a> {
     parent: &'a Node,
     parent_context: Option<&'a Context<'a>>,
-    left: Option<&'a [Rc<Node>]>,
-    right: Option<&'a [Rc<Node>]>,
+    left: Option<&'a [Arc<Node>]>,
+    right: Option<&'a [Arc<Node>]>,
 }
 
 impl<'a> Context<'a> {
@@ -529,7 +527,7 @@ impl<'a> Context<'a> {
         })
     }
 
-    fn next_element(&self) -> Option<&Rc<Node>> {
+    fn next_element(&self) -> Option<&Arc<Node>> {
         self.right.and_then(|siblings| {
             siblings
                 .iter()
@@ -537,9 +535,9 @@ impl<'a> Context<'a> {
         })
     }
 
-    fn is_block_element(node: &Rc<Node>) -> Option<bool> {
+    fn is_block_element(node: &Arc<Node>) -> Option<bool> {
         if let NodeData::Element { name, .. } = &node.data {
-            Some(is_block_element_name(name.local.as_ref()))
+            Some(is_block_element_name(&name.local))
         } else {
             None
         }
@@ -623,7 +621,7 @@ fn is_block_element_name(name: &str) -> bool {
 
 fn is_block_element(node: &Node) -> bool {
     match &node.data {
-        NodeData::Element { name, .. } => is_block_element_name(name.local.as_ref()),
+        NodeData::Element { name, .. } => is_block_element_name(&name.local),
         NodeData::Document => true,
         _ => false,
     }

@@ -700,7 +700,7 @@ pub struct Session {
     child_session_ids: HashSet<SessionId>,
     parent_session: Option<Entity<Session>>,
     output_token: OutputToken,
-    output: Box<circular_buffer::CircularBuffer<MAX_TRACKED_OUTPUT_EVENTS, dap::OutputEvent>>,
+    output: circular_buffer::HeapCircularBuffer<dap::OutputEvent>,
     watchers: HashMap<SharedString, Watcher>,
     is_session_terminated: bool,
     requests: TypeIdHashMap<HashMap<RequestSlot, Shared<Task<Option<()>>>>>,
@@ -874,7 +874,9 @@ impl Session {
                 capabilities: Capabilities::default(),
                 watchers: HashMap::default(),
                 output_token: OutputToken(0),
-                output: circular_buffer::CircularBuffer::boxed(),
+                output: circular_buffer::HeapCircularBuffer::with_capacity(
+                    MAX_TRACKED_OUTPUT_EVENTS,
+                ),
                 requests: Default::default(),
                 background_tasks: Vec::default(),
                 restart_task: None,
@@ -2831,7 +2833,7 @@ impl Session {
                     Ok(response) => {
                         let event = dap::OutputEvent {
                             category: None,
-                            output: format!("< {}", &response.result),
+                            output: format!("< {}", response.result),
                             group: None,
                             variables_reference: Some(response.variables_reference),
                             source: None,

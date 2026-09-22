@@ -2597,7 +2597,7 @@ fn test_buffer_path_with_id_fallback(cx: &mut TestAppContext) {
     assert_ne!(path_1.as_ref(), path_2.as_ref());
 }
 
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn init_logger() {
     zlog::init_test();
 }

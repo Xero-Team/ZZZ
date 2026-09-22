@@ -269,8 +269,8 @@ fn zip_file(src: &Path, dest: &Path) -> Result<(), String> {
         .to_string_lossy();
     let output = fs::File::create(dest).map_err(|error| error.to_string())?;
     let mut zip = zip::ZipWriter::new(output);
-    let options =
-        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
     zip.start_file(file_name.as_ref(), options)
         .map_err(|error| error.to_string())?;
     let mut input = fs::File::open(src).map_err(|error| error.to_string())?;

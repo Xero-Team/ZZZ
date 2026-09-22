@@ -1,7 +1,7 @@
 use brush_parser::ast;
 use brush_parser::ast::SourceLocation;
 use brush_parser::word::WordPiece;
-use brush_parser::{Parser, ParserOptions, SourceInfo};
+use brush_parser::{Parser, ParserOptions};
 use std::io::BufReader;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,8 +23,7 @@ pub enum TerminalCommandValidation {
 pub fn extract_commands(command: &str) -> Option<Vec<String>> {
     let reader = BufReader::new(command.as_bytes());
     let options = ParserOptions::default();
-    let source_info = SourceInfo::default();
-    let mut parser = Parser::new(reader, &options, &source_info);
+    let mut parser = Parser::new(reader, &options);
 
     let program = parser.parse_program().ok()?;
 
@@ -37,8 +36,7 @@ pub fn extract_commands(command: &str) -> Option<Vec<String>> {
 pub fn extract_terminal_command_prefix(command: &str) -> Option<TerminalCommandPrefix> {
     let reader = BufReader::new(command.as_bytes());
     let options = ParserOptions::default();
-    let source_info = SourceInfo::default();
-    let mut parser = Parser::new(reader, &options, &source_info);
+    let mut parser = Parser::new(reader, &options);
 
     let program = parser.parse_program().ok()?;
     let simple_command = first_simple_command(&program)?;
@@ -101,8 +99,7 @@ pub fn extract_terminal_command_prefix(command: &str) -> Option<TerminalCommandP
 pub fn validate_terminal_command(command: &str) -> TerminalCommandValidation {
     let reader = BufReader::new(command.as_bytes());
     let options = ParserOptions::default();
-    let source_info = SourceInfo::default();
-    let mut parser = Parser::new(reader, &options, &source_info);
+    let mut parser = Parser::new(reader, &options);
 
     let program = match parser.parse_program() {
         Ok(program) => program,
@@ -239,7 +236,10 @@ fn command_validation(command: &ast::Command) -> TerminalProgramValidation {
         ast::Command::Function(function_definition) => {
             function_body_validation(&function_definition.body)
         }
-        ast::Command::ExtendedTest(test_expr) => extended_test_expr_validation(test_expr),
+        ast::Command::ExtendedTest(test_expr, redirect_list) => combine_validations(
+            std::iter::once(extended_test_expr_validation(test_expr))
+                .chain(redirect_list.iter().map(redirect_list_validation)),
+        ),
     }
 }
 
@@ -332,7 +332,7 @@ fn word_piece_validation(piece: &WordPiece) -> TerminalProgramValidation {
         | WordPiece::SingleQuotedText(_)
         | WordPiece::AnsiCQuotedText(_)
         | WordPiece::EscapeSequence(_)
-        | WordPiece::TildePrefix(_) => TerminalProgramValidation::Safe,
+        | WordPiece::TildeExpansion(_) => TerminalProgramValidation::Safe,
         WordPiece::DoubleQuotedSequence(pieces)
         | WordPiece::GettextDoubleQuotedSequence(pieces) => combine_validations(
             pieces
@@ -346,8 +346,7 @@ fn word_piece_validation(piece: &WordPiece) -> TerminalProgramValidation {
         | WordPiece::BackquotedCommandSubstitution(command) => {
             let reader = BufReader::new(command.as_bytes());
             let options = ParserOptions::default();
-            let source_info = SourceInfo::default();
-            let mut parser = Parser::new(reader, &options, &source_info);
+            let mut parser = Parser::new(reader, &options);
 
             match parser.parse_program() {
                 Ok(_) => TerminalProgramValidation::Unsafe,
@@ -407,6 +406,7 @@ fn compound_command_validation(
         ]),
         ast::CompoundCommand::ArithmeticForClause(_) => TerminalProgramValidation::Unsafe,
         ast::CompoundCommand::Arithmetic(_) => TerminalProgramValidation::Unsafe,
+        ast::CompoundCommand::Coprocess(_) => TerminalProgramValidation::Unsafe,
     }
 }
 
@@ -544,8 +544,13 @@ fn extract_commands_from_command(command: &ast::Command, commands: &mut Vec<Stri
         ast::Command::Function(func_def) => {
             extract_commands_from_function_body(&func_def.body, commands)?;
         }
-        ast::Command::ExtendedTest(test_expr) => {
+        ast::Command::ExtendedTest(test_expr, redirect_list) => {
             extract_commands_from_extended_test_expr(test_expr, commands)?;
+            if let Some(redirect_list) = redirect_list {
+                for redirect in &redirect_list.0 {
+                    extract_commands_from_io_redirect(redirect, commands)?;
+                }
+            }
         }
     }
     Some(())
@@ -691,9 +696,9 @@ fn normalize_word_piece_into(
                 )?;
             }
         }
-        WordPiece::TildePrefix(prefix) => {
-            result.push('~');
-            result.push_str(prefix);
+        WordPiece::TildeExpansion(_) => {
+            let source = raw_value.get(start_index..end_index)?;
+            result.push_str(source);
         }
         // For parameter expansions, command substitutions, and arithmetic expressions,
         // preserve the original source text so that patterns like `\$HOME` continue
@@ -890,7 +895,7 @@ fn extract_commands_from_word_piece(piece: &WordPiece, commands: &mut Vec<String
         | WordPiece::SingleQuotedText(_)
         | WordPiece::Text(_)
         | WordPiece::AnsiCQuotedText(_)
-        | WordPiece::TildePrefix(_) => {}
+        | WordPiece::TildeExpansion(_) => {}
     }
     Some(())
 }
@@ -1036,6 +1041,11 @@ fn extract_commands_from_compound_command(
             Some(body_start)
         }
         ast::CompoundCommand::Arithmetic(_arith_cmd) => Some(commands.len()),
+        ast::CompoundCommand::Coprocess(coprocess) => {
+            let body_start = commands.len();
+            extract_commands_from_command(&coprocess.body, commands)?;
+            Some(body_start)
+        }
     }
 }
 

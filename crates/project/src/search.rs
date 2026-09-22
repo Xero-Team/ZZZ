@@ -490,7 +490,7 @@ impl SearchQuery {
                     LazyLock::new(|| Regex::new(r"\\\\|\\n|\\t").unwrap());
                 let replacement = TEXT_REPLACEMENT_SPECIAL_CHARACTERS_REGEX.replace_all(
                     replacement,
-                    |c: &Captures| match c.get(0).unwrap().as_str() {
+                    |c: &Captures<'_, str>| match c.get(0).unwrap().as_str() {
                         r"\\" => "\\",
                         r"\n" => "\n",
                         r"\t" => "\t",

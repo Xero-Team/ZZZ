@@ -245,17 +245,18 @@ impl TaffyLayoutEngine {
             .compute_layout_with_measure(
                 id.into(),
                 available_space.into(),
-                |known_dimensions, available_space, _id, node_context, _style| {
+                |layout_input, _id, node_context, _style| {
                     let Some(node_context) = node_context else {
-                        return taffy::geometry::Size::default();
+                        return taffy::LayoutOutput::HIDDEN;
                     };
 
+                    let known_dimensions = layout_input.known_dimensions;
                     let known_dimensions = Size {
                         width: known_dimensions.width.map(|e| Pixels(e / scale_factor)),
                         height: known_dimensions.height.map(|e| Pixels(e / scale_factor)),
                     };
 
-                    let available_space: Size<AvailableSpace> = available_space.into();
+                    let available_space: Size<AvailableSpace> = layout_input.available_space.into();
                     let untransform = |ev: AvailableSpace| match ev {
                         AvailableSpace::Definite(pixels) => {
                             AvailableSpace::Definite(Pixels(pixels.0 / scale_factor))
@@ -270,7 +271,8 @@ impl TaffyLayoutEngine {
 
                     let measured_size: Size<Pixels> =
                         (node_context.measure)(known_dimensions, available_space, window, cx);
-                    snap_measured_size_to_device_pixels(measured_size, scale_factor).into()
+                    let size = snap_measured_size_to_device_pixels(measured_size, scale_factor);
+                    taffy::LayoutOutput::from_outer_size(size.into())
                 },
             )
             .expect(EXPECT_MESSAGE);

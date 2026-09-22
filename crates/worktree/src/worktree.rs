@@ -2819,13 +2819,7 @@ impl Snapshot {
 
     pub fn entry_for_path(&self, path: &RelPath) -> Option<&Entry> {
         let entry = self.traverse_from_path(true, true, true, path).entry();
-        entry.and_then(|entry| {
-            if entry.path.as_ref() == path {
-                Some(entry)
-            } else {
-                None
-            }
-        })
+        entry.filter(|&entry| entry.path.as_ref() == path)
     }
 
     /// Whether `path` is gitignored, or lies inside a gitignored directory.
@@ -2941,7 +2935,7 @@ impl LocalSnapshot {
                 Err(error) => {
                     log::error!(
                         "error loading .gitignore file {:?} - {:?}",
-                        &entry.path,
+                        entry.path,
                         error
                     );
                 }
