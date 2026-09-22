@@ -69,7 +69,7 @@ reduced to the scanner used by the elicitation URL warning.
 | `cargo check -p agent_ui`                            | PASS    |
 | `cargo check -p zzz`                                 | PASS    |
 | `cargo fmt --all`                                    | PASS    |
-| `./script/clippy` (full release run)                 | NOT RUN |
+| `./script/clippy` (full release run)                 | PASS    |
 | `cargo test` on touched crates                       | NOT RUN |
 | macOS / Windows runtime checks                       | NOT RUN |
 
