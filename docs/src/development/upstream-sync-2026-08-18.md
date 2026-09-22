@@ -22,7 +22,8 @@ ZZZ's local-first, no-account, ACP-only boundary, or failed isolation.
 
 The reviewed baseline is now `aa3718614b3ade75524be6f8b2e101bd1166e02c`.
 The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
-`--shallow-since=2026-08-06` restored ancestry. Counts: 28 A, 8 B, 80 C.
+`--shallow-since=2026-08-06` restored ancestry. Counts: 28 A, 13 B, 75 C
+(after the 2026-09-22 re-audit moved five commits to B).
 
 ## Decisions
 
@@ -56,11 +57,11 @@ The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
 | bd1b83a4 | C     | --           | Git collapsible sections; `git_panel` conflict.                |
 | c6b01d8a | C     | --           | Git stash message; git/proto conflict.                         |
 | 7807e4b1 | A     | af25a382     | Cherry-picked with `-x -s`.                                    |
-| a4916265 | C     | --           | OpenAI reasoning separators; completion conflict.              |
+| a4916265 | B     | 89c1511729   | OpenAI reasoning-summary separators; ported after review.      |
 | c83adb3d | C     | --           | `SymbolKind` RPC; `language_core` conflict.                    |
 | d71f1461 | C     | --           | `stacksafe` lockfile-only bump.                                |
-| 992c7d46 | C     | --           | GitHub request bound; `reqwest_client` conflict.               |
-| 83dc1967 | C     | --           | Worktree ignore-rule anchoring conflict.                       |
+| 992c7d46 | B     | 4a20d45f0a   | GitHub release request timeout; ported after review.           |
+| 83dc1967 | B     | 7b4c1a46f9   | Worktree ignore-rule anchoring; ported after review.           |
 | c0979ee0 | C     | --           | OpenAI subscribed default model.                               |
 | c7537bdf | C     | --           | Brand-writer marketing skill rename.                           |
 | daec37bd | A     | 817392cb     | Cherry-picked with `-x -s`.                                    |
@@ -97,7 +98,7 @@ The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
 | 2cb57850 | A     | ae7a4c5d     | Cherry-picked with `-x -s`.                                    |
 | 47825fe0 | C     | --           | Invisible-char measure; wrap_map conflict.                     |
 | 24e25552 | A     | aa0da57b     | Cherry-picked with `-x -s`.                                    |
-| 30f806c4 | C     | --           | JetBrains CamelHump; migrate docs conflict.                    |
+| 30f806c4 | B     | d3dad3d954   | JetBrains CamelHump subword navigation; ported after review.   |
 | 5fa87423 | A     | 769be242     | Cherry-picked with `-x -s`.                                    |
 | cdc537c6 | C     | --           | csv_preview tabular rewrite.                                   |
 | a21007b7 | C     | --           | Unused profiler rewrite.                                       |
@@ -106,7 +107,7 @@ The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
 | 3cf86bed | C     | --           | OpenAI subscribed account models.                              |
 | 9f164a0d | C     | --           | Native agent Chat Completions share.                           |
 | 9bde578e | C     | --           | ACP dedicated thread needs absent `spawn_dedicated`.           |
-| 1e3d8b5a | C     | --           | Search rewrite; `project_search` conflict.                     |
+| 1e3d8b5a | B     | fb304e06b8   | Share the search snapshot behind an Arc; ported after review.  |
 | 56b1e79a | A     | fe7de095     | Cherry-picked with `-x -s`.                                    |
 | 939d2d70 | A     | --           | Already equivalent title_bar test-support.                     |
 | f4199ae0 | A     | 6bb8e518     | Cherry-picked with `-x -s`.                                    |
@@ -185,8 +186,12 @@ Missing architecture: `lsp_locations`, `spawn_dedicated`, elapsed RPC
 tracker, deleted editor modules (`completions.rs`, `code_actions.rs`,
 `element/mouse.rs`, `alacritty.rs`, staged/unstaged diffs).
 
-Unisolatable conflicts: git_panel, markdown, worktree, askpass, csv_preview,
-JetBrains docs, rustc 1.97 66-file bump.
+Unisolatable conflicts: git_panel, markdown, askpass, csv_preview, rustc 1.97
+66-file bump.
+
+The 2026-09-22 re-audit moved `83dc1967`, `1e3d8b5a`, `a4916265`,
+`992c7d46`, and `30f806c4` from C to B and ported them; see
+`upstream-sync-audit-2026-09-22.md`.
 
 ## Verification
 
