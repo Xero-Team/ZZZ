@@ -242,6 +242,19 @@ members = [
     "tooling/xtask",
 ]
 default-members = ["crates/zzz"]
+# Vendored third-party crates live under `vendor/`. They are path
+# dependencies but are kept out of the workspace so that workspace-wide
+# lint/fmt/test runs do not touch upstream code.
+exclude = [
+    "vendor/async-pipe",
+    "vendor/dap-types",
+    "vendor/gh-workflow",
+    "vendor/lsp-types",
+    "vendor/mermaid-rs-renderer",
+    "vendor/trash",
+    "vendor/wprcontrol",
+    "vendor/xim-rs",
+]
 
 [workspace.package]
 publish = false
@@ -372,7 +385,8 @@ markdown_preview = { path = "crates/markdown_preview" }
 svg_preview = { path = "crates/svg_preview" }
 media = { path = "crates/media" }
 menu = { path = "crates/menu" }
-mermaid-rs-renderer = { git = "https://github.com/zed-industries/mermaid-rs-renderer", rev = "782b89a7da3f0e91e51f98d00a93acba679be6fb", default-features = false }
+# Vendored from https://github.com/zed-industries/mermaid-rs-renderer @ 782b89a7da3f0e91e51f98d00a93acba679be6fb
+mermaid-rs-renderer = { path = "vendor/mermaid-rs-renderer", default-features = false }
 migrator = { path = "crates/migrator" }
 mistral = { path = "crates/mistral" }
 multi_buffer = { path = "crates/multi_buffer" }
@@ -498,7 +512,8 @@ async-dispatcher = "0.1"
 async-fs = "2.2"
 async-io = "2.6.0"
 async-lock = "3.4"
-async-pipe = { git = "https://github.com/zed-industries/async-pipe-rs", rev = "82d00a04211cf4e1236029aa03e6b6ce2a74c553" }
+# Vendored from https://github.com/zed-industries/async-pipe-rs @ 82d00a04211cf4e1236029aa03e6b6ce2a74c553
+async-pipe = { path = "vendor/async-pipe" }
 async-recursion = "1.1.1"
 async-tar = "0.6.1"
 async-task = "4.7"
@@ -545,7 +560,8 @@ cpal = "0.18"
 crash-handler = "0.8"
 criterion = { version = "0.8", features = ["html_reports"] }
 ctor = "1.0.13"
-dap-types = { git = "https://github.com/zed-industries/dap-types", rev = "1b461b310481d01e02b2603c16d7144b926339f8" }
+# Vendored from https://github.com/zed-industries/dap-types @ 1b461b310481d01e02b2603c16d7144b926339f8
+dap-types = { path = "vendor/dap-types/dap-types" }
 dashmap = "6.2"
 derive_more = { version = "2.1.1", features = [
     "add",
@@ -573,7 +589,8 @@ flume = "0.12"
 futures = "0.3.34"
 futures-concurrency = "7.7.1"
 futures-lite = "2.6"
-gh-workflow = { git = "https://github.com/zed-industries/gh-workflow", rev = "37f3c0575d379c218a9c455ee67585184e40d43f" }
+# Vendored from https://github.com/zed-industries/gh-workflow @ 37f3c0575d379c218a9c455ee67585184e40d43f
+gh-workflow = { path = "vendor/gh-workflow/crates/gh-workflow" }
 git2 = { version = "0.21.0", default-features = false, features = ["vendored-libgit2", "unstable-sha256"] }
 globset = "0.4"
 heapless = "0.9.3"
@@ -622,7 +639,8 @@ linkify = "0.11.0"
 lofty = "0.25"
 log = { version = "0.4.34", features = ["kv_unstable_serde", "serde"] }
 lru = "0.18"
-lsp-types = { git = "https://github.com/zed-industries/lsp-types", rev = "f4dfa89a21ca35cd929b70354b1583fabae325f8" }
+# Vendored from https://github.com/zed-industries/lsp-types @ f4dfa89a21ca35cd929b70354b1583fabae325f8
+lsp-types = { path = "vendor/lsp-types" }
 mach2 = "0.7"
 markup5ever_rcdom = { package = "spider-markup5ever_rcdom", version = "0.40.0" }
 metal = "0.33"
@@ -794,17 +812,19 @@ tree-sitter-elixir = "0.3"
 tree-sitter-embedded-template = "0.25.0"
 tree-sitter-git-config = { path = "crates/grammars/vendor/tree-sitter-git-config" }
 tree-sitter-gitattributes = { git = "https://github.com/tree-sitter-grammars/tree-sitter-gitattributes", rev = "1b7af09d45b579f9f288453b95ad555f1f431645" }
-tree-sitter-gitcommit = { git = "https://github.com/zed-industries/tree-sitter-git-commit", rev = "88309716a69dd13ab83443721ba6e0b491d37ee9" }
+# Vendored from https://github.com/zed-industries/tree-sitter-git-commit @ 88309716a69dd13ab83443721ba6e0b491d37ee9
+tree-sitter-gitcommit = { path = "crates/grammars/vendor/tree-sitter-gitcommit" }
 tree-sitter-git-rebase = { git = "https://github.com/the-mikedavis/tree-sitter-git-rebase", rev = "39bf3b7566c86ccffd70aaa5105c7c8b76788975" }
 tree-sitter-gitignore = { path = "crates/grammars/vendor/tree-sitter-gitignore", package = "tree-sitter-ignore" }
 tree-sitter-go = "0.25"
 tree-sitter-go-mod = { git = "https://github.com/camdencheek/tree-sitter-go-mod", rev = "2e886870578eeba1927a2dc4bd2e2b3f598c5f9a", package = "tree-sitter-gomod" }
-tree-sitter-gowork = { git = "https://github.com/zed-industries/tree-sitter-go-work", rev = "acb0617bf7f4fda02c6217676cc64acb89536dc7" }
+# Vendored from https://github.com/zed-industries/tree-sitter-go-work @ acb0617bf7f4fda02c6217676cc64acb89536dc7
+tree-sitter-gowork = { path = "crates/grammars/vendor/tree-sitter-gowork" }
 tree-sitter-heex = "0.8"
 tree-sitter-html = "0.23"
 tree-sitter-jsdoc = "0.25"
 tree-sitter-json = "0.24"
-tree-sitter-md = { git = "https://github.com/zed-industries/tree-sitter-markdown", rev = "b596e737286780d7bfa9fcddceaeeb754574b352" } # fork of 9a23c1a with serialize() buffer-overflow fix; https://github.com/tree-sitter-grammars/tree-sitter-markdown/issues/243
+tree-sitter-md = { path = "crates/grammars/vendor/tree-sitter-md" } # vendored fork of 9a23c1a with serialize() buffer-overflow fix; https://github.com/tree-sitter-grammars/tree-sitter-markdown/issues/243
 tree-sitter-powershell = { path = "crates/grammars/vendor/tree-sitter-powershell" }
 tree-sitter-python = "0.25"
 tree-sitter-regex = "0.25"
@@ -812,7 +832,7 @@ tree-sitter-ruby = "0.23"
 tree-sitter-rust = "0.24.2"
 tree-sitter-syslog = { path = "crates/grammars/vendor/tree-sitter-syslog" }
 tree-sitter-toml = { package = "tree-sitter-toml-ng", path = "crates/grammars/vendor/tree-sitter-toml" }
-tree-sitter-typescript = { git = "https://github.com/zed-industries/tree-sitter-typescript", rev = "e2c53597d6a5d9cf7bbe8dccde576fe1e46c5899" } # https://github.com/tree-sitter/tree-sitter-typescript/pull/347
+tree-sitter-typescript = { path = "crates/grammars/vendor/tree-sitter-typescript" } # vendored; https://github.com/tree-sitter/tree-sitter-typescript/pull/347
 tree-sitter-xml = "0.7.0"
 tree-sitter-yaml = "0.7"
 tracing = "0.1.44"
