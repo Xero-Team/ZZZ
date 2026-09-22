@@ -1323,7 +1323,7 @@ impl PickerDelegate for RegistersViewDelegate {
                 '\r' => Some("\\r".to_owned()),
                 c if is_invisible(c) => {
                     if c <= '\x1f' {
-                        replacement(c).map(|s| s.to_owned())
+                        replacement(c).map(|s| s.to_string())
                     } else {
                         Some(format!("\\u{:04X}", c as u32))
                     }
