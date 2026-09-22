@@ -110,6 +110,16 @@ impl IgnoreStack {
                 }
             }
             IgnoreStackEntry::RepoExclude { ignore, parent } => {
+                // Ignore rules from a repository that does not contain this path.
+                if !abs_path.starts_with(ignore.path()) {
+                    return IgnoreStack {
+                        repo_root: self.repo_root.clone(),
+                        global_ignore_root: self.global_ignore_root.clone(),
+                        top: parent.clone(),
+                    }
+                    .is_abs_path_ignored(abs_path, is_dir);
+                }
+
                 match ignore.matched(abs_path, is_dir) {
                     ignore::Match::None => IgnoreStack {
                         repo_root: self.repo_root.clone(),

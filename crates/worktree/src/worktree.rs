@@ -3008,10 +3008,19 @@ impl LocalSnapshot {
             if let Some((repo_exclude, _)) = self.repo_exclude_by_work_dir_abs_path.get(ancestor) {
                 repo_excludes.push(repo_exclude.clone());
             }
-            if repo_root.is_none() {
-                let metadata = fs.metadata(&ancestor.join(DOT_GIT)).await.ok().flatten();
-                if metadata.is_some() {
+            let is_repo_root = fs
+                .metadata(&ancestor.join(DOT_GIT))
+                .await
+                .is_ok_and(|metadata| metadata.is_some());
+            if is_repo_root {
+                if repo_root.is_none() {
                     repo_root = Some(Arc::from(ancestor));
+                }
+
+                // Stop at the repository containing the worktree root, but not at
+                // ones nested below it, where its rules still apply.
+                if self.abs_path.as_path().starts_with(ancestor) {
+                    break;
                 }
             }
         }

@@ -3326,6 +3326,62 @@ async fn test_repo_exclude_in_worktree(executor: BackgroundExecutor, cx: &mut Te
 }
 
 #[gpui::test]
+async fn test_repo_exclude_naming_a_worktree_ancestor(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    init_test(cx);
+
+    let fs = FakeFs::new(executor);
+
+    fs.insert_tree(
+        path!("/scratch/proj"),
+        json!({
+            ".git": {
+                "info": { "exclude": "scratch" }
+            },
+            "src": {
+                "main.rs": "fn main() {}",
+            }
+        }),
+    )
+    .await;
+
+    let worktree = Worktree::local(
+        path!("/scratch/proj").as_ref(),
+        true,
+        fs.clone(),
+        Default::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .unwrap();
+
+    worktree
+        .update(cx, |worktree, _| {
+            worktree.as_local().unwrap().scan_complete()
+        })
+        .await;
+    cx.run_until_parked();
+
+    worktree.update(cx, |worktree, _cx| {
+        assert!(
+            !worktree.root_entry().unwrap().is_ignored,
+            "an exclude pattern matching an ancestor must not ignore the worktree"
+        );
+        check_worktree_entries(
+            worktree,
+            WorktreeExpectations {
+                tracked_paths: &["src/main.rs"],
+                ..Default::default()
+            },
+        );
+    });
+}
+
+#[gpui::test]
 async fn test_repo_exclude(executor: BackgroundExecutor, cx: &mut TestAppContext) {
     init_test(cx);
 
