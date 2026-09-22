@@ -5,12 +5,17 @@ use component::{Component, ComponentScope, example_group_with_title, single_exam
 use editor::Editor;
 use futures::channel::oneshot;
 use gpui::{AnyElement, App, Div, Empty, Entity, Focusable, Hsla, SharedString, Window, div};
+use i18n as app_i18n;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 use ui::{
     Button, Checkbox, Color, Icon, IconName, IconSize, Indicator, Label, LabelSize, ToggleState,
     prelude::*,
 };
+
+fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 #[derive(Clone)]
 struct ElicitationOption {
@@ -1823,14 +1828,44 @@ impl<'a> ElicitationCard<'a> {
             (ElicitationStatus::Accepted, acp::ElicitationMode::Url(_))
         );
         let (status_label, status_icon, status_color) = match &self.elicitation.status {
-            ElicitationStatus::Pending { .. } => ("Waiting for input", IconName::Info, Color::Info),
-            ElicitationStatus::Accepted if is_accepted_url => {
-                ("Waiting for completion", IconName::Info, Color::Info)
-            }
-            ElicitationStatus::Accepted => ("Submitted", IconName::Check, Color::Success),
-            ElicitationStatus::Declined => ("Declined", IconName::Close, Color::Muted),
-            ElicitationStatus::Canceled => ("Canceled", IconName::Circle, Color::Muted),
-            ElicitationStatus::Completed => ("Completed", IconName::Check, Color::Success),
+            ElicitationStatus::Pending { .. } => (
+                tr(
+                    cx,
+                    "agent_ui.elicitation.status.waiting_for_input",
+                    "Waiting for input",
+                ),
+                IconName::Info,
+                Color::Info,
+            ),
+            ElicitationStatus::Accepted if is_accepted_url => (
+                tr(
+                    cx,
+                    "agent_ui.elicitation.status.waiting_for_completion",
+                    "Waiting for completion",
+                ),
+                IconName::Info,
+                Color::Info,
+            ),
+            ElicitationStatus::Accepted => (
+                tr(cx, "agent_ui.elicitation.status.submitted", "Submitted"),
+                IconName::Check,
+                Color::Success,
+            ),
+            ElicitationStatus::Declined => (
+                tr(cx, "agent_ui.elicitation.status.declined", "Declined"),
+                IconName::Close,
+                Color::Muted,
+            ),
+            ElicitationStatus::Canceled => (
+                tr(cx, "agent_ui.elicitation.status.canceled", "Canceled"),
+                IconName::Circle,
+                Color::Muted,
+            ),
+            ElicitationStatus::Completed => (
+                tr(cx, "agent_ui.elicitation.status.completed", "Completed"),
+                IconName::Check,
+                Color::Success,
+            ),
         };
 
         let body = v_flex()
@@ -1842,7 +1877,7 @@ impl<'a> ElicitationCard<'a> {
                 body.child(self.render_form(mode, cx))
             }
             acp::ElicitationMode::Url(mode) if is_pending || is_accepted_url => {
-                body.child(self.render_url_elicitation(mode))
+                body.child(self.render_url_elicitation(mode, cx))
             }
             _ => body,
         };
@@ -1876,9 +1911,20 @@ impl<'a> ElicitationCard<'a> {
                                     .color(status_color),
                             )
                             .child(
-                                Label::new(format!("Input Requested by {}", self.requester_name))
-                                    .size(LabelSize::Custom(tool_name_font_size))
-                                    .truncate(),
+                                Label::new(
+                                    tr(
+                                        cx,
+                                        "agent_ui.elicitation.input_requested_by",
+                                        "Input Requested by {}",
+                                    )
+                                    .replacen(
+                                        "{}",
+                                        self.requester_name.as_ref(),
+                                        1,
+                                    ),
+                                )
+                                .size(LabelSize::Custom(tool_name_font_size))
+                                .truncate(),
                             ),
                     )
                     .child(
@@ -2256,7 +2302,7 @@ impl<'a> ElicitationCard<'a> {
             })
     }
 
-    fn render_url_elicitation(&self, mode: &acp::ElicitationUrlMode) -> AnyElement {
+    fn render_url_elicitation(&self, mode: &acp::ElicitationUrlMode, cx: &App) -> AnyElement {
         v_flex()
             .gap_2()
             .when_some(url_host_presentation(&mode.url), |this, presentation| {
@@ -2267,9 +2313,13 @@ impl<'a> ElicitationCard<'a> {
                             h_flex()
                                 .gap_1()
                                 .child(
-                                    Label::new("Destination")
-                                        .size(LabelSize::Small)
-                                        .color(Color::Muted),
+                                    Label::new(tr(
+                                        cx,
+                                        "agent_ui.elicitation.destination",
+                                        "Destination",
+                                    ))
+                                    .size(LabelSize::Small)
+                                    .color(Color::Muted),
                                 )
                                 .child(Label::new(presentation.host).size(LabelSize::Small)),
                         )
@@ -2286,9 +2336,14 @@ impl<'a> ElicitationCard<'a> {
                                                 .color(Color::Warning),
                                         )
                                         .child(
-                                            Label::new(format!(
-                                                "This internationalized address displays as {decoded_host}. Verify it carefully."
-                                            ))
+                                            Label::new(
+                                                tr(
+                                                    cx,
+                                                    "agent_ui.elicitation.suspicious_address",
+                                                    "This internationalized address displays as {}. Verify it carefully.",
+                                                )
+                                                .replacen("{}", &decoded_host, 1),
+                                            )
                                             .size(LabelSize::Small)
                                             .color(Color::Warning),
                                         ),
@@ -2333,11 +2388,23 @@ impl<'a> ElicitationCard<'a> {
             open_url.is_some() && matches!(self.elicitation.status, ElicitationStatus::Accepted);
         let is_submitting = self.form_state.is_some_and(|state| state.is_submitting);
         let (accept_label, accept_icon, accept_icon_color) = if is_accepted_url {
-            ("Open Again", IconName::ArrowUpRight, Color::Muted)
+            (
+                tr(cx, "agent_ui.elicitation.open_again", "Open Again"),
+                IconName::ArrowUpRight,
+                Color::Muted,
+            )
         } else if open_url.is_some() {
-            ("Open", IconName::ArrowUpRight, Color::Muted)
+            (
+                tr(cx, "agent_ui.elicitation.open", "Open"),
+                IconName::ArrowUpRight,
+                Color::Muted,
+            )
         } else {
-            ("Submit", IconName::Check, Color::Success)
+            (
+                tr(cx, "agent_ui.elicitation.submit", "Submit"),
+                IconName::Check,
+                Color::Success,
+            )
         };
         let border_color = cx.theme().colors().border.opacity(0.8);
         let on_submit = self.handlers.on_submit.clone();
@@ -2380,35 +2447,44 @@ impl<'a> ElicitationCard<'a> {
             )
             .when(!is_accepted_url, |this| {
                 this.child(
-                    Button::new(("elicitation-decline", self.entry_ix), "Decline")
-                        .tab_index(0_isize)
-                        .start_icon(
-                            Icon::new(IconName::Close)
-                                .size(IconSize::XSmall)
-                                .color(Color::Error),
-                        )
-                        .label_size(LabelSize::Small)
-                        .on_click(move |_, window, cx| {
-                            on_decline(decline_id.clone(), window, cx);
-                        }),
+                    Button::new(
+                        ("elicitation-decline", self.entry_ix),
+                        tr(cx, "agent_ui.elicitation.decline", "Decline"),
+                    )
+                    .tab_index(0_isize)
+                    .start_icon(
+                        Icon::new(IconName::Close)
+                            .size(IconSize::XSmall)
+                            .color(Color::Error),
+                    )
+                    .label_size(LabelSize::Small)
+                    .on_click(move |_, window, cx| {
+                        on_decline(decline_id.clone(), window, cx);
+                    }),
                 )
                 .child(
-                    Button::new(("elicitation-cancel", self.entry_ix), "Cancel")
-                        .tab_index(0_isize)
-                        .label_size(LabelSize::Small)
-                        .on_click(move |_, window, cx| {
-                            on_cancel(cancel_id.clone(), window, cx);
-                        }),
+                    Button::new(
+                        ("elicitation-cancel", self.entry_ix),
+                        tr(cx, "agent_ui.elicitation.cancel", "Cancel"),
+                    )
+                    .tab_index(0_isize)
+                    .label_size(LabelSize::Small)
+                    .on_click(move |_, window, cx| {
+                        on_cancel(cancel_id.clone(), window, cx);
+                    }),
                 )
             })
             .when(is_accepted_url, |this| {
                 this.child(
-                    Button::new(("elicitation-dismiss-url", self.entry_ix), "Cancel")
-                        .tab_index(0_isize)
-                        .label_size(LabelSize::Small)
-                        .on_click(move |_, window, cx| {
-                            on_dismiss_url(dismiss_id.clone(), window, cx);
-                        }),
+                    Button::new(
+                        ("elicitation-dismiss-url", self.entry_ix),
+                        tr(cx, "agent_ui.elicitation.cancel", "Cancel"),
+                    )
+                    .tab_index(0_isize)
+                    .label_size(LabelSize::Small)
+                    .on_click(move |_, window, cx| {
+                        on_dismiss_url(dismiss_id.clone(), window, cx);
+                    }),
                 )
             })
             .into_any_element()
