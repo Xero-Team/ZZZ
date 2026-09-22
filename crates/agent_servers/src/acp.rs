@@ -3089,7 +3089,6 @@ mod tests {
             command,
             agent_server_store,
             None,
-            None,
             HashMap::default(),
             &mut async_cx,
         )
@@ -3474,6 +3473,7 @@ mod tests {
                     acp_thread::AgentThreadEntry::AssistantMessage(_) => "assistant",
                     acp_thread::AgentThreadEntry::ToolCall(_) => "tool_call",
                     acp_thread::AgentThreadEntry::CompletedPlan(_) => "plan",
+                    acp_thread::AgentThreadEntry::Elicitation(_) => "elicitation",
                 })
                 .collect::<Vec<_>>()
         });

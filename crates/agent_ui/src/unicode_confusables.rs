@@ -58,7 +58,7 @@ pub fn scan_host(host: &str) -> (String, Vec<SuspiciousChar>) {
     // best-effort decoding, which is exactly what we want to scan and show.
     let (decoded, _result) = idna::domain_to_unicode(host);
     let findings = scan(&decoded);
-    (decoded.to_string(), findings)
+    (decoded, findings)
 }
 
 fn classify(character: char) -> SuspiciousKind {
