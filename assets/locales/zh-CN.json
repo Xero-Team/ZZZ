@@ -3049,6 +3049,7 @@
     "git_ui.git_panel.sort_by_status": "按状态排序",
     "git_ui.git_panel.stage_file": "暂存文件",
     "git_ui.git_panel.stash_all": "全部暂存到 stash",
+    "git_ui.git_panel.stash_message_placeholder": "可选：填写 stash 名称",
     "git_ui.git_panel.stash_pop": "弹出 stash",
     "git_ui.text_diff_view.clipboard_diff_title": "剪贴板 ↔ {}",
     "git_ui.git_panel.switch_active_repository": "切换活动仓库",

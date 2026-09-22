@@ -3049,6 +3049,7 @@
     "git_ui.git_panel.sort_by_status": "Sort by Status",
     "git_ui.git_panel.stage_file": "Stage File",
     "git_ui.git_panel.stash_all": "Stash All",
+    "git_ui.git_panel.stash_message_placeholder": "Optionally provide a stash message",
     "git_ui.git_panel.stash_pop": "Stash Pop",
     "git_ui.text_diff_view.clipboard_diff_title": "Clipboard ↔ {}",
     "git_ui.git_panel.switch_active_repository": "Switch Active Repository",
