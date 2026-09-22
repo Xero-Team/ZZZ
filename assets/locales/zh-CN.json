@@ -2991,6 +2991,8 @@
     "git_ui.git_panel.commit_message_title_exceeds_limit": "提交消息标题超过了 {max_title_length} 个字符的限制。",
     "git_ui.git_panel.commit_tracked": "提交已跟踪项",
     "git_ui.git_panel.configure_llm_provider_to_generate_commit_messages": "配置一个 LLM 提供方来生成提交消息",
+    "git_ui.git_panel.copy_path": "复制路径",
+    "git_ui.git_panel.copy_relative_path": "复制相对路径",
     "git_ui.git_panel.discard_changes": "丢弃更改",
     "git_ui.git_panel.discard_changes_to_file_prompt": "确定要丢弃 {} 的更改吗？",
     "git_ui.git_panel.discard_changes_to_these_files": "要丢弃这些文件的更改吗？",

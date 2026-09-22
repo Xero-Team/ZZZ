@@ -2991,6 +2991,8 @@
     "git_ui.git_panel.commit_message_title_exceeds_limit": "Commit message title exceeds {max_title_length}-character limit.",
     "git_ui.git_panel.commit_tracked": "Commit Tracked",
     "git_ui.git_panel.configure_llm_provider_to_generate_commit_messages": "Configure an LLM provider to generate commit messages",
+    "git_ui.git_panel.copy_path": "Copy Path",
+    "git_ui.git_panel.copy_relative_path": "Copy Relative Path",
     "git_ui.git_panel.discard_changes": "Discard Changes",
     "git_ui.git_panel.discard_changes_to_file_prompt": "Are you sure you want to discard changes to {}?",
     "git_ui.git_panel.discard_changes_to_these_files": "Discard changes to these files?",

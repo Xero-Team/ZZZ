@@ -38,10 +38,10 @@ use git::{
     ViewFile, parse_git_remote_url,
 };
 use gpui::{
-    AbsoluteLength, Action, Anchor, AsyncApp, AsyncWindowContext, Bounds, ClickEvent, DismissEvent,
-    Empty, Entity, EventEmitter, FocusHandle, Focusable, KeyContext, MouseButton, MouseDownEvent,
-    Point, PromptLevel, ScrollStrategy, Subscription, Task, TextStyle, UniformListScrollHandle,
-    WeakEntity, actions, anchored, deferred, point, size, uniform_list,
+    AbsoluteLength, Action, Anchor, AsyncApp, AsyncWindowContext, Bounds, ClickEvent,
+    ClipboardItem, DismissEvent, Empty, Entity, EventEmitter, FocusHandle, Focusable, KeyContext,
+    MouseButton, MouseDownEvent, Point, PromptLevel, ScrollStrategy, Subscription, Task, TextStyle,
+    UniformListScrollHandle, WeakEntity, actions, anchored, deferred, point, size, uniform_list,
 };
 use i18n::tr;
 use itertools::Itertools;
@@ -91,7 +91,10 @@ use workspace::{
     dock::{DockPosition, Panel, PanelEvent},
     notifications::{DetachAndPromptErr, ErrorMessagePrompt, NotificationId, NotifyTaskExt},
 };
-use zzz_actions::{DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize};
+use zzz_actions::{
+    DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize,
+    workspace::{CopyPath, CopyRelativePath},
+};
 
 const MAX_HISTORY_TAG_CHIPS: usize = 3;
 actions!(
@@ -320,6 +323,7 @@ fn git_panel_context_menu(
     has_unstaged_changes: bool,
     has_new_changes: bool,
     has_stash_items: bool,
+    include_copy_paths: bool,
     focus_handle: FocusHandle,
     window: &mut Window,
     cx: &mut App,
@@ -329,6 +333,12 @@ fn git_panel_context_menu(
     let stash_all = tr(cx, "git_ui.git_panel.stash_all", "Stash All");
     let stash_pop = tr(cx, "git_ui.git_panel.stash_pop", "Stash Pop");
     let view_stash = tr(cx, "git_ui.stash_picker.view_stash", "View Stash");
+    let copy_path = tr(cx, "git_ui.git_panel.copy_path", "Copy Path");
+    let copy_relative_path = tr(
+        cx,
+        "git_ui.git_panel.copy_relative_path",
+        "Copy Relative Path",
+    );
     let open_diff = tr(cx, "git_ui.git_panel.open_diff", "Open Diff");
     let discard_tracked_changes = tr(
         cx,
@@ -364,6 +374,12 @@ fn git_panel_context_menu(
                 view_stash.clone(),
                 zzz_actions::git::ViewStash.boxed_clone(),
             )
+            .when(include_copy_paths, |context_menu| {
+                context_menu
+                    .separator()
+                    .action(copy_path.clone(), CopyPath.boxed_clone())
+                    .action(copy_relative_path.clone(), CopyRelativePath.boxed_clone())
+            })
             .separator()
             .action(open_diff.clone(), Diff.boxed_clone())
             .separator()
@@ -560,6 +576,15 @@ impl GitListEntry {
             GitListEntry::Directory(dir) => dir.depth,
             GitListEntry::TreeStatus(status) => status.depth,
             _ => 0,
+        }
+    }
+
+    fn repo_path(&self) -> Option<&RepoPath> {
+        match self {
+            GitListEntry::Status(entry) => Some(&entry.repo_path),
+            GitListEntry::TreeStatus(entry) => Some(&entry.entry.repo_path),
+            GitListEntry::Directory(entry) => Some(&entry.key.path),
+            GitListEntry::Header(_) => None,
         }
     }
 }
@@ -5339,6 +5364,7 @@ impl GitPanel {
                     has_unstaged_changes,
                     has_new_changes,
                     has_stash_items,
+                    false,
                     focus_handle.clone(),
                     window,
                     cx,
@@ -6874,7 +6900,7 @@ impl GitPanel {
                     .on_mouse_down(
                         MouseButton::Right,
                         cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                            this.deploy_panel_context_menu(event.position, window, cx)
+                            this.deploy_panel_context_menu(event.position, false, window, cx)
                         }),
                     )
                     .custom_scrollbars(
@@ -6976,6 +7002,12 @@ impl GitPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if matches!(self.entries.get(ix), Some(GitListEntry::Directory(_))) {
+            self.selected_entry = Some(ix);
+            self.deploy_panel_context_menu(position, true, window, cx);
+            return;
+        }
+
         let Some(entry) = self.entries.get(ix).and_then(|e| e.status_entry()) else {
             return;
         };
@@ -6995,6 +7027,12 @@ impl GitPanel {
         let open_diff = tr(cx, "git_ui.git_panel.open_diff", "Open Diff");
         let open_diff_file = tr(cx, "git_ui.git_panel.open_diff_file", "Open Diff (File)");
         let view_file = tr(cx, "git_ui.git_panel.view_file", "View File");
+        let copy_path = tr(cx, "git_ui.git_panel.copy_path", "Copy Path");
+        let copy_relative_path = tr(
+            cx,
+            "git_ui.git_panel.copy_relative_path",
+            "Copy Relative Path",
+        );
         let view_file_history = tr(
             cx,
             "git_ui.git_panel.view_file_history",
@@ -7009,6 +7047,9 @@ impl GitPanel {
                     restore_title.clone(),
                     git::RestoreFile::default().boxed_clone(),
                 )
+                .separator()
+                .action(copy_path.clone(), CopyPath.boxed_clone())
+                .action(copy_relative_path.clone(), CopyRelativePath.boxed_clone())
                 .separator()
                 .action_disabled_when(
                     !is_created,
@@ -7034,9 +7075,36 @@ impl GitPanel {
         self.set_context_menu(context_menu, position, window, cx);
     }
 
+    fn copy_path(&mut self, _: &CopyPath, _: &mut Window, cx: &mut Context<Self>) {
+        if let Some((repo_path, repo)) = self
+            .get_selected_entry()
+            .and_then(GitListEntry::repo_path)
+            .zip(self.active_repository.as_ref())
+        {
+            let path = repo.read(cx).repo_path_to_abs_path(repo_path);
+            cx.write_to_clipboard(ClipboardItem::new_string(
+                path.to_string_lossy().into_owned(),
+            ));
+        } else {
+            cx.propagate();
+        }
+    }
+
+    fn copy_relative_path(&mut self, _: &CopyRelativePath, _: &mut Window, cx: &mut Context<Self>) {
+        if let Some(repo_path) = self.get_selected_entry().and_then(GitListEntry::repo_path) {
+            let path_style = self.project.read(cx).path_style(cx);
+            cx.write_to_clipboard(ClipboardItem::new_string(
+                repo_path.display(path_style).into_owned(),
+            ));
+        } else {
+            cx.propagate();
+        }
+    }
+
     fn deploy_panel_context_menu(
         &mut self,
         position: Point<Pixels>,
+        include_copy_paths: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -7054,6 +7122,7 @@ impl GitPanel {
             has_unstaged_changes,
             has_new_changes,
             has_stash_items,
+            include_copy_paths,
             self.focus_handle.clone(),
             window,
             cx,
@@ -7747,6 +7816,8 @@ impl Render for GitPanel {
             .on_action(cx.listener(Self::open_diff))
             .on_action(cx.listener(Self::open_solo_diff))
             .on_action(cx.listener(Self::view_file))
+            .on_action(cx.listener(Self::copy_path))
+            .on_action(cx.listener(Self::copy_relative_path))
             .on_action(cx.listener(Self::focus_changes_list))
             .on_action(cx.listener(Self::focus_editor))
             .on_action(cx.listener(Self::expand_commit_editor))
@@ -8903,6 +8974,77 @@ mod tests {
         cx.run_until_parked();
 
         assert_editor_opened_with_path(&workspace, Path::new("src/a/foo.rs"), &mut cx);
+    }
+
+    #[gpui::test]
+    async fn test_copy_paths(cx: &mut TestAppContext) {
+        init_test(cx);
+        cx.update(|cx| {
+            SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.git_panel.get_or_insert_default().tree_view = Some(true);
+                })
+            });
+        });
+
+        let (_, workspace, panel, mut cx) = setup_git_panel_with_changes(
+            cx,
+            json!({
+                ".git": {},
+                "src": {
+                    "main.rs": "fn main() {}",
+                },
+            }),
+            &[("src/main.rs", StatusCode::Modified)],
+        )
+        .await;
+
+        workspace.update_in(&mut cx, |workspace, window, cx| {
+            workspace.add_panel(panel.clone(), window, cx);
+            workspace.open_panel::<GitPanel>(window, cx);
+        });
+        panel.update_in(&mut cx, |panel, window, cx| {
+            let entry_index = entry_index_for_repo_path(panel, &repo_path("src/main.rs"))
+                .expect("main.rs should exist in the changes list");
+            panel.selected_entry = Some(entry_index);
+            panel.focus_handle.focus(window, cx);
+        });
+        cx.update(|window, cx| window.draw(cx).clear());
+
+        cx.dispatch_action(CopyRelativePath);
+        assert_eq!(
+            cx.read_from_clipboard().and_then(|item| item.text()),
+            Some(path!("src/main.rs").to_owned())
+        );
+
+        cx.dispatch_action(CopyPath);
+        assert_eq!(
+            cx.read_from_clipboard().and_then(|item| item.text()),
+            Some(path!("/project/src/main.rs").to_owned())
+        );
+
+        panel.update(&mut cx, |panel, _| {
+            let entry_index = panel
+                .entries
+                .iter()
+                .position(|entry| {
+                    matches!(entry, GitListEntry::Directory(dir) if dir.key.path == repo_path("src"))
+                })
+                .expect("src directory should exist in the changes list");
+            panel.selected_entry = Some(entry_index);
+        });
+
+        cx.dispatch_action(CopyRelativePath);
+        assert_eq!(
+            cx.read_from_clipboard().and_then(|item| item.text()),
+            Some(path!("src").to_owned())
+        );
+
+        cx.dispatch_action(CopyPath);
+        assert_eq!(
+            cx.read_from_clipboard().and_then(|item| item.text()),
+            Some(path!("/project/src").to_owned())
+        );
     }
 
     async fn history_panel_for_project(
