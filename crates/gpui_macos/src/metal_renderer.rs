@@ -24,7 +24,9 @@ use metal::{
     CAMetalLayer, CommandQueue, MTLGPUFamily, MTLPixelFormat, MTLResourceOptions, NSRange,
     RenderPassColorAttachmentDescriptorRef,
 };
-use objc::{self, msg_send, rc::autoreleasepool, sel, sel_impl};
+use objc::{self, msg_send, sel, sel_impl};
+#[cfg(any(test, feature = "test-support"))]
+use objc::rc::autoreleasepool;
 use parking_lot::Mutex;
 
 use std::{cell::Cell, ffi::c_void, mem, ptr, sync::Arc};
