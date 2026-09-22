@@ -60,6 +60,16 @@ request-scoped client handlers plus the client elicitation capability to
 elicitation cards in the thread view. The `unicode_confusables` helper is
 reduced to the scanner used by the elicitation URL warning.
 
+### Follow-up — request-scoped cards and localization
+
+`ConversationView` now subscribes to the connection's `ElicitationStore`,
+keeps request-scoped form state, renders request-scoped cards when no active
+thread renders them, and answers through the store. The elicitation card
+chrome (status labels, `Input Requested by {}`, destination, suspicious
+address warning, and the accept/decline/cancel buttons) is localized with
+`i18n::tr`; the English fallbacks match the new `agent_ui.elicitation.*` keys
+added to both `assets/locales/en.json` and `assets/locales/zh-CN.json`.
+
 ## Verification
 
 | Check                                                | Result  |
@@ -75,9 +85,7 @@ reduced to the scanner used by the elicitation URL warning.
 
 ## Remaining
 
-- Request-scoped elicitation cards in the conversation view are not wired;
-  only the store and handlers exist.
-- The new elicitation UI strings are not localized into the ZZZ locale
-  catalogs.
+- Elicitation form validation messages are still English. They are produced
+  by synchronous helpers that have no `cx`, so they were not localized.
 - `unicode_confusables` is ported without the sandbox-prompt display helpers
   that upstream uses outside elicitation.
