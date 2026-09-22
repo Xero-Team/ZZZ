@@ -54,25 +54,14 @@ two of them were later absorbed without updating the record. The current
 Superseded versions carry no separate local commit because a later follow
 already moved `crates/zzz` past them.
 
-### F3: Over-rejection re-reviewreviewreviewreviewreviewreviewreviewreviewreviewreviewreviewreviewreviewreviewreviewreviewreviewreview
+### F3: Over-rejection re-review
 
-Roughly 606060606060606060606060606060606060 `C` decisions are justified only by "conflict", "already
+Roughly 60 `C` decisions are justified only by "conflict", "already
 diverged", or "not isolatable", without recording an isolation attempt. The
 skill treats a dry-run conflict as evidence for `B` or `C`, decided by
-isolation...... EachEachEachEachEachEach candidate was re-checked against the current ZZZ call chain.
-Five were genuinely missed andcandidate was re-checked against the current ZZZ call chain.
-Five were genuinely missed andcandidate was re-checked against the current ZZZ call chain.
-Five were genuinely missed andcandidate was re-checked against the current ZZZ call chain.
-Five were genuinely missed andcandidate was re-checked against the current ZZZ call chain.
-Five were genuinely missed andcandidate was re-checked against the current ZZZ call chain.
-Five were genuinely missed and are nownownownownownow portedportedportedportedportedported:
-isolation...... EachEachEachEachEachEach candidate was re-checked against the current ZZZ call chain.
-Five were genuinely missed andcandidate was re-checked against the current ZZZ call chain.
-Five were genuinely missed andcandidate was re-checked against the current ZZZ call chain.
-Five were genuinely missed andcandidate was re-checked against the current ZZZ call chain.
-Five were genuinely missed andcandidate was re-checked against the current ZZZ call chain.
-Five were genuinely missed andcandidate was re-checked against the current ZZZ call chain.
-Five were genuinely missed and are nownownownownownow portedportedportedportedportedported:
+isolation. Each candidate was re-checked against the current ZZZ call chain.
+
+Ten were genuinely missed and are now ported:
 
 | Upstream   | Class | Local commit | What was missed                               |
 | ---------- | ----- | ------------ | --------------------------------------------- |
@@ -81,125 +70,11 @@ Five were genuinely missed and are nownownownownownow portedportedportedportedpo
 | `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
 | `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
 | `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
-| Upstream   | Class | Local commit | What was missed                               |
-| ---------- | ----- | ------------ | --------------------------------------------  |
-| `83dc1967` | B     | `7b4c1a46f9` | Worktree `info/exclude` anchoring bugfix      |
-| `1e3d8b5a` | B     | `fb304e06b8` | O(files^2) project-search snapshot clone      |
-| `a4916265` | B     | `89c1511729` | Missing separator between reasoning summaries |
-| `992c7d46` | B     | `4a20d45f0a` | Unbounded GitHub release requests             |
-| `30f806c4` | B     | `d3dad3d954` | JetBrains CamelHump subword keybindings       |
+| `47825fe0` | B     | `ba686f3ca0` | Invisible-character replacement width         |
+| `f543a764` | A     | `81a751b591` | Invisible-character range matching            |
+| `c6b01d8a` | B     | `a3c4dd2111` | Optional git stash message                    |
+| `6634c945` | B     | `2260d67f9b` | Git panel copy path actions                   |
+| `bd1b83a4` | B     | `b4c301e099` | Git panel collapsible sections                |
 
 Two were re-checked and confirmed correctly `C`, so they were not ported:
 
@@ -210,370 +85,12 @@ Two were re-checked and confirmed correctly `C`, so they were not ported:
   and cloud paths.
 
 The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
+and were not ported in this pass:
 
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
+- `4bdf188c` stash tracked/staged options
 - `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
 - `6721ea2e` reset dock panels, `0ad5441b` display-position selections
 - `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
-- `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
-
-The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
-project search/scanner, LSP protocol, outline panel, language-model stream
-unification, and build/bloat work.
-Two were re-checked and confirmed correctly `C`, so they were not ported:
-
-- `c83adb3d` `SymbolKind` RPC: local `language_core` uses `lsp::SymbolKind`
-  directly, so the serialization bug does not exist.
-- `dbf7f638` Anthropic compaction context: `into_compact_request` has no
-  ZZZ caller; explicit compaction is only wired into rejected native-agent
-  and cloud paths.
-
-The remaining candidates are philosophy-safe but need per-commit adaptation
-and were not ported in this pass. The most likely follow-ups:
-
-- `47825fe0` + `f543a764` invisible-replacement width (`wrap_map` rewrite)
-- `e4671f71` malformed-`tasks.json` error toast (settings-observer refactor)
-- `6721ea2e` reset dock panels, `0ad5441b` display-position selections
-- `a034d870` canceled-worktree leak, `d4010e91` trash-confirm undo
-- `6634c945`, `bd1b83a4`, `c6b01d8a`, `4bdf188c` git panel and stash
 - `897ba9ad`, `eb548352`, `c1eda3e8` markdown preview
 
 The large architecture rewrites stay `C`: web IME/touch, MultiWorkspace,
@@ -593,22 +110,13 @@ names the 2026-09-18 audit through `b961b495`.
 | `upstream-sync-2026-08-07.md` | Reclassified `e24eeb71` and `02c6dd95` to B version follows                                                                                       |
 | `upstream-sync-2026-08-27.md` | Reclassified `0a4a4a95` and `ac099b4a` to B; corrected batch counts and rejected-work notes                                                       |
 | `upstream-sync-2026-09-02.md` | Reclassified `ff68a64c` to B; corrected batch count                                                                                               |
-| `upstream-sync-2026-08-18.md` | Reclassified the five F3 ports to B with their local commits; corrected counts to 28 A, 13 B, 75 C                                                |
+| `upstream-sync-2026-08-18.md` | Reclassified the ten F3 ports with their local commits; corrected counts to 29 A, 17 B, 70 C                                                      |
 | `REFERENCE.md`                | Updated `LAST_REVIEWED_UPSTREAM`, `LOCAL_BASE_COMMIT`, and the baseline prose                                                                     |
 
-The record-only corrections changed noThe record-only corrections changed noThe record-only corrections changed noThe record-only corrections changed noThe record-only corrections changed noThe record-only corrections changed no product code. TheTheTheTheTheThe F3F3F3F3F3F3 re-reviewre-reviewre-reviewre-reviewre-reviewre-review added
-five B ports (`7b4c1a46f9`, `fb304e06b8`, `89c1511729`, `4a20d45f0a`,
-`d3dad3d954`)added
-five B ports (`7b4c1a46f9`, `fb304e06b8`, `89c1511729`, `4a20d45f0a`,
-`d3dad3d954`)added
-five B ports (`7b4c1a46f9`, `fb304e06b8`, `89c1511729`, `4a20d45f0a`,
-`d3dad3d954`)added
-five B ports (`7b4c1a46f9`, `fb304e06b8`, `89c1511729`, `4a20d45f0a`,
-`d3dad3d954`)added
-five B ports (`7b4c1a46f9`, `fb304e06b8`, `89c1511729`, `4a20d45f0a`,
-`d3dad3d954`)added
-five B ports (`7b4c1a46f9`, `fb304e06b8`, `89c1511729`, `4a20d45f0a`,
-`d3dad3d954`).
+The record-only corrections changed no product code. The F3 re-review added
+ten local commits (`7b4c1a46f9`, `fb304e06b8`, `89c1511729`, `4a20d45f0a`,
+`d3dad3d954`, `ba686f3ca0`, `81a751b591`, `a3c4dd2111`, `2260d67f9b`,
+`b4c301e099`).
 
 ## Verification
 
@@ -618,12 +126,13 @@ PASS no report lost decision rows relative to its historical union
 PASS restored batch 1 rows match commit 35b4e80a9d
 PASS local commits referenced by restored rows exist on main
 PASS cd docs && npx prettier --check src/development/
-PASS cargo check --locked -p worktree
+PASS cargo check --locked -p worktree -p project -p open_ai -p reqwest_client -p http_client -p git -p fs -p git_ui
 PASS cargo test --locked -p worktree --test integration test_repo_exclude
-PASS cargo check --locked -p project
 PASS cargo test --locked -p open_ai responses_stream_separates_reasoning_summary_items
 PASS cargo test --locked -p reqwest_client test_request_timeout_applies_while_reading_response_body
+PASS cargo test --locked -p editor --lib wrap_map::tests::test_invisibles
+PASS cargo test --locked -p git_ui --lib test_copy_paths
 PASS ./script/check-keymaps
-NOT RUN cargo testtest --workspace--workspace
+NOT RUN cargo test --workspace
 NOT RUN macOS / Windows / wasm32 runtime tests
 ```

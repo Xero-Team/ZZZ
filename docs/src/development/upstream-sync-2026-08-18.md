@@ -22,8 +22,8 @@ ZZZ's local-first, no-account, ACP-only boundary, or failed isolation.
 
 The reviewed baseline is now `aa3718614b3ade75524be6f8b2e101bd1166e02c`.
 The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
-`--shallow-since=2026-08-06` restored ancestry. Counts: 28 A, 13 B, 75 C
-(after the 2026-09-22 re-audit moved five commits to B).
+`--shallow-since=2026-08-06` restored ancestry. Counts: 29 A, 17 B, 70 C
+(after the 2026-09-22 re-audit ported ten commits).
 
 ## Decisions
 
@@ -53,9 +53,9 @@ The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
 | c65e08a8 | A     | 3d24720f     | Cherry-picked with `-x -s`.                                    |
 | 9e236090 | C     | --           | Unused per-window histogram APIs.                              |
 | a1860ac1 | C     | --           | Hosted Claude pricing docs.                                    |
-| 6634c945 | C     | --           | Git copy-path actions; `git_panel` conflict.                   |
-| bd1b83a4 | C     | --           | Git collapsible sections; `git_panel` conflict.                |
-| c6b01d8a | C     | --           | Git stash message; git/proto conflict.                         |
+| 6634c945 | B     | 2260d67f9b   | Git panel copy-path actions; ported after review.              |
+| bd1b83a4 | B     | b4c301e099   | Git panel collapsible sections; ported after review.           |
+| c6b01d8a | B     | a3c4dd2111   | Optional git stash message; ported after review.               |
 | 7807e4b1 | A     | af25a382     | Cherry-picked with `-x -s`.                                    |
 | a4916265 | B     | 89c1511729   | OpenAI reasoning-summary separators; ported after review.      |
 | c83adb3d | C     | --           | `SymbolKind` RPC; `language_core` conflict.                    |
@@ -96,7 +96,7 @@ The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
 | d8664715 | C     | --           | csv_preview copy; renderer conflict.                           |
 | 0ad5441b | C     | --           | Display-position selections; editor conflict.                  |
 | 2cb57850 | A     | ae7a4c5d     | Cherry-picked with `-x -s`.                                    |
-| 47825fe0 | C     | --           | Invisible-char measure; wrap_map conflict.                     |
+| 47825fe0 | B     | ba686f3ca0   | Measure invisible replacement width; ported after review.      |
 | 24e25552 | A     | aa0da57b     | Cherry-picked with `-x -s`.                                    |
 | 30f806c4 | B     | d3dad3d954   | JetBrains CamelHump subword navigation; ported after review.   |
 | 5fa87423 | A     | 769be242     | Cherry-picked with `-x -s`.                                    |
@@ -113,7 +113,7 @@ The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
 | f4199ae0 | A     | 6bb8e518     | Cherry-picked with `-x -s`.                                    |
 | bc538def | A     | 9a38802b     | Cherry-picked with `-x -s`.                                    |
 | bc6095f2 | C     | --           | Buffer-header menu; `element/mouse.rs` deleted.                |
-| f543a764 | C     | --           | Invisible ranges; display_map conflict.                        |
+| f543a764 | A     | 81a751b591   | Invisible-character matching; cherry-picked after review.      |
 | b2d9c2e1 | C     | --           | Native agent panel rewind.                                     |
 | b47d8ac4 | A     | 5339c998     | Cherry-picked with `-x -s`.                                    |
 | 6c706fb9 | A     | 60eac2c9     | Cherry-picked with `-x -s`.                                    |
@@ -189,9 +189,9 @@ tracker, deleted editor modules (`completions.rs`, `code_actions.rs`,
 Unisolatable conflicts: git_panel, markdown, askpass, csv_preview, rustc 1.97
 66-file bump.
 
-The 2026-09-22 re-audit moved `83dc1967`, `1e3d8b5a`, `a4916265`,
-`992c7d46`, and `30f806c4` from C to B and ported them; see
-`upstream-sync-audit-2026-09-22.md`.
+The 2026-09-22 re-audit ported `83dc1967`, `1e3d8b5a`, `a4916265`,
+`992c7d46`, `30f806c4`, `47825fe0`, `f543a764`, `c6b01d8a`, `6634c945`, and
+`bd1b83a4`; see `upstream-sync-audit-2026-09-22.md`.
 
 ## Verification
 
