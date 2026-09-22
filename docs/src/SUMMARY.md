@@ -205,4 +205,5 @@
   - [Upstream Sync 2026-09-17](./development/upstream-sync-2026-09-17.md)
   - [Upstream Sync 2026-09-18](./development/upstream-sync-2026-09-18.md)
   - [Upstream Sync Re-audit 2026-09-22](./development/upstream-sync-audit-2026-09-22.md)
+  - [Upstream Sync 2026-09-22 ACP Elicitation](./development/upstream-sync-2026-09-22-acp-elicitation.md)
 - [Release Notes](./development/release-notes.md)
