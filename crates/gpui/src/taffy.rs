@@ -245,18 +245,7 @@ impl TaffyLayoutEngine {
             .compute_layout_with_measure(
                 id.into(),
                 available_space.into(),
-                |layout_input, _id, node_context, _style| {
-                    let Some(node_context) = node_context else {
-                        return taffy::LayoutOutput::HIDDEN;
-                    };
-
-                    let known_dimensions = layout_input.known_dimensions;
-                    let known_dimensions = Size {
-                        width: known_dimensions.width.map(|e| Pixels(e / scale_factor)),
-                        height: known_dimensions.height.map(|e| Pixels(e / scale_factor)),
-                    };
-
-                    let available_space: Size<AvailableSpace> = layout_input.available_space.into();
+                |layout_input, _id, mut node_context, style| {
                     let untransform = |ev: AvailableSpace| match ev {
                         AvailableSpace::Definite(pixels) => {
                             AvailableSpace::Definite(Pixels(pixels.0 / scale_factor))
@@ -264,15 +253,39 @@ impl TaffyLayoutEngine {
                         AvailableSpace::MinContent => AvailableSpace::MinContent,
                         AvailableSpace::MaxContent => AvailableSpace::MaxContent,
                     };
-                    let available_space = size(
-                        untransform(available_space.width),
-                        untransform(available_space.height),
-                    );
 
-                    let measured_size: Size<Pixels> =
-                        (node_context.measure)(known_dimensions, available_space, window, cx);
-                    let size = snap_measured_size_to_device_pixels(measured_size, scale_factor);
-                    taffy::LayoutOutput::from_outer_size(size.into())
+                    // `compute_leaf_layout` applies the node's style (size, min/max size,
+                    // aspect ratio, padding and borders) before deferring to the measure
+                    // function for the content size. Leaf nodes without a measure function
+                    // must still resolve their style, otherwise they collapse to zero.
+                    taffy::compute_leaf_layout(
+                        layout_input,
+                        style,
+                        |_, _| 0.0,
+                        |known_dimensions, available_space| {
+                            let Some(node_context) = node_context.as_mut() else {
+                                return taffy::geometry::Size::ZERO;
+                            };
+
+                            let known_dimensions = Size {
+                                width: known_dimensions.width.map(|e| Pixels(e / scale_factor)),
+                                height: known_dimensions.height.map(|e| Pixels(e / scale_factor)),
+                            };
+
+                            let available_space = size(
+                                untransform(AvailableSpace::from(available_space.width)),
+                                untransform(AvailableSpace::from(available_space.height)),
+                            );
+
+                            let measured_size: Size<Pixels> = (node_context.measure)(
+                                known_dimensions,
+                                available_space,
+                                window,
+                                cx,
+                            );
+                            snap_measured_size_to_device_pixels(measured_size, scale_factor).into()
+                        },
+                    )
                 },
             )
             .expect(EXPECT_MESSAGE);
