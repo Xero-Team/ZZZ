@@ -248,10 +248,15 @@ check_registry_init_no_refresh() {
     ! rg -n 'store\.refresh\(' "$root/crates/project/src/agent_registry_store.rs"
 }
 
-check_no_default_refresh_if_stale() {
-    ! rg -n 'refresh_if_stale' \
-        "$root/crates/agent_servers/src/custom.rs" \
-        "$root/crates/project/src/agent_server_store.rs"
+# The ACP registry is refreshed only on user-initiated paths: when registry
+# agents are configured (AgentServerStore::reregister_agents) or when one is
+# being connected (CustomAgentServer::connect). The unconditional startup
+# fetch stays absent; see check_registry_init_no_refresh.
+check_registry_refresh_is_user_gated() {
+    rg -U -q 'has_registry_agents\(\)[\s\S]{0,200}?refresh_if_stale' \
+        "$root/crates/project/src/agent_server_store.rs" \
+        && rg -U -q 'is_registry_agent[\s\S]{0,600}?refresh_if_stale' \
+            "$root/crates/agent_servers/src/custom.rs"
 }
 
 check_no_unconditional_copilot_chat_init() {
@@ -453,7 +458,7 @@ check "agent configuration does not default to ZedAgent" check_no_zed_agent_conf
 check "NativeAgent is absent from production agent UI" check_no_native_agent_production_ui
 check "ZZZ_AGENT_ID is not a live selectable agent" check_no_live_zed_agent_id
 check "agent registry init does not refresh when empty" check_registry_init_no_refresh
-check "default agent registry paths do not refresh_if_stale" check_no_default_refresh_if_stale
+check "agent registry refresh is gated on user configuration" check_registry_refresh_is_user_gated
 check "copilot_chat::init is not unconditional in main.rs" check_no_unconditional_copilot_chat_init
 check "CopilotChatLanguageModelProvider is not registered at language_models init" check_no_unconditional_copilot_chat_register
 check "eval_cli and edit_prediction_cli directories are absent" check_eval_clis_absent

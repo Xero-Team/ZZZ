@@ -285,6 +285,13 @@ impl AgentServer for CustomAgentServer {
         let default_mode = self.default_mode(cx);
         let default_model = self.default_model(cx);
         let is_registry_agent = is_registry_agent(agent_id.clone(), cx);
+        if is_registry_agent {
+            // Connecting a registry agent is a user action, so refreshing the
+            // registry here is not a default network surface.
+            if let Some(registry_store) = project::AgentRegistryStore::try_global(cx) {
+                registry_store.update(cx, |store, cx| store.refresh_if_stale(cx));
+            }
+        }
         let default_config_options = cx.read_global(|settings: &SettingsStore, _| {
             settings
                 .get::<AllAgentServersSettings>(None)

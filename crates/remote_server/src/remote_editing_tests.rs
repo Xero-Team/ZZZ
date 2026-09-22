@@ -37,6 +37,7 @@ use std::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
+    time::Duration,
 };
 use unindent::Unindent as _;
 use util::{path, paths::PathMatcher, rel_path::rel_path};
@@ -2425,6 +2426,10 @@ async fn test_remote_external_agent_server(
             .unwrap();
     });
     server_cx.run_until_parked();
+    // `AgentServerStore::shared` delays its initial `ExternalAgentsUpdated`
+    // by one second so the downstream project can register its handlers first.
+    server_cx.executor().advance_clock(Duration::from_secs(1));
+    server_cx.run_until_parked();
     cx.run_until_parked();
     let names = project.update(cx, |project, cx| {
         project
@@ -2462,6 +2467,102 @@ async fn test_remote_external_agent_server(
             ]))
         }
     );
+}
+
+#[gpui::test]
+async fn test_remote_registry_agent_server_is_registered(
+    cx: &mut TestAppContext,
+    server_cx: &mut TestAppContext,
+) {
+    use project::AgentRegistryStore;
+    use project::agent_registry_store::{RegistryAgent, RegistryAgentMetadata, RegistryNpxAgent};
+
+    let fs = FakeFs::new(server_cx.executor());
+    fs.insert_tree(path!("/project"), json!({})).await;
+
+    let (project, _headless_project) = init_test(&fs, cx, server_cx).await;
+    project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(path!("/project"), true, cx)
+        })
+        .await
+        .unwrap();
+
+    // Seed the server's registry store. In production the server fetches the
+    // registry on demand once a registry agent is configured; this pins the
+    // registration and announcement steps that follow.
+    server_cx.update(|cx| {
+        let registry_agent = RegistryAgent::Npx(RegistryNpxAgent {
+            metadata: RegistryAgentMetadata {
+                id: "remote-registry-agent".into(),
+                name: SharedString::from("Remote Registry Agent"),
+                description: SharedString::from(""),
+                version: SharedString::from("1.0.0"),
+                repository: None,
+                website: None,
+                license_url: None,
+                icon_path: None,
+            },
+            package: SharedString::from("remote-registry-agent"),
+            args: Vec::new(),
+            env: HashMap::default(),
+        });
+        AgentRegistryStore::global(cx).update(cx, |store, cx| {
+            store.set_agents(vec![registry_agent], cx);
+        });
+    });
+
+    let names = remote_agent_names(&project, cx);
+    pretty_assertions::assert_eq!(names, Vec::<String>::new());
+
+    // Configuring a registry agent on the server must register it there and
+    // announce it to the remote client, so connecting no longer fails with
+    // "Custom agent server `remote-registry-agent` is not registered".
+    server_cx.update_global::<SettingsStore, _>(|settings_store, cx| {
+        settings_store
+            .set_server_settings(
+                &json!({
+                    "agent_servers": {
+                        "remote-registry-agent": { "type": "registry" }
+                    }
+                })
+                .to_string(),
+                cx,
+            )
+            .unwrap();
+    });
+    server_cx.run_until_parked();
+    // `AgentServerStore::shared` delays its initial `ExternalAgentsUpdated`
+    // by one second so the downstream project can register its handlers first.
+    server_cx.executor().advance_clock(Duration::from_secs(1));
+    server_cx.run_until_parked();
+    cx.run_until_parked();
+
+    let names = remote_agent_names(&project, cx);
+    pretty_assertions::assert_eq!(names, ["remote-registry-agent"]);
+
+    let is_registered = project.update(cx, |project, cx| {
+        project.agent_server_store().update(cx, |store, _| {
+            store
+                .get_external_agent(&"remote-registry-agent".into())
+                .is_some()
+        })
+    });
+    assert!(
+        is_registered,
+        "the remote client must see the configured registry agent as registered"
+    );
+}
+
+fn remote_agent_names(project: &Entity<Project>, cx: &mut TestAppContext) -> Vec<String> {
+    project.update(cx, |project, cx| {
+        project
+            .agent_server_store()
+            .read(cx)
+            .external_agents()
+            .map(|name| name.to_string())
+            .collect::<Vec<_>>()
+    })
 }
 
 #[gpui::test]

@@ -301,7 +301,16 @@ impl AgentServerStore {
             .get::<AllAgentServersSettings>(None)
             .clone();
 
+        // If the user has registry agents configured but we don't have them
+        // loaded yet, trigger a refresh, which will cause this function to be
+        // called again. This is gated on user configuration so a fresh install
+        // never contacts the ACP registry on its own.
         let registry_store = AgentRegistryStore::try_global(cx);
+        if new_settings.has_registry_agents()
+            && let Some(registry) = registry_store.as_ref()
+        {
+            registry.update(cx, |registry, cx| registry.refresh_if_stale(cx));
+        }
 
         let registry_agents_by_id = registry_store
             .as_ref()
@@ -1941,6 +1950,108 @@ mod tests {
                     .take_new_version_available_tx()
                     .is_some(),
                 "agent-b tx should have been transferred"
+            );
+        });
+    }
+
+    #[gpui::test]
+    fn test_configured_registry_agent_triggers_registry_fetch(cx: &mut TestAppContext) {
+        init_test_settings(cx);
+        set_registry_settings(cx, &["test-agent"]);
+
+        // The registry store starts empty (no cache) and only populates by
+        // fetching. A configured registry agent must trigger that fetch, or it
+        // would never be registered (for example on a remote server that never
+        // opened the Agent Registry page).
+        let fs: Arc<dyn Fs> = cx.update(|cx| fs::FakeFs::new(cx.background_executor().clone()));
+        let http_client = http_client::FakeHttpClient::create(|request| async move {
+            if request.uri().to_string().contains("registry.json") {
+                Ok(http_client::Response::builder()
+                    .status(200)
+                    .body(http_client::AsyncBody::from(
+                        serde_json::to_string(&serde_json::json!({
+                            "version": "1",
+                            "agents": [{
+                                "id": "test-agent",
+                                "name": "Test Agent",
+                                "version": "1.2.3",
+                                "description": "A registry agent.",
+                                "distribution": {
+                                    "npx": { "package": "test-agent" }
+                                }
+                            }]
+                        }))
+                        .unwrap(),
+                    ))
+                    .unwrap())
+            } else {
+                Ok(http_client::Response::builder()
+                    .status(404)
+                    .body(http_client::AsyncBody::default())
+                    .unwrap())
+            }
+        }) as Arc<dyn HttpClient>;
+
+        cx.update(|cx| AgentRegistryStore::init_global(cx, fs, http_client));
+        let store = create_agent_server_store(cx);
+        cx.run_until_parked();
+
+        store.read_with(cx, |store, _| {
+            let entry = store
+                .external_agents
+                .get(&AgentId::new("test-agent"))
+                .expect("registry agent should be registered after fetching the registry");
+            assert_eq!(
+                entry.server.version().map(|version| version.to_string()),
+                Some("1.2.3".to_string())
+            );
+        });
+    }
+
+    #[gpui::test]
+    fn test_no_registry_fetch_without_configured_agents(cx: &mut TestAppContext) {
+        init_test_settings(cx);
+
+        // No registry agents are configured, so ZZZ must not contact the ACP
+        // registry on its own. This is the local-first default enforced by
+        // `script/check-philosophy`.
+        let fs: Arc<dyn Fs> = cx.update(|cx| fs::FakeFs::new(cx.background_executor().clone()));
+        let http_client = http_client::FakeHttpClient::create(|request| async move {
+            if request.uri().to_string().contains("registry.json") {
+                Ok(http_client::Response::builder()
+                    .status(200)
+                    .body(http_client::AsyncBody::from(
+                        serde_json::to_string(&serde_json::json!({
+                            "version": "1",
+                            "agents": [{
+                                "id": "test-agent",
+                                "name": "Test Agent",
+                                "version": "1.2.3",
+                                "description": "A registry agent.",
+                                "distribution": {
+                                    "npx": { "package": "test-agent" }
+                                }
+                            }]
+                        }))
+                        .unwrap(),
+                    ))
+                    .unwrap())
+            } else {
+                Ok(http_client::Response::builder()
+                    .status(404)
+                    .body(http_client::AsyncBody::default())
+                    .unwrap())
+            }
+        }) as Arc<dyn HttpClient>;
+
+        let registry_store = cx.update(|cx| AgentRegistryStore::init_global(cx, fs, http_client));
+        let _store = create_agent_server_store(cx);
+        cx.run_until_parked();
+
+        registry_store.read_with(cx, |store, _| {
+            assert!(
+                store.agents().is_empty(),
+                "registry must stay empty when no registry agents are configured"
             );
         });
     }
