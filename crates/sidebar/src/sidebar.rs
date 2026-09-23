@@ -1755,9 +1755,10 @@ impl Sidebar {
             .pr_1p5()
             .justify_between()
             .border_1()
+            .border_r_2()
             .map(|this| {
                 if is_focused {
-                    this.border_color(color.border_focused)
+                    this.border_color(color.panel_focused_border)
                 } else {
                     this.border_color(gpui::transparent_black())
                 }
