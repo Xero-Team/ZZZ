@@ -678,7 +678,7 @@ impl DebugPanel {
             let open_documentation_label = open_documentation_label.clone();
             IconButton::new("debug-open-documentation", IconName::CircleHelp)
                 .icon_size(IconSize::Small)
-                .on_click(move |_, _, cx| cx.open_url("https://codeberg.org/ZZZEditor/ZZZ"))
+                .on_click(move |_, _, cx| cx.open_url("https://github.com/Xero-Team/ZZZ"))
                 .tooltip(Tooltip::text(open_documentation_label))
         };
 
@@ -1916,7 +1916,7 @@ impl Render for DebugPanel {
                                     .size(IconSize::Small)
                                     .color(Color::Muted),
                             )
-                            .on_click(|_, _, cx| cx.open_url("https://codeberg.org/ZZZEditor/ZZZ")),
+                            .on_click(|_, _, cx| cx.open_url("https://github.com/Xero-Team/ZZZ")),
                         )
                         .child(
                             Button::new(

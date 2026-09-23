@@ -1,4 +1,4 @@
-# Continuous integration for ZZZ, run by Forgejo Actions.
+# Continuous integration for ZZZ, run by GitHub Actions.
 #
 # Branch pushes run the checks and the test suite. Tags additionally build a
 # release tarball (with the embedded remote server) and upload it as an
@@ -117,7 +117,7 @@ jobs:
           {
             echo "tarball=zzz-linux-${arch}${version}.tar.gz"
             echo "remote_server=zzz-remote-server-linux-${arch}${version}.gz"
-          } >> "$FORGEJO_OUTPUT"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload tarball
         uses: actions/upload-artifact@v4

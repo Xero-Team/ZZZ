@@ -140,4 +140,4 @@ If ZZZ uses more resources than expected:
 
 For additional help, see the [Troubleshooting guide](./troubleshooting.md) or
 open an issue at
-<https://codeberg.org/ZZZEditor/ZZZ/issues/new>.
+<https://github.com/Xero-Team/ZZZ/issues/new>.

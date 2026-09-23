@@ -19,7 +19,7 @@ ZZZ service by default.
 - ZZZ has no default subprocessors.
 
 Questions and privacy requests belong in this repository's issue tracker:
-<https://codeberg.org/ZZZEditor/ZZZ/issues/new>.
+<https://github.com/Xero-Team/ZZZ/issues/new>.
 
 ## Introduction
 
@@ -74,4 +74,4 @@ channel.
 ## Contact
 
 Report bugs or propose changes at
-<https://codeberg.org/ZZZEditor/ZZZ/issues/new>.
+<https://github.com/Xero-Team/ZZZ/issues/new>.

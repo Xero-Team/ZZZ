@@ -7,7 +7,7 @@ description: "Guide to building zzz for macos for ZZZ development."
 
 ## Repository
 
-Clone the [ZZZ repository](https://codeberg.org/ZZZEditor/ZZZ).
+Clone the [ZZZ repository](https://github.com/Xero-Team/ZZZ).
 
 ## Dependencies
 

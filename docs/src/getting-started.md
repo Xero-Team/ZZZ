@@ -93,4 +93,4 @@ You can also enable familiar keybindings:
 
 ZZZ is open source. Report bugs and suggest features in this repository.
 
-- [Codeberg issues](https://codeberg.org/ZZZEditor/ZZZ/issues)
+- [GitHub issues](https://github.com/Xero-Team/ZZZ/issues)

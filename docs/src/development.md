@@ -111,5 +111,5 @@ While a trace is recording, open the command palette and run one of the followin
 
 ## Contributor links
 
-- [CONTRIBUTING.md](https://codeberg.org/ZZZEditor/ZZZ/src/branch/main/CONTRIBUTING.md)
-- [Code of Conduct](https://codeberg.org/ZZZEditor/ZZZ/src/branch/main/CODE_OF_CONDUCT.md)
+- [CONTRIBUTING.md](https://github.com/Xero-Team/ZZZ/blob/main/CONTRIBUTING.md)
+- [Code of Conduct](https://github.com/Xero-Team/ZZZ/blob/main/CODE_OF_CONDUCT.md)

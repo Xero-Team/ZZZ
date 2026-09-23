@@ -9,7 +9,7 @@ FreeBSD is not currently a supported platform, so this guide is a work in progre
 
 ## Repository
 
-Clone the [ZZZ repository](https://codeberg.org/ZZZEditor/ZZZ).
+Clone the [ZZZ repository](https://github.com/Xero-Team/ZZZ).
 
 ## Dependencies
 

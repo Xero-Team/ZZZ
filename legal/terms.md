@@ -34,5 +34,5 @@ terms of any third-party software or service that you choose to connect.
 
 ## Contact
 
-Report bugs or propose changes at the project's Codeberg issue tracker:
-<https://codeberg.org/ZZZEditor/ZZZ/issues/new>.
+Report bugs or propose changes at the project's GitHub issue tracker:
+<https://github.com/Xero-Team/ZZZ/issues/new>.

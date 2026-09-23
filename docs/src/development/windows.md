@@ -9,7 +9,7 @@ description: "Guide to building zzz for windows for ZZZ development."
 
 ## Repository
 
-Clone the [ZZZ repository](https://codeberg.org/ZZZEditor/ZZZ).
+Clone the [ZZZ repository](https://github.com/Xero-Team/ZZZ).
 
 ## Dependencies
 

@@ -26,7 +26,7 @@ pub use crate::repl_settings::ReplSettings;
 pub use crate::repl_store::ReplStore;
 pub use crate::session::Session;
 
-pub const KERNEL_DOCS_URL: &str = "https://codeberg.org/ZZZEditor/ZZZ";
+pub const KERNEL_DOCS_URL: &str = "https://github.com/Xero-Team/ZZZ";
 
 pub fn init(fs: Arc<dyn Fs>, cx: &mut App) {
     set_dispatcher(zzz_dispatcher(cx));

@@ -34,12 +34,12 @@ In particular we love PRs that are:
 - Fixing bugs.
 - Small enhancements to existing features to make them work for more people (making things work on more platforms/modes/whatever).
 - Small extra features, like keybindings or actions you miss from other editors or extensions.
-- Part of the ZZZ community on [Codeberg](https://codeberg.org/ZZZEditor/ZZZ/issues).
+- Part of the ZZZ community on [GitHub](https://github.com/Xero-Team/ZZZ/issues).
 
 If you're looking for concrete ideas:
 
-- [Triaged bugs with confirmed steps to reproduce](https://codeberg.org/ZZZEditor/ZZZ/issues).
-- [Codeberg issues](https://codeberg.org/ZZZEditor/ZZZ/issues) to browse bugs in a specific part of the product.
+- [Triaged bugs with confirmed steps to reproduce](https://github.com/Xero-Team/ZZZ/issues).
+- [GitHub issues](https://github.com/Xero-Team/ZZZ/issues) to browse bugs in a specific part of the product.
 
 If you're thinking about proposing or building a larger feature, read the [ZZZ Feature Process](./docs/src/development/feature-process.md) for how we think about feature design — what context to provide, what integration points to consider, and how to put together a strong proposal.
 
@@ -57,7 +57,7 @@ submitted. If you'd like your PR to have the best chance of being merged:
 
 - Make sure the change is **desired**: we're always happy to accept bugfixes,
   but features should be confirmed with us first if you aim to avoid wasted
-  effort. If there isn't already a Codeberg issue for your feature with
+  effort. If there isn't already a GitHub issue for your feature with
   confirmation that we want it, start with an issue rather than a PR.
 - Include a clear description of **what you're solving**, and why it's important.
 - Include **tests**. For UI changes, consider updating visual regression tests (see [Building ZZZ for macOS](./docs/src/development/macos.md#visual-regression-tests)).
@@ -74,7 +74,7 @@ The internal advice for reviewers is as follows:
 - If the fix/feature is not obviously great, or the code needs rewriting from scratch. Close the PR with a thank you and some explanation.
 
 If you need more feedback from us: the best way is to be responsive to
-  Codeberg comments, or to offer up time to pair with us.
+  GitHub comments, or to offer up time to pair with us.
 
 If you need help deciding how to fix a bug, or finish implementing a feature
 that we've agreed we want, please open a PR early so we can discuss how to make

@@ -226,7 +226,7 @@ impl Render for KeyContextView {
                         )
                             .style(ButtonStyle::Filled)
                             .on_click(|_, _, cx| {
-                                cx.open_url("https://codeberg.org/ZZZEditor/ZZZ")
+                                cx.open_url("https://github.com/Xero-Team/ZZZ")
                             }),
                     )
                     .child(

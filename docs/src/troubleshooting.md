@@ -34,7 +34,7 @@ You'll find the ZZZ log in the respective location on each operating system:
 > **Note:** In some cases, it might be useful to monitor the log live, such as when [developing a ZZZ extension](./extensions/developing-extensions.md).
 > Example: `tail -f ~/Library/Logs/ZZZ/ZZZ.log`
 
-The log may contain enough context to help you debug the issue yourself, or you may find specific errors that are useful when filing an [issue](https://codeberg.org/ZZZEditor/ZZZ/issues/new).
+The log may contain enough context to help you debug the issue yourself, or you may find specific errors that are useful when filing an [issue](https://github.com/Xero-Team/ZZZ/issues/new).
 
 ## Performance Issues (Profiling)
 
@@ -52,7 +52,7 @@ Xcode Instruments (which comes bundled with your [Xcode](https://apps.apple.com/
 1. Stop recording
 1. Save the trace file
 1. Compress the trace file into a zip archive
-1. File an [issue](https://codeberg.org/ZZZEditor/ZZZ/issues/new) with the trace zip attached
+1. File an [issue](https://github.com/Xero-Team/ZZZ/issues/new) with the trace zip attached
 
 <!--### Windows-->
 
@@ -79,7 +79,7 @@ If you're experiencing startup issues, you can test whether it's workspace-relat
 > **Note**: Moving the workspace database will cause ZZZ to create a fresh one.
 > Your recent projects, open tabs, etc. will be reset to "factory".
 
-If your issue persists after regenerating the database, please [file an issue](https://codeberg.org/ZZZEditor/ZZZ/issues/new).
+If your issue persists after regenerating the database, please [file an issue](https://github.com/Xero-Team/ZZZ/issues/new).
 
 ## Language Server Issues
 

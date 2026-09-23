@@ -15,14 +15,14 @@ actions!(
     ]
 );
 
-const ZZZ_REPO_URL: &str = "https://codeberg.org/ZZZEditor/ZZZ";
+const ZZZ_REPO_URL: &str = "https://github.com/Xero-Team/ZZZ";
 
-const REQUEST_FEATURE_URL: &str = "https://codeberg.org/ZZZEditor/ZZZ/issues/new";
+const REQUEST_FEATURE_URL: &str = "https://github.com/Xero-Team/ZZZ/issues/new";
 
 fn file_bug_report_url(specs: &SystemSpecs) -> String {
     format!(
         concat!(
-            "https://codeberg.org/ZZZEditor/ZZZ/issues/new",
+            "https://github.com/Xero-Team/ZZZ/issues/new",
             "?",
             "body=Bug%20report%0A%0AEnvironment%3A%20{}"
         ),
@@ -150,7 +150,7 @@ mod tests {
 
         let url = file_bug_report_url(&specs);
 
-        assert!(url.starts_with("https://codeberg.org/ZZZEditor/ZZZ/issues/new?"));
+        assert!(url.starts_with("https://github.com/Xero-Team/ZZZ/issues/new?"));
         assert!(url.contains("body=Bug%20report"));
 
         let encoded_environment = url.split("Environment%3A%20").nth(1).unwrap();

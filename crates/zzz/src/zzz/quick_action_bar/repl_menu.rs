@@ -16,7 +16,7 @@ use util::ResultExt;
 
 use super::QuickActionBar;
 
-const ZZZ_REPL_DOCUMENTATION: &str = "https://codeberg.org/ZZZEditor/ZZZ";
+const ZZZ_REPL_DOCUMENTATION: &str = "https://github.com/Xero-Team/ZZZ";
 
 struct ReplMenuState {
     tooltip: SharedString,

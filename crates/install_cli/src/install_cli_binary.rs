@@ -17,7 +17,7 @@ actions!(
     ]
 );
 
-const CANT_INSTALL_DOCS_URL: &str = "https://codeberg.org/ZZZEditor/ZZZ";
+const CANT_INSTALL_DOCS_URL: &str = "https://github.com/Xero-Team/ZZZ";
 
 /// Attempts to install the CLI symlink. Returns the installed path on success,
 /// or `None` if the user dismissed the macOS administrator authentication

@@ -114,4 +114,4 @@ If you encounter issues during uninstallation:
 
 For additional help, see our [Linux-specific documentation](./linux.md)
 or open an issue at
-[https://codeberg.org/ZZZEditor/ZZZ](https://codeberg.org/ZZZEditor/ZZZ).
+[https://github.com/Xero-Team/ZZZ](https://github.com/Xero-Team/ZZZ).

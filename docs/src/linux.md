@@ -196,7 +196,7 @@ Using [vkdevicechooser](https://github.com/jiriks74/vkdevicechooser).
 
 #### Reporting graphics issues
 
-If Vulkan is configured correctly, and ZZZ is still not working for you, please [file an issue](https://codeberg.org/ZZZEditor/ZZZ/issues/new) with as much information as possible.
+If Vulkan is configured correctly, and ZZZ is still not working for you, please [file an issue](https://github.com/Xero-Team/ZZZ/issues/new) with as much information as possible.
 
 When reporting issues where ZZZ fails to start due to graphics initialization errors on GitHub, it can be impossible to run the `zzz: copy system specs into clipboard` command like we instruct you to in our issue template. We provide an alternative way to collect the system specs specifically for this situation.
 

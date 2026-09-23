@@ -9,10 +9,10 @@ description: |
 grade: stable
 confinement: classic
 compression: lzo
-website: https://codeberg.org/ZZZEditor/ZZZ
-source-code: https://codeberg.org/ZZZEditor/ZZZ
-issues: https://codeberg.org/ZZZEditor/ZZZ/issues
-contact: https://codeberg.org/ZZZEditor/ZZZ/issues
+website: https://github.com/Xero-Team/ZZZ
+source-code: https://github.com/Xero-Team/ZZZ
+issues: https://github.com/Xero-Team/ZZZ/issues
+contact: https://github.com/Xero-Team/ZZZ/issues
 
 parts:
   zzz:

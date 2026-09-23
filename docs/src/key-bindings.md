@@ -80,7 +80,7 @@ You can see all of ZZZ's default bindings for each platform in the default keyma
 - [Linux](../../assets/keymaps/default-linux.json).
 
 If you want to debug problems with custom keymaps, you can use `dev: Open Key Context View` from the command palette.
-Please [file an issue](https://codeberg.org/ZZZEditor/ZZZ/issues) if you run into something you think should work but isn't.
+Please [file an issue](https://github.com/Xero-Team/ZZZ/issues) if you run into something you think should work but isn't.
 
 ### Keybinding Syntax
 

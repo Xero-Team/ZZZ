@@ -53,7 +53,7 @@ contribution.
 ## Enforcement
 
 Report unacceptable behavior through this repository's issue tracker:
-<https://codeberg.org/ZZZEditor/ZZZ/issues/new>.
+<https://github.com/Xero-Team/ZZZ/issues/new>.
 
 Community leaders will review and investigate reports and will take
 action they deem appropriate, including removing comments, commits, code,

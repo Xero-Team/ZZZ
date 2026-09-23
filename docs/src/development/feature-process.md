@@ -6,7 +6,7 @@ This is for moderate-to-large features — new UI, behavior changes, or work tha
 > feature is something the project wants before investing significant
 > effort. Please read the [Contributing Guide](../../../CONTRIBUTING.md).
 > Open a feature request in this repository's
-> [issue tracker](https://codeberg.org/ZZZEditor/ZZZ/issues) if there
+> [issue tracker](https://github.com/Xero-Team/ZZZ/issues) if there
 > isn't already an issue with clear confirmation.
 
 ## 1. Why does this matter?

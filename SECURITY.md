@@ -9,7 +9,7 @@ There is no security email address and no embargo window.
 Report every vulnerability, including exploitable ones, publicly in this
 repository's issue tracker:
 
-<https://codeberg.org/ZZZEditor/ZZZ/issues/new>
+<https://github.com/Xero-Team/ZZZ/issues/new>
 
 Do not email maintainers. Public disclosure from the start is intentional:
 it keeps the report, the reproduction steps, the discussion, and the

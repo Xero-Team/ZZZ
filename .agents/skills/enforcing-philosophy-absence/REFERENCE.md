@@ -41,7 +41,7 @@ Leave these alone unless the user names them:
 - `CloudLanguageModelProvider` unregistered unless the user sets a
   remote `server_url`
 - Help menu without Twitter / join-the-team / hosted docs
-- `crates/feedback` URLs on Codeberg
+- `crates/feedback` URLs on GitHub
 - Embedded `remote_server`
 - Language-server, DAP, Prettier, and Node auto-download
 - Extension auto-install (HTML by default) and auto-update via `api.zed.dev`
@@ -81,7 +81,7 @@ Docs (`docs/AGENTS.md`):
 - Do not add speculative docs for unreleased features.
 - Product docs must not claim hosted downloads, auto-update-on, Zeta as
   default, Zed Pro, or data sent to ZZZ servers.
-- Support links go to `https://codeberg.org/ZZZEditor/ZZZ`, not
+- Support links go to `https://githubgithubgithubgithubgithubgithubgithubgithubgithub.comcomcomcomcomcomcomcomcom/Xero-TeamXero-TeamXero-TeamXero-TeamXero-TeamXero-TeamXero-TeamXero-TeamXero-Team/ZZZ`, not
   `zed-industries/zed` or `zed.dev/community-links`.
 - Do not hotlink `https://zed.dev/img/...` or `https://images.zed.dev/...`.
   Remove the image markdown if there is no in-repo asset.
@@ -124,10 +124,10 @@ Rewrite. Do not leave a page that contradicts `README.md`.
 | `docs/src/worktree-trust.md` | Do not say Copilot is globally installed by default. |
 | `docs/src/ai/llm-providers.md` | Copilot Chat is optional and silent. Do not lead with "Sign in to use GitHub Copilot". |
 | `docs/src/ai/external-agents.md` | Claude/ChatGPT login belongs to the external agent, not ZZZ. |
-| `docs/src/uninstall.md` | Community link → Codeberg. |
-| `docs/src/troubleshooting.md` | Issues → Codeberg. Remove Discord/`zed.dev` staff support. Remove `images.zed.dev` screenshots. |
-| `docs/src/getting-started.md` | Discussions → Codeberg issues. |
-| `docs/src/linux.md` | Issue links: Codeberg, or mark upstream Zed issues as upstream. |
+| `docs/src/uninstall.md` | Community link → GitHub. |
+| `docs/src/troubleshooting.md` | Issues → GitHub. Remove Discord/`zed.dev` staff support. Remove `images.zed.dev` screenshots. |
+| `docs/src/getting-started.md` | Discussions → GitHub issues. |
+| `docs/src/linux.md` | Issue links: GitHub, or mark upstream Zed issues as upstream. |
 | `docs/src/development/feature-process.md` | Feature requests go to this repository, not `zed-industries` discussions. |
 | `docs/src/development/release-notes.md` | Do not describe hosted Zed release automation as ZZZ process. |
 | `docs/src/development/glossary.md` | Relative docs links, not `zed.dev/docs`. |

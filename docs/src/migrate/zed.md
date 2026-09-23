@@ -83,6 +83,6 @@ compare the [Keybindings](../key-bindings.md) page and adjust your
 
 If something works in Zed but not in ZZZ, open an issue:
 
-<https://codeberg.org/ZZZEditor/ZZZ/issues/new>
+<https://github.com/Xero-Team/ZZZ/issues/new>
 
 Describe the Zed behavior, the ZZZ behavior, and the steps to reproduce.

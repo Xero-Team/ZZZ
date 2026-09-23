@@ -102,7 +102,7 @@ impl Component for ListBulletItem {
                     .child(Label::new("Create a ZZZ account by"))
                     .child(ButtonLink::new(
                         "visiting the ZZZ repository",
-                        "https://codeberg.org/ZZZEditor/ZZZ",
+                        "https://github.com/Xero-Team/ZZZ",
                     ))
                     .into_any_element(),
             ),
