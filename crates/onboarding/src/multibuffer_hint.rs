@@ -172,7 +172,9 @@ impl Render for MultibufferHint {
                                 .color(Color::Muted),
                         )
                         .on_click(move |_event, _, cx| {
-                            cx.open_url("https://github.com/Xero-Team/ZZZ/wiki/multibuffers")
+                            cx.open_url(
+                                "https://github.com/Xero-Team/ZZZ/blob/main/docs/src/multibuffers.md",
+                            )
                         }),
                     ),
             )

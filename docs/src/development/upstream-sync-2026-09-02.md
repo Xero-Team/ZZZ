@@ -8,7 +8,7 @@ description: Selective Zed upstream sync audit.
 ## Scope
 
 - Target branch: `sync/upstream-2026-09-02` from `main` at
-  `864fc21e199b61b110a5be345171f4e890f894f0`
+  `7bc9ed5d1df59ad76b4fdc3fef22db2a127a9f45`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previously reviewed baseline: `669bede5c582140d2f3917e2c5fae5b764f9023f`
 - Reviewed upstream head: `bce0c5785bfd9172c939aca4083fd70bc4930927`
@@ -30,21 +30,21 @@ queried live head.
 | 956a49e4 | C     | --                 | Touch/Web IME and gesture architecture conflicts with ZZZ's existing web input path.                          |
 | a3f6b96c | C     | --                 | Optimization targets deleted `editor/src/input.rs`, absent `git_ui_core`, and a divergent toolchain selector. |
 | 49469000 | C     | --                 | Large multibuffer anchor/display rewrite is not isolatable from ZZZ's local layout.                           |
-| a61e2609 | B     | 13fde019           | Normalize reversed LSP ranges on existing editor, project, document-color, and Copilot paths.                 |
-| aa347c30 | B     | c889bc72, 33b16f39 | Preserve single-file breakpoint paths; adapt to local `RelPathBuf`.                                           |
+| a61e2609 | B     | 81f19e7b           | Normalize reversed LSP ranges on existing editor, project, document-color, and Copilot paths.                 |
+| aa347c30 | B     | 0902ba6d, b96e2cc0 | Preserve single-file breakpoint paths; adapt to local `RelPathBuf`.                                           |
 | ca2b5741 | C     | --                 | New upstream lint/test infrastructure only; no independent product behavior.                                  |
 | 2890c340 | C     | --                 | Upstream `.rules` instruction is repository scaffolding, not ZZZ product behavior.                            |
-| e3adf43f | A     | caa3521d           | Cherry-picked with `-x -s`.                                                                                   |
-| 1662f5f3 | B     | f227c16b, e669a29f | Accept full SHA-256 commit searches and add the local hash-length constant.                                   |
-| 31a32671 | A     | 4fcbff03           | Cherry-picked with `-x -s`.                                                                                   |
-| 82aeef2d | A     | 4e4e71e7           | Cherry-picked with `-x -s`.                                                                                   |
+| e3adf43f | A     | 885d0870           | Cherry-picked with `-x -s`.                                                                                   |
+| 1662f5f3 | B     | 6cb671af, 5d0cf3de | Accept full SHA-256 commit searches and add the local hash-length constant.                                   |
+| 31a32671 | A     | 0518256b           | Cherry-picked with `-x -s`.                                                                                   |
+| 82aeef2d | A     | 58305b29           | Cherry-picked with `-x -s`.                                                                                   |
 | 9dbc9e76 | A     | --                 | Already equivalent: the migration is already absent and `m_2025_06_27` already uses command shape detection.  |
-| 19e458b7 | B     | bbd6edb2           | Include selected scopes in MCP OAuth dynamic client registration.                                             |
-| 399258fe | B     | 72081642           | Reduce closure-funnel monomorphization in existing editor/settings paths.                                     |
+| 19e458b7 | B     | 38fb5544           | Include selected scopes in MCP OAuth dynamic client registration.                                             |
+| 399258fe | B     | 599bb8bd           | Reduce closure-funnel monomorphization in existing editor/settings paths.                                     |
 | 68b65045 | C     | --                 | Bundle scripts have diverged substantially; Rust bootstrap/config plumbing is not isolatable.                 |
 | 770aac34 | C     | --                 | Hosted `cloud_api_client` websocket change is outside ZZZ's local-first boundary.                             |
-| 9a76a39d | B     | 9d6ce198           | Underline diagnostics that span only a line terminator; adapt `Unclipped<PointUtf16>`.                        |
-| bce0c578 | B     | a3a1f934           | Recognize `.bash_login` as a Shell Script filename in a local sync commit.                                    |
+| 9a76a39d | B     | ad2a3a2f           | Underline diagnostics that span only a line terminator; adapt `Unclipped<PointUtf16>`.                        |
+| bce0c578 | B     | f4cd1df5           | Recognize `.bash_login` as a Shell Script filename in a local sync commit.                                    |
 
 ## Applied work
 
@@ -107,20 +107,20 @@ This continuation reviewed the next 20 commits. Counts: 1 A, 5 B, and
 | 6840b8d2 | C     | --                                     | Repository Danger CI and mixed upstream documentation; the documentation also retains hosted-service and telemetry guidance outside ZZZ's boundary.      |
 | ded896cc | C     | --                                     | Depends on an unabsorbed incremental-search architecture and divergent editor APIs; not isolatable onto the current search implementation.               |
 | e6690f38 | C     | --                                     | Targets the deleted `tabular_data_preview` crate and cannot land without restoring an absent product surface.                                            |
-| 24254879 | B     | 2fd39ac4                               | Filter editorconfig resolution to the keys ZZZ consumes and return `None` when no config exists; omit the divergent buffer cache and benchmark plumbing. |
+| 24254879 | B     | 2078d56f                               | Filter editorconfig resolution to the keys ZZZ consumes and return `None` when no config exists; omit the divergent buffer cache and benchmark plumbing. |
 | 7aa903ef | C     | --                                     | Adds keybindings for the deleted `tabular_data_preview` product surface.                                                                                 |
 | adc72a5a | C     | --                                     | CSV preview support requires the absent tabular preview crate and related project-less architecture.                                                     |
 | ef075910 | C     | --                                     | Web font ownership rewrite is coupled to upstream examples and has no independent ZZZ web caller; local examples are intentionally removed.              |
-| 98c6c140 | B     | fb360c11, dd1df8d4                     | Gate synchronous blocking APIs on wasm and run quit handlers asynchronously; adapt to ZZZ's scheduler naming.                                            |
+| 98c6c140 | B     | c209e22d, 5ff019a2                     | Gate synchronous blocking APIs on wasm and run quit handlers asynchronously; adapt to ZZZ's scheduler naming.                                            |
 | a60addb9 | C     | --                                     | objc2 prompt migration conflicts with ZZZ's macOS platform layout and dependency feature set; no safe isolated port was established on this Linux host.  |
 | e8fbacb6 | C     | --                                     | Large outline-panel rewrite is not isolatable from ZZZ's divergent panel implementation.                                                                 |
-| ff020dd0 | B     | 453b18f3                               | Batch ordered conflict-anchor conversion and use it for conflict highlighting; omit upstream benchmark-generator tooling and duplicate tests.            |
+| ff020dd0 | B     | 794b92de                               | Batch ordered conflict-anchor conversion and use it for conflict highlighting; omit upstream benchmark-generator tooling and duplicate tests.            |
 | 81df6f4a | C     | --                                     | Replaces crash user data with Sentry tags, which is telemetry machinery rejected by ZZZ.                                                                 |
-| 3f00b5d7 | B     | 6056ffda, c8a46208, 528970b4, d3af7201 | Restrict row-highlight expansion to the viewport and skip header rows; adapt stored-color and block visibility APIs.                                     |
+| 3f00b5d7 | B     | 7740ff10, d6df7d2e, b8f5825a, 81ffe4ce | Restrict row-highlight expansion to the viewport and skip header rows; adapt stored-color and block visibility APIs.                                     |
 | 76b1096c | C     | --                                     | Requires an unabsorbed gesture/prediction architecture and divergent GPUI web input APIs.                                                                |
 | ee6badf4 | C     | --                                     | Corgi build support is upstream build/release infrastructure with no ZZZ product behavior.                                                               |
 | 9785475c | C     | --                                     | Terminal Threads title editing belongs to the rejected native-agent/thread surface.                                                                      |
-| ce48461e | A     | cc87f2bd                               | Cherry-picked with `-x -s`; malformed shell-variable references now pass through without panicking.                                                      |
+| ce48461e | A     | 30ed1fca                               | Cherry-picked with `-x -s`; malformed shell-variable references now pass through without panicking.                                                      |
 | a66fb6ae | C     | --                                     | Depends on unabsorbed touch/IME gesture state and cannot be isolated from the current web event path.                                                    |
 | f8c27835 | C     | --                                     | Large git-panel multi-select rewrite conflicts with ZZZ's divergent panel and is not safely isolatable in this batch.                                    |
 | 5e28272c | C     | --                                     | Touch-axis locking depends on the unabsorbed gesture physics rewrite.                                                                                    |
@@ -172,24 +172,24 @@ This continuation reviewed the next 20 commits. Counts: 3 A, 7 B, and
 | -------- | ----- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | c4bc69e5 | C     | --                 | Corgi sandbox/glob and bootstrap configuration is upstream build infrastructure without independent ZZZ product behavior.                                |
 | 22945084 | C     | --                 | Broad BufferDiff/GitStore/editor hunk-operation refactor is not isolatable onto ZZZ's divergent diff architecture.                                       |
-| a49de953 | B     | b9525da4           | Enabled Wayland backend logging while retaining ZZZ's newer dependency versions; the upstream lockfile conflicted.                                       |
-| 8ce383f2 | B     | 4c8274ac, 947302e0 | Added and documented `close_panel_on_toggle`, adapting the settings UI to ZZZ's `UiText` and field shape.                                                |
-| d1446d66 | B     | 06d2f0db, ef448f25 | Queried the configured Ollama server for FIM-capable models and gated the provider on edit-prediction settings; omitted Sweep support absent from ZZZ.   |
+| a49de953 | B     | f7c61d2e           | Enabled Wayland backend logging while retaining ZZZ's newer dependency versions; the upstream lockfile conflicted.                                       |
+| 8ce383f2 | B     | 4bc73f19, 76666dbf | Added and documented `close_panel_on_toggle`, adapting the settings UI to ZZZ's `UiText` and field shape.                                                |
+| d1446d66 | B     | c2042a37, cd1d0eee | Queried the configured Ollama server for FIM-capable models and gated the provider on edit-prediction settings; omitted Sweep support absent from ZZZ.   |
 | 0855410c | C     | --                 | Long-press gesture recognition is coupled to the unabsorbed touch/IME gesture architecture.                                                              |
-| 283460f5 | B     | 120ef38f, ef448f25 | Added Anthropic Fable 5.1 thinking-binding controls and forced-tool gating; omitted unavailable compaction metadata and deleted Copilot product changes. |
+| 283460f5 | B     | f4fc7594, cd1d0eee | Added Anthropic Fable 5.1 thinking-binding controls and forced-tool gating; omitted unavailable compaction metadata and deleted Copilot product changes. |
 | d3e54c97 | C     | --                 | Requires the absent `fs_embed!` architecture; ZZZ uses direct rust-embed paths.                                                                          |
 | 239d0aa1 | C     | --                 | Release/test workflow changes are upstream CI and SDK bootstrap infrastructure.                                                                          |
 | ac5af8b9 | C     | --                 | License-manifest and symlink relicensing has no independent ZZZ product behavior and conflicts with current package metadata.                            |
 | 2551721a | C     | --                 | Follow-up `fs_embed!` debug embedding depends on the absent upstream macro surface.                                                                      |
-| 520d8bda | A     | 2dc02412           | Cherry-picked with `-x -s`; corrected fractional-scale avatar borders.                                                                                   |
+| 520d8bda | A     | 28eab08d           | Cherry-picked with `-x -s`; corrected fractional-scale avatar borders.                                                                                   |
 | 97b1e64a | C     | --                 | Adds hang-trigger telemetry and release telemetry plumbing, rejected by ZZZ's no-telemetry boundary.                                                     |
 | d56dca80 | C     | --                 | GitHub issue-triage workflow only; no product behavior.                                                                                                  |
-| 83726412 | A     | 571896b8           | Cherry-picked with `-x -s`; preserves the correct pre-modal focus handle.                                                                                |
-| a24cafa9 | B     | 2c2ba4fc           | Removed the completion-row shrink flag using ZZZ's existing flex API spelling.                                                                           |
+| 83726412 | A     | 777a6117           | Cherry-picked with `-x -s`; preserves the correct pre-modal focus handle.                                                                                |
+| a24cafa9 | B     | 29611f1d           | Removed the completion-row shrink flag using ZZZ's existing flex API spelling.                                                                           |
 | 480d81bf | C     | --                 | ChatGPT Subscription setup/cancellation is an explicitly rejected account-bound surface.                                                                 |
-| dbfeae77 | B     | 11347dec           | Avoided persisting commit-template text as a user draft; adapted the logic to ZZZ's git panel.                                                           |
-| 6309c722 | B     | 4fbc921b, ef448f25 | Classified Anthropic prompt-too-long HTTP 400s using ZZZ's existing completion error model.                                                              |
-| c3cf80c0 | A     | 276a4e51           | Cherry-picked with `-x -s`; Git Graph now participates in pane navigation history.                                                                       |
+| dbfeae77 | B     | 72e44182           | Avoided persisting commit-template text as a user draft; adapted the logic to ZZZ's git panel.                                                           |
+| 6309c722 | B     | 1c05fa31, cd1d0eee | Classified Anthropic prompt-too-long HTTP 400s using ZZZ's existing completion error model.                                                              |
+| c3cf80c0 | A     | 0026815a           | Cherry-picked with `-x -s`; Git Graph now participates in pane navigation history.                                                                       |
 
 ### Applied work
 
@@ -199,7 +199,7 @@ This continuation reviewed the next 20 commits. Counts: 3 A, 7 B, and
   Anthropic, modal-focus, completion-layout, Git-template, and prompt-error
   ports each preserve the local behavior without importing rejected account,
   telemetry, Sweep, or absent `fs_embed!` machinery.
-- `ef448f25` is a formatting-only cleanup for the local B ports.
+- `cd1d0eee` is a formatting-only cleanup for the local B ports.
 
 ### Verification
 
@@ -240,17 +240,17 @@ the queried range.
 | Upstream | Class | Local commit | Disposition                                                                                                                                             |
 | -------- | ----- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 8514ce3b | C     | --           | Broad language-model stream/schema rewrite conflicts across ZZZ's provider APIs and deleted test surfaces; not isolatable in this batch.                |
-| 2b0562a8 | A     | 04ec646d     | Cherry-picked with `-x -s`; keybinding labels can be hidden while bindings remain active.                                                               |
-| ff68a64c | B     | f36e6093a5   | Version follow to v1.20.0; local version bump retained.                                                                                                 |
+| 2b0562a8 | A     | 68a0d618     | Cherry-picked with `-x -s`; keybinding labels can be hidden while bindings remain active.                                                               |
+| ff68a64c | B     | f5787a4f69   | Version follow to v1.20.0; local version bump retained.                                                                                                 |
 | cff4edce | C     | --           | Nix/Corgi build-source plumbing with no independent ZZZ product behavior.                                                                               |
-| 810c6a04 | B     | 2c51323b     | Added the `on_new_window` setting and launchpad behavior, adapting the settings UI to ZZZ's localized page-data API.                                    |
+| 810c6a04 | B     | 7c88b253     | Added the `on_new_window` setting and launchpad behavior, adapting the settings UI to ZZZ's localized page-data API.                                    |
 | 769d0bef | C     | --           | Emmet wrap-with-abbreviation requires a large new inline-input/protocol architecture and collab changes absent from ZZZ.                                |
 | 6b5e15ed | C     | --           | Dependency, lockfile, and build compatibility churn without an independent ZZZ behavior.                                                                |
 | 9decdcc1 | C     | --           | GPUI web IME mirror-focus rewrite depends on the divergent touch/IME architecture.                                                                      |
 | 60bf47b9 | C     | --           | Project-scoped LSP log identity requires a broad `LogStore`/extension API rewrite not isolatable onto ZZZ's current model.                              |
 | a85cf449 | C     | --           | Touch prediction jitter fix targets upstream `gpui/src/gestures.rs`, which ZZZ has deleted.                                                             |
-| f8000a30 | B     | 127f4ef5     | Cleared stale per-server diagnostics and inlay state, resolving the closed-buffer sweep against ZZZ's existing cleanup path.                            |
-| ad251e0a | B     | 8c087937     | Documented `focus_follows_mouse`, adapting placement and preserving ZZZ's existing format-on-save anchor.                                               |
+| f8000a30 | B     | ea316783     | Cleared stale per-server diagnostics and inlay state, resolving the closed-buffer sweep against ZZZ's existing cleanup path.                            |
+| ad251e0a | B     | ce366c3b     | Documented `focus_follows_mouse`, adapting placement and preserving ZZZ's existing format-on-save anchor.                                               |
 | ab7d21d4 | C     | --           | Workspace-diagnostics polling overhaul conflicts with ZZZ's local diagnostics implementation and requires a large unisolated LSP error/request rewrite. |
 | 8a4bd132 | C     | --           | Release-bundle symbol stripping and Sentry/debug-file packaging are upstream release infrastructure.                                                    |
 | 23aca989 | C     | --           | Dynamic LSP document-selector support is a broad capability/protocol rewrite across divergent ZZZ APIs.                                                 |
@@ -264,7 +264,7 @@ the queried range.
   `Upstream`, `Retained`, and `Omitted` trailers. The settings UI, diagnostics
   cleanup, and documentation hunks were adapted to ZZZ's existing APIs.
   The incompatible inlay-hints fixture was omitted in follow-up commit
-  `827d2933`.
+  `39ff921d`.
 
 ### Verification
 

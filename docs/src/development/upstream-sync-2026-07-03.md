@@ -117,26 +117,26 @@ These commits were added on top of the local branch during this sync and
 record the actual absorbed work:
 
 ```text
-c0f25455c9 sync: port project panel expand-all controls from 02aabb9cef
-32989ffa53 project_panel: Wrap filenames in code spans in confirmation dialogs (#53068)
-82b6a76b08 workspace: Use remote host's path style when validating trust scope (#60139)
-439327deed git_panel: Focus back on commit editor when expanded (#59901)
-9b3d2c0dc5 agent_ui: Close search when hitting escape from message editor (#59705)
-1c2265d03a markdown: Make linked images clickable (#59525)
-cde15c72b2 Add range-based whitespace and newline removal to buffer formatting (#53942)
-140ec3914b sync: port OpenAI-compatible thinking support from 7187d65774
-a0f78dbe94 sync: port OpenAI-compatible provider form from 15c31d4147
-d6f56ecb2e sync: port terminal startup handshake from a2fee92e30
-ccf47fe6c4 sync: port reqwest keepalive tuning from 485aeabff3
-f6e4fdc308 sync: port ACP boolean config defaults from 45015f89d7
-8fed3fe08b sync: move MCP timeout settings into MCP subpage
-efb105162e sync: manually port git commit draft restore from bfe0d7c8f6
-71d72c1ed9 sync: manually port embedded tool resources from 2df74932bc
-8501767445 sync: manually port ACP message-id chunk boundaries from 70fd3c5774
-36b3421f54 sync: manually port remote op locking from e7afe9fcf9
-9eaaeb2995 sync: manually port ollama model fetch tolerance from 4eb039b451
-f5d7544357 sync: manually port project panel markdown preview entry from db30c67ed2
-f97238bca5 sync: manually port markdown preview context menu polish from a8ffae4c00
+f7e756a752 sync: port project panel expand-all controls from 02aabb9cef
+c1a465ab57 project_panel: Wrap filenames in code spans in confirmation dialogs (#53068)
+709e7b8a00 workspace: Use remote host's path style when validating trust scope (#60139)
+a66d107602 git_panel: Focus back on commit editor when expanded (#59901)
+d51c57856d agent_ui: Close search when hitting escape from message editor (#59705)
+a09f649096 markdown: Make linked images clickable (#59525)
+7f2125a2b4 Add range-based whitespace and newline removal to buffer formatting (#53942)
+a18d0c70d6 sync: port OpenAI-compatible thinking support from 7187d65774
+28893ec1b9 sync: port OpenAI-compatible provider form from 15c31d4147
+0551513e69 sync: port terminal startup handshake from a2fee92e30
+f5cc6bd18c sync: port reqwest keepalive tuning from 485aeabff3
+7ecd48e5ff sync: port ACP boolean config defaults from 45015f89d7
+ed24d963ff sync: move MCP timeout settings into MCP subpage
+690ee13065 sync: manually port git commit draft restore from bfe0d7c8f6
+5656f622fd sync: manually port embedded tool resources from 2df74932bc
+c37d19587f sync: manually port ACP message-id chunk boundaries from 70fd3c5774
+4bd11d11e5 sync: manually port remote op locking from e7afe9fcf9
+4426f2fb24 sync: manually port ollama model fetch tolerance from 4eb039b451
+fd31f3a61c sync: manually port project panel markdown preview entry from db30c67ed2
+ce410882b1 sync: manually port markdown preview context menu polish from a8ffae4c00
 ```
 
 The branch log contains the full ordered list of local sync commits.

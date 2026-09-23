@@ -9,7 +9,7 @@ Override only when the user supplies a value.
 ```text
 LAST_REVIEWED_UPSTREAM=b961b4950febbc050081554bafe976b5d1b93f39
 LOCAL_BASE_BRANCH=main
-LOCAL_BASE_COMMIT=a8be04d04f7471b8aef85b6f84658e5c834b3808
+LOCAL_BASE_COMMIT=50d748832b8e0a7cd290b11957de82584bb4b2d8
 UPSTREAM_URL=https://github.com/zed-industries/zed.git
 UPSTREAM_REF=refs/heads/main
 WORK_BRANCH=sync/upstream-YYYY-MM-DD
@@ -20,7 +20,7 @@ CREATE_PR=no
 PUSH=no
 ```
 
-As of 2026-09-22, local `main` is `a8be04d04f`. The last completed
+As of 2026-09-22, local `main` is `50d748832b`. The last completed
 audit is `docs/src/development/upstream-sync-2026-09-18.md` through
 `b961b495` on `sync/upstream-2026-09-18`. Query again at run start.
 The next range starts after `LAST_REVIEWED_UPSTREAM`.
@@ -252,11 +252,11 @@ Record the SHA, the reason, and the last reviewed baseline.
 From the 2026-08-07 audit. Classification anchors only. Do not absorb
 these SHAs again.
 
-- Clean A: `20ce54f8` worktree path pairing, landed as `4b90c44d`.
+- Clean A: `20ce54f8` worktree path pairing, landed as `70674296`.
 - Already-equivalent A: `f851d82e` left-biased cursor. No V4 `udiff`
   route was restored.
 - Isolatable B: `027cf0de` Markdown scrollbar setting, ported as
-  `e3fa4d74` after a conflicting cherry-pick.
+  `673c0c6f` after a conflicting cherry-pick.
 - Failed B then C: `c7aea6cb` and `41c0f28b` failed `cargo check` on
   missing APIs and were fully reverted.
 - Philosophy C: `d356b2f5` subscription compaction, `66ed3027` native

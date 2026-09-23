@@ -38,7 +38,7 @@ already-loaded config.
 
 As of 2026-08-18:
 
-- Local `main`: `7a3be67b422d2cfe8550f9d7c633ae9f81da77ab`
+- Local `main`: `14646e7843f37ad399edfcbf1344642f10b76f99`
 - Last audit:
   [Upstream Sync 2026-08-07](./upstream-sync-2026-08-07.md)
 - Last reviewed upstream: `027cf0def75e5c027504f402a6a6c0dcac11f178`

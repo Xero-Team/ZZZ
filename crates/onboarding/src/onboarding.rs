@@ -52,7 +52,7 @@ pub struct ImportCursorSettings {
 }
 
 pub const FIRST_OPEN: &str = "first_open";
-pub const DOCS_URL: &str = "https://github.com/Xero-Team/ZZZ/wiki";
+pub const DOCS_URL: &str = "https://github.com/Xero-Team/ZZZ/tree/main/docs";
 
 actions!(
     onboarding,

@@ -8,7 +8,7 @@ description: Selective Zed upstream sync audit.
 ## Scope
 
 - Target branch: `sync/upstream-2026-08-27` from `main` at
-  `2761d2445eca441bc5948e8d35bebb01274496cf`
+  `b7f389802c04482a8884f106f6a8ea4deb4fe042`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Reviewed upstream head: `4c7244790a075e862eeb4e5ccc12d6c8f5da6f7e`
 - Live upstream head queried: `8166e3d7b8b42d8aaf4d4dee7fcd25ab4ec65105`
@@ -29,12 +29,12 @@ remain after this head. Counts: 3 A, 6 B, 11 C.
 | Upstream | Class | Local commit | Disposition                                                     |
 | -------- | ----- | ------------ | --------------------------------------------------------------- |
 | 83f3a8e3 | C     | --           | ChatGPT Subscription Responses transport; `HttpSend` absent.    |
-| 78712609 | A     | 3510b24e     | Cherry-picked with `-x -s`.                                     |
+| 78712609 | A     | 3762f194     | Cherry-picked with `-x -s`.                                     |
 | 4bdf188c | C     | --           | Stash tracked/staged options; git_panel and git.proto conflict. |
-| 2893b86b | B     | dcf64063     | macOS simple fullscreen covering the notch.                     |
-| 1274a5dc | B     | 4d7ead54     | VS Code npm task `path` property.                               |
-| cf08569e | B     | 62714f97     | `file_scan_exclusions` `"..."` splice.                          |
-| fd5cd939 | B     | 5c0060f4     | Markdown loose-list task markers.                               |
+| 2893b86b | B     | ee6b0e7e     | macOS simple fullscreen covering the notch.                     |
+| 1274a5dc | B     | c4632655     | VS Code npm task `path` property.                               |
+| cf08569e | B     | 94954ebf     | `file_scan_exclusions` `"..."` splice.                          |
+| fd5cd939 | B     | ea21365b     | Markdown loose-list task markers.                               |
 | fdad9186 | C     | --           | `git_ui_core` askpass files are absent.                         |
 | 05473ed8 | C     | --           | `csv_preview` rename; local crate already diverged.             |
 | dbc90d18 | C     | --           | Depends on rejected `05473ed8` crate rename.                    |
@@ -42,12 +42,12 @@ remain after this head. Counts: 3 A, 6 B, 11 C.
 | 03c9c4e7 | C     | --           | `ParsedSvg` / `render_parsed` APIs are absent.                  |
 | 87324045 | C     | --           | Lockfile-only `async-tar` fork for Cursor ACP download.         |
 | 3624a5bf | C     | --           | Depends on rejected `6dee3fc7` diagnostic proto.                |
-| 35f63e40 | B     | 0322d76b     | Markdown code-block `buffer_line_height`.                       |
+| 35f63e40 | B     | 3d25aeb9     | Markdown code-block `buffer_line_height`.                       |
 | 2040e0de | C     | --           | `spawn_dedicated` / scheduler rewrite plus lockfile churn.      |
 | 00c0e96e | C     | --           | `LoadedFile` Rope rewrite conflicts on local worktree decode.   |
-| aad75630 | A     | 1baf13a1     | Cherry-picked with `-x -s`.                                     |
-| 3f660a0a | B     | 3abceceb     | Drop deprecated `std::usize` / `std::u32` / `std::u64` imports. |
-| 4c724479 | A     | 17ec7f5a     | Cherry-picked with `-x -s` after `aad75630`.                    |
+| aad75630 | A     | 54530410     | Cherry-picked with `-x -s`.                                     |
+| 3f660a0a | B     | 0a76c1e8     | Drop deprecated `std::usize` / `std::u32` / `std::u64` imports. |
+| 4c724479 | A     | a7ee1a31     | Cherry-picked with `-x -s` after `aad75630`.                    |
 
 ## Applied Work
 
@@ -118,7 +118,7 @@ Work remains on `sync/upstream-2026-08-27` and has not been merged to
 ### Scope
 
 - Target branch: `sync/upstream-2026-08-27` from `main` at
-  `2761d2445eca441bc5948e8d35bebb01274496cf`
+  `b7f389802c04482a8884f106f6a8ea4deb4fe042`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previous reviewed baseline:
   `01acd0ee8e906dd0ec8b526fe08da94444a5e2af`
@@ -136,13 +136,13 @@ queried live head.
 
 | Upstream | Class | Local commit     | Disposition                                                               |
 | -------- | ----- | ---------------- | ------------------------------------------------------------------------- |
-| a6ffd721 | B     | 2cae688b         | Delay ETW output-path selection until save.                               |
-| c90f1fed | B     | 6d486563         | Preserve platform-specific keybinding labels in Which Key.                |
-| 4b3ef3e4 | B     | 089592b          | Parse partial-clone filter metadata in remote URLs.                       |
-| cf1900f4 | B     | 47fb250          | Refresh YARA naming, links, and setup documentation.                      |
-| 351899e5 | B     | e011fcf, a096808 | Reveal already-open files in another pane when configured.                |
-| 8ee36b68 | B     | df35f2f          | Anchor bare-repository worktree names and paths to repository identity.   |
-| 669bede5 | B     | f1d34c2          | Detect languages in eligible untitled buffers with confidence thresholds. |
+| a6ffd721 | B     | 0c73b447         | Delay ETW output-path selection until save.                               |
+| c90f1fed | B     | eed89ced         | Preserve platform-specific keybinding labels in Which Key.                |
+| 4b3ef3e4 | B     | 27b2459          | Parse partial-clone filter metadata in remote URLs.                       |
+| cf1900f4 | B     | f2aad61          | Refresh YARA naming, links, and setup documentation.                      |
+| 351899e5 | B     | 6a08de6, c54404d | Reveal already-open files in another pane when configured.                |
+| 8ee36b68 | B     | 4f1e9ff          | Anchor bare-repository worktree names and paths to repository identity.   |
+| 669bede5 | B     | 416fc9b          | Detect languages in eligible untitled buffers with confidence thresholds. |
 
 ### Applied work
 
@@ -183,10 +183,10 @@ NOT RUN macOS / Windows / wasm32 gpui_web runtime
 NOT RUN cargo test --workspace
 ```
 
-Post-port validation fixes landed as `4a71668eef` (window-blur test context),
-`9a444fdf66` (inspector and Markdown-preview clippy), and `1824b5fdc8`
+Post-port validation fixes landed as `0ea195884f` (window-blur test context),
+`6054125767` (inspector and Markdown-preview clippy), and `7f295f89e3`
 (test-context, type-import, and dead-code cleanup). Formatting for the
-adapted worktree-picker import landed separately as `ef1a39950b`.
+adapted worktree-picker import landed separately as `a62e5986e6`.
 
 The reviewed baseline is `669bede5c582140d2f3917e2c5fae5b764f9023f`.
 Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
@@ -198,33 +198,33 @@ Previous baseline: `7f2a2c3c3ee2f23f28772dee7661fb98d3910990`.
 
 | Upstream | Class | Local commit       | Disposition                                                      |
 | -------- | ----- | ------------------ | ---------------------------------------------------------------- |
-| 35aab214 | B     | adef72b4           | Document Tailwind CSS IntelliSense for CSS files.                |
-| 6805d952 | A     | 870a48d7           | Make slang-server the default SystemVerilog LSP.                 |
-| 93f07f6d | B     | ca0d018c           | Preserve modal focus when terminals appear.                      |
-| d6449a9e | B     | df156a42           | Bound oversized LSP hover content.                               |
-| 1b86941c | B     | dfedc287           | Add Gemini 3.5 Flash-Lite metadata.                              |
-| 4c4b19a2 | B     | 57a5358b           | Retire deprecated Gemini models and aliases.                     |
-| b9d1fe59 | A     | 715e321b           | Document Elixir debug adapter support.                           |
-| 99b0ed6b | B     | 23e55f0b           | Preserve configured workspace session state on close.            |
+| 35aab214 | B     | 9682af3a           | Document Tailwind CSS IntelliSense for CSS files.                |
+| 6805d952 | A     | a311f5b5           | Make slang-server the default SystemVerilog LSP.                 |
+| 93f07f6d | B     | 9fbc3e58           | Preserve modal focus when terminals appear.                      |
+| d6449a9e | B     | a84bd703           | Bound oversized LSP hover content.                               |
+| 1b86941c | B     | 5240ab9c           | Add Gemini 3.5 Flash-Lite metadata.                              |
+| 4c4b19a2 | B     | aed5da94           | Retire deprecated Gemini models and aliases.                     |
+| b9d1fe59 | A     | 5de5e5a1           | Document Elixir debug adapter support.                           |
+| 99b0ed6b | B     | 090a4940           | Preserve configured workspace session state on close.            |
 | fdfd00e4 | C     | --                 | GitHub Enterprise Copilot cloud-account routing.                 |
 | 6e2fae61 | C     | --                 | Wasmtime/lockfile-only dependency update.                        |
-| a170a124 | A     | 2da28878           | Fix fold-at-level function-body boundaries.                      |
-| 49a841c7 | A     | 606fb782           | Pass task-template environment to PythonLocator.                 |
-| f1d27d54 | B     | c7d1e3f4, dab7f655 | Prewarm Linux font-match caches on local cosmic-text paths.      |
+| a170a124 | A     | 07ea1d12           | Fix fold-at-level function-body boundaries.                      |
+| 49a841c7 | A     | a500682b           | Pass task-template environment to PythonLocator.                 |
+| f1d27d54 | B     | 2ddbe977, e549f89a | Prewarm Linux font-match caches on local cosmic-text paths.      |
 | 5a2039b2 | C     | --                 | Requires absent ProviderRejection APIs and native-agent changes. |
 | eb96feb8 | A     | eab14afc           | Repaint editor gutter when bookmarks change.                     |
 | 0b1bf8dc | A     | 0b7b9f2a           | Remove stray SQL statement debug output.                         |
 | ff7b061d | C     | --                 | macOS provisioning-profile release metadata only.                |
 | 1747596a | C     | --                 | Extension-card layout targets a replaced local component.        |
-| 507a1b99 | B     | 294466a7           | Skip non-selectable entries when selecting Git changes.          |
-| 391a66a5 | B     | 4a44e54d           | Split debugger continue actions on local DAP APIs.               |
+| 507a1b99 | B     | c7621ff4           | Skip non-selectable entries when selecting Git changes.          |
+| 391a66a5 | B     | e80f2da1           | Split debugger continue actions on local DAP APIs.               |
 
 ### Applied work
 
 Direct A commits `6805d952`, `b9d1fe59`, `a170a124`, `49a841c7`, `eb96feb8`,
 and `0b1bf8dc` were absorbed with `git cherry-pick -x -s`. The B ports have
 `Upstream`, `Retained`, and `Omitted` trailers. `f1d27d54` first added the
-shared GPUI/platform and Linux startup hooks, then `dab7f655` implemented the
+shared GPUI/platform and Linux startup hooks, then `e549f89a` implemented the
 ZZZ cosmic-text prewarm path after the upstream fallback-chain hunk conflicted.
 
 - `35aab214`: adapted Tailwind CSS IntelliSense guidance to ZZZ documentation.
@@ -279,7 +279,7 @@ Work remains on `sync/upstream-2026-08-27` and has not been merged to
 ### Scope
 
 - Target branch: `sync/upstream-2026-08-27`, continuing from `main` at
-  `2761d2445eca441bc5948e8d35bebb01274496cf`
+  `b7f389802c04482a8884f106f6a8ea4deb4fe042`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previous reviewed baseline:
   `4c7244790a075e862eeb4e5ccc12d6c8f5da6f7e`
@@ -296,25 +296,25 @@ queried live head.
 
 | Upstream | Class | Local commit | Disposition                                                               |
 | -------- | ----- | ------------ | ------------------------------------------------------------------------- |
-| fa852694 | B     | 4b90cbaa     | Enable the existing CSV preview without an upstream feature flag.         |
+| fa852694 | B     | 48a8d146     | Enable the existing CSV preview without an upstream feature flag.         |
 | 7a7c3e1d | C     | --           | Requires the removed auto-update downloader.                              |
-| 1a332533 | A     | 4bc1f8df     | Cherry-picked with `-x -s`.                                               |
-| 28c0f4ae | B     | 01bf9f79     | Collapse the nearest Git tree parent.                                     |
+| 1a332533 | A     | a8b6665c     | Cherry-picked with `-x -s`.                                               |
+| 28c0f4ae | B     | f601dec3     | Collapse the nearest Git tree parent.                                     |
 | 99f4c21c | C     | --           | OpenCode Go/Zen subscription-model catalog and settings.                  |
-| c43e2d97 | B     | 2a9c84a0     | Reject failed XKB context initialization.                                 |
-| 45ae0572 | B     | 1450b072     | Stream web Fetch responses.                                               |
+| c43e2d97 | B     | 03899005     | Reject failed XKB context initialization.                                 |
+| 45ae0572 | B     | 285092e7     | Stream web Fetch responses.                                               |
 | d70c45e5 | C     | --           | Needs absent web clipboard and external-drag GPUI APIs.                   |
 | fa00dccc | C     | --           | Large `crates/path` migration conflicts with ZZZ `paths`.                 |
-| 9bb47879 | B     | 79a0a31d     | Hide Markdown syntax that does not render from find matches.              |
+| 9bb47879 | B     | ce4f8567     | Hide Markdown syntax that does not render from find matches.              |
 | 0f84a49e | C     | --           | Native cloud websocket belongs to rejected account/collaboration paths.   |
-| 71507659 | B     | ffbd393f     | Preserve `--user-data-dir` on normal restart.                             |
-| 242fe31a | A     | fe810e97     | Cherry-picked with `-x -s`.                                               |
-| f1cdbaad | B     | c9eded99     | Disable invalid Git-panel discard action.                                 |
-| 7b48fc68 | A     | 6623fd1d     | Cherry-picked with `-x -s`.                                               |
-| 82854434 | B     | 8263bdc4     | Preserve lookaround context during regex replacement.                     |
-| 0cfb1ca1 | B     | c14c6130     | Normalize Pyright and basedpyright analysis settings.                     |
-| 0a4a4a95 | B     | --           | Version follow to v1.18.0; superseded by the v1.19.0 follow `36ec8c40d7`. |
-| badd2157 | A     | 7e7bf33b     | Cherry-picked with `-x -s`.                                               |
+| 71507659 | B     | 23971163     | Preserve `--user-data-dir` on normal restart.                             |
+| 242fe31a | A     | 493f236f     | Cherry-picked with `-x -s`.                                               |
+| f1cdbaad | B     | 08cc289d     | Disable invalid Git-panel discard action.                                 |
+| 7b48fc68 | A     | f3dfe9c2     | Cherry-picked with `-x -s`.                                               |
+| 82854434 | B     | 2ddbcc32     | Preserve lookaround context during regex replacement.                     |
+| 0cfb1ca1 | B     | cf89d27d     | Normalize Pyright and basedpyright analysis settings.                     |
+| 0a4a4a95 | B     | --           | Version follow to v1.18.0; superseded by the v1.19.0 follow `8ad9315d1e`. |
+| badd2157 | A     | 11aa380c     | Cherry-picked with `-x -s`.                                               |
 | 582e6a57 | C     | --           | Broad async language-loader and query API rewrite.                        |
 
 ### Applied work
@@ -358,7 +358,7 @@ commits.
 - `0f84a49e` optimizes an account/collaboration cloud websocket route, which
   ZZZ does not retain as a product surface.
 - `0a4a4a95` is a version follow to v1.18.0, superseded by the v1.19.0
-  follow `36ec8c40d7`.
+  follow `8ad9315d1e`.
 - `582e6a57` adds public async language-loader and query-selection APIs across
   extension and grammar loading. It is an unisolatable architecture rewrite,
   not a current ZZZ caller fix.
@@ -386,7 +386,7 @@ Work remains on `sync/upstream-2026-08-27` and has not been merged to
 ### Scope
 
 - Target branch: `sync/upstream-2026-08-27` from `main` at
-  `2761d2445eca441bc5948e8d35bebb01274496cf`
+  `b7f389802c04482a8884f106f6a8ea4deb4fe042`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previous reviewed baseline:
   `582e6a5789570f9abf9eab17bff027eaf18a0e3c`
@@ -405,26 +405,26 @@ queried live head.
 
 | Upstream | Class | Local commit | Disposition                                                   |
 | -------- | ----- | ------------ | ------------------------------------------------------------- |
-| d5dc01f2 | B     | 06ab03c7     | Localized Windows ZZZ registry-key lookup.                    |
-| 314e0902 | B     | 798e7cba     | Bash language-server workspace settings.                      |
+| d5dc01f2 | B     | ec9137b8     | Localized Windows ZZZ registry-key lookup.                    |
+| 314e0902 | B     | 1b4d04fe     | Bash language-server workspace settings.                      |
 | 2936989f | C     | --           | New GPUI `LineLayout` APIs have no ZZZ caller.                |
 | 1861e58f | C     | --           | Telemetry/hang journaling violates the no-telemetry boundary. |
-| 8bbbeb3d | A     | fd98f700     | Cherry-picked with `-x -s`.                                   |
-| e3056061 | B     | 3548cd29     | Render C0 control characters in existing labels.              |
-| 30aea6ac | B     | b0b6e591     | Add `in_preview` keybinding context.                          |
-| 6a37cc11 | A     | 2a60883c     | Cherry-picked with `-x -s`.                                   |
-| 2bf9e264 | B     | 2e6f8124     | Support terminal Ctrl-Alt ASCII keys.                         |
+| 8bbbeb3d | A     | fbea7b89     | Cherry-picked with `-x -s`.                                   |
+| e3056061 | B     | f61619c3     | Render C0 control characters in existing labels.              |
+| 30aea6ac | B     | 8612993b     | Add `in_preview` keybinding context.                          |
+| 6a37cc11 | A     | 36fd43d2     | Cherry-picked with `-x -s`.                                   |
+| 2bf9e264 | B     | 1d71f06c     | Support terminal Ctrl-Alt ASCII keys.                         |
 | 6e0a0835 | C     | --           | CI-only `gh` toolchain acquisition.                           |
-| 32a0e813 | B     | 94e27269     | Align debugger step bindings on local contexts.               |
-| a58fff13 | A     | e7d3e123     | Cherry-picked with `-x -s`.                                   |
+| 32a0e813 | B     | 10b6b061     | Align debugger step bindings on local contexts.               |
+| a58fff13 | A     | a70b5219     | Cherry-picked with `-x -s`.                                   |
 | cef06d35 | C     | --           | Depends on the rejected worktree streaming rewrite.           |
-| 4d1935b8 | A     | 2ede3ec0     | Cherry-picked with `-x -s`.                                   |
+| 4d1935b8 | A     | d495deb2     | Cherry-picked with `-x -s`.                                   |
 | 282f47a5 | C     | --           | cargo-shear, lockfile, and CI cleanup only.                   |
-| 1b04e4ca | B     | 4d90d67e     | Do not bundle GLib in Linux archives.                         |
+| 1b04e4ca | B     | 6c15f1ea     | Do not bundle GLib in Linux archives.                         |
 | dbdcb310 | C     | --           | Requires the absent `lsp_locations` crate.                    |
-| 3ea4d186 | B     | 49ea83c5     | Canonicalize case-insensitive LSP paths.                      |
-| 58006060 | B     | 66b992dd     | Remove rename-created directories on undo.                    |
-| 09adbb01 | B     | 2b597735     | Persist recent navigation history across sessions.            |
+| 3ea4d186 | B     | bbeb5be0     | Canonicalize case-insensitive LSP paths.                      |
+| 58006060 | B     | 1b980647     | Remove rename-created directories on undo.                    |
+| 09adbb01 | B     | ebbefbbd     | Persist recent navigation history across sessions.            |
 
 ### Applied work
 
@@ -491,7 +491,7 @@ Work remains on `sync/upstream-2026-08-27` and has not been merged to
 ### Scope
 
 - Target branch: `sync/upstream-2026-08-27` from `main` at
-  `2761d2445eca441bc5948e8d35bebb01274496cf`
+  `b7f389802c04482a8884f106f6a8ea4deb4fe042`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previous reviewed baseline:
   `09adbb01f6ed625a976339f014d6c11690aa6301`
@@ -511,21 +511,21 @@ queried live head.
 | Upstream | Class | Local commit | Disposition                                                         |
 | -------- | ----- | ------------ | ------------------------------------------------------------------- |
 | c3b365d2 | C     | --           | Native Agent inline assistant is outside ZZZ's ACP-only boundary.   |
-| deb194b4 | B     | de81c421     | Deduplicate overlapping LSP range-format edits.                     |
+| deb194b4 | B     | 8004c9d1     | Deduplicate overlapping LSP range-format edits.                     |
 | 2b37a3ed | C     | --           | Upstream GitHub contributor-label link only.                        |
-| 53b39e8e | B     | 85beb270     | Bound global gitignore matching to repository/worktree roots.       |
-| b0e37a6c | B     | 2e471090     | Display Node/Python language-server script paths in LSP tooltips.   |
-| f4178619 | B     | b1c5a201     | Drain buffered X11 events after foreground work.                    |
-| debf6b21 | B     | df4d3558     | Order Flatpak launcher arguments before positional paths.           |
-| cb1352a2 | B     | 1332e495     | Add debounce only for manual local edit-prediction providers.       |
-| b427d4ec | A     | 87a8c7f3     | Cherry-picked with `-x -s`.                                         |
+| 53b39e8e | B     | 784b1846     | Bound global gitignore matching to repository/worktree roots.       |
+| b0e37a6c | B     | ffba461b     | Display Node/Python language-server script paths in LSP tooltips.   |
+| f4178619 | B     | 3ee07359     | Drain buffered X11 events after foreground work.                    |
+| debf6b21 | B     | ea85ef8d     | Order Flatpak launcher arguments before positional paths.           |
+| cb1352a2 | B     | 18b63a6d     | Add debounce only for manual local edit-prediction providers.       |
+| b427d4ec | A     | c911cde9     | Cherry-picked with `-x -s`.                                         |
 | 1e9f1ef4 | C     | --           | Baseten uses cloud credentials and is not a silent manual provider. |
 | fe9556a1 | C     | --           | Unused browser performance-tracing API and web tracing machinery.   |
-| f5e87e53 | B     | 483087bb     | Clear the existing settings search field.                           |
-| 91bf967e | B     | deda284e     | Expose ZZZ's inspector as an explicit diagnostic feature.           |
+| f5e87e53 | B     | 05a6c360     | Clear the existing settings search field.                           |
+| 91bf967e | B     | c082651b     | Expose ZZZ's inspector as an explicit diagnostic feature.           |
 | 5255bd7f | C     | --           | Needs absent `PaymentRequired` completion-error API.                |
 | 84aaa525 | C     | --           | Upstream GitHub triage-project workflow and script removal.         |
-| 5b70f793 | B     | ee09d831     | Use `Duration` on existing local timing paths.                      |
+| 5b70f793 | B     | 7840435b     | Use `Duration` on existing local timing paths.                      |
 | ef50ad95 | C     | --           | GitHub CLA/draft pull-request cleanup automation.                   |
 | eb354c8d | C     | --           | Unisolatable Wayland/GPUI render-loop architecture rewrite.         |
 | 54230ad8 | C     | --           | OpenAI subscription-provider autocomplete is account-bound.         |
@@ -534,7 +534,7 @@ queried live head.
 ### Applied work
 
 Direct A commit `b427d4ec` was absorbed with `git cherry-pick -x -s` as
-`87a8c7f3`. The B ports have `Upstream`, `Retained`, and `Omitted` trailers in
+`c911cde9`. The B ports have `Upstream`, `Retained`, and `Omitted` trailers in
 their local commits. They cover range-format overlap handling, global
 gitignore boundaries, script-path tooltips, buffered X11 events, Flatpak
 launch arguments, local prediction debounce, settings search clearing,
@@ -588,7 +588,7 @@ Work remains on `sync/upstream-2026-08-27` and has not been merged to
 ### Scope
 
 - Target branch: `sync/upstream-2026-08-27` from `main` at
-  `2761d2445eca441bc5948e8d35bebb01274496cf`
+  `b7f389802c04482a8884f106f6a8ea4deb4fe042`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previous reviewed baseline:
   `ab208db8d264ad08f62bda7ba0ce560c220a347f`
@@ -609,22 +609,22 @@ queried live head.
 | -------- | ----- | ------------ | ------------------------------------------------------------------------- |
 | 875e2a1c | C     | --           | Publishing docs target deleted ZZZ extension-publishing pages.            |
 | 9b5b5860 | C     | --           | `.rules` and Danger self-review automation are repository administration. |
-| 075520b9 | A     | c7d094f4     | Focus Git Graph items on the search editor.                               |
-| 10b2925e | A     | 85c1135b     | Document language auto-indentation rules.                                 |
+| 075520b9 | A     | e101113b     | Focus Git Graph items on the search editor.                               |
+| 10b2925e | A     | 352d7b1b     | Document language auto-indentation rules.                                 |
 | ec18126b | C     | --           | Requires the absent `mermaid_render` crate and merman dependency.         |
-| 907ed09c | B     | 896b4f24     | Prevent saves and format-on-save for read-only items.                     |
-| 4c763e15 | B     | 095d7216     | Preserve Git context-menu bindings during initial focus.                  |
+| 907ed09c | B     | 72540e32     | Prevent saves and format-on-save for read-only items.                     |
+| 4c763e15 | B     | 8fc13bfb     | Preserve Git context-menu bindings during initial focus.                  |
 | 53dbfe40 | C     | --           | Typed transport-error rewrite does not match ZZZ's OpenAI request APIs.   |
-| 51a3ac29 | A     | 3a8241b7     | Validate extension manifest metadata before builds.                       |
+| 51a3ac29 | A     | 965546a8     | Validate extension manifest metadata before builds.                       |
 | a7e23df6 | C     | --           | Attempted port failed test compilation; reverted per B-port rule.         |
 | 1ea16c1a | C     | --           | Needs upstream global `GitDiffBaseSetting` toggle path absent in ZZZ.     |
 | 107ee1a6 | C     | --           | Large terminal/dock restoration rewrite is unisolatable from ZZZ layout.  |
 | f36aec82 | C     | --           | `ask_user` tool/default is absent from ZZZ's ACP surface.                 |
 | 7316cf77 | C     | --           | Depends on deleted foreground profiler journal and bench machinery.       |
-| fd82517a | A     | a5f1387c     | Add Tangled Git hosting permalinks.                                       |
-| 7eec8920 | A     | 503c1b60     | Restore project LSP settings for legacy extension APIs.                   |
-| d9ad6aff | A     | 201a5184     | Release X11 client state before close callbacks.                          |
-| bcf033f8 | B     | a1582a51     | Clarify ZZZ Linux uninstall paths and parallel installations.             |
+| fd82517a | A     | 12d0fae5     | Add Tangled Git hosting permalinks.                                       |
+| 7eec8920 | A     | 53ad7df9     | Restore project LSP settings for legacy extension APIs.                   |
+| d9ad6aff | A     | 9bd8c443     | Release X11 client state before close callbacks.                          |
+| bcf033f8 | B     | ecb47395     | Clarify ZZZ Linux uninstall paths and parallel installations.             |
 | 6bf539cd | C     | --           | Depends on absent blame-revision actions in ZZZ.                          |
 | 7f2a2c3c | C     | --           | Requires deleted `crashes` sidecar and cross-platform quit API rewrite.   |
 
@@ -692,7 +692,7 @@ Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
 ### Scope
 
 - Target branch: `sync/upstream-2026-08-27` from `main` at
-  `2761d2445eca441bc5948e8d35bebb01274496cf`
+  `b7f389802c04482a8884f106f6a8ea4deb4fe042`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previous reviewed baseline:
   `5ed5bf95e518f1b35386a8787b512c99b90509f7`
@@ -711,34 +711,34 @@ queried live head.
 
 | Upstream | Class | Local commit       | Disposition                                                                           |
 | -------- | ----- | ------------------ | ------------------------------------------------------------------------------------- |
-| a1cc2548 | B     | 2f97a63d, 9a6bba83 | Port OpenRouter effort reasoning onto local provider APIs.                            |
-| 3b90a968 | B     | 84c3db6c           | Release completed ACP PTY resources while retaining history metadata.                 |
+| a1cc2548 | B     | d4d0f39d, 099e4646 | Port OpenRouter effort reasoning onto local provider APIs.                            |
+| 3b90a968 | B     | 062ca142           | Release completed ACP PTY resources while retaining history metadata.                 |
 | 8fc1a8a0 | C     | --                 | Web text-input/IME architecture conflicts with ZZZ's input path.                      |
 | fc9258b4 | C     | --                 | File-permalink rewrite is not isolatable across local RPC/workspace divergences.      |
-| f66ed399 | B     | 7d377066           | Clear pending key sequences when a window blurs.                                      |
+| f66ed399 | B     | 8c89730b           | Clear pending key sequences when a window blurs.                                      |
 | f595fd84 | C     | --                 | Upstream-only lint-creator skill documentation.                                       |
-| fe5b7ced | A     | 957fbe37           | Cherry-picked loop-invariant clone cleanup; local path API preserved.                 |
+| fe5b7ced | A     | 4f5523e5           | Cherry-picked loop-invariant clone cleanup; local path API preserved.                 |
 | 6efd4950 | C     | --                 | Upstream-only lint-creator fixture guidance.                                          |
-| c8dfe26a | A     | 81117dbe           | Cherry-picked terminal Visual Line selection support.                                 |
+| c8dfe26a | A     | cce670c0           | Cherry-picked terminal Visual Line selection support.                                 |
 | d84e5d49 | C     | --                 | Depends on the rejected Web IME implementation from `8fc1a8a0`.                       |
 | 12ef40c3 | C     | --                 | Broad LSP diagnostic message/protocol rewrite conflicts with local diagnostics.       |
 | 5218009a | C     | --                 | Depends on the rejected Web IME implementation.                                       |
 | ec312b27 | C     | --                 | Large call-hierarchy crate and deleted keymap/protocol surfaces are not localizable.  |
 | 1e2e422c | C     | --                 | Broad remote extension-host/settings rewrite is not isolatable locally.               |
 | 8166e3d7 | C     | --                 | Cross-panel folder-indicator/settings migration conflicts with local settings APIs.   |
-| 756c2b73 | A     | 356be522           | Cherry-picked Helix mark/surround motions and selection preservation.                 |
+| 756c2b73 | A     | 0217a469           | Cherry-picked Helix mark/surround motions and selection preservation.                 |
 | 797e5dc9 | C     | --                 | Bookmark-tab lifecycle rewrite requires deleted navigation and divergent editor APIs. |
 | fa8d0b77 | C     | --                 | Targets the deleted crashes/telemetry crate.                                          |
-| 4c6c4750 | B     | 00754a85           | Port Windows PowerShell and Git Bash discovery into `util::shell`.                    |
+| 4c6c4750 | B     | 7300a70e           | Port Windows PowerShell and Git Bash discovery into `util::shell`.                    |
 | 01acd0ee | B     | d565dd8a           | Port outline buffer typography and reparsed syntax highlighting; omit call hierarchy. |
 
 ### Applied work
 
 Direct A commit `fe5b7ced` was absorbed with `git cherry-pick -x -s` as
-`957fbe37`. The local path-trie hunk was adapted to ZZZ's `util::RelPath`
-API. Direct A commit `c8dfe26a` was absorbed as `81117dbe`; its Visual Line
+`4f5523e5`. The local path-trie hunk was adapted to ZZZ's `util::RelPath`
+API. Direct A commit `c8dfe26a` was absorbed as `cce670c0`; its Visual Line
 selection event uses ZZZ's `(Selection, Point)` representation. Commit
-`756c2b73` was absorbed as `356be522`.
+`756c2b73` was absorbed as `0217a469`.
 
 The B ports carry `Upstream`, `Retained`, and `Omitted` trailers:
 
@@ -793,7 +793,7 @@ Work remains on `sync/upstream-2026-08-27` and has not been merged to
 ### Scope
 
 - Target branch: `sync/upstream-2026-08-27` from `main` at
-  `2761d2445eca441bc5948e8d35bebb01274496cf`
+  `b7f389802c04482a8884f106f6a8ea4deb4fe042`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previous reviewed baseline:
   `391a66a5ad9f68e13a54f57b3b06f4605867614c`
@@ -814,24 +814,24 @@ queried live head.
 | -------- | ----- | ----------------- | --------------------------------------------------------------------------- |
 | 5631830c | C     | --                | Depends on the unabsorbed Bedrock Mantle model surface.                     |
 | 4ca90055 | C     | --                | Broad tree-sitter/Wasmtime and lockfile/toolchain update.                   |
-| e9735934 | B     | 16b379a3          | Port preview typography onto the existing Markdown renderer.                |
-| 41d72f6c | B     | 8dbddbc6          | Make stacksafe opt-in while retaining ZZZ desktop protection.               |
-| 91ebd505 | B     | cd2645ca          | Serialize the latest selected ACP agent task.                               |
-| 693140ab | B     | 6b352045          | Accept nullable OpenAI prompt-cache usage fields.                           |
-| 96382d8e | B     | d72af3b5, 261dc08 | Add ACP agent retry controls.                                               |
-| 38c5dd7c | A     | b5099ab8          | Default missing Mistral stream `object` values.                             |
-| b20c4694 | A     | 91612188          | Account for removed lines when diffing overwritten files.                   |
-| 0969b0db | B     | 9ae568ad          | Ignore uninstalled custom agents during restoration.                        |
+| e9735934 | B     | 8cbe4800          | Port preview typography onto the existing Markdown renderer.                |
+| 41d72f6c | B     | 490f5a71          | Make stacksafe opt-in while retaining ZZZ desktop protection.               |
+| 91ebd505 | B     | e7299c31          | Serialize the latest selected ACP agent task.                               |
+| 693140ab | B     | 3c9cc819          | Accept nullable OpenAI prompt-cache usage fields.                           |
+| 96382d8e | B     | 30aada9f, 4defce7 | Add ACP agent retry controls.                                               |
+| 38c5dd7c | A     | 2ac1f5c6          | Default missing Mistral stream `object` values.                             |
+| b20c4694 | A     | 1d8ba8da          | Account for removed lines when diffing overwritten files.                   |
+| 0969b0db | B     | dac519b2          | Ignore uninstalled custom agents during restoration.                        |
 | 224373ab | C     | --                | Web IME/input rewrite conflicts with ZZZ's web window path.                 |
-| f42c6e87 | B     | aa309ef8          | Use unstable sorting on existing deduplication paths.                       |
+| f42c6e87 | B     | 67954872          | Use unstable sorting on existing deduplication paths.                       |
 | 3c2848e9 | C     | --                | Requires the absent provider error-category/native-agent API.               |
-| 1ff7cb66 | B     | c267bd7b          | Reuse measured glyph images in local cosmic-text paths.                     |
+| 1ff7cb66 | B     | cf207a0a          | Reuse measured glyph images in local cosmic-text paths.                     |
 | 55007f51 | C     | --                | Adds telemetry reporting and profiler surfaces rejected by ZZZ.             |
 | e0f913b0 | C     | --                | Targets upstream `tabular_data_preview`, replaced locally by `csv_preview`. |
 | d4cd310e | C     | --                | Modifies the deleted upstream action-profiler module.                       |
-| 7040aa56 | A     | b2c46bf7          | Clear Windows COLR emoji render targets before compositing.                 |
-| 081a45f6 | A     | 46266953          | Add Grok 4.5 and 4.6 manual-provider models.                                |
-| 5dd0666d | A     | ce84da0d          | Terminate X11 `WM_CLASS` with a second NUL byte.                            |
+| 7040aa56 | A     | dff2e50f          | Clear Windows COLR emoji render targets before compositing.                 |
+| 081a45f6 | A     | a1a74f16          | Add Grok 4.5 and 4.6 manual-provider models.                                |
+| 5dd0666d | A     | 0e72b82a          | Terminate X11 `WM_CLASS` with a second NUL byte.                            |
 
 ### Applied work
 
@@ -896,7 +896,7 @@ Work remains on `sync/upstream-2026-08-27` and has not been merged to `main`.
 ### Scope
 
 - Target branch: `sync/upstream-2026-08-27` from `main` at
-  `2761d2445eca441bc5948e8d35bebb01274496cf`
+  `b7f389802c04482a8884f106f6a8ea4deb4fe042`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previous reviewed baseline:
   `5dd0666dfb627bb7c04b210b730005628f5a229a`
@@ -915,16 +915,16 @@ queried live head.
 
 | Upstream | Class | Local commit | Disposition                                                               |
 | -------- | ----- | ------------ | ------------------------------------------------------------------------- |
-| 74490dac | A     | 5e77869b     | Cherry-picked with `-x -s`.                                               |
-| 4278ff36 | A     | f625b502     | Cherry-picked with `-x -s`.                                               |
-| 1d7e5f1d | A     | a7bef4c3     | Cherry-picked with `-x -s`.                                               |
+| 74490dac | A     | d79498fc     | Cherry-picked with `-x -s`.                                               |
+| 4278ff36 | A     | dafa7ae5     | Cherry-picked with `-x -s`.                                               |
+| 1d7e5f1d | A     | 7030858d     | Cherry-picked with `-x -s`.                                               |
 | 76478024 | C     | --           | Needs the absent local provider error-category API.                       |
 | b415b5d4 | C     | --           | GitHub maintainer-edit workflow automation only.                          |
 | 5f1f7e63 | C     | --           | Web IME architecture conflicts with ZZZ's input path.                     |
 | 1f7eae7f | C     | --           | Benchmark/test-support and upstream skill scaffolding only.               |
-| 45cd77bb | A     | dd8fa365     | Cherry-picked with `-x -s`.                                               |
+| 45cd77bb | A     | 6a724283     | Cherry-picked with `-x -s`.                                               |
 | fecc3273 | C     | --           | Depends on benchmark headless-renderer infrastructure.                    |
-| 4ccbcabf | A     | 5dc66f10     | Cherry-picked with `-x -s`.                                               |
+| 4ccbcabf | A     | 06029275     | Cherry-picked with `-x -s`.                                               |
 | 1475887f | C     | --           | Broad project-search-on-type rewrite is not isolatable locally.           |
 | 839ab7a9 | C     | --           | Shallow-diff UI/protocol rewrite needs absent git APIs and askpass UI.    |
 | 279da638 | C     | --           | Broad persistence shutdown rewrite conflicts with local lifecycle APIs.   |
@@ -932,7 +932,7 @@ queried live head.
 | 34241d5f | C     | --           | LLVM/settings deserializer rewrite failed on removed ZZZ fields.          |
 | ea701d40 | C     | --           | Agent persistence worker targets deleted/diverged native-agent paths.     |
 | 4a9a863c | C     | --           | Auto-indentation patch requires deleted `editor/src/input.rs`.            |
-| ac099b4a | B     | 36ec8c40d7   | Version follow to v1.19.0; local version bump retained.                   |
+| ac099b4a | B     | 8ad9315d1e   | Version follow to v1.19.0; local version bump retained.                   |
 | 7ecab315 | C     | --           | Depends on the rejected project-search rewrite from `1475887f`.           |
 | 5ed5bf95 | C     | --           | Stream-mapping rewrite spans deleted and conflicting provider APIs.       |
 

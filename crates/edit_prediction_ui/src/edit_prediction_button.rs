@@ -51,7 +51,8 @@ actions!(
 
 const COPILOT_SETTINGS_PATH: &str = "/settings/copilot";
 const COPILOT_SETTINGS_URL: &str = concat!("https://github.com", "/settings/copilot");
-const PRIVACY_DOCS: &str = "https://github.com/Xero-Team/ZZZ/wiki/privacy";
+const PRIVACY_DOCS: &str =
+    "https://github.com/Xero-Team/ZZZ/blob/main/docs/src/ai/privacy-and-security.md";
 
 struct CopilotErrorToast;
 

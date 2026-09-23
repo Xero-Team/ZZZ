@@ -8,7 +8,7 @@ description: Selective Zed upstream sync audit.
 ## Scope
 
 - Target branch: `sync/upstream-2026-09-17` from `main` at
-  `e6adb70968552e53dae959f107df4f8ac03470d9`
+  `7a17811ea134efde1be74696179ce2e7ee7e9e45`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previously reviewed baseline: `9bda6b4e0342f22680bc1e7fcd847f4697c48874`
 - Reviewed upstream head: `490aad88d5c754e4b0fbbb2bf1e3d6936df27729`
@@ -28,23 +28,23 @@ queried live head.
 | 5313741f | C     | --           | Native agent session leak rewrite; `WeakEntry` and native `Thread` storage are absent.               |
 | ee3b5558 | C     | --           | ChatGPT subscription usage-limit classification; `ProviderErrorCategory::PaymentRequired` is absent. |
 | 22e92168 | C     | --           | Concurrent peer LSP requests through the collab RPC path.                                            |
-| 5a9b9558 | A     | 44bc6b09     | Cherry-picked with `-x -s`.                                                                          |
-| 1c3aa005 | A     | 2bc9b841     | Cherry-picked with `-x -s`.                                                                          |
-| 1870e269 | A     | 91324b04     | Cherry-picked with `-x -s`.                                                                          |
+| 5a9b9558 | A     | d554852d     | Cherry-picked with `-x -s`.                                                                          |
+| 1c3aa005 | A     | ebad7423     | Cherry-picked with `-x -s`.                                                                          |
+| 1870e269 | A     | 2f8ef6a9     | Cherry-picked with `-x -s`.                                                                          |
 | 69164008 | C     | --           | Community PR-board platform mapping.                                                                 |
-| c7801b0c | B     | 6ca31d21     | Honor macOS tiled-window margins for titlebar Fill; omit the extra `is_resizable` guard.             |
-| 13e5c99a | B     | 6d2c65e3     | Disable native gpui_web canvas selection on ZZZ's per-property style path.                           |
-| 4a217d53 | B     | 70f1e9b7     | Disable Wayland IME when no text input handler is present.                                           |
-| 1d25e83f | B     | faab5165     | Honor project panel preview setting for keyboard opens; keep localized Settings UI copy.             |
-| b95b188b | B     | 7b3d284c     | Simulate `TestWindow` scale factor; omit nested-window draw tests ZZZ does not have.                 |
-| 63d15474 | B     | e121fd30     | Poll worktree root path on a 5s timer; omit the notify fork rev bump.                                |
+| c7801b0c | B     | 6378544a     | Honor macOS tiled-window margins for titlebar Fill; omit the extra `is_resizable` guard.             |
+| 13e5c99a | B     | 25abb12f     | Disable native gpui_web canvas selection on ZZZ's per-property style path.                           |
+| 4a217d53 | B     | 6c71e909     | Disable Wayland IME when no text input handler is present.                                           |
+| 1d25e83f | B     | 811c72cf     | Honor project panel preview setting for keyboard opens; keep localized Settings UI copy.             |
+| b95b188b | B     | 55591f44     | Simulate `TestWindow` scale factor; omit nested-window draw tests ZZZ does not have.                 |
+| 63d15474 | B     | 7cb33fd9     | Poll worktree root path on a 5s timer; omit the notify fork rev bump.                                |
 | 20fa2fa8 | C     | --           | Cross-crate LLVM IR reduction; not one isolatable local behavior.                                    |
-| 5bdfa7c8 | B     | f13db0c6     | Use Option instead of Alt in macOS modifier hints; omit absent `git_ui_core` picker.                 |
+| 5bdfa7c8 | B     | 1edda4b5     | Use Option instead of Alt in macOS modifier hints; omit absent `git_ui_core` picker.                 |
 | e5784305 | C     | --           | `crates/agent_skills` is absent.                                                                     |
-| ad51f682 | A     | 181f3bc4     | Cherry-picked with `-x -s`.                                                                          |
+| ad51f682 | A     | df1ecec1     | Cherry-picked with `-x -s`.                                                                          |
 | db10a8dd | C     | --           | `GlobalWatcher` testability rewrite spans MultiWorkspace and a later OsWatcher replacement.          |
 | 6f73c7d0 | C     | --           | Replaces `GlobalWatcher` with `OsWatcher`; depends on rejected `db10a8dd`.                           |
-| 490aad88 | B     | 95a089b4     | Copy full debugger variable values via DAP evaluate clipboard context.                               |
+| 490aad88 | B     | 142edf8e     | Copy full debugger variable values via DAP evaluate clipboard context.                               |
 
 ## Applied work
 

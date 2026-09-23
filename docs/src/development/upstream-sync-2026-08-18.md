@@ -8,7 +8,7 @@ description: Selective Zed upstream sync audit.
 ## Scope
 
 - Target branch: `sync/upstream-2026-08-18` from `main` at
-  `7a3be67b422d2cfe8550f9d7c633ae9f81da77ab`
+  `14646e7843f37ad399edfcbf1344642f10b76f99`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Reviewed upstream head: `aa3718614b3ade75524be6f8b2e101bd1166e02c`
 - Live upstream head queried: `aa3718614b3ade75524be6f8b2e101bd1166e02c`
@@ -29,17 +29,17 @@ The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
 
 | Upstream | Class | Local commit | Disposition                                                    |
 | -------- | ----- | ------------ | -------------------------------------------------------------- |
-| 417d0330 | B     | d3dfbcf2     | Web RAF wakes only on demand.                                  |
-| 4ed3738c | B     | c2e914c1     | Phase-locked repeating spinners.                               |
-| 38ca9106 | B     | 3dda7fab     | Hover listeners after layout.                                  |
-| 65308f40 | B     | f9348586     | Gemini 3.6 Flash.                                              |
+| 417d0330 | B     | f7e177b8     | Web RAF wakes only on demand.                                  |
+| 4ed3738c | B     | a910a8e7     | Phase-locked repeating spinners.                               |
+| 38ca9106 | B     | 3efaf5c6     | Hover listeners after layout.                                  |
+| 65308f40 | B     | bad00395     | Gemini 3.6 Flash.                                              |
 | 3b90a9be | C     | --           | Timed RPC log groups need absent elapsed tracker.              |
-| d2779c34 | A     | 2d15603c     | Cherry-picked with `-x -s`.                                    |
+| d2779c34 | A     | 53146bd0     | Cherry-picked with `-x -s`.                                    |
 | 803467f3 | C     | --           | Text finder regex highlight needs missing picker preview API.  |
-| be52d3b7 | A     | 30012371     | Cherry-picked with `-x -s`.                                    |
-| e9b5778e | A     | b1cd8c30     | Cherry-picked with `-x -s`.                                    |
-| 08827f92 | B     | 5f27cb77     | `terminal.starts_open`.                                        |
-| 59b2ebf1 | A     | 9cd5b67b     | Cherry-picked with `-x -s`.                                    |
+| be52d3b7 | A     | e438687e     | Cherry-picked with `-x -s`.                                    |
+| e9b5778e | A     | e49339cc     | Cherry-picked with `-x -s`.                                    |
+| 08827f92 | B     | 5b0d95cd     | `terminal.starts_open`.                                        |
+| 59b2ebf1 | A     | de45206d     | Cherry-picked with `-x -s`.                                    |
 | 371a7d4b | C     | --           | `crates/lsp_locations` is absent.                              |
 | 1271f8b0 | C     | --           | rustc 1.97 bump is 66-file lockfile/agent/collab churn.        |
 | f99aad78 | C     | --           | Guild labeling workflow.                                       |
@@ -50,13 +50,13 @@ The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
 | 4bd19937 | C     | --           | Mermaid `~~~` fences; local markdown diverged.                 |
 | e4671f71 | C     | --           | Malformed-task toast conflicts in `zzz.rs`.                    |
 | 069449ab | C     | --           | mdBook smart-punctuation docs infra.                           |
-| c65e08a8 | A     | 3d24720f     | Cherry-picked with `-x -s`.                                    |
+| c65e08a8 | A     | c17d2ed1     | Cherry-picked with `-x -s`.                                    |
 | 9e236090 | C     | --           | Unused per-window histogram APIs.                              |
 | a1860ac1 | C     | --           | Hosted Claude pricing docs.                                    |
 | 6634c945 | B     | 2260d67f9b   | Git panel copy-path actions; ported after review.              |
 | bd1b83a4 | B     | b4c301e099   | Git panel collapsible sections; ported after review.           |
 | c6b01d8a | B     | a3c4dd2111   | Optional git stash message; ported after review.               |
-| 7807e4b1 | A     | af25a382     | Cherry-picked with `-x -s`.                                    |
+| 7807e4b1 | A     | acfaeb99     | Cherry-picked with `-x -s`.                                    |
 | a4916265 | B     | 89c1511729   | OpenAI reasoning-summary separators; ported after review.      |
 | c83adb3d | C     | --           | `SymbolKind` RPC; `language_core` conflict.                    |
 | d71f1461 | C     | --           | `stacksafe` lockfile-only bump.                                |
@@ -64,42 +64,42 @@ The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
 | 83dc1967 | B     | 7b4c1a46f9   | Worktree ignore-rule anchoring; ported after review.           |
 | c0979ee0 | C     | --           | OpenAI subscribed default model.                               |
 | c7537bdf | C     | --           | Brand-writer marketing skill rename.                           |
-| daec37bd | A     | 817392cb     | Cherry-picked with `-x -s`.                                    |
+| daec37bd | A     | 61450f38     | Cherry-picked with `-x -s`.                                    |
 | 6bd93fc3 | C     | --           | OpenAI subscribed context windows.                             |
 | a3d65153 | C     | --           | Encrypted-content error factored for native agent thread.      |
 | 315ea374 | C     | --           | OpenAI subscribed Codex limits.                                |
 | 1c9cbd3b | C     | --           | Native agent terminal shrink.                                  |
 | 6ae52316 | C     | --           | Extension proto version/lockfile only.                         |
 | 897ba9ad | C     | --           | Remote markdown images; preview/agent_ui diverged.             |
-| fdf5de99 | A     | 1373ca81     | Cherry-picked with `-x -s`.                                    |
-| b13f6c71 | B     | 209a6048     | Follow upstream app version to 1.17.0.                         |
+| fdf5de99 | A     | b50c1326     | Cherry-picked with `-x -s`.                                    |
+| b13f6c71 | B     | 9e40f452     | Follow upstream app version to 1.17.0.                         |
 | cdf33ac2 | C     | --           | Markdown table autosize needs unused gpui API + lockfile.      |
 | a034d870 | C     | --           | Canceled worktree leak; tests conflict.                        |
 | 52894d3f | C     | --           | `filterText` completions; `editor/src/completions.rs` deleted. |
 | 770a977c | C     | --           | On-type formatting; deleted editor modules.                    |
-| bc463bc2 | A     | 92597e1f     | Cherry-picked with `-x -s`.                                    |
+| bc463bc2 | A     | 2ab1c18b     | Cherry-picked with `-x -s`.                                    |
 | 93f6b2e5 | C     | --           | Python shim + lockfile conflict.                               |
-| fc952d52 | A     | b4b5e86c     | Cherry-picked with `-x -s`.                                    |
+| fc952d52 | A     | 0522f9d2     | Cherry-picked with `-x -s`.                                    |
 | ff9f114c | C     | --           | New `Svg` binary-data API has no current isolated caller.      |
 | ba0e2a94 | C     | --           | OpenAI subscribed compaction logs.                             |
 | c05e3463 | C     | --           | ChatGPT subscription compaction.                               |
 | a8fafdd7 | C     | --           | ChatGPT subscription routing headers.                          |
-| 7733b992 | A     | a2637063     | Cherry-picked with `-x -s`.                                    |
-| 03e5ad8a | A     | de06b149     | Cherry-picked with `-x -s`.                                    |
+| 7733b992 | A     | 1250adb4     | Cherry-picked with `-x -s`.                                    |
+| 03e5ad8a | A     | f6e15bb4     | Cherry-picked with `-x -s`.                                    |
 | dd04a229 | C     | --           | Unused `Animation` max-FPS API.                                |
 | b4150535 | C     | --           | Terminal hyperlinks; `alacritty.rs` deleted.                   |
-| 4efba716 | B     | 72cf33f3     | Non-Unicode search; local `LineHint`.                          |
+| 4efba716 | B     | 131b9d6d     | Non-Unicode search; local `LineHint`.                          |
 | 18be72fd | C     | --           | File-scanner rewrite; settings/worktree conflict.              |
 | 17d71d2b | C     | --           | csv_preview filter files deleted locally.                      |
 | 0307288d | C     | --           | Unused benchmark/threaded-dispatcher API.                      |
 | cd6d7055 | C     | --           | Extension publishing docs split.                               |
 | d8664715 | C     | --           | csv_preview copy; renderer conflict.                           |
 | 0ad5441b | C     | --           | Display-position selections; editor conflict.                  |
-| 2cb57850 | A     | ae7a4c5d     | Cherry-picked with `-x -s`.                                    |
+| 2cb57850 | A     | 9693b5d5     | Cherry-picked with `-x -s`.                                    |
 | 47825fe0 | B     | ba686f3ca0   | Measure invisible replacement width; ported after review.      |
-| 24e25552 | A     | aa0da57b     | Cherry-picked with `-x -s`.                                    |
+| 24e25552 | A     | f10fa494     | Cherry-picked with `-x -s`.                                    |
 | 30f806c4 | B     | d3dad3d954   | JetBrains CamelHump subword navigation; ported after review.   |
-| 5fa87423 | A     | 769be242     | Cherry-picked with `-x -s`.                                    |
+| 5fa87423 | A     | ba9894c3     | Cherry-picked with `-x -s`.                                    |
 | cdc537c6 | C     | --           | csv_preview tabular rewrite.                                   |
 | a21007b7 | C     | --           | Unused profiler rewrite.                                       |
 | 52b24181 | C     | --           | `gpui_apple` crate split; macOS-only rewrite.                  |
@@ -108,42 +108,42 @@ The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
 | 9f164a0d | C     | --           | Native agent Chat Completions share.                           |
 | 9bde578e | C     | --           | ACP dedicated thread needs absent `spawn_dedicated`.           |
 | 1e3d8b5a | B     | fb304e06b8   | Share the search snapshot behind an Arc; ported after review.  |
-| 56b1e79a | A     | fe7de095     | Cherry-picked with `-x -s`.                                    |
+| 56b1e79a | A     | 4cc4126f     | Cherry-picked with `-x -s`.                                    |
 | 939d2d70 | A     | --           | Already equivalent title_bar test-support.                     |
-| f4199ae0 | A     | 6bb8e518     | Cherry-picked with `-x -s`.                                    |
-| bc538def | A     | 9a38802b     | Cherry-picked with `-x -s`.                                    |
+| f4199ae0 | A     | 7f3fc8bd     | Cherry-picked with `-x -s`.                                    |
+| bc538def | A     | 2b2f9fc5     | Cherry-picked with `-x -s`.                                    |
 | bc6095f2 | C     | --           | Buffer-header menu; `element/mouse.rs` deleted.                |
 | f543a764 | A     | 81a751b591   | Invisible-character matching; cherry-picked after review.      |
 | b2d9c2e1 | C     | --           | Native agent panel rewind.                                     |
-| b47d8ac4 | A     | 5339c998     | Cherry-picked with `-x -s`.                                    |
-| 6c706fb9 | A     | 60eac2c9     | Cherry-picked with `-x -s`.                                    |
+| b47d8ac4 | A     | dcffb59d     | Cherry-picked with `-x -s`.                                    |
+| 6c706fb9 | A     | 0ab6e94d     | Cherry-picked with `-x -s`.                                    |
 | 632d805d | C     | --           | Native agent `ask_user` elicitation.                           |
-| 1f36e4b0 | A     | 2a62464e     | Cherry-picked with `-x -s`.                                    |
+| 1f36e4b0 | A     | b5ee7092     | Cherry-picked with `-x -s`.                                    |
 | 098e4407 | C     | --           | OpenAI subscribed ungated catalog.                             |
 | 8968bf78 | C     | --           | Non-UTF-8 git blobs; staged_diff deleted.                      |
 | 984bf4d4 | C     | --           | Anthropic compaction; provider conflict.                       |
-| eedd2016 | A     | afa293a3     | Cherry-picked with `-x -s`.                                    |
+| eedd2016 | A     | b8238eb7     | Cherry-picked with `-x -s`.                                    |
 | 91a6890d | C     | --           | Sidebar onboarding title wrap.                                 |
-| 511ac170 | A     | 63841c68     | Cherry-picked with `-x -s`.                                    |
+| 511ac170 | A     | bdb2b214     | Cherry-picked with `-x -s`.                                    |
 | 90eb566f | C     | --           | Sidebar reorder; MultiWorkspace conflict.                      |
 | dbf7f638 | C     | --           | Anthropic compaction context; completion conflict.             |
-| 30f73707 | B     | 1d76d5f6     | Gemini 3.7 Flash.                                              |
+| 30f73707 | B     | fd3438cd     | Gemini 3.7 Flash.                                              |
 | bf65fd4d | C     | --           | Legal ToS/Privacy absolute URLs.                               |
 | e0931d5a | C     | --           | Invisibles reuse; display_map/benchmarks deleted.              |
 | db7c1d38 | C     | --           | Community CI permissions.                                      |
-| 378d6254 | A     | 54aa4243     | Cherry-picked with `-x -s`.                                    |
-| a8b5f6b9 | A     | ab6dfc27     | Cherry-picked with `-x -s`.                                    |
-| dfb69669 | A     | e0815c00     | Cherry-picked with `-x -s`.                                    |
+| 378d6254 | A     | 89572004     | Cherry-picked with `-x -s`.                                    |
+| a8b5f6b9 | A     | 556ff92e     | Cherry-picked with `-x -s`.                                    |
+| dfb69669 | A     | 3108a484     | Cherry-picked with `-x -s`.                                    |
 | 6dee3fc7 | C     | --           | Diagnostic related info; language proto conflict.              |
 | d0bfe0a4 | C     | --           | Single-hunk nav; staged/unstaged_diff deleted.                 |
 | eb38ea55 | C     | --           | Community champions list.                                      |
 | eb548352 | C     | --           | Markdown highlight overflow; markdown conflict.                |
 | 8b1497db | C     | --           | Unused spring animation API.                                   |
-| 7bddd16a | A     | 39c59915     | Cherry-picked with `-x -s`.                                    |
+| 7bddd16a | A     | bdce4cc5     | Cherry-picked with `-x -s`.                                    |
 | 07a0bd12 | C     | --           | Unused frame-time debug overlay.                               |
 | 6721ea2e | C     | --           | Reset dock panels; workspace conflict.                         |
 | 64d14ea8 | C     | --           | System pinentry; askpass conflict.                             |
-| fd90c0af | A     | 3edb95f7     | Cherry-picked with `-x -s`.                                    |
+| fd90c0af | A     | 20b57034     | Cherry-picked with `-x -s`.                                    |
 | aa371861 | C     | --           | Autofix workflow clippy flag.                                  |
 
 ## Applied Work
@@ -158,7 +158,7 @@ App version followed upstream: `crates/zzz` is now `1.17.0`.
 `9bde578e` was cherry-picked then fully reverted after `cargo check` failed on
 absent `SchedulerLocalExecutor` / `spawn_dedicated`. `4efba716` was adapted to
 `LineHint`. Duplicate `#[test]` from the `4ed3738c` port was dropped in
-`a3aa5526`.
+`1d63e442`.
 
 ## Per-commit notes
 
@@ -214,5 +214,5 @@ NOT RUN cargo test --workspace
 ```
 
 The reviewed baseline is `aa3718614b3ade75524be6f8b2e101bd1166e02c`.
-Work remains on `sync/upstream-2026-08-18` at `1044617cfc` and has not been
+Work remains on `sync/upstream-2026-08-18` at `2fe4b4bd4d` and has not been
 merged to `main`.

@@ -8,7 +8,7 @@ description: Selective Zed upstream sync audit.
 ## Scope
 
 - Target branch: `sync/upstream-2026-09-06` from `main` at
-  `3b792ba6f8129c8381332dab9acba4e217941973`
+  `c32b3602dbdb940eaf523b65f9e7e68aa5c540f7`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previously reviewed baseline: `1057c2cf3d5b4aefd04755e1387c7826a4d7fba6`
 - Reviewed upstream head: `9bda6b4e0342f22680bc1e7fcd847f4697c48874`

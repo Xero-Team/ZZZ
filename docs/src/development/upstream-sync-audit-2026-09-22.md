@@ -8,7 +8,7 @@ description: Re-audit of past Zed upstream absorption records.
 ## Scope
 
 - Repository: ZZZ, local `main` at
-  `a8be04d04f7471b8aef85b6f84658e5c834b3808`
+  `50d748832b8e0a7cd290b11957de82584bb4b2d8`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Audited records: `docs/src/development/upstream-sync-2026-07-03.md`
   through `upstream-sync-2026-09-18.md`
@@ -29,7 +29,7 @@ of its decision rows and narrative. The surviving counts were short by 20
 (151 instead of 171), the scope baseline said `0d08af1e` instead of
 `490aad88`, and every `## Batch N` section was offset by one.
 
-The rows and narrative were recovered from commit `35b4e80a9d` and restored.
+The rows and narrative were recovered from commit `45e6c5fae8` and restored.
 All referenced local commits still exist on `main`.
 
 ### F2: Version-follow commits were classified inconsistently
@@ -42,14 +42,14 @@ two of them were later absorbed without updating the record. The current
 
 | Upstream | Version | Was | Now | Local commit               |
 | -------- | ------- | --- | --- | -------------------------- |
-| e24eeb71 | v1.15.0 | C   | B   | superseded by `209a6048`   |
-| 02c6dd95 | v1.16.0 | C   | B   | superseded by `209a6048`   |
-| b13f6c71 | v1.17.0 | B   | B   | `209a6048`                 |
-| 0a4a4a95 | v1.18.0 | C   | B   | superseded by `36ec8c40d7` |
-| ac099b4a | v1.19.0 | C   | B   | `36ec8c40d7`               |
-| ff68a64c | v1.20.0 | C   | B   | `f36e6093a5`               |
-| 71b60bba | v1.21.0 | C   | B   | superseded by `57b5799a`   |
-| b0db8327 | v1.22.0 | B   | B   | `57b5799a`                 |
+| e24eeb71 | v1.15.0 | C   | B   | superseded by `9e40f452`   |
+| 02c6dd95 | v1.16.0 | C   | B   | superseded by `9e40f452`   |
+| b13f6c71 | v1.17.0 | B   | B   | `9e40f452`                 |
+| 0a4a4a95 | v1.18.0 | C   | B   | superseded by `8ad9315d1e` |
+| ac099b4a | v1.19.0 | C   | B   | `8ad9315d1e`               |
+| ff68a64c | v1.20.0 | C   | B   | `f5787a4f69`               |
+| 71b60bba | v1.21.0 | C   | B   | superseded by `c5133374`   |
+| b0db8327 | v1.22.0 | B   | B   | `c5133374`                 |
 
 Superseded versions carry no separate local commit because a later follow
 already moved `crates/zzz` past them.
@@ -123,7 +123,7 @@ ten local commits (`7b4c1a46f9`, `fb304e06b8`, `89c1511729`, `4a20d45f0a`,
 ```text
 PASS git diff --check
 PASS no report lost decision rows relative to its historical union
-PASS restored batch 1 rows match commit 35b4e80a9d
+PASS restored batch 1 rows match commit 45e6c5fae8
 PASS local commits referenced by restored rows exist on main
 PASS cd docs && npx prettier --check src/development/
 PASS cargo check --locked -p worktree -p project -p open_ai -p reqwest_client -p http_client -p git -p fs -p git_ui

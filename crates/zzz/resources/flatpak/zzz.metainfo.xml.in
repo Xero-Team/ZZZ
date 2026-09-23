@@ -36,8 +36,8 @@
 
     <url type="homepage">https://github.com/Xero-Team/ZZZ</url>
     <url type="bugtracker">https://github.com/Xero-Team/ZZZ/issues</url>
-    <url type="faq">https://github.com/Xero-Team/ZZZ/wiki</url>
-    <url type="help">https://github.com/Xero-Team/ZZZ/wiki</url>
+    <url type="faq">https://github.com/Xero-Team/ZZZ/tree/main/docs</url>
+    <url type="help">https://github.com/Xero-Team/ZZZ/tree/main/docs</url>
     <url type="contact">https://github.com/Xero-Team/ZZZ/issues</url>
     <url type="vcs-browser">https://github.com/Xero-Team/ZZZ</url>
     <url type="contribute">https://github.com/Xero-Team/ZZZ/blob/main/CONTRIBUTING.md</url>

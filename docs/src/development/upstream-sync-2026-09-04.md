@@ -8,7 +8,7 @@ description: Selective Zed upstream sync audit.
 ## Scope
 
 - Target branch: `sync/upstream-2026-09-04` from `main` at
-  `f312d0c2941d32da6a5a5c88010c86866a051e96`
+  `c50bffed185cfbd117e35aa7e55c2505b9081468`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previously reviewed baseline: `5f2d7ad735c266854503c1f40e9b490a8fd0e3a0`
 - Reviewed upstream head: `1057c2cf3d5b4aefd04755e1387c7826a4d7fba6`
@@ -25,24 +25,24 @@ the queried range.
 
 | Upstream | Class | Local commit | Disposition                                                                                               |
 | -------- | ----- | ------------ | --------------------------------------------------------------------------------------------------------- |
-| b1a7ef0c | B     | a061e169     | Snap recomputed padding to the device pixel grid; cherry-pick conflicted on divergent gpui div tests.     |
-| d7b9b385 | A     | b86f40aa     | Cherry-picked with `-x -s`.                                                                               |
+| b1a7ef0c | B     | 192c0d63     | Snap recomputed padding to the device pixel grid; cherry-pick conflicted on divergent gpui div tests.     |
+| d7b9b385 | A     | 59cb7720     | Cherry-picked with `-x -s`.                                                                               |
 | f0d8b0b0 | C     | --           | New `HoverListenerMode` API with no current ZZZ caller once the which-key indicator is rejected.          |
 | d85eade7 | C     | --           | Pending-keystrokes indicator needs a GPUI timeout rewrite, unused hover API, and localized settings_ui.   |
-| 33375c34 | B     | cd3a2c23     | Commit details use `format_timestamp`; upstream `git_ui/src/git_graph.rs` path is absent.                 |
-| 55c0cc36 | B     | 18f12069     | Dismiss the SSH-config Open Folder picker; `RemoteServerPickerDelegate` is absent.                        |
-| 801c087a | B     | 0cb520d8     | Terminate git revisions with `--`; omit absent `MergeBaseWithWorktree`.                                   |
-| e621c4f4 | B     | 363d3e75     | `active_item_as` falls back to `act_as`; omit MultiWorkspace git-graph test.                              |
-| ed8d6004 | B     | 024ae938     | Git panel `HistoryList` key context; keep local ChangesList-specific bindings.                            |
+| 33375c34 | B     | 9654ff01     | Commit details use `format_timestamp`; upstream `git_ui/src/git_graph.rs` path is absent.                 |
+| 55c0cc36 | B     | 1ee35b30     | Dismiss the SSH-config Open Folder picker; `RemoteServerPickerDelegate` is absent.                        |
+| 801c087a | B     | a11f2959     | Terminate git revisions with `--`; omit absent `MergeBaseWithWorktree`.                                   |
+| e621c4f4 | B     | 58cbf250     | `active_item_as` falls back to `act_as`; omit MultiWorkspace git-graph test.                              |
+| ed8d6004 | B     | c2d21de6     | Git panel `HistoryList` key context; keep local ChangesList-specific bindings.                            |
 | 73ee8fa0 | C     | --           | Native agent `ask_user` elicitation; the file is absent.                                                  |
 | 63e31fb7 | C     | --           | Community PR-board GitHub triage automation.                                                              |
 | 3ce72bab | C     | --           | Unused `Hitbox::is_hovered_at` public API with no ZZZ caller.                                             |
 | 5b055fa7 | C     | --           | Cloud notification websocket plus telemetry `system_id` refresh.                                          |
 | 59b0c714 | C     | --           | GitHub young-account / Zed Business sign-in layout.                                                       |
 | 49d01146 | C     | --           | OpenAI 404 retry needs `ProviderRejection`/`is_transient` and native agent `thread.rs`.                   |
-| 28e52a28 | B     | 434b0ffc     | Always send OpenCode session headers; omit native-agent/sidebar request wiring.                           |
+| 28e52a28 | B     | 48d6d695     | Always send OpenCode session headers; omit native-agent/sidebar request wiring.                           |
 | 206a863a | C     | --           | gpui_web example-only `run_embedded` migration; no product caller and the local example already diverged. |
-| 1057c2cf | B     | 5ffd8afb     | Redact docker exec environment secrets and reject invalid env names.                                      |
+| 1057c2cf | B     | 565242e8     | Redact docker exec environment secrets and reject invalid env names.                                      |
 
 ## Applied work
 

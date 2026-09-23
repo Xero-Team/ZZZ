@@ -9,15 +9,7 @@ description: "Build and install ZZZ locally on Windows."
 
 Build and install ZZZ locally using the instructions in this repository. Automatic updates are disabled by default.
 
-You can also build ZZZ from source; see [the Windows development guide](./development/windows.md).
-
-### Package managers
-
-Additionally, you can install ZZZ using winget:
-
-```sh
-winget install -e --id ZZZEditor.ZZZ
-```
+There is no winget, Chocolatey, or installer package for ZZZ. Build from source with the [Windows development guide](./development/windows.md).
 
 ## Uninstall
 
