@@ -24,6 +24,10 @@ The live upstream query at `2026-08-07T19:16:41+02:00` returned
 `027cf0def75e5c027504f402a6a6c0dcac11f178`; commits after the reviewed range
 are not claimed as audited or synchronized.
 
+Correction 2026-09-24: `41c0f28b` and `c7aea6cb` were later absorbed as
+`772132ec1d` and `e39b426b14`; their rows are reclassified from `C` to
+`B` below.
+
 ## Decisions
 
 | Upstream | Class | Local commit       | Disposition                                                                                  |
@@ -115,7 +119,7 @@ are not claimed as audited or synchronized.
 | 4f047acc | C     | --                 | V4 cursor-marker route is absent from ZZZ's edit_prediction API.                             |
 | 9c7a5c94 | A     | be9e42c6           | CLI `--existing` option documented.                                                          |
 | 56cf49bc | B     | 075a221b           | Gruvbox parameter colors adapted to divergent local theme data.                              |
-| c7aea6cb | C     | --                 | Requires absent GPUI ExternalDragPayload/FileDragPaths and PlatformWindow drag APIs.         |
+| c7aea6cb | B     | e39b426b14         | Wayland outbound file drags; absorbed after the GPUI drag APIs landed.                       |
 | 1ac840ab | B     | fc016550           | WSL host-path translation retained with local remote/drop APIs.                              |
 | 59cb143c | C     | --                 | Triage automation.                                                                           |
 | 2318f45f | C     | --                 | Broad MultiWorkspace/recent-project lifecycle rewrite; no isolated safe port.                |
@@ -137,7 +141,7 @@ are not claimed as audited or synchronized.
 | be8c6f9f | C     | --                 | Large cross-platform renderer resource rewrite cannot be isolated safely.                    |
 | b036368c | C     | --                 | Native agent sidebar UI, outside ACP-only scope.                                             |
 | 7759e9f9 | C     | --                 | Removes an upstream-only auto-watch flag absent from ZZZ's feature policy.                   |
-| 41c0f28b | C     | --                 | Requires absent `MergeBaseWithWorktree` protocol variant.                                    |
+| 41c0f28b | B     | 772132ec1d         | Remote diff compatibility; absorbed after the protocol variant landed.                       |
 | b5764581 | B     | 111dc69b, 8f06ca23 | Re-resolve local MCP settings after worktree changes; adapted the worktree-event test.       |
 | 4aad57fd | C     | --                 | Broad remote workspace lifetime/recent-project flow rewrite.                                 |
 | e717010c | C     | --                 | WSL streaming fallback is coupled to upstream remote transport lifecycle.                    |
@@ -788,6 +792,7 @@ PASS git diff --check
   WSL-only dropped-file translation uses the existing local path helper.
 - `c7aea6cbbd43a5849c4f8be6cbd74789e9ca48c6`: C. Required external-drag
   GPUI APIs are absent from ZZZ, so the attempted port was reverted.
+  Superseded: absorbed as `e39b426b14` in the 2026-09-24 correction.
 - `21f16f7b5b968092cf4cd9cb38684a2854834fda`: C. The full diff is a broad
   crate extraction, Cargo.lock/workflow churn, and incremental-build policy;
   it has no independent user-facing behavior and would import unrelated
@@ -906,6 +911,7 @@ failure is unrelated to the selected-column fix and was not changed here.
   that `ExternalDragPayload`, `FileDragPaths`, `FileDropEvent::Ended`, and
   the `PlatformWindow` external-drag methods are absent from ZZZ's GPUI.
   The attempted port was reverted and left no retained code.
+  Superseded: absorbed as `e39b426b14` in the 2026-09-24 correction.
 - `2318f45f4c13d6e57486d25498fe2715d21b14d0`: C. The multi-workspace and
   recent-project lifecycle rewrite is too broad to isolate without importing
   upstream UI/persistence assumptions.
@@ -931,6 +937,7 @@ failure is unrelated to the selected-column fix and was not changed here.
 - `41c0f28bf9ab5c5b7318810449ac810a74f2fdd3`: C. The required
   `MergeBaseWithWorktree` variant is absent from ZZZ; the attempted port was
   reverted after `cargo check -p project` failed.
+  Superseded: absorbed as `772132ec1d` in the 2026-09-24 correction.
 - `b5764581d2136b48fdad826a36fabe138b887369`: B, local commits
   `111dc69b11` and test-only `8f06ca2315`. Effective local MCP settings are
   re-resolved when worktrees change; the worktree-event test was adapted to

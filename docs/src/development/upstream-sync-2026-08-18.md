@@ -22,8 +22,9 @@ ZZZ's local-first, no-account, ACP-only boundary, or failed isolation.
 
 The reviewed baseline is now `aa3718614b3ade75524be6f8b2e101bd1166e02c`.
 The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
-`--shallow-since=2026-08-06` restored ancestry. Counts: 29 A, 17 B, 70 C
-(after the 2026-09-22 re-audit ported ten commits).
+`--shallow-since=2026-08-06` restored ancestry. Counts: 30 A, 17 B, 69 C
+(after the 2026-09-22 re-audit ported ten commits and the 2026-09-24
+correction absorbed `9bde578e`).
 
 ## Decisions
 
@@ -106,7 +107,7 @@ The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
 | f0685e0a | C     | --           | Parent-revision blame; git/proto conflict.                     |
 | 3cf86bed | C     | --           | OpenAI subscribed account models.                              |
 | 9f164a0d | C     | --           | Native agent Chat Completions share.                           |
-| 9bde578e | C     | --           | ACP dedicated thread needs absent `spawn_dedicated`.           |
+| 9bde578e | A     | dcafe24237   | Cherry-picked with `-x -s` after `spawn_dedicated` landed.     |
 | 1e3d8b5a | B     | fb304e06b8   | Share the search snapshot behind an Arc; ported after review.  |
 | 56b1e79a | A     | 4cc4126f     | Cherry-picked with `-x -s`.                                    |
 | 939d2d70 | A     | --           | Already equivalent title_bar test-support.                     |
@@ -156,7 +157,8 @@ upstream remote was created.
 App version followed upstream: `crates/zzz` is now `1.17.0`.
 
 `9bde578e` was cherry-picked then fully reverted after `cargo check` failed on
-absent `SchedulerLocalExecutor` / `spawn_dedicated`. `4efba716` was adapted to
+absent `SchedulerLocalExecutor` / `spawn_dedicated`; it was absorbed later
+as `dcafe24237` once `spawn_dedicated` landed. `4efba716` was adapted to
 `LineHint`. Duplicate `#[test]` from the `4ed3738c` port was dropped in
 `1d63e442`.
 
@@ -182,7 +184,7 @@ absent `SchedulerLocalExecutor` / `spawn_dedicated`. `4efba716` was adapted to
 Philosophy: subscribed/ChatGPT routes, native agent panel/thread/tools,
 guild/CI/community/legal/marketing docs.
 
-Missing architecture: `lsp_locations`, `spawn_dedicated`, elapsed RPC
+Missing architecture: `lsp_locations`, elapsed RPC
 tracker, deleted editor modules (`completions.rs`, `code_actions.rs`,
 `element/mouse.rs`, `alacritty.rs`, staged/unstaged diffs).
 
