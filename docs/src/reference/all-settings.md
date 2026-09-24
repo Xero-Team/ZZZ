@@ -100,7 +100,7 @@ To configure panel sizing, open the Settings Editor and search for “Agent Pane
 
 ### Flexible Sizing {#agent-panel-flexible-sizing}
 
-- Description: Whether the agent panel uses flexible (proportional) sizing when docked to the left or right. When enabled, `agent.default_width` does not control the panel width, and double-clicking the panel’s outer resize handle restores the default proportion.
+- Description: Whether the agent panel uses flexible (proportional) sizing when docked to the left or right. When enabled, `agent.default_width` does not control the panel width, and double-clicking the panel's outer resize handle restores the default proportion.
 - Setting: `agent.flexible`
 - Default: `true`
 
@@ -679,6 +679,7 @@ For the case of "open", regular selection behavior can be achieved by holding `a
 - Default:
 
 ```json [settings]
+{
   "edit_predictions": {
     "disabled_globs": [
       "**/.env*",
@@ -693,6 +694,7 @@ For the case of "open", regular selection behavior can be achieved by holding `a
       "/**/zzz/keymap.json"
     ]
   }
+}
 ```
 
 **Options**
@@ -737,13 +739,29 @@ For the case of "open", regular selection behavior can be achieved by holding `a
 
 ### Disabled Globs
 
-- Description: A list of globs for which edit predictions should be disabled for. This list adds to a pre-existing, sensible default set of globs. Any additional ones you add are combined with them.
+- Description: Disable edit predictions for files matching these glob patterns.
 - Setting: `disabled_globs`
 - Default: `["**/.env*", "**/*.pem", "**/*.key", "**/*.cert", "**/*.crt", "**/.dev.vars", "**/secrets.yml", "**/.zzz/settings.json", "/**/zzz/settings.json", "/**/zzz/keymap.json"]`
 
 **Options**
 
 List of `string` values.
+
+Use `"..."` to add patterns without repeating ZZZ's defaults. In project settings, it extends the user or parent configuration value. Omit `"..."` to replace the inherited list.
+
+```json [settings]
+{
+  "edit_predictions": {
+    "disabled_globs": ["**/build/**", "..."]
+  }
+}
+```
+
+Inherited patterns are inserted at `"..."`, and duplicates keep their first occurrence.
+
+Set `[]` to clear the inherited list. Omit this setting to inherit it unchanged.
+
+Relative patterns are matched against paths relative to the worktree root. Absolute patterns are matched against absolute paths. A leading `~` is expanded to your home folder.
 
 ## Edit Predictions Disabled in
 
@@ -1721,7 +1739,7 @@ Each option controls displaying of a particular toolbar element. If all elements
 
 ## Use System Tabs
 
-- Description: Whether to allow windows to tab together based on the user’s tabbing preference (macOS only).
+- Description: Whether to allow windows to tab together based on the user's tabbing preference (macOS only).
 - Setting: `use_system_window_tabs`
 - Default: `false`
 
