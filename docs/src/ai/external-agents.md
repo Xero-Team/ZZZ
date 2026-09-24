@@ -227,29 +227,6 @@ This can be useful if you're in the middle of developing a new agent that speaks
 
 It's also possible to customize environment variables for registry-installed agents like Claude Agent, Codex, and Gemini CLI by using their registry names (`claude-acp`, `codex-acp`, `gemini`) with `"type": "registry"` in your settings.
 
-### OpenCode {#opencode}
-
-The public ACP registry still lists OpenCode 1.x GitHub release
-archives. Those GitHub v1 assets are stale: OpenCode v2 is not
-published as a GitHub Release, and the ACP command remains
-`opencode acp`. ZZZ rewrites registry-installed OpenCode 1.x entries
-to the latest v2 binaries from `https://opencode.ai/files/bin/`
-before download.
-
-To use an OpenCode binary you already have, add a custom agent:
-
-```json [settings]
-{
-  "agent_servers": {
-    "opencode": {
-      "type": "custom",
-      "command": "opencode",
-      "args": ["acp"]
-    }
-  }
-}
-```
-
 ## Debugging Agents
 
 When using external agents in ZZZ, you can access the debug view with `dev: open acp logs` from the Command Palette.
