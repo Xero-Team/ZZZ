@@ -4,7 +4,9 @@ use anyhow::Result;
 use encoding_rs;
 use fs::{FakeFs, Fs, PathEventKind, RealFs, RemoveOptions};
 use git::{DOT_GIT, GITIGNORE, REPO_EXCLUDE};
-use gpui::{AppContext as _, BackgroundExecutor, BorrowAppContext, Context, Task, TestAppContext};
+use gpui::{
+    AppContext as _, BackgroundExecutor, BorrowAppContext, Context, Entity, Task, TestAppContext,
+};
 use parking_lot::Mutex;
 use postage::stream::Stream;
 use pretty_assertions::assert_eq;
@@ -13,7 +15,7 @@ use rpc::{AnyProtoClient, NoopProtoClient, proto};
 use worktree::{Entry, EntryKind, Event, PathChange, Worktree, WorktreeModelHandle};
 
 use serde_json::json;
-use settings::{SettingsStore, SplicingVec, WorktreeId};
+use settings::{LocalSettingsKind, LocalSettingsPath, SettingsStore, SplicingVec, WorktreeId};
 use std::{
     cell::Cell,
     env,
@@ -1751,7 +1753,8 @@ async fn test_hidden_files(cx: &mut TestAppContext) {
     cx.update(|cx| {
         cx.update_global::<SettingsStore, _>(|store, cx| {
             store.update_user_settings(cx, |settings| {
-                settings.project.worktree.hidden_files = Some(vec!["**/*.log".to_string()]);
+                settings.project.worktree.hidden_files =
+                    Some(SplicingVec::from(vec!["**/*.log".to_string()]));
             });
         });
     });
@@ -1778,6 +1781,124 @@ async fn test_hidden_files(cx: &mut TestAppContext) {
             ]
         );
     });
+}
+
+#[gpui::test]
+async fn test_hidden_files_from_project_settings(cx: &mut TestAppContext) {
+    init_test(cx);
+    let worktree_id = WorktreeId::from_proto(0);
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            ".hidden_dir": {
+                "nested.rs": ""
+            },
+            ".hidden_file": "",
+            "app.log": "",
+            "generated": {
+                "nested.rs": ""
+            },
+            "visible.rs": ""
+        }),
+    )
+    .await;
+    let tree = build_worktree(fs, path!("/root"), cx).await;
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entries(true, 0)
+                .filter(|entry| entry.is_hidden)
+                .map(|entry| entry.path.as_ref())
+                .collect::<Vec<_>>(),
+            vec![
+                rel_path(".hidden_dir"),
+                rel_path(".hidden_dir/nested.rs"),
+                rel_path(".hidden_file"),
+            ]
+        );
+    });
+
+    cx.update(|cx| {
+        cx.update_global::<SettingsStore, _>(|store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.project.worktree.hidden_files = Some(SplicingVec::from(vec![
+                    "**/*.log".to_string(),
+                    SplicingVec::REST.to_string(),
+                ]));
+            });
+        });
+    });
+
+    for (settings, hidden_paths) in [
+        (
+            None,
+            vec![
+                rel_path(".hidden_dir"),
+                rel_path(".hidden_dir/nested.rs"),
+                rel_path(".hidden_file"),
+                rel_path("app.log"),
+            ],
+        ),
+        (
+            Some(r#"{ "hidden_files": ["**/generated", "..."] }"#),
+            vec![
+                rel_path(".hidden_dir"),
+                rel_path(".hidden_dir/nested.rs"),
+                rel_path(".hidden_file"),
+                rel_path("app.log"),
+                rel_path("generated"),
+                rel_path("generated/nested.rs"),
+            ],
+        ),
+        (
+            Some(r#"{ "hidden_files": ["**/generated"] }"#),
+            vec![rel_path("generated"), rel_path("generated/nested.rs")],
+        ),
+        (Some(r#"{ "hidden_files": [] }"#), vec![]),
+    ] {
+        cx.update(|cx| {
+            cx.update_global::<SettingsStore, _>(|store, cx| {
+                store
+                    .set_local_settings(
+                        worktree_id,
+                        LocalSettingsPath::InWorktree(Arc::from(RelPath::empty())),
+                        LocalSettingsKind::Settings,
+                        settings,
+                        cx,
+                    )
+                    .expect("valid project settings");
+            });
+        });
+        cx.run_until_parked();
+        tree.read_with(cx, |tree, _| {
+            tree.as_local().expect("local worktree").scan_complete()
+        })
+        .await;
+        tree.read_with(cx, |tree, _| {
+            assert_eq!(
+                tree.entries(true, 0)
+                    .filter(|entry| entry.is_hidden)
+                    .map(|entry| entry.path.as_ref())
+                    .collect::<Vec<_>>(),
+                hidden_paths
+            );
+            assert_eq!(
+                tree.entries(true, 0)
+                    .map(|entry| entry.path.as_ref())
+                    .collect::<Vec<_>>(),
+                vec![
+                    rel_path(""),
+                    rel_path(".hidden_dir"),
+                    rel_path(".hidden_dir/nested.rs"),
+                    rel_path(".hidden_file"),
+                    rel_path("app.log"),
+                    rel_path("generated"),
+                    rel_path("generated/nested.rs"),
+                    rel_path("visible.rs"),
+                ]
+            );
+        });
+    }
 }
 
 #[gpui::test]
@@ -4825,6 +4946,23 @@ fn init_test(cx: &mut gpui::TestAppContext) {
         let settings_store = SettingsStore::test(cx);
         cx.set_global(settings_store);
     });
+}
+
+async fn build_worktree(fs: Arc<FakeFs>, root: &str, cx: &mut TestAppContext) -> Entity<Worktree> {
+    let tree = Worktree::local(
+        Path::new(root),
+        true,
+        fs,
+        Arc::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .unwrap();
+    cx.read(|cx| tree.read(cx).as_local().unwrap().scan_complete())
+        .await;
+    tree
 }
 
 async fn wait_for_condition(
