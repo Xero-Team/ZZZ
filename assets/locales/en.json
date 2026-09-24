@@ -595,7 +595,7 @@
     "settings_ui.page_data.description.controls.when.to.use.system.clipboard.in.vim.mode": "Controls when to use system clipboard in Vim mode.",
     "settings_ui.page_data.description.controls.where.the.editor.rewrap.action.is.allowed.for.this.language": "Controls where the `editor::rewrap` action is allowed for this language.",
     "settings_ui.page_data.description.controls.whether.edit.predictions.are.shown.immediately.or.manually": "Controls whether edit predictions are shown immediately or manually.",
-    "settings_ui.page_data.description.controls.whether.edit.predictions.are.shown.in.the.given.language.scopes": "Controls whether edit predictions are shown in the given language scopes.",
+    "settings_ui.page_data.description.controls.whether.edit.predictions.are.shown.in.the.given.language.scopes": "Disable edit predictions in these language scopes, such as \"comment\" and \"string\". Use \"...\" to add scopes without repeating the inherited list.",
     "settings_ui.page_data.description.controls.whether.the.closing.characters.are.always.skipped.over.and.auto.removed.no.matter.how.they.were.inserted": "Controls whether the closing characters are always skipped over and auto-removed no matter how they were inserted.",
     "settings_ui.page_data.description.cursor.shape.for.insert.mode.inherit.uses.the.editor.s.cursor.shape": "Cursor shape for insert mode. Inherit uses the editor's cursor shape.",
     "settings_ui.page_data.description.cursor.shape.for.normal.mode": "Cursor shape for normal mode.",

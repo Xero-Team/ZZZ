@@ -11772,7 +11772,7 @@ fn edit_prediction_language_settings_section() -> [SettingsPageItem; 4] {
             ),
             description: lt(
                 "settings_ui.page_data.description.controls.whether.edit.predictions.are.shown.in.the.given.language.scopes",
-                "Controls whether edit predictions are shown in the given language scopes.",
+                "Disable edit predictions in these language scopes, such as \"comment\" and \"string\". Use \"...\" to add scopes without repeating the inherited list.",
             ),
             field: Box::new(
                 SettingField {

@@ -595,7 +595,7 @@
     "settings_ui.page_data.description.controls.when.to.use.system.clipboard.in.vim.mode": "控制在 Vim 模式下何时使用系统剪贴板。",
     "settings_ui.page_data.description.controls.where.the.editor.rewrap.action.is.allowed.for.this.language": "控制此语言允许在何处使用 `editor::rewrap` 操作。",
     "settings_ui.page_data.description.controls.whether.edit.predictions.are.shown.immediately.or.manually": "控制编辑预测是立即显示还是手动显示。",
-    "settings_ui.page_data.description.controls.whether.edit.predictions.are.shown.in.the.given.language.scopes": "控制是否在指定的语言作用域中显示编辑预测。",
+    "settings_ui.page_data.description.controls.whether.edit.predictions.are.shown.in.the.given.language.scopes": "在这些语言作用域中禁用编辑预测，例如 \"comment\" 和 \"string\"。使用 \"...\" 可在不重复继承列表的情况下添加作用域。",
     "settings_ui.page_data.description.controls.whether.the.closing.characters.are.always.skipped.over.and.auto.removed.no.matter.how.they.were.inserted": "控制是否始终跳过并自动删除闭合字符，无论它们是如何插入的。",
     "settings_ui.page_data.description.cursor.shape.for.insert.mode.inherit.uses.the.editor.s.cursor.shape": "插入模式下的光标形状。`inherit` 使用编辑器的光标形状。",
     "settings_ui.page_data.description.cursor.shape.for.normal.mode": "普通模式下的光标形状。",
