@@ -5799,7 +5799,16 @@ impl Workspace {
                 .detach();
         }
 
-        if focus_changed && let Some(project_path) = &active_entry {
+        // Infer the active repository only from singleton items.
+        // A multibuffer's active path represents the cursor's location within
+        // an aggregate view, so we assume it's not the user's intent to switch
+        // repositories.
+        if focus_changed
+            && let Some(project_path) = &active_entry
+            && self
+                .active_item(cx)
+                .is_some_and(|item| item.buffer_kind(cx) == ItemBufferKind::Singleton)
+        {
             let git_store_entity = self.project.read(cx).git_store().clone();
             git_store_entity.update(cx, |git_store, cx| {
                 git_store.set_active_repo_for_path(project_path, cx);
