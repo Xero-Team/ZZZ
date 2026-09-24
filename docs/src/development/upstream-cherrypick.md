@@ -68,3 +68,47 @@ out. See `README.md` and the skill `REFERENCE.md`.
 
 Each run appends or creates
 `docs/src/development/upstream-sync-YYYY-MM-DD.md`.
+
+## Rejection Ledger
+
+Every class C decision is recorded in
+`docs/src/development/upstream-rejected.tsv`. The ledger is the dedup
+index for re-review: a SHA listed there was already rejected and does
+not need another look unless a later report supersedes it.
+
+The file is generated from the decision tables in the sync reports:
+
+```sh
+./script/backfill-upstream-ledger
+```
+
+`script/check-upstream-ledger` fails when the ledger is stale, is
+malformed, has duplicate SHA prefixes, or lists a commit that was
+actually absorbed. It runs in CI next to `check-philosophy`.
+
+Known absorbed-but-still-listed commits are documented in
+`script/upstream-ledger-allowlist` until the report is corrected.
+
+## Status
+
+`script/upstream-status` reads `LAST_REVIEWED_UPSTREAM` from the skill
+reference, fetches live upstream, and prints the unreviewed commits and
+how many are already in the rejection ledger:
+
+```sh
+./script/upstream-status
+./script/upstream-status --limit 10
+```
+
+## Re-Audit
+
+The forward pass is `absorbing-upstream`. Re-checking past decisions is
+`auditing-upstream`:
+
+- Switch to the `auditing-upstream` agent, or
+- Run `/auditing-upstream`.
+
+It cross-references recorded `C` decisions against later local commits,
+re-runs the isolation test, corrects stale reports, and maintains the
+rejection ledger. See
+`.agents/skills/auditing-upstream/REFERENCE.md`.

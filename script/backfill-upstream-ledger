@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""Backfill the upstream rejection ledger from the sync reports."""
+
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+DIR = ROOT / "docs" / "src" / "development"
+LEDGER = DIR / "upstream-rejected.tsv"
+
+SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+CLASSES = ("A", "B", "C")
+REASONS = (
+    "philosophy",
+    "absent-api",
+    "unisolatable",
+    "upstream-infra",
+    "release-metadata",
+    "diverged",
+    "untriaged",
+)
+
+PATTERNS = (
+    ("philosophy", r"telemetry|account|billing|subscription|trial|upgrade|copilot|chatgpt|collab|native agent|zed agent|hosted|cloud|discord|onboarding|mercury|zeta|sign"),
+    ("release-metadata", r"release metadata|version follow|bump zed|bump zzz"),
+    ("upstream-infra", r"release|lockfile|npm|benchmark|workflow|marketing|triage|infra|bloat|flaky|upstream-only|metadata|docs"),
+    ("absent-api", r"absent|does not exist|not present|no local|missing|deleted|no zzz caller|not compile"),
+    ("diverged", r"diverg|conflict"),
+    ("unisolatable", r"unisolat|rewrite|refactor|entangl|multiworkspace"),
+)
+
+
+def reason_for(note):
+    low = note.lower()
+    for code, pattern in PATTERNS:
+        if re.search(pattern, low):
+            return code
+    return "untriaged"
+
+
+def clean(text):
+    text = text.replace("\t", " ")
+    text = text.replace("\n", " ")
+    text = text.replace("\r", " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def table_rows(path):
+    found = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if len(cells) != 4:
+            continue
+        sha = cells[0]
+        cls = cells[1]
+        if cls in CLASSES and SHA_RE.match(sha):
+            found.append((sha, cls, clean(cells[3])))
+    return found
+
+
+def block_rows(path):
+    note = "Rejected in this sync; see the report for the section-level rationale."
+    found = []
+    inside = False
+    fence = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if re.match(r"^#{2,3} ", line):
+            inside = bool(re.match(r"^#{2,3} C[:\s]", line))
+            fence = False
+            continue
+        if not inside:
+            continue
+        if line.strip().startswith("```"):
+            fence = not fence
+            continue
+        if fence:
+            for token in line.split():
+                if SHA_RE.match(token):
+                    found.append((token, "C", note))
+    return found
+
+
+def collect(reports):
+    latest = {}
+    longest = {}
+    for path in reports:
+        rows = table_rows(path) + block_rows(path)
+        for sha, cls, note in rows:
+            prefix = sha[:8]
+            old = longest.get(prefix, "")
+            if len(sha) > len(old):
+                longest[prefix] = sha
+            latest[prefix] = (cls, note, path.name)
+    result = {}
+    for prefix in latest:
+        cls, note, source = latest[prefix]
+        result[prefix] = (longest[prefix], cls, note, source)
+    return result
+
+
+def render(decisions):
+    header = []
+    header.append("# ZZZ upstream rejection ledger (class C).")
+    header.append("#")
+    header.append("# One row per upstream commit ZZZ classified C and did not absorb.")
+    header.append("# This is the dedup index for re-review: a SHA listed here was")
+    header.append("# already rejected and must not be re-triaged unless a later")
+    header.append("# report supersedes it.")
+    header.append("#")
+    header.append("# Columns (tab-separated): sha, class, reason_code, note, source")
+    header.append("# reason_code is one of: " + ", ".join(REASONS) + ".")
+    header.append("# untriaged marks a backfilled row whose bucket still needs review.")
+    header.append("# Regenerate: ./script/backfill-upstream-ledger")
+    header.append("# Validate:   ./script/check-upstream-ledger")
+    header.append("sha\tclass\treason_code\tnote\tsource")
+    body = []
+    for prefix in sorted(decisions):
+        sha, cls, note, source = decisions[prefix]
+        if cls != "C":
+            continue
+        fields = [sha, "C", reason_for(note), note, source]
+        body.append("\t".join(fields))
+    return "\n".join(header + body) + "\n"
+
+
+def main():
+    if len(sys.argv) > 1:
+        output = Path(sys.argv[1]).resolve()
+    else:
+        output = LEDGER
+    reports = []
+    for path in sorted(DIR.glob("upstream-sync-*.md")):
+        if path.name.startswith("upstream-sync-audit-"):
+            continue
+        reports.append(path)
+    if not reports:
+        print("no sync reports found", file=sys.stderr)
+        return 1
+    decisions = collect(reports)
+    output.write_text(render(decisions), encoding="utf-8")
+    count = 0
+    for prefix in decisions:
+        if decisions[prefix][1] == "C":
+            count = count + 1
+    try:
+        shown = output.relative_to(ROOT)
+    except ValueError:
+        shown = output
+    print("wrote " + str(count) + " rejection rows to " + str(shown))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

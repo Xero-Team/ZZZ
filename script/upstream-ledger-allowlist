@@ -1,0 +1,9 @@
+# Upstream ledger exceptions.
+#
+# `script/check-upstream-ledger` fails when a SHA in the rejection ledger is
+# also present as an absorbed commit in git history. Each entry below is a
+# known case where the sync report still says C but the commit was absorbed
+# later. Fix the report, run ./script/backfill-upstream-ledger, then delete
+# the line.
+#
+# Format: <sha-prefix>  <reason>

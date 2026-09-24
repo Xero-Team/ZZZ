@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""Report the unreviewed Zed upstream range for ZZZ.
+
+Reads LAST_REVIEWED_UPSTREAM from the absorbing-upstream skill reference,
+fetches live upstream, and prints the commits after that baseline together
+with how many are already in the rejection ledger.
+"""
+
+import argparse
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+REFERENCE = ROOT / ".agents" / "skills" / "absorbing-upstream" / "REFERENCE.md"
+LEDGER = ROOT / "docs" / "src" / "development" / "upstream-rejected.tsv"
+DEFAULT_URL = "https://github.com/zed-industries/zed.git"
+DEFAULT_REF = "refs/heads/main"
+BASELINE_RE = re.compile(r"^LAST_REVIEWED_UPSTREAM=([0-9a-f]{7,40})\s*$", re.MULTILINE)
+
+
+def git(*args, check=True):
+    return subprocess.run(
+        ["git", "-C", str(ROOT)] + list(args),
+        check=check,
+        capture_output=True,
+        text=True,
+    )
+
+
+def baseline_from_reference():
+    if not REFERENCE.is_file():
+        return None
+    match = BASELINE_RE.search(REFERENCE.read_text(encoding="utf-8"))
+    return match.group(1) if match else None
+
+
+def ledger_prefixes():
+    prefixes = set()
+    if not LEDGER.is_file():
+        return prefixes
+    for line in LEDGER.read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#") or line.startswith("sha"):
+            continue
+        prefixes.add(line.split("\t")[0][:8])
+    return prefixes
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--url", default=DEFAULT_URL, help="upstream git URL")
+    parser.add_argument("--ref", default=DEFAULT_REF, help="upstream ref")
+    parser.add_argument("--baseline", default=None, help="override the last reviewed SHA")
+    parser.add_argument("--limit", type=int, default=20, help="commits to list per end")
+    args = parser.parse_args()
+
+    baseline = args.baseline or baseline_from_reference()
+    if not baseline:
+        print(
+            "no baseline: pass --baseline or set LAST_REVIEWED_UPSTREAM in "
+            + str(REFERENCE.relative_to(ROOT)),
+            file=sys.stderr,
+        )
+        return 2
+
+    print("baseline (last reviewed): " + baseline)
+
+    live = git("ls-remote", args.url, args.ref, check=False)
+    if live.returncode != 0:
+        print("cannot query " + args.url + " " + args.ref, file=sys.stderr)
+        print(live.stderr.strip(), file=sys.stderr)
+        return 1
+    live_head = live.stdout.split()[0] if live.stdout.split() else ""
+    print("live upstream head:       " + live_head)
+
+    fetch = git("fetch", "--no-tags", args.url, args.ref, check=False)
+    if fetch.returncode != 0:
+        print("fetch failed:", file=sys.stderr)
+        print(fetch.stderr.strip(), file=sys.stderr)
+        return 1
+    head = git("rev-parse", "FETCH_HEAD").stdout.strip()
+    print("fetched head:             " + head)
+
+    if git("merge-base", "--is-ancestor", baseline, head, check=False).returncode != 0:
+        print(
+            "STOP: baseline " + baseline + " is not an ancestor of the fetched head.",
+            file=sys.stderr,
+        )
+        return 1
+
+    log_result = git("log", "--reverse", "--format=%h %s", baseline + ".." + head, check=False)
+    if log_result.returncode != 0:
+        print("cannot read the range " + baseline + ".." + head, file=sys.stderr)
+        print(log_result.stderr.strip(), file=sys.stderr)
+        return 1
+    log = [line for line in log_result.stdout.splitlines() if line.strip()]
+
+    print("")
+    print("unreviewed commits: " + str(len(log)))
+    if not log:
+        print("up to date with the reviewed baseline.")
+        return 0
+
+    rejected = ledger_prefixes()
+    already = [line for line in log if line.split()[0][:8] in rejected]
+    print("already in rejection ledger: " + str(len(already)))
+
+    if len(log) <= args.limit:
+        shown = log
+    else:
+        shown = log[: args.limit] + ["..."] + log[-args.limit :]
+    print("")
+    for line in shown:
+        print("  " + line)
+    if len(log) > args.limit:
+        print("  (" + str(len(log)) + " total; use --limit to change)")
+
+    print("")
+    print("next: run /absorbing-upstream for the range after " + baseline)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

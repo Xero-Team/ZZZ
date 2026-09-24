@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""Validate docs/src/development/upstream-rejected.tsv.
+
+Checks that the ledger is current against the sync reports, is well formed,
+has no duplicate SHA prefixes, and does not list a commit that was actually
+absorbed. Known absorbed-but-still-listed commits live in
+script/upstream-ledger-allowlist; a stale allowlist entry is itself a failure.
+"""
+
+import difflib
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+LEDGER = ROOT / "docs" / "src" / "development" / "upstream-rejected.tsv"
+ALLOWLIST = ROOT / "script" / "upstream-ledger-allowlist"
+BACKFILL = ROOT / "script" / "backfill-upstream-ledger"
+
+SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+ABSORBED_RE = re.compile(r"(?:Upstream: |cherry picked from commit )([0-9a-f]{7,40})")
+
+# Keep in sync with REASONS in script/backfill-upstream-ledger.
+REASONS = (
+    "philosophy",
+    "absent-api",
+    "unisolatable",
+    "upstream-infra",
+    "release-metadata",
+    "diverged",
+    "untriaged",
+)
+
+failures = 0
+
+
+def fail(message):
+    global failures
+    failures = failures + 1
+    print("FAIL: " + message, file=sys.stderr)
+
+
+def data_rows(text):
+    rows = []
+    for line in text.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        fields = line.split("\t")
+        if fields[0] == "sha":
+            continue
+        rows.append(fields)
+    return rows
+
+
+def regenerate():
+    handle = tempfile.NamedTemporaryFile("w", suffix=".tsv", delete=False)
+    temp = Path(handle.name)
+    handle.close()
+    try:
+        subprocess.run(
+            [str(BACKFILL), str(temp)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
+        return temp.read_text(encoding="utf-8")
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def check_stale(actual):
+    expected = regenerate()
+    if actual == expected:
+        return
+    fail("ledger is stale; run ./script/backfill-upstream-ledger")
+    diff = difflib.unified_diff(
+        actual.splitlines(),
+        expected.splitlines(),
+        "committed",
+        "expected",
+        lineterm="",
+    )
+    for line in list(diff)[:40]:
+        print(line, file=sys.stderr)
+
+
+def check_rows(rows):
+    seen = {}
+    for fields in rows:
+        if len(fields) != 5:
+            fail("row does not have 5 fields: " + repr(fields))
+            continue
+        sha = fields[0]
+        cls = fields[1]
+        reason = fields[2]
+        note = fields[3]
+        if not SHA_RE.match(sha):
+            fail("bad sha: " + sha)
+        if cls != "C":
+            fail("non-C row in the rejection ledger: " + sha)
+        if reason not in REASONS:
+            fail("unknown reason_code " + reason + " for " + sha)
+        if not note.strip():
+            fail("empty note for " + sha)
+        prefix = sha[:8]
+        if prefix in seen:
+            fail("duplicate sha prefix " + prefix + ": " + sha + " and " + seen[prefix])
+        seen[prefix] = sha
+    return seen
+
+
+def load_allowlist():
+    allowed = []
+    if not ALLOWLIST.is_file():
+        return allowed
+    for line in ALLOWLIST.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        allowed.append(line.split()[0][:8])
+    return allowed
+
+
+def absorbed_prefixes():
+    log = subprocess.run(
+        ["git", "-C", str(ROOT), "log", "--format=%B"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    prefixes = set()
+    for match in ABSORBED_RE.finditer(log):
+        prefixes.add(match.group(1)[:8])
+    return prefixes
+
+
+def check_absorbed(seen):
+    allowed = load_allowlist()
+    absorbed = absorbed_prefixes()
+    for prefix in seen:
+        if prefix in absorbed and prefix not in allowed:
+            fail(
+                "ledger sha "
+                + seen[prefix]
+                + " is also an absorbed commit; fix the report or allowlist it"
+            )
+    for prefix in allowed:
+        if prefix not in seen:
+            fail("stale allowlist entry " + prefix + ": not in the ledger")
+        elif prefix not in absorbed:
+            fail("stale allowlist entry " + prefix + ": not an absorbed commit")
+
+
+def main():
+    if not LEDGER.is_file():
+        print("FAIL: missing " + str(LEDGER), file=sys.stderr)
+        return 1
+
+    actual = LEDGER.read_text(encoding="utf-8")
+    check_stale(actual)
+    rows = data_rows(actual)
+    seen = check_rows(rows)
+    check_absorbed(seen)
+
+    if failures:
+        print(
+            "upstream ledger check failed with " + str(failures) + " violation(s)",
+            file=sys.stderr,
+        )
+        return 1
+    print("upstream ledger check passed (" + str(len(rows)) + " rejection rows)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -235,6 +235,23 @@ cd docs && npx prettier --check src/development/<report>.md
 Do not run Prettier across all of `docs/src/`. Advance the reviewed
 baseline only through commits you classified.
 
+## Rejection Ledger
+
+Every class C decision also lands in
+`docs/src/development/upstream-rejected.tsv`. After writing the report,
+run:
+
+```sh
+./script/backfill-upstream-ledger
+./script/check-upstream-ledger
+```
+
+The backfill derives the ledger from the report decision tables. Do not
+hand-edit the ledger; improve the report and regenerate. The checker
+fails on a stale ledger, a malformed row, a duplicate SHA prefix, or a
+row whose commit was actually absorbed. Known exceptions are listed in
+`script/upstream-ledger-allowlist`.
+
 ## Hard Stops
 
 Stop and leave the tree clean if:
@@ -257,8 +274,9 @@ these SHAs again.
   route was restored.
 - Isolatable B: `027cf0de` Markdown scrollbar setting, ported as
   `673c0c6f` after a conflicting cherry-pick.
-- Failed B then C: `c7aea6cb` and `41c0f28b` failed `cargo check` on
-  missing APIs and were fully reverted.
+- Failed B then C, later absorbed: `c7aea6cb` and `41c0f28b` failed
+  `cargo check` on missing APIs and were reverted, then landed as
+  `e39b426b14` and `772132ec1d` once those APIs arrived.
 - Philosophy C: `d356b2f5` subscription compaction, `66ed3027` native
   agent panel, `cdf3ccd0` telemetry in extensions.
 - Unisolatable C: `200fb85c` bracket cache, `2318f45f` MultiWorkspace

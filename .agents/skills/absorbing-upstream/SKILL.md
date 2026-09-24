@@ -66,6 +66,9 @@ release-channel cherry-picks via `script/cherry-pick`.
 7. Verify each applied change with the narrowest `cargo check` /
    `cargo test` on touched crates.
 8. Append the run to `REPORT` and format only that file with Prettier.
+9. Regenerate the rejection ledger with
+   `./script/backfill-upstream-ledger` and verify it with
+   `./script/check-upstream-ledger`.
 
 ## Final Response
 

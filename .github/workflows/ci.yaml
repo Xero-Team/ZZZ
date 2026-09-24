@@ -53,6 +53,9 @@ jobs:
       - name: Check philosophy boundary
         run: ./script/check-philosophy
 
+      - name: Check upstream rejection ledger
+        run: ./script/check-upstream-ledger
+
   test:
     name: Test
     if: github.ref_type == 'branch' && !inputs.skip_rust_build
