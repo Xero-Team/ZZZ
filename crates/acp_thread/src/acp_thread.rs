@@ -363,9 +363,15 @@ pub enum ElicitationStatus {
     Completed,
 }
 
+enum ElicitationChange {
+    Responded,
+    Updated,
+}
+
 #[derive(Clone, Debug)]
 pub enum ElicitationStoreEvent {
     ElicitationRequested(ElicitationEntryId),
+    /// The request left `Pending`; this does not imply delivery to its response waiter.
     ElicitationResponded(ElicitationEntryId),
     ElicitationUpdated(ElicitationEntryId),
 }
@@ -418,23 +424,22 @@ impl ElicitationStore {
         (id, response_rx)
     }
 
-    fn response_task<T>(
-        id: ElicitationEntryId,
+    fn response_task(
         response_rx: oneshot::Receiver<acp::CreateElicitationResponse>,
-        cx: &mut Context<T>,
-        emit_responded: impl FnOnce(&mut T, &mut Context<T>, ElicitationEntryId) + 'static,
-    ) -> Task<acp::CreateElicitationResponse>
-    where
-        T: 'static,
-    {
-        cx.spawn(async move |this, cx| {
-            let response = response_rx.await.unwrap_or_else(|oneshot::Canceled| {
+        cx: &App,
+    ) -> Task<acp::CreateElicitationResponse> {
+        cx.foreground_executor().spawn(async move {
+            response_rx.await.unwrap_or_else(|oneshot::Canceled| {
                 acp::CreateElicitationResponse::new(acp::ElicitationAction::Cancel)
-            });
-            this.update(cx, |this, cx| emit_responded(this, cx, id))
-                .ok();
-            response
+            })
         })
+    }
+
+    fn emit_change(id: ElicitationEntryId, change: ElicitationChange, cx: &mut Context<Self>) {
+        cx.emit(ElicitationStoreEvent::ElicitationUpdated(id.clone()));
+        if matches!(change, ElicitationChange::Responded) {
+            cx.emit(ElicitationStoreEvent::ElicitationResponded(id));
+        }
     }
 
     fn respond_to_elicitation_entry(
@@ -450,7 +455,9 @@ impl ElicitationStore {
         ) else {
             return false;
         };
-        respond_tx.send(response).ok();
+        if respond_tx.send(response).is_err() {
+            log::debug!("Elicitation waiter closed before its response was delivered");
+        }
         true
     }
 
@@ -468,28 +475,27 @@ impl ElicitationStore {
         }
     }
 
-    fn cancel_elicitation_entry(
-        elicitation: &mut Elicitation,
-        cancel_accepted_url_elicitations: bool,
-    ) -> bool {
+    fn cancel_elicitation_entry(elicitation: &mut Elicitation) -> Option<ElicitationChange> {
         match mem::replace(&mut elicitation.status, ElicitationStatus::Canceled) {
             ElicitationStatus::Pending { respond_tx } => {
-                respond_tx
+                if respond_tx
                     .send(acp::CreateElicitationResponse::new(
                         acp::ElicitationAction::Cancel,
                     ))
-                    .ok();
-                true
+                    .is_err()
+                {
+                    log::debug!("Elicitation waiter closed before cancellation was delivered");
+                }
+                Some(ElicitationChange::Responded)
             }
             ElicitationStatus::Accepted
-                if cancel_accepted_url_elicitations
-                    && matches!(&elicitation.request.mode, acp::ElicitationMode::Url(_)) =>
+                if matches!(&elicitation.request.mode, acp::ElicitationMode::Url(_)) =>
             {
-                true
+                Some(ElicitationChange::Updated)
             }
             previous_status => {
                 elicitation.status = previous_status;
-                false
+                None
             }
         }
     }
@@ -512,15 +518,9 @@ impl ElicitationStore {
         Self::complete_url_elicitation_entry(elicitation)
     }
 
-    fn cancel_elicitation_by_id(
-        &mut self,
-        id: &ElicitationEntryId,
-        cancel_accepted_url_elicitations: bool,
-    ) -> bool {
-        let Some((_, elicitation)) = self.elicitation_mut(id) else {
-            return false;
-        };
-        Self::cancel_elicitation_entry(elicitation, cancel_accepted_url_elicitations)
+    fn cancel_elicitation_by_id(&mut self, id: &ElicitationEntryId) -> Option<ElicitationChange> {
+        let (_, elicitation) = self.elicitation_mut(id)?;
+        Self::cancel_elicitation_entry(elicitation)
     }
 
     pub fn request_elicitation(
@@ -542,11 +542,7 @@ impl ElicitationStore {
         cx.emit(ElicitationStoreEvent::ElicitationRequested(id.clone()));
         cx.notify();
 
-        let task = Self::response_task(id.clone(), response_rx, cx, |_store, cx, id| {
-            cx.emit(ElicitationStoreEvent::ElicitationResponded(id));
-            cx.notify();
-        });
-
+        let task = Self::response_task(response_rx, cx);
         Ok((id, task))
     }
 
@@ -560,7 +556,7 @@ impl ElicitationStore {
             return;
         }
 
-        cx.emit(ElicitationStoreEvent::ElicitationUpdated(id.clone()));
+        Self::emit_change(id.clone(), ElicitationChange::Responded, cx);
         cx.notify();
     }
 
@@ -581,27 +577,26 @@ impl ElicitationStore {
     }
 
     pub fn cancel_elicitation(&mut self, id: &ElicitationEntryId, cx: &mut Context<Self>) {
-        if !self.cancel_elicitation_by_id(id, true) {
+        let Some(change) = self.cancel_elicitation_by_id(id) else {
             return;
-        }
+        };
 
-        cx.emit(ElicitationStoreEvent::ElicitationUpdated(id.clone()));
+        Self::emit_change(id.clone(), change, cx);
         cx.notify();
     }
 
     pub fn cancel_all(&mut self, cx: &mut Context<Self>) {
-        let canceled_ids = self.cancel_pending(|_| true);
-        for id in canceled_ids {
-            cx.emit(ElicitationStoreEvent::ElicitationUpdated(id));
+        for (id, change) in self.cancel_pending(|_| true) {
+            Self::emit_change(id, change, cx);
         }
         cx.notify();
     }
 
     pub fn clear(&mut self, cx: &mut Context<Self>) {
-        let canceled_ids = self.cancel_pending(|_| true);
+        let changes = self.cancel_pending(|_| true);
         self.elicitations.clear();
-        for id in canceled_ids {
-            cx.emit(ElicitationStoreEvent::ElicitationUpdated(id));
+        for (id, change) in changes {
+            Self::emit_change(id, change, cx);
         }
         cx.notify();
     }
@@ -631,14 +626,14 @@ impl ElicitationStore {
     }
 
     pub fn cancel_request(&mut self, request_id: &acp::RequestId, cx: &mut Context<Self>) {
-        let canceled_ids = self.cancel_pending(|elicitation| {
+        let changes = self.cancel_pending(|elicitation| {
             matches!(
                 elicitation.request.scope(),
                 acp::ElicitationScope::Request(scope) if &scope.request_id == request_id
             )
         });
-        for id in canceled_ids {
-            cx.emit(ElicitationStoreEvent::ElicitationUpdated(id));
+        for (id, change) in changes {
+            Self::emit_change(id, change, cx);
         }
         cx.notify();
     }
@@ -681,14 +676,16 @@ impl ElicitationStore {
     fn cancel_pending(
         &mut self,
         mut should_cancel: impl FnMut(&Elicitation) -> bool,
-    ) -> Vec<ElicitationEntryId> {
-        let mut canceled_ids = Vec::new();
+    ) -> Vec<(ElicitationEntryId, ElicitationChange)> {
+        let mut changes = Vec::new();
         for elicitation in &mut self.elicitations {
-            if should_cancel(elicitation) && Self::cancel_elicitation_entry(elicitation, true) {
-                canceled_ids.push(elicitation.id.clone());
+            if should_cancel(elicitation)
+                && let Some(change) = Self::cancel_elicitation_entry(elicitation)
+            {
+                changes.push((elicitation.id.clone(), change));
             }
         }
-        canceled_ids
+        changes
     }
 }
 
@@ -1902,6 +1899,7 @@ pub enum AcpThreadEvent {
     ToolAuthorizationRequested(acp::ToolCallId),
     ToolAuthorizationReceived(acp::ToolCallId),
     ElicitationRequested(ElicitationEntryId),
+    /// The request left `Pending`; this does not imply delivery to its response waiter.
     ElicitationResponded(ElicitationEntryId),
     Retry(RetryStatus),
     SubagentSpawned(acp::SessionId),
@@ -3104,12 +3102,20 @@ impl AcpThread {
         self.push_entry(AgentThreadEntry::Elicitation(id.clone()), cx);
         cx.emit(AcpThreadEvent::ElicitationRequested(id.clone()));
 
-        let task =
-            ElicitationStore::response_task(id.clone(), response_rx, cx, |_thread, cx, id| {
-                cx.emit(AcpThreadEvent::ElicitationResponded(id))
-            });
-
+        let task = ElicitationStore::response_task(response_rx, cx);
         Ok((id, task))
+    }
+
+    fn emit_elicitation_change(
+        entry_index: usize,
+        id: &ElicitationEntryId,
+        change: ElicitationChange,
+        cx: &mut Context<Self>,
+    ) {
+        cx.emit(AcpThreadEvent::EntryUpdated(entry_index));
+        if matches!(change, ElicitationChange::Responded) {
+            cx.emit(AcpThreadEvent::ElicitationResponded(id.clone()));
+        }
     }
 
     pub fn respond_to_elicitation(
@@ -3125,7 +3131,7 @@ impl AcpThread {
             return;
         }
 
-        cx.emit(AcpThreadEvent::EntryUpdated(ix));
+        Self::emit_elicitation_change(ix, id, ElicitationChange::Responded, cx);
     }
 
     pub fn complete_url_elicitation(
@@ -3153,11 +3159,11 @@ impl AcpThread {
         let Some(ix) = self.elicitation_entry_ix(id) else {
             return;
         };
-        if !self.elicitations.cancel_elicitation_by_id(id, true) {
+        let Some(change) = self.elicitations.cancel_elicitation_by_id(id) else {
             return;
-        }
+        };
 
-        cx.emit(AcpThreadEvent::EntryUpdated(ix));
+        Self::emit_elicitation_change(ix, id, change, cx);
     }
 
     fn elicitation_entry_ix(&self, id: &ElicitationEntryId) -> Option<usize> {
@@ -3472,11 +3478,8 @@ impl AcpThread {
             let Some(AgentThreadEntry::Elicitation(elicitation_id)) = self.entries.get(ix) else {
                 continue;
             };
-            if self
-                .elicitations
-                .cancel_elicitation_by_id(elicitation_id, true)
-            {
-                cx.emit(AcpThreadEvent::EntryUpdated(ix));
+            if let Some(change) = self.elicitations.cancel_elicitation_by_id(elicitation_id) {
+                Self::emit_elicitation_change(ix, elicitation_id, change, cx);
             }
         }
     }
