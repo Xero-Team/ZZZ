@@ -6556,19 +6556,33 @@ impl EditorElement {
         });
     }
 
-    const DELETED_MARKER_WIDTH_RATIO: f32 = 0.35 / 0.275;
+    const DEFAULT_STRIP_WIDTH_RATIO: f32 = 0.275;
+    const DELETED_MARKER_WIDTH_RATIO: f32 = 0.35 / Self::DEFAULT_STRIP_WIDTH_RATIO;
+    const MIN_DELETED_MARKER_WIDTH_RATIO: f32 = 0.2;
 
     fn gutter_strip_width(line_height: Pixels, cx: &App) -> Pixels {
         match EditorSettings::get_global(cx).gutter.git_gutter_width {
             Some(width) => px(width),
-            None => (0.275 * line_height).floor(),
+            None => (Self::DEFAULT_STRIP_WIDTH_RATIO * line_height).floor(),
         }
     }
 
     fn deleted_marker_base_width(setting: Option<f32>, line_height: Pixels) -> Pixels {
         match setting {
-            Some(width) => px(width * Self::DELETED_MARKER_WIDTH_RATIO),
-            None => (0.275 * line_height * Self::DELETED_MARKER_WIDTH_RATIO).floor(),
+            Some(width) => {
+                let scaled_width = px(width * Self::DELETED_MARKER_WIDTH_RATIO);
+                if scaled_width > Pixels::ZERO {
+                    let default_strip_width = Self::DEFAULT_STRIP_WIDTH_RATIO * line_height;
+                    let boost_factor = (1.0 - width / f32::from(default_strip_width)).max(0.0);
+                    scaled_width + line_height * Self::MIN_DELETED_MARKER_WIDTH_RATIO * boost_factor
+                } else {
+                    Pixels::ZERO
+                }
+            }
+            None => {
+                (Self::DEFAULT_STRIP_WIDTH_RATIO * line_height * Self::DELETED_MARKER_WIDTH_RATIO)
+                    .floor()
+            }
         }
     }
 
@@ -14667,6 +14681,25 @@ mod tests {
         assert_eq!(
             EditorElement::deleted_marker_base_width(Some(0.0), px(22.0)),
             px(0.0),
+        );
+
+        for line_height in [22.0, 40.0] {
+            let widths = [1.0, 2.0, 3.0, 6.0].map(|width| {
+                EditorElement::deleted_marker_base_width(Some(width), px(line_height))
+            });
+            assert!(
+                widths.windows(2).all(|pair| pair[0] < pair[1]),
+                "widths={widths:?} must grow with the custom setting"
+            );
+            assert!(
+                widths[0] > px(line_height / 8.0),
+                "widths={widths:?} must stay above the vanishing width for line_height={line_height}"
+            );
+        }
+
+        assert_eq!(
+            EditorElement::deleted_marker_base_width(Some(0.275 * 40.0), px(40.0)),
+            px(14.0),
         );
     }
 
