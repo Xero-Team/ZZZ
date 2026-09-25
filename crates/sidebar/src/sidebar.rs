@@ -24,15 +24,16 @@ use feature_flags::{
 };
 use git_ui::worktree_service::{RemoteBranchName, worktree_create_targets};
 use gpui::{
-    Action as _, AnyElement, App, ClickEvent, Context, DismissEvent, Entity, EntityId, FocusHandle,
-    Focusable, KeyContext, ListState, Modifiers, Pixels, Render, SharedString, Task, WeakEntity,
-    Window, WindowBackgroundAppearance, WindowHandle, linear_color_stop, linear_gradient, list,
-    prelude::*, px,
+    Action as _, AnyElement, App, ClickEvent, Context, Decorations, DismissEvent, Entity, EntityId,
+    FocusHandle, Focusable, KeyContext, ListState, Modifiers, Pixels, Render, SharedString, Task,
+    WeakEntity, Window, WindowBackgroundAppearance, WindowHandle, linear_color_stop,
+    linear_gradient, list, prelude::*, px,
 };
 use i18n as app_i18n;
 use menu::{
     Cancel, Confirm, SelectChild, SelectFirst, SelectLast, SelectNext, SelectParent, SelectPrevious,
 };
+use platform_title_bar::apply_title_bar_insets;
 use project::{AgentId, AgentRegistryStore, Event as ProjectEvent, WorktreeId};
 use recent_projects::sidebar_recent_projects::SidebarRecentProjects;
 use remote::{RemoteConnectionOptions, same_remote_connection_identity};
@@ -5028,8 +5029,16 @@ impl Sidebar {
 
         h_flex()
             .h(header_height)
-            .mt_px()
-            .pb_px()
+            .map(|header| match window.window_decorations() {
+                // Without projects there's no bottom border to match the title bar's.
+                Decorations::Client { .. } => apply_title_bar_insets(
+                    header,
+                    left_window_controls,
+                    right_window_controls,
+                    no_open_projects,
+                ),
+                Decorations::Server => header.mt_px().pb_px(),
+            })
             .when(left_window_controls, |this| {
                 this.children(Self::render_left_window_controls(window, cx))
             })
