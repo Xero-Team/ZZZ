@@ -16,72 +16,225 @@ use workspace::notifications::simple_message_notification::MessageNotification;
 use workspace::{AppState, Event as WorkspaceEvent, Workspace, notifications::NotificationId};
 
 const SUGGESTIONS_BY_EXTENSION_ID: &[(&str, &[&str])] = &[
+    ("asciidoc", &["adoc", "asciidoc"]),
     ("astro", &["astro"]),
-    ("beancount", &["beancount"]),
-    ("clojure", &["bb", "clj", "cljc", "cljs", "edn"]),
-    ("neocmake", &["CMakeLists.txt", "cmake"]),
-    ("csharp", &["cs"]),
+    ("beancount", &["bean", "beancount"]),
+    ("clojure", &["bb", "clj", "cljc", "cljd", "cljs", "edn"]),
+    (
+        "csharp",
+        &["cs", "csproj", "proj", "props", "slnx", "targets"],
+    ),
+    ("csv", &["csv"]),
     ("cython", &["pyx", "pxd", "pxi"]),
     ("dart", &["dart"]),
-    ("dockerfile", &["Dockerfile"]),
+    (
+        "dockerfile",
+        &[
+            "Containerfile",
+            "Dockerfile",
+            "compose.yaml",
+            "compose.yml",
+            "docker-compose.yaml",
+            "docker-compose.yml",
+            "dockerfile",
+        ],
+    ),
     ("elisp", &["el"]),
-    ("elixir", &["eex", "ex", "exs", "heex", "leex", "neex"]),
+    (
+        "elixir",
+        &["eex", "ex", "exs", "heex", "leex", "mix.lock", "neex"],
+    ),
     ("elm", &["elm"]),
-    ("erlang", &["erl", "hrl"]),
+    ("env", &[".env", ".envrc", "env", "envrc"]),
+    (
+        "erlang",
+        &[
+            "app.src",
+            "Emakefile",
+            "erl",
+            "erlang",
+            "escript",
+            "hrl",
+            "rebar.config",
+            "xrl",
+            "yrl",
+        ],
+    ),
     ("fish", &["fish"]),
+    (
+        "gdscript",
+        &[
+            "gd",
+            "gdextension",
+            "gdshader",
+            "gdshaderinc",
+            "godot",
+            "tres",
+            "tscn",
+        ],
+    ),
     (
         "git-firefly",
         &[
+            ".containerignore",
+            ".cursorignore",
+            ".dockerignore",
+            ".eslintignore",
+            ".fdignore",
+            ".git-blame-ignore-revs",
+            ".gitattributes",
             ".gitconfig",
             ".gitignore",
-            "COMMIT_EDITMSG",
-            "EDIT_DESCRIPTION",
-            "MERGE_MSG",
-            "NOTES_EDITMSG",
-            "TAG_EDITMSG",
+            ".gitignore_global",
+            ".gitmodules",
+            ".ignore",
+            ".lfsconfig",
+            ".npmignore",
+            ".prettierignore",
+            ".rgignore",
+            ".vscodeignore",
+            "config.worktree",
             "git-rebase-todo",
+            "gitattributes",
         ],
     ),
     ("gleam", &["gleam"]),
-    ("glsl", &["vert", "frag"]),
-    ("graphql", &["gql", "graphql"]),
-    ("haskell", &["hs"]),
+    (
+        "glsl",
+        &[
+            "comp", "frag", "geom", "glsl", "mesh", "rcall", "rgen", "rahit", "rchit", "rmiss",
+            "rint", "task", "tesc", "tese", "vert",
+        ],
+    ),
+    ("graphql", &["gql", "graphql", "graphqls"]),
+    (
+        "groovy",
+        &["Jenkinsfile", "JenkinsFile", "gradle", "groovy"],
+    ),
+    ("haskell", &["cabal", "hs", "lhs"]),
     ("html", &["htm", "html", "shtml"]),
-    ("java", &["java"]),
-    ("kotlin", &["kt"]),
-    ("latex", &["tex"]),
+    ("ini", &["inf", "ini"]),
+    ("java", &["java", "properties"]),
+    ("json5", &["json5"]),
+    ("julia", &["jl"]),
+    ("just", &["JUSTFILE", "Justfile", "just", "justfile"]),
+    ("kotlin", &["kt", "kts"]),
+    (
+        "latex",
+        &[
+            "bib", "biblatex", "bibtex", "cls", "dtx", "ins", "latex", "sty", "tex",
+        ],
+    ),
     ("log", &["log"]),
     ("lua", &["lua"]),
-    ("make", &["Makefile"]),
-    ("nim", &["nim"]),
+    (
+        "make",
+        &[
+            "GNUmakefile",
+            "mak",
+            "Makefile",
+            "makefile",
+            "mk",
+            "OCamlMakefile",
+        ],
+    ),
+    ("neocmake", &["CMakeLists.txt", "cmake"]),
+    ("nginx", &["nginx.conf"]),
+    ("nim", &["nim", "nim_format_string", "nimble", "nims"]),
     ("nix", &["nix"]),
-    ("nu", &["nu"]),
-    ("ocaml", &["ml", "mli"]),
-    ("php", &["php"]),
+    ("nu", &["nu", "nuon"]),
+    (
+        "ocaml",
+        &[
+            "dune",
+            "dune-project",
+            "dune-workspace",
+            "ml",
+            "mld",
+            "mli",
+            "mll",
+            "mlx",
+            "mly",
+            "re",
+            "rei",
+        ],
+    ),
+    ("odin", &["odin"]),
+    ("perl", &["pl", "pm", "pod", "t"]),
+    ("php", &["php", "phpt", "phtml"]),
     ("powershell", &["ps1", "psm1"]),
     ("prisma", &["prisma"]),
     ("proto", &["proto"]),
     ("purescript", &["purs"]),
-    ("r", &["r", "R"]),
+    (
+        "python-requirements",
+        &["constraints.txt", "requirements.txt"],
+    ),
+    ("r", &["R", "Rmd", "qmd", "r", "rmd"]),
     ("racket", &["rkt"]),
     ("rescript", &["res", "resi"]),
     ("rst", &["rst"]),
-    ("ruby", &["rb", "erb"]),
-    ("scheme", &["scm"]),
-    ("scss", &["scss"]),
+    (
+        "ruby",
+        &[
+            "Appfile",
+            "Appraisals",
+            "Berksfile",
+            "Brewfile",
+            "builder",
+            "cap",
+            "Capfile",
+            "capfile",
+            "Cheffile",
+            "Dangerfile",
+            "Deliverfile",
+            "erb",
+            "Fastfile",
+            "Gemfile",
+            "gemspec",
+            "Guardfile",
+            "Gymfile",
+            "Hobofile",
+            "irbrc",
+            "jbuilder",
+            "Matchfile",
+            "Podfile",
+            "pryrc",
+            "Puppetfile",
+            "rabl",
+            "rake",
+            "Rakefile",
+            "Rantfile",
+            "rb",
+            "rbs",
+            "ru",
+            "rxml",
+            "Scanfile",
+            "simplecov",
+            "Snapfile",
+            "Steepfile",
+            "thor",
+            "Thorfile",
+            "Vagrantfile",
+        ],
+    ),
+    ("scala", &["mill", "scala", "sbt", "sc"]),
+    ("scheme", &["scm", "ss"]),
+    ("scss", &["sass", "scss"]),
+    ("solidity", &["sol", "yul"]),
     ("sql", &["sql"]),
     ("svelte", &["svelte"]),
-    ("swift", &["swift"]),
+    ("swift", &["swift", "swiftinterface"]),
     ("templ", &["templ"]),
-    ("terraform", &["tf", "tfvars", "hcl"]),
-    ("toml", &["Cargo.lock", "toml"]),
-    ("typst", &["typ"]),
+    ("terraform", &["hcl", "tf", "tfvars", "tofu"]),
+    ("toml", &["Cargo.lock", "Pipfile", "toml", "uv.lock"]),
+    ("typst", &["typ", "typst"]),
     ("vue", &["vue"]),
     ("wgsl", &["wgsl"]),
     ("windows-batch", &["bat", "cmd"]),
     ("wit", &["wit"]),
     ("xml", &["xml"]),
-    ("zig", &["zig"]),
+    ("zig", &["zig", "zon"]),
 ];
 
 const EMMET_LANGUAGES: &[&str] = &[
@@ -465,6 +618,75 @@ mod tests {
                 extension_id: "gleam".into(),
                 file_name_or_extension: "gleam".into()
             })
+        );
+        assert_eq!(
+            suggested_extension(rel_path("a/b/c/d/test.sol")),
+            Some(SuggestedExtension {
+                extension_id: "solidity".into(),
+                file_name_or_extension: "sol".into()
+            })
+        );
+        assert_eq!(
+            suggested_extension(rel_path("a/b/c/d/test.jl")),
+            Some(SuggestedExtension {
+                extension_id: "julia".into(),
+                file_name_or_extension: "jl".into()
+            })
+        );
+        assert_eq!(
+            suggested_extension(rel_path("script.pl")),
+            Some(SuggestedExtension {
+                extension_id: "perl".into(),
+                file_name_or_extension: "pl".into()
+            })
+        );
+        assert_eq!(
+            suggested_extension(rel_path("app/uv.lock")),
+            Some(SuggestedExtension {
+                extension_id: "toml".into(),
+                file_name_or_extension: "uv.lock".into()
+            })
+        );
+        // Dotfiles have no `Path::extension`, so they match by name.
+        assert_eq!(
+            suggested_extension(rel_path(".envrc")),
+            Some(SuggestedExtension {
+                extension_id: "env".into(),
+                file_name_or_extension: ".envrc".into()
+            })
+        );
+        assert_eq!(
+            suggested_extension(rel_path(".gitattributes")),
+            Some(SuggestedExtension {
+                extension_id: "git-firefly".into(),
+                file_name_or_extension: ".gitattributes".into()
+            })
+        );
+    }
+
+    #[test]
+    pub fn suggested_path_suffixes_are_unique() {
+        let mut claims: HashMap<&str, &str> = HashMap::new();
+        for (extension_id, path_suffixes) in SUGGESTIONS_BY_EXTENSION_ID {
+            for suffix in *path_suffixes {
+                let previous = claims.insert(suffix, extension_id);
+                assert!(
+                    previous.is_none(),
+                    "duplicate suffix `{suffix}` is claimed by both `{}` and `{extension_id}`",
+                    previous.unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    pub fn table_is_sorted_by_extension_id() {
+        assert!(
+            SUGGESTIONS_BY_EXTENSION_ID
+                .iter()
+                .map(|(extension_id, _)| *extension_id)
+                .is_sorted(),
+            "suggested extensions must be sorted by id"
         );
     }
 }
