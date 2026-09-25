@@ -415,3 +415,277 @@ absent.
 on the pre-run baseline `86b1a68cfd`; the failure is in
 `crates/editor/src/test.rs:216` block-height bookkeeping and is unrelated
 to this batch.
+
+## Run 3 — continuation after `e5221fa295`
+
+### Scope
+
+- Target branch: `sync/upstream-2026-09-24`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previously reviewed baseline: `e5221fa2956cd8ec88b459de0258a71fea5294de`
+- Reviewed upstream head: `b89471c52d22d2c642a9db6b4ad7e22f232bc974`
+- Live upstream head queried: `a84858acb95381c8c40b730879ad0f9a0c70b294`
+- Query time: `2026-09-25T12:21:09+02:00`
+- Requested range starts after `e5221fa2956cd8ec88b459de0258a71fea5294de`
+
+This continuation reviews the next twenty commits of the range, from
+`96e95edac4` through `b89471c52d`. The reviewed baseline advances to
+`b89471c52d22d2c642a9db6b4ad7e22f232bc974`.
+
+### Decisions
+
+| Upstream   | Class | Local commit | Disposition                                                                                         |
+| ---------- | ----- | ------------ | --------------------------------------------------------------------------------------------------- |
+| 96e95edac4 | B     | 6a162de286   | Atlas texture lookups return `Option`; a released texture skips the sprite batch.                   |
+| ee8dd5f861 | C     | --           | ChatGPT subscription model picker; the account-bound provider is absent.                            |
+| 75e9bb2fea | B     | fcce37d31e   | Claude Opus 5.5 BYOK model behavior; hosted half and compaction omitted.                            |
+| bc6dd34d4c | B     | 1218fa972b   | GPT-6 Sol and Luna models; the compaction matrix is omitted.                                        |
+| 5299a14401 | C     | --           | macOS Look Up needs the upstream markdown element refactor; local rendering has diverged.           |
+| ba42ab9d98 | B     | 2f93addb94   | Standalone modifiers reach keystroke interceptors; the test module is omitted.                      |
+| 7fecbb2c4b | C     | --           | which-key and pending-indicator unification rewrites a module ZZZ has trimmed.                      |
+| b7be0f185b | B     | 1706daa522   | REPL output copy uses `CopyButton`; the localized tooltip is kept.                                  |
+| f2aa97c47f | B     | 90f9a798f8   | Thread registration seeds permissions already waiting for confirmation.                             |
+| a3ccafef66 | C     | --           | Unisolatable ACP session-notice feature depends on absent idle-sleep and compaction surfaces.       |
+| 05958c4773 | B     | bcfd168880   | Elicitation completion is emitted from state transitions.                                           |
+| 6971ae21e9 | C     | --           | opencode dynamic model catalog adds a default network surface and an unisolatable provider rewrite. |
+| bf89346c1b | C     | --           | Community PR routing metadata.                                                                      |
+| a39324bf99 | A     | 4ce8be2e60   | Sidebar keyboard-selection border; cherry-picked with `-x -s`.                                      |
+| fbb313eb33 | C     | --           | CI workflow Danger runner profile.                                                                  |
+| f57e400a17 | C     | --           | Zed version bump; release metadata.                                                                 |
+| 573b5d66bb | A     | fc1d2ffa0a   | Helix buffer picker opens in the active pane; cherry-picked with `-x -s`.                           |
+| 9183ba4c55 | B     | 67603e8092   | Confirm with no selection dismisses; a11y gating is already absent locally.                         |
+| eb2f43d982 | C     | --           | `*Map` randomized-test fix depends on an unabsorbed `path_key` excerpt-reuse rewrite.               |
+| b89471c52d | C     | --           | Upstream-only `gpui_apple` dependency cleanup and xtask workspace plumbing; macOS-only tooling.     |
+
+Totals: two `A`, eight `B`, ten `C`.
+
+### Applied work
+
+Every clean `A` was created with `git cherry-pick -x -s`. Every `B` has a
+local commit with a `sync:` subject and `Upstream:` / `Retained:` /
+`Omitted:` trailers. No remote, pull request, or named upstream remote was
+created.
+
+- `6a162de286` ports the atlas safety net to `gpui_wgpu`, `gpui_macos`,
+  and `gpui_windows`: lookups return `Option` and each sprite draw skips a
+  batch whose texture was released. ZZZ's wgpu draw helpers keep their
+  `bool` overflow return and report a skipped batch as success; the cached
+  wgpu bind-group path does not exist locally and was not imported.
+- `fcce37d31e` teaches the Anthropic provider that `claude-opus-5-5`
+  enables fast mode, prefix-bound thinking blocks, forced-tool-use
+  exclusion, and always-on adaptive thinking with temperature omitted.
+  The hosted `language_models_cloud` half is absent from ZZZ and the
+  `supports_compaction` model matrix does not exist locally.
+- `1218fa972b` adds `x_ai::Model`'s sibling `open_ai::Model::SixSol` and
+  `SixLuna` with their limits, reasoning efforts, and effort-dependent
+  temperature rejection. The `supports_compaction` matrix was omitted for
+  the same reason. The regression test was adapted to ZZZ's
+  `into_open_ai_response` signature.
+- `2f93addb94` passes the recognized keystroke, including standalone
+  modifiers observed on release, to keystroke interceptors and observers
+  in `gpui::Window`; the keymap editor records and searches modifier-only
+  strokes. The `key_dispatch` test additions are test-only and depend on
+  pending-input helpers ZZZ does not carry.
+- `1706daa522` switches the REPL output copy control to the shared
+  `CopyButton` and keeps the localized `repl.outputs.copy_output` tooltip.
+- `90f9a798f8` seeds a conversation's pending permission requests from
+  tool calls already `WaitingForConfirmation` when a thread is registered,
+  sharing the deduplicating helper with later request events. The upstream
+  test is test-only and depends on absent `pending_tool_call_for_session`
+  and `AuthorizationKind` APIs.
+- `bcfd168880` routes elicitation completion through the store's response
+  and cancel state transitions, resolving waiters and emitting change
+  events consistently. The upstream test module is omitted as test-only.
+- `67603e8092` makes `ContextMenu::confirm` emit `DismissEvent` when no
+  item is selected. The first-entry-on-open behavior the upstream commit
+  fixes is already absent locally, and `Window::is_a11y_enabled` would
+  need the AccessKit writer path ZZZ does not carry.
+
+### Per-commit narrative
+
+#### `96e95edac4` — B, `6a162de286`
+
+Each rendering backend looked up a sprite batch's atlas texture with an
+`unwrap`, so a stale paint that referenced a released texture aborted the
+process. ZZZ ships wgpu on Linux, Metal under `gpui_macos`, and DirectX
+under `gpui_windows`, so all three backends were ported. `gpui_wgpu`'s
+`get_texture_info` now returns `Option` through the existing
+`WgpuAtlasStorage::get`, and its three `draw_*` helpers return `true`
+(skip, no overflow) on a missing texture. The unused
+`Index<AtlasTextureId>` impl was removed. `gpui_macos` and `gpui_windows`
+got the same `Option` treatment and early return at their call sites.
+
+#### `ee8dd5f861` — C
+
+Raises the client version sent to the ChatGPT subscription catalog so newer
+account models appear. ZZZ has no `openai_subscribed` provider and no
+account or subscription surface, so there is nothing to update.
+
+#### `75e9bb2fea` — B, `fcce37d31e`
+
+`claude-opus-5-5` joins the fast-mode, prefix-binding, and forced-tool-use
+model-ID predicates, and `completion.rs` forces `AdaptiveThinking` with
+`temperature: None` for it. ZZZ's Anthropic lineage does not include
+`claude-opus-5`, so only `claude-opus-5-5` was added ahead of the existing
+`4-6`/`4-7`/`4-8` entries. The `language_models_cloud` diff is absent
+locally, and `Model` has no `supports_compaction` field to extend.
+
+#### `bc6dd34d4c` — B, `1218fa972b`
+
+Adds `gpt-6-sol` and `gpt-6-luna` as selectable models with 1,050,000-token
+contexts, 128,000 output tokens, medium default reasoning, the full
+`None..Max` effort range, and effort-dependent temperature rejection
+(Sol/Luna reject temperature unless reasoning is explicitly disabled).
+ZZZ's `display_name` returns IDs rather than upstream's title-cased names,
+so the new arms follow the local style. The `supports_compaction` matrix
+and its documentation comment were dropped because the method has no local
+counterpart or caller.
+
+#### `5299a14401` — C
+
+Registers a macOS Look Up input handler for rendered Markdown and rewrites
+the line rendering into `RenderedLineElement` with clipped visible bounds
+and UTF-16 source mapping. ZZZ's `markdown.rs` has diverged: it has no
+`HighlightedLine` split, a different `RenderedText` shape, and a
+`bounds_for_source_range` already used for other purposes. The lookup
+support cannot be isolated from that refactor.
+
+#### `ba42ab9d98` — B, `2f93addb94`
+
+`dispatch_keystroke_interceptors` and `dispatch_keystroke_observers` now
+take a recognized `Keystroke` and an `Option<&dyn Action>` instead of
+downcasting a raw event, so standalone modifiers recognized on release
+reach interceptors before keymap dispatch. The keymap editor and its
+keystroke input recorded the modifier. All `key_dispatch.rs` changes are
+inside `mod tests` and depend on pending-input test helpers absent
+locally, so that file was left at its ZZZ state.
+
+#### `7fecbb2c4b` — C
+
+Unifies which-key preparation and rendering with the pending-keystrokes
+indicator behind a new `pending_bindings.rs` and shrinks `which_key_modal`.
+ZZZ's `which_key` crate is a trimmed implementation with no pending
+indicator and a different modal shape, so the refactor is not isolatable.
+
+#### `b7be0f185b` — B, `1706daa522`
+
+The copy control on REPL output becomes a `CopyButton`, giving the green
+checkmark and popup feedback. ZZZ localizes the tooltip, so
+`tooltip_label` receives `tr(cx, "repl.outputs.copy_output", "Copy Output")`
+instead of upstream's literal. The shared button is no longer styled
+`ButtonStyle::Transparent`, matching upstream.
+
+#### `f2aa97c47f` — B, `90f9a798f8`
+
+`Conversation::register_thread` now reads the thread's entries before
+subscribing and records any `WaitingForConfirmation` tool calls, using a
+new `add_permission_request` that deduplicates. The upstream regression
+test needs `pending_tool_call_for_session` and
+`acp_thread::AuthorizationKind`, neither present locally, so it was not
+carried.
+
+#### `a3ccafef66` — C
+
+Adds ACP session notices end to end: an `acp::Notice` store and
+`NoticesUpdated` event on `AcpThread`, client session capabilities, a
+session-notice callout, and thread-view wiring. The upstream context also
+depends on idle-sleep prevention and `AgentThreadEntry::ContextCompaction`
+machinery ZZZ never absorbed, and the feature touches eight files with
+conflicts across the absent surfaces, so it is rejected rather than
+partially imported.
+
+#### `05958c4773` — B, `bcfd168880`
+
+`ElicitationStore` now emits a completion change when a request is
+responded to, cancelled, or has its waiter dropped, and
+`AcpThread::emit_elicitation_change` funnels those transitions. The two
+conflict regions were both inside `mod tests`; the production hunks applied
+cleanly, so the local test module was kept wholesale.
+
+#### `6971ae21e9` — C
+
+Replaces the static opencode model enum with a runtime fetch of
+`https://models.opencode.ai/api.json` and rewrites the provider's model
+surface (~1,600 changed lines) plus a docs page ZZZ does not carry.
+Fetching a third-party catalog on provider use adds a default network
+surface, and the provider rewrite is not isolatable from the absent
+dynamic-model architecture.
+
+#### `bf89346c1b` — C
+
+One-line change to `script/community-pr-track-mapping.json`, a
+community/upstream automation artifact with no local counterpart.
+
+#### `a39324bf99` — A, `4ce8be2e60`
+
+Clean cherry-pick of the Workspace sidebar selection border that matches
+the project panel focus style.
+
+#### `fbb313eb33` — C
+
+CI workflow and xtask plumbing to run Danger on its dedicated runner.
+`.github` workflows and the generator are out of scope locally.
+
+#### `f57e400a17` — C
+
+Bumps the upstream Zed crate to `v1.23.0` in `Cargo.lock` and
+`crates/zed/Cargo.toml`. Release metadata does not apply to ZZZ.
+
+#### `573b5d66bb` — A, `fc1d2ffa0a`
+
+Clean cherry-pick rebinding Helix `space b` to
+`tab_switcher::OpenInActivePane`, which already exists locally.
+
+#### `9183ba4c55` — B, `67603e8092`
+
+Upstream gates the "select the first item when a menu opens" behavior on
+`Window::is_a11y_enabled`, which ZZZ cannot provide because the AccessKit
+writer path is absent. ZZZ's `ContextMenu` already has no
+`suppress_focus_selection` or focus-in selection logic, so the flicker bug
+does not exist here. The retained change is the new dismiss-on-confirm
+behavior when nothing is selected.
+
+#### `eb2f43d982` — C
+
+Fixes randomized editor map tests across `buffer_diff`, `block_map`,
+`fold_map`, `wrap_map`, `multi_buffer`, and `path_key`. The `path_key`
+hunks extend the `reused_excerpt`/`context_anchors_match` excerpt-reuse
+logic, which ZZZ's divergent `path_key.rs` does not have, so the commit
+depends on an unabsorbed prerequisite.
+
+#### `b89471c52d` — C
+
+Drops `block` as a direct `gpui_apple` dependency and adds workspace
+classification support to xtask. ZZZ has no `gpui_apple` crate and the
+change is macOS-only tooling.
+
+### Verification
+
+| Check                                                                                               | Result  |
+| --------------------------------------------------------------------------------------------------- | ------- |
+| `git diff --check`                                                                                  | PASS    |
+| `cargo fmt --all -- --check` (only pre-existing `agent_registry_store.rs` drift)                    | PASS    |
+| `cargo check --locked -p gpui_wgpu`                                                                 | PASS    |
+| `cargo check --locked -p anthropic`                                                                 | PASS    |
+| `cargo test --locked -p anthropic --lib fast_mode`                                                  | PASS    |
+| `cargo check --locked -p open_ai`                                                                   | PASS    |
+| `cargo test --locked -p open_ai --lib request_conversion_omits_unsupported_temperature`             | PASS    |
+| `cargo check --locked -p gpui`                                                                      | PASS    |
+| `cargo check --locked -p keymap_editor`                                                             | PASS    |
+| `cargo check --locked -p repl`                                                                      | PASS    |
+| `cargo check --locked -p agent_ui`                                                                  | PASS    |
+| `cargo check --locked -p acp_thread`                                                                | PASS    |
+| `cargo check --locked -p ui`                                                                        | PASS    |
+| `cargo test --locked -p acp_thread --lib` (78 passed, 1 baseline failure)                           | FAIL    |
+| `cargo check --locked --target aarch64-apple-darwin -p gpui_macos` (atlas/keystroke platform hunks) | NOT RUN |
+| `cargo check --locked --target x86_64-pc-windows-msvc -p gpui_windows` (atlas backend)              | NOT RUN |
+| macOS / Windows runtime checks for platform hunks                                                   | NOT RUN |
+| `cargo test --workspace`                                                                            | NOT RUN |
+
+`cargo test --locked -p acp_thread --lib` fails
+`test_terminal_kill_allows_wait_for_exit_to_complete` with "Timed out
+waiting for printf output to appear in terminal". The same test fails on
+the unmodified `acp_thread.rs` baseline, so it is a pre-existing
+environment failure unrelated to this batch. `cargo fmt --all -- --check`
+reports the same pre-existing `crates/project/src/agent_registry_store.rs`
+drift recorded in Run 1.
