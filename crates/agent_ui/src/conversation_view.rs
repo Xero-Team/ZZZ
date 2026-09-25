@@ -236,17 +236,26 @@ pub(crate) struct Conversation {
 
 impl Conversation {
     pub fn register_thread(&mut self, thread: Entity<AcpThread>, cx: &mut Context<Self>) {
-        let session_id = thread.read(cx).session_id().clone();
+        let thread_state = thread.read(cx);
+        let session_id = thread_state.session_id().clone();
+        for entry in thread_state.entries() {
+            if let AgentThreadEntry::ToolCall(tool_call) = entry
+                && matches!(
+                    tool_call.status,
+                    ToolCallStatus::WaitingForConfirmation { .. }
+                )
+            {
+                self.add_permission_request(&session_id, &tool_call.id);
+            }
+        }
+
         let subscription = cx.subscribe(&thread, {
             let session_id = session_id.clone();
             move |this, _thread, event, _cx| {
                 this.updated_at = Some(Instant::now());
                 match event {
                     AcpThreadEvent::ToolAuthorizationRequested(id) => {
-                        this.permission_requests
-                            .entry(session_id.clone())
-                            .or_default()
-                            .push(id.clone());
+                        this.add_permission_request(&session_id, id);
                     }
                     AcpThreadEvent::ToolAuthorizationReceived(id) => {
                         if let Some(tool_calls) = this.permission_requests.get_mut(&session_id) {
@@ -280,6 +289,20 @@ impl Conversation {
         });
         self.subscriptions.push(subscription);
         self.threads.insert(session_id, thread);
+    }
+
+    fn add_permission_request(
+        &mut self,
+        session_id: &acp::SessionId,
+        tool_call_id: &acp::ToolCallId,
+    ) {
+        let requests = self
+            .permission_requests
+            .entry(session_id.clone())
+            .or_default();
+        if !requests.contains(tool_call_id) {
+            requests.push(tool_call_id.clone());
+        }
     }
 
     pub fn respond_to_elicitation(
