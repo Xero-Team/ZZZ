@@ -241,7 +241,7 @@ use workspace::{
     TabBarSettings, Toast, ViewId, Workspace, WorkspaceId, WorkspaceSettings,
     item::{ItemBufferKind, ItemHandle, PreviewTabsSettings, SaveOptions},
     notifications::{DetachAndPromptErr, NotificationId, NotifyResultExt, NotifyTaskExt},
-    searchable::SearchEvent,
+    searchable::{SearchEvent, SelectSearchOptions},
 };
 pub use zzz_actions::editor::RevealInFileManager;
 use zzz_actions::editor::{MoveDown, MoveUp};
@@ -1385,7 +1385,7 @@ pub struct Editor {
     refresh_folding_ranges_task: Task<()>,
     inlay_hints: Option<LspInlayHintData>,
     folding_newlines: Task<()>,
-    select_next_is_case_sensitive: Option<bool>,
+    select_next_options: Option<SelectSearchOptions>,
     pub lookup_key: Option<Box<dyn Any + Send + Sync>>,
     on_local_selections_changed:
         Option<Box<dyn Fn(Point, &mut Window, &mut Context<Self>) + 'static>>,
@@ -1738,6 +1738,17 @@ struct AddSelectionsState {
 struct AddSelectionsGroup {
     above: bool,
     stack: Vec<usize>,
+}
+
+/// How a [`crate::actions::SelectNext`] or [`crate::actions::SelectPrevious`]
+/// action originated.
+///
+/// When started from a caret, whole-word matching is always enabled, compared
+/// to when started from a selection, where the configured whole-word option is
+/// used instead.
+enum SelectNextOrigin {
+    Caret,
+    Selection,
 }
 
 #[derive(Clone)]
@@ -2761,7 +2772,7 @@ impl Editor {
             selection_drag_state: SelectionDragState::None,
             folding_newlines: Task::ready(()),
             lookup_key: None,
-            select_next_is_case_sensitive: None,
+            select_next_options: None,
             on_local_selections_changed: None,
             suppress_selection_callback: false,
             applicable_language_settings: HashMap::default(),
@@ -15698,21 +15709,19 @@ impl Editor {
                         .text_for_range(selection.start..selection.end)
                         .collect::<String>();
                     let is_empty = query.is_empty();
-                    let select_state = SelectNextState {
-                        query: self.build_query(&[query], cx)?,
-                        wordwise: true,
-                        done: is_empty,
-                    };
+                    let select_state =
+                        self.build_select_state(query, SelectNextOrigin::Caret, is_empty, cx)?;
                     self.select_next_state = Some(select_state);
                 } else {
                     self.select_next_state = None;
                 }
             } else if let Some(selected_text) = selected_text {
-                self.select_next_state = Some(SelectNextState {
-                    query: self.build_query(&[selected_text], cx)?,
-                    wordwise: false,
-                    done: false,
-                });
+                self.select_next_state = Some(self.build_select_state(
+                    selected_text,
+                    SelectNextOrigin::Selection,
+                    false,
+                    cx,
+                )?);
                 self.select_next_match_internal(
                     display_map,
                     replace_newest,
@@ -15921,44 +15930,58 @@ impl Editor {
                         .text_for_range(selection.start..selection.end)
                         .collect::<String>();
                     let is_empty = query.is_empty();
-                    let select_state = SelectNextState {
-                        query: self.build_query(&[query.chars().rev().collect::<String>()], cx)?,
-                        wordwise: true,
-                        done: is_empty,
-                    };
+                    let select_state = self.build_select_state(
+                        query.chars().rev().collect(),
+                        SelectNextOrigin::Caret,
+                        is_empty,
+                        cx,
+                    )?;
                     self.select_prev_state = Some(select_state);
                 } else {
                     self.select_prev_state = None;
                 }
             } else if let Some(selected_text) = selected_text {
-                self.select_prev_state = Some(SelectNextState {
-                    query: self
-                        .build_query(&[selected_text.chars().rev().collect::<String>()], cx)?,
-                    wordwise: false,
-                    done: false,
-                });
+                self.select_prev_state = Some(self.build_select_state(
+                    selected_text.chars().rev().collect(),
+                    SelectNextOrigin::Selection,
+                    false,
+                    cx,
+                )?);
                 self.select_previous(action, window, cx)?;
             }
         }
         Ok(())
     }
 
-    /// Builds an `AhoCorasick` automaton from the provided patterns, while
-    /// setting the case sensitivity based on the global
-    /// `SelectNextCaseSensitive` setting, if set, otherwise based on the
-    /// editor's settings.
-    fn build_query<I, P>(&self, patterns: I, cx: &Context<Self>) -> Result<AhoCorasick, BuildError>
+    fn build_query<I, P>(patterns: I, case_sensitive: bool) -> Result<AhoCorasick, BuildError>
     where
         I: IntoIterator<Item = P>,
         P: AsRef<[u8]>,
     {
-        let case_sensitive = self
-            .select_next_is_case_sensitive
-            .unwrap_or_else(|| EditorSettings::get_global(cx).search.case_sensitive);
-
         let mut builder = AhoCorasickBuilder::new();
         builder.ascii_case_insensitive(!case_sensitive);
         builder.build(patterns)
+    }
+
+    fn build_select_state(
+        &self,
+        query: String,
+        origin: SelectNextOrigin,
+        done: bool,
+        cx: &App,
+    ) -> Result<SelectNextState, BuildError> {
+        let search_options = self.select_next_options.unwrap_or_else(|| {
+            let search_settings = EditorSettings::get_global(cx).search;
+            SelectSearchOptions {
+                case_sensitive: search_settings.case_sensitive,
+                whole_word: search_settings.whole_word,
+            }
+        });
+        Ok(SelectNextState {
+            query: Self::build_query(&[query], search_options.case_sensitive)?,
+            wordwise: matches!(origin, SelectNextOrigin::Caret) || search_options.whole_word,
+            done,
+        })
     }
 
     pub fn find_next_match(
