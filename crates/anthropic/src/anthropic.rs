@@ -25,16 +25,19 @@ pub const THINKING_BINDING_CONTROLS_BETA_HEADER: &str = "thinking-binding-contro
 pub fn supports_fast_mode(model_id: &str) -> bool {
     matches!(
         model_id,
-        "claude-opus-4-6" | "claude-opus-4-7" | "claude-opus-4-8"
+        "claude-opus-5-5" | "claude-opus-4-6" | "claude-opus-4-7" | "claude-opus-4-8"
     )
 }
 
 pub fn binds_thinking_blocks_to_prefix(model_id: &str) -> bool {
-    matches!(model_id, "claude-fable-5-1")
+    matches!(model_id, "claude-opus-5-5" | "claude-fable-5-1")
 }
 
 pub fn supports_forced_tool_use(model_id: &str) -> bool {
-    !matches!(model_id, "claude-fable-5-1" | "claude-mythos-5-1")
+    !matches!(
+        model_id,
+        "claude-opus-5-5" | "claude-fable-5-1" | "claude-mythos-5-1"
+    )
 }
 
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]

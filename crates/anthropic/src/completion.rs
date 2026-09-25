@@ -173,6 +173,12 @@ pub fn into_anthropic(
     mode: AnthropicModelMode,
     cache_mode: AnthropicPromptCacheMode,
 ) -> crate::Request {
+    let requires_adaptive_thinking = model == "claude-opus-5-5";
+    let mode = if requires_adaptive_thinking {
+        AnthropicModelMode::AdaptiveThinking
+    } else {
+        mode
+    };
     let mut new_messages: Vec<Message> = Vec::new();
     let mut system_message = String::new();
     let mut any_message_wants_cache = false;
@@ -274,6 +280,14 @@ pub fn into_anthropic(
 
     let binds_thinking_blocks = crate::binds_thinking_blocks_to_prefix(&model);
 
+    // Opus 5.5 always uses adaptive thinking, which does not accept sampling controls.
+    // <https://platform.claude.com/docs/en/models/opus-5-5/overview>
+    let temperature = if requires_adaptive_thinking {
+        None
+    } else {
+        request.temperature.or(Some(default_temperature))
+    };
+
     crate::Request {
         model,
         messages: new_messages,
@@ -333,7 +347,7 @@ pub fn into_anthropic(
         },
         stop_sequences: Vec::new(),
         speed: request.speed.map(Into::into),
-        temperature: request.temperature.or(Some(default_temperature)),
+        temperature,
         top_k: None,
         top_p: None,
         context_management: request.compact_at_tokens.map(|value| ContextManagement {
