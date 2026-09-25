@@ -2079,10 +2079,8 @@ impl ProjectPanel {
                 return;
             };
 
-            if let Some(worktree) = self
-                .project
-                .read(cx)
-                .worktree_for_id(edit_state.worktree_id, cx)
+            let project = self.project.read(cx);
+            if let Some(worktree) = project.worktree_for_id(edit_state.worktree_id, cx)
                 && let Some(entry) = worktree.read(cx).entry_for_id(edit_state.entry_id)
             {
                 let mut already_exists = false;
@@ -2097,7 +2095,14 @@ impl ProjectPanel {
                     } else {
                         filename.into()
                     };
-                    if let Some(existing) = worktree.read(cx).entry_for_path(&new_path)
+
+                    // We skip the collision check for worktree roots as the
+                    // lookup resolves paths relative to the root itself,
+                    // whereas renaming the root should resolve it against its
+                    // parent directory. Otherwise, renaming `bar/` to `foo/`
+                    // would report a false collision with `bar/foo/`.
+                    if !project.entry_is_worktree_root(entry.id, cx)
+                        && let Some(existing) = worktree.read(cx).entry_for_path(&new_path)
                         && existing.id != entry.id
                     {
                         already_exists = true;
@@ -2189,7 +2194,15 @@ impl ProjectPanel {
             } else {
                 filename.clone()
             };
-            if let Some(existing) = worktree.read(cx).entry_for_path(&new_path) {
+
+            // We skip the collision check for worktree roots as the lookup
+            // resolves paths relative to the root itself, whereas renaming the
+            // root should resolve it against its parent directory. Otherwise,
+            // renaming `bar/` to `foo/` would report a false collision with
+            // `bar/foo/`.
+            if !self.project.read(cx).entry_is_worktree_root(entry.id, cx)
+                && let Some(existing) = worktree.read(cx).entry_for_path(&new_path)
+            {
                 if existing.id == entry.id && refocus {
                     window.focus(&self.focus_handle, cx);
                 }
