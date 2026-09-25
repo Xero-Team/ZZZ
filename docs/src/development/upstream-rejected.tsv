@@ -101,6 +101,7 @@ sha	class	reason_code	note	source
 38df25d5	C	upstream-infra	Benchmark-only dispatcher readiness API; no product behavior.	upstream-sync-2026-08-07.md
 395def7a	C	upstream-infra	Upstream merge-queue CI plumbing; workflow files are absent locally.	upstream-sync-2026-09-24.md
 395fbd11	C	absent-api	Auto-update title-bar feedback; `auto_update` and `UpdateVersion` are absent.	upstream-sync-2026-09-18.md
+397cbc84de	C	upstream-infra	Guild PR-labeling workflow lives only in `.github/`, which ZZZ does not carry.	upstream-sync-2026-09-24.md
 3ab0b5df18	C	philosophy	ACP pending-session rework conflicts with ZZZ's own ref-count design from #54009.	upstream-sync-2026-09-24.md
 3b2acfe0ad	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 3b90a9be	C	absent-api	Timed RPC log groups need absent elapsed tracker.	upstream-sync-2026-08-18.md
@@ -170,6 +171,7 @@ sha	class	reason_code	note	source
 5c58d5c49a	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 5ccbbbd8	C	untriaged	Unused GPUI grid API and public enum rename omitted.	upstream-sync-2026-08-07.md
 5d06fffd98	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
+5ddc17645c	C	absent-api	Outline-panel chevron folding needs the absent `FolderIndicator`/`get_folder_indicators`/`multi_buffer_hide_symbols` surface.	upstream-sync-2026-09-24.md
 5e1fd392	C	untriaged	Depends on the unabsorbed diff-base protocol and broad editor/project graph changes.	upstream-sync-2026-08-07.md
 5e28272c	C	unisolatable	Touch-axis locking depends on the unabsorbed gesture physics rewrite.	upstream-sync-2026-09-02.md
 5ed5bf95	C	absent-api	Stream-mapping rewrite spans deleted and conflicting provider APIs.	upstream-sync-2026-08-27.md
@@ -233,6 +235,7 @@ sha	class	reason_code	note	source
 7ecab315	C	unisolatable	Depends on the rejected project-search rewrite from `1475887f`.	upstream-sync-2026-08-27.md
 7f2a2c3c	C	absent-api	Requires deleted `crashes` sidecar and cross-platform quit API rewrite.	upstream-sync-2026-08-27.md
 7fc2cf9b84	C	untriaged	opencode dynamic model catalog; the same default network surface rejected in Run 3.	upstream-sync-2026-09-24.md
+7fdb97cad5	C	philosophy	`yawc` 0.4.2 bump belongs to the absent `cloud_api_client` crate; lockfile-only churn with no local behavior.	upstream-sync-2026-09-24.md
 7fecbb2c4b	C	unisolatable	which-key and pending-indicator unification rewrites a module ZZZ has trimmed.	upstream-sync-2026-09-24.md
 803467f3	C	absent-api	Text finder regex highlight needs missing picker preview API.	upstream-sync-2026-08-18.md
 80ddc3af	C	philosophy	Organization menu when signed out; account/sign-in surface.	upstream-sync-2026-09-06.md

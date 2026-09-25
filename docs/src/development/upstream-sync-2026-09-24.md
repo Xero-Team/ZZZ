@@ -957,3 +957,169 @@ dependency mix; no error points at `platform.rs`, so the credential hunk
 is not implicated and the platform check is recorded as a baseline
 `FAIL`. `cargo fmt --all -- --check` reports only the pre-existing
 `crates/project/src/agent_registry_store.rs` drift recorded in Run 1.
+
+## Run 5 — continuation after `8720fd1d09`
+
+### Scope
+
+- Target branch: `sync/upstream-2026-09-24`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previously reviewed baseline: `8720fd1d093963be0aeb36954c15fd1aca1b94d2`
+- Reviewed upstream head: `397cbc84de333eeb56849dc90782d365b37e60d7`
+- Live upstream head queried: `397cbc84de333eeb56849dc90782d365b37e60d7`
+- Query time: `2026-09-25T15:17:49+02:00`
+- Requested range starts after `8720fd1d093963be0aeb36954c15fd1aca1b94d2`
+
+The upstream `main` branch had only seven commits after the previous
+baseline, so this continuation reviews all of them, from `25303a4b25`
+through `397cbc84de`. The reviewed baseline advances to
+`397cbc84de333eeb56849dc90782d365b37e60d7`, which is also the live head
+at query time.
+
+### Decisions
+
+| Upstream   | Class | Local commit | Disposition                                                                                                                   |
+| ---------- | ----- | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| 25303a4b25 | B     | 3fcacfc752   | Fenced code language resolves from the first info-string word; the upstream highlight test is omitted.                        |
+| ec609f84c1 | B     | e52fb82b5d   | Multicursor edits preserve indentation; `input.rs` hunk ported into the consolidated `editor.rs`.                             |
+| 7fdb97cad5 | C     | --           | `yawc` 0.4.2 bump belongs to the absent `cloud_api_client` crate; lockfile-only churn with no local behavior.                 |
+| 5ddc17645c | C     | --           | Outline-panel chevron folding needs the absent `FolderIndicator`/`get_folder_indicators`/`multi_buffer_hide_symbols` surface. |
+| a84858acb9 | B     | d254211b49   | One Left press collapses an opened file's parent; only the new regression test was portable.                                  |
+| f8adffe9d1 | B     | c34e0221e4   | The embedded agent terminal rounds its background to the tool card corners.                                                   |
+| 397cbc84de | C     | --           | Guild PR-labeling workflow lives only in `.github/`, which ZZZ does not carry.                                                |
+
+Totals: zero `A`, four `B`, three `C`.
+
+### Applied work
+
+Every `B` was committed with `git commit -s` and a `sync:` subject with
+`Upstream:` / `Retained:` / `Omitted:` trailers. No `A` was available:
+the one candidate for a clean cherry-pick (`a84858acb9`) conflicted on a
+diverged `expand_all_entries`, so it was ported locally instead. No
+remote, pull request, or named upstream remote was created.
+
+- `3fcacfc752` resolves a fenced code block's language from the first
+  whitespace-separated word of its info string when the full string does
+  not match a language, keeping the full info string keyed so mermaid
+  options still work.
+- `e52fb82b5d` adds `AutoindentMode::PreserveSingleLine`, the
+  `only_explicit_outdents` request flag, and the `explicit_outdent`
+  suggestion flag, then routes `handle_input` and `indent_selection`
+  through them.
+- `d254211b49` guards every `expanded_dir_ids` insertion that can see a
+  file entry and makes `collapse_entry` skip a file id found in that
+  set, so the first Left press collapses the parent directory.
+- `c34e0221e4` adds `TerminalView::set_background_corner_radii` and
+  paints the terminal background quad with clamped corner radii, then
+  sets bottom radii on the agent tool-call terminal.
+
+### Per-commit narrative
+
+#### `25303a4b25` — B, `3fcacfc752`
+
+CommonMark uses only the first word of a fenced code block's info string
+as the language, but the local parser passed the whole string to
+`language_for_name_or_extension`, so `rust import.meta.vitest` did not
+resolve. The production hunk now retries with the first word on failure;
+ZZZ's structure keeps its empty-name fallback language path. Upstream's
+`test_code_block_language_uses_first_word_of_info_string` needs
+`markdown_with_rust_language` and `cached_code_block_highlights`, which
+do not exist locally, so it was omitted as test-only. The retained
+upstream test asserts `languages_by_name` prefers the full match
+(`Go Mod`) and falls back to the first word (`Go extra`), and it passes.
+Removing the fallback `.left_future()` / `.right_future()` made the
+`futures::FutureExt` import unused, so it was dropped.
+
+#### `ec609f84c1` — B, `e52fb82b5d`
+
+Multicursor input and selected-block indentation could corrupt YAML
+indentation because a multiline replacement reindented the other
+single-line edits, and overlapping selections recomputed a shared row's
+indent. The commit adds `AutoindentMode::PreserveSingleLine`, which
+autoindents multiline edits but only lets syntax-triggered outdents
+apply to single-line edits, and makes `indent_selection` use the
+previous row's delta or the tab size for multi-row and overlapping
+selections. ZZZ deleted `crates/editor/src/input.rs`, so upstream's two
+`input.rs` hunks were ported into the local `handle_input`; the
+`buffer.rs` changes applied directly. The upstream test hunk conflicted
+where ZZZ interleaves `test_autoclose_toml_multiline_strings`; the local
+test was kept and the five new/extended tests pass.
+
+#### `7fdb97cad5` — C
+
+Moves `cloud_api_client` from a pinned `zed-industries/yawc` fork to the
+crates.io `yawc` 0.4.2 release. ZZZ has no `cloud_api_client` crate and
+the root `Cargo.toml` does not declare `yawc` at all, so the change is
+dependency and lockfile churn for an absent, account-facing cloud
+client with no independent local behavior.
+
+#### `5ddc17645c` — C
+
+Reworks outline-panel row clicks so a click selects instead of toggling,
+and moves expand/collapse onto clickable chevron and icon elements
+(~650 changed lines plus docs). The commit is built on
+`FolderIndicator` and `FileIcons::get_folder_indicators`, and its tests
+use `multi_buffer_hide_symbols`, `active_outline_panel`,
+`wait_for_outline_tasks`, `add_multi_buffer_editor`, and
+`update_outline_panel_settings`. ZZZ's outline panel instead has boolean
+`file_icons` / `folder_icons` settings and a different rendering shape,
+and none of those types or helpers exist locally, so the click/folding
+behavior cannot be isolated from the unabsorbed settings and rendering
+rewrite.
+
+#### `a84858acb9` — B, `d254211b49`
+
+Opening a file inserted the file's id into `expanded_dir_ids` through
+the ancestor loops in `expand_all_for_entry` and `expand_entry`, so
+`collapse_entry` consumed that file id on the first Left press and only
+the second press collapsed the parent. The port guards each insertion
+with `entry.is_dir()` and makes the `collapse_entry` match treat a
+non-directory hit as a miss. A dry-run cherry-pick conflicted because
+ZZZ's `expand_all_entries` has been rewritten, so the change was ported
+rather than cherry-picked; upstream's
+`synchronously_expand_all_directories_internal` guarded insert has no
+local counterpart, since ZZZ expands children from the
+`ExpandedAllForEntry` event. The upstream test file has diverged
+wholesale (37 compile errors), so only
+`test_collapse_opened_file_scrolls_to_parent` was ported onto the local
+helpers and it passes.
+
+#### `f8adffe9d1` — B, `c34e0221e4`
+
+An embedded agent terminal paints a square background that covered the
+rounded corners of its tool card. `TerminalView` gains an optional
+`background_corner_radii` and a setter, the agent terminal sets
+`rounded_md`-equivalent bottom radii, and `TerminalElement::paint` fills
+its background quad with the same clamped radii. ZZZ's `TerminalView`
+has no `read_only` field, so upstream's `.with_read_only(read_only)`
+context did not apply, and the local paint path keeps its own
+`scroll_top` binding without upstream's unused `mouse_input_mode`.
+
+#### `397cbc84de` — C
+
+Removes Guild PR labeling from `.github/workflows/pr_issue_labeler.yml`.
+That workflow does not exist in ZZZ and CI/release automation is out of
+scope, so there is nothing to change locally.
+
+### Verification
+
+| Check                                                                                                                                                                                                                                                                              | Result  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `git diff --check` (`4a95c4bac1..HEAD`)                                                                                                                                                                                                                                            | PASS    |
+| `cargo fmt --all -- --check` (only pre-existing `agent_registry_store.rs` drift)                                                                                                                                                                                                   | PASS    |
+| `cargo check --locked -p markdown -p project_panel -p terminal_view -p agent_ui -p editor -p language`                                                                                                                                                                             | PASS    |
+| `cargo test --locked -p markdown --lib test_code_block_language_prefers_full_info_string`                                                                                                                                                                                          | PASS    |
+| `cargo test --locked -p project_panel test_collapse_opened_file_scrolls_to_parent`                                                                                                                                                                                                 | PASS    |
+| `cargo test --locked -p editor --lib -- test_multicursor_input_preserves_yaml_indentation test_multicursor_input_autoindents_multiline_replacements test_tab_indents_selected_yaml_block test_tab_indents_overlapping_selections_consistently test_outdent_after_input_for_python` | PASS    |
+| `cargo check --locked -p zzz`                                                                                                                                                                                                                                                      | PASS    |
+| macOS / Windows runtime checks for platform hunks                                                                                                                                                                                                                                  | NOT RUN |
+| `cargo test --workspace`                                                                                                                                                                                                                                                           | NOT RUN |
+
+The first `cargo test --locked -p project_panel` attempt used the
+upstream test file wholesale and failed to compile with 37 errors from
+unrelated diverged tests; the local test file was restored and only the
+new regression test was ported, after which the check passes.
+`cargo fmt --all -- --check` reports only the pre-existing
+`crates/project/src/agent_registry_store.rs` drift recorded in Run 1.
+There are no macOS- or Windows-only hunks in this batch, so platform
+runtime checks were not required.
