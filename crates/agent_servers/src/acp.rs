@@ -226,7 +226,21 @@ impl AcpDebugLog {
     }
 }
 
-fn exited_load_error_with_stderr(status: ExitStatus, debug_log: &AcpDebugLog) -> LoadError {
+const EXIT_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(250);
+
+async fn exited_load_error_after_drain(
+    status: ExitStatus,
+    drained: impl Future<Output = ()>,
+    debug_log: &AcpDebugLog,
+    cx: &AsyncApp,
+) -> LoadError {
+    // Descendants can keep stdout or stderr open after the direct child exits.
+    let timeout = cx.background_executor().timer(EXIT_DRAIN_TIMEOUT);
+    futures::pin_mut!(drained, timeout);
+    if let futures::future::Either::Right(_) = futures::future::select(drained, timeout).await {
+        log::warn!("Timed out draining ACP output after agent exit");
+    }
+
     LoadError::Exited {
         status,
         stderr: debug_log.trailing_stderr().map(SharedString::from),
@@ -317,6 +331,22 @@ trait ForegroundWorkItem: Send {
 }
 
 type ForegroundWork = Box<dyn ForegroundWorkItem>;
+
+struct ForegroundBarrier {
+    acknowledgment: futures::channel::oneshot::Sender<()>,
+}
+
+impl ForegroundWorkItem for ForegroundBarrier {
+    fn run(self: Box<Self>, _cx: &mut AsyncApp, _context: &ClientContext) {
+        if self.acknowledgment.send(()).is_err() {
+            log::debug!("ACP exit drain was cancelled before foreground acknowledgment");
+        }
+    }
+
+    fn reject(self: Box<Self>) {
+        log::debug!("ACP foreground dispatch queue closed before exit drain");
+    }
+}
 
 struct RequestForegroundWork<Req, Res>
 where
@@ -431,7 +461,7 @@ pub struct AcpConnection {
     _io_task: Task<()>,
     _dispatch_task: Task<()>,
     _wait_task: Task<Result<()>>,
-    _stderr_task: Task<Result<()>>,
+    _stderr_task: Shared<Task<()>>,
 }
 
 struct PendingAcpSession {
@@ -848,22 +878,23 @@ impl AcpConnection {
 
         let transport = Lines::new(tapped_outgoing, tapped_incoming);
 
-        let stderr_task = cx.background_spawn({
-            let debug_log = debug_log.clone();
-            async move {
-                let mut stderr = BufReader::new(stderr);
-                let mut line = String::new();
-                while let Ok(n) = stderr.read_line(&mut line).await
-                    && n > 0
-                {
-                    let trimmed = line.trim_end_matches(['\n', '\r']);
-                    log::warn!("agent stderr: {trimmed}");
-                    debug_log.record_line(AcpDebugMessageDirection::Stderr, trimmed);
-                    line.clear();
+        let stderr_task = cx
+            .background_spawn({
+                let debug_log = debug_log.clone();
+                async move {
+                    let mut stderr = BufReader::new(stderr);
+                    let mut line = String::new();
+                    while let Ok(n) = stderr.read_line(&mut line).await
+                        && n > 0
+                    {
+                        let trimmed = line.trim_end_matches(['\n', '\r']);
+                        log::warn!("agent stderr: {trimmed}");
+                        debug_log.record_line(AcpDebugMessageDirection::Stderr, trimmed);
+                        line.clear();
+                    }
                 }
-                Ok(())
-            }
-        });
+            })
+            .shared();
 
         // `connect_client_future` installs the production handler set and
         // hands us back both the connection-future (to run on a background
@@ -886,20 +917,20 @@ impl AcpConnection {
         .boxed_local();
         let status_fut = child
             .status()
-            .map({
-                let debug_log = debug_log.clone();
-                move |status| match status {
-                    Ok(status) => Ok(exited_load_error_with_stderr(status, &debug_log)),
-                    Err(err) => Err(anyhow!("failed to wait for agent server exit: {err}")),
-                }
+            .map(|status| {
+                status.map_err(|error| anyhow!("failed to wait for agent server exit: {error}"))
             })
             .boxed_local();
         let (connection, status_fut) = match futures::future::select(connection_rx, status_fut)
             .await
         {
             futures::future::Either::Left((connection, status_fut)) => (connection?, status_fut),
-            futures::future::Either::Right((load_error, _connection_rx)) => {
-                return Err(load_error?.into());
+            futures::future::Either::Right((status, _connection_rx)) => {
+                return Err(
+                    exited_load_error_after_drain(status?, stderr_task, &debug_log, cx)
+                        .await
+                        .into(),
+                );
             }
         };
 
@@ -918,6 +949,27 @@ impl AcpConnection {
                 }
             }
         });
+        let drained = {
+            let connection = connection.clone();
+            let stderr_task = stderr_task.clone();
+            async move {
+                let incoming = async move {
+                    // EOF follows SDK dispatch, but model updates are still queued on the foreground.
+                    connection.incoming_closed().await;
+                    let (acknowledgment, received) = futures::channel::oneshot::channel();
+                    let barrier: ForegroundWork = Box::new(ForegroundBarrier { acknowledgment });
+                    if let Err(error) = dispatch_tx.unbounded_send(barrier) {
+                        error.into_inner().reject();
+                        return;
+                    }
+                    received
+                        .await
+                        .context("ACP foreground dispatch closed during exit drain")
+                        .log_err();
+                };
+                futures::join!(incoming, stderr_task);
+            }
+        };
 
         let initialize_response = connection.send_request(
             acp::InitializeRequest::new(ProtocolVersion::V1)
@@ -946,16 +998,24 @@ impl AcpConnection {
                         .background_executor()
                         .timer(Duration::from_millis(250))
                         .boxed_local();
-                    if let futures::future::Either::Left((load_error, _timer)) =
+                    if let futures::future::Either::Left((status, _timer)) =
                         futures::future::select(status_fut, timer).await
                     {
-                        return Err(load_error?.into());
+                        return Err(exited_load_error_after_drain(
+                            status?, drained, &debug_log, cx,
+                        )
+                        .await
+                        .into());
                     }
 
                     return Err(error.into());
                 }
-                futures::future::Either::Right((load_error, _initialize_response)) => {
-                    return Err(load_error?.into());
+                futures::future::Either::Right((status, _initialize_response)) => {
+                    return Err(
+                        exited_load_error_after_drain(status?, drained, &debug_log, cx)
+                            .await
+                            .into(),
+                    );
                 }
             };
 
@@ -965,8 +1025,11 @@ impl AcpConnection {
 
         let wait_task = cx.spawn({
             let sessions = sessions.clone();
+            let debug_log = debug_log.clone();
             async move |cx| {
-                let load_error = status_fut.await?;
+                let status = status_fut.await?;
+                let load_error =
+                    exited_load_error_after_drain(status, drained, &debug_log, cx).await;
                 emit_load_error_to_all_sessions(&sessions, load_error, cx);
                 anyhow::Ok(())
             }
@@ -1080,7 +1143,7 @@ impl AcpConnection {
             _io_task: io_task,
             _dispatch_task: dispatch_task,
             _wait_task: Task::ready(Ok(())),
-            _stderr_task: Task::ready(Ok(())),
+            _stderr_task: Task::ready(()).shared(),
         }
     }
 
@@ -3111,8 +3174,15 @@ mod tests {
             .downcast::<LoadError>()
             .expect("startup failure should preserve the typed load error");
         match load_error {
-            LoadError::Exited { status, .. } => {
+            LoadError::Exited { status, stderr } => {
                 assert!(!status.success(), "expected non-zero exit status");
+                assert_eq!(
+                    stderr.as_deref(),
+                    Some(
+                        "npm error code ETARGET\nnpm error notarget No matching version found for @agentclientprotocol/claude-agent-acp@0.32.0 with a date before 4/28/2026, 12:11:38 PM."
+                    ),
+                    "startup failure should retain the agent's final stderr"
+                );
             }
             error => panic!("expected exited load error, got: {error:?}"),
         };
