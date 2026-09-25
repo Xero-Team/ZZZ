@@ -1305,8 +1305,15 @@ impl Element for TerminalElement {
         let paint_start = Instant::now();
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
             let scroll_top = self.terminal_view.read(cx).scroll_top;
+            let corner_radii = self
+                .terminal_view
+                .read(cx)
+                .background_corner_radii
+                .unwrap_or_default()
+                .map(|radius| radius.to_pixels(window.rem_size()))
+                .clamp_radii_for_quad_size(bounds.size);
 
-            window.paint_quad(fill(bounds, layout.background_color));
+            window.paint_quad(fill(bounds, layout.background_color).corner_radii(corner_radii));
             let origin = layout.dimensions.bounds.origin - Point::new(px(0.), scroll_top);
             let scale_factor = window.scale_factor();
             let snap_px = |value: Pixels| {

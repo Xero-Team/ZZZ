@@ -9,10 +9,10 @@ use editor::{
     ui_scrollbar_settings_from_raw,
 };
 use gpui::{
-    Action, AnyElement, App, ClipboardEntry, DismissEvent, Entity, EventEmitter, ExternalPaths,
-    FocusHandle, Focusable, Font, KeyContext, KeyDownEvent, Keystroke, MouseButton, MouseDownEvent,
-    Pixels, Point, Render, ScrollWheelEvent, Styled, Subscription, Task, WeakEntity, actions,
-    anchored, deferred, div,
+    Action, AnyElement, App, ClipboardEntry, Corners, DismissEvent, Entity, EventEmitter,
+    ExternalPaths, FocusHandle, Focusable, Font, KeyContext, KeyDownEvent, Keystroke, MouseButton,
+    MouseDownEvent, Pixels, Point, Rems, Render, ScrollWheelEvent, Styled, Subscription, Task,
+    WeakEntity, actions, anchored, deferred, div,
 };
 use i18n::tr;
 use menu;
@@ -133,6 +133,13 @@ pub struct TerminalView {
     cursor_shape: CursorShape,
     blink_manager: Entity<BlinkManager>,
     mode: TerminalMode,
+    /// Corner radii for the terminal's background, for when it's embedded in a
+    /// container with rounded corners.
+    ///
+    /// GPUI can't clip children to rounded corners, so without this the square
+    /// background paints over the container's corners. Only the background is
+    /// rounded, terminal content isn't clipped.
+    background_corner_radii: Option<Corners<Rems>>,
     blinking_terminal_enabled: bool,
     needs_serialize: bool,
     custom_title: Option<String>,
@@ -282,6 +289,7 @@ impl TerminalView {
             hover: None,
             hover_tooltip_update: Task::ready(()),
             mode: TerminalMode::Standalone,
+            background_corner_radii: None,
             workspace_id,
             show_breadcrumbs: TerminalSettings::get_global(cx).toolbar.breadcrumbs,
             block_below_cursor: None,
@@ -307,6 +315,16 @@ impl TerminalView {
         self.mode = TerminalMode::Embedded {
             max_lines_when_unfocused,
         };
+        cx.notify();
+    }
+
+    /// Rounds the background without clipping terminal content to the corners.
+    pub fn set_background_corner_radii(
+        &mut self,
+        corner_radii: Option<Corners<Rems>>,
+        cx: &mut Context<Self>,
+    ) {
+        self.background_corner_radii = corner_radii;
         cx.notify();
     }
 
@@ -1399,6 +1417,12 @@ impl Render for TerminalView {
                     .id("terminal-view-container")
                     .size_full()
                     .bg(cx.theme().colors().editor_background)
+                    .when_some(self.background_corner_radii, |this, radii| {
+                        this.rounded_tl(radii.top_left)
+                            .rounded_tr(radii.top_right)
+                            .rounded_bl(radii.bottom_left)
+                            .rounded_br(radii.bottom_right)
+                    })
                     .child(TerminalElement::new(
                         terminal_handle,
                         terminal_view_handle,
