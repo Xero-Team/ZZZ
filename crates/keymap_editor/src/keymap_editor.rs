@@ -4283,12 +4283,12 @@ mod tests {
             })
             .expect("workspace exists");
         cx.run_until_parked();
-        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.update(|window, cx| window.draw(cx).clear());
         keymap_editor.update_in(&mut cx, |editor, window, cx| {
             editor.toggle_keystroke_search(&ToggleKeystrokeSearch, window, cx);
             editor.toggle_exact_keystroke_matching(&ToggleExactKeystrokeMatching, window, cx);
         });
-        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.update(|window, cx| window.draw(cx).clear());
 
         // While held, Control is a modifier query that finds Ctrl-K.
         cx.simulate_modifiers_change(gpui::Modifiers::control());

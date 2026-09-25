@@ -354,7 +354,10 @@ async fn fetch_registry_index(
     let registry: serde_json::Value =
         serde_json::from_slice(&body).context("parsing ACP registry")?;
     let index: RegistryIndex = serde_json::from_value(registry).context("parsing ACP registry")?;
-    Ok(RegistryFetchResult { index, raw_body: body })
+    Ok(RegistryFetchResult {
+        index,
+        raw_body: body,
+    })
 }
 
 async fn build_registry_agents(

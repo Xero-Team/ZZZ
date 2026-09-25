@@ -1177,9 +1177,9 @@ mod tests {
         };
         helper.cx.update(|window, _| window.activate_window());
         helper.cx.run_until_parked();
-        helper.cx.update(|window, cx| window.draw(cx).clear(cx));
+        helper.cx.update(|window, cx| window.draw(cx).clear());
         helper.start_recording();
-        helper.cx.update(|window, cx| window.draw(cx).clear(cx));
+        helper.cx.update(|window, cx| window.draw(cx).clear());
         helper.input.read_with(&helper.cx, |input, _| {
             assert!(input.intercept_subscription.is_some());
         });
@@ -1215,7 +1215,7 @@ mod tests {
         helper.expect_recorded_keystrokes(&["shift"]);
 
         helper.stop_recording();
-        helper.cx.update(|window, cx| window.draw(cx).clear(cx));
+        helper.cx.update(|window, cx| window.draw(cx).clear());
         simulate_standalone_shift(&mut helper.cx);
         helper.expect_empty();
     }
@@ -1228,7 +1228,7 @@ mod tests {
         helper.expect_recorded_keystrokes(&["shift-f1"]);
 
         helper.stop_recording();
-        helper.cx.update(|window, cx| window.draw(cx).clear(cx));
+        helper.cx.update(|window, cx| window.draw(cx).clear());
         simulate_shift_f1(&mut helper.cx);
         helper.expect_empty();
     }
