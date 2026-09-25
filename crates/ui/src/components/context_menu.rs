@@ -898,7 +898,7 @@ impl ContextMenu {
 
     pub fn confirm(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
         let Some(ix) = self.selected_index else {
-            return;
+            return cx.emit(DismissEvent);
         };
 
         if let Some(ContextMenuItem::Submenu { builder, .. }) = self.items.get(ix) {
