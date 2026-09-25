@@ -689,3 +689,271 @@ the unmodified `acp_thread.rs` baseline, so it is a pre-existing
 environment failure unrelated to this batch. `cargo fmt --all -- --check`
 reports the same pre-existing `crates/project/src/agent_registry_store.rs`
 drift recorded in Run 1.
+
+## Run 4 — continuation after `b89471c52d`
+
+### Scope
+
+- Target branch: `sync/upstream-2026-09-24`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previously reviewed baseline: `b89471c52d22d2c642a9db6b4ad7e22f232bc974`
+- Reviewed upstream head: `8720fd1d093963be0aeb36954c15fd1aca1b94d2`
+- Live upstream head queried: `a84858acb95381c8c40b730879ad0f9a0c70b294`
+- Query time: `2026-09-25T12:21:09+02:00`
+- Requested range starts after `b89471c52d22d2c642a9db6b4ad7e22f232bc974`
+
+This continuation reviews the next twenty commits of the range, from
+`4668a4bf09` through `8720fd1d09`. The reviewed baseline advances to
+`8720fd1d093963be0aeb36954c15fd1aca1b94d2`.
+
+### Decisions
+
+| Upstream   | Class | Local commit | Disposition                                                                                               |
+| ---------- | ----- | ------------ | --------------------------------------------------------------------------------------------------------- |
+| 4668a4bf09 | C     | --           | LSP log-stream reference counting needs the unabsorbed log-store refactor and absent collaborator events. |
+| bd692a8021 | C     | --           | Hosted-model pricing and availability docs; the account and hosted-model pages are absent locally.        |
+| e71963a599 | A     | 76c3a948c9   | Hit testing past a wrapped line's width returns the row end; cherry-picked with `-x -s`.                  |
+| 532532bb80 | B     | c26c5d149e   | Out-of-bounds inlay hints are filtered before conversion; the collab test is omitted.                     |
+| 4c902c9db2 | B     | b8ac1b9e40   | Suggested extensions synced to the live registry; the new crate is omitted.                               |
+| 7d6a4c1d5a | B     | 9c78774b5f   | Centered layout pads a zoomed pane; the local center render API is kept.                                  |
+| a405fb91d5 | C     | --           | `MessageContent` ownership rewrite introduces an absent `acp_thread` data model.                          |
+| baee1ca6de | B     | dbb3d6626c   | Whole-word match inherited from buffer search; landed in `editor.rs` instead of `selection.rs`.           |
+| 382ff7a64b | B     | ec70317c2d   | Synthetic mouse drags stop after button release on macOS.                                                 |
+| 3ab0b5df18 | C     | --           | ACP pending-session rework conflicts with ZZZ's own ref-count design from #54009.                         |
+| e9ddcdaf98 | C     | --           | `From<u64> for ElementId` has no local caller.                                                            |
+| 99f947e5f6 | C     | --           | Plan-card removal depends on the absent `ContextCompaction` surface.                                      |
+| 557f85d25e | C     | --           | Tool-output ownership fix needs the absent `new_label` refactor and the deleted `agent/src/thread.rs`.    |
+| 7fc2cf9b84 | C     | --           | opencode dynamic model catalog; the same default network surface rejected in Run 3.                       |
+| 6990d3f678 | B     | 709c808698   | Git commit-view buffers receive the language registry; Markdown-Inline regression test.                   |
+| 6fae7f3513 | B     | 693dcb2f7a   | `apply_title_bar_insets` keeps window controls aligned; local render shapes kept.                         |
+| 5402570caa | A     | 1463642a40   | Completion detail text is muted; cherry-picked with `-x -s`.                                              |
+| d528c665e1 | C     | --           | JSONL/NDJSON preview depends on the unabsorbed `TabularFormat` parser refactor.                           |
+| 2c4bc2d7b2 | C     | --           | `data_table` separator fix needs the absent column-filter and row-border wiring.                          |
+| 8720fd1d09 | B     | 6ea10cc654   | Null `UserName`/`CredentialBlob` tolerated on Windows.                                                    |
+
+Totals: two `A`, eight `B`, ten `C`.
+
+### Applied work
+
+Every clean `A` was created with `git cherry-pick -x -s`. Every `B` has a
+local commit with a `sync:` subject and `Upstream:` / `Retained:` /
+`Omitted:` trailers. No remote, pull request, or named upstream remote was
+created.
+
+- `c26c5d149e` ports the offset-based `hints_in_range` helper and the
+  snapshot-based hint conversion into `project`, and adapts the editor
+  regression test to the local `EditorLspTestContext`; the collab
+  integration test is omitted because `crates/collab` is absent.
+- `b8ac1b9e40` regenerates the local `SUGGESTIONS_BY_EXTENSION_ID` table
+  against the live registry, re-sorts it by ID, and adds the uniqueness,
+  sortedness, and new-lookup tests; the new `extension_suggest` crate and
+  its `crates/path` dependency are not imported.
+- `9c78774b5f` adds `pad_zoomed_pane`, `zoomed_paddings`, and the padded
+  zoom overlay while keeping ZZZ's explicit corner rounding and
+  `self.center.render` call sites.
+- `dbb3d6626c` adds `SelectSearchOptions`, routes buffer-search options to
+  the active searchable item, and rebuilds select-next/previous queries
+  from those options in `editor.rs`.
+- `ec70317c2d` adds `synthetic_drag_button_is_pressed` and checks
+  `pressedMouseButtons` before replaying a drag; ZZZ's
+  `conclude_drag_operation` is kept in place of the absent
+  dragging-session helpers.
+- `709c808698` calls `set_language_registry` when building a commit-view
+  file buffer and carries the Markdown-Inline test; `Buffer::build` keeps
+  its local three-argument signature.
+- `693dcb2f7a` adds `theme::CLIENT_SIDE_DECORATION_BORDER` and
+  `platform_title_bar::apply_title_bar_insets`, and uses them in the
+  sidebar, archive, title bar, and client-side decorations.
+- `6ea10cc654` moves credential decoding into `username_and_password` and
+  treats null fields as empty; the local Windows test module keeps only
+  its existing tests plus the new credential cases.
+
+### Per-commit narrative
+
+#### `4668a4bf09` — C
+
+Reference-counts LSP log streams per view and per downstream peer. ZZZ's
+`LogStore::toggle_lsp_logs` still keys a single `toggled_log_kind` by
+`LanguageServerId`, while this commit builds on the unabsorbed
+`LanguageServerLogKey` refactor. The downstream half also depends on
+`CollaboratorLeft`, `CollaboratorUpdated`, `Rejoined`, and `HostReshared`
+events that are absent from the local `project::Event`, so the change is
+not isolatable.
+
+#### `bd692a8021` — C
+
+Updates `docs/src/account/plans-and-pricing.md`,
+`account/zed-hosted-models.md`, and `ai/privacy-and-security.md`. The
+account directory and hosted-model page do not exist locally, and the
+content is commercial hosted-model availability, which is out of scope.
+
+#### `e71963a599` — A, `76c3a948c9`
+
+Clean cherry-pick. `WrappedLineLayout::index_for_position` now maps a
+`None` from `index_for_x` to the row-end index, and the new
+`index_for_position_past_line_width` test covers the cosmic-text
+overshoot.
+
+#### `532532bb80` — B, `c26c5d149e`
+
+Moves the inlay-hint range filter to an offset-based
+`inlay_hints::hints_in_range` that treats the buffer end as inclusive,
+drops hints past the last row before conversion, and makes
+`lsp_to_project_hint` a pure `BufferSnapshot` function. The collab test
+edit was dropped. The editor regression test was adapted to the local
+`EditorLspTestContext` and passes.
+
+#### `4c902c9db2` — B, `b8ac1b9e40`
+
+Ports the data half only: the local table gains 15 languages, the new
+suffixes, and the removed `COMMIT_EDITMSG` family, plus the uniqueness and
+sortedness tests. The new `extension_suggest` crate, its `crates/path`
+dependency, the workspace manifest entries, and the module rename were
+omitted; ZZZ keeps its consolidated, localized
+`extensions_ui/src/extension_suggest.rs`.
+
+#### `7d6a4c1d5a` — B, `9c78774b5f`
+
+The padding computation is split into `centered_paddings` and
+`zoomed_paddings`, and the zoom overlay wraps its view in the same
+insets. The two conflicts were upstream's `render_center` refactor versus
+ZZZ's `self.center.render(self.zoomed.as_ref(), self.maximized_pane.as_ref(), ...)`;
+the local shape was kept and the test passes.
+
+#### `a405fb91d5` — C
+
+Replaces `UserMessage.content` plus `chunks` with a consolidated
+`MessageContent` type and rewrites ownership throughout `acp_thread.rs`
+and its `agent_ui` consumers (~1,180 changed lines). `MessageContent`
+does not exist locally and the refactor produced 26 conflicting regions,
+so it is an unisolatable data-model rewrite rather than a port.
+
+#### `baee1ca6de` — B, `dbb3d6626c`
+
+Adds `SelectSearchOptions { case_sensitive, whole_word }` to
+`workspace::searchable`, syncs the search bar's options onto the active
+item (clearing them on item switch, dismiss, and show), and builds
+select-next/previous queries from the active options while always
+enabling whole-word matching for caret origins. Upstream edits
+`editor/src/selection.rs`; ZZZ keeps these helpers in `editor.rs`, so the
+port landed there. The editor and search regression tests pass.
+
+#### `382ff7a64b` — B, `ec70317c2d`
+
+Adds a button-bit test and checks `NSEvent.pressedMouseButtons` before
+replaying a synthetic drag, incrementing the drag counter and breaking
+once the originating button is no longer held. The conflict was resolved
+by keeping ZZZ's `conclude_drag_operation`; the dragging-session helpers
+upstream interleaves are absent locally.
+
+#### `3ab0b5df18` — C
+
+Reworks `PendingAcpSession` from a shared `Entity<AcpThread>` task to a
+`WeakEntity<AcpThread>` plus a unit task and adds `close_session_and_drain`
+and `dispatch_tx` plumbing. ZZZ already carries its own ref-counted
+pending-session design (from `ad1719db17`, "Fix close session not found
+error"), so the two ownership models conflict across twelve regions and
+the fix is not isolatable.
+
+#### `e9ddcdaf98` — C
+
+Adds `impl From<u64> for ElementId`. No commit in this batch or existing
+local code calls it, so it would be an unused public API.
+
+#### `99f947e5f6` — C
+
+Removes completed plan cards from conversation history. The diff adds and
+depends on `ContextCompactionId` and `ContextCompactionStatus`, the
+`ContextCompaction` surface ZZZ never absorbed, and conflicts across
+`acp_thread`, `agent_ui`, and `entry_view_state`.
+
+#### `557f85d25e` — C
+
+Caches raw tool output as `raw_output_content` and refreshes marked-up
+output in place. The commit calls `ToolCall::new_label` and
+`label_text`, neither of which ZZZ carries, and touches
+`agent/src/thread.rs`, which is deleted locally. The ownership fix is
+therefore entangled with an unabsorbed label refactor.
+
+#### `7fc2cf9b84` — C
+
+Extends the opencode provider's runtime model catalog. The base
+`6971ae21e9` commit was rejected in Run 3 because it fetches
+`models.opencode.ai` on provider use and rewrites the provider surface;
+this follow-up depends on it.
+
+#### `6990d3f678` — B, `709c808698`
+
+Assigns the language registry to commit-view file buffers so injected
+grammars resolve. Because ZZZ's `Buffer::build` takes three arguments
+rather than upstream's four, the registry is set with a separate
+`set_language_registry` call after construction. The Markdown-Inline test
+and its two dev-dependencies were carried over and pass.
+
+#### `6fae7f3513` — B, `693dcb2f7a`
+
+Adds `theme::CLIENT_SIDE_DECORATION_BORDER` and
+`platform_title_bar::apply_title_bar_insets`, then uses them to keep the
+sidebar, archive, title bar, and decorations on the same border pixel.
+Conflicts were resolved onto ZZZ's explicit corner-rounding code and the
+`gpui::Decorations` imports were added at the two call sites.
+
+#### `5402570caa` — A, `1463642a40`
+
+Clean cherry-pick. Completion suffix text uses the muted color and
+uncolored suffixes drop their fade-out, with a new regression test.
+
+#### `d528c665e1` — C
+
+Adds JSONL/NDJSON support to the tabular preview. The commit extends the
+`TabularFormat` enum with a `JsonLines` variant and a
+`TabularFormat::parse` method that do not exist in ZZZ's `csv_preview`,
+which still parses directly from a buffer snapshot. Porting the feature
+would require first absorbing that parser refactor.
+
+#### `2c4bc2d7b2` — C
+
+Moves the table-row bottom border into a shared `render_section` and
+limits its width to the last column. ZZZ's `render_table_row` has no
+`column_filter`, `column_is_visible`, or pre-existing row-border wiring,
+so the separator change depends on an unabsorbed data-table refactor.
+
+#### `8720fd1d09` — B, `6ea10cc654`
+
+Decodes credentials through a `username_and_password` helper that treats
+a null `UserName` or `CredentialBlob` as empty. The conflict was in the
+`cfg(test)` module: the local module keeps its clipboard tests, gains the
+credential cases, and omits the absent `test_encode_restart_arguments`.
+
+### Verification
+
+| Check                                                                                    | Result  |
+| ---------------------------------------------------------------------------------------- | ------- |
+| `git diff --check`                                                                       | PASS    |
+| `cargo fmt --all -- --check` (only pre-existing `agent_registry_store.rs` drift)         | PASS    |
+| `cargo check --locked -p project -p editor` (inlay hints)                                | PASS    |
+| `cargo test --locked -p editor --lib test_inlay_hints_at_buffer_bounds`                  | PASS    |
+| `cargo check --locked -p extensions_ui`                                                  | PASS    |
+| `cargo test --locked -p extensions_ui --lib extension_suggest`                           | PASS    |
+| `cargo check --locked -p workspace -p sidebar -p agent_ui`                               | PASS    |
+| `cargo test --locked -p workspace --lib test_centered_layout_with_zoomed_pane`           | PASS    |
+| `cargo check --locked -p workspace -p editor -p search` (whole word)                     | PASS    |
+| `cargo test --locked -p editor --lib test_select_next`                                   | PASS    |
+| `cargo test --locked -p search --lib select_search_options`                              | PASS    |
+| `cargo test --locked -p search --lib test_search_option_change_during_selections`        | PASS    |
+| `cargo check --locked -p git_ui`                                                         | PASS    |
+| `cargo test --locked -p git_ui --lib test_build_buffer_resolves_injected_languages`      | PASS    |
+| `cargo check --locked -p platform_title_bar -p sidebar -p agent_ui -p workspace`         | PASS    |
+| `cargo check --locked -p zzz`                                                            | PASS    |
+| `cargo check --locked --target x86_64-pc-windows-msvc -p gpui_windows` (credential hunk) | FAIL    |
+| `cargo check --locked --target aarch64-apple-darwin -p gpui_macos` (synthetic drag hunk) | NOT RUN |
+| macOS / Windows runtime checks for platform hunks                                        | NOT RUN |
+| `cargo test --workspace`                                                                 | NOT RUN |
+
+`cargo check --locked --target x86_64-pc-windows-msvc -p gpui_windows`
+fails with 45 pre-existing errors in `direct_manipulation.rs`,
+`direct_write.rs`, `window.rs`, and the `windows-core` 0.62/0.100
+dependency mix; no error points at `platform.rs`, so the credential hunk
+is not implicated and the platform check is recorded as a baseline
+`FAIL`. `cargo fmt --all -- --check` reports only the pre-existing
+`crates/project/src/agent_registry_store.rs` drift recorded in Run 1.
