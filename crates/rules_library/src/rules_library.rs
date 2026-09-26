@@ -760,7 +760,6 @@ impl RulesLibrary {
                             editor.set_text(rule_metadata.title.unwrap_or_default(), window, cx);
                             if prompt_id.is_built_in() {
                                 editor.set_read_only(true);
-                                editor.set_show_edit_predictions(Some(false), window, cx);
                             }
                             editor
                         });
@@ -775,7 +774,6 @@ impl RulesLibrary {
                             let mut editor = Editor::for_buffer(buffer, None, window, cx);
                             if !prompt_id.can_edit() {
                                 editor.set_read_only(true);
-                                editor.set_show_edit_predictions(Some(false), window, cx);
                             }
                             editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
                             editor.set_show_gutter(false, cx);
@@ -1198,7 +1196,6 @@ impl RulesLibrary {
                     syntax: cx.theme().syntax().clone(),
                     status: cx.theme().status().clone(),
                     inlay_hints_style: editor::make_inlay_hints_style(cx),
-                    edit_prediction_styles: editor::make_suggestion_styles(cx),
                     ..EditorStyle::default()
                 },
             ))

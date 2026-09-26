@@ -173,9 +173,7 @@ impl InlineAssistant {
                     let window = windows[0];
                     drop(window.update(cx, |_, window, cx| {
                         editor.update(cx, |editor, cx| {
-                            if editor.has_active_edit_prediction() {
-                                editor.cancel(&Default::default(), window, cx);
-                            }
+                            editor.cancel(&Default::default(), window, cx);
                         });
                     }));
                 }
@@ -1404,7 +1402,6 @@ impl InlineAssistant {
                     editor.disable_mouse_wheel_zoom();
                     editor.set_forbid_vertical_scroll(true);
                     editor.set_read_only(true);
-                    editor.set_show_edit_predictions(Some(false), window, cx);
                     editor.highlight_rows::<DeletedLines>(
                         Anchor::Min..Anchor::Max,
                         cx.theme().status().deleted_background,

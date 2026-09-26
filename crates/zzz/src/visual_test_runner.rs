@@ -1395,13 +1395,13 @@ fn run_settings_ui_subpage_visual_tests(
     cx.run_until_parked();
 
     // Test 2: Open settings with a path that maps to a single SubPageLink
-    // "edit_predictions.providers" maps to the "Configure Providers" SubPageLink
+    // "language_models" maps to the "Configure Providers" SubPageLink
     // This should auto-open the sub-page
     workspace_window
         .update(cx, |_workspace, window, cx| {
             window.dispatch_action(
                 Box::new(OpenSettingsAt {
-                    path: "edit_predictions.providers".to_owned(),
+                    path: "language_models".to_owned(),
                 }),
                 cx,
             );

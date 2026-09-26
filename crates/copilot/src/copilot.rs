@@ -1,25 +1,20 @@
-mod copilot_edit_prediction_delegate;
 pub mod request;
 
-use crate::request::{
-    DidFocus, DidFocusParams, FormattingOptions, InlineCompletionContext,
-    InlineCompletionTriggerKind, InlineCompletions, NextEditSuggestions,
-};
+use crate::request::{DidFocus, DidFocusParams};
 use ::fs::Fs;
 use anyhow::{Context as _, Result, anyhow};
 use collections::{HashMap, HashSet};
 use command_palette_hooks::CommandPaletteFilter;
-use futures::future;
-use futures::{Future, FutureExt, TryFutureExt, channel::oneshot, future::Shared, select_biased};
+use futures::{Future, FutureExt, TryFutureExt, channel::oneshot, future::Shared};
 use gpui::{
     App, AppContext as _, AsyncApp, Context, Entity, EntityId, EventEmitter, Global, Subscription,
     Task, WeakEntity, actions,
 };
-use language::language_settings::{AllLanguageSettings, CopilotSettings};
+use language::language_settings::CopilotSettings;
 use language::{
-    Anchor, Bias, Buffer, BufferSnapshot, Language, PointUtf16, ToPointUtf16,
+    Anchor, Buffer, BufferSnapshot, Language, PointUtf16,
     language_settings::{EditPredictionProvider, all_language_settings},
-    point_to_lsp, range_from_lsp,
+    point_to_lsp,
 };
 use lsp::{LanguageServer, LanguageServerBinary, LanguageServerId, LanguageServerName};
 use node_runtime::{NodeRuntime, VersionStrategy};
@@ -42,8 +37,6 @@ use std::{
 use sum_tree::Dimensions;
 use util::{ResultExt, fs::remove_matching};
 use workspace::AppState;
-
-pub use crate::copilot_edit_prediction_delegate::CopilotEditPredictionDelegate;
 
 actions!(
     copilot,
@@ -304,23 +297,6 @@ impl GlobalCopilotAuth {
     }
 }
 impl Global for GlobalCopilotAuth {}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum CompletionSource {
-    NextEditSuggestion,
-    InlineCompletion,
-}
-
-/// Copilot's NextEditSuggestion response, with coordinates converted to Anchors.
-#[derive(Clone)]
-pub(crate) struct CopilotEditPrediction {
-    pub(crate) buffer: Entity<Buffer>,
-    pub(crate) range: Range<Anchor>,
-    pub(crate) text: String,
-    pub(crate) command: Option<lsp::Command>,
-    pub(crate) snapshot: BufferSnapshot,
-    pub(crate) source: CompletionSource,
-}
 
 impl Copilot {
     pub fn new(
@@ -1011,205 +987,6 @@ impl Copilot {
                     },
                 )
                 .ok();
-        }
-    }
-
-    pub(crate) fn completions(
-        &mut self,
-        buffer: &Entity<Buffer>,
-        position: Anchor,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Vec<CopilotEditPrediction>>> {
-        self.register_buffer(buffer, cx);
-
-        let server = match self.server.as_authenticated() {
-            Ok(server) => server,
-            Err(error) => return Task::ready(Err(error)),
-        };
-        let buffer_entity = buffer.clone();
-        let lsp = server.lsp.clone();
-        let Some(registered_buffer) = server.registered_buffers.get_mut(&buffer.entity_id()) else {
-            return Task::ready(Err(anyhow::anyhow!("buffer not registered")));
-        };
-        let pending_snapshot = registered_buffer.report_changes(buffer, cx);
-        let buffer = buffer.read(cx);
-        let uri = registered_buffer.uri.clone();
-        let position = position.to_point_utf16(buffer);
-        let snapshot = buffer.snapshot();
-        let settings = snapshot.settings_at(0, cx);
-        let tab_size = settings.tab_size.get();
-        let hard_tabs = settings.hard_tabs;
-        drop(settings);
-
-        let request_timeout = ProjectSettings::get_global(cx)
-            .global_lsp_settings
-            .get_request_timeout();
-
-        let nes_enabled = AllLanguageSettings::get_global(cx)
-            .edit_predictions
-            .copilot
-            .enable_next_edit_suggestions
-            .unwrap_or(true);
-
-        cx.background_spawn(async move {
-            let (version, snapshot) = pending_snapshot.await?;
-            let lsp_position = point_to_lsp(position);
-
-            let nes_fut = if nes_enabled {
-                lsp.request::<NextEditSuggestions>(
-                    request::NextEditSuggestionsParams {
-                        text_document: lsp::VersionedTextDocumentIdentifier {
-                            uri: uri.clone(),
-                            version,
-                        },
-                        position: lsp_position,
-                    },
-                    request_timeout,
-                )
-                .map(|resp| {
-                    resp.into_response()
-                        .ok()
-                        .map(|result| {
-                            result
-                                .edits
-                                .into_iter()
-                                .map(|completion| {
-                                    let range = range_from_lsp(completion.range);
-                                    let start = snapshot.clip_point_utf16(range.start, Bias::Left);
-                                    let end = snapshot.clip_point_utf16(range.end, Bias::Left);
-                                    CopilotEditPrediction {
-                                        buffer: buffer_entity.clone(),
-                                        range: snapshot.anchor_before(start)
-                                            ..snapshot.anchor_after(end),
-                                        text: completion.text,
-                                        command: completion.command,
-                                        snapshot: snapshot.clone(),
-                                        source: CompletionSource::NextEditSuggestion,
-                                    }
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default()
-                })
-                .left_future()
-                .fuse()
-            } else {
-                future::ready(Vec::<CopilotEditPrediction>::new())
-                    .right_future()
-                    .fuse()
-            };
-
-            let inline_fut = lsp
-                .request::<InlineCompletions>(
-                    request::InlineCompletionsParams {
-                        text_document: lsp::VersionedTextDocumentIdentifier {
-                            uri: uri.clone(),
-                            version,
-                        },
-                        position: lsp_position,
-                        context: InlineCompletionContext {
-                            trigger_kind: InlineCompletionTriggerKind::Automatic,
-                        },
-                        formatting_options: Some(FormattingOptions {
-                            tab_size,
-                            insert_spaces: !hard_tabs,
-                        }),
-                    },
-                    request_timeout,
-                )
-                .map(|resp| {
-                    resp.into_response()
-                        .ok()
-                        .map(|result| {
-                            result
-                                .items
-                                .into_iter()
-                                .map(|item| {
-                                    let range = range_from_lsp(item.range);
-                                    let start = snapshot.clip_point_utf16(range.start, Bias::Left);
-                                    let end = snapshot.clip_point_utf16(range.end, Bias::Left);
-                                    CopilotEditPrediction {
-                                        buffer: buffer_entity.clone(),
-                                        range: snapshot.anchor_before(start)
-                                            ..snapshot.anchor_after(end),
-                                        text: item.insert_text,
-                                        command: item.command,
-                                        snapshot: snapshot.clone(),
-                                        source: CompletionSource::InlineCompletion,
-                                    }
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default()
-                })
-                .fuse();
-
-            futures::pin_mut!(nes_fut, inline_fut);
-
-            let mut nes_result: Option<Vec<CopilotEditPrediction>> = None;
-            let mut inline_result: Option<Vec<CopilotEditPrediction>> = None;
-
-            loop {
-                select_biased! {
-                    nes = nes_fut => {
-                        if !nes.is_empty() {
-                            return Ok(nes);
-                        }
-                        nes_result = Some(nes);
-                    }
-                    inline = inline_fut => {
-                        if !inline.is_empty() {
-                            return Ok(inline);
-                        }
-                        inline_result = Some(inline);
-                    }
-                    complete => break,
-                }
-
-                if let (Some(nes), Some(inline)) = (&nes_result, &inline_result) {
-                    return if !nes.is_empty() {
-                        Ok(nes.clone())
-                    } else {
-                        Ok(inline.clone())
-                    };
-                }
-            }
-
-            Ok(nes_result.or(inline_result).unwrap_or_default())
-        })
-    }
-
-    pub(crate) fn accept_completion(
-        &mut self,
-        completion: &CopilotEditPrediction,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<()>> {
-        let server = match self.server.as_authenticated() {
-            Ok(server) => server,
-            Err(error) => return Task::ready(Err(error)),
-        };
-        if let Some(command) = &completion.command {
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-
-            let request = server.lsp.request::<lsp::ExecuteCommand>(
-                lsp::ExecuteCommandParams {
-                    command: command.command.clone(),
-                    arguments: command.arguments.clone().unwrap_or_default(),
-                    ..Default::default()
-                },
-                request_timeout,
-            );
-            cx.background_spawn(async move {
-                request
-                    .await
-                    .into_response()
-                    .context("copilot: notify accepted")?;
-                Ok(())
-            })
-        } else {
-            Task::ready(Ok(()))
         }
     }
 

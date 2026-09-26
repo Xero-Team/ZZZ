@@ -193,18 +193,6 @@ impl lsp::notification::Notification for DidFocus {
     const METHOD: &'static str = "textDocument/didFocus";
 }
 
-pub(crate) struct DidShowInlineEdit;
-
-#[derive(Serialize, Deserialize)]
-pub(crate) struct DidShowInlineEditParams {
-    pub(crate) item: serde_json::Value,
-}
-
-impl lsp::notification::Notification for DidShowInlineEdit {
-    type Params = DidShowInlineEditParams;
-    const METHOD: &'static str = "textDocument/didShowInlineEdit";
-}
-
 // Inline Completions (non-NES) - textDocument/inlineCompletion
 
 pub enum InlineCompletions {}
@@ -281,19 +269,4 @@ impl lsp::request::Request for InlineCompletions {
     type Result = InlineCompletionsResult;
 
     const METHOD: &'static str = "textDocument/inlineCompletion";
-}
-
-// Telemetry notifications for inline completions
-
-pub(crate) struct DidShowCompletion;
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct DidShowCompletionParams {
-    pub(crate) item: InlineCompletionItem,
-}
-
-impl lsp::notification::Notification for DidShowCompletion {
-    type Params = DidShowCompletionParams;
-    const METHOD: &'static str = "textDocument/didShowCompletion";
 }

@@ -48,7 +48,7 @@ check_sentry_opt_in() {
 check_no_commercial_entrypoints() {
     ! rg -n 'start_trial|upgrade_to_zed_pro|billing-support@zed\.dev|Try Zed Pro|Start Free Trial|Upgrade to Pro|Manage Subscription' \
         "$root/crates/onboarding" "$root/crates/title_bar" \
-        "$root/crates/edit_prediction_ui" "$root/crates/agent_ui"
+        "$root/crates/agent_ui"
 }
 
 check_no_commercial_identifiers() {
@@ -87,7 +87,7 @@ check_product_defaults_no_zed_host() {
 check_product_surfaces_no_hosted_docs() {
     ! rg -n 'https?://(www\.)?zed\.dev/docs|https?://(www\.)?zed\.dev/(download|releases|pricing|account|terms)' \
         "$root/crates/zzz/src" "$root/crates/onboarding" \
-        "$root/crates/title_bar" "$root/crates/edit_prediction_ui" "$root/crates/edit_prediction/src" \
+        "$root/crates/title_bar" \
         "$root/crates/agent_ui" "$root/crates/settings_ui/src" "$root/crates/language_tools/src" \
         "$root/crates/theme_selector/src" "$root/crates/debugger_ui/src" "$root/crates/repl/src" \
         "$root/crates/install_cli/src" "$root/crates/language_onboarding/src" "$root/crates/feedback/src" \
@@ -202,13 +202,11 @@ check_collab_absent() {
 
 check_no_mercury_provider() {
     ! rg -n 'EditPredictionProvider::Mercury' \
-        "$root/crates/edit_prediction" "$root/crates/edit_prediction_ui" \
         "$root/crates/settings_content" "$root/crates/settings_ui"
 }
 
 check_no_zed_edit_prediction_provider() {
     ! rg -n 'EditPredictionProvider::Zed' \
-        "$root/crates/edit_prediction" "$root/crates/edit_prediction_ui" \
         "$root/crates/settings_content" "$root/crates/settings_ui"
 }
 
@@ -217,9 +215,7 @@ check_no_allow_data_collection_default() {
 }
 
 check_no_cloud_web_search() {
-    ! rg -n 'CloudWebSearchProvider|ZED_WEB_SEARCH_PROVIDER_ID' \
-        "$root/crates/web_search_providers" \
-        && ! rg -n '"zed\.dev"' "$root/crates/web_search_providers"
+    ! test -d "$root/crates/web_search_providers"
 }
 
 check_no_client_signin_product_entry() {
@@ -346,7 +342,7 @@ check_no_llm_token_api() {
 
 check_no_account_fetch_in_user_store() {
     ! rg -n 'get_authenticated_user|update_authenticated_user|submit_edit_prediction_feedback' \
-        "$root/crates/client/src/user.rs" "$root/crates/edit_prediction/src"
+        "$root/crates/client/src/user.rs"
 }
 
 check_no_agent_feedback_upload() {

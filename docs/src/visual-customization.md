@@ -397,15 +397,6 @@ TBD: Centered layout related settings
   "colorize_brackets": true,
 ```
 
-### Edit Predictions {#editor-ai}
-
-```json [settings]
-  "edit_predictions": {
-    "mode": "eager"                  // Automatically show (eager) or hold-alt (subtle)
-  },
-  "show_edit_predictions": true     // Show/hide predictions in editor
-```
-
 ### Editor Inlay Hints
 
 ```json [settings]

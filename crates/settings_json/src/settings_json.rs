@@ -2697,32 +2697,29 @@ mod tests {
 
     #[test]
     fn test_find_value_range_in_json_text() {
-        let text = r#"// "edit_predictions": { "disabled_globs": ["commented/**"] },
+        let text = r#"// "lsp": { "runnables": ["commented/**"] },
         {
-            // "disabled_globs": ["commented/**"],
-            "languages": { "edit_predictions": { "disabled_globs": ["nested/**"] } },
-            "edit_predictions": {
-                /* "disabled_globs": ["commented/**"], */
+            // "runnables": ["commented/**"],
+            "languages": { "lsp": { "runnables": ["nested/**"] } },
+            "lsp": {
+                /* "runnables": ["commented/**"], */
                 "mode": "subtle",
-                "disabled_globs": ["live/**", /* ] */ "..."], // ]
+                "runnables": ["live/**", /* ] */ "..."], // ]
             }
         }"#;
-        let range = find_value_range_in_json_text(text, &["edit_predictions", "disabled_globs"])
-            .expect("value range");
+        let range =
+            find_value_range_in_json_text(text, &["lsp", "runnables"]).expect("value range");
         assert_eq!(&text[range], r#"["live/**", /* ] */ "..."]"#);
         assert_eq!(
-            find_value_range_in_json_text(text, &["edit_predictions", "missing"]),
+            find_value_range_in_json_text(text, &["lsp", "missing"]),
             None
         );
         assert_eq!(find_value_range_in_json_text(text, &["missing"]), None);
         assert_eq!(
-            find_value_range_in_json_text("// only a comment", &["edit_predictions"]),
+            find_value_range_in_json_text("// only a comment", &["lsp"]),
             None
         );
-        assert_eq!(
-            find_value_range_in_json_text("", &["edit_predictions"]),
-            None
-        );
+        assert_eq!(find_value_range_in_json_text("", &["lsp"]), None);
         assert_eq!(
             find_value_range_in_json_text(r#"{"a": 1}"#, &["a", "b"]),
             None

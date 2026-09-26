@@ -51,10 +51,7 @@ use gpui::{
     Action, App, Context, Entity, ImageSource, Resource, SharedString, SharedUri, Window, actions,
 };
 use i18n as app_i18n;
-use language::{
-    LanguageRegistry,
-    language_settings::{AllLanguageSettings, EditPredictionProvider},
-};
+use language::LanguageRegistry;
 use language_model::{
     ConfiguredModel, LanguageModelId, LanguageModelProviderId, LanguageModelRegistry,
 };
@@ -64,7 +61,6 @@ use rope::Point;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings::{LanguageModelSelection, Settings as _, SettingsStore};
-use std::any::TypeId;
 use workspace::{OpenOptions, Workspace};
 
 use crate::agent_configuration::{ConfigureContextServerModal, ManageProfilesModal};
@@ -743,34 +739,12 @@ fn update_command_palette_filter(cx: &mut App) {
     let disable_ai = DisableAiSettings::get_global(cx).disable_ai;
     let agent_enabled = AgentSettings::get_global(cx).enabled;
 
-    let edit_prediction_provider = AllLanguageSettings::get_global(cx)
-        .edit_predictions
-        .provider;
-
     CommandPaletteFilter::update_global(cx, |filter, _| {
-        use editor::actions::{
-            AcceptEditPrediction, AcceptNextLineEditPrediction, AcceptNextWordEditPrediction,
-            NextEditPrediction, PreviousEditPrediction, ShowEditPrediction, ToggleEditPrediction,
-        };
-        let edit_prediction_actions = [
-            TypeId::of::<AcceptEditPrediction>(),
-            TypeId::of::<AcceptNextWordEditPrediction>(),
-            TypeId::of::<AcceptNextLineEditPrediction>(),
-            TypeId::of::<AcceptEditPrediction>(),
-            TypeId::of::<ShowEditPrediction>(),
-            TypeId::of::<NextEditPrediction>(),
-            TypeId::of::<PreviousEditPrediction>(),
-            TypeId::of::<ToggleEditPrediction>(),
-        ];
-
         if disable_ai {
             filter.hide_namespace("agent");
             filter.hide_namespace("agents");
             filter.hide_namespace("assistant");
             filter.hide_namespace("copilot");
-            filter.hide_namespace("edit_prediction");
-
-            filter.hide_action_types(&edit_prediction_actions);
         } else {
             if agent_enabled {
                 filter.show_namespace("agent");
@@ -780,24 +754,6 @@ fn update_command_palette_filter(cx: &mut App) {
                 filter.hide_namespace("agent");
                 filter.hide_namespace("agents");
                 filter.hide_namespace("assistant");
-            }
-
-            match edit_prediction_provider {
-                EditPredictionProvider::None => {
-                    filter.hide_namespace("edit_prediction");
-                    filter.hide_namespace("copilot");
-                    filter.hide_action_types(&edit_prediction_actions);
-                }
-                EditPredictionProvider::Copilot => {
-                    filter.show_namespace("edit_prediction");
-                    filter.show_namespace("copilot");
-                    filter.show_action_types(edit_prediction_actions.iter());
-                }
-                EditPredictionProvider::Ollama | EditPredictionProvider::OpenAiCompatibleApi => {
-                    filter.show_namespace("edit_prediction");
-                    filter.hide_namespace("copilot");
-                    filter.show_action_types(edit_prediction_actions.iter());
-                }
             }
 
             filter.show_namespace("multi_workspace");
@@ -869,8 +825,8 @@ mod tests {
     use agent_settings::{AgentProfileId, AgentSettings};
     use command_palette_hooks::CommandPaletteFilter;
     use db::kvp::KeyValueStore;
-    use editor::actions::AcceptEditPrediction;
-    use gpui::{BorrowAppContext, TestAppContext, px};
+    use gpui::{TestAppContext, px};
+    use language::language_settings::AllLanguageSettings;
     use project::DisableAiSettings;
     use settings::{
         DockPosition, NotifyWhenAgentWaiting, PlaySoundWhenAgentDone, Settings, SettingsStore,
@@ -956,51 +912,6 @@ mod tests {
             assert!(
                 filter.is_hidden(&NewThread),
                 "NewThread should be hidden when agent is disabled"
-            );
-        });
-
-        // Test EditPredictionProvider
-        // Enable EditPredictionProvider::Copilot
-        cx.update(|cx| {
-            cx.update_global::<SettingsStore, _>(|store, cx| {
-                store.update_user_settings(cx, |s| {
-                    s.project
-                        .all_languages
-                        .edit_predictions
-                        .get_or_insert(Default::default())
-                        .provider = Some(EditPredictionProvider::Copilot);
-                });
-            });
-            update_command_palette_filter(cx);
-        });
-
-        cx.update(|cx| {
-            let filter = CommandPaletteFilter::try_global(cx).unwrap();
-            assert!(
-                !filter.is_hidden(&AcceptEditPrediction),
-                "EditPrediction should be visible when provider is Copilot"
-            );
-        });
-
-        // Disable EditPredictionProvider (None)
-        cx.update(|cx| {
-            cx.update_global::<SettingsStore, _>(|store, cx| {
-                store.update_user_settings(cx, |s| {
-                    s.project
-                        .all_languages
-                        .edit_predictions
-                        .get_or_insert(Default::default())
-                        .provider = Some(EditPredictionProvider::None);
-                });
-            });
-            update_command_palette_filter(cx);
-        });
-
-        cx.update(|cx| {
-            let filter = CommandPaletteFilter::try_global(cx).unwrap();
-            assert!(
-                filter.is_hidden(&AcceptEditPrediction),
-                "EditPrediction should be hidden when provider is None"
             );
         });
     }

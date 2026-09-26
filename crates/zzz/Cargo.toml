@@ -125,8 +125,6 @@ agent_servers = { workspace = true, optional = true }
 gpui_tokio.workspace = true
 rayon.workspace = true
 
-edit_prediction.workspace = true
-edit_prediction_ui.workspace = true
 http_client.workspace = true
 image_viewer.workspace = true
 audio_viewer.workspace = true
@@ -215,8 +213,6 @@ uuid.workspace = true
 vim.workspace = true
 vim_mode_setting.workspace = true
 watch.workspace = true
-web_search.workspace = true
-web_search_providers.workspace = true
 which_key.workspace = true
 workspace.workspace = true
 zzz_actions.workspace = true

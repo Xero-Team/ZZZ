@@ -1,4 +1,4 @@
-use std::{num::NonZeroU32, path::Path};
+use std::num::NonZeroU32;
 
 use collections::{HashMap, HashSet};
 use schemars::JsonSchema;
@@ -6,10 +6,7 @@ use serde::{Deserialize, Serialize};
 use settings_macros::{MergeFrom, with_fallible_options};
 use std::sync::Arc;
 
-use crate::{
-    DelayMs, DocumentFoldingRanges, DocumentSymbols, ExtendingSet, SemanticTokens, SplicingVec,
-    merge_from,
-};
+use crate::{DocumentFoldingRanges, DocumentSymbols, ExtendingSet, SemanticTokens, merge_from};
 
 /// The state of the modifier keys at some point in time
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
@@ -135,96 +132,8 @@ impl EditPredictionProvider {
 pub struct EditPredictionSettingsContent {
     /// Determines which edit prediction provider to use.
     pub provider: Option<EditPredictionProvider>,
-    /// Disable edit predictions for files matching these glob patterns.
-    ///
-    /// Use `"..."` to add patterns without repeating ZZZ's defaults. In project
-    /// settings, it extends the user or parent configuration value. Omit
-    /// `"..."` to replace the inherited list.
-    ///
-    /// ```json
-    /// {
-    ///   "edit_predictions": {
-    ///     "disabled_globs": ["**/build/**", "..."]
-    ///   }
-    /// }
-    /// ```
-    ///
-    /// Inherited patterns are inserted at `"..."`, and duplicates keep their first
-    /// occurrence.
-    ///
-    /// Set `[]` to clear the inherited list. Omit this setting to inherit it unchanged.
-    ///
-    /// Relative patterns are matched against paths relative to the worktree root.
-    /// Absolute patterns are matched against absolute paths. A leading `~` is
-    /// expanded to your home folder.
-    pub disabled_globs: Option<SplicingVec>,
-    /// The mode used to display edit predictions in the buffer.
-    /// Provider support required.
-    pub mode: Option<EditPredictionsMode>,
     /// Settings specific to GitHub Copilot.
     pub copilot: Option<CopilotSettingsContent>,
-    /// Settings specific to Ollama.
-    pub ollama: Option<OllamaEditPredictionSettingsContent>,
-    /// Settings specific to using custom OpenAI-compatible servers for edit prediction.
-    pub open_ai_compatible_api: Option<CustomEditPredictionProviderSettingsContent>,
-    /// The directory where manually captured edit prediction examples are stored.
-    pub examples_dir: Option<Arc<Path>>,
-}
-
-#[with_fallible_options]
-#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
-pub struct CustomEditPredictionProviderSettingsContent {
-    /// Api URL to use for completions.
-    ///
-    /// Default: ""
-    pub api_url: Option<String>,
-    /// The prompt format to use for completions. Set to `""` to have the format be derived from the model name.
-    ///
-    /// Default: ""
-    pub prompt_format: Option<EditPredictionPromptFormatContent>,
-    /// The name of the model.
-    ///
-    /// Default: ""
-    pub model: Option<String>,
-    /// Maximum tokens to generate.
-    ///
-    /// Default: 256
-    pub max_output_tokens: Option<u32>,
-    /// The debounce delay in milliseconds before automatically requesting a prediction
-    /// after typing stops. Set to 0 to request predictions immediately.
-    ///
-    /// Default: 0
-    pub prediction_debounce: Option<DelayMs>,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum EditPredictionPromptFormatContent {
-    #[default]
-    Infer,
-    Zeta,
-    Zeta2,
-    Zeta2_1,
-    CodeLlama,
-    StarCoder,
-    DeepseekCoder,
-    Qwen,
-    CodeGemma,
-    Codestral,
-    Glm,
 }
 
 #[with_fallible_options]
@@ -242,88 +151,6 @@ pub struct CopilotSettingsContent {
     ///
     /// Default: none
     pub enterprise_uri: Option<String>,
-    /// Whether the Copilot Next Edit Suggestions feature is enabled.
-    ///
-    /// Default: true
-    pub enable_next_edit_suggestions: Option<bool>,
-}
-
-/// Ollama model name for edit predictions.
-#[with_fallible_options]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
-#[serde(transparent)]
-pub struct OllamaModelName(pub String);
-
-impl AsRef<str> for OllamaModelName {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl From<String> for OllamaModelName {
-    fn from(value: String) -> Self {
-        Self(value)
-    }
-}
-
-impl From<OllamaModelName> for String {
-    fn from(value: OllamaModelName) -> Self {
-        value.0
-    }
-}
-
-#[with_fallible_options]
-#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
-pub struct OllamaEditPredictionSettingsContent {
-    /// Model to use for completions.
-    ///
-    /// Default: none
-    pub model: Option<OllamaModelName>,
-    /// Maximum tokens to generate for FIM models.
-    ///
-    /// Default: 256
-    pub max_output_tokens: Option<u32>,
-    /// Api URL to use for completions.
-    ///
-    /// Default: "http://localhost:11434"
-    pub api_url: Option<String>,
-
-    /// The prompt format to use for completions. Set to `""` to have the format be derived from the model name.
-    ///
-    /// Default: ""
-    pub prompt_format: Option<EditPredictionPromptFormatContent>,
-    /// The debounce delay in milliseconds before automatically requesting a prediction
-    /// after typing stops. Set to 0 to request predictions immediately.
-    ///
-    /// Default: 0
-    pub prediction_debounce: Option<DelayMs>,
-}
-
-/// The mode in which edit predictions should be displayed.
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Eq,
-    PartialEq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum EditPredictionsMode {
-    /// If provider supports it, display inline when holding modifier key (e.g., alt).
-    /// Otherwise, eager preview is used.
-    #[serde(alias = "auto")]
-    Subtle,
-    /// Display inline when there are no language server completions available.
-    #[default]
-    #[serde(alias = "eager_preview")]
-    Eager,
 }
 
 /// Controls the soft-wrapping behavior in the editor.
@@ -507,43 +334,6 @@ pub struct LanguageSettingsContent {
     ///
     /// Default: "in_comments"
     pub allow_rewrap: Option<RewrapBehavior>,
-    /// Controls whether edit predictions are shown immediately (true)
-    /// or manually by triggering `editor::ShowEditPrediction` (false).
-    ///
-    /// Default: true
-    pub show_edit_predictions: Option<bool>,
-    /// Disable edit predictions in these language scopes, such as "comment" and
-    /// "string".
-    ///
-    /// Default:
-    ///
-    /// ```json
-    /// {
-    ///   "edit_predictions_disabled_in": []
-    /// }
-    /// ```
-    ///
-    /// Use `"..."` to add scopes without repeating the inherited list. In project
-    /// settings, it extends the user or parent configuration value. In
-    /// language-specific settings, it extends the scopes inherited by that
-    /// language. Omit `"..."` to replace the inherited list.
-    ///
-    /// ```json
-    /// {
-    ///   "edit_predictions_disabled_in": ["comment"],
-    ///   "languages": {
-    ///     "Go": {
-    ///       "edit_predictions_disabled_in": ["string", "..."]
-    ///     }
-    ///   }
-    /// }
-    /// ```
-    ///
-    /// Inherited scopes are inserted at `"..."`, and duplicates keep their first
-    /// occurrence.
-    ///
-    /// Set `[]` to clear the inherited list. Omit this setting to inherit it unchanged.
-    pub edit_predictions_disabled_in: Option<SplicingVec>,
     /// Whether to show tabs and spaces in the editor.
     pub show_whitespaces: Option<ShowWhitespaceSetting>,
     /// Visible characters used to render whitespace when show_whitespaces is enabled.

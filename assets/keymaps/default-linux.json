@@ -37,7 +37,6 @@
       "shift-f5": "debugger::Stop",
       "ctrl-shift-f5": "debugger::RerunSession",
       "f6": "debugger::Pause",
-      "ctrl-alt-shift-i": "edit_prediction::ToggleMenu",
       "ctrl-alt-l": "lsp_tool::ToggleMenu",
       "ctrl-alt-shift-s": "workspace::ToggleWorktreeSecurity",
     },
@@ -125,7 +124,6 @@
       "alt-g r": "git::ReviewDiff",
       "menu": "editor::OpenContextMenu",
       "shift-f10": "editor::OpenContextMenu",
-      "ctrl-alt-shift-e": "editor::ToggleEditPrediction",
       "f9": "editor::ToggleBreakpoint",
       "shift-f9": "editor::EditLogBreakpoint",
     },
@@ -148,19 +146,6 @@
       "ctrl-shift-alt-backspace": "editor::GoToNextChange",
       "alt-enter": "editor::OpenSelectionsInMultibuffer",
       "ctrl-alt-f": "text_finder::Toggle",
-    },
-  },
-  {
-    "context": "Editor && mode == full && edit_prediction",
-    "bindings": {
-      "alt-]": "editor::NextEditPrediction",
-      "alt-[": "editor::PreviousEditPrediction",
-    },
-  },
-  {
-    "context": "Editor && !edit_prediction",
-    "bindings": {
-      "alt-\\": "editor::ShowEditPrediction",
     },
   },
   {
@@ -854,21 +839,6 @@
   // alt-l is provided as an alternative to tab/alt-tab. and will be displayed in the UI. This is
   // because alt-tab may not be available, as it is often used for window switching.
   {
-    "context": "Editor && edit_prediction",
-    "bindings": {
-      "alt-tab": "editor::AcceptEditPrediction",
-      "alt-l": "editor::AcceptEditPrediction",
-      "alt-k": "editor::AcceptNextWordEditPrediction",
-      "alt-j": "editor::AcceptNextLineEditPrediction",
-    },
-  },
-  {
-    "context": "Editor && edit_prediction && edit_prediction_mode == eager && !showing_completions",
-    "bindings": {
-      "tab": "editor::AcceptEditPrediction",
-    },
-  },
-  {
     "context": "Editor && showing_code_actions",
     "bindings": {
       "enter": "editor::ConfirmCodeAction",
@@ -1467,13 +1437,6 @@
       "pagedown": "settings_editor::FocusNextRootNavEntry",
       "home": "settings_editor::FocusFirstNavEntry",
       "end": "settings_editor::FocusLastNavEntry",
-    },
-  },
-  {
-    "context": "EditPredictionContext > Editor",
-    "bindings": {
-      "alt-left": "dev::EditPredictionContextGoBack",
-      "alt-right": "dev::EditPredictionContextGoForward",
     },
   },
   {

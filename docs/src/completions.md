@@ -1,18 +1,13 @@
 ---
 title: Code Completions - ZZZ
-description: ZZZ's code completions from language servers and edit predictions. Configure autocomplete behavior, snippets, and documentation display.
+description: ZZZ's code completions from language servers. Configure autocomplete behavior, snippets, and documentation display.
 ---
 
 # Completions
 
-ZZZ supports two sources for completions:
-
-1. "Code Completions" provided by language servers (LSPs) you download
-   explicitly, or via [ZZZ Language Extensions](languages.md). Language
-   servers are not downloaded when you open a buffer.
-2. "Edit Predictions" from a provider you configure. Prefer a local
-   endpoint such as Ollama or llama.cpp. GitHub Copilot is
-   optional and only used after you select it.
+ZZZ provides "Code Completions" from language servers (LSPs) you download
+explicitly, or via [ZZZ Language Extensions](languages.md). Language servers
+are not downloaded when you open a buffer.
 
 ## Language Server Code Completions {#code-completions}
 
@@ -37,11 +32,3 @@ For more information, see:
 
 - [Configuring Supported Languages](./configuring-languages.md)
 - [List of ZZZ Supported Languages](./languages.md)
-
-## Edit Predictions {#edit-predictions}
-
-Edit predictions appear as you type once you configure a provider. Most of
-the time, you can accept them by pressing `tab`.
-
-See the [edit predictions documentation](./ai/edit-prediction.md) for how
-to set up a local provider and optional remote providers.

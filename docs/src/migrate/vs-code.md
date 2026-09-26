@@ -80,7 +80,6 @@ The following VS Code settings are automatically imported when you use **Import 
 | `editor.trimAutoWhitespace`                 | `remove_trailing_whitespace_on_save`           |
 | `editor.suggestOnTriggerCharacters`         | `show_completions_on_input`                    |
 | `editor.suggest.showWords`                  | `completions.words`                            |
-| `editor.inlineSuggest.enabled`              | `show_edit_predictions`                        |
 
 **Files & Workspace**
 
@@ -304,26 +303,21 @@ You won’t find one-to-one replacements for every VS Code extension, especially
 
 ### Using AI in ZZZ
 
-Prefer a local provider such as Ollama or llama.cpp. GitHub Copilot is
-optional after you configure it. There is no ZZZ Pro plan. You can
-disable AI features entirely if you prefer.
+ZZZ has no paid plans and needs no ZZZ account. You can disable AI features
+entirely if you prefer.
 
-#### Configuring a local provider
+#### External agents
 
-1. Open Settings with `Cmd+,` (macOS) or `Ctrl+,` (Linux/Windows)
-2. Navigate to **AI → Edit Predictions**
-3. Click **Configure** next to "Configure Providers"
-4. Point the provider at a local Ollama or llama.cpp endpoint
-
-See [Edit Prediction](../ai/edit-prediction.md) for JSON examples.
+The recommended way to use AI in ZZZ is through external agents such as
+Claude Code, Gemini CLI, and OpenCode. See
+[External Agents](../ai/external-agents.md) to set one up.
 
 #### Additional AI Options
 
 To use other AI models in ZZZ, you have several options:
 
-- Use local Ollama or llama.cpp models by configuring a provider in ZZZ.
 - Bring your own [API keys](../ai/llm-providers.md), no ZZZ account required
-- Use [external agents like Claude Agent](../ai/external-agents.md).
+- Configure a local model provider for use with an external agent
 
 ### Advanced Config and Productivity Tweaks
 

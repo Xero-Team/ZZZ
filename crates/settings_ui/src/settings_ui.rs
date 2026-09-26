@@ -51,8 +51,7 @@ use zzz_actions::{OpenProjectSettings, OpenSettings, OpenSettingsAt};
 
 use crate::components::{
     EnumVariantDropdown, NumberField, NumberFieldMode, NumberFieldType, SettingsInputField,
-    SettingsSectionHeader, font_picker, icon_theme_picker, render_ollama_model_picker,
-    theme_picker,
+    SettingsSectionHeader, font_picker, icon_theme_picker, theme_picker,
 };
 use crate::pages::{
     LlmProviderForm, render_input_audio_device_dropdown, render_output_audio_device_dropdown,
@@ -539,7 +538,6 @@ fn init_renderers(cx: &mut App) {
         .add_basic_renderer::<settings::AlternateScroll>(render_dropdown)
         .add_basic_renderer::<settings::TerminalBlink>(render_dropdown)
         .add_basic_renderer::<settings::CursorShapeContent>(render_dropdown)
-        .add_basic_renderer::<settings::EditPredictionPromptFormatContent>(render_dropdown)
         .add_basic_renderer::<f32>(render_editable_number_field)
         .add_basic_renderer::<u32>(render_editable_number_field)
         .add_basic_renderer::<u64>(render_editable_number_field)
@@ -587,12 +585,10 @@ fn init_renderers(cx: &mut App) {
         .add_basic_renderer::<settings::IncludeIgnoredContent>(render_dropdown)
         .add_basic_renderer::<settings::ShowIndentGuides>(render_dropdown)
         .add_basic_renderer::<settings::ShellDiscriminants>(render_dropdown)
-        .add_basic_renderer::<settings::EditPredictionsMode>(render_dropdown)
         .add_basic_renderer::<settings::RelativeLineNumbers>(render_dropdown)
         .add_basic_renderer::<settings::WindowDecorations>(render_dropdown)
         .add_basic_renderer::<settings::WindowButtonLayoutContentDiscriminants>(render_dropdown)
         .add_basic_renderer::<settings::FontSize>(render_editable_number_field)
-        .add_basic_renderer::<settings::OllamaModelName>(render_ollama_model_picker)
         .add_basic_renderer::<settings::SemanticTokens>(render_dropdown)
         .add_basic_renderer::<settings::DocumentFoldingRanges>(render_dropdown)
         .add_basic_renderer::<settings::DocumentSymbols>(render_dropdown)
@@ -3457,20 +3453,6 @@ impl SettingsWindow {
             .overflow_y_scroll()
             .track_scroll(scroll_handle);
         self.render_sub_page_items_in(page_content, items, false, window, cx)
-    }
-
-    fn render_sub_page_items_section<'a, Items>(
-        &self,
-        items: Items,
-        is_inline_section: bool,
-        window: &mut Window,
-        cx: &mut Context<SettingsWindow>,
-    ) -> impl IntoElement
-    where
-        Items: Iterator<Item = (usize, &'a SettingsPageItem)>,
-    {
-        let page_content = v_flex().id("settings-ui-sub-page-section").size_full();
-        self.render_sub_page_items_in(page_content, items, is_inline_section, window, cx)
     }
 
     fn render_sub_page_items_in<'a, Items>(

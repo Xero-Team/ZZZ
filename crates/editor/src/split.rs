@@ -5986,17 +5986,13 @@ mod tests {
             rhs_editor.splice_inlays(
                 &[],
                 vec![
-                    Inlay::edit_prediction(
-                        0,
-                        snapshot.anchor_after(Point::new(0, 3)),
-                        "\nINLAY_WITHIN",
-                    ),
-                    Inlay::edit_prediction(
+                    Inlay::mock_hint(0, snapshot.anchor_after(Point::new(0, 3)), "\nINLAY_WITHIN"),
+                    Inlay::mock_hint(
                         1,
                         snapshot.anchor_after(Point::new(1, 3)),
                         "\nINLAY_MID_1\nINLAY_MID_2",
                     ),
-                    Inlay::edit_prediction(
+                    Inlay::mock_hint(
                         2,
                         snapshot.anchor_after(Point::new(3, 3)),
                         "\nINLAY_END_1\nINLAY_END_2",

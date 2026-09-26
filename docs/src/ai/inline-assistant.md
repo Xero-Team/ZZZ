@@ -92,15 +92,6 @@ One with Claude Sonnet 4.5 (the default model), another with GPT-5-mini, and ano
 }
 ```
 
-## Inline Assistant vs. Edit Prediction
-
-Both features generate inline code, but they work differently:
-
-- **Inline Assistant**: You write a prompt and select what to transform. You control the context.
-- **[Edit Prediction](./edit-prediction.md)**: ZZZ automatically suggests edits based on your recent changes, visited files, and cursor position. No prompting required.
-
-The key difference: Inline Assistant is explicit and prompt-driven; Edit Prediction is automatic and context-inferred.
-
 ## Prefilling Prompts
 
 To create a custom keybinding that prefills a prompt, you can add the following format in your keymap:

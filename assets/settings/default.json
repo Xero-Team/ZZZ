@@ -516,22 +516,6 @@
   //
   // Note: This setting has no effect in Vim mode, as rewrap is already allowed everywhere.
   "allow_rewrap": "in_comments",
-  // Controls whether edit predictions are shown immediately (true)
-  // or manually by triggering `editor::ShowEditPrediction` (false).
-  "show_edit_predictions": true,
-  // Disable edit predictions in these language scopes, such as "comment" and
-  // "string".
-  //
-  // Use `"..."` to add scopes without repeating the inherited list. In project
-  // settings, it extends the user or parent configuration value. In
-  // language-specific settings, it extends the scopes inherited by that
-  // language. Omit `"..."` to replace the inherited list.
-  //
-  // Inherited scopes are inserted at `"..."`, and duplicates keep their first
-  // occurrence.
-  //
-  // Set `[]` to clear the inherited list. Omit this setting to inherit it unchanged.
-  "edit_predictions_disabled_in": [],
   // Whether to show tabs and spaces in the editor.
   // This setting can take four values:
   //
@@ -1749,60 +1733,6 @@
   // 3. Don't load direnv configuration at all.
   //      "load_direnv": "disabled"
   "load_direnv": "direct",
-  "edit_predictions": {
-    // Which edit prediction provider to use.
-    // Disable edit predictions for files matching these glob patterns.
-    //
-    // Use `"..."` to add patterns without repeating ZZZ's defaults. In project
-    // settings, it extends the user or parent configuration value. Omit
-    // `"..."` to replace the inherited list.
-    //
-    // Inherited patterns are inserted at `"..."`, and duplicates keep their first
-    // occurrence.
-    //
-    // Set `[]` to clear the inherited list. Omit this setting to inherit it unchanged.
-    //
-    // Relative patterns are matched against paths relative to the worktree root.
-    // Absolute patterns are matched against absolute paths.
-    // A leading `~` is expanded to your home folder.
-    "disabled_globs": [
-      "**/.env*",
-      "**/*.pem",
-      "**/*.key",
-      "**/*.cert",
-      "**/*.crt",
-      "**/.dev.vars",
-      "**/secrets.yml",
-      "**/.zzz/settings.json", // zzz project settings
-      "/**/zzz/settings.json", // zzz user settings
-      "/**/zzz/keymap.json",
-    ],
-    // When to show edit predictions previews in buffer.
-    // This setting takes two possible values:
-    // 1. Display predictions inline when there are no language server completions available.
-    //     "mode": "eager"
-    // 2. Display predictions inline only when holding a modifier key (alt by default).
-    //     "mode": "subtle"
-    "mode": "eager",
-    "ollama": {
-      "api_url": "http://localhost:11434",
-      "model": "qwen2.5-coder:7b-base",
-      "prompt_format": "infer",
-      "max_output_tokens": 64,
-      // The debounce delay in milliseconds before automatically requesting a prediction.
-      // Set to 0 to request predictions immediately.
-      "prediction_debounce": 0,
-    },
-    "open_ai_compatible_api": {
-      "api_url": "",
-      "model": "",
-      "prompt_format": "infer",
-      "max_output_tokens": 64,
-      // The debounce delay in milliseconds before automatically requesting a prediction.
-      // Set to 0 to request predictions immediately.
-      "prediction_debounce": 0,
-    },
-  },
   // Settings specific to journaling
   "journal": {
     // The path of the directory where journal entries are stored
@@ -2250,7 +2180,6 @@
       "tab_size": 2,
     },
     "Diff": {
-      "show_edit_predictions": false,
       "remove_trailing_whitespace_on_save": false,
       "ensure_final_newline_on_save": false,
     },
@@ -2641,9 +2570,6 @@
     "gdefault": false,
     "highlight_on_yank_duration": 200,
     "custom_digraphs": {},
-    // When enabled, edit predictions are shown in Vim normal mode.
-    // By default, edit predictions are only shown in insert and replace modes.
-    "show_edit_predictions_in_normal_mode": false,
     // Cursor shape for each mode.
     // The shape can be one of the following: "block", "bar", "underline", "hollow".
     "cursor_shape": {

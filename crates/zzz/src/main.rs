@@ -69,8 +69,8 @@ use workspace::{
 };
 use zzz::{
     OpenListener, OpenRequest, RawOpenRequest, app_menus, build_window_options,
-    derive_paths_with_position, edit_prediction_registry, handle_cli_connection,
-    handle_keymap_file_changes, initialize_workspace, open_paths_with_positions,
+    derive_paths_with_position, handle_cli_connection, handle_keymap_file_changes,
+    initialize_workspace, open_paths_with_positions,
 };
 
 use crate::zzz::{OpenRequestKind, eager_load_active_theme_and_icon_theme};
@@ -572,38 +572,9 @@ fn main() {
         copilot_ui::init(&app_state, cx);
         language_model::init(cx);
         language_models::init(app_state.user_store.clone(), app_state.client.clone(), cx);
-        if language::language_settings::all_language_settings(None, cx)
-            .edit_predictions
-            .provider
-            == settings::EditPredictionProvider::Copilot
-        {
-            language_models::ensure_copilot_chat(
-                app_state.fs.clone(),
-                app_state.client.http_client(),
-                cx,
-            );
-        }
-        cx.observe_global::<settings::SettingsStore>({
-            let fs = app_state.fs.clone();
-            let http_client = app_state.client.http_client();
-            move |cx| {
-                if language::language_settings::all_language_settings(None, cx)
-                    .edit_predictions
-                    .provider
-                    == settings::EditPredictionProvider::Copilot
-                {
-                    language_models::ensure_copilot_chat(fs.clone(), http_client.clone(), cx);
-                }
-            }
-        })
-        .detach();
         acp_tools::init(cx);
         zzz::remote_debug::init(cx);
-        edit_prediction_ui::init(cx);
-        web_search::init(cx);
-        web_search_providers::init(cx);
         snippet_provider::init(cx);
-        edit_prediction_registry::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         let prompt_builder = PromptBuilder::load(app_state.fs.clone(), stdout_is_a_pty(), cx);
         project::AgentRegistryStore::init_global(
             cx,
@@ -683,7 +654,6 @@ fn main() {
         settings_ui::init(cx);
         keymap_editor::init(cx);
         extensions_ui::init(cx);
-        edit_prediction::init(cx);
         inspector_ui::init(app_state.clone(), cx);
         json_schema_store::init(cx);
         miniprofiler_ui::init(*STARTUP_TIME.get().unwrap(), cx);

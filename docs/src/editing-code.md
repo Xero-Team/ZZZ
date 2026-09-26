@@ -9,7 +9,7 @@ ZZZ provides tools to help you write and modify code efficiently. This section c
 
 ## What's in This Section
 
-- **[Code Completions](./completions.md)** — Autocomplete from language servers and AI-powered edit predictions
+- **[Code Completions](./completions.md)** — Autocomplete from language servers
 - **[Snippets](./snippets.md)** — Insert reusable code templates with tab stops
 - **[Formatting & Linting](./configuring-languages.md#formatting-and-linting)** — Configure automatic code formatting and linter integration
 - **[Diagnostics & Quick Fixes](./diagnostics.md)** — View errors, warnings, and apply fixes from your language server
@@ -20,8 +20,7 @@ ZZZ provides tools to help you write and modify code efficiently. This section c
 When you're editing code, ZZZ combines input from multiple sources:
 
 1. **Language servers** provide completions, diagnostics, and quick fixes based on your project's types and structure
-2. **Edit predictions** suggest multi-character or multi-line changes as you type
-3. **Multibuffers** let you apply changes across files in one operation
+2. **Multibuffers** let you apply changes across files in one operation
 
 For example, you might:
 
