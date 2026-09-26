@@ -447,7 +447,11 @@ async fn poll_path_until_created(
             continue;
         }
 
-        let case_insensitive = case_insensitive_path(path.as_ref());
+        let case_insensitive = smol::unblock({
+            let path = path.clone();
+            move || case_insensitive_path(path.as_ref())
+        })
+        .await;
         let key = WatchKey::for_registration(SanitizedPath::new(&path), case_insensitive);
 
         if registrations.lock().contains_key(&key) {
@@ -455,12 +459,15 @@ async fn poll_path_until_created(
             return;
         }
 
-        match register_existing_path(
-            path.clone(),
-            case_insensitive,
-            tx.clone(),
-            pending_path_events.clone(),
-        ) {
+        let register = {
+            let path = path.clone();
+            let tx = tx.clone();
+            let pending_path_events = pending_path_events.clone();
+            move || register_existing_path(path, case_insensitive, tx, pending_path_events)
+        };
+        let registration = smol::unblock(register).await;
+
+        match registration {
             Ok(Some(registration)) => {
                 {
                     let mut pending_registrations = pending_registrations.lock();

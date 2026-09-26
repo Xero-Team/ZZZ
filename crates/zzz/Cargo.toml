@@ -2,7 +2,7 @@
 description = "A local-first, open-source code editor."
 edition.workspace = true
 name = "zzz"
-version = "1.22.0"
+version = "1.23.0"
 publish.workspace = true
 license = "AGPL-3.0-or-later"
 authors = ["Xero Team"]
