@@ -3236,6 +3236,7 @@ impl RemoteServerProjects {
 
         let connect_button = div()
             .id("ssh-connect-new-server-container")
+            .debug_selector(|| "ssh-connect-button".into())
             .track_focus(&state.add_new_server.focus_handle)
             .anchor_scroll(state.add_new_server.scroll_anchor.clone())
             .child(
@@ -3350,6 +3351,7 @@ impl RemoteServerProjects {
         let modal_section = v_flex()
             .track_focus(&self.focus_handle)
             .id("ssh-server-list")
+            .debug_selector(|| "ssh-server-list".into())
             .overflow_y_scroll()
             .track_scroll(&state.scroll_handle)
             .size_full()
@@ -3480,6 +3482,7 @@ impl RemoteServerProjects {
                                     modal_section.paint(window, cx);
                                 },
                             )
+                            .min_h(rems(20.))
                             .size_full(),
                         )
                         .custom_scrollbars(
@@ -3803,5 +3806,87 @@ mod create_host_tests {
 
         assert_eq!(connections[0].projects.len(), 1);
         assert!(connections[new_index.0].projects.is_empty());
+    }
+
+    // Regression test for the modal body collapsing to zero height when the
+    // remote projects modal is rendered through `ModalLayer`. The layer gives
+    // the modal an auto height, so the canvas that hosts the server list must
+    // declare its own minimum height instead of relying on `height: 100%`
+    // resolving against an indefinite parent.
+    #[gpui::test]
+    async fn test_remote_projects_modal_renders_server_list(cx: &mut TestAppContext) {
+        let app_state = init_test(cx);
+        let fs: Arc<dyn Fs> = app_state.fs.clone();
+
+        let ssh_config_path = paths::user_ssh_config_file();
+        let ssh_config = indoc::indoc! {"
+            Host example-host
+              HostName 192.168.1.10
+              User someone
+
+            Host another-host
+              HostName 192.168.1.11
+              User someone
+        "};
+        fs.create_dir(ssh_config_path.parent().unwrap())
+            .await
+            .unwrap();
+        fs.create_file(&ssh_config_path, Default::default())
+            .await
+            .unwrap();
+        fs.atomic_write(ssh_config_path, ssh_config.to_owned())
+            .await
+            .unwrap();
+
+        let project = Project::test(fs.clone(), [], cx).await;
+        let (multi_workspace, mcx) =
+            cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
+
+        multi_workspace.update_in(mcx, |multi_workspace, window, cx| {
+            let workspace = multi_workspace.workspace().clone();
+            let weak = workspace.downgrade();
+            workspace.update(cx, |workspace, cx| {
+                workspace.toggle_modal(window, cx, |window, cx| {
+                    RemoteServerProjects::new(false, fs.clone(), window, weak, cx)
+                });
+            });
+        });
+
+        mcx.run_until_parked();
+        mcx.executor()
+            .advance_clock(std::time::Duration::from_secs(2));
+        mcx.run_until_parked();
+        mcx.update(|window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        });
+        mcx.run_until_parked();
+
+        let modal = multi_workspace
+            .read_with(mcx, |multi_workspace, cx| {
+                multi_workspace.active_modal::<RemoteServerProjects>(cx)
+            })
+            .expect("modal should be active");
+        let hosts = modal.read_with(mcx, |modal, _| modal.ssh_config_servers.clone());
+        assert_eq!(
+            hosts.len(),
+            2,
+            "the ssh config hosts should be imported, got {hosts:?}"
+        );
+
+        let list_bounds = mcx
+            .debug_bounds("ssh-server-list")
+            .expect("the server list should have been laid out");
+        assert!(
+            list_bounds.size.height > px(0.0),
+            "the server list collapsed to zero height: {list_bounds:?}"
+        );
+        let connect_bounds = mcx
+            .debug_bounds("ssh-connect-button")
+            .expect("the connect button should have been laid out");
+        assert!(
+            connect_bounds.size.height > px(0.0),
+            "the connect button collapsed to zero height: {connect_bounds:?}"
+        );
     }
 }
