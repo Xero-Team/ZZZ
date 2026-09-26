@@ -207,4 +207,5 @@
   - [Upstream Sync Re-audit 2026-09-22](./development/upstream-sync-audit-2026-09-22.md)
   - [Upstream Sync 2026-09-22 ACP Elicitation](./development/upstream-sync-2026-09-22-acp-elicitation.md)
   - [ACP-only AI Cleanup Plan](./development/acp-only-ai-cleanup.md)
+  - [ACP-only Provider Stack Cleanup Plan](./development/acp-only-ai-provider-cleanup.md)
 - [Release Notes](./development/release-notes.md)
