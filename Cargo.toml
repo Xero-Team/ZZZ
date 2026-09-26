@@ -203,6 +203,8 @@ members = [
     "crates/ui_prompt",
     "crates/util",
     "crates/util_macros",
+    "crates/video",
+    "crates/video_viewer",
     "crates/vim",
     "crates/vim_mode_setting",
     "crates/watch",
@@ -355,6 +357,8 @@ icons = { path = "crates/icons" }
 image_viewer = { path = "crates/image_viewer" }
 audio_viewer = { path = "crates/audio_viewer" }
 pdf_viewer = { path = "crates/pdf_viewer" }
+video = { path = "crates/video" }
+video_viewer = { path = "crates/video_viewer" }
 edit_prediction_types = { path = "crates/edit_prediction_types" }
 edit_prediction_ui = { path = "crates/edit_prediction_ui" }
 edit_prediction_context = { path = "crates/edit_prediction_context" }

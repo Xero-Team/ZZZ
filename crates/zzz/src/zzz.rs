@@ -85,6 +85,7 @@ use util::markdown::MarkdownString;
 use util::rel_path::RelPath;
 use util::{ResultExt, asset_str, maybe};
 use uuid::Uuid;
+use video_viewer::VideoInfo;
 use vim_mode_setting::VimModeSetting;
 use workspace::notifications::{NotificationId, dismiss_app_notification, show_app_notification};
 
@@ -572,6 +573,7 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
         let vim_mode_indicator = cx.new(|cx| vim::ModeIndicator::new(window, cx));
         let image_info = cx.new(|_cx| ImageInfo::new(workspace));
         let audio_info = cx.new(|_cx| AudioInfo::new(workspace));
+        let video_info = cx.new(|_cx| VideoInfo::new(workspace));
         let activity_indicator = activity_indicator::ActivityIndicator::new(
             workspace,
             app_state.languages.clone(),
@@ -610,6 +612,7 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             status_bar.add_right_item(cursor_position, window, cx);
             status_bar.add_right_item(image_info, window, cx);
             status_bar.add_right_item(audio_info, window, cx);
+            status_bar.add_right_item(video_info, window, cx);
         });
 
         let panels_task = initialize_panels(window, cx);
@@ -1331,6 +1334,8 @@ fn initialize_pane(
             toolbar.add_item(pdf_view_toolbar, window, cx);
             let audio_view_toolbar = cx.new(|_| audio_viewer::AudioToolbarControls::new());
             toolbar.add_item(audio_view_toolbar, window, cx);
+            let video_view_toolbar = cx.new(|_| video_viewer::VideoToolbarControls::new());
+            toolbar.add_item(video_view_toolbar, window, cx);
         })
     });
 }
@@ -5534,6 +5539,7 @@ mod tests {
                 "toast",
                 "toolchain",
                 "variable_list",
+                "video_viewer",
                 "vim",
                 "window",
                 "workspace",
@@ -5725,6 +5731,7 @@ mod tests {
             image_viewer::init(cx);
             pdf_viewer::init(cx);
             audio_viewer::init(cx);
+            video_viewer::init(cx);
             language_model::init(cx);
             language_models::init(app_state.user_store.clone(), app_state.client.clone(), cx);
             web_search::init(cx);

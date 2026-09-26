@@ -8,8 +8,8 @@ use gpui::{App, AsyncApp, BorrowAppContext, Global};
 use parking_lot::Mutex;
 
 use rodio::{
-    Decoder, DeviceSinkBuilder, MixerDeviceSink, Sample as RodioSample, Source, mixer::Mixer,
-    source::Buffered,
+    Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Sample as RodioSample, Source,
+    mixer::Mixer, source::Buffered,
 };
 use settings::Settings;
 use std::{
@@ -58,6 +58,7 @@ pub struct Audio {
     output: Option<(MixerDeviceSink, Mixer)>,
     source_cache: HashMap<Sound, Buffered<Decoder<Cursor<Vec<u8>>>>>,
     preview: Option<PlaybackHandle>,
+    player: Option<Arc<Player>>,
 }
 
 impl Global for Audio {}
@@ -100,6 +101,9 @@ impl Audio {
             if let Some(preview) = this.preview.take() {
                 preview.stop();
             }
+            if let Some(player) = this.player.take() {
+                player.stop();
+            }
             this.output.take();
         });
     }
@@ -114,10 +118,40 @@ impl Audio {
         })
     }
 
+    /// Play `source` through a controllable [`Player`].
+    ///
+    /// Unlike [`Audio::play_source`], the returned player can change its
+    /// playback speed and its volume (including amplifying above `1.0`) while
+    /// it is running, which the video viewer needs for speed control and for
+    /// following the audio clock. Dropping the returned handle does not stop
+    /// playback; call [`Player::stop`] on it instead.
+    pub fn play_source_player<S>(source: S, cx: &mut App) -> Result<Arc<Player>>
+    where
+        S: Source<Item = f32> + Send + 'static,
+    {
+        let output_audio_device = AudioSettings::get_global(cx).output_audio_device.clone();
+        cx.update_default_global(|this: &mut Self, _cx| {
+            if let Some(previous) = this.preview.take() {
+                previous.stop();
+            }
+            if let Some(previous) = this.player.take() {
+                previous.stop();
+            }
+            let mixer = this.ensure_output_exists(output_audio_device)?.clone();
+            let player = Arc::new(Player::connect_new(&mixer));
+            player.append(source);
+            this.player = Some(player.clone());
+            Ok(player)
+        })
+    }
+
     pub fn stop_preview(cx: &mut App) {
         cx.update_default_global(|this: &mut Self, _cx| {
             if let Some(preview) = this.preview.take() {
                 preview.stop();
+            }
+            if let Some(player) = this.player.take() {
+                player.stop();
             }
         });
     }
@@ -131,6 +165,9 @@ impl Audio {
         S: Source + Send + 'static,
     {
         if let Some(previous) = self.preview.take() {
+            previous.stop();
+        }
+        if let Some(previous) = self.player.take() {
             previous.stop();
         }
 

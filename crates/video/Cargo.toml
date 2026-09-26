@@ -1,0 +1,34 @@
+[package]
+name = "video"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "AGPL-3.0-or-later"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/video.rs"
+doctest = false
+
+[dependencies]
+anyhow.workspace = true
+libc.workspace = true
+log.workspace = true
+
+# FFmpeg provides the Linux/Windows decoder backend. By default the build
+# links against the system FFmpeg via pkg-config (fast builds, runtime `.so`
+# dependency). For a self-contained binary, point `FFMPEG_DIR` at a static
+# FFmpeg built with `--disable-everything --disable-encoders` and only the
+# required decoders/demuxers, or enable the crate's `build` feature to compile
+# FFmpeg from source.
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+ffmpeg-the-third = { version = "6.0", default-features = false, features = [
+    "codec",
+    "format",
+    "software-scaling",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc.workspace = true
