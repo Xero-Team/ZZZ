@@ -17,7 +17,8 @@ pub struct IpcHandshake {
 #[serde(rename_all = "snake_case")]
 pub enum OpenBehavior {
     /// Consult the user's `cli_default_open_behavior` setting to choose between
-    /// `ExistingWindow` or `Classic`.
+    /// `ExistingWindow` or `Classic`. Defaults to `Classic` (new window) when
+    /// the setting is unset.
     #[default]
     Default,
     /// Always create a new window. No matching against existing worktrees.
@@ -39,20 +40,6 @@ pub enum OpenBehavior {
     Reuse,
 }
 
-/// The setting-level enum for configuring default behavior. This only has
-/// two values because the other modes are always explicitly requested via
-/// CLI flags.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CliBehaviorSetting {
-    /// Open directories as a new workspace in the current ZZZ window's sidebar.
-    ExistingWindow,
-    /// Classic behavior: open directories in a new window, but reuse an
-    /// existing window when opening files that are already part of an open
-    /// project.
-    NewWindow,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CliRequest {
     Open {
@@ -70,9 +57,6 @@ pub enum CliRequest {
         #[serde(default)]
         cwd: Option<PathBuf>,
     },
-    SetOpenBehavior {
-        behavior: CliBehaviorSetting,
-    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -81,7 +65,6 @@ pub enum CliResponse {
     Stdout { message: String },
     Stderr { message: String },
     Exit { status: i32 },
-    PromptOpenBehavior,
 }
 
 /// When ZZZ started not as an *.app but as a binary (e.g. local development),

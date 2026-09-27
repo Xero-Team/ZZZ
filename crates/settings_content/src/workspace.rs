@@ -56,11 +56,11 @@ pub struct WorkspaceSettingsContent {
     /// The default behavior when opening paths from the CLI without
     /// an explicit `-e` or `-n` flag.
     ///
-    /// Default: existing_window
+    /// Default: new_window
     pub cli_default_open_behavior: Option<CliDefaultOpenBehavior>,
     /// The default behavior when opening projects from the UI.
     ///
-    /// Default: existing_window
+    /// Default: new_window
     pub default_open_behavior: Option<DefaultOpenBehavior>,
     /// Whether to attempt to restore previous file's state when opening it again.
     /// The state is stored per pane.
@@ -478,11 +478,11 @@ impl CloseWindowWhenNoItems {
 #[serde(rename_all = "snake_case")]
 pub enum CliDefaultOpenBehavior {
     /// Open directories as a new workspace in the current ZZZ window's sidebar.
-    #[default]
     #[strum(serialize = "Add to Existing Window")]
     ExistingWindow,
     /// Open directories in a new window, but reuse an existing window when
     /// opening files that are already part of an open project.
+    #[default]
     #[strum(serialize = "Open a New Window")]
     NewWindow,
 }
@@ -504,10 +504,10 @@ pub enum CliDefaultOpenBehavior {
 #[serde(rename_all = "snake_case")]
 pub enum DefaultOpenBehavior {
     /// Open projects in the current ZZZ window.
-    #[default]
     #[strum(serialize = "Add to Existing Window")]
     ExistingWindow,
     /// Open projects in a new window.
+    #[default]
     #[strum(serialize = "Open a New Window")]
     NewWindow,
 }

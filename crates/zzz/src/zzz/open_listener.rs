@@ -26,7 +26,6 @@ use std::thread;
 use std::time::Duration;
 use ui::SharedString;
 use util::ResultExt;
-use util::debug_panic;
 use util::paths::PathWithPosition;
 use workspace::PathList;
 use workspace::item::ItemHandle;
@@ -579,192 +578,71 @@ pub async fn handle_cli_connection(
     cx: &mut AsyncApp,
 ) {
     if let Some(request) = requests.next().await {
-        match request {
-            CliRequest::Open {
-                urls,
-                paths,
-                diff_paths,
-                diff_all,
-                wait,
-                wsl,
-                mut open_behavior,
-                env,
-                user_data_dir: _,
-                dev_container,
-                cwd,
-            } => {
-                if !urls.is_empty() {
-                    cx.update(|cx| {
-                        match OpenRequest::parse(
-                            RawOpenRequest {
-                                urls,
-                                diff_paths,
-                                diff_all,
-                                dev_container,
-                                wsl,
-                                open_behavior: Some(open_behavior),
-                            },
-                            cx,
-                        ) {
-                            Ok(open_request) => {
-                                cx.activate(true);
-                                handle_open_request(open_request, app_state.clone(), cx);
-                                responses.send(CliResponse::Exit { status: 0 }).log_err();
-                            }
-                            Err(e) => {
-                                responses
-                                    .send(CliResponse::Stderr {
-                                        message: format!("{e}"),
-                                    })
-                                    .log_err();
-                                responses.send(CliResponse::Exit { status: 1 }).log_err();
-                            }
-                        };
-                    });
-                    return;
-                }
+        let CliRequest::Open {
+            urls,
+            paths,
+            diff_paths,
+            diff_all,
+            wait,
+            wsl,
+            open_behavior,
+            env,
+            user_data_dir: _,
+            dev_container,
+            cwd,
+        } = request;
 
-                if open_behavior == cli::OpenBehavior::Default {
-                    match resolve_open_behavior(
-                        &paths,
-                        &app_state,
-                        responses.as_ref(),
-                        &mut requests,
-                        cx,
-                    )
-                    .await
-                    {
-                        Some(settings::CliDefaultOpenBehavior::ExistingWindow) => {
-                            open_behavior = cli::OpenBehavior::ExistingWindow;
-                        }
-                        Some(settings::CliDefaultOpenBehavior::NewWindow) => {
-                            open_behavior = cli::OpenBehavior::Classic;
-                        }
-                        None => {}
-                    }
-                }
-
-                cx.update(|cx| cx.activate(true));
-
-                let open_workspace_result = open_workspaces(
-                    paths,
-                    diff_paths,
-                    diff_all,
-                    open_behavior,
-                    responses.as_ref(),
-                    wait,
-                    dev_container,
-                    app_state.clone(),
-                    env,
-                    cwd,
+        if !urls.is_empty() {
+            cx.update(|cx| {
+                match OpenRequest::parse(
+                    RawOpenRequest {
+                        urls,
+                        diff_paths,
+                        diff_all,
+                        dev_container,
+                        wsl,
+                        open_behavior: Some(open_behavior),
+                    },
                     cx,
-                )
-                .await;
-
-                let status = if open_workspace_result.is_err() { 1 } else { 0 };
-                responses.send(CliResponse::Exit { status }).log_err();
-            }
-            CliRequest::SetOpenBehavior { .. } => {
-                // We handle this case in a situation-specific way in
-                // resolve_open_behavior
-                debug_panic!("unexpected SetOpenBehavior message");
-            }
-        }
-    }
-}
-
-/// Resolves the CLI open behavior when no explicit flag (`-n`, `-e`, `--reuse`)
-/// was given. May prompt the user interactively on first run.
-///
-/// Returns `Some(behavior)` to override the default, or `None` if no override
-/// is needed (e.g. no existing windows, paths already in a workspace, or the
-/// user has already configured `cli_default_open_behavior` in settings).
-async fn resolve_open_behavior(
-    paths: &[String],
-    app_state: &Arc<AppState>,
-    responses: &dyn CliResponseSink,
-    requests: &mut mpsc::UnboundedReceiver<CliRequest>,
-    cx: &mut AsyncApp,
-) -> Option<settings::CliDefaultOpenBehavior> {
-    let has_existing_windows = cx.update(|cx| {
-        cx.windows()
-            .iter()
-            .any(|window| window.downcast::<MultiWorkspace>().is_some())
-    });
-
-    if !has_existing_windows {
-        return None;
-    }
-
-    if !paths.is_empty() {
-        let paths_as_pathbufs: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
-        let paths_in_existing_workspace = cx.update(|cx| {
-            for window in cx.windows() {
-                if let Some(multi_workspace) = window.downcast::<MultiWorkspace>() {
-                    if let Ok(multi_workspace) = multi_workspace.read(cx) {
-                        for workspace in multi_workspace.workspaces() {
-                            let project = workspace.read(cx).project().read(cx);
-                            if project
-                                .visibility_for_paths(&paths_as_pathbufs, false, cx)
-                                .is_some()
-                            {
-                                return true;
-                            }
-                        }
+                ) {
+                    Ok(open_request) => {
+                        cx.activate(true);
+                        handle_open_request(open_request, app_state.clone(), cx);
+                        responses.send(CliResponse::Exit { status: 0 }).log_err();
                     }
-                }
-            }
-            false
-        });
-
-        if paths_in_existing_workspace {
-            return None;
-        }
-    }
-
-    if !paths.is_empty() {
-        let has_directory =
-            futures::future::join_all(paths.iter().map(|p| app_state.fs.is_dir(Path::new(p))))
-                .await
-                .into_iter()
-                .any(|is_dir| is_dir);
-
-        if !has_directory {
-            return None;
-        }
-    }
-
-    let settings_text = app_state
-        .fs
-        .load(paths::settings_file())
-        .await
-        .unwrap_or_default();
-
-    if settings_text.contains("cli_default_open_behavior") {
-        return None;
-    }
-
-    responses.send(CliResponse::PromptOpenBehavior).log_err()?;
-
-    if let Some(CliRequest::SetOpenBehavior { behavior }) = requests.next().await {
-        let behavior = match behavior {
-            cli::CliBehaviorSetting::ExistingWindow => {
-                settings::CliDefaultOpenBehavior::ExistingWindow
-            }
-            cli::CliBehaviorSetting::NewWindow => settings::CliDefaultOpenBehavior::NewWindow,
-        };
-
-        let fs = app_state.fs.clone();
-        cx.update(|cx| {
-            settings::update_settings_file(fs, cx, move |content, _cx| {
-                content.workspace.cli_default_open_behavior = Some(behavior);
+                    Err(e) => {
+                        responses
+                            .send(CliResponse::Stderr {
+                                message: format!("{e}"),
+                            })
+                            .log_err();
+                        responses.send(CliResponse::Exit { status: 1 }).log_err();
+                    }
+                };
             });
-        });
+            return;
+        }
 
-        return Some(behavior);
+        cx.update(|cx| cx.activate(true));
+
+        let open_workspace_result = open_workspaces(
+            paths,
+            diff_paths,
+            diff_all,
+            open_behavior,
+            responses.as_ref(),
+            wait,
+            dev_container,
+            app_state.clone(),
+            env,
+            cwd,
+            cx,
+        )
+        .await;
+
+        let status = if open_workspace_result.is_err() { 1 } else { 0 };
+        responses.send(CliResponse::Exit { status }).log_err();
     }
-
-    None
 }
 
 pub(crate) fn open_options_for_request(
@@ -2443,18 +2321,16 @@ mod tests {
         }
     }
 
-    /// Runs the real [`cli::run_cli_response_loop`] on an OS thread against
-    /// the ZZZ-side `handle_cli_connection` on the GPUI foreground executor,
-    /// using `allow_parking` so the test scheduler tolerates cross-thread
-    /// wakeups.
+    /// Runs the CLI-side response loop on an OS thread against the ZZZ-side
+    /// `handle_cli_connection` on the GPUI foreground executor, using
+    /// `allow_parking` so the test scheduler tolerates cross-thread wakeups.
     ///
-    /// Returns `(exit_status, prompt_was_shown)`.
+    /// Returns the CLI exit status.
     fn run_cli_with_zzz_handler(
         cx: &mut TestAppContext,
         app_state: Arc<AppState>,
         open_request: CliRequest,
-        prompt_response: Option<cli::CliBehaviorSetting>,
-    ) -> (i32, bool) {
+    ) -> i32 {
         cx.executor().allow_parking();
 
         let (request_tx, request_rx) = mpsc::unbounded::<CliRequest>();
@@ -2466,9 +2342,6 @@ mod tests {
         })
         .detach();
 
-        let prompt_called = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let prompt_called_for_thread = prompt_called.clone();
-
         let cli_thread = std::thread::spawn(move || -> anyhow::Result<i32> {
             request_tx
                 .unbounded_send(open_request)
@@ -2479,14 +2352,6 @@ mod tests {
                     CliResponse::Ping => {}
                     CliResponse::Stdout { .. } | CliResponse::Stderr { .. } => {}
                     CliResponse::Exit { status } => return Ok(status),
-                    CliResponse::PromptOpenBehavior => {
-                        prompt_called_for_thread.store(true, std::sync::atomic::Ordering::SeqCst);
-                        let behavior =
-                            prompt_response.unwrap_or(cli::CliBehaviorSetting::ExistingWindow);
-                        request_tx
-                            .unbounded_send(CliRequest::SetOpenBehavior { behavior })
-                            .map_err(|error| anyhow::anyhow!("{error}"))?;
-                    }
                 }
             }
 
@@ -2499,16 +2364,15 @@ mod tests {
         }
 
         let exit_status = cli_thread.join().unwrap().expect("CLI loop failed");
-        let prompt_shown = prompt_called.load(std::sync::atomic::Ordering::SeqCst);
 
         // Flush any remaining async work (e.g. settings file writes).
         cx.run_until_parked();
 
-        (exit_status, prompt_shown)
+        exit_status
     }
 
     #[gpui::test]
-    async fn test_e2e_no_flags_no_windows_no_prompt(cx: &mut TestAppContext) {
+    async fn test_e2e_no_flags_no_windows(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
         app_state
@@ -2519,26 +2383,21 @@ mod tests {
 
         assert_eq!(cx.windows().len(), 0);
 
-        let (status, prompt_shown) = run_cli_with_zzz_handler(
+        let status = run_cli_with_zzz_handler(
             cx,
             app_state,
             make_cli_open_request(
                 vec![path!("/project/file.txt").to_string()],
                 cli::OpenBehavior::Default,
             ),
-            None,
         );
 
         assert_eq!(status, 0);
-        assert!(
-            !prompt_shown,
-            "no prompt should be shown when no windows exist"
-        );
         assert_eq!(cx.windows().len(), 1);
     }
 
     #[gpui::test]
-    async fn test_e2e_prompt_user_picks_existing_window(cx: &mut TestAppContext) {
+    async fn test_e2e_default_opens_new_window(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
         app_state
@@ -2552,7 +2411,7 @@ mod tests {
             .insert_tree(path!("/project_b"), json!({ "file.txt": "content" }))
             .await;
 
-        // Create an existing window so the prompt triggers
+        // Create an existing window with project_a.
         open_workspace_file(
             path!("/project_a"),
             Default::default(),
@@ -2562,126 +2421,71 @@ mod tests {
         .await;
         assert_eq!(cx.windows().len(), 1);
 
-        let (status, prompt_shown) = run_cli_with_zzz_handler(
+        // Opening a different directory with no flag opens a new window.
+        let status = run_cli_with_zzz_handler(
             cx,
             app_state.clone(),
             make_cli_open_request(
                 vec![path!("/project_b").to_string()],
                 cli::OpenBehavior::Default,
             ),
-            Some(cli::CliBehaviorSetting::ExistingWindow),
         );
 
         assert_eq!(status, 0);
-        assert!(prompt_shown, "prompt should be shown");
-        assert_eq!(cx.windows().len(), 1);
-
-        let settings_text = app_state
-            .fs
-            .load(paths::settings_file())
-            .await
-            .unwrap_or_default();
-        assert!(
-            settings_text.contains("existing_window"),
-            "settings should contain 'existing_window', got: {settings_text}"
-        );
-    }
-
-    #[gpui::test]
-    async fn test_e2e_prompt_user_picks_new_window(cx: &mut TestAppContext) {
-        let app_state = init_test(cx);
-
-        app_state
-            .fs
-            .as_fake()
-            .insert_tree(path!("/project_a"), json!({ "file.txt": "content" }))
-            .await;
-        app_state
-            .fs
-            .as_fake()
-            .insert_tree(path!("/project_b"), json!({ "file.txt": "content" }))
-            .await;
-
-        // Create an existing window with project_a
-        open_workspace_file(
-            path!("/project_a"),
-            Default::default(),
-            app_state.clone(),
-            cx,
-        )
-        .await;
-        assert_eq!(cx.windows().len(), 1);
-
-        let (status, prompt_shown) = run_cli_with_zzz_handler(
-            cx,
-            app_state.clone(),
-            make_cli_open_request(
-                vec![path!("/project_b").to_string()],
-                cli::OpenBehavior::Default,
-            ),
-            Some(cli::CliBehaviorSetting::NewWindow),
-        );
-
-        assert_eq!(status, 0);
-        assert!(prompt_shown, "prompt should be shown");
         assert_eq!(cx.windows().len(), 2);
-
-        let settings_text = app_state
-            .fs
-            .load(paths::settings_file())
-            .await
-            .unwrap_or_default();
-        assert!(
-            settings_text.contains("new_window"),
-            "settings should contain 'new_window', got: {settings_text}"
-        );
     }
 
     #[gpui::test]
-    async fn test_e2e_setting_already_configured_no_prompt(cx: &mut TestAppContext) {
+    async fn test_e2e_existing_window_setting_adds_to_sidebar(cx: &mut TestAppContext) {
+        use gpui::UpdateGlobal as _;
+
         let app_state = init_test(cx);
 
         app_state
             .fs
             .as_fake()
-            .insert_tree(path!("/project"), json!({ "file.txt": "content" }))
+            .insert_tree(path!("/project_a"), json!({ "file.txt": "content" }))
             .await;
-
-        // Pre-configure the setting in settings.json
         app_state
             .fs
             .as_fake()
-            .insert_tree(
-                paths::config_dir(),
-                json!({
-                    "settings.json": r#"{"cli_default_open_behavior": "existing_window"}"#
-                }),
-            )
+            .insert_tree(path!("/project_b"), json!({ "file.txt": "content" }))
             .await;
 
-        // Create an existing window
-        open_workspace_file(path!("/project"), Default::default(), app_state.clone(), cx).await;
+        // Opt back into adding directories to the current window's sidebar.
+        cx.update(|cx| {
+            settings::SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.workspace.cli_default_open_behavior =
+                        Some(settings::CliDefaultOpenBehavior::ExistingWindow);
+                });
+            });
+        });
+
+        open_workspace_file(
+            path!("/project_a"),
+            Default::default(),
+            app_state.clone(),
+            cx,
+        )
+        .await;
         assert_eq!(cx.windows().len(), 1);
 
-        let (status, prompt_shown) = run_cli_with_zzz_handler(
+        let status = run_cli_with_zzz_handler(
             cx,
-            app_state,
+            app_state.clone(),
             make_cli_open_request(
-                vec![path!("/project/file.txt").to_string()],
+                vec![path!("/project_b").to_string()],
                 cli::OpenBehavior::Default,
             ),
-            None,
         );
 
         assert_eq!(status, 0);
-        assert!(
-            !prompt_shown,
-            "no prompt should be shown when setting already configured"
-        );
+        assert_eq!(cx.windows().len(), 1);
     }
 
     #[gpui::test]
-    async fn test_e2e_explicit_existing_flag_no_prompt(cx: &mut TestAppContext) {
+    async fn test_e2e_explicit_existing_flag(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
         app_state
@@ -2694,23 +2498,21 @@ mod tests {
         open_workspace_file(path!("/project"), Default::default(), app_state.clone(), cx).await;
         assert_eq!(cx.windows().len(), 1);
 
-        let (status, prompt_shown) = run_cli_with_zzz_handler(
+        let status = run_cli_with_zzz_handler(
             cx,
             app_state,
             make_cli_open_request(
                 vec![path!("/project/file.txt").to_string()],
                 cli::OpenBehavior::ExistingWindow, // -e flag: force existing window
             ),
-            None,
         );
 
         assert_eq!(status, 0);
-        assert!(!prompt_shown, "no prompt should be shown with -e flag");
         assert_eq!(cx.windows().len(), 1);
     }
 
     #[gpui::test]
-    async fn test_e2e_explicit_new_flag_no_prompt(cx: &mut TestAppContext) {
+    async fn test_e2e_explicit_new_flag(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
         app_state
@@ -2734,18 +2536,16 @@ mod tests {
         .await;
         assert_eq!(cx.windows().len(), 1);
 
-        let (status, prompt_shown) = run_cli_with_zzz_handler(
+        let status = run_cli_with_zzz_handler(
             cx,
             app_state,
             make_cli_open_request(
                 vec![path!("/project_b/file.txt").to_string()],
                 cli::OpenBehavior::AlwaysNew, // -n flag: force new window
             ),
-            None,
         );
 
         assert_eq!(status, 0);
-        assert!(!prompt_shown, "no prompt should be shown with -n flag");
         assert_eq!(cx.windows().len(), 2);
     }
 
@@ -2766,20 +2566,18 @@ mod tests {
             "file://{}",
             urlencoding::encode(path!("/project/file.txt")).into_owned()
         );
-        let (status, prompt_shown) = run_cli_with_zzz_handler(
+        let status = run_cli_with_zzz_handler(
             cx,
             app_state,
             make_cli_url_open_request(vec![file_url], cli::OpenBehavior::AlwaysNew),
-            None,
         );
 
         assert_eq!(status, 0);
-        assert!(!prompt_shown, "no prompt should be shown with -n flag");
         assert_eq!(cx.windows().len(), 2);
     }
 
     #[gpui::test]
-    async fn test_e2e_paths_in_existing_workspace_no_prompt(cx: &mut TestAppContext) {
+    async fn test_e2e_paths_in_existing_workspace(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
         app_state
@@ -2799,23 +2597,17 @@ mod tests {
         open_workspace_file(path!("/project"), Default::default(), app_state.clone(), cx).await;
         assert_eq!(cx.windows().len(), 1);
 
-        // Opening a file inside the already-open workspace should not prompt
-        let (status, prompt_shown) = run_cli_with_zzz_handler(
+        // A file inside the already-open workspace reuses that window.
+        let status = run_cli_with_zzz_handler(
             cx,
             app_state,
             make_cli_open_request(
                 vec![path!("/project/src/main.rs").to_string()],
                 cli::OpenBehavior::Default,
             ),
-            None,
         );
 
         assert_eq!(status, 0);
-        assert!(
-            !prompt_shown,
-            "no prompt should be shown when paths are in an existing workspace"
-        );
-        // File opened in existing window
         assert_eq!(cx.windows().len(), 1);
     }
 }

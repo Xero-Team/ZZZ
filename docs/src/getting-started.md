@@ -27,7 +27,7 @@ zzz ~/projects/my-app
 
 Or use `Cmd+O` (macOS) / `Ctrl+O` (Linux/Windows) to open a folder from within ZZZ.
 
-By default, new projects open in your current window's threads sidebar. To open in a new window instead, use `zzz -n ~/projects/my-app` or press `Cmd+Enter` when selecting from Open Recent. See [Windows & Projects](./windows-and-projects.md) for more details.
+By default, new projects open in a new window. To add a project to your current window's threads sidebar instead, use `zzz -a ~/projects/my-app` or press `Cmd+Enter` when selecting from Open Recent. See [Windows & Projects](./windows-and-projects.md) for more details.
 
 Opening an MP3, WAV, FLAC, OGG, M4A, or AAC file uses the audio viewer instead
 of a text editor. It streams the file, shows tags and cover art when present,

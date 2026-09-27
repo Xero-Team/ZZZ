@@ -2213,10 +2213,8 @@ dependencies = [
  "clap_complete",
  "clap_complete_nushell",
  "collections",
- "console",
  "core-foundation 0.10.1",
  "core-services",
- "dialoguer",
  "exec",
  "fork",
  "ipc-channel",
@@ -2591,7 +2589,6 @@ checksum = "d64e8af5551369d19cf50138de61f1c42074ab970f74e99be916646777f8fc87"
 dependencies = [
  "encode_unicode",
  "libc",
- "unicode-width",
  "windows-sys 0.61.2",
 ]
 
@@ -3956,16 +3953,6 @@ dependencies = [
  "workspace",
  "zlog",
  "zzz_actions",
-]
-
-[[package]]
-name = "dialoguer"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25f104b501bf2364e78d0d3974cbc774f738f5865306ed128e1e0d7499c0ad96"
-dependencies = [
- "console",
- "shell-words",
 ]
 
 [[package]]

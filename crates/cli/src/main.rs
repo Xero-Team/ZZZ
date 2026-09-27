@@ -867,11 +867,6 @@ fn run() -> Result<()> {
                             exit_status.lock().replace(status);
                             return Ok(());
                         }
-                        CliResponse::PromptOpenBehavior => {
-                            let behavior = prompt_open_behavior()
-                                .unwrap_or(cli::CliBehaviorSetting::ExistingWindow);
-                            tx.send(CliRequest::SetOpenBehavior { behavior })?;
-                        }
                     }
                 }
 
@@ -963,43 +958,6 @@ fn anonymous_fd(path: &str) -> Option<fs::File> {
         // not implemented for bsd, windows. Could be, but isn't yet
         None
     }
-}
-
-/// Shows an interactive prompt asking the user to choose the default open
-/// behavior for `zzz <path>`. Returns `None` if the prompt cannot be shown
-/// (e.g. stdin is not a terminal) or the user cancels.
-fn prompt_open_behavior() -> Option<cli::CliBehaviorSetting> {
-    if !std::io::stdin().is_terminal() {
-        return None;
-    }
-
-    let blue = console::Style::new().blue();
-    let items = [
-        format!(
-            "Add to existing ZZZ window ({})",
-            blue.apply_to("zzz --existing")
-        ),
-        format!("Open a new window ({})", blue.apply_to("zzz --classic")),
-    ];
-
-    let prompt = format!(
-        "Configure default behavior for {}\n{}",
-        blue.apply_to("zzz <path>"),
-        console::style("You can change this later in ZZZ settings"),
-    );
-
-    let selection = dialoguer::Select::new()
-        .with_prompt(&prompt)
-        .items(&items)
-        .default(0)
-        .interact()
-        .ok()?;
-
-    Some(if selection == 0 {
-        cli::CliBehaviorSetting::ExistingWindow
-    } else {
-        cli::CliBehaviorSetting::NewWindow
-    })
 }
 
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]

@@ -93,7 +93,7 @@ Open paths in an existing ZZZ window instead of creating a new one:
 zzz -e myfile.txt
 ```
 
-By default (without `-n`, `-a`, `-r`, or `-e`), directories open in the current window's sidebar. You can change this default with the `cli_default_open_behavior` setting. See [Windows & Projects](../windows-and-projects.md) for more details.
+By default (without `-n`, `-a`, `-r`, or `-e`), directories open in a new window. Files that are already part of an open project reuse that project's window. You can change this default with the `cli_default_open_behavior` setting. See [Windows & Projects](../windows-and-projects.md) for more details.
 
 ### `--diff <OLD_PATH> <NEW_PATH>`
 

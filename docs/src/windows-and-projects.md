@@ -9,18 +9,18 @@ ZZZ lets you work on multiple projects in a single window. Projects appear in th
 
 ## How Projects Open
 
-By default, when you open a folder in ZZZ, it opens as a new project in your current window's threads sidebar rather than creating a new window. This keeps related work together and preserves your agent threads and layout.
+By default, when you open a folder in ZZZ, it opens in a new window. If you'd rather keep related work together, you can open folders as projects in the current window's threads sidebar instead.
 
-| Action             | Result                                    |
-| ------------------ | ----------------------------------------- |
-| File > Open        | Opens in current window (threads sidebar) |
-| File > Open Recent | Opens in current window (threads sidebar) |
-| Drag folder to ZZZ | Opens in current window (threads sidebar) |
-| `zzz ~/project`    | Opens in current window (threads sidebar) |
+| Action             | Result                |
+| ------------------ | --------------------- |
+| File > Open        | Opens in a new window |
+| File > Open Recent | Opens in a new window |
+| Drag folder to ZZZ | Opens in a new window |
+| `zzz ~/project`    | Opens in a new window |
 
 ## Working with Multiple Projects
 
-When you have multiple projects open:
+When you have multiple projects open in one window's threads sidebar:
 
 - Click a project header to collapse or expand its threads; Cmd+click (macOS) or Ctrl+click (Linux/Windows) to switch to that project
 - Each project has its own file tree, git state, and search scope
@@ -29,51 +29,51 @@ When you have multiple projects open:
 
 Think of projects in the threads sidebar like browser tabs, but for repositories.
 
-## Opening in a New Window
+## Opening in the Current Window
 
-Sometimes you want a completely separate window. Here's how:
+To add a folder to the window you already have open instead of creating a new one:
 
 ### From Open Recent
 
 When using File > Open Recent ({#kb projects::OpenRecent}):
 
-- **Enter** or **click** opens in the current window (threads sidebar)
-- **Cmd+Enter** or **Cmd+click** (macOS) / **Ctrl+Enter** or **Ctrl+click** (Linux/Windows) opens in a new window
+- **Enter** or **click** opens in a new window
+- **Cmd+Enter** or **Cmd+click** (macOS) / **Ctrl+Enter** or **Ctrl+click** (Linux/Windows) opens in the current window's threads sidebar
 
 ### From the CLI
 
-Use the `-n` flag to force a new window:
+Use the `-a` flag to add a folder to the current window's threads sidebar:
 
 ```sh
-zzz -n ~/projects/other-project
+zzz -a ~/projects/other-project
 ```
 
 Other CLI options for controlling window behavior:
 
-| Flag            | Behavior                                           |
-| --------------- | -------------------------------------------------- |
-| `-n`, `--new`   | Always open in a new window                        |
-| `-a`, `--add`   | Add to the current window's threads sidebar        |
-| `-r`, `--reuse` | Replace the current project in the existing window |
+| Flag               | Behavior                                           |
+| ------------------ | -------------------------------------------------- |
+| `-n`, `--new`      | Always open in a new window                        |
+| `-a`, `--add`      | Add to the current window's threads sidebar        |
+| `-e`, `--existing` | Open files in an existing window                   |
+| `-r`, `--reuse`    | Replace the current project in the existing window |
 
 See [CLI Reference](./reference/cli.md) for full details.
 
 ### Via Settings
 
-You can change the default CLI behavior with the `cli_default_open_behavior` setting:
+Two settings control the default:
+
+- `cli_default_open_behavior` (default `new_window`): how `zzz <path>` opens directories.
+- `default_open_behavior` (default `new_window`): how File > Open and Open Recent open projects.
 
 ```json [settings]
 {
-  "cli_default_open_behavior": "new_window"
+  "cli_default_open_behavior": "new_window",
+  "default_open_behavior": "new_window"
 }
 ```
 
-Options:
-
-- `existing_window` (default): Open folders in the current window's threads sidebar
-- `new_window`: Open folders in a new window
-
-This setting affects CLI and double-click behavior, not the File > Open menu.
+For both, `new_window` opens in a new window and `existing_window` opens in the current window's threads sidebar.
 
 ## Adding Folders to a Project
 
