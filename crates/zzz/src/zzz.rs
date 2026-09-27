@@ -5437,7 +5437,6 @@ mod tests {
                 "assistant2",
                 "audio_viewer",
                 "branch_picker",
-                "bedrock",
                 "branches",
                 "buffer_search",
                 "cli",
@@ -5446,7 +5445,6 @@ mod tests {
                 "command_palette",
                 "console",
                 "context_server",
-                "copilot",
                 "csv",
                 "debug_panel",
                 "debugger",
@@ -5711,12 +5709,7 @@ mod tests {
                 app_state.fs.clone(),
                 app_state.client.http_client(),
             );
-            agent_ui::init(
-                app_state.fs.clone(),
-                app_state.languages.clone(),
-                true,
-                cx,
-            );
+            agent_ui::init(app_state.fs.clone(), app_state.languages.clone(), true, cx);
 
             repl::init(app_state.fs.clone(), cx);
             repl::notebook::init(cx);

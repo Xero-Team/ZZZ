@@ -14,8 +14,8 @@ use itertools::{Either, Itertools};
 use settings::{DocumentFoldingRanges, DocumentSymbols, IntoGpui, SemanticTokens};
 
 pub use settings::{
-    AutoIndentMode, CompletionSettingsContent, FormatOnSave, Formatter,
-    FormatterList, InlayHintKind, LanguageSettingsContent, LineEndingSetting, LspInsertMode,
+    AutoIndentMode, CompletionSettingsContent, FormatOnSave, Formatter, FormatterList,
+    InlayHintKind, LanguageSettingsContent, LineEndingSetting, LspInsertMode,
     REST_OF_LANGUAGE_SERVERS, RewrapBehavior, ShowWhitespaceSetting, SoftWrap, WordsCompletionMode,
 };
 use settings::{RegisterSetting, Settings, SettingsLocation, SettingsStore, merge_from::MergeFrom};

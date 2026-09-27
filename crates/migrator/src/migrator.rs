@@ -260,9 +260,7 @@ pub fn migrate_settings(text: &str) -> Result<Option<String>> {
         MigrationType::Json(
             migrations::m_2026_09_04::map_rejected_edit_prediction_surfaces_to_absent,
         ),
-        MigrationType::Json(
-            migrations::m_2026_09_27::remove_retired_ai_provider_settings,
-        ),
+        MigrationType::Json(migrations::m_2026_09_27::remove_retired_ai_provider_settings),
     ];
     run_migrations(text, migrations)
 }

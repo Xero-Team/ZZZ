@@ -12,8 +12,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings::{
     DockPosition, DockSide, NotifyWhenAgentWaiting, PlaySoundWhenAgentDone, RegisterSetting,
-    Settings, SettingsContent, SettingsStore, SidebarDockPosition, SidebarSide, ThinkingBlockDisplay,
-    ToolPermissionMode, update_settings_file, update_settings_file_with_completion,
+    Settings, SettingsContent, SettingsStore, SidebarDockPosition, SidebarSide,
+    ThinkingBlockDisplay, ToolPermissionMode, update_settings_file,
+    update_settings_file_with_completion,
 };
 
 pub use crate::agent_profile::*;

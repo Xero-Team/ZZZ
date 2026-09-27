@@ -14,7 +14,8 @@ use settings::{AgentConfigOptionValue, SettingsStore, update_settings_file};
 use std::{rc::Rc, sync::Arc};
 use ui::IconName;
 
-pub const GEMINI_ID: &str = "gemini";pub const CLAUDE_AGENT_ID: &str = "claude-acp";
+pub const GEMINI_ID: &str = "gemini";
+pub const CLAUDE_AGENT_ID: &str = "claude-acp";
 pub const CODEX_ID: &str = "codex-acp";
 pub const CURSOR_ID: &str = "cursor";
 

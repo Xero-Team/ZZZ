@@ -210,12 +210,7 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
             app_state.fs.clone(),
             app_state.client.http_client(),
         );
-        agent_ui::init(
-            app_state.fs.clone(),
-            app_state.languages.clone(),
-            true,
-            cx,
-        );
+        agent_ui::init(app_state.fs.clone(), app_state.languages.clone(), true, cx);
         settings_ui::init(cx);
 
         // Load default keymaps so tooltips can show keybindings like "f9" for ToggleBreakpoint
