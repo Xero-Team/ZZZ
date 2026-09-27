@@ -1,31 +1,22 @@
 mod agent_configuration;
 pub mod agent_connection_store;
 mod agent_diff;
-mod agent_model_selector;
 mod agent_panel;
 mod agent_registry_ui;
 pub mod ai_onboarding;
-mod buffer_codegen;
 mod completion_provider;
 mod config_options;
-mod context;
 mod context_server_configuration;
 pub(crate) mod conversation_view;
 mod diagnostics;
 mod entry_view_state;
 mod external_source_prompt;
-mod favorite_models;
-mod inline_assistant;
-mod inline_prompt_editor;
-mod language_model_selector;
 mod mention_set;
 mod message_editor;
 mod mode_selector;
 mod model_selector;
 mod model_selector_popover;
 mod profile_selector;
-mod terminal_codegen;
-mod terminal_inline_assistant;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 mod thread_import;
@@ -52,11 +43,8 @@ use gpui::{
 };
 use i18n as app_i18n;
 use language::LanguageRegistry;
-use language_model::{
-    ConfiguredModel, LanguageModelId, LanguageModelProviderId, LanguageModelRegistry,
-};
+use language_model::{LanguageModelId, LanguageModelProviderId, LanguageModelRegistry};
 use project::{AgentId, DisableAiSettings};
-use prompt_store::PromptBuilder;
 use rope::Point;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -67,7 +55,6 @@ use crate::agent_configuration::{ConfigureContextServerModal, ManageProfilesModa
 pub use crate::agent_connection_store::{ActiveAcpConnection, AgentConnectionStore};
 pub use crate::agent_panel::{AgentPanel, AgentPanelEvent, MaxIdleRetainedThreads};
 use crate::agent_registry_ui::AgentRegistryPage;
-pub use crate::inline_assistant::InlineAssistant;
 pub use crate::thread_metadata_store::ThreadId;
 pub use agent_diff::{AgentDiffPane, AgentDiffToolbar};
 pub use conversation_view::ConversationView;
@@ -579,21 +566,6 @@ impl ManageProfiles {
     }
 }
 
-#[derive(Clone)]
-pub(crate) enum ModelUsageContext {
-    InlineAssistant,
-}
-
-impl ModelUsageContext {
-    pub fn configured_model(&self, cx: &App) -> Option<ConfiguredModel> {
-        match self {
-            Self::InlineAssistant => {
-                LanguageModelRegistry::read_global(cx).inline_assistant_model()
-            }
-        }
-    }
-}
-
 pub(crate) fn humanize_token_count(count: u64) -> String {
     match count {
         0..=999 => count.to_string(),
@@ -627,7 +599,6 @@ pub(crate) fn humanize_token_count(count: u64) -> String {
 /// Initializes the `agent` crate.
 pub fn init(
     fs: Arc<dyn Fs>,
-    prompt_builder: Arc<PromptBuilder>,
     language_registry: Arc<LanguageRegistry>,
     is_new_install: bool,
     is_eval: bool,
@@ -644,8 +615,6 @@ pub fn init(
     context_server_configuration::init(language_registry.clone(), fs.clone(), cx);
     thread_metadata_store::init(cx);
 
-    inline_assistant::init(fs.clone(), prompt_builder.clone(), cx);
-    terminal_inline_assistant::init(fs.clone(), prompt_builder, cx);
     cx.observe_new(move |workspace, window, cx| {
         ConfigureContextServerModal::register(workspace, language_registry.clone(), window, cx)
     })

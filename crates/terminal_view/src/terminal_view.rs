@@ -64,7 +64,7 @@ use workspace::{
         Direction, SearchEvent, SearchOptions, SearchToken, SearchableItem, SearchableItemHandle,
     },
 };
-use zzz_actions::{agent::AddSelectionToThread, assistant::InlineAssist};
+use zzz_actions::agent::AddSelectionToThread;
 
 struct ImeState {
     marked_text: String,
@@ -550,21 +550,16 @@ impl TerminalView {
                 .when(
                     assistant_enabled && !matches!(self.mode, TerminalMode::Embedded { .. }),
                     |menu| {
-                        menu.separator()
-                            .action(
-                                tr(cx, "zzz.quick_action_bar.inline_assist", "Inline Assist"),
-                                Box::new(InlineAssist::default()),
+                        menu.when(has_selection, |menu| {
+                            menu.separator().action(
+                                tr(
+                                    cx,
+                                    "zzz.quick_action_bar.add_to_agent_thread",
+                                    "Add to Agent Thread",
+                                ),
+                                Box::new(AddSelectionToThread),
                             )
-                            .when(has_selection, |menu| {
-                                menu.action(
-                                    tr(
-                                        cx,
-                                        "zzz.quick_action_bar.add_to_agent_thread",
-                                        "Add to Agent Thread",
-                                    ),
-                                    Box::new(AddSelectionToThread),
-                                )
-                            })
+                        })
                     },
                 )
                 .separator()

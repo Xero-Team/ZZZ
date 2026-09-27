@@ -584,14 +584,6 @@ pub mod assistant {
         #[serde(skip)]
         pub prompt_to_select: Option<Uuid>,
     }
-
-    /// Deploys the assistant interface with the specified configuration.
-    #[derive(Clone, Default, Deserialize, PartialEq, JsonSchema, Action)]
-    #[action(namespace = assistant)]
-    #[serde(deny_unknown_fields)]
-    pub struct InlineAssist {
-        pub prompt: Option<String>,
-    }
 }
 
 /// Opens the recent projects interface.

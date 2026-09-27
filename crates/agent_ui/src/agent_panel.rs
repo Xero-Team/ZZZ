@@ -18,7 +18,6 @@ use itertools::Itertools;
 use project::AgentId;
 use project::agent_server_store::AllAgentServersSettings;
 use serde::{Deserialize, Serialize};
-use settings::{LanguageModelProviderSetting, LanguageModelSelection};
 
 use zzz_actions::{
     DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize,
@@ -38,10 +37,10 @@ use crate::completion_provider::AgentContextSource;
 use crate::thread_metadata_store::{ThreadId, ThreadMetadataStore, ThreadMetadataStoreEvent};
 use crate::{
     AddContextServer, AgentDiffPane, ConversationView, CopyThreadToClipboard, Follow,
-    InlineAssistant, LoadThreadFromClipboard, NewThread, OpenActiveThreadAsMarkdown, OpenAgentDiff,
+    LoadThreadFromClipboard, NewThread, OpenActiveThreadAsMarkdown, OpenAgentDiff,
     ResetTrialEndUpsell, ResetTrialUpsell, ShowAllSidebarThreadMetadata, ShowThreadMetadata,
     ToggleNewThreadMenu, ToggleOptionsMenu,
-    agent_configuration::{AgentConfiguration, AssistantConfigurationEvent},
+    agent_configuration::AgentConfiguration,
     conversation_view::{AcpThreadViewEvent, ThreadView},
 };
 use crate::{Agent, AgentInitialContent, ExternalSourcePrompt, NewExternalAgentThread};
@@ -54,14 +53,13 @@ use fs::Fs;
 use gpui::{
     Action, Anchor, Animation, AnimationExt, AnyElement, App, AsyncWindowContext, Entity,
     EventEmitter, ExternalPaths, FocusHandle, Focusable, KeyContext, Pixels, Subscription, Task,
-    UpdateGlobal, WeakEntity, prelude::*, pulsating_between,
+    WeakEntity, prelude::*, pulsating_between,
 };
 use i18n as app_i18n;
 use language::LanguageRegistry;
-use language_model::LanguageModelRegistry;
 use project::{Project, ProjectPath, Worktree};
 use prompt_store::{PromptStore, UserPromptId};
-use rules_library::{RulesLibrary, open_rules_library};
+use rules_library::open_rules_library;
 use settings::{Settings, update_settings_file};
 use theme_settings::ThemeSettings;
 use ui::{
@@ -721,7 +719,6 @@ pub struct AgentPanel {
     connection_store: Entity<AgentConnectionStore>,
     context_server_registry: Entity<ContextServerRegistry>,
     configuration: Option<Entity<AgentConfiguration>>,
-    configuration_subscription: Option<Subscription>,
     focus_handle: FocusHandle,
     base_view: BaseView,
     overlay_view: Option<OverlayView>,
@@ -1048,7 +1045,6 @@ impl AgentPanel {
             prompt_store,
             connection_store,
             configuration: None,
-            configuration_subscription: None,
             focus_handle: cx.focus_handle(),
             context_server_registry,
             draft_thread: None,
@@ -1120,10 +1116,6 @@ impl AgentPanel {
                 workspace.close_panel::<Self>(window, cx);
             }
         }
-    }
-
-    pub(crate) fn prompt_store(&self) -> &Option<Entity<PromptStore>> {
-        &self.prompt_store
     }
 
     pub fn thread_store(&self) -> &Entity<ThreadStore> {
@@ -1411,7 +1403,6 @@ impl AgentPanel {
     ) {
         open_rules_library(
             self.language_registry.clone(),
-            Box::new(PromptLibraryInlineAssist::new(self.workspace.clone())),
             action
                 .prompt_to_select
                 .map(|uuid| UserPromptId(uuid).into()),
@@ -1577,14 +1568,6 @@ impl AgentPanel {
                 cx,
             )
         }));
-
-        if let Some(configuration) = self.configuration.as_ref() {
-            self.configuration_subscription = Some(cx.subscribe_in(
-                configuration,
-                window,
-                Self::handle_agent_configuration_event,
-            ));
-        }
 
         self.set_overlay(OverlayView::Configuration, true, window, cx);
 
@@ -1908,45 +1891,6 @@ impl AgentPanel {
             .detach_and_log_err(cx);
     }
 
-    fn handle_agent_configuration_event(
-        &mut self,
-        _entity: &Entity<AgentConfiguration>,
-        event: &AssistantConfigurationEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        match event {
-            AssistantConfigurationEvent::NewThread(provider) => {
-                if LanguageModelRegistry::read_global(cx)
-                    .default_model()
-                    .is_none_or(|model| model.provider.id() != provider.id())
-                    && let Some(model) = provider.default_model(cx)
-                {
-                    update_settings_file(self.fs.clone(), cx, move |settings, _| {
-                        let provider = model.provider_id().0.to_string();
-                        let enable_thinking = model.supports_thinking();
-                        let effort = model
-                            .default_effort_level()
-                            .map(|effort| effort.value.to_string());
-                        let model = model.id().0.to_string();
-                        settings
-                            .agent
-                            .get_or_insert_default()
-                            .set_model(LanguageModelSelection {
-                                provider: LanguageModelProviderSetting(provider),
-                                model,
-                                enable_thinking,
-                                effort,
-                                speed: None,
-                            })
-                    });
-                }
-
-                self.new_thread(&NewThread, window, cx);
-            }
-        }
-    }
-
     pub fn workspace_id(&self) -> Option<WorkspaceId> {
         self.workspace_id
     }
@@ -2139,7 +2083,6 @@ impl AgentPanel {
 
     fn clear_overlay_state(&mut self) {
         self.overlay_view = None;
-        self.configuration_subscription = None;
         self.configuration = None;
     }
 
@@ -3519,57 +3462,6 @@ impl Render for AgentPanel {
             }
             _ => content.into_any(),
         }
-    }
-}
-
-struct PromptLibraryInlineAssist {
-    workspace: WeakEntity<Workspace>,
-}
-
-impl PromptLibraryInlineAssist {
-    pub fn new(workspace: WeakEntity<Workspace>) -> Self {
-        Self { workspace }
-    }
-}
-
-impl rules_library::InlineAssistDelegate for PromptLibraryInlineAssist {
-    fn assist(
-        &self,
-        prompt_editor: &Entity<Editor>,
-        initial_prompt: Option<String>,
-        window: &mut Window,
-        cx: &mut Context<RulesLibrary>,
-    ) {
-        InlineAssistant::update_global(cx, |assistant, cx| {
-            let Some(workspace) = self.workspace.upgrade() else {
-                return;
-            };
-            let Some(panel) = workspace.read(cx).panel::<AgentPanel>(cx) else {
-                return;
-            };
-            let project = workspace.read(cx).project().downgrade();
-            let panel = panel.read(cx);
-            let thread_store = panel.thread_store().clone();
-            assistant.assist(
-                prompt_editor,
-                self.workspace.clone(),
-                project,
-                thread_store,
-                None,
-                initial_prompt,
-                window,
-                cx,
-            );
-        })
-    }
-
-    fn focus_agent_panel(
-        &self,
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) -> bool {
-        workspace.focus_panel::<AgentPanel>(window, cx).is_some()
     }
 }
 

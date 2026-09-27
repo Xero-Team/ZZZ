@@ -854,8 +854,7 @@ async fn initialize_agent_panel(
             workspace
                 .register_action(agent_ui::AgentPanel::toggle_focus)
                 .register_action(agent_ui::AgentPanel::focus)
-                .register_action(agent_ui::AgentPanel::toggle)
-                .register_action(agent_ui::InlineAssistant::inline_assist);
+                .register_action(agent_ui::AgentPanel::toggle);
         }
     })?;
 
@@ -2628,7 +2627,6 @@ mod tests {
     use languages::{markdown_lang, rust_lang};
     use pretty_assertions::{assert_eq, assert_ne};
     use project::{Project, ProjectPath};
-    use prompt_store::PromptBuilder;
     use semver::Version;
     use serde_json::json;
     use settings::{SaturatingBool, SettingsStore, SplicingVec, watch_config_file};
@@ -5710,7 +5708,6 @@ mod tests {
             language_model::init(cx);
             language_models::init(app_state.user_store.clone(), app_state.client.clone(), cx);
             git_graph::init(cx);
-            let prompt_builder = PromptBuilder::load(app_state.fs.clone(), false, cx);
             project::AgentRegistryStore::init_global(
                 cx,
                 app_state.fs.clone(),
@@ -5718,7 +5715,6 @@ mod tests {
             );
             agent_ui::init(
                 app_state.fs.clone(),
-                prompt_builder,
                 app_state.languages.clone(),
                 true,
                 false,
@@ -5950,11 +5946,8 @@ mod tests {
         });
 
         // User-defined bindings to AI actions should also be filtered.
-        let user_binding = KeyBinding::new(
-            "ctrl-enter",
-            zzz_actions::assistant::InlineAssist { prompt: None },
-            None,
-        );
+        let user_binding =
+            KeyBinding::new("ctrl-enter", zzz_actions::agent::Chat, None);
         cx.update(|cx| reload_keymaps(cx, vec![user_binding]));
         cx.update(|cx| {
             let keymap = cx.key_bindings();

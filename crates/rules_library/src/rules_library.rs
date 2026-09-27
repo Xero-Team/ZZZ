@@ -9,7 +9,6 @@ use gpui::{
 };
 use i18n::tr;
 use language::{Buffer, LanguageRegistry, language_settings::SoftWrap};
-use language_model::{ConfiguredModel, LanguageModelRegistry};
 use picker::{Picker, PickerDelegate};
 use platform_title_bar::PlatformTitleBar;
 use release_channel::ReleaseChannel;
@@ -22,8 +21,7 @@ use theme_settings::ThemeSettings;
 use ui::{Divider, ListItem, ListItemSpacing, ListSubHeader, Tooltip, prelude::*};
 use ui_input::ErasedEditor;
 use util::{ResultExt, TryFutureExt};
-use workspace::{MultiWorkspace, Workspace, WorkspaceSettings, client_side_decorations};
-use zzz_actions::assistant::InlineAssist;
+use workspace::{WorkspaceSettings, client_side_decorations};
 
 use prompt_store::*;
 
@@ -47,24 +45,6 @@ actions!(
     ]
 );
 
-pub trait InlineAssistDelegate {
-    fn assist(
-        &self,
-        prompt_editor: &Entity<Editor>,
-        initial_prompt: Option<String>,
-        window: &mut Window,
-        cx: &mut Context<RulesLibrary>,
-    );
-
-    /// Returns whether the Agent panel was focused.
-    fn focus_agent_panel(
-        &self,
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) -> bool;
-}
-
 /// This function opens a new rules library window if one doesn't exist already.
 /// If one exists, it brings it to the foreground.
 ///
@@ -73,7 +53,6 @@ pub trait InlineAssistDelegate {
 /// to a rules library.
 pub fn open_rules_library(
     language_registry: Arc<LanguageRegistry>,
-    inline_assist_delegate: Box<dyn InlineAssistDelegate>,
     prompt_to_select: Option<PromptId>,
     cx: &mut App,
 ) -> Task<Result<WindowHandle<RulesLibrary>>> {
@@ -134,14 +113,7 @@ pub fn open_rules_library(
                 },
                 |window, cx| {
                     cx.new(|cx| {
-                        RulesLibrary::new(
-                            store,
-                            language_registry,
-                            inline_assist_delegate,
-                            prompt_to_select,
-                            window,
-                            cx,
-                        )
+                        RulesLibrary::new(store, language_registry, prompt_to_select, window, cx)
                     })
                 },
             )
@@ -157,7 +129,6 @@ pub struct RulesLibrary {
     active_rule_id: Option<PromptId>,
     picker: Entity<Picker<RulePickerDelegate>>,
     pending_load: Task<()>,
-    inline_assist_delegate: Box<dyn InlineAssistDelegate>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -496,7 +467,6 @@ impl RulesLibrary {
     fn new(
         store: Entity<PromptStore>,
         language_registry: Arc<LanguageRegistry>,
-        inline_assist_delegate: Box<dyn InlineAssistDelegate>,
         rule_to_select: Option<PromptId>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -538,7 +508,6 @@ impl RulesLibrary {
             rule_editors: HashMap::default(),
             active_rule_id: None,
             pending_load: Task::ready(()),
-            inline_assist_delegate,
             _subscriptions: vec![cx.subscribe_in(&picker, window, Self::handle_picker_event)],
             picker,
         }
@@ -974,48 +943,6 @@ impl RulesLibrary {
             .update(cx, |picker, cx| picker.focus(window, cx));
     }
 
-    pub fn inline_assist(
-        &mut self,
-        action: &InlineAssist,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(active_rule_id) = self.active_rule_id else {
-            cx.propagate();
-            return;
-        };
-
-        let rule_editor = &self.rule_editors[&active_rule_id].body_editor;
-        let Some(ConfiguredModel { provider, .. }) =
-            LanguageModelRegistry::read_global(cx).inline_assistant_model()
-        else {
-            return;
-        };
-
-        let initial_prompt = action.prompt.clone();
-        if provider.is_authenticated(cx) {
-            self.inline_assist_delegate
-                .assist(rule_editor, initial_prompt, window, cx);
-        } else {
-            for window in cx.windows() {
-                if let Some(multi_workspace) = window.downcast::<MultiWorkspace>() {
-                    let panel = multi_workspace
-                        .update(cx, |multi_workspace, window, cx| {
-                            window.activate_window();
-                            multi_workspace.workspace().update(cx, |workspace, cx| {
-                                self.inline_assist_delegate
-                                    .focus_agent_panel(workspace, window, cx)
-                            })
-                        })
-                        .ok();
-                    if panel == Some(true) {
-                        return;
-                    }
-                }
-            }
-        }
-    }
-
     fn move_down_from_title(
         &mut self,
         _: &zzz_actions::editor::MoveDown,
@@ -1340,7 +1267,6 @@ impl RulesLibrary {
                         .child(
                             div()
                                 .on_action(cx.listener(Self::focus_picker))
-                                .on_action(cx.listener(Self::inline_assist))
                                 .on_action(cx.listener(Self::move_up_from_body))
                                 .h_full()
                                 .flex_grow()

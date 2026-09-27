@@ -1,4 +1,3 @@
-mod add_llm_provider_modal;
 pub mod configure_context_server_modal;
 mod configure_context_server_tools_modal;
 mod manage_profiles_modal;
@@ -15,26 +14,22 @@ use extension::ExtensionManifest;
 use extension_host::ExtensionStore;
 use fs::Fs;
 use gpui::{
-    Action, Anchor, AnyView, App, AsyncWindowContext, Entity, EventEmitter, FocusHandle, Focusable,
-    ScrollHandle, Subscription, Task, WeakEntity,
+    Action, Anchor, App, AsyncWindowContext, Entity, FocusHandle, Focusable, ScrollHandle,
+    Subscription, Task, WeakEntity,
 };
 use i18n as app_i18n;
 use itertools::Itertools;
 use language::LanguageRegistry;
-use language_model::{
-    IconOrSvg, LanguageModelProvider, LanguageModelProviderId, LanguageModelRegistry,
-};
-use language_models::AllLanguageModelSettings;
 use notifications::status_toast::StatusToast;
 use project::{
     agent_server_store::{AgentId, AgentServerStore, ExternalAgentSource},
     context_server_store::{ContextServerConfiguration, ContextServerStatus, ContextServerStore},
 };
-use settings::{Settings, SettingsStore, update_settings_file};
+use settings::{SettingsStore, update_settings_file};
 use ui::{
     AiSettingItem, AiSettingItemSource, AiSettingItemStatus, ButtonStyle, ContextMenu,
-    ContextMenuEntry, Disclosure, Divider, DividerColor, ElevationIndex, LabelSize, PopoverMenu,
-    Switch, Tooltip, WithScrollbar, prelude::*,
+    ContextMenuEntry, Divider, DividerColor, LabelSize, PopoverMenu, Switch, Tooltip,
+    WithScrollbar, prelude::*,
 };
 use util::ResultExt as _;
 use workspace::{Workspace, create_and_open_local_file};
@@ -46,7 +41,6 @@ pub(crate) use manage_profiles_modal::ManageProfilesModal;
 
 use crate::{
     Agent,
-    agent_configuration::add_llm_provider_modal::{AddLlmProviderModal, LlmCompatibleProvider},
     agent_connection_store::{AgentConnectionStatus, AgentConnectionStore},
 };
 
@@ -61,9 +55,7 @@ pub struct AgentConfiguration {
     agent_connection_store: Entity<AgentConnectionStore>,
     workspace: WeakEntity<Workspace>,
     focus_handle: FocusHandle,
-    configuration_views_by_provider: HashMap<LanguageModelProviderId, AnyView>,
     context_server_store: Entity<ContextServerStore>,
-    expanded_provider_configurations: HashMap<LanguageModelProviderId, bool>,
     context_server_registry: Entity<ContextServerRegistry>,
     _subscriptions: Vec<Subscription>,
     scroll_handle: ScrollHandle,
@@ -78,77 +70,31 @@ impl AgentConfiguration {
         context_server_registry: Entity<ContextServerRegistry>,
         language_registry: Arc<LanguageRegistry>,
         workspace: WeakEntity<Workspace>,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let focus_handle = cx.focus_handle();
 
         let subscriptions = vec![
-            cx.subscribe_in(
-                &LanguageModelRegistry::global(cx),
-                window,
-                |this, _, event: &language_model::Event, window, cx| match event {
-                    language_model::Event::AddedProvider(provider_id) => {
-                        let provider = LanguageModelRegistry::read_global(cx).provider(provider_id);
-                        if let Some(provider) = provider {
-                            this.add_provider_configuration_view(&provider, window, cx);
-                        }
-                    }
-                    language_model::Event::RemovedProvider(provider_id) => {
-                        this.remove_provider_configuration_view(provider_id);
-                    }
-                    _ => {}
-                },
-            ),
             cx.subscribe(&agent_server_store, |_, _, _, cx| cx.notify()),
             cx.observe(&agent_connection_store, |_, _, cx| cx.notify()),
             cx.subscribe(&context_server_store, |_, _, _, cx| cx.notify()),
         ];
 
-        let mut this = Self {
+        let this = Self {
             fs,
             language_registry,
             workspace,
             focus_handle,
-            configuration_views_by_provider: HashMap::default(),
             agent_server_store,
             agent_connection_store,
             context_server_store,
-            expanded_provider_configurations: HashMap::default(),
             context_server_registry,
             _subscriptions: subscriptions,
             scroll_handle: ScrollHandle::new(),
         };
 
-        this.build_provider_configuration_views(window, cx);
         this
-    }
-
-    fn build_provider_configuration_views(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let providers = LanguageModelRegistry::read_global(cx).visible_providers();
-        for provider in providers {
-            self.add_provider_configuration_view(&provider, window, cx);
-        }
-    }
-
-    fn remove_provider_configuration_view(&mut self, provider_id: &LanguageModelProviderId) {
-        self.configuration_views_by_provider.remove(provider_id);
-        self.expanded_provider_configurations.remove(provider_id);
-    }
-
-    fn add_provider_configuration_view(
-        &mut self,
-        provider: &Arc<dyn LanguageModelProvider>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let configuration_view = provider.configuration_view(
-            language_model::ConfigurationViewTargetAgent::Other("agent".into()),
-            window,
-            cx,
-        );
-        self.configuration_views_by_provider
-            .insert(provider.id(), configuration_view);
     }
 }
 
@@ -157,12 +103,6 @@ impl Focusable for AgentConfiguration {
         self.focus_handle.clone()
     }
 }
-
-pub enum AssistantConfigurationEvent {
-    NewThread(Arc<dyn LanguageModelProvider>),
-}
-
-impl EventEmitter<AssistantConfigurationEvent> for AgentConfiguration {}
 
 enum AgentIcon {
     Name(IconName),
@@ -197,314 +137,6 @@ impl AgentConfiguration {
                             .child(menu),
                     )
                     .child(Label::new(description.into()).color(Color::Muted)),
-            )
-    }
-
-    fn render_provider_configuration_block(
-        &mut self,
-        provider: &Arc<dyn LanguageModelProvider>,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement + use<> {
-        let provider_id = provider.id().0;
-        let provider_name = provider.name().0;
-        let provider_id_string = SharedString::from(format!("provider-disclosure-{provider_id}"));
-
-        let configuration_view = self
-            .configuration_views_by_provider
-            .get(&provider.id())
-            .cloned();
-
-        let is_expanded = self
-            .expanded_provider_configurations
-            .get(&provider.id())
-            .copied()
-            .unwrap_or(false);
-
-        v_flex()
-            .min_w_0()
-            .w_full()
-            .when(is_expanded, |this| this.mb_2())
-            .child(
-                div()
-                    .px_2()
-                    .child(Divider::horizontal().color(DividerColor::BorderFaded)),
-            )
-            .child(
-                h_flex()
-                    .map(|this| {
-                        if is_expanded {
-                            this.mt_2().mb_1()
-                        } else {
-                            this.my_2()
-                        }
-                    })
-                    .w_full()
-                    .justify_between()
-                    .child(
-                        h_flex()
-                            .id(provider_id_string.clone())
-                            .px_2()
-                            .py_0p5()
-                            .w_full()
-                            .justify_between()
-                            .rounded_sm()
-                            .hover(|hover| hover.bg(cx.theme().colors().element_hover))
-                            .child(
-                                h_flex()
-                                    .w_full()
-                                    .gap_1p5()
-                                    .child(
-                                        match provider.icon() {
-                                            IconOrSvg::Svg(path) => Icon::from_external_svg(path),
-                                            IconOrSvg::Icon(name) => Icon::new(name),
-                                        }
-                                        .size(IconSize::Small)
-                                        .color(Color::Muted),
-                                    )
-                                    .child(
-                                        h_flex()
-                                            .w_full()
-                                            .gap_1()
-                                            .child(Label::new(provider_name.clone()))
-                                            .map(|this| {
-                                                this.when(
-                                                    provider.is_authenticated(cx) && !is_expanded,
-                                                    |parent| {
-                                                        parent.child(
-                                                            Icon::new(IconName::Check)
-                                                                .color(Color::Success),
-                                                        )
-                                                    },
-                                                )
-                                            }),
-                                    ),
-                            )
-                            .child(
-                                Disclosure::new(provider_id_string, is_expanded)
-                                    .opened_icon(IconName::ChevronUp)
-                                    .closed_icon(IconName::ChevronDown),
-                            )
-                            .on_click(cx.listener({
-                                let provider_id = provider.id();
-                                move |this, _event, _window, _cx| {
-                                    let is_expanded = this
-                                        .expanded_provider_configurations
-                                        .entry(provider_id.clone())
-                                        .or_insert(false);
-
-                                    *is_expanded = !*is_expanded;
-                                }
-                            })),
-                    ),
-            )
-            .child(
-                v_flex()
-                    .min_w_0()
-                    .w_full()
-                    .px_2()
-                    .gap_1()
-                    .when(is_expanded, |parent| match configuration_view {
-                        Some(configuration_view) => parent.child(configuration_view),
-                        None => parent.child(Label::new(
-                            tr(
-                                cx,
-                                "agent_ui.agent_configuration.no_configuration_view",
-                                "No configuration view for {}",
-                            )
-                            .replacen("{}", provider_name.as_ref(), 1),
-                        )),
-                    })
-                    .when(is_expanded && provider.is_authenticated(cx), |parent| {
-                        parent.child(
-                            Button::new(
-                                SharedString::from(format!("new-thread-{provider_id}")),
-                                tr(
-                                    cx,
-                                    "agent_ui.agent_configuration.start_new_thread",
-                                    "Start New Thread",
-                                ),
-                            )
-                            .full_width()
-                            .style(ButtonStyle::Outlined)
-                            .layer(ElevationIndex::ModalSurface)
-                            .start_icon(
-                                Icon::new(IconName::Thread)
-                                    .size(IconSize::Small)
-                                    .color(Color::Muted),
-                            )
-                            .label_size(LabelSize::Small)
-                            .on_click(cx.listener({
-                                let provider = provider.clone();
-                                move |_this, _event, _window, cx| {
-                                    cx.emit(AssistantConfigurationEvent::NewThread(
-                                        provider.clone(),
-                                    ))
-                                }
-                            })),
-                        )
-                    })
-                    .when(
-                        is_expanded && is_removable_provider(&provider.id(), cx),
-                        |this| {
-                            this.child(
-                                Button::new(
-                                    SharedString::from(format!("delete-provider-{provider_id}")),
-                                    tr(
-                                        cx,
-                                        "agent_ui.agent_configuration.remove_provider",
-                                        "Remove Provider",
-                                    ),
-                                )
-                                .full_width()
-                                .style(ButtonStyle::Outlined)
-                                .start_icon(
-                                    Icon::new(IconName::Trash)
-                                        .size(IconSize::Small)
-                                        .color(Color::Muted),
-                                )
-                                .label_size(LabelSize::Small)
-                                .on_click(cx.listener({
-                                    let provider = provider.clone();
-                                    move |this, _event, window, cx| {
-                                        this.delete_provider(provider.clone(), window, cx);
-                                    }
-                                })),
-                            )
-                        },
-                    ),
-            )
-    }
-
-    fn delete_provider(
-        &mut self,
-        provider: Arc<dyn LanguageModelProvider>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let fs = self.fs.clone();
-        let provider_id = provider.id();
-
-        cx.spawn_in(window, async move |_, cx| {
-            cx.update(|_window, cx| {
-                update_settings_file(fs.clone(), cx, {
-                    let provider_id = provider_id.clone();
-                    move |settings, _| {
-                        if let Some(ref mut openai_compatible) = settings
-                            .language_models
-                            .as_mut()
-                            .and_then(|lm| lm.openai_compatible.as_mut())
-                        {
-                            let key_to_remove: Arc<str> = Arc::from(provider_id.0.as_ref());
-                            openai_compatible.remove(&key_to_remove);
-                        }
-                    }
-                });
-            })
-            .log_err();
-
-            cx.update(|_window, cx| {
-                LanguageModelRegistry::global(cx).update(cx, {
-                    let provider_id = provider_id.clone();
-                    move |registry, cx| {
-                        registry.unregister_provider(provider_id, cx);
-                    }
-                })
-            })
-            .log_err();
-
-            anyhow::Ok(())
-        })
-        .detach_and_log_err(cx);
-    }
-
-    fn render_provider_configuration_section(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let providers = LanguageModelRegistry::read_global(cx).visible_providers();
-        let compatible_apis_label = tr(
-            cx,
-            "agent_ui.agent_configuration.compatible_apis",
-            "Compatible APIs",
-        );
-        let openai_label = tr(cx, "agent_ui.agent_configuration.provider.openai", "OpenAI");
-
-        let popover_menu = PopoverMenu::new("add-provider-popover")
-            .trigger(
-                Button::new(
-                    "add-provider",
-                    tr(
-                        cx,
-                        "agent_ui.agent_configuration.add_provider",
-                        "Add Provider",
-                    ),
-                )
-                .style(ButtonStyle::Outlined)
-                .start_icon(
-                    Icon::new(IconName::Plus)
-                        .size(IconSize::Small)
-                        .color(Color::Muted),
-                )
-                .label_size(LabelSize::Small),
-            )
-            .menu({
-                let workspace = self.workspace.clone();
-                move |window, cx| {
-                    Some(ContextMenu::build(window, cx, |menu, _window, _cx| {
-                        menu.header(compatible_apis_label.clone()).entry(
-                            openai_label.clone(),
-                            None,
-                            {
-                                let workspace = workspace.clone();
-                                move |window, cx| {
-                                    workspace
-                                        .update(cx, |workspace, cx| {
-                                            AddLlmProviderModal::toggle(
-                                                LlmCompatibleProvider::OpenAi,
-                                                workspace,
-                                                window,
-                                                cx,
-                                            );
-                                        })
-                                        .log_err();
-                                }
-                            },
-                        )
-                    }))
-                }
-            })
-            .anchor(gpui::Anchor::TopRight)
-            .offset(gpui::Point {
-                x: px(0.0),
-                y: px(2.0),
-            });
-
-        v_flex()
-            .min_w_0()
-            .w_full()
-            .child(self.render_section_title(
-                tr(
-                    cx,
-                    "agent_ui.agent_configuration.llm_providers",
-                    "LLM Providers",
-                ),
-                tr(
-                    cx,
-                    "agent_ui.agent_configuration.llm_providers_description",
-                    "Add at least one provider to use AI-powered features in ZZZ.",
-                ),
-                popover_menu.into_any_element(),
-            ))
-            .child(
-                div()
-                    .w_full()
-                    .pl(DynamicSpacing::Base08.rems(cx))
-                    .pr(DynamicSpacing::Base20.rems(cx))
-                    .children(
-                        providers.into_iter().map(|provider| {
-                            self.render_provider_configuration_block(&provider, cx)
-                        }),
-                    ),
             )
     }
 
@@ -1420,8 +1052,7 @@ impl Render for AgentConfiguration {
                             .min_w_0()
                             .overflow_y_scroll()
                             .child(self.render_agent_servers_section(cx))
-                            .child(self.render_context_servers_section(cx))
-                            .child(self.render_provider_configuration_section(cx)),
+                            .child(self.render_context_servers_section(cx)),
                     )
                     .vertical_scrollbar_for(&self.scroll_handle, window, cx),
             )
@@ -1650,15 +1281,4 @@ fn find_text_in_buffer(
     } else {
         None
     }
-}
-
-// OpenAI-compatible providers are user-configured and can be removed,
-// whereas built-in providers (like Anthropic, OpenAI, Google, etc.) can't.
-//
-// If in the future we have more "API-compatible-type" of providers,
-// they should be included here as removable providers.
-fn is_removable_provider(provider_id: &LanguageModelProviderId, cx: &App) -> bool {
-    AllLanguageModelSettings::get_global(cx)
-        .openai_compatible
-        .contains_key(provider_id.0.as_ref())
 }

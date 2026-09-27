@@ -37,7 +37,6 @@ use gpui_tokio::Tokio;
 use language::LanguageRegistry;
 use onboarding::{FIRST_OPEN, show_onboarding_view};
 use project_panel::ProjectPanel;
-use prompt_store::PromptBuilder;
 use remote::RemoteConnectionOptions;
 use reqwest_client::ReqwestClient;
 
@@ -575,7 +574,6 @@ fn main() {
         acp_tools::init(cx);
         zzz::remote_debug::init(cx);
         snippet_provider::init(cx);
-        let prompt_builder = PromptBuilder::load(app_state.fs.clone(), stdout_is_a_pty(), cx);
         project::AgentRegistryStore::init_global(
             cx,
             app_state.fs.clone(),
@@ -583,7 +581,6 @@ fn main() {
         );
         agent_ui::init(
             app_state.fs.clone(),
-            prompt_builder,
             app_state.languages.clone(),
             is_new_install,
             false,
