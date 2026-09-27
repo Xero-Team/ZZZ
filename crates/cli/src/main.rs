@@ -29,8 +29,6 @@ use tempfile::{NamedTempFile, TempDir};
 use util::paths::PathWithPosition;
 use walkdir::WalkDir;
 
-use std::io::IsTerminal;
-
 const URL_PREFIX: [&'static str; 5] = ["zzz://", "http://", "https://", "file://", "ssh://"];
 
 struct Detect;
@@ -740,7 +738,7 @@ fn run() -> Result<()> {
             // project-specific vars (e.g. those set by direnv).
             // By setting env to None here, the LSP will use worktree env vars instead,
             // which is what we want.
-            if !std::io::stdout().is_terminal() {
+            if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
                 None
             } else {
                 Some(std::env::vars().collect::<HashMap<_, _>>())
