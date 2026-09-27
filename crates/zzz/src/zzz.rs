@@ -5717,7 +5717,6 @@ mod tests {
                 app_state.fs.clone(),
                 app_state.languages.clone(),
                 true,
-                false,
                 cx,
             );
 
@@ -5946,8 +5945,7 @@ mod tests {
         });
 
         // User-defined bindings to AI actions should also be filtered.
-        let user_binding =
-            KeyBinding::new("ctrl-enter", zzz_actions::agent::Chat, None);
+        let user_binding = KeyBinding::new("ctrl-enter", zzz_actions::agent::Chat, None);
         cx.update(|cx| reload_keymaps(cx, vec![user_binding]));
         cx.update(|cx| {
             let keymap = cx.key_bindings();

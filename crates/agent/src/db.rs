@@ -1,14 +1,12 @@
-use crate::{AgentMessage, AgentMessageContent, UserMessage, UserMessageContent};
 use acp_thread::UserMessageId;
 use agent_client_protocol::schema::v1 as acp;
 use agent_settings::AgentProfileId;
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
-use collections::{HashMap, IndexMap};
+use collections::HashMap;
 use futures::{FutureExt, future::Shared};
 use gpui::{BackgroundExecutor, Global, Task};
 use indoc::indoc;
-use language_model::Speed;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use sqlez::{
@@ -21,9 +19,30 @@ use ui::{App, SharedString};
 use util::path_list::PathList;
 use zzz_env_vars::ZZZ_STATELESS;
 
-pub type DbMessage = crate::Message;
-pub type DbSummary = crate::legacy_thread::DetailedSummaryState;
-pub type DbLanguageModel = crate::legacy_thread::SerializedLanguageModel;
+pub type DbMessage = serde_json::Value;
+pub type DbLanguageModel = serde_json::Value;
+
+/// Token accounting persisted with an agent thread.
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize, Default)]
+pub struct TokenUsage {
+    #[serde(default)]
+    pub input_tokens: u64,
+    #[serde(default)]
+    pub output_tokens: u64,
+    #[serde(default)]
+    pub cache_creation_input_tokens: u64,
+    #[serde(default)]
+    pub cache_read_input_tokens: u64,
+}
+
+/// Context passed to a subagent thread for lifecycle management.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SubagentContext {
+    /// ID of the parent thread.
+    pub parent_thread_id: acp::SessionId,
+    /// Current depth level (0 = root agent, 1 = first-level subagent, etc.).
+    pub depth: u8,
+}
 
 #[derive(Debug, Clone)]
 pub struct DbThreadMetadata {
@@ -60,17 +79,17 @@ pub struct DbThread {
     #[serde(default)]
     pub initial_project_snapshot: Option<Arc<crate::ProjectSnapshot>>,
     #[serde(default)]
-    pub cumulative_token_usage: language_model::TokenUsage,
+    pub cumulative_token_usage: TokenUsage,
     #[serde(default)]
-    pub request_token_usage: HashMap<acp_thread::UserMessageId, language_model::TokenUsage>,
+    pub request_token_usage: HashMap<UserMessageId, TokenUsage>,
     #[serde(default)]
     pub model: Option<DbLanguageModel>,
     #[serde(default)]
     pub profile: Option<AgentProfileId>,
     #[serde(default)]
-    pub subagent_context: Option<crate::SubagentContext>,
+    pub subagent_context: Option<SubagentContext>,
     #[serde(default)]
-    pub speed: Option<Speed>,
+    pub speed: Option<serde_json::Value>,
     #[serde(default)]
     pub thinking_enabled: bool,
     #[serde(default)]
@@ -147,165 +166,7 @@ impl DbThread {
     pub const VERSION: &'static str = "0.3.0";
 
     pub fn from_json(json: &[u8]) -> Result<Self> {
-        let saved_thread_json = serde_json::from_slice::<serde_json::Value>(json)?;
-        match saved_thread_json.get("version") {
-            Some(serde_json::Value::String(version)) => match version.as_str() {
-                Self::VERSION => Ok(serde_json::from_value(saved_thread_json)?),
-                _ => Self::upgrade_from_agent_1(crate::legacy_thread::SerializedThread::from_json(
-                    json,
-                )?),
-            },
-            _ => {
-                Self::upgrade_from_agent_1(crate::legacy_thread::SerializedThread::from_json(json)?)
-            }
-        }
-    }
-
-    fn upgrade_from_agent_1(thread: crate::legacy_thread::SerializedThread) -> Result<Self> {
-        let mut messages = Vec::new();
-        let mut request_token_usage = HashMap::default();
-
-        let mut last_user_message_id = None;
-        for (ix, msg) in thread.messages.into_iter().enumerate() {
-            let message = match msg.role {
-                language_model::Role::User => {
-                    let mut content = Vec::new();
-
-                    // Convert segments to content
-                    for segment in msg.segments {
-                        match segment {
-                            crate::legacy_thread::SerializedMessageSegment::Text { text } => {
-                                content.push(UserMessageContent::Text(text));
-                            }
-                            crate::legacy_thread::SerializedMessageSegment::Thinking {
-                                text,
-                                ..
-                            } => {
-                                // User messages don't have thinking segments, but handle gracefully
-                                content.push(UserMessageContent::Text(text));
-                            }
-                            crate::legacy_thread::SerializedMessageSegment::RedactedThinking {
-                                ..
-                            } => {
-                                // User messages don't have redacted thinking, skip.
-                            }
-                        }
-                    }
-
-                    // If no content was added, add context as text if available
-                    if content.is_empty() && !msg.context.is_empty() {
-                        content.push(UserMessageContent::Text(msg.context));
-                    }
-
-                    let id = UserMessageId::new();
-                    last_user_message_id = Some(id.clone());
-
-                    crate::Message::User(UserMessage {
-                        // MessageId from old format can't be meaningfully converted, so generate a new one
-                        id,
-                        content,
-                    })
-                }
-                language_model::Role::Assistant => {
-                    let mut content = Vec::new();
-
-                    // Convert segments to content
-                    for segment in msg.segments {
-                        match segment {
-                            crate::legacy_thread::SerializedMessageSegment::Text { text } => {
-                                content.push(AgentMessageContent::Text(text));
-                            }
-                            crate::legacy_thread::SerializedMessageSegment::Thinking {
-                                text,
-                                signature,
-                            } => {
-                                content.push(AgentMessageContent::Thinking { text, signature });
-                            }
-                            crate::legacy_thread::SerializedMessageSegment::RedactedThinking {
-                                data,
-                            } => {
-                                content.push(AgentMessageContent::RedactedThinking(data));
-                            }
-                        }
-                    }
-
-                    // Convert tool uses
-                    let mut tool_names_by_id = HashMap::default();
-                    for tool_use in msg.tool_uses {
-                        tool_names_by_id.insert(tool_use.id.clone(), tool_use.name.clone());
-                        content.push(AgentMessageContent::ToolUse(
-                            language_model::LanguageModelToolUse {
-                                id: tool_use.id,
-                                name: tool_use.name.into(),
-                                raw_input: serde_json::to_string(&tool_use.input)
-                                    .unwrap_or_default(),
-                                input: tool_use.input,
-                                is_input_complete: true,
-                                thought_signature: None,
-                            },
-                        ));
-                    }
-
-                    // Convert tool results
-                    let mut tool_results = IndexMap::default();
-                    for tool_result in msg.tool_results {
-                        let name = tool_names_by_id
-                            .remove(&tool_result.tool_use_id)
-                            .unwrap_or_else(|| SharedString::from("unknown"));
-                        tool_results.insert(
-                            tool_result.tool_use_id.clone(),
-                            language_model::LanguageModelToolResult {
-                                tool_use_id: tool_result.tool_use_id,
-                                tool_name: name.into(),
-                                is_error: tool_result.is_error,
-                                content: vec![tool_result.content],
-                                output: tool_result.output,
-                            },
-                        );
-                    }
-
-                    if let Some(last_user_message_id) = &last_user_message_id
-                        && let Some(token_usage) = thread.request_token_usage.get(ix).copied()
-                    {
-                        request_token_usage.insert(last_user_message_id.clone(), token_usage);
-                    }
-
-                    crate::Message::Agent(AgentMessage {
-                        content,
-                        tool_results,
-                        reasoning_details: None,
-                    })
-                }
-                language_model::Role::System => {
-                    // Skip system messages as they're not supported in the new format
-                    continue;
-                }
-            };
-
-            messages.push(message);
-        }
-
-        Ok(Self {
-            title: thread.summary,
-            messages,
-            updated_at: thread.updated_at,
-            detailed_summary: match thread.detailed_summary_state {
-                crate::legacy_thread::DetailedSummaryState::NotGenerated
-                | crate::legacy_thread::DetailedSummaryState::Generating => None,
-                crate::legacy_thread::DetailedSummaryState::Generated { text, .. } => Some(text),
-            },
-            initial_project_snapshot: thread.initial_project_snapshot,
-            cumulative_token_usage: thread.cumulative_token_usage,
-            request_token_usage,
-            model: thread.model,
-            profile: thread.profile,
-            subagent_context: None,
-            speed: None,
-            thinking_enabled: false,
-            thinking_effort: None,
-            draft_prompt: None,
-            ui_scroll_position: None,
-        })
+        Ok(serde_json::from_slice(json)?)
     }
 }
 

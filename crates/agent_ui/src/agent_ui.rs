@@ -43,12 +43,11 @@ use gpui::{
 };
 use i18n as app_i18n;
 use language::LanguageRegistry;
-use language_model::{LanguageModelId, LanguageModelProviderId, LanguageModelRegistry};
 use project::{AgentId, DisableAiSettings};
 use rope::Point;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use settings::{LanguageModelSelection, Settings as _, SettingsStore};
+use settings::{Settings as _, SettingsStore};
 use workspace::{OpenOptions, Workspace};
 
 use crate::agent_configuration::{ConfigureContextServerModal, ManageProfilesModal};
@@ -601,16 +600,10 @@ pub fn init(
     fs: Arc<dyn Fs>,
     language_registry: Arc<LanguageRegistry>,
     is_new_install: bool,
-    is_eval: bool,
     cx: &mut App,
 ) {
     agent::ThreadStore::init_global(cx);
     rules_library::init(cx);
-    if !is_eval {
-        // Initializing the language model from the user settings messes with the eval, so we only initialize them when
-        // we're not running inside of the eval.
-        init_language_model_settings(cx);
-    }
     agent_panel::init(cx);
     context_server_configuration::init(language_registry.clone(), fs.clone(), cx);
     thread_metadata_store::init(cx);
@@ -730,64 +723,6 @@ fn update_command_palette_filter(cx: &mut App) {
     });
 }
 
-fn init_language_model_settings(cx: &mut App) {
-    update_active_language_model_from_settings(cx);
-
-    cx.observe_global::<SettingsStore>(update_active_language_model_from_settings)
-        .detach();
-    cx.subscribe(
-        &LanguageModelRegistry::global(cx),
-        |_, event: &language_model::Event, cx| match event {
-            language_model::Event::ProviderStateChanged(_)
-            | language_model::Event::AddedProvider(_)
-            | language_model::Event::RemovedProvider(_)
-            | language_model::Event::ProvidersChanged => {
-                update_active_language_model_from_settings(cx);
-            }
-            _ => {}
-        },
-    )
-    .detach();
-}
-
-fn update_active_language_model_from_settings(cx: &mut App) {
-    let settings = AgentSettings::get_global(cx);
-
-    fn to_selected_model(selection: &LanguageModelSelection) -> language_model::SelectedModel {
-        language_model::SelectedModel {
-            provider: LanguageModelProviderId::from(selection.provider.0.clone()),
-            model: LanguageModelId::from(selection.model.clone()),
-        }
-    }
-
-    let default = settings.default_model.as_ref().map(to_selected_model);
-    let inline_assistant = settings
-        .inline_assistant_model
-        .as_ref()
-        .map(to_selected_model);
-    let commit_message = settings
-        .commit_message_model
-        .as_ref()
-        .map(to_selected_model);
-    let thread_summary = settings
-        .thread_summary_model
-        .as_ref()
-        .map(to_selected_model);
-    let inline_alternatives = settings
-        .inline_alternatives
-        .iter()
-        .map(to_selected_model)
-        .collect::<Vec<_>>();
-
-    LanguageModelRegistry::global(cx).update(cx, |registry, cx| {
-        registry.select_default_model(default.as_ref(), cx);
-        registry.select_inline_assistant_model(inline_assistant.as_ref(), cx);
-        registry.select_commit_message_model(commit_message.as_ref(), cx);
-        registry.select_thread_summary_model(thread_summary.as_ref(), cx);
-        registry.select_inline_alternative_models(inline_alternatives, cx);
-    });
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -821,21 +756,11 @@ mod tests {
             default_width: px(300.),
             default_height: px(600.),
             max_content_width: Some(px(850.)),
-            default_model: None,
-            subagent_model: None,
-            inline_assistant_model: None,
-            inline_assistant_use_streaming_tools: false,
-            commit_message_model: None,
-            commit_message_instructions: None,
-            thread_summary_model: None,
-            inline_alternatives: vec![],
-            favorite_models: vec![],
             default_profile: AgentProfileId::default(),
             profiles: Default::default(),
             notify_when_agent_waiting: NotifyWhenAgentWaiting::default(),
             play_sound_when_agent_done: PlaySoundWhenAgentDone::Never,
             single_file_review: false,
-            model_parameters: vec![],
             expand_edit_card: true,
             expand_terminal_card: true,
             cancel_generation_on_terminal_stop: true,

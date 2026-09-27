@@ -1,6 +1,4 @@
 mod db;
-mod history;
-mod legacy_thread;
 pub mod outline;
 mod pattern_extraction;
 mod thread_store;
@@ -9,7 +7,6 @@ mod tool_protocol;
 mod tools;
 
 pub use db::*;
-pub use history::*;
 pub use pattern_extraction::*;
 pub use shell_command_parser::extract_commands;
 pub use thread_store::*;

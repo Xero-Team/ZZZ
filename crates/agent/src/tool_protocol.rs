@@ -1,4 +1,4 @@
-use crate::{TerminalTool, ToolPermissionDecision, UserMessage, decide_permission_from_settings};
+use crate::{TerminalTool, ToolPermissionDecision, decide_permission_from_settings};
 use agent_client_protocol::schema::v1 as acp;
 use anyhow::{Result, anyhow};
 use fs::Fs;
@@ -19,7 +19,6 @@ use std::{marker::PhantomData, sync::Arc};
 
 #[derive(Debug)]
 pub enum ThreadEvent {
-    UserMessage(UserMessage),
     AgentText(String),
     AgentThinking(String),
     ToolCall(acp::ToolCall),

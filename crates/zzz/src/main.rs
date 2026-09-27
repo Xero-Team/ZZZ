@@ -583,7 +583,6 @@ fn main() {
             app_state.fs.clone(),
             app_state.languages.clone(),
             is_new_install,
-            false,
             cx,
         );
 

@@ -14,8 +14,7 @@ use settings::{AgentConfigOptionValue, SettingsStore, update_settings_file};
 use std::{rc::Rc, sync::Arc};
 use ui::IconName;
 
-pub const GEMINI_ID: &str = "gemini";
-pub const CLAUDE_AGENT_ID: &str = "claude-acp";
+pub const GEMINI_ID: &str = "gemini";pub const CLAUDE_AGENT_ID: &str = "claude-acp";
 pub const CODEX_ID: &str = "codex-acp";
 pub const CURSOR_ID: &str = "cursor";
 
@@ -283,13 +282,15 @@ impl AgentServer for CustomAgentServer {
     }
 }
 
+const GEMINI_API_URL: &str = "https://generativelanguage.googleapis.com";
+
 fn api_key_for_gemini_cli(cx: &mut App) -> Task<Result<String>> {
     let env_var = EnvVar::new("GEMINI_API_KEY".into()).or(EnvVar::new("GOOGLE_AI_API_KEY".into()));
     if let Some(key) = env_var.value {
         return Task::ready(Ok(key));
     }
     let credentials_provider = zzz_credentials_provider::global(cx);
-    let api_url = google_ai::API_URL.to_owned();
+    let api_url = GEMINI_API_URL.to_owned();
     cx.spawn(async move |cx| {
         Ok(
             ApiKey::load_from_system_keychain(&api_url, credentials_provider.as_ref(), cx)

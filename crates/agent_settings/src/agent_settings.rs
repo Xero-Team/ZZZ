@@ -7,15 +7,13 @@ use collections::IndexMap;
 use fs::Fs;
 use futures::channel::oneshot;
 use gpui::{App, Pixels, px};
-use language_model::LanguageModel;
 use project::DisableAiSettings;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings::{
-    DockPosition, DockSide, LanguageModelParameters, LanguageModelSelection,
-    NotifyWhenAgentWaiting, PlaySoundWhenAgentDone, RegisterSetting, Settings, SettingsContent,
-    SettingsStore, SidebarDockPosition, SidebarSide, ThinkingBlockDisplay, ToolPermissionMode,
-    update_settings_file, update_settings_file_with_completion,
+    DockPosition, DockSide, NotifyWhenAgentWaiting, PlaySoundWhenAgentDone, RegisterSetting,
+    Settings, SettingsContent, SettingsStore, SidebarDockPosition, SidebarSide, ThinkingBlockDisplay,
+    ToolPermissionMode, update_settings_file, update_settings_file_with_completion,
 };
 
 pub use crate::agent_profile::*;
@@ -129,22 +127,12 @@ pub struct AgentSettings {
     pub default_width: Pixels,
     pub default_height: Pixels,
     pub max_content_width: Option<Pixels>,
-    pub default_model: Option<LanguageModelSelection>,
-    pub subagent_model: Option<LanguageModelSelection>,
-    pub inline_assistant_model: Option<LanguageModelSelection>,
-    pub inline_assistant_use_streaming_tools: bool,
-    pub commit_message_model: Option<LanguageModelSelection>,
-    pub commit_message_instructions: Option<String>,
-    pub thread_summary_model: Option<LanguageModelSelection>,
-    pub inline_alternatives: Vec<LanguageModelSelection>,
-    pub favorite_models: Vec<LanguageModelSelection>,
     pub default_profile: AgentProfileId,
     pub profiles: IndexMap<AgentProfileId, AgentProfileSettings>,
 
     pub notify_when_agent_waiting: NotifyWhenAgentWaiting,
     pub play_sound_when_agent_done: PlaySoundWhenAgentDone,
     pub single_file_review: bool,
-    pub model_parameters: Vec<LanguageModelParameters>,
     pub expand_edit_card: bool,
     pub expand_terminal_card: bool,
     pub thinking_display: ThinkingBlockDisplay,
@@ -161,24 +149,6 @@ impl AgentSettings {
         self.enabled && !DisableAiSettings::get_global(cx).disable_ai
     }
 
-    pub fn temperature_for_model(model: &Arc<dyn LanguageModel>, cx: &App) -> Option<f32> {
-        let settings = Self::get_global(cx);
-        for setting in settings.model_parameters.iter().rev() {
-            if let Some(provider) = &setting.provider
-                && provider.0 != model.provider_id().0
-            {
-                continue;
-            }
-            if let Some(setting_model) = &setting.model
-                && *setting_model != model.id().0
-            {
-                continue;
-            }
-            return setting.temperature;
-        }
-        return None;
-    }
-
     pub fn sidebar_side(&self) -> SidebarSide {
         match self.sidebar_side {
             SidebarDockPosition::Left => SidebarSide::Left,
@@ -188,45 +158,6 @@ impl AgentSettings {
 
     pub fn set_message_editor_max_lines(&self) -> usize {
         self.message_editor_min_lines * 2
-    }
-}
-
-pub fn language_model_to_selection(
-    model: &Arc<dyn LanguageModel>,
-    override_selection: Option<&LanguageModelSelection>,
-) -> LanguageModelSelection {
-    let provider = model.provider_id().0.to_string().into();
-    let model_name = model.id().0.to_string();
-    match override_selection {
-        Some(current) => LanguageModelSelection {
-            provider,
-            model: model_name,
-            enable_thinking: current.enable_thinking && model.supports_thinking(),
-            effort: current
-                .effort
-                .clone()
-                .filter(|value| {
-                    model
-                        .supported_effort_levels()
-                        .iter()
-                        .any(|level| level.value.as_ref() == value.as_str())
-                })
-                .or_else(|| {
-                    model
-                        .default_effort_level()
-                        .map(|effort| effort.value.to_string())
-                }),
-            speed: current.speed.filter(|_| model.supports_fast_mode()),
-        },
-        None => LanguageModelSelection {
-            provider,
-            model: model_name,
-            enable_thinking: model.supports_thinking(),
-            effort: model
-                .default_effort_level()
-                .map(|effort| effort.value.to_string()),
-            speed: None,
-        },
     }
 }
 
@@ -619,17 +550,6 @@ impl Settings for AgentSettings {
                 None
             },
             flexible: agent.flexible.unwrap(),
-            default_model: Some(agent.default_model.unwrap()),
-            subagent_model: agent.subagent_model,
-            inline_assistant_model: agent.inline_assistant_model,
-            inline_assistant_use_streaming_tools: agent
-                .inline_assistant_use_streaming_tools
-                .unwrap_or(true),
-            commit_message_model: agent.commit_message_model,
-            commit_message_instructions: agent.commit_message_instructions,
-            thread_summary_model: agent.thread_summary_model,
-            inline_alternatives: agent.inline_alternatives.unwrap_or_default(),
-            favorite_models: agent.favorite_models,
             default_profile: AgentProfileId(agent.default_profile.unwrap()),
             profiles: agent
                 .profiles
@@ -641,7 +561,6 @@ impl Settings for AgentSettings {
             notify_when_agent_waiting: agent.notify_when_agent_waiting.unwrap(),
             play_sound_when_agent_done: agent.play_sound_when_agent_done.unwrap_or_default(),
             single_file_review: agent.single_file_review.unwrap(),
-            model_parameters: agent.model_parameters,
             expand_edit_card: agent.expand_edit_card.unwrap(),
             expand_terminal_card: agent.expand_terminal_card.unwrap(),
             thinking_display: agent.thinking_display.unwrap(),
