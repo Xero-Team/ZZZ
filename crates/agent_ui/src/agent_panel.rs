@@ -1638,39 +1638,33 @@ impl AgentPanel {
             return;
         };
 
-        let thread_data = match base64::Engine::decode(&base64::prelude::BASE64_STANDARD, &encoded)
-        {
-            Ok(data) => data,
-            Err(_) => {
-                Self::show_deferred_toast(
-                    &self.workspace,
-                    tr(
-                        cx,
-                        "agent_ui.panel.failed_to_decode_clipboard",
-                        "Failed to decode clipboard content (expected base64)",
-                    )
-                    .to_string(),
+        let Ok(thread_data) = base64::Engine::decode(&base64::prelude::BASE64_STANDARD, &encoded)
+        else {
+            Self::show_deferred_toast(
+                &self.workspace,
+                tr(
                     cx,
-                );
-                return;
-            }
+                    "agent_ui.panel.failed_to_decode_clipboard",
+                    "Failed to decode clipboard content (expected base64)",
+                )
+                .to_string(),
+                cx,
+            );
+            return;
         };
 
-        let shared_thread = match SharedThread::from_bytes(&thread_data) {
-            Ok(thread) => thread,
-            Err(_) => {
-                Self::show_deferred_toast(
-                    &self.workspace,
-                    tr(
-                        cx,
-                        "agent_ui.panel.failed_to_parse_thread_data",
-                        "Failed to parse thread data from clipboard",
-                    )
-                    .to_string(),
+        let Ok(shared_thread) = SharedThread::from_bytes(&thread_data) else {
+            Self::show_deferred_toast(
+                &self.workspace,
+                tr(
                     cx,
-                );
-                return;
-            }
+                    "agent_ui.panel.failed_to_parse_thread_data",
+                    "Failed to parse thread data from clipboard",
+                )
+                .to_string(),
+                cx,
+            );
+            return;
         };
 
         let db_thread = shared_thread.to_db_thread();

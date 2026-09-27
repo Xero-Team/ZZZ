@@ -1665,7 +1665,7 @@ impl SlashCommandCompletion {
             source_range: prefix.len() + offset_to_line
                 ..line
                     .rfind(|c: char| !c.is_whitespace())
-                    .unwrap_or_else(|| line.len())
+                    .unwrap_or(line.len())
                     + 1
                     + offset_to_line,
             command,

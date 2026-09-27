@@ -34,25 +34,24 @@ impl SharedState {
     /// Assert that both ZZZ and NeoVim have the same content and mode.
     #[track_caller]
     pub fn assert_matches(&self) {
-        if self.neovim != self.editor || self.neovim_mode != self.editor_mode {
-            panic!(
-                indoc! {"Test failed (zzz does not match nvim behavior)
-                    # initial state:
-                    {}
-                    # keystrokes:
-                    {}
-                    # neovim ({}):
-                    {}
-                    # zzz ({}):
-                    {}"},
-                self.initial,
-                self.recent_keystrokes,
-                self.neovim_mode,
-                self.neovim,
-                self.editor_mode,
-                self.editor,
-            )
-        }
+        assert!(
+            self.neovim == self.editor && self.neovim_mode == self.editor_mode,
+            indoc! {"Test failed (zzz does not match nvim behavior)
+                # initial state:
+                {}
+                # keystrokes:
+                {}
+                # neovim ({}):
+                {}
+                # zzz ({}):
+                {}"},
+            self.initial,
+            self.recent_keystrokes,
+            self.neovim_mode,
+            self.neovim,
+            self.editor_mode,
+            self.editor,
+        );
     }
 
     #[track_caller]
@@ -276,9 +275,7 @@ impl NeovimBackedTestContext {
     }
 
     pub async fn set_shared_wrap(&mut self, columns: u32) {
-        if columns < 12 {
-            panic!("nvim doesn't support columns < 12")
-        }
+        assert!(columns >= 12, "nvim doesn't support columns < 12");
         self.neovim.set_option("wrap").await;
         self.neovim
             .set_option(&format!("columns={}", columns))

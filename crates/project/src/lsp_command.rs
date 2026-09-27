@@ -1167,9 +1167,8 @@ pub async fn location_links_from_lsp(
     workspace_only: bool,
     mut cx: AsyncApp,
 ) -> Result<Vec<LocationLink>> {
-    let message = match message {
-        Some(message) => message,
-        None => return Ok(Vec::new()),
+    let Some(message) = message else {
+        return Ok(Vec::new());
     };
 
     let mut unresolved_links = Vec::new();

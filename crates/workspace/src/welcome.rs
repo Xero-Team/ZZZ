@@ -616,8 +616,7 @@ impl crate::SerializableItem for WelcomePage {
     ) -> Task<gpui::Result<Entity<Self>>> {
         if persistence::WelcomePagesDb::global(cx)
             .get_welcome_page(item_id, workspace_id)
-            .ok()
-            .is_some_and(|is_open| is_open)
+            .is_ok_and(|is_open| is_open)
         {
             Task::ready(Ok(
                 cx.new(|cx| WelcomePage::new(workspace, false, window, cx))

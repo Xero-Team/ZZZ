@@ -1147,13 +1147,11 @@ impl<'a> SyntaxMapCaptures<'a> {
             active_layer_count: 0,
         };
         for layer in layers {
-            let grammar = match &layer.language.grammar {
-                Some(grammar) => grammar,
-                None => continue,
+            let Some(grammar) = &layer.language.grammar else {
+                continue;
             };
-            let query = match query(grammar) {
-                Some(query) => query,
-                None => continue,
+            let Some(query) = query(grammar) else {
+                continue;
             };
 
             let mut query_cursor = QueryCursorHandle::new();
@@ -1216,9 +1214,7 @@ impl<'a> SyntaxMapCaptures<'a> {
     }
 
     pub fn advance(&mut self) -> bool {
-        let layer = if let Some(layer) = self.layers[..self.active_layer_count].first_mut() {
-            layer
-        } else {
+        let Some(layer) = self.layers[..self.active_layer_count].first_mut() else {
             return false;
         };
 
@@ -1282,13 +1278,11 @@ impl<'a> SyntaxMapMatches<'a> {
     ) -> Self {
         let mut result = Self::default();
         for layer in layers {
-            let grammar = match &layer.language.grammar {
-                Some(grammar) => grammar,
-                None => continue,
+            let Some(grammar) = &layer.language.grammar else {
+                continue;
             };
-            let query = match query(grammar) {
-                Some(query) => query,
-                None => continue,
+            let Some(query) = query(grammar) else {
+                continue;
             };
 
             let mut query_cursor = QueryCursorHandle::new();
@@ -1369,9 +1363,7 @@ impl<'a> SyntaxMapMatches<'a> {
     }
 
     pub fn advance(&mut self) -> bool {
-        let layer = if let Some(layer) = self.layers.first_mut() {
-            layer
-        } else {
+        let Some(layer) = self.layers.first_mut() else {
             return false;
         };
 

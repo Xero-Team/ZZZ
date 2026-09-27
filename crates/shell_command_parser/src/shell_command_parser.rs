@@ -101,9 +101,8 @@ pub fn validate_terminal_command(command: &str) -> TerminalCommandValidation {
     let options = ParserOptions::default();
     let mut parser = Parser::new(reader, &options);
 
-    let program = match parser.parse_program() {
-        Ok(program) => program,
-        Err(_) => return TerminalCommandValidation::Unsupported,
+    let Ok(program) = parser.parse_program() else {
+        return TerminalCommandValidation::Unsupported;
     };
 
     match program_validation(&program) {
@@ -314,9 +313,8 @@ fn assignment_validation(assignment: &ast::Assignment) -> TerminalProgramValidat
 
 fn word_validation(word: &ast::Word) -> TerminalProgramValidation {
     let options = ParserOptions::default();
-    let pieces = match brush_parser::word::parse(&word.value, &options) {
-        Ok(pieces) => pieces,
-        Err(_) => return TerminalProgramValidation::Unsupported,
+    let Ok(pieces) = brush_parser::word::parse(&word.value, &options) else {
+        return TerminalProgramValidation::Unsupported;
     };
 
     combine_validations(
@@ -721,9 +719,8 @@ fn is_known_safe_redirect_target(normalized_target: &str) -> bool {
 fn normalize_io_redirect(redirect: &ast::IoRedirect) -> Option<RedirectNormalization> {
     match redirect {
         ast::IoRedirect::File(fd, kind, target) => {
-            let target_word = match target {
-                ast::IoFileRedirectTarget::Filename(word) => word,
-                _ => return Some(RedirectNormalization::Skip),
+            let ast::IoFileRedirectTarget::Filename(target_word) = target else {
+                return Some(RedirectNormalization::Skip);
             };
             let operator = match kind {
                 ast::IoFileRedirectKind::Read => "<",

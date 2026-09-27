@@ -284,18 +284,15 @@ impl ToolPermissionDecision {
             return ToolPermissionDecision::Deny(INVALID_TERMINAL_COMMAND_MESSAGE.into());
         }
 
-        let rules = match rules {
-            Some(rules) => rules,
-            None => {
-                // No tool-specific rules, use the global default
-                return match permissions.default {
-                    ToolPermissionMode::Allow => ToolPermissionDecision::Allow,
-                    ToolPermissionMode::Deny => {
-                        ToolPermissionDecision::Deny("Blocked by global default: deny".into())
-                    }
-                    ToolPermissionMode::Confirm => ToolPermissionDecision::Confirm,
-                };
-            }
+        let Some(rules) = rules else {
+            // No tool-specific rules, use the global default
+            return match permissions.default {
+                ToolPermissionMode::Allow => ToolPermissionDecision::Allow,
+                ToolPermissionMode::Deny => {
+                    ToolPermissionDecision::Deny("Blocked by global default: deny".into())
+                }
+                ToolPermissionMode::Confirm => ToolPermissionDecision::Confirm,
+            };
         };
 
         // For the terminal tool, parse each input command to extract all sub-commands.

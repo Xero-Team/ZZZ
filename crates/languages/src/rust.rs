@@ -1384,9 +1384,8 @@ async fn get_cached_server_binary(container_dir: PathBuf) -> Option<LanguageServ
             last = Some(path);
         }
 
-        let path = match last {
-            Some(last) => last,
-            None => return Ok(None),
+        let Some(path) = last else {
+            return Ok(None);
         };
         let path = match RustLspAdapter::GITHUB_ASSET_KIND {
             AssetKind::TarGz | AssetKind::TarBz2 | AssetKind::Gz => path, // Tar and gzip extract in place.

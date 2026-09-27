@@ -4091,11 +4091,7 @@ impl sum_tree::Item for Entry {
     type Summary = EntrySummary;
 
     fn summary(&self, _cx: ()) -> Self::Summary {
-        let non_ignored_count = if self.is_ignored && !self.is_always_included {
-            0
-        } else {
-            1
-        };
+        let non_ignored_count = usize::from(!self.is_ignored || self.is_always_included);
         let file_count;
         let non_ignored_file_count;
         if self.is_file() {

@@ -29,13 +29,12 @@ fn parse_resize_behavior(
         }
     }
 
-    if resize_behavior.len() != expected_cols {
-        panic!(
-            "invalid test input: expected {} columns, got {}",
-            expected_cols,
-            resize_behavior.len()
-        );
-    }
+    assert!(
+        resize_behavior.len() == expected_cols,
+        "invalid test input: expected {} columns, got {}",
+        expected_cols,
+        resize_behavior.len()
+    );
     resize_behavior
 }
 

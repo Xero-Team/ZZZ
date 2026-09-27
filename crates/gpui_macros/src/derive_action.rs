@@ -103,12 +103,11 @@ pub(crate) fn derive_action(input: TokenStream) -> TokenStream {
 
     let name = name_argument.unwrap_or_else(|| struct_name.to_string());
 
-    if name.contains("::") {
-        panic!(
-            "in #[action] attribute: `name = \"{name}\"` must not contain `::`, \
-            also specify `namespace` instead"
-        );
-    }
+    assert!(
+        !name.contains("::"),
+        "in #[action] attribute: `name = \"{name}\"` must not contain `::`, \
+        also specify `namespace` instead"
+    );
 
     let full_name = if let Some(namespace) = namespace {
         format!("{namespace}::{name}")

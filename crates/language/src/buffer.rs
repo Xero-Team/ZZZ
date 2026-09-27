@@ -1836,9 +1836,7 @@ impl Buffer {
         if self.reparse.is_some() {
             return;
         }
-        let language = if let Some(language) = self.language.clone() {
-            language
-        } else {
+        let Some(language) = self.language.clone() else {
             return;
         };
 
@@ -3472,9 +3470,8 @@ impl BufferSnapshot {
         let mut result = BTreeMap::new();
 
         for row_range in contiguous_ranges(rows, 10) {
-            let suggestions = match self.suggest_autoindents(row_range.clone()) {
-                Some(suggestions) => suggestions,
-                _ => break,
+            let Some(suggestions) = self.suggest_autoindents(row_range.clone()) else {
+                break;
             };
 
             for (row, suggestion) in row_range.zip(suggestions) {

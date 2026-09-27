@@ -1106,9 +1106,7 @@ impl ProjectPanel {
     ) {
         let project = self.project.read(cx);
 
-        let worktree_id = if let Some(id) = project.worktree_id_for_entry(entry_id, cx) {
-            id
-        } else {
+        let Some(worktree_id) = project.worktree_id_for_entry(entry_id, cx) else {
             return;
         };
 
@@ -1559,11 +1557,8 @@ impl ProjectPanel {
             if entry.is_dir() {
                 let worktree_id = worktree.id();
                 let entry_id = entry.id;
-                let expanded_dir_ids = if let Some(expanded_dir_ids) =
-                    self.state.expanded_dir_ids.get_mut(&worktree_id)
-                {
-                    expanded_dir_ids
-                } else {
+                let Some(expanded_dir_ids) = self.state.expanded_dir_ids.get_mut(&worktree_id)
+                else {
                     return;
                 };
 
@@ -1611,12 +1606,9 @@ impl ProjectPanel {
             return;
         }
         let worktree_id = worktree.id();
-        let expanded_dir_ids =
-            if let Some(expanded_dir_ids) = self.state.expanded_dir_ids.get_mut(&worktree_id) {
-                expanded_dir_ids
-            } else {
-                return;
-            };
+        let Some(expanded_dir_ids) = self.state.expanded_dir_ids.get_mut(&worktree_id) else {
+            return;
+        };
 
         let mut entry = &entry;
         loop {
@@ -2043,9 +2035,8 @@ impl ProjectPanel {
     }
 
     fn populate_validation_error(&mut self, cx: &mut Context<Self>) {
-        let edit_state = match self.state.edit_state.as_mut() {
-            Some(state) => state,
-            None => return,
+        let Some(edit_state) = self.state.edit_state.as_mut() else {
+            return;
         };
         let filename = self.filename_editor.read(cx).text(cx);
         if !filename.is_empty() {
@@ -3425,15 +3416,13 @@ impl ProjectPanel {
             self.selection.as_ref(),
             true,
             &|entry: GitEntryRef, worktree_id: WorktreeId| {
-                (self.selection.is_none()
-                    || self.selection.is_some_and(|selection| {
-                        if selection.worktree_id == worktree_id {
-                            selection.entry_id != entry.id
-                        } else {
-                            true
-                        }
-                    }))
-                    && entry.is_file()
+                self.selection.is_none_or(|selection| {
+                    if selection.worktree_id == worktree_id {
+                        selection.entry_id != entry.id
+                    } else {
+                        true
+                    }
+                }) && entry.is_file()
                     && entry.git_summary.index.modified + entry.git_summary.worktree.modified > 0
             },
             cx,
@@ -5467,9 +5456,11 @@ impl ProjectPanel {
                     .index
                     .get_or_init(|| visible.entries.iter().map(|e| e.path.clone()).collect());
                 for entry in visible.entries[entry_range].iter() {
-                    let status = git_status_setting
-                        .then_some(entry.git_summary)
-                        .unwrap_or_default();
+                    let status = if git_status_setting {
+                        entry.git_summary
+                    } else {
+                        Default::default()
+                    };
 
                     let mut details = self.details_for_entry(
                         entry,
@@ -6281,9 +6272,7 @@ impl ProjectPanel {
                                 ancestors.active_component(&details.filename)
                             });
                         move |selection, click_offset, _window, cx| {
-                            let filename = active_component
-                                .as_ref()
-                                .unwrap_or_else(|| &details.filename);
+                            let filename = active_component.as_ref().unwrap_or(&details.filename);
                             cx.new(|_| DraggedProjectEntryView {
                                 icon: details.icon.clone(),
                                 filename: filename.clone(),

@@ -735,14 +735,13 @@ fn nth_set_bit(v: u128, n: usize) -> usize {
 #[inline(never)]
 #[track_caller]
 fn panic_char_boundary(text: &str, offset: usize) -> ! {
-    if offset > text.len() {
-        panic!(
-            "byte index {} is out of bounds of `{:?}` (length: {})",
-            offset,
-            text,
-            text.len()
-        );
-    }
+    assert!(
+        offset <= text.len(),
+        "byte index {} is out of bounds of `{:?}` (length: {})",
+        offset,
+        text,
+        text.len()
+    );
     // find the character
     let char_start = text.floor_char_boundary(offset);
     // `char_start` must be less than len and a char boundary

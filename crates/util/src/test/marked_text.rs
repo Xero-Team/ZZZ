@@ -130,9 +130,10 @@ pub fn marked_text_ranges(
         match marker {
             "ˇ" => {
                 if current_range_start.is_some() {
-                    if current_range_cursor.is_some() {
-                        panic!("duplicate point marker 'ˇ' at index {marked_ix}");
-                    }
+                    assert!(
+                        current_range_cursor.is_none(),
+                        "duplicate point marker 'ˇ' at index {marked_ix}"
+                    );
 
                     current_range_cursor = Some(unmarked_len);
                 } else {
@@ -140,15 +141,14 @@ pub fn marked_text_ranges(
                 }
             }
             "«" => {
-                if current_range_start.is_some() {
-                    panic!("unexpected range start marker '«' at index {marked_ix}");
-                }
+                assert!(
+                    current_range_start.is_none(),
+                    "unexpected range start marker '«' at index {marked_ix}"
+                );
                 current_range_start = Some(unmarked_len);
             }
             "»" => {
-                let current_range_start = if let Some(start) = current_range_start.take() {
-                    start
-                } else {
+                let Some(current_range_start) = current_range_start.take() else {
                     panic!("unexpected range end marker '»' at index {marked_ix}");
                 };
 

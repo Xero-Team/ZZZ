@@ -328,8 +328,15 @@ impl Element for Img {
                                             if elapsed >= frame_duration {
                                                 state.frame_index =
                                                     (state.frame_index + 1) % frame_count;
-                                                state.last_frame_time =
-                                                    Some(current_time - (elapsed - frame_duration));
+                                                state.last_frame_time = Some(
+                                                    current_time
+                                                        .checked_sub(
+                                                            elapsed
+                                                                .checked_sub(frame_duration)
+                                                                .unwrap(),
+                                                        )
+                                                        .unwrap(),
+                                                );
                                             }
                                         } else {
                                             state.last_frame_time = Some(current_time);

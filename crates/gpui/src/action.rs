@@ -292,12 +292,11 @@ impl ActionRegistry {
 
     fn insert_action(&mut self, action: MacroActionData) {
         let name = action.name;
-        if self.by_name.contains_key(name) {
-            panic!(
-                "Action with name `{name}` already registered \
-                (might be registered in `#[action(deprecated_aliases = [...])]`."
-            );
-        }
+        assert!(
+            !self.by_name.contains_key(name),
+            "Action with name `{name}` already registered \
+            (might be registered in `#[action(deprecated_aliases = [...])]`."
+        );
         self.by_name.insert(
             name,
             ActionData {
@@ -306,12 +305,11 @@ impl ActionRegistry {
             },
         );
         for &alias in action.deprecated_aliases {
-            if self.by_name.contains_key(alias) {
-                panic!(
-                    "Action with name `{alias}` already registered. \
-                    `{alias}` is specified in `#[action(deprecated_aliases = [...])]` for action `{name}`."
-                );
-            }
+            assert!(
+                !self.by_name.contains_key(alias),
+                "Action with name `{alias}` already registered. \
+                `{alias}` is specified in `#[action(deprecated_aliases = [...])]` for action `{name}`."
+            );
             self.by_name.insert(
                 alias,
                 ActionData {

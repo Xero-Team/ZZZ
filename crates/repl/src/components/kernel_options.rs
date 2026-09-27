@@ -82,12 +82,12 @@ fn build_grouped_entries(
 
     // Sort Python envs: has_ipykernel first, then by name
     python_envs.sort_by(|a, b| {
-        let (spec_a, spec_b) = match (a, b) {
-            (
-                KernelPickerEntry::Kernel { spec: sa, .. },
-                KernelPickerEntry::Kernel { spec: sb, .. },
-            ) => (sa, sb),
-            _ => return std::cmp::Ordering::Equal,
+        let (
+            KernelPickerEntry::Kernel { spec: spec_a, .. },
+            KernelPickerEntry::Kernel { spec: spec_b, .. },
+        ) = (a, b)
+        else {
+            return std::cmp::Ordering::Equal;
         };
         spec_b
             .has_ipykernel()

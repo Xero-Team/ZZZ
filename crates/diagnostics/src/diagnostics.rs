@@ -1002,7 +1002,7 @@ async fn context_range_for_entry(
         cx,
     )
     .await;
-    let row_range = expanded_range.unwrap_or_else(|| range.start.row..=range.end.row);
+    let row_range = expanded_range.unwrap_or(range.start.row..=range.end.row);
     let row_count = row_range.end().saturating_sub(*row_range.start()) + 1;
     let target_row_count = context.saturating_mul(2).saturating_add(1);
     let row_range = if let Some(rows_to_add) = target_row_count.checked_sub(row_count) {

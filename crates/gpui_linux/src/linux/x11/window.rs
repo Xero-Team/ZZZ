@@ -1606,7 +1606,7 @@ impl PlatformWindow for X11Window {
             .client
             .0
             .upgrade()
-            .map(|ref_cell| {
+            .is_some_and(|ref_cell| {
                 let state = ref_cell.borrow();
                 state
                     .gpu_context
@@ -1614,7 +1614,6 @@ impl PlatformWindow for X11Window {
                     .as_ref()
                     .is_some_and(|ctx| ctx.supports_dual_source_blending())
             })
-            .unwrap_or_default()
     }
 
     fn minimize(&self) {

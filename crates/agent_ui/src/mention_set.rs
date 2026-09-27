@@ -635,9 +635,7 @@ impl MentionSet {
             "No diagnostics found.",
         );
         cx.spawn(async move |_, _| {
-            let content = diagnostics_task
-                .await?
-                .unwrap_or_else(|| no_diagnostics_found);
+            let content = diagnostics_task.await?.unwrap_or(no_diagnostics_found);
             Ok(Mention::Text {
                 content,
                 tracked_buffers: Vec::new(),

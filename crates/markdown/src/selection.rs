@@ -224,7 +224,7 @@ fn snap_out_of_delimiters(spans: &[InlineSpan], selection: Range<usize>) -> Opti
             break;
         }
     }
-    (start < end).then(|| start..end)
+    (start < end).then_some(start..end)
 }
 
 fn selection_is_only_inside_code_spans(spans: &[InlineSpan], selection: &Range<usize>) -> bool {

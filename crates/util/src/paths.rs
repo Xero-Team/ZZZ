@@ -463,13 +463,11 @@ impl PathStyle {
                         (format!("{drive}:"), remainder)
                     }
                 } else if let Some(remainder) = unc_remainder {
-                    let (server, remainder) = match remainder.split_once(['\\', '/']) {
-                        Some(parts) => parts,
-                        None => return path_like.to_string(),
+                    let Some((server, remainder)) = remainder.split_once(['\\', '/']) else {
+                        return path_like.to_string();
                     };
-                    let (share, remainder) = match remainder.split_once(['\\', '/']) {
-                        Some(parts) => parts,
-                        None => return format!("\\\\{server}\\{remainder}"),
+                    let Some((share, remainder)) = remainder.split_once(['\\', '/']) else {
+                        return format!("\\\\{server}\\{remainder}");
                     };
                     (format!("\\\\{server}\\{share}\\"), remainder)
                 } else if let Some(remainder) = path_like
@@ -1344,25 +1342,12 @@ pub enum SortMode {
 }
 
 fn case_group_key(name: &str, order: SortOrder) -> u8 {
-    let first = match name.chars().next() {
-        Some(c) => c,
-        None => return 0,
+    let Some(first) = name.chars().next() else {
+        return 0;
     };
     match order {
-        SortOrder::Upper => {
-            if first.is_lowercase() {
-                1
-            } else {
-                0
-            }
-        }
-        SortOrder::Lower => {
-            if first.is_uppercase() {
-                1
-            } else {
-                0
-            }
-        }
+        SortOrder::Upper => u8::from(first.is_lowercase()),
+        SortOrder::Lower => u8::from(first.is_uppercase()),
         _ => 0,
     }
 }
@@ -1432,12 +1417,16 @@ pub fn compare_rel_paths_by(
                     }
                 }
 
-                let (a_stem, a_ext) = a_leaf_file
-                    .then(|| stem_and_extension(component_a))
-                    .unwrap_or_default();
-                let (b_stem, b_ext) = b_leaf_file
-                    .then(|| stem_and_extension(component_b))
-                    .unwrap_or_default();
+                let (a_stem, a_ext) = if a_leaf_file {
+                    stem_and_extension(component_a)
+                } else {
+                    Default::default()
+                };
+                let (b_stem, b_ext) = if b_leaf_file {
+                    stem_and_extension(component_b)
+                } else {
+                    Default::default()
+                };
                 let a_key = if a_leaf_file {
                     a_stem
                 } else {

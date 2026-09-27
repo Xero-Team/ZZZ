@@ -2571,23 +2571,20 @@ impl OutlinePanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Stateful<Div>> {
-        let search_data = match render_data.get() {
-            Some(search_data) => search_data,
-            None => {
-                if let ItemsDisplayMode::Search(search_state) = &mut self.mode
-                    && let Some(multi_buffer_snapshot) = multi_buffer_snapshot
-                {
-                    search_state
-                        .highlight_search_match_tx
-                        .try_send(HighlightArguments {
-                            multi_buffer_snapshot: multi_buffer_snapshot.clone(),
-                            match_range: match_range.clone(),
-                            search_data: Arc::clone(render_data),
-                        })
-                        .ok();
-                }
-                return None;
+        let Some(search_data) = render_data.get() else {
+            if let ItemsDisplayMode::Search(search_state) = &mut self.mode
+                && let Some(multi_buffer_snapshot) = multi_buffer_snapshot
+            {
+                search_state
+                    .highlight_search_match_tx
+                    .try_send(HighlightArguments {
+                        multi_buffer_snapshot: multi_buffer_snapshot.clone(),
+                        match_range: match_range.clone(),
+                        search_data: Arc::clone(render_data),
+                    })
+                    .ok();
             }
+            return None;
         };
         let search_matches = string_match
             .iter()

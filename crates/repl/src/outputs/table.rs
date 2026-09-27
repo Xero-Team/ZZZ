@@ -278,9 +278,8 @@ impl TableView {
 
 impl Render for TableView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let data = match &self.table.data {
-            Some(data) => data,
-            None => return div().into_any_element(),
+        let Some(data) = &self.table.data else {
+            return div().into_any_element();
         };
 
         let mut headings = serde_json::Map::new();

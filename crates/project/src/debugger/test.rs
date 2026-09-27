@@ -33,9 +33,7 @@ fn register_default_handlers(session: &Session, client: &Arc<DebugAdapterClient>
 
     client.on_request::<dap::requests::SetBreakpoints, _>(move |_, args| {
         let p = Arc::from(Path::new(&args.source.path.unwrap()));
-        if !paths.contains(&p) {
-            panic!("Sent breakpoints for path without any")
-        }
+        assert!(paths.contains(&p), "Sent breakpoints for path without any");
 
         Ok(dap::SetBreakpointsResponse {
             breakpoints: Vec::default(),

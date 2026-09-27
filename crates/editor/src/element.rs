@@ -2275,13 +2275,16 @@ impl EditorElement {
         // The horizontal scrollbar is usually slightly offset to align nicely with
         // indent guides. However, this offset is not needed if indent guides are
         // disabled for the current editor.
-        let content_offset = self
+        let content_offset = if self
             .editor
             .read(cx)
             .show_indent_guides
             .is_none_or(|should_show| should_show)
-            .then_some(content_offset)
-            .unwrap_or_default();
+        {
+            content_offset
+        } else {
+            Default::default()
+        };
 
         Some(EditorScrollbars::from_scrollbar_axes(
             ScrollbarAxes {
@@ -2631,7 +2634,7 @@ impl EditorElement {
         window: &mut Window,
         cx: &mut App,
     ) -> HashMap<DisplayRow, AnyElement> {
-        let max_severity = match self
+        let Some(max_severity) = self
             .editor
             .read(cx)
             .inline_diagnostics_enabled()
@@ -2644,9 +2647,8 @@ impl EditorElement {
                     .into_lsp()
             })
             .flatten()
-        {
-            Some(max_severity) => max_severity,
-            None => return HashMap::default(),
+        else {
+            return HashMap::default();
         };
 
         let active_diagnostics_group = self.editor.read(cx).active_diagnostic_group_id();
@@ -3509,7 +3511,7 @@ impl EditorElement {
                     actions
                         .tasks()
                         .map(|tasks| tasks.position.to_display_point(gutter.snapshot).row())
-                        .or_else(|| match deployed_from {
+                        .or(match deployed_from {
                             Some(CodeActionSource::Indicator(row)) => Some(*row),
                             _ => None,
                         })
@@ -8615,8 +8617,7 @@ pub(crate) fn render_buffer_header(
     let include_root = editor_read
         .project
         .as_ref()
-        .map(|project| project.read(cx).visible_worktrees(cx).count() > 1)
-        .unwrap_or_default();
+        .is_some_and(|project| project.read(cx).visible_worktrees(cx).count() > 1);
     let file = buffer.file();
     let can_open_excerpts = file.is_none_or(|file| file.can_open());
     let path_style = file.map(|file| file.path_style(cx));
@@ -10114,11 +10115,14 @@ impl Element for EditorElement {
 
                     let settings = EditorSettings::get_global(cx);
                     let scrollbars_shown = settings.scrollbar.show != ShowScrollbar::Never;
-                    let vertical_scrollbar_width = (scrollbars_shown
+                    let vertical_scrollbar_width = if scrollbars_shown
                         && settings.scrollbar.axes.vertical
-                        && self.editor.read(cx).show_scrollbars.vertical)
-                        .then_some(style.scrollbar_width)
-                        .unwrap_or_default();
+                        && self.editor.read(cx).show_scrollbars.vertical
+                    {
+                        style.scrollbar_width
+                    } else {
+                        Default::default()
+                    };
                     let minimap_width = self
                         .get_minimap_width(
                             &settings.minimap,
@@ -10780,8 +10784,8 @@ impl Element for EditorElement {
                     );
                     let indent_guides_for_spacers = indent_guides.clone();
 
-                    let blocks = (!is_minimap)
-                        .then(|| {
+                    let blocks = if !is_minimap {
+                        {
                             window.with_element_namespace("blocks", |window| {
                                 self.render_blocks(
                                     start_row..end_row,
@@ -10805,8 +10809,10 @@ impl Element for EditorElement {
                                     cx,
                                 )
                             })
-                        })
-                        .unwrap_or_default();
+                        }
+                    } else {
+                        Default::default()
+                    };
                     let RenderBlocksOutput {
                         non_spacer_blocks: mut blocks,
                         mut spacer_blocks,

@@ -1253,9 +1253,8 @@ impl RunningState {
             self.session.read(cx).task_context().project_env.clone();
         if let Some(Value::Object(env)) = &request.env {
             for (key, value) in env {
-                let value_str = match (key.as_str(), value) {
-                    (_, Value::String(value)) => value,
-                    _ => continue,
+                let (_, Value::String(value_str)) = (key.as_str(), value) else {
+                    continue;
                 };
 
                 envs.insert(key.clone(), value_str.clone());

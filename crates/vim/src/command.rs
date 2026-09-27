@@ -2097,11 +2097,11 @@ pub fn command_interceptor(
                 positions.splice(0..0, no_args_positions.clone());
                 let string = format!("{display_string} {string}");
                 let (range, query) = VimCommand::parse_range(&string[1..]);
-                let action =
-                    match cx.update(|cx| commands(cx).get(cmd_idx)?.parse(&query, &range, cx)) {
-                        Some(action) => action,
-                        _ => continue,
-                    };
+                let Some(action) =
+                    cx.update(|cx| commands(cx).get(cmd_idx)?.parse(&query, &range, cx))
+                else {
+                    continue;
+                };
                 results.push(CommandInterceptItem {
                     action,
                     string,

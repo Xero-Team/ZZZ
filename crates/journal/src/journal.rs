@@ -56,12 +56,9 @@ pub fn init(_: Arc<AppState>, cx: &mut App) {
 
 pub fn new_journal_entry(workspace: &Workspace, window: &mut Window, cx: &mut App) {
     let settings = JournalSettings::get_global(cx);
-    let journal_dir = match journal_dir(&settings.path) {
-        Some(journal_dir) => journal_dir,
-        None => {
-            log::error!("Can't determine journal directory");
-            return;
-        }
+    let Some(journal_dir) = journal_dir(&settings.path) else {
+        log::error!("Can't determine journal directory");
+        return;
     };
     let journal_dir_clone = journal_dir.clone();
 

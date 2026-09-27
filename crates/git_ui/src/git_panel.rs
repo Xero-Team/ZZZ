@@ -3257,11 +3257,8 @@ impl GitPanel {
         };
 
         cx.spawn_in(window, async move |this, cx| {
-            let worktree = match worktree.await {
-                Some(worktree) => worktree,
-                None => {
-                    return;
-                }
+            let Some(worktree) = worktree.await else {
+                return;
             };
 
             let Ok(result) = this.update(cx, |this, cx| {

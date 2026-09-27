@@ -1140,13 +1140,15 @@ impl BranchListDelegate {
                         log::error!("Failed to delete branch: {error}");
                     }
 
-                    let force_delete_prompt = (!force)
-                        .then(|| force_delete_prompt_for_branch_delete_error(&error))
-                        .unwrap_or(false)
-                        .then(|| {
-                            cx.update(|_, cx| unmerged_branch_force_delete_prompt(entry.name(), cx))
-                        })
-                        .transpose()?;
+                    let force_delete_prompt = if !force {
+                        force_delete_prompt_for_branch_delete_error(&error)
+                    } else {
+                        false
+                    }
+                    .then(|| {
+                        cx.update(|_, cx| unmerged_branch_force_delete_prompt(entry.name(), cx))
+                    })
+                    .transpose()?;
 
                     if let Some(prompt_message) = force_delete_prompt {
                         let answer = cx.update(|window, cx| {
@@ -1656,7 +1658,7 @@ impl PickerDelegate for BranchListDelegate {
                     )
                 })
             })
-            .unwrap_or_else(|| (None, None, None, None));
+            .unwrap_or((None, None, None, None));
 
         let is_head_branch = entry.as_branch().is_some_and(|branch| branch.is_head);
         let is_checked_branch = entry.as_branch().is_some_and(|branch| {

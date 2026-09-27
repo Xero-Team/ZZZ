@@ -256,7 +256,7 @@ mod sum_tree_impl {
             TabStopOrderNodeSummary {
                 max_index: self.node_insertion_index,
                 max_path: self.path.clone(),
-                tab_stops: if self.tab_stop { 1 } else { 0 },
+                tab_stops: usize::from(self.tab_stop),
             }
         }
     }

@@ -766,13 +766,11 @@ impl<T: Item> ItemHandle for Entity<T> {
                 self,
                 window,
                 move |workspace, item: &Entity<T>, event, window, cx| {
-                    let pane = if let Some(pane) = workspace
+                    let Some(pane) = workspace
                         .panes_by_item
                         .get(&item.item_id())
                         .and_then(|pane| pane.upgrade())
-                    {
-                        pane
-                    } else {
+                    else {
                         return;
                     };
 

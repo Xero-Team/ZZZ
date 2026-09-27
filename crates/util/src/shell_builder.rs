@@ -58,7 +58,11 @@ impl ShellBuilder {
                 | ShellKind::Rc
                 | ShellKind::Xonsh
                 | ShellKind::Elvish => {
-                    let interactivity = self.interactive.then_some("-i ").unwrap_or_default();
+                    let interactivity = if self.interactive {
+                        "-i "
+                    } else {
+                        Default::default()
+                    };
                     format!(
                         "{PROGRAM} {interactivity}-c '{command_to_use_in_label}'",
                         PROGRAM = self.program

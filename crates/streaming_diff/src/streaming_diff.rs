@@ -34,13 +34,9 @@ impl Matrix {
             return;
         }
 
-        if col1 >= self.cols {
-            panic!("column out of bounds");
-        }
+        assert!(col1 < self.cols, "column out of bounds");
 
-        if col2 >= self.cols {
-            panic!("column out of bounds");
-        }
+        assert!(col2 < self.cols, "column out of bounds");
 
         let ptr = self.cells.as_mut_ptr();
         // SAFETY: `col1` and `col2` are in bounds (checked above).
@@ -53,24 +49,16 @@ impl Matrix {
     }
 
     fn get(&self, row: usize, col: usize) -> f64 {
-        if row >= self.rows {
-            panic!("row out of bounds")
-        }
+        assert!(row < self.rows, "row out of bounds");
 
-        if col >= self.cols {
-            panic!("column out of bounds")
-        }
+        assert!(col < self.cols, "column out of bounds");
         self.cells[col * self.rows + row]
     }
 
     fn set(&mut self, row: usize, col: usize, value: f64) {
-        if row >= self.rows {
-            panic!("row out of bounds")
-        }
+        assert!(row < self.rows, "row out of bounds");
 
-        if col >= self.cols {
-            panic!("column out of bounds")
-        }
+        assert!(col < self.cols, "column out of bounds");
 
         self.cells[col * self.rows + row] = value;
     }

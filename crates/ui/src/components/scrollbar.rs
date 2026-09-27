@@ -1368,8 +1368,8 @@ impl<T: ScrollableHandle> Element for ScrollbarElement<T> {
                             track_color.fade_out(fade);
                         }
 
-                        let border_edges = has_border
-                            .then(|| match axis {
+                        let border_edges = if has_border {
+                            match axis {
                                 ScrollbarAxis::Horizontal => Edges {
                                     top: BORDER_WIDTH,
                                     ..Default::default()
@@ -1378,8 +1378,10 @@ impl<T: ScrollableHandle> Element for ScrollbarElement<T> {
                                     left: BORDER_WIDTH,
                                     ..Default::default()
                                 },
-                            })
-                            .unwrap_or_default();
+                            }
+                        } else {
+                            Default::default()
+                        };
 
                         let border_color = if has_border {
                             cx.theme().colors().border_variant.opacity(0.6)

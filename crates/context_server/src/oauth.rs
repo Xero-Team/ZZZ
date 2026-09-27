@@ -327,9 +327,8 @@ fn parse_auth_params(input: &str) -> collections::HashMap<String, String> {
         }
 
         // Find the key (everything before '=').
-        let eq_pos = match remaining.find('=') {
-            Some(pos) => pos,
-            None => break,
+        let Some(eq_pos) = remaining.find('=') else {
+            break;
         };
 
         let key = remaining[..eq_pos].trim().to_lowercase();

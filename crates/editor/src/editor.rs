@@ -2576,8 +2576,8 @@ impl Editor {
             stored_review_comments: Vec::new(),
             next_review_comment_id: 0,
             hovered_diff_hunk_row: None,
-            _subscriptions: (!is_minimap)
-                .then(|| {
+            _subscriptions: if !is_minimap {
+                {
                     vec![
                         cx.observe(&multi_buffer, Self::on_buffer_changed),
                         cx.subscribe_in(&multi_buffer, window, Self::on_buffer_event),
@@ -2587,8 +2587,10 @@ impl Editor {
                         cx.observe_global_in::<GlobalTheme>(window, Self::theme_changed),
                         observe_buffer_font_size_adjustment(cx, |_, cx| cx.notify()),
                     ]
-                })
-                .unwrap_or_default(),
+                }
+            } else {
+                Default::default()
+            },
             runnables: RunnableData::new(),
             pull_diagnostics_task: Task::ready(()),
             colors: None,
@@ -5986,12 +5988,9 @@ impl Editor {
             return None;
         }
 
-        let actions_menu =
-            if let CodeContextMenu::CodeActions(menu) = self.hide_context_menu(window, cx)? {
-                menu
-            } else {
-                return None;
-            };
+        let CodeContextMenu::CodeActions(actions_menu) = self.hide_context_menu(window, cx)? else {
+            return None;
+        };
 
         let action_ix = action.item_ix.unwrap_or(actions_menu.selected_item);
         let action = actions_menu.actions.get(action_ix)?;
@@ -9304,7 +9303,7 @@ impl Editor {
         }
 
         for (anchor, breakpoint) in self.breakpoints_at_cursors(window, cx) {
-            let breakpoint = breakpoint.unwrap_or_else(|| Breakpoint {
+            let breakpoint = breakpoint.unwrap_or(Breakpoint {
                 message: None,
                 state: BreakpointState::Enabled,
                 condition: None,
@@ -9348,7 +9347,7 @@ impl Editor {
                     .breakpoint_at_anchor(breakpoint_position, &snapshot, cx)
                     .map(|(anchor, breakpoint)| (anchor, Some(breakpoint)));
 
-                breakpoint.unwrap_or_else(|| (breakpoint_position, None))
+                breakpoint.unwrap_or((breakpoint_position, None))
             })
             // There might be multiple cursors on the same line; all of them should have the same anchors though as their breakpoints positions, which makes it possible to sort and dedup the list.
             .collect::<HashMap<Anchor, _>>();
@@ -13804,14 +13803,11 @@ impl Editor {
                     .flatten()
                     .copied();
 
-                let leading_space_len = if suffix_start_column > 0
-                    && line_end_bytes.next() == Some(b' ')
-                    && comment_suffix_has_leading_space
-                {
-                    1
-                } else {
-                    0
-                };
+                let leading_space_len = u32::from(
+                    suffix_start_column > 0
+                        && line_end_bytes.next() == Some(b' ')
+                        && comment_suffix_has_leading_space,
+                );
 
                 // If this line currently begins with the line comment prefix, then record
                 // the range containing the prefix.
@@ -13828,11 +13824,9 @@ impl Editor {
                 let start_column = snapshot
                     .indent_size_for_line(MultiBufferRow(selection.start.row))
                     .len;
-                let language = if let Some(language) =
+                let Some(language) =
                     snapshot.language_scope_at(Point::new(selection.start.row, start_column))
-                {
-                    language
-                } else {
+                else {
                     continue;
                 };
 
@@ -21879,10 +21873,9 @@ impl Editor {
                     .read(cx)
                     .snapshot()
                     .resolve_file_path(
-                        self.project
-                            .as_ref()
-                            .map(|project| project.read(cx).visible_worktrees(cx).count() > 1)
-                            .unwrap_or_default(),
+                        self.project.as_ref().is_some_and(|project| {
+                            project.read(cx).visible_worktrees(cx).count() > 1
+                        }),
                         cx,
                     )
                     .unwrap_or_else(|| multi_buffer.title(cx).to_string())
@@ -22446,9 +22439,8 @@ fn list_delimiter_for_newline(
         .collect();
 
     for ordered_config in language.ordered_list() {
-        let regex = match Regex::new(&ordered_config.pattern) {
-            Ok(r) => r,
-            Err(_) => continue,
+        let Ok(regex) = Regex::new(&ordered_config.pattern) else {
+            continue;
         };
 
         if let Some(captures) = regex.captures(&candidate) {
@@ -22542,9 +22534,8 @@ fn is_list_prefix_row(
         .take(ORDERED_LIST_MAX_MARKER_LEN)
         .collect();
     for ordered_config in language.ordered_list() {
-        let regex = match Regex::new(&ordered_config.pattern) {
-            Ok(r) => r,
-            Err(_) => continue,
+        let Ok(regex) = Regex::new(&ordered_config.pattern) else {
+            continue;
         };
         if let Some(captures) = regex.captures(&ordered_list_candidate) {
             return captures.get(0).is_some();
@@ -23215,9 +23206,7 @@ impl CompletionProvider for Entity<Project> {
         cx: &mut Context<Editor>,
     ) -> bool {
         let mut chars = text.chars();
-        let char = if let Some(char) = chars.next() {
-            char
-        } else {
+        let Some(char) = chars.next() else {
             return false;
         };
         if chars.next().is_some() {
@@ -24478,7 +24467,7 @@ pub fn styled_runs_for_code_label<'a>(
     if label.runs.is_empty() {
         let desc_start = label.filter_range.end;
         let fade_run =
-            (desc_start < label.text.len()).then(|| (desc_start..label.text.len(), fade_out));
+            (desc_start < label.text.len()).then_some((desc_start..label.text.len(), fade_out));
         return Either::Left(fade_run.into_iter());
     }
 

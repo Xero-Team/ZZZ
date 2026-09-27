@@ -637,9 +637,12 @@ fn load_all_actions() -> ActionManifest {
             manifest
         }
         Err(err) => {
-            if std::env::var("CI").is_ok() {
-                panic!("actions.json not found at {}: {}", asset_path, err);
-            }
+            assert!(
+                std::env::var("CI").is_err(),
+                "actions.json not found at {}: {}",
+                asset_path,
+                err
+            );
             eprintln!(
                 "Warning: actions.json not found, action validation will be skipped: {}",
                 err

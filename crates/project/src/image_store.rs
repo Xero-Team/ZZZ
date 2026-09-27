@@ -786,9 +786,7 @@ impl LocalImageStore {
             })
             .ok()
             .flatten();
-        let image = if let Some(image) = image {
-            image
-        } else {
+        let Some(image) = image else {
             self.local_image_ids_by_path.remove(&project_path);
             self.local_image_ids_by_entry_id.remove(&entry_id);
             return None;

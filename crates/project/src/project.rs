@@ -2445,9 +2445,10 @@ impl Project {
         project_searchable: bool,
         cx: &mut Context<Self>,
     ) -> Entity<Buffer> {
-        if self.is_remote() {
-            panic!("called create_local_buffer on a remote project")
-        }
+        assert!(
+            !self.is_remote(),
+            "called create_local_buffer on a remote project"
+        );
         self.buffer_store.update(cx, |buffer_store, cx| {
             buffer_store.create_local_buffer(text, language, project_searchable, cx)
         })
@@ -4979,11 +4980,7 @@ impl Project {
         cx: &mut AsyncApp,
     ) -> Result<proto::OpenBufferResponse> {
         this.update(cx, |this, cx| {
-            let is_private = buffer
-                .read(cx)
-                .file()
-                .map(|f| f.is_private())
-                .unwrap_or_default();
+            let is_private = buffer.read(cx).file().is_some_and(|f| f.is_private());
             anyhow::ensure!(!is_private, ErrorCode::UnsharedItem);
             Ok(proto::OpenBufferResponse {
                 buffer_id: this.create_buffer_for_peer(&buffer, peer_id, cx).into(),

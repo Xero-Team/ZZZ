@@ -458,7 +458,7 @@ pub fn get_prompt(
             .request::<context_server::types::requests::PromptsGet>(
                 context_server::types::PromptsGetParams {
                     name: prompt_name,
-                    arguments: (!arguments.is_empty()).then(|| arguments),
+                    arguments: (!arguments.is_empty()).then_some(arguments),
                     meta: None,
                 },
             )

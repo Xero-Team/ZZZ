@@ -581,9 +581,7 @@ impl CompletionProvider for ConsoleQueryBarCompletionProvider {
         cx: &mut Context<Editor>,
     ) -> bool {
         let mut chars = text.chars();
-        let char = if let Some(char) = chars.next() {
-            char
-        } else {
+        let Some(char) = chars.next() else {
             return false;
         };
 

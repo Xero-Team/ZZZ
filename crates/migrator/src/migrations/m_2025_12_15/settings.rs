@@ -40,9 +40,8 @@ fn is_restore_on_startup_setting(contents: &str, mat: &QueryMatch, query: &Query
     // Actually, restore_on_startup can be at the root level too, so we need to handle both cases
     // The SETTINGS_NESTED_KEY_VALUE_PATTERN captures parent_key and setting_name
 
-    let setting_name_ix = match query.capture_index_for_name("setting_name") {
-        Some(ix) => ix,
-        None => return false,
+    let Some(setting_name_ix) = query.capture_index_for_name("setting_name") else {
+        return false;
     };
     let setting_name_range = match mat.nodes_for_capture_index(setting_name_ix).next() {
         Some(node) => node.byte_range(),

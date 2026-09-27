@@ -544,9 +544,8 @@ impl ExtensionBuilder {
                     continue;
                 }
                 End { .. } => {
-                    let mut parent = match stack.pop() {
-                        Some(c) => c,
-                        None => break,
+                    let Some(mut parent) = stack.pop() else {
+                        break;
                     };
                     if output.starts_with(&wasm_encoder::Component::HEADER) {
                         parent.push(ComponentSectionId::Component as u8);

@@ -49,9 +49,10 @@ pub fn init_env_filter(filter: env_config::EnvFilter) {
     if let Some(level_max) = filter.level_global {
         LEVEL_ENABLED_MAX_STATIC.store(level_max as u8, Ordering::Release)
     }
-    if ENV_FILTER.set(filter).is_err() {
-        panic!("Environment filter cannot be initialized twice");
-    }
+    assert!(
+        ENV_FILTER.set(filter).is_ok(),
+        "Environment filter cannot be initialized twice"
+    )
 }
 
 pub fn is_possibly_enabled_level(level: log::Level) -> bool {

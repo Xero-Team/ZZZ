@@ -233,9 +233,10 @@ impl<T: 'static> core::ops::DerefMut for Lease<T> {
 
 impl<T> Drop for Lease<T> {
     fn drop(&mut self) {
-        if self.entity.is_some() && !panicking() {
-            panic!("Leases must be ended with EntityMap::end_lease")
-        }
+        assert!(
+            self.entity.is_none() || panicking(),
+            "Leases must be ended with EntityMap::end_lease"
+        );
     }
 }
 
@@ -1076,9 +1077,10 @@ impl LeakDetector {
             }
         }
 
-        if !out.is_empty() {
-            panic!("New entity leaks detected since snapshot:\n{out}");
-        }
+        assert!(
+            out.is_empty(),
+            "New entity leaks detected since snapshot:\n{out}"
+        )
     }
 }
 

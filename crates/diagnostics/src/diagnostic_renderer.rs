@@ -174,7 +174,7 @@ impl editor::DiagnosticRenderer for DiagnosticRenderer {
         );
         blocks
             .into_iter()
-            .find_map(|block| (block.initial_range == range).then(|| block.markdown))
+            .find_map(|block| (block.initial_range == range).then_some(block.markdown))
     }
 
     fn open_link(

@@ -131,7 +131,7 @@ impl SharedScrollAnchor {
 impl OngoingScroll {
     fn new() -> Self {
         Self {
-            last_event: Instant::now() - SCROLL_EVENT_SEPARATION,
+            last_event: Instant::now().checked_sub(SCROLL_EVENT_SEPARATION).unwrap(),
             axis: None,
         }
     }

@@ -1035,6 +1035,26 @@ multiple_unsafe_ops_per_block = "deny"
 needless_for_each = "deny"
 mem_forget = "deny"
 
+# Clarity and control-flow lints promoted once the whole workspace was fixed
+# for them: they replace manual matches and if/panic pairs with the idiom the
+# standard library or language now provides (let-else, assert!, checked time
+# math, is_some_and, ...).
+manual_assert = "deny"
+manual_let_else = "deny"
+manual_ok_or = "deny"
+manual_ok_err = "deny"
+manual_clamp = "deny"
+manual_is_variant_and = "deny"
+bool_to_int_with_if = "deny"
+obfuscated_if_else = "deny"
+unnecessary_lazy_evaluations = "deny"
+unnecessary_unwrap = "deny"
+needless_question_mark = "deny"
+mut_mutex_lock = "deny"
+empty_line_after_doc_comments = "deny"
+inefficient_to_string = "deny"
+unchecked_time_subtraction = "deny"
+
 # We currently do not restrict any style rules
 # as it slows down shipping code to ZZZ.
 #

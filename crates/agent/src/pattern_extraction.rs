@@ -97,9 +97,8 @@ pub fn extract_terminal_pattern_display(command: &str) -> Option<String> {
 /// filtered out, and duplicate command names are deduplicated while preserving
 /// order.
 pub fn extract_all_terminal_patterns(command: &str) -> Vec<PermissionPattern> {
-    let commands = match extract_commands(command) {
-        Some(commands) => commands,
-        None => return Vec::new(),
+    let Some(commands) = extract_commands(command) else {
+        return Vec::new();
     };
 
     let mut results = Vec::new();

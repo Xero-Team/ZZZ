@@ -1420,7 +1420,7 @@ impl Session {
     fn session_state(&self) -> &SessionSnapshot {
         self.selected_snapshot_index
             .and_then(|ix| self.snapshots.get(ix))
-            .unwrap_or_else(|| &self.active_snapshot)
+            .unwrap_or(&self.active_snapshot)
     }
 
     fn push_to_history(&mut self) {
@@ -2383,7 +2383,7 @@ impl Session {
         let command = NextCommand {
             inner: StepCommand {
                 thread_id: thread_id.0,
-                granularity: supports_stepping_granularity.then(|| granularity),
+                granularity: supports_stepping_granularity.then_some(granularity),
                 single_thread: supports_single_thread_execution_requests,
             },
         };
@@ -2415,7 +2415,7 @@ impl Session {
         let command = StepInCommand {
             inner: StepCommand {
                 thread_id: thread_id.0,
-                granularity: supports_stepping_granularity.then(|| granularity),
+                granularity: supports_stepping_granularity.then_some(granularity),
                 single_thread: supports_single_thread_execution_requests,
             },
         };
@@ -2447,7 +2447,7 @@ impl Session {
         let command = StepOutCommand {
             inner: StepCommand {
                 thread_id: thread_id.0,
-                granularity: supports_stepping_granularity.then(|| granularity),
+                granularity: supports_stepping_granularity.then_some(granularity),
                 single_thread: supports_single_thread_execution_requests,
             },
         };
@@ -2479,7 +2479,7 @@ impl Session {
         let command = StepBackCommand {
             inner: StepCommand {
                 thread_id: thread_id.0,
-                granularity: supports_stepping_granularity.then(|| granularity),
+                granularity: supports_stepping_granularity.then_some(granularity),
                 single_thread: supports_single_thread_execution_requests,
             },
         };

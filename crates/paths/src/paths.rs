@@ -122,9 +122,10 @@ pub fn remote_server_binary_name(channel: &str, version: &str, windows: bool) ->
 /// * The directory's path cannot be canonicalized to an absolute path
 /// * The directory cannot be created
 pub fn set_custom_data_dir(dir: &str) -> &'static PathBuf {
-    if CURRENT_DATA_DIR.get().is_some() || CONFIG_DIR.get().is_some() {
-        panic!("set_custom_data_dir called after data_dir or config_dir was initialized");
-    }
+    assert!(
+        CURRENT_DATA_DIR.get().is_none() && CONFIG_DIR.get().is_none(),
+        "set_custom_data_dir called after data_dir or config_dir was initialized"
+    );
     CUSTOM_DATA_DIR.get_or_init(|| {
         let path = PathBuf::from(dir);
         std::fs::create_dir_all(&path).expect("failed to create custom data directory");

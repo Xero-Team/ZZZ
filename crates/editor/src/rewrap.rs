@@ -156,9 +156,7 @@ impl Editor {
                 .filter(|row| !buffer.is_line_blank(MultiBufferRow(*row)))
                 .peekable();
 
-            let first_row = if let Some(&row) = non_blank_rows_iter.peek() {
-                row
-            } else {
+            let Some(&first_row) = non_blank_rows_iter.peek() else {
                 return Vec::new();
             };
 

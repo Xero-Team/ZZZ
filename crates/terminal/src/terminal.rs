@@ -2118,9 +2118,8 @@ impl Terminal {
 
             // Doesn't make sense to scroll the alt screen
             if !self.last_content.mode.contains(TermMode::ALT_SCREEN) {
-                let scroll_lines = match self.drag_line_delta(e, region) {
-                    Some(value) => value,
-                    None => return,
+                let Some(scroll_lines) = self.drag_line_delta(e, region) else {
+                    return;
                 };
 
                 self.events
@@ -2519,24 +2518,21 @@ impl Terminal {
             self.child_exited = Some(e);
         }
         let _ = self.write_init_command_after_startup(cx);
-        let task = match &mut self.task {
-            Some(task) => task,
-            None => {
-                // For interactive shells (no task), we need to differentiate:
-                // 1. User-initiated exits (typed "exit", Ctrl+D, etc.) - always close,
-                //    even if the shell exits with a non-zero code (e.g. after `false`).
-                // 2. Shell spawn failures (bad $SHELL) - don't close, so the user sees
-                //    the error. Spawn failures never receive keyboard input.
-                let should_close = if self.keyboard_input_sent {
-                    true
-                } else {
-                    self.child_exited.is_none_or(|e| e.code() == Some(0))
-                };
-                if should_close {
-                    cx.emit(Event::CloseTerminal);
-                }
-                return;
+        let Some(task) = &mut self.task else {
+            // For interactive shells (no task), we need to differentiate:
+            // 1. User-initiated exits (typed "exit", Ctrl+D, etc.) - always close,
+            //    even if the shell exits with a non-zero code (e.g. after `false`).
+            // 2. Shell spawn failures (bad $SHELL) - don't close, so the user sees
+            //    the error. Spawn failures never receive keyboard input.
+            let should_close = if self.keyboard_input_sent {
+                true
+            } else {
+                self.child_exited.is_none_or(|e| e.code() == Some(0))
+            };
+            if should_close {
+                cx.emit(Event::CloseTerminal);
             }
+            return;
         };
         if task.status != TaskStatus::Running {
             return;
@@ -2585,7 +2581,7 @@ impl Terminal {
     }
 
     pub fn clone_builder(&self, cx: &App, cwd: Option<PathBuf>) -> Task<Result<TerminalBuilder>> {
-        let working_directory = self.working_directory().or_else(|| cwd);
+        let working_directory = self.working_directory().or(cwd);
         TerminalBuilder::new(
             working_directory,
             None,

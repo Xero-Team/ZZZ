@@ -1684,8 +1684,7 @@ impl LinuxClient for X11Client {
             .mouse_focused_window
             .and_then(|w| state.windows.get(&w));
 
-        let should_change = *current_style != style
-            && (window.is_none() || window.is_some_and(|w| !w.is_blocked()));
+        let should_change = *current_style != style && window.is_none_or(|w| !w.is_blocked());
 
         if !should_change {
             return;

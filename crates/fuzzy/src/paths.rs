@@ -269,9 +269,9 @@ fn distance_between_paths(path: &RelPath, relative_to: &RelPath) -> usize {
     while path_components
         .next()
         .zip(relative_components.next())
-        .map(|(path_component, relative_component)| path_component == relative_component)
-        .unwrap_or_default()
-    {}
+        .is_some_and(|(path_component, relative_component)| path_component == relative_component)
+    {
+    }
     path_components.count() + relative_components.count() + 1
 }
 

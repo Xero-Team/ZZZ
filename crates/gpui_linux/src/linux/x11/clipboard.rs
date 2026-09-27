@@ -400,12 +400,9 @@ impl Inner {
 
         while Instant::now() < timeout_end {
             let event = reader.conn.poll_for_event().map_err(into_unknown)?;
-            let event = match event {
-                Some(e) => e,
-                None => {
-                    std::thread::sleep(Duration::from_millis(1));
-                    continue;
-                }
+            let Some(event) = event else {
+                std::thread::sleep(Duration::from_millis(1));
+                continue;
             };
             match event {
                 // The first response after requesting a selection.
@@ -661,14 +658,11 @@ impl Inner {
     }
 
     fn handle_selection_request(&self, event: SelectionRequestEvent) -> Result<()> {
-        let selection = match self.kind_of(event.selection) {
-            Some(kind) => kind,
-            None => {
-                log::warn!(
-                    "Received a selection request to a selection other than the CLIPBOARD, PRIMARY or SECONDARY. This is unexpected."
-                );
-                return Ok(());
-            }
+        let Some(selection) = self.kind_of(event.selection) else {
+            log::warn!(
+                "Received a selection request to a selection other than the CLIPBOARD, PRIMARY or SECONDARY. This is unexpected."
+            );
+            return Ok(());
         };
 
         let success;

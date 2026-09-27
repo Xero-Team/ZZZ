@@ -1732,7 +1732,7 @@ fn editor_page() -> SettingsPage {
                             let settings_value = settings_content
                                 .workspace
                                 .autosave
-                                .get_or_insert_with(|| settings::AutosaveSetting::Off);
+                                .get_or_insert(settings::AutosaveSetting::Off);
                             *settings_value = match value {
                                 settings::AutosaveSettingDiscriminants::Off => {
                                     settings::AutosaveSetting::Off
@@ -7400,7 +7400,7 @@ fn panels_page() -> SettingsPage {
                         .as_ref()?
                         .limit_content_width
                         .unwrap_or(true);
-                    Some(if enabled { 1 } else { 0 })
+                    Some(usize::from(enabled))
                 },
                 fields: vec![
                     vec![],
@@ -7833,7 +7833,7 @@ fn terminal_page() -> SettingsPage {
                                     .get_or_insert_default()
                                     .project
                                     .working_directory
-                                    .get_or_insert_with(|| settings::WorkingDirectory::CurrentProjectDirectory);
+                                    .get_or_insert(settings::WorkingDirectory::CurrentProjectDirectory);
                                 *settings_value = match value {
                                     settings::WorkingDirectoryDiscriminants::CurrentFileDirectory => {
                                         settings::WorkingDirectory::CurrentFileDirectory
@@ -8598,7 +8598,7 @@ fn version_control_page() -> SettingsPage {
                         .as_ref()?
                         .disable_git
                         .unwrap_or(false);
-                    Some(if disabled { 0 } else { 1 })
+                    Some(usize::from(!disabled))
                 },
                 fields: vec![
                     vec![],
@@ -11013,7 +11013,7 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
                         .as_ref()?
                         .limit_content_width
                         .unwrap_or(true);
-                    Some(if enabled { 1 } else { 0 })
+                    Some(usize::from(enabled))
                 },
                 fields: vec![
                     vec![],

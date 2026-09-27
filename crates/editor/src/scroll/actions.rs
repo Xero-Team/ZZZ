@@ -91,11 +91,11 @@ impl Editor {
                 as u32;
 
         let new_screen_top = selection_head.row().0;
-        let header_offset = display_snapshot
-            .buffer_snapshot()
-            .show_headers()
-            .then(|| display_snapshot.buffer_header_height())
-            .unwrap_or(0);
+        let header_offset = if display_snapshot.buffer_snapshot().show_headers() {
+            display_snapshot.buffer_header_height()
+        } else {
+            0
+        };
 
         // If the number of sticky headers exceeds the vertical_scroll_margin,
         // we need to adjust the scroll top a bit further

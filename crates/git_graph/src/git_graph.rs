@@ -1429,7 +1429,7 @@ impl GitGraph {
 
         let is_path_history = matches!(self.log_source, LogSource::Path(_));
         let graph_fraction = if is_path_history { 0.0 } else { fractions[0] };
-        let offset = if is_path_history { 0 } else { 1 };
+        let offset = usize::from(!is_path_history);
 
         [
             graph_fraction,

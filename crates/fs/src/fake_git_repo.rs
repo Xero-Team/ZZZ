@@ -565,13 +565,11 @@ impl GitRepository for FakeGitRepository {
             if let Ok(mut entries) = fs.read_dir(&worktrees_dir).await {
                 use futures::StreamExt;
                 while let Some(Ok(entry_path)) = entries.next().await {
-                    let head_content = match fs.load(&entry_path.join("HEAD")).await {
-                        Ok(content) => content,
-                        Err(_) => continue,
+                    let Ok(head_content) = fs.load(&entry_path.join("HEAD")).await else {
+                        continue;
                     };
-                    let gitdir_content = match fs.load(&entry_path.join("gitdir")).await {
-                        Ok(content) => content,
-                        Err(_) => continue,
+                    let Ok(gitdir_content) = fs.load(&entry_path.join("gitdir")).await else {
+                        continue;
                     };
 
                     let ref_name = head_content

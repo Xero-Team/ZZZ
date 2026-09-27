@@ -4472,14 +4472,13 @@ mod tests {
         fs::create_dir_all(&worktree_dir).unwrap();
         fs::write(worktree_dir.join(".git"), "not a gitdir file\n").unwrap();
 
-        let error = match RealGitRepository::new(
+        let Err(error) = RealGitRepository::new(
             &worktree_dir.join(".git"),
             None,
             Some("git".into()),
             cx.executor(),
-        ) {
-            Ok(_) => panic!("malformed .git file should be rejected"),
-            Err(error) => error,
+        ) else {
+            panic!("malformed .git file should be rejected");
         };
 
         assert!(

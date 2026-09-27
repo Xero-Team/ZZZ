@@ -1702,7 +1702,7 @@ impl ThreadView {
         if is_send_now {
             let is_generating =
                 self.thread.read(cx).status() == acp_thread::ThreadStatus::Generating;
-            self.skip_queue_processing_count += if is_generating { 1 } else { 0 };
+            self.skip_queue_processing_count += usize::from(is_generating);
         }
 
         let cancelled = self.thread.update(cx, |thread, cx| thread.cancel(cx));

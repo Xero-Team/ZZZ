@@ -3462,37 +3462,39 @@ impl MultiBufferSnapshot {
                 range.end.row + 1
             };
 
-            let word_diffs =
-                (!hunk.base_word_diffs.is_empty() || !hunk.buffer_word_diffs.is_empty())
-                    .then(|| {
-                        let mut word_diffs = Vec::new();
+            let word_diffs = if !hunk.base_word_diffs.is_empty()
+                || !hunk.buffer_word_diffs.is_empty()
+            {
+                {
+                    let mut word_diffs = Vec::new();
 
-                        if self.show_deleted_hunks || is_inverted {
-                            let hunk_start_offset = if is_inverted {
-                                Anchor::in_buffer(
-                                    excerpt.path_key_index,
-                                    buffer_snapshot.anchor_after(hunk.diff_base_byte_range.start),
-                                )
+                    if self.show_deleted_hunks || is_inverted {
+                        let hunk_start_offset = if is_inverted {
+                            Anchor::in_buffer(
+                                excerpt.path_key_index,
+                                buffer_snapshot.anchor_after(hunk.diff_base_byte_range.start),
+                            )
+                            .to_offset(self)
+                        } else {
+                            Anchor::in_buffer(excerpt.path_key_index, hunk.buffer_range.start)
                                 .to_offset(self)
-                            } else {
-                                Anchor::in_buffer(excerpt.path_key_index, hunk.buffer_range.start)
-                                    .to_offset(self)
-                            };
+                        };
 
-                            word_diffs.extend(hunk.base_word_diffs.iter().map(|diff| {
-                                hunk_start_offset + diff.start..hunk_start_offset + diff.end
-                            }));
-                        }
+                        word_diffs.extend(hunk.base_word_diffs.iter().map(|diff| {
+                            hunk_start_offset + diff.start..hunk_start_offset + diff.end
+                        }));
+                    }
 
-                        if !is_inverted {
-                            word_diffs.extend(hunk.buffer_word_diffs.into_iter().map(|diff| {
-                                Anchor::range_in_buffer(excerpt.path_key_index, diff)
-                                    .to_offset(self)
-                            }));
-                        }
-                        word_diffs
-                    })
-                    .unwrap_or_default();
+                    if !is_inverted {
+                        word_diffs.extend(hunk.buffer_word_diffs.into_iter().map(|diff| {
+                            Anchor::range_in_buffer(excerpt.path_key_index, diff).to_offset(self)
+                        }));
+                    }
+                    word_diffs
+                }
+            } else {
+                Default::default()
+            };
 
             let buffer_range = if is_inverted {
                 buffer_snapshot.anchor_after(hunk.diff_base_byte_range.start)
@@ -6962,14 +6964,13 @@ impl MultiBufferSnapshot {
         }
         assert_eq!(all_buffer_path_keys, all_excerpt_path_keys);
 
-        if self.diff_transforms.summary().input != self.excerpts.summary().text {
-            panic!(
-                "incorrect input summary. expected {:?}, got {:?}. transforms: {:+?}",
-                self.excerpts.summary().text,
-                self.diff_transforms.summary().input,
-                self.diff_transforms.items(()),
-            );
-        }
+        assert!(
+            self.diff_transforms.summary().input == self.excerpts.summary().text,
+            "incorrect input summary. expected {:?}, got {:?}. transforms: {:+?}",
+            self.excerpts.summary().text,
+            self.diff_transforms.summary().input,
+            self.diff_transforms.items(()),
+        );
 
         let mut prev_transform: Option<&DiffTransform> = None;
         for item in self.diff_transforms.iter() {
@@ -6989,9 +6990,10 @@ impl MultiBufferSnapshot {
                         self.diff_transforms.items(())
                     );
                 }
-                if summary.len == MultiBufferOffset(0) && !self.is_empty() {
-                    panic!("empty buffer content transform");
-                }
+                assert!(
+                    summary.len != MultiBufferOffset(0) || self.is_empty(),
+                    "empty buffer content transform"
+                )
             }
             prev_transform = Some(item);
         }

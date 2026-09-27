@@ -694,12 +694,12 @@ fn wl_seat_version(version: u32) -> u32 {
     const WL_SEAT_MIN_VERSION: u32 = 5;
     const WL_SEAT_MAX_VERSION: u32 = 9;
 
-    if version < WL_SEAT_MIN_VERSION {
-        panic!(
-            "wl_seat below required version: {} < {}",
-            version, WL_SEAT_MIN_VERSION
-        );
-    }
+    assert!(
+        version >= WL_SEAT_MIN_VERSION,
+        "wl_seat below required version: {} < {}",
+        version,
+        WL_SEAT_MIN_VERSION
+    );
 
     version.clamp(WL_SEAT_MIN_VERSION, WL_SEAT_MAX_VERSION)
 }
@@ -708,12 +708,12 @@ fn wl_output_version(version: u32) -> u32 {
     const WL_OUTPUT_MIN_VERSION: u32 = 2;
     const WL_OUTPUT_MAX_VERSION: u32 = 4;
 
-    if version < WL_OUTPUT_MIN_VERSION {
-        panic!(
-            "wl_output below required version: {} < {}",
-            version, WL_OUTPUT_MIN_VERSION
-        );
-    }
+    assert!(
+        version >= WL_OUTPUT_MIN_VERSION,
+        "wl_output below required version: {} < {}",
+        version,
+        WL_OUTPUT_MIN_VERSION
+    );
 
     version.clamp(WL_OUTPUT_MIN_VERSION, WL_OUTPUT_MAX_VERSION)
 }

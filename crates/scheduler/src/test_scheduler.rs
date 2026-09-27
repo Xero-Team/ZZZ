@@ -495,12 +495,11 @@ impl TestScheduler {
                 let now = Instant::now();
                 if now >= effective_deadline {
                     // Check if we hit the hard timeout
-                    if now >= hard_deadline {
-                        panic!(
-                            "Test timed out after 15 seconds while parking. \
-                            This may indicate a deadlock or missing waker.",
-                        );
-                    }
+                    assert!(
+                        now < hard_deadline,
+                        "Test timed out after 15 seconds while parking. \
+                        This may indicate a deadlock or missing waker.",
+                    );
                     // Hit the provided deadline
                     return false;
                 }

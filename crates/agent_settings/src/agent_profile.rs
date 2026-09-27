@@ -60,8 +60,7 @@ impl AgentProfile {
             .unwrap_or_default();
         let enable_all_context_servers = base_profile
             .as_ref()
-            .map(|profile| profile.enable_all_context_servers)
-            .unwrap_or_default();
+            .is_some_and(|profile| profile.enable_all_context_servers);
         let context_servers = base_profile
             .as_ref()
             .map(|profile| profile.context_servers.clone())

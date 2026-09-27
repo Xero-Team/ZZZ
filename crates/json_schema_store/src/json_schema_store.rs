@@ -143,9 +143,8 @@ pub fn handle_schema_request(
     uri: String,
     cx: &mut AsyncApp,
 ) -> Task<Result<String>> {
-    let path = match uri.strip_prefix(SCHEMA_URI_PREFIX) {
-        Some(path) => path,
-        None => return Task::ready(Err(anyhow::anyhow!("Invalid schema URI: {}", uri))),
+    let Some(path) = uri.strip_prefix(SCHEMA_URI_PREFIX) else {
+        return Task::ready(Err(anyhow::anyhow!("Invalid schema URI: {}", uri)));
     };
 
     if let Some(json) = resolve_static_schema(path) {
@@ -194,9 +193,8 @@ fn resolve_static_schema(path: &str) -> Option<String> {
         }
 
         "action" => {
-            let normalized_action_name = match rest {
-                Some(name) => name,
-                None => return None,
+            let Some(normalized_action_name) = rest else {
+                return None;
             };
             let action_name = denormalize_action_name(normalized_action_name);
 

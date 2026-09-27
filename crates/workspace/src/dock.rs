@@ -748,13 +748,12 @@ impl Dock {
                 entry.panel.activation_priority(cx)
             }) {
             Ok(ix) => {
-                if cfg!(debug_assertions) {
-                    panic!(
-                        "Panels `{}` and `{}` have the same activation priority. Each panel must have a unique priority so the status bar order is deterministic.",
-                        T::panel_key(),
-                        self.panel_entries[ix].panel.panel_key()
-                    );
-                }
+                assert!(
+                    !cfg!(debug_assertions),
+                    "Panels `{}` and `{}` have the same activation priority. Each panel must have a unique priority so the status bar order is deterministic.",
+                    T::panel_key(),
+                    self.panel_entries[ix].panel.panel_key()
+                );
                 ix
             }
             Err(ix) => ix,

@@ -471,9 +471,8 @@ fn show_hover(
             };
             let snapshot = this.update_in(cx, |this, window, cx| this.snapshot(window, cx))?;
             let mut hover_highlights = Vec::with_capacity(hovers_response.len());
-            let mut info_popovers = Vec::with_capacity(
-                hovers_response.len() + if invisible_char.is_some() { 1 } else { 0 },
-            );
+            let mut info_popovers =
+                Vec::with_capacity(hovers_response.len() + usize::from(invisible_char.is_some()));
 
             if let Some((invisible, range)) = invisible_char {
                 let blocks = vec![HoverBlock {
@@ -537,7 +536,7 @@ fn show_hover(
                         let range = snapshot.syntax_ancestor(anchor..anchor)?.1;
                         Some(snapshot.anchor_before(range.start)..snapshot.anchor_after(range.end))
                     })
-                    .unwrap_or_else(|| anchor..anchor);
+                    .unwrap_or(anchor..anchor);
 
                 let blocks = hover_result.contents;
                 let language = hover_result.language;

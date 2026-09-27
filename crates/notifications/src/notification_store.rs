@@ -368,7 +368,7 @@ impl sum_tree::Item for NotificationEntry {
         NotificationSummary {
             max_id: self.id,
             count: 1,
-            unread_count: if self.is_read { 0 } else { 1 },
+            unread_count: usize::from(!self.is_read),
         }
     }
 }

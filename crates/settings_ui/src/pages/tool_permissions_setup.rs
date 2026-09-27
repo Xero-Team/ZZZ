@@ -817,9 +817,8 @@ struct MatchedPattern {
 
 fn find_matched_patterns(tool_id: &str, input: &str, cx: &App) -> Vec<MatchedPattern> {
     let settings = AgentSettings::get_global(cx);
-    let rules = match settings.tool_permissions.tools.get(tool_id) {
-        Some(rules) => rules,
-        None => return Vec::new(),
+    let Some(rules) = settings.tool_permissions.tools.get(tool_id) else {
+        return Vec::new();
     };
 
     let mut matched = Vec::new();

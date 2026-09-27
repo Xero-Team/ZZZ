@@ -1557,55 +1557,51 @@ impl ProjectSearchView {
         // Do not bail early in this function, as we want to fill out `self.panels_with_errors`.
 
         let text = self.search_query_text(cx);
-        let included_files = self
-            .filters_enabled
-            .then(|| {
-                match self.parse_path_matches(self.included_files_editor.read(cx).text(cx), cx) {
-                    Ok(included_files) => {
-                        let should_unmark_error =
-                            self.panels_with_errors.remove(&InputPanel::Include);
-                        if should_unmark_error.is_some() {
-                            cx.notify();
-                        }
-                        included_files
+        let included_files = if self.filters_enabled {
+            match self.parse_path_matches(self.included_files_editor.read(cx).text(cx), cx) {
+                Ok(included_files) => {
+                    let should_unmark_error = self.panels_with_errors.remove(&InputPanel::Include);
+                    if should_unmark_error.is_some() {
+                        cx.notify();
                     }
-                    Err(e) => {
-                        let should_mark_error = self
-                            .panels_with_errors
-                            .insert(InputPanel::Include, e.to_string());
-                        if should_mark_error.is_none() {
-                            cx.notify();
-                        }
-                        PathMatcher::default()
-                    }
+                    included_files
                 }
-            })
-            .unwrap_or(PathMatcher::default());
-        let excluded_files = self
-            .filters_enabled
-            .then(|| {
-                match self.parse_path_matches(self.excluded_files_editor.read(cx).text(cx), cx) {
-                    Ok(excluded_files) => {
-                        let should_unmark_error =
-                            self.panels_with_errors.remove(&InputPanel::Exclude);
-                        if should_unmark_error.is_some() {
-                            cx.notify();
-                        }
+                Err(e) => {
+                    let should_mark_error = self
+                        .panels_with_errors
+                        .insert(InputPanel::Include, e.to_string());
+                    if should_mark_error.is_none() {
+                        cx.notify();
+                    }
+                    PathMatcher::default()
+                }
+            }
+        } else {
+            PathMatcher::default()
+        };
+        let excluded_files = if self.filters_enabled {
+            match self.parse_path_matches(self.excluded_files_editor.read(cx).text(cx), cx) {
+                Ok(excluded_files) => {
+                    let should_unmark_error = self.panels_with_errors.remove(&InputPanel::Exclude);
+                    if should_unmark_error.is_some() {
+                        cx.notify();
+                    }
 
-                        excluded_files
-                    }
-                    Err(e) => {
-                        let should_mark_error = self
-                            .panels_with_errors
-                            .insert(InputPanel::Exclude, e.to_string());
-                        if should_mark_error.is_none() {
-                            cx.notify();
-                        }
-                        PathMatcher::default()
-                    }
+                    excluded_files
                 }
-            })
-            .unwrap_or(PathMatcher::default());
+                Err(e) => {
+                    let should_mark_error = self
+                        .panels_with_errors
+                        .insert(InputPanel::Exclude, e.to_string());
+                    if should_mark_error.is_none() {
+                        cx.notify();
+                    }
+                    PathMatcher::default()
+                }
+            }
+        } else {
+            PathMatcher::default()
+        };
 
         // If the project contains multiple visible worktrees, we match the
         // include/exclude patterns against full paths to allow them to be
@@ -2133,9 +2129,8 @@ impl ProjectSearchBar {
     }
 
     fn cycle_field(&mut self, direction: Direction, window: &mut Window, cx: &mut Context<Self>) {
-        let active_project_search = match &self.active_project_search {
-            Some(active_project_search) => active_project_search,
-            None => return,
+        let Some(active_project_search) = &self.active_project_search else {
+            return;
         };
 
         active_project_search.update(cx, |project_view, cx| {
@@ -2149,9 +2144,9 @@ impl ProjectSearchBar {
                     project_view.excluded_files_editor.focus_handle(cx),
                 ]);
             }
-            let current_index = match views.iter().position(|focus| focus.is_focused(window)) {
-                Some(index) => index,
-                None => return,
+            let Some(current_index) = views.iter().position(|focus| focus.is_focused(window))
+            else {
+                return;
             };
 
             let new_index = match direction {
@@ -2607,8 +2602,7 @@ impl Render for ProjectSearchBar {
                     .toggle_state(
                         self.active_project_search
                             .as_ref()
-                            .map(|search| search.read(cx).filters_enabled)
-                            .unwrap_or_default(),
+                            .is_some_and(|search| search.read(cx).filters_enabled),
                     )
                     .tooltip({
                         let focus_handle = focus_handle.clone();

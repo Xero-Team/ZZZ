@@ -427,7 +427,7 @@ impl ShellKind {
         let program = program.as_ref();
         let program = program
             .file_stem()
-            .unwrap_or_else(|| program.as_os_str())
+            .unwrap_or(program.as_os_str())
             .to_string_lossy();
 
         match &*program {

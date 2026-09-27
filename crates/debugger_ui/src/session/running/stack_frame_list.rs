@@ -876,8 +876,7 @@ impl StackFrameList {
                     self.list_state.reset(self.filter_entries_indices.len());
                     if !self
                         .selected_ix
-                        .map(|ix| self.filter_entries_indices.contains(&ix))
-                        .unwrap_or_default()
+                        .is_some_and(|ix| self.filter_entries_indices.contains(&ix))
                     {
                         self.selected_ix = None;
                     }

@@ -1804,9 +1804,10 @@ impl App {
 
     /// Obtains a reference to the executor, which can be used to spawn futures.
     pub fn foreground_executor(&self) -> &ForegroundExecutor {
-        if self.quitting {
-            panic!("Can't spawn on main thread after on_app_quit")
-        };
+        assert!(
+            !self.quitting,
+            "Can't spawn on main thread after on_app_quit"
+        );
         &self.foreground_executor
     }
 

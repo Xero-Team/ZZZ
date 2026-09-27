@@ -249,9 +249,11 @@ fn migrate_thread_remote_connections(cx: &mut App, migration_task: Task<anyhow::
             }
         }
 
-        let reloaded_task = reloaded
-            .then_some(store.update(cx, |store, cx| store.reload(cx)))
-            .unwrap_or(Task::ready(()).shared());
+        let reloaded_task = if reloaded {
+            store.update(cx, |store, cx| store.reload(cx))
+        } else {
+            Task::ready(()).shared()
+        };
 
         kvp.write_kvp(
             THREAD_REMOTE_CONNECTION_MIGRATION_KEY.to_owned(),
@@ -281,9 +283,11 @@ fn migrate_thread_ids(cx: &mut App) {
             reloaded = true;
         }
 
-        let reloaded_task = reloaded
-            .then_some(store.update(cx, |store, cx| store.reload(cx)))
-            .unwrap_or(Task::ready(()).shared());
+        let reloaded_task = if reloaded {
+            store.update(cx, |store, cx| store.reload(cx))
+        } else {
+            Task::ready(()).shared()
+        };
 
         kvp.write_kvp(THREAD_ID_MIGRATION_KEY.to_owned(), "1".to_owned())
             .await?;
@@ -1188,7 +1192,7 @@ impl ThreadMetadataStore {
 
         let created_at = existing_thread
             .and_then(|t| t.created_at)
-            .unwrap_or_else(|| updated_at);
+            .unwrap_or(updated_at);
 
         let interacted_at = existing_thread
             .map(|t| t.interacted_at)

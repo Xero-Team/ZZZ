@@ -113,9 +113,10 @@ impl ProtoMessageHandlerSet {
         self.entities_by_message_type
             .insert(message_type_id, entity);
         let prev_handler = self.message_handlers.insert(message_type_id, handler);
-        if prev_handler.is_some() {
-            panic!("registered handler for the same message twice");
-        }
+        assert!(
+            prev_handler.is_none(),
+            "registered handler for the same message twice"
+        )
     }
 
     fn add_entity_message_handler(
@@ -131,9 +132,10 @@ impl ProtoMessageHandlerSet {
         self.entity_types_by_message_type
             .insert(message_type_id, entity_type_id);
         let prev_handler = self.message_handlers.insert(message_type_id, handler);
-        if prev_handler.is_some() {
-            panic!("registered handler for the same message twice");
-        }
+        assert!(
+            prev_handler.is_none(),
+            "registered handler for the same message twice"
+        )
     }
 
     pub fn handle_message(

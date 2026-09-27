@@ -2785,9 +2785,8 @@ impl LocalLspStore {
                         None
                     }
                 });
-            let server = match server {
-                Some(server) => server,
-                None => continue,
+            let Some(server) = server else {
+                continue;
             };
 
             buffer_handle.update(cx, |buffer, cx| {
@@ -3276,17 +3275,16 @@ impl LocalLspStore {
 
         if let Some(version) = version {
             let buffer_id = buffer.read(cx).remote_id();
-            let snapshots = if let Some(snapshots) = self
+            let Some(snapshots) = self
                 .buffer_snapshots
                 .get_mut(&buffer_id)
                 .and_then(|m| m.get_mut(&server_id))
-            {
-                snapshots
-            } else if version == 0 {
+            else {
                 // Some language servers report version 0 even if the buffer hasn't been opened yet.
                 // We detect this case and treat it as if the version was `None`.
-                return Ok(buffer.read(cx).text_snapshot());
-            } else {
+                if version == 0 {
+                    return Ok(buffer.read(cx).text_snapshot());
+                }
                 anyhow::bail!("no snapshots found for buffer {buffer_id} and server {server_id}");
             };
 
@@ -8436,9 +8434,8 @@ impl LspStore {
 
             cx.spawn(async move |this, cx| {
                 let responses = futures::future::join_all(requests).await;
-                let this = match this.upgrade() {
-                    Some(this) => this,
-                    None => return Ok(Vec::new()),
+                let Some(this) = this.upgrade() else {
+                    return Ok(Vec::new());
                 };
 
                 let mut symbols = Vec::new();
@@ -9326,9 +9323,8 @@ impl LspStore {
         diagnostics: Vec<DiagnosticEntry<Unclipped<PointUtf16>>>,
         _: &mut Context<Worktree>,
     ) -> Result<ControlFlow<(), Option<(u64, proto::DiagnosticSummary)>>> {
-        let local = match &mut self.mode {
-            LspStoreMode::Local(local_lsp_store) => local_lsp_store,
-            _ => anyhow::bail!("update_worktree_diagnostics called on remote"),
+        let LspStoreMode::Local(local) = &mut self.mode else {
+            anyhow::bail!("update_worktree_diagnostics called on remote");
         };
 
         let summaries_for_tree = self.diagnostic_summaries.entry(worktree_id).or_default();
@@ -9429,9 +9425,7 @@ impl LspStore {
                 Ok(abs_path) => abs_path,
                 Err(err) => return Task::ready(Err(err)),
             };
-            let symbol_uri = if let Ok(uri) = lsp::Uri::from_file_path(symbol_abs_path) {
-                uri
-            } else {
+            let Ok(symbol_uri) = lsp::Uri::from_file_path(symbol_abs_path) else {
                 return Task::ready(Err(anyhow!("invalid symbol path")));
             };
 
@@ -10870,12 +10864,11 @@ impl LspStore {
         token: ProgressToken,
         cx: &mut Context<Self>,
     ) {
-        let language_server_status =
-            if let Some(status) = self.language_server_statuses.get_mut(&language_server_id) {
-                status
-            } else {
-                return;
-            };
+        let Some(language_server_status) =
+            self.language_server_statuses.get_mut(&language_server_id)
+        else {
+            return;
+        };
 
         if !language_server_status.progress_tokens.contains(&token) {
             return;
@@ -11215,11 +11208,7 @@ impl LspStore {
             .await?;
 
         this.update(&mut cx, |this, cx| {
-            let is_private = buffer
-                .read(cx)
-                .file()
-                .map(|f| f.is_private())
-                .unwrap_or_default();
+            let is_private = buffer.read(cx).file().is_some_and(|f| f.is_private());
             if is_private {
                 Err(anyhow!(rpc::ErrorCode::UnsharedItem))
             } else {
@@ -11716,11 +11705,8 @@ impl LspStore {
         server_id: LanguageServerId,
         cx: &mut Context<Self>,
     ) -> Task<()> {
-        let local = match &mut self.mode {
-            LspStoreMode::Local(local) => local,
-            _ => {
-                return Task::ready(());
-            }
+        let LspStoreMode::Local(local) = &mut self.mode else {
+            return Task::ready(());
         };
 
         // Remove this server ID from all entries in the given worktree.
@@ -12054,7 +12040,7 @@ impl LspStore {
                         let all_language_servers_with_this_name = local
                             .language_server_ids
                             .iter()
-                            .filter_map(|(seed, state)| seed.name.eq(name).then(|| state.id));
+                            .filter_map(|(seed, state)| seed.name.eq(name).then_some(state.id));
                         language_servers_to_stop.extend(all_language_servers_with_this_name);
                         old_ids_count == language_servers_to_stop.len()
                     });
@@ -12066,7 +12052,7 @@ impl LspStore {
                 local
                     .language_server_ids
                     .iter()
-                    .filter_map(|(seed, v)| seed.name.eq(&name).then(|| v.id)),
+                    .filter_map(|(seed, v)| seed.name.eq(&name).then_some(v.id)),
             );
         }
 
@@ -12435,13 +12421,11 @@ impl LspStore {
             let mut lsp_adapters = HashMap::default();
             for buffer_handle in buffer_store.buffers() {
                 let buffer = buffer_handle.read(cx);
-                let file = match File::from_dyn(buffer.file()) {
-                    Some(file) => file,
-                    None => continue,
+                let Some(file) = File::from_dyn(buffer.file()) else {
+                    continue;
                 };
-                let language = match buffer.language() {
-                    Some(language) => language,
-                    None => continue,
+                let Some(language) = buffer.language() else {
+                    continue;
                 };
 
                 if !worktrees_using_server.contains(&file.worktree.read(cx).id())
@@ -12454,9 +12438,8 @@ impl LspStore {
                     continue;
                 }
                 // didOpen
-                let file = match file.as_local() {
-                    Some(file) => file,
-                    None => continue,
+                let Some(file) = file.as_local() else {
+                    continue;
                 };
 
                 let local = self.as_local_mut().unwrap();
@@ -12464,12 +12447,9 @@ impl LspStore {
                 let buffer_id = buffer.remote_id();
                 if local.registered_buffers.contains_key(&buffer_id) {
                     let abs_path = file.abs_path(cx);
-                    let uri = match lsp::Uri::from_file_path(&abs_path) {
-                        Ok(uri) => uri,
-                        Err(()) => {
-                            log::error!("failed to convert path to URI: {:?}", abs_path);
-                            continue;
-                        }
+                    let Ok(uri) = lsp::Uri::from_file_path(&abs_path) else {
+                        log::error!("failed to convert path to URI: {:?}", abs_path);
+                        continue;
                     };
 
                     let versions = local
@@ -12709,7 +12689,7 @@ impl LspStore {
         let mut language_server_ids = local
             .language_server_ids
             .iter()
-            .filter_map(|(seed, v)| seed.worktree_id.eq(&worktree_id).then(|| v.id))
+            .filter_map(|(seed, v)| seed.worktree_id.eq(&worktree_id).then_some(v.id))
             .collect::<Vec<_>>();
         language_server_ids.sort_unstable();
         language_server_ids.dedup();
@@ -13463,8 +13443,8 @@ impl LspStore {
                                 if local
                                     .buffers_opened_in_servers
                                     .get(&buffer_id)
-                                    .filter(|s| s.contains(&server_id))
-                                    .is_some()
+                                    .as_ref()
+                                    .is_some_and(|s| s.contains(&server_id))
                                 {
                                     buffers_with_language_server.push(handle);
                                 }
@@ -13713,7 +13693,7 @@ impl LspStore {
                     server.update_capabilities(|capabilities| {
                         capabilities
                             .workspace
-                            .get_or_insert_with(|| lsp::WorkspaceServerCapabilities {
+                            .get_or_insert(lsp::WorkspaceServerCapabilities {
                                 workspace_folders: None,
                                 file_operations: None,
                             })
@@ -13731,7 +13711,7 @@ impl LspStore {
                     server.update_capabilities(|capabilities| {
                         capabilities
                             .workspace
-                            .get_or_insert_with(|| lsp::WorkspaceServerCapabilities {
+                            .get_or_insert(lsp::WorkspaceServerCapabilities {
                                 workspace_folders: None,
                                 file_operations: None,
                             })

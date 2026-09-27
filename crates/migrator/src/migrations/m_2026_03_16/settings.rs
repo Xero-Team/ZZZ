@@ -26,9 +26,8 @@ fn rename_heex_settings(
 }
 
 fn is_heex_settings(contents: &str, mat: &QueryMatch, query: &Query) -> bool {
-    let parent_key_ix = match query.capture_index_for_name("parent_key") {
-        Some(ix) => ix,
-        None => return false,
+    let Some(parent_key_ix) = query.capture_index_for_name("parent_key") else {
+        return false;
     };
     let parent_range = match mat.nodes_for_capture_index(parent_key_ix).next() {
         Some(node) => node.byte_range(),
@@ -38,9 +37,8 @@ fn is_heex_settings(contents: &str, mat: &QueryMatch, query: &Query) -> bool {
         return false;
     }
 
-    let setting_name_ix = match query.capture_index_for_name("setting_name") {
-        Some(ix) => ix,
-        None => return false,
+    let Some(setting_name_ix) = query.capture_index_for_name("setting_name") else {
+        return false;
     };
     let setting_name_range = match mat.nodes_for_capture_index(setting_name_ix).next() {
         Some(node) => node.byte_range(),

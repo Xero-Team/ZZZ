@@ -187,9 +187,8 @@ pub(crate) fn parse_git_diff_raw(
             return None;
         }
 
-        let path = match parts.next() {
-            Some(path) => path,
-            None => return Some(Err(anyhow::anyhow!("raw diff is missing the path"))),
+        let Some(path) = parts.next() else {
+            return Some(Err(anyhow::anyhow!("raw diff is missing the path")));
         };
         Some(parse_git_diff_raw_entry(metadata, path))
     })

@@ -625,7 +625,7 @@ impl VariableList {
             } else {
                 var.evaluate_name
                     .as_deref()
-                    .map(|name| name.strip_prefix("/nat ").unwrap_or_else(|| name))
+                    .map(|name| name.strip_prefix("/nat ").unwrap_or(name))
             };
             self.memory_view.update(cx, |this, cx| {
                 this.go_to_memory_reference(

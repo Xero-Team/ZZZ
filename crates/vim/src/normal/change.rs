@@ -160,8 +160,7 @@ fn expand_changed_word_selection(
     let is_in_word = map
         .buffer_chars_at(selection.head().to_offset(map, Bias::Left))
         .next()
-        .map(|(c, _)| !classifier.is_whitespace(c))
-        .unwrap_or_default();
+        .is_some_and(|(c, _)| !classifier.is_whitespace(c));
 
     if is_in_word {
         let advance_end = |point, times, always_advance| {

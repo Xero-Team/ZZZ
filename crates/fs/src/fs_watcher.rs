@@ -255,9 +255,8 @@ fn detect_requires_poll_watcher_linux(path: &Path) -> bool {
     use std::ffi::CString;
     use std::os::unix::ffi::OsStrExt;
 
-    let c_path = match CString::new(path.as_os_str().as_bytes()) {
-        Ok(p) => p,
-        Err(_) => return false,
+    let Ok(c_path) = CString::new(path.as_os_str().as_bytes()) else {
+        return false;
     };
 
     let mut stat: libc::statfs = unsafe { std::mem::zeroed() };

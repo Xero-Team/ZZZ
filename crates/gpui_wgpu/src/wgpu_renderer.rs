@@ -1168,13 +1168,9 @@ impl WgpuRenderer {
                 self.surface_config.width as f32,
                 self.surface_config.height as f32,
             ],
-            premultiplied_alpha: if self.surface_config.alpha_mode
-                == wgpu::CompositeAlphaMode::PreMultiplied
-            {
-                1
-            } else {
-                0
-            },
+            premultiplied_alpha: u32::from(
+                self.surface_config.alpha_mode == wgpu::CompositeAlphaMode::PreMultiplied,
+            ),
             pad: 0,
         };
 

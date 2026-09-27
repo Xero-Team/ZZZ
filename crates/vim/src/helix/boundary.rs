@@ -157,7 +157,7 @@ impl Offset {
             map.buffer_snapshot()
                 .clip_offset(self.0 + 1usize, Bias::Right),
         );
-        (next.0 > self.0).then(|| next)
+        (next.0 > self.0).then_some(next)
     }
     fn previous(self, map: &DisplaySnapshot) -> Option<Self> {
         if self.0 == MultiBufferOffset(0) {
@@ -201,7 +201,7 @@ impl<B: BoundedObject> HelixTextObject for B {
             let max_end = self.close_at_end(search_start, map, find_outer)?;
             let min_start = self.close_at_start(max_end, map, find_outer)?;
 
-            (min_start <= relative_to.start).then(|| min_start..max_end)
+            (min_start <= relative_to.start).then_some(min_start..max_end)
         })
     }
 

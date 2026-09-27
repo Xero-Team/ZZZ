@@ -349,7 +349,11 @@ pub fn repository_owner_guard_expression(trigger_always: bool) -> Expression {
     Expression::new(format!(
         "{}{}",
         DEFAULT_REPOSITORY_OWNER_GUARD,
-        trigger_always.then_some(" && always()").unwrap_or_default()
+        if trigger_always {
+            " && always()"
+        } else {
+            Default::default()
+        }
     ))
 }
 

@@ -4893,9 +4893,10 @@ pub mod test {
                     .unwrap()
                     .items
                     .push(SettingsPageItem::SectionHeader(title.into()));
-                if selected_idx == Some(index) && !in_expanded_section {
-                    panic!("Items in unexpanded sections cannot be selected");
-                }
+                assert!(
+                    selected_idx != Some(index) || in_expanded_section,
+                    "Items in unexpanded sections cannot be selected"
+                );
                 index += 1;
             } else {
                 panic!(

@@ -1315,8 +1315,8 @@ impl CompletionsMenu {
                 MatchTier::OtherMatch { sort_score }
             } else {
                 let sort_snippet = match snippet_sort_order {
-                    SnippetSortOrder::Top => Reverse(if is_snippet { 1 } else { 0 }),
-                    SnippetSortOrder::Bottom => Reverse(if is_snippet { 0 } else { 1 }),
+                    SnippetSortOrder::Top => Reverse(i32::from(is_snippet)),
+                    SnippetSortOrder::Bottom => Reverse(i32::from(!is_snippet)),
                     SnippetSortOrder::Inline => Reverse(0),
                     SnippetSortOrder::None => Reverse(0),
                 };
@@ -1326,11 +1326,7 @@ impl CompletionsMenu {
                     string_match,
                 ));
                 // This exact matching won't work for multi-word snippets, but it's fine
-                let sort_exact = Reverse(if Some(completion.label.filter_text()) == query {
-                    1
-                } else {
-                    0
-                });
+                let sort_exact = Reverse(i32::from(Some(completion.label.filter_text()) == query));
 
                 MatchTier::WordStartMatch {
                     sort_exact,

@@ -510,14 +510,12 @@ pub fn python_env_kernel_specifications(
     let background_executor = cx.background_executor().clone();
 
     async move {
-        let (toolchains, user_toolchains) = if let Some(Toolchains {
+        let Some(Toolchains {
             toolchains,
             root_path: _,
             user_toolchains,
         }) = toolchains.await
-        {
-            (toolchains, user_toolchains)
-        } else {
+        else {
             return Ok(Vec::new());
         };
 

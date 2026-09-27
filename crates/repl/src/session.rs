@@ -985,9 +985,7 @@ impl KernelSession for Session {
                 cx.notify();
             }
             JupyterMessageContent::UpdateDisplayData(update) => {
-                let display_id = if let Some(display_id) = update.transient.display_id.clone() {
-                    display_id
-                } else {
+                let Some(display_id) = update.transient.display_id.clone() else {
                     return;
                 };
 

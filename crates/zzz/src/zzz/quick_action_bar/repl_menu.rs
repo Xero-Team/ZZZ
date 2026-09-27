@@ -47,15 +47,15 @@ impl QuickActionBar {
 
         let has_nonempty_selection = {
             editor.update(cx, |this, cx| {
-                this.selections
-                    .count()
-                    .ne(&0)
-                    .then(|| {
+                if this.selections.count().ne(&0) {
+                    {
                         let snapshot = this.display_snapshot(cx);
                         let latest = this.selections.newest_display(&snapshot);
                         !latest.is_empty()
-                    })
-                    .unwrap_or_default()
+                    }
+                } else {
+                    Default::default()
+                }
             })
         };
 
@@ -283,9 +283,7 @@ impl QuickActionBar {
     }
 
     pub fn render_kernel_selector(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let editor = if let Some(editor) = self.active_editor() {
-            editor
-        } else {
+        let Some(editor) = self.active_editor() else {
             return div().into_any_element();
         };
 

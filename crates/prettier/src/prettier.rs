@@ -140,8 +140,7 @@ impl Prettier {
                                                 &[workspace_definition],
                                                 PathStyle::local(),
                                             )
-                                            .ok()
-                                            .is_some_and(|path_matcher| {
+                                            .is_ok_and(|path_matcher| {
                                                 RelPath::new(subproject_path, PathStyle::local())
                                                     .is_ok_and(|path| path_matcher.is_match(path))
                                             })
@@ -255,8 +254,7 @@ impl Prettier {
                                             &[workspace_definition],
                                             PathStyle::local(),
                                         )
-                                        .ok()
-                                        .is_some_and(
+                                        .is_ok_and(
                                             |path_matcher| {
                                                 RelPath::new(subproject_path, PathStyle::local())
                                                     .is_ok_and(|rel_path| {

@@ -21795,11 +21795,10 @@ async fn test_word_completions_do_not_show_before_threshold(cx: &mut TestAppCont
     cx.simulate_keystroke("w");
     cx.executor().run_until_parked();
     cx.update_editor(|editor, _, _| {
-        if editor.context_menu.borrow_mut().is_some() {
-            panic!(
-                "expected completion menu to be hidden, as words completion threshold is not met"
-            );
-        }
+        assert!(
+            !editor.context_menu.borrow_mut().is_some(),
+            "expected completion menu to be hidden, as words completion threshold is not met"
+        );
     });
 
     cx.update_editor(|editor, window, cx| {
@@ -21817,19 +21816,19 @@ async fn test_word_completions_do_not_show_before_threshold(cx: &mut TestAppCont
         editor.cancel(&Cancel, window, cx);
     });
     cx.update_editor(|editor, _, _| {
-        if editor.context_menu.borrow_mut().is_some() {
-            panic!("expected completion menu to be hidden after canceling");
-        }
+        assert!(
+            !editor.context_menu.borrow_mut().is_some(),
+            "expected completion menu to be hidden after canceling"
+        );
     });
 
     cx.simulate_keystroke("o");
     cx.executor().run_until_parked();
     cx.update_editor(|editor, _, _| {
-        if editor.context_menu.borrow_mut().is_some() {
-            panic!(
-                "expected completion menu to be hidden, as words completion threshold is not met still"
-            );
-        }
+        assert!(
+            !editor.context_menu.borrow_mut().is_some(),
+            "expected completion menu to be hidden, as words completion threshold is not met still"
+        );
     });
 
     cx.simulate_keystroke("w");
@@ -21867,11 +21866,10 @@ async fn test_word_completions_disabled(cx: &mut TestAppContext) {
     cx.simulate_keystroke("w");
     cx.executor().run_until_parked();
     cx.update_editor(|editor, _, _| {
-        if editor.context_menu.borrow_mut().is_some() {
-            panic!(
-                "expected completion menu to be hidden, as words completion are disabled for this editor"
-            );
-        }
+        assert!(
+            !editor.context_menu.borrow_mut().is_some(),
+            "expected completion menu to be hidden, as words completion are disabled for this editor"
+        );
     });
 
     cx.update_editor(|editor, window, cx| {
@@ -21879,11 +21877,10 @@ async fn test_word_completions_disabled(cx: &mut TestAppContext) {
     });
     cx.executor().run_until_parked();
     cx.update_editor(|editor, _, _| {
-        if editor.context_menu.borrow_mut().is_some() {
-            panic!(
-                "expected completion menu to be hidden even if called for explicitly, as words completion are disabled for this editor"
-            );
-        }
+        assert!(
+            !editor.context_menu.borrow_mut().is_some(),
+            "expected completion menu to be hidden even if called for explicitly, as words completion are disabled for this editor"
+        );
     });
 }
 
@@ -21910,9 +21907,10 @@ async fn test_word_completions_disabled_with_no_provider(cx: &mut TestAppContext
     cx.simulate_keystroke("w");
     cx.executor().run_until_parked();
     cx.update_editor(|editor, _, _| {
-        if editor.context_menu.borrow_mut().is_some() {
-            panic!("expected completion menu to be hidden, as disabled in settings");
-        }
+        assert!(
+            !editor.context_menu.borrow_mut().is_some(),
+            "expected completion menu to be hidden, as disabled in settings"
+        );
     });
 }
 
@@ -42440,9 +42438,8 @@ async fn test_restore_hunk_with_stale_base_text(cx: &mut TestAppContext) {
 
         let race_exists = cx.update_editor(|editor, _window, cx| {
             let multi_buffer = editor.buffer().read(cx);
-            let diff_entity = match multi_buffer.diff_for(buffer_id) {
-                Some(d) => d,
-                None => return false,
+            let Some(diff_entity) = multi_buffer.diff_for(buffer_id) else {
+                return false;
             };
             let live_base_len = diff_entity.read(cx).base_text(cx).len();
             let snapshot = multi_buffer.snapshot(cx);

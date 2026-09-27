@@ -3375,7 +3375,7 @@ impl ReferenceMultibuffer {
                             let remaining_newlines = text[ix..region.range.end.min(text.len())]
                                 .matches('\n')
                                 .count();
-                            remaining_newlines == if is_last_region { 0 } else { 1 }
+                            remaining_newlines == usize::from(!is_last_region)
                         };
                         if region_ix < regions.len() - 1
                             && !text[ix..].contains("\n")
@@ -3498,9 +3498,10 @@ impl ReferenceMultibuffer {
     }
 
     fn anchor_to_offset(&self, anchor: &Anchor, cx: &App) -> Option<MultiBufferOffset> {
-        if anchor.diff_base_anchor().is_some() {
-            panic!("reference multibuffer cannot yet resolve anchors inside deleted hunks");
-        }
+        assert!(
+            anchor.diff_base_anchor().is_none(),
+            "reference multibuffer cannot yet resolve anchors inside deleted hunks"
+        );
         let (anchor, snapshot, path_key) = self.anchor_to_buffer_anchor(anchor, cx)?;
         // TODO(cole) can maybe make this and expected content call a common function instead
         let (text, _, _, regions) = self.expected_content(cx);

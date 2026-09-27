@@ -1250,9 +1250,8 @@ fn build_highlight_entries(
             let start = multi_buffer_snapshot.anchor_in_excerpt(start_anchor);
             let end = multi_buffer_snapshot.anchor_in_excerpt(end_anchor);
 
-            let (start, end) = match (start, end) {
-                (Some(start), Some(end)) => (start, end),
-                _ => continue,
+            let (Some(start), Some(end)) = (start, end) else {
+                continue;
             };
 
             let range = start..end;

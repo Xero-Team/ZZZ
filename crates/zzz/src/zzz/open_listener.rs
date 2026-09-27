@@ -640,7 +640,7 @@ pub async fn handle_cli_connection(
         )
         .await;
 
-        let status = if open_workspace_result.is_err() { 1 } else { 0 };
+        let status = i32::from(open_workspace_result.is_err());
         responses.send(CliResponse::Exit { status }).log_err();
     }
 }

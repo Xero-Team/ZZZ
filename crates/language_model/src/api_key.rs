@@ -70,9 +70,8 @@ impl ApiKeyState {
     /// To avoid URL mismatches, expects that `load_if_needed` or `handle_url_change` has been
     /// called with this URL.
     pub fn key(&self, url: &str) -> Option<Arc<str>> {
-        let api_key = match &self.load_status {
-            LoadStatus::Loaded(api_key) => api_key,
-            _ => return None,
+        let LoadStatus::Loaded(api_key) = &self.load_status else {
+            return None;
         };
         if url == self.url.as_str() {
             Some(api_key.key.clone())
@@ -269,9 +268,8 @@ impl ApiKey {
             Ok(None) => return LoadStatus::NotPresent,
             Err(err) => return LoadStatus::Error(err.to_string()),
         };
-        let key = match str::from_utf8(&api_key) {
-            Ok(key) => key,
-            Err(_) => return LoadStatus::Error(format!("API key for URL {url} is not utf8")),
+        let Ok(key) = str::from_utf8(&api_key) else {
+            return LoadStatus::Error(format!("API key for URL {url} is not utf8"));
         };
         LoadStatus::Loaded(Self {
             source: ApiKeySource::SystemKeychain,

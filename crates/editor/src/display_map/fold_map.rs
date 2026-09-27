@@ -420,12 +420,11 @@ impl FoldMap {
 
             let mut prev_transform_isomorphic = false;
             for transform in self.snapshot.transforms.iter() {
-                if !transform.is_fold() && prev_transform_isomorphic {
-                    panic!(
-                        "found adjacent isomorphic transforms: {:?}",
-                        self.snapshot.transforms.items(())
-                    );
-                }
+                assert!(
+                    transform.is_fold() || !prev_transform_isomorphic,
+                    "found adjacent isomorphic transforms: {:?}",
+                    self.snapshot.transforms.items(())
+                );
                 prev_transform_isomorphic = !transform.is_fold();
             }
 
@@ -825,9 +824,11 @@ impl FoldSnapshot {
 
     #[ztracing::instrument(skip_all)]
     pub fn row_infos(&self, start_row: u32) -> FoldRows<'_> {
-        if start_row > self.transforms.summary().output.lines.row {
-            panic!("invalid display row {}", start_row);
-        }
+        assert!(
+            start_row <= self.transforms.summary().output.lines.row,
+            "invalid display row {}",
+            start_row
+        );
 
         let fold_point = FoldPoint::new(start_row, 0);
         let mut cursor = self
@@ -2123,15 +2124,14 @@ mod tests {
                     char_column += 1;
                 }
                 fold_offset.0 += c.len_utf8();
-                if char_column > longest_char_column {
-                    panic!(
-                        "invalid longest row {:?} (chars {}), found row {:?} (chars: {})",
-                        longest_row,
-                        longest_char_column,
-                        fold_point.row(),
-                        char_column
-                    );
-                }
+                assert!(
+                    char_column <= longest_char_column,
+                    "invalid longest row {:?} (chars {}), found row {:?} (chars: {})",
+                    longest_row,
+                    longest_char_column,
+                    fold_point.row(),
+                    char_column
+                )
             }
 
             for _ in 0..5 {

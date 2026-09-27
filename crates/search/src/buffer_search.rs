@@ -253,8 +253,7 @@ impl Render for BufferSearchBar {
                 .as_ref()
                 .and_then(|item| item.act_as_type(TypeId::of::<Editor>(), cx))
                 .and_then(|item| item.downcast::<Editor>().ok())
-                .map(|editor: Entity<Editor>| editor.read(cx).has_any_buffer_folded(cx))
-                .unwrap_or_default();
+                .is_some_and(|editor: Entity<Editor>| editor.read(cx).has_any_buffer_folded(cx));
             let (icon, tooltip_label) = if is_collapsed {
                 (
                     IconName::ChevronUpDown,
@@ -1811,9 +1810,8 @@ impl BufferSearchBar {
         if let Some(item) = self.active_searchable_item.as_ref() {
             handles.push(item.item_focus_handle(cx));
         }
-        let current_index = match handles.iter().position(|focus| focus.is_focused(window)) {
-            Some(index) => index,
-            None => return,
+        let Some(current_index) = handles.iter().position(|focus| focus.is_focused(window)) else {
+            return;
         };
 
         let new_index = match direction {

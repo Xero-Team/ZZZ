@@ -9202,7 +9202,7 @@ pub fn open_remote_project_with_new_connection(
             deserialize_remote_project(remote_connection.connection_options(), paths.clone(), cx)
                 .await?;
 
-        let session = match cx
+        let Some(session) = cx
             .update(|cx| {
                 remote::RemoteClient::new(
                     ConnectionIdentifier::Workspace(workspace_id.0),
@@ -9213,9 +9213,8 @@ pub fn open_remote_project_with_new_connection(
                 )
             })
             .await?
-        {
-            Some(result) => result,
-            None => return Ok(Vec::new()),
+        else {
+            return Ok(Vec::new());
         };
 
         let project = cx.update(|cx| {
@@ -9585,14 +9584,10 @@ pub fn client_side_decorations(
                         let size = window.window_bounds().get_bounds().size;
                         let pos = e.position;
 
-                        let edge = match resize_edge(
-                            pos,
-                            theme::CLIENT_SIDE_DECORATION_SHADOW,
-                            size,
-                            tiling,
-                        ) {
-                            Some(value) => value,
-                            None => return,
+                        let Some(edge) =
+                            resize_edge(pos, theme::CLIENT_SIDE_DECORATION_SHADOW, size, tiling)
+                        else {
+                            return;
                         };
 
                         window.start_window_resize(edge);

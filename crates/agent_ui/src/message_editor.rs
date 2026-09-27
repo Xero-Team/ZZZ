@@ -1445,9 +1445,8 @@ impl MessageEditor {
 
         window
             .spawn(cx, async move |cx| {
-                let paths = match paths_receiver.await {
-                    Ok(Ok(Some(paths))) => paths,
-                    _ => return Ok::<(), anyhow::Error>(()),
+                let Ok(Ok(Some(paths))) = paths_receiver.await else {
+                    return Ok::<(), anyhow::Error>(());
                 };
 
                 let default_image_name: SharedString = cx

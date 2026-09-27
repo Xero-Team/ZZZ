@@ -199,9 +199,7 @@ impl NeovimConnection {
             .await
             .expect("Could not get neovim window");
 
-        if selections.len() != 1 {
-            panic!("must have one selection");
-        }
+        assert!(selections.len() == 1, "must have one selection");
         let selection = &selections[0];
 
         let cursor = selection.start;

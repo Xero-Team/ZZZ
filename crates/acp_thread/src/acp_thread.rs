@@ -2762,33 +2762,30 @@ impl AcpThread {
         let languages = self.project.read(cx).languages().clone();
         let path_style = self.project.read(cx).path_style(cx);
 
-        let ix = match self.index_for_tool_call(update.id()) {
-            Some(ix) => ix,
-            None => {
-                // Tool call not found - create a failed tool call entry
-                let failed_tool_call = ToolCall {
-                    id: update.id().clone(),
-                    label: cx.new(|cx| Markdown::new("Tool call not found".into(), None, None, cx)),
-                    kind: acp::ToolKind::Fetch,
-                    content: vec![ToolCallContent::ContentBlock(ContentBlock::new(
-                        "Tool call not found".into(),
-                        &languages,
-                        path_style,
-                        cx,
-                    ))],
-                    status: ToolCallStatus::Failed,
-                    locations: Vec::new(),
-                    resolved_locations: Vec::new(),
-                    raw_input: None,
-                    raw_input_markdown: None,
-                    raw_output: None,
-                    tool_name: None,
-                    subagent_session_info: None,
-                    sandbox_authorization_details: None,
-                };
-                self.push_entry(AgentThreadEntry::ToolCall(failed_tool_call), cx);
-                return Ok(());
-            }
+        let Some(ix) = self.index_for_tool_call(update.id()) else {
+            // Tool call not found - create a failed tool call entry
+            let failed_tool_call = ToolCall {
+                id: update.id().clone(),
+                label: cx.new(|cx| Markdown::new("Tool call not found".into(), None, None, cx)),
+                kind: acp::ToolKind::Fetch,
+                content: vec![ToolCallContent::ContentBlock(ContentBlock::new(
+                    "Tool call not found".into(),
+                    &languages,
+                    path_style,
+                    cx,
+                ))],
+                status: ToolCallStatus::Failed,
+                locations: Vec::new(),
+                resolved_locations: Vec::new(),
+                raw_input: None,
+                raw_input_markdown: None,
+                raw_output: None,
+                tool_name: None,
+                subagent_session_info: None,
+                sandbox_authorization_details: None,
+            };
+            self.push_entry(AgentThreadEntry::ToolCall(failed_tool_call), cx);
+            return Ok(());
         };
         let AgentThreadEntry::ToolCall(call) = &mut self.entries[ix] else {
             unreachable!()

@@ -3176,7 +3176,7 @@ mod tests {
                     .take(deleted_count)
                     .map(|line| line.len() + 1)
                     .sum::<usize>();
-                let minimum_added = if deleted_count == 0 { 1 } else { 0 };
+                let minimum_added = i32::from(deleted_count == 0);
                 let added_count = rng.random_range(minimum_added..=5);
                 let addition = (0..added_count).map(|_| gen_line(rng)).collect::<String>();
                 result += &addition;
@@ -3824,7 +3824,7 @@ mod tests {
                     old_lines.remove(0);
                 }
 
-                let minimum_added = if deleted_count == 0 { 1 } else { 0 };
+                let minimum_added = i32::from(deleted_count == 0);
                 let added_count = rng.random_range(minimum_added..=3);
                 for _ in 0..added_count {
                     result.push_str(&gen_line(rng));

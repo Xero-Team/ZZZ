@@ -482,16 +482,15 @@ pub fn get_zzz_path() -> PathBuf {
         .file_name()
         .is_none_or(|name| name.to_string_lossy() != "debug")
     {
-        if !zzz_path.pop() {
-            panic!("Could not find target directory");
-        }
+        assert!(zzz_path.pop(), "Could not find target directory");
     }
 
     zzz_path.push("zzz");
 
-    if !zzz_path.exists() {
-        panic!("\n🚨 Run `cargo build` at least once before running e2e tests\n\n");
-    }
+    assert!(
+        zzz_path.exists(),
+        "\n🚨 Run `cargo build` at least once before running e2e tests\n\n"
+    );
 
     zzz_path
 }

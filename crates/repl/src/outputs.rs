@@ -746,9 +746,8 @@ impl ExecutionView {
         let output = self.outputs.first()?;
 
         // Only Plain outputs can be inlined
-        let content = match output {
-            Output::Plain { content, .. } => content,
-            _ => return None,
+        let Output::Plain { content, .. } = output else {
+            return None;
         };
 
         let text = content.read(cx).full_text();

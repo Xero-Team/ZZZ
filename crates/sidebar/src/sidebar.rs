@@ -1558,7 +1558,7 @@ impl Sidebar {
             .entries
             .iter()
             .position(|entry| matches!(entry, ListEntry::Thread(_)))
-            .or_else(|| {
+            .or({
                 if self.contents.entries.is_empty() {
                     None
                 } else {

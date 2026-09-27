@@ -3215,7 +3215,7 @@ impl Render for KeybindingEditorModal {
                                 .when_some(
                                     self.creating
                                         .then_some(())
-                                        .and_then(|_| self.action_editor.as_ref()),
+                                        .and(self.action_editor.as_ref()),
                                     |this, selector| this.child(selector.clone()),
                                 )
                                 .child(

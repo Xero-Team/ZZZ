@@ -113,9 +113,11 @@ mod path_trie {
         let mut visited_paths = BTreeSet::new();
         trie.walk(&TriePath::new(rel_path("a/b/c")), &mut |path, nodes| {
             assert_eq!(nodes.get(&()), Some(&LabelPresence::Present));
-            if path.as_unix_str() != "a" && path.as_unix_str() != "a/b" {
-                panic!("Unexpected path: {}", path.as_unix_str());
-            }
+            assert!(
+                path.as_unix_str() == "a" || path.as_unix_str() == "a/b",
+                "Unexpected path: {}",
+                path.as_unix_str()
+            );
             assert!(visited_paths.insert(path.clone()));
             ControlFlow::Continue(())
         });

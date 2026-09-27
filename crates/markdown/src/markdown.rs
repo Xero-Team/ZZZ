@@ -2014,8 +2014,7 @@ impl MarkdownElement {
             && !self.markdown.read(cx).selection.pending
             && rendered_text
                 .source_index_for_position(window.mouse_position())
-                .ok()
-                .is_some_and(|source_index| {
+                .is_ok_and(|source_index| {
                     rendered_text.link_for_source_index(source_index).is_some()
                         || rendered_text
                             .footnote_ref_for_source_index(source_index)
@@ -2160,8 +2159,7 @@ impl MarkdownElement {
                     let is_hovering_clickable = hitbox.is_hovered(window)
                         && rendered_text
                             .source_index_for_position(event.position)
-                            .ok()
-                            .is_some_and(|source_index| {
+                            .is_ok_and(|source_index| {
                                 rendered_text.link_for_source_index(source_index).is_some()
                                     || rendered_text
                                         .footnote_ref_for_source_index(source_index)

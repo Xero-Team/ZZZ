@@ -500,9 +500,7 @@ impl LocalBufferStore {
             None
         };
 
-        let buffer = if let Some(buffer) = buffer {
-            buffer
-        } else {
+        let Some(buffer) = buffer else {
             this.path_to_buffer_id.remove(&project_path);
             let this = this.as_local_mut()?;
             this.local_buffer_ids_by_entry_id.remove(&entry_id);
