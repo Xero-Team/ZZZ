@@ -341,8 +341,6 @@ actions!(
         ClearTrustedWorktrees,
         /// Stops following a collaborator.
         Unfollow,
-        /// Restores the banner.
-        RestoreBanner,
         /// Toggles expansion of the selected item.
         ToggleExpandItem,
     ]
@@ -1423,8 +1421,6 @@ pub struct FollowerState {
 
 struct FollowerView {
     view: Box<dyn FollowableItemHandle>,
-    #[allow(dead_code)]
-    location: Option<proto::PanelId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -6020,12 +6016,7 @@ impl Workspace {
                         })
                     });
 
-                    view.map(|view| {
-                        entry.insert(FollowerView {
-                            view,
-                            location: None,
-                        })
-                    })
+                    view.map(|view| entry.insert(FollowerView { view }))
                 }
             };
 
@@ -8311,31 +8302,6 @@ impl WorkspaceStore {
         &self,
     ) -> impl Iterator<Item = (gpui::AnyWindowHandle, &WeakEntity<Workspace>)> {
         self.workspaces.iter().map(|(window, weak)| (*window, weak))
-    }
-}
-
-impl ViewId {
-    #[allow(dead_code)]
-    pub(crate) fn from_proto(message: proto::ViewId) -> Result<Self> {
-        Ok(Self {
-            creator: message
-                .creator
-                .map(CollaboratorId::PeerId)
-                .context("creator is missing")?,
-            id: message.id,
-        })
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn to_proto(self) -> Option<proto::ViewId> {
-        if let CollaboratorId::PeerId(peer_id) = self.creator {
-            Some(proto::ViewId {
-                creator: Some(peer_id),
-                id: self.id,
-            })
-        } else {
-            None
-        }
     }
 }
 
