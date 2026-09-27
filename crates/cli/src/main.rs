@@ -552,17 +552,10 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
-    fn test_linux_bundled_app_locations_include_current_and_legacy_names() {
+    fn test_linux_bundled_app_locations() {
         assert_eq!(
             linux::bundled_app_locations(),
-            [
-                "../libexec/zzz-editor",
-                "../lib/zzz/zzz-editor",
-                "../libexec/zed-editor",
-                "../lib/zed/zed-editor",
-                "./zzz",
-                "./zed",
-            ]
+            ["../libexec/zzz-editor", "../lib/zzz/zzz-editor", "./zzz"]
         );
     }
 }
@@ -1030,15 +1023,8 @@ mod linux {
 
     struct App(PathBuf);
 
-    pub(super) fn bundled_app_locations() -> [&'static str; 6] {
-        [
-            "../libexec/zzz-editor",
-            "../lib/zzz/zzz-editor",
-            "../libexec/zed-editor",
-            "../lib/zed/zed-editor",
-            "./zzz",
-            "./zed",
-        ]
+    pub(super) fn bundled_app_locations() -> [&'static str; 3] {
+        ["../libexec/zzz-editor", "../lib/zzz/zzz-editor", "./zzz"]
     }
 
     impl Detect {
@@ -1049,8 +1035,7 @@ mod linux {
                 let cli = env::current_exe()?;
                 let dir = cli.parent().context("no parent path for cli")?;
 
-                // libexec is the standard, lib/zzz is for distro packages, and the zzz-* paths
-                // are retained as a compatibility fallback for older package layouts.
+                // libexec is the standard and lib/zzz is for distro packages.
                 bundled_app_locations()
                     .iter()
                     .find_map(|p| dir.join(p).canonicalize().ok().filter(|path| path != &cli))
@@ -1537,7 +1522,7 @@ mod mac_os {
                             kCFStringEncodingUTF8,
                             ptr::null(),
                         ));
-                        // equivalent to: open zed-cli:... -a /Applications/ZZZ\ Preview.app
+                        // equivalent to: open zzz-cli:... -a /Applications/ZZZ\ Preview.app
                         let urls_to_open =
                             CFArray::from_copyable(&[url_to_open.as_concrete_TypeRef()]);
                         LSOpenFromURLSpec(
