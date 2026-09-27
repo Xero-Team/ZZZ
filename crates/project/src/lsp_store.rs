@@ -10450,11 +10450,9 @@ impl LspStore {
     ) -> Result<proto::Ack> {
         let server_id = LanguageServerId(envelope.payload.language_server_id as usize);
         let task = lsp_store.read_with(&cx, |lsp_store, _| {
-            if let Some(server) = lsp_store.language_server_for_id(server_id) {
-                Some(server.notify::<lsp_store::lsp_ext_command::LspExtCancelFlycheck>(()))
-            } else {
-                None
-            }
+            lsp_store
+                .language_server_for_id(server_id)
+                .map(|server| server.notify::<lsp_store::lsp_ext_command::LspExtCancelFlycheck>(()))
         });
         if let Some(task) = task {
             task.context("handling lsp ext cancel flycheck")?;
@@ -10532,11 +10530,9 @@ impl LspStore {
     ) -> Result<proto::Ack> {
         let server_id = LanguageServerId(envelope.payload.language_server_id as usize);
         lsp_store.read_with(&cx, |lsp_store, _| {
-            if let Some(server) = lsp_store.language_server_for_id(server_id) {
-                Some(server.notify::<lsp_store::lsp_ext_command::LspExtClearFlycheck>(()))
-            } else {
-                None
-            }
+            lsp_store
+                .language_server_for_id(server_id)
+                .map(|server| server.notify::<lsp_store::lsp_ext_command::LspExtClearFlycheck>(()))
         });
 
         Ok(proto::Ack {})

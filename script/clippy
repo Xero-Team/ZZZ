@@ -2,6 +2,13 @@
 
 set -euo pipefail
 
+# The base lint gate lives in `[workspace.lints.clippy]` (Cargo.toml), so the
+# low-noise strict lints (safety docs, unsafe-op grouping, error handling,
+# pointer provenance) apply to every `cargo clippy` invocation below. The
+# passes in this script cover what workspace lint levels cannot: denying the
+# `warnings` group, opt-in lints that are too noisy to gate workspace-wide, and
+# the non-clippy checks. See the comment above the block in Cargo.toml for how
+# to evaluate a new low-noise candidate.
 "$(dirname "$0")/check-philosophy"
 
 has_package_selection=false

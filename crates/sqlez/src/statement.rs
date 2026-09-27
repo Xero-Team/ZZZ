@@ -73,7 +73,8 @@ impl<'a> Statement<'a> {
             statement.raw_statements.push(raw_statement);
 
             if !connection.can_write() && unsafe { sqlite3_stmt_readonly(raw_statement) == 0 } {
-                let sql = unsafe { CStr::from_ptr(sqlite3_sql(raw_statement)) };
+                let sql_ptr = unsafe { sqlite3_sql(raw_statement) };
+                let sql = unsafe { CStr::from_ptr(sql_ptr) };
 
                 bail!(
                     "Write statement prepared with connection that is not write capable. SQL:\n{} ",
@@ -130,7 +131,7 @@ impl<'a> Statement<'a> {
 
     pub fn bind_blob(&self, index: i32, blob: &[u8]) -> Result<()> {
         let index = index as c_int;
-        let blob_pointer = blob.as_ptr() as *const _;
+        let blob_pointer = blob.as_ptr().cast();
         let len = blob.len() as c_int;
 
         self.bind_index_with(index, &|raw_statement| unsafe {
@@ -153,7 +154,7 @@ impl<'a> Statement<'a> {
             .last_error()
             .with_context(|| format!("Failed to read length of blob at index {index}"))?;
 
-        unsafe { Ok(slice::from_raw_parts(pointer as *const u8, len)) }
+        unsafe { Ok(slice::from_raw_parts(pointer.cast::<u8>(), len)) }
     }
 
     pub fn bind_double(&self, index: i32, double: f64) -> Result<()> {
@@ -214,7 +215,7 @@ impl<'a> Statement<'a> {
 
     pub fn bind_text(&self, index: i32, text: &str) -> Result<()> {
         let index = index as c_int;
-        let text_pointer = text.as_ptr() as *const _;
+        let text_pointer = text.as_ptr().cast();
         let len = text.len() as c_int;
 
         self.bind_index_with(index, &|raw_statement| unsafe {

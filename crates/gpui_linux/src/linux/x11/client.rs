@@ -2449,9 +2449,9 @@ fn scroll_data_to_axis_state(
 fn reset_all_pointer_device_scroll_positions(
     pointer_device_states: &mut BTreeMap<xinput::DeviceId, PointerDeviceState>,
 ) {
-    pointer_device_states
-        .iter_mut()
-        .for_each(|(_, device_state)| reset_pointer_device_scroll_positions(device_state));
+    for device_state in pointer_device_states.values_mut() {
+        reset_pointer_device_scroll_positions(device_state);
+    }
 }
 
 fn reset_pointer_device_scroll_positions(pointer: &mut PointerDeviceState) {

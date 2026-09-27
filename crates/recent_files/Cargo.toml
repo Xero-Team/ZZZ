@@ -13,7 +13,6 @@ path = "src/recent_files.rs"
 doctest = false
 
 [dependencies]
-anyhow.workspace = true
 file_icons.workspace = true
 gpui.workspace = true
 i18n.workspace = true

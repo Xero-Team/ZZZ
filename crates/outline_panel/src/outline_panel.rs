@@ -259,10 +259,10 @@ impl SearchState {
                         }
                     }
 
-                    highlight_ranges.iter_mut().for_each(|(range, _)| {
+                    for (range, _) in highlight_ranges.iter_mut() {
                         range.start = range.start.saturating_sub(left_whitespaces_count);
                         range.end = range.end.saturating_sub(left_whitespaces_count);
-                    });
+                    }
                     if highlight_data.set(highlight_ranges).ok().is_some() {
                         notify_tx.try_send(()).ok();
                     }
@@ -528,10 +528,10 @@ impl SearchData {
                 .chars_at(extended_context_right_border)
                 .next()
                 .is_some_and(|c| !c.is_whitespace());
-        search_match_indices.iter_mut().for_each(|range| {
+        for range in search_match_indices.iter_mut() {
             range.start = range.start.saturating_sub(left_whitespaces_offset);
             range.end = range.end.saturating_sub(left_whitespaces_offset);
-        });
+        }
 
         let trimmed_row_offset_range =
             context_offset_range.start + left_whitespaces_offset..context_offset_range.end;

@@ -36,10 +36,7 @@ impl ThreadTaskTimings {
     pub fn convert(timings: &[GlobalThreadTimings]) -> Vec<Self> {
         timings
             .iter()
-            .filter_map(|t| match t.timings.upgrade() {
-                Some(timings) => Some((t.thread_id, timings)),
-                _ => None,
-            })
+            .filter_map(|t| t.timings.upgrade().map(|timings| (t.thread_id, timings)))
             .map(|(thread_id, timings)| {
                 let timings = timings.lock();
                 let thread_name = timings.thread_name.clone();

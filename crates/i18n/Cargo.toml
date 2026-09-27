@@ -16,7 +16,6 @@ anyhow.workspace = true
 gpui.workspace = true
 indexmap.workspace = true
 parking_lot.workspace = true
-paths.workspace = true
 rust-embed = { workspace = true, features = ["debug-embed"] }
 serde.workspace = true
 serde_json.workspace = true

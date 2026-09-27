@@ -525,13 +525,17 @@ pub fn execute_run(
         })
         .detach();
 
+        #[allow(
+            clippy::mem_forget,
+            reason = "the project must not be dropped while the worker is unwinding"
+        )]
         mem::forget(project);
     };
     // We do not reuse any of the state after unwinding, so we don't run risk of observing broken invariants.
     let app = std::panic::AssertUnwindSafe(app);
     let run = std::panic::AssertUnwindSafe(run);
     let res = std::panic::catch_unwind(move || { app }.0.run({ run }.0));
-    if let Err(_) = res {
+    if res.is_err() {
         log::error!("app panicked. quitting.");
         Err(anyhow::anyhow!("panicked"))
     } else {

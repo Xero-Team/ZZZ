@@ -16,7 +16,6 @@ default = ["futures"]
 
 [dependencies]
 tokio = { version = "1", features= [], optional = true }
-log = "0.4"
 futures = { version = "0.3", optional = true }
 
 [dev-dependencies]

@@ -42,13 +42,13 @@ impl Matrix {
             panic!("column out of bounds");
         }
 
+        let ptr = self.cells.as_mut_ptr();
+        // SAFETY: `col1` and `col2` are in bounds (checked above).
+        let lhs = unsafe { ptr.add(col1 * self.rows) };
+        let rhs = unsafe { ptr.add(col2 * self.rows) };
+        // SAFETY: both pointers are in bounds and the regions cover `self.rows` elements.
         unsafe {
-            let ptr = self.cells.as_mut_ptr();
-            std::ptr::swap_nonoverlapping(
-                ptr.add(col1 * self.rows),
-                ptr.add(col2 * self.rows),
-                self.rows,
-            );
+            std::ptr::swap_nonoverlapping(lhs, rhs, self.rows);
         }
     }
 

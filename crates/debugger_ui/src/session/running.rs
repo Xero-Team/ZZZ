@@ -675,9 +675,9 @@ impl RunningState {
                     .for_each(|value| Self::substitute_variables_in_config(value, context));
             }
             serde_json::Value::Array(array) => {
-                array
-                    .iter_mut()
-                    .for_each(|value| Self::substitute_variables_in_config(value, context));
+                for value in array.iter_mut() {
+                    Self::substitute_variables_in_config(value, context);
+                }
             }
             serde_json::Value::String(s) => {
                 // Some built-in zzz tasks wrap their arguments in quotes as they might contain spaces.
@@ -713,9 +713,9 @@ impl RunningState {
                 });
             }
             serde_json::Value::Array(array) => {
-                array.iter_mut().for_each(|value| {
+                for value in array.iter_mut() {
                     Self::substitute_process_id_in_config(value, process_id);
-                });
+                }
             }
             serde_json::Value::String(s) => {
                 if s.contains(PROCESS_ID_PLACEHOLDER.as_str()) {
@@ -737,9 +737,9 @@ impl RunningState {
                     .for_each(|(key, value)| Self::relativize_paths(Some(key), value, context));
             }
             serde_json::Value::Array(array) => {
-                array
-                    .iter_mut()
-                    .for_each(|value| Self::relativize_paths(None, value, context));
+                for value in array.iter_mut() {
+                    Self::relativize_paths(None, value, context);
+                }
             }
             serde_json::Value::String(s) if key == Some("program") || key == Some("cwd") => {
                 // Some built-in zzz tasks wrap their arguments in quotes as they might contain spaces.

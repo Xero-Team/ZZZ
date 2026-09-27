@@ -27,12 +27,12 @@ struct Chunk {
 
 impl Drop for Chunk {
     fn drop(&mut self) {
-        unsafe {
-            let chunk_size = self.end.offset_from_unsigned(self.start);
-            // SAFETY: This succeeded during allocation.
-            let layout = alloc::Layout::from_size_align_unchecked(chunk_size, 1);
-            alloc::dealloc(self.start, layout);
-        }
+        // SAFETY: Both pointers were derived from the same allocation in `Chunk::new`.
+        let chunk_size = unsafe { self.end.offset_from_unsigned(self.start) };
+        // SAFETY: This succeeded during allocation.
+        let layout = unsafe { alloc::Layout::from_size_align_unchecked(chunk_size, 1) };
+        // SAFETY: `self.start` was allocated with `layout`.
+        unsafe { alloc::dealloc(self.start, layout) };
     }
 }
 

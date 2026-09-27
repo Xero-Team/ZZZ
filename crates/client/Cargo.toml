@@ -23,8 +23,6 @@ base64.workspace = true
 clock.workspace = true
 collections.workspace = true
 credentials_provider.workspace = true
-feature_flags.workspace = true
-fs.workspace = true
 futures.workspace = true
 gpui.workspace = true
 gpui_tokio.workspace = true
@@ -33,16 +31,13 @@ http_client_tls.workspace = true
 httparse = "1.10"
 log.workspace = true
 parking_lot.workspace = true
-paths.workspace = true
 postage.workspace = true
 rand.workspace = true
 regex.workspace = true
 release_channel.workspace = true
 rpc = { workspace = true, features = ["gpui"] }
 serde.workspace = true
-serde_json.workspace = true
 settings.workspace = true
-sha2.workspace = true
 smol.workspace = true
 text.workspace = true
 thiserror.workspace = true
@@ -51,13 +46,11 @@ tokio-socks.workspace = true
 tokio.workspace = true
 url.workspace = true
 util.workspace = true
-worktree.workspace = true
 zzz_credentials_provider.workspace = true
 
 [dev-dependencies]
 clock = { workspace = true, features = ["test-support"] }
 collections = { workspace = true, features = ["test-support"] }
-fs.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 http_client = { workspace = true, features = ["test-support"] }
 rpc = { workspace = true, features = ["test-support"] }

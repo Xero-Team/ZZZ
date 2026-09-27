@@ -14,9 +14,7 @@ doctest = false
 test = false
 
 [dependencies]
-anyhow.workspace = true
 assets.workspace = true
-collections.workspace = true
 gpui.workspace = true
 i18n.workspace = true
 language.workspace = true

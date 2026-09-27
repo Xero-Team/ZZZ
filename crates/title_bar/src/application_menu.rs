@@ -211,7 +211,9 @@ impl ApplicationMenu {
             )
             .on_hover(move |hover_enter, window, cx| {
                 if *hover_enter && !current_handle.is_deployed() {
-                    all_handles.iter().for_each(|h| h.hide(cx));
+                    for handle in all_handles.iter() {
+                        handle.hide(cx);
+                    }
 
                     // We need to defer this so that this menu handle can take focus from the previous menu
                     let handle = current_handle.clone();
@@ -303,12 +305,16 @@ impl Render for ApplicationMenu {
                 // We need to wait for the next frame to show all menus first,
                 // before we can handle show/hide operations
                 window.on_next_frame(move |window, cx| {
-                    handles_to_hide.iter().for_each(|handle| handle.hide(cx));
+                    for handle in handles_to_hide.iter() {
+                        handle.hide(cx);
+                    }
                     window.defer(cx, move |window, cx| handle_to_show.show(window, cx));
                 });
             } else {
                 // Since menus are already shown, we can directly handle show/hide operations
-                handles_to_hide.iter().for_each(|handle| handle.hide(cx));
+                for handle in handles_to_hide.iter() {
+                    handle.hide(cx);
+                }
                 cx.defer_in(window, move |_, window, cx| handle_to_show.show(window, cx));
             }
         }

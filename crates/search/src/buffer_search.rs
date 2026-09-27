@@ -1592,7 +1592,7 @@ impl BufferSearchBar {
         cx: &mut Context<Self>,
     ) {
         self.set_search_within_selection(
-            if let Some(_) = self.selection_search_enabled {
+            if self.selection_search_enabled.is_some() {
                 None
             } else {
                 Some(FilteredSearchRange::Default)

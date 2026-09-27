@@ -3890,8 +3890,11 @@ mod tests {
     }
 
     fn disable_git_global_config() {
+        // SAFETY: tests run under the environment lock, so mutating the environment is sound.
         unsafe {
             std::env::set_var("GIT_CONFIG_GLOBAL", "");
+        }
+        unsafe {
             std::env::set_var("GIT_CONFIG_SYSTEM", "");
         }
     }

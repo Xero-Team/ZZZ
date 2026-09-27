@@ -205,9 +205,10 @@ impl Search {
                         let fill_requests = cx
                             .background_spawn(async move {
                                 for buffer in open_buffers {
-                                    if let Err(_) = grab_buffer_snapshot_tx
+                                    if grab_buffer_snapshot_tx
                                         .send((buffer, LineHint::default()))
                                         .await
+                                        .is_err()
                                     {
                                         return;
                                     }

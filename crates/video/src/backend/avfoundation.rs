@@ -325,7 +325,8 @@ unsafe fn create_reader(asset: Id, video_track: Id) -> anyhow::Result<(Id, Id)> 
             ));
         }
 
-        let key: Id = msg_send![class!(NSString), stringWithUTF8String: c"PixelFormatType".as_ptr()];
+        let key: Id =
+            msg_send![class!(NSString), stringWithUTF8String: c"PixelFormatType".as_ptr()];
         let value: Id = msg_send![
             class!(NSNumber),
             numberWithUnsignedInt: K_CV_PIXEL_FORMAT_TYPE_32_BGRA

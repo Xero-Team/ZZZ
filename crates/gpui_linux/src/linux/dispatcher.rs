@@ -160,6 +160,10 @@ impl PlatformDispatcher for LinuxDispatcher {
                 // 2. we are on a background thread.
                 // It is not safe to drop something !Send on the wrong thread, and
                 // the app will exit soon anyway, so we must forget the runnable.
+                #[allow(
+                    clippy::mem_forget,
+                    reason = "dropping a !Send runnable on a background thread is unsound"
+                )]
                 std::mem::forget(runnable);
             });
     }

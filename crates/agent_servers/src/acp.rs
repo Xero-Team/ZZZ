@@ -2014,15 +2014,13 @@ impl AgentConnection for AcpConnection {
             return None;
         };
 
-        if let Some(modes) = session.session_modes.as_ref() {
-            Some(Rc::new(AcpSessionModes {
+        session.session_modes.as_ref().map(|modes| {
+            Rc::new(AcpSessionModes {
                 connection: self.connection.clone(),
                 session_id: session_id.clone(),
                 state: modes.clone(),
-            }) as _)
-        } else {
-            None
-        }
+            }) as _
+        })
     }
 
     fn request_elicitations(&self) -> Option<Entity<ElicitationStore>> {

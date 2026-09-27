@@ -612,7 +612,7 @@ impl GitStore {
                 cx.spawn(async move |this, cx| {
                     let watcher = fs.watch(&path, Duration::from_millis(100));
                     let (mut watcher, _) = watcher.await;
-                    while let Some(_) = watcher.next().await {
+                    while watcher.next().await.is_some() {
                         let Ok(_) = this.update(cx, |this, cx| {
                             let GitStoreState::Local {
                                 project_environment,

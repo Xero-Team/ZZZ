@@ -618,13 +618,10 @@ impl WatchedConnectionMessage {
     fn expanded(&mut self, language_registry: Arc<LanguageRegistry>, cx: &mut App) {
         let params_md = match &self.params {
             Ok(Some(params)) => Some(expanded_params_md(params, &language_registry, cx)),
-            Err(err) => {
-                if let Some(err) = &serde_json::to_value(err).log_err() {
-                    Some(expanded_params_md(&err, &language_registry, cx))
-                } else {
-                    None
-                }
-            }
+            Err(err) => serde_json::to_value(err)
+                .log_err()
+                .as_ref()
+                .map(|err| expanded_params_md(&err, &language_registry, cx)),
             _ => None,
         };
         self.expanded_params_md = params_md;

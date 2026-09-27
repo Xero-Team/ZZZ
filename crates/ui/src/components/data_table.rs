@@ -1135,7 +1135,7 @@ impl RenderOnce for Table {
         };
 
         let (redistributable_entity, resizable_entity, resize_handles) =
-            if let Some(_) = interaction_state.as_ref() {
+            if interaction_state.as_ref().is_some() {
                 match &self.column_width_config {
                     ColumnWidthConfig::Redistributable { columns_state, .. } => (
                         Some(columns_state.clone()),

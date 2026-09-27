@@ -269,6 +269,10 @@ fn non_zero_rational(rational: ffmpeg::Rational) -> Option<f64> {
 /// FFmpeg 7 moved stream side data onto `AVCodecParameters::coded_side_data`,
 /// which the high-level API does not expose yet, so the bindings are read
 /// directly here.
+#[allow(
+    clippy::multiple_unsafe_ops_per_block,
+    reason = "the FFmpeg side-data pointers share a single validity proof, so the dereferences are grouped"
+)]
 fn video_stream_rotation(stream: &ffmpeg::format::stream::Stream<'_>) -> Rotation {
     let parameters = stream.parameters().as_ptr();
     if parameters.is_null() {

@@ -162,11 +162,7 @@ fn main() -> Result<(), anyhow::Error> {
                 for (worktree, _) in &worktrees {
                     let scan_complete = worktree
                         .update(cx, |this, _| {
-                            if let Some(local) = this.as_local() {
-                                Some(local.scan_complete())
-                            } else {
-                                None
-                            }
+                            this.as_local().map(|local| local.scan_complete())
                         });
                     if let Some(scan_complete) = scan_complete {
                         scan_complete.await;

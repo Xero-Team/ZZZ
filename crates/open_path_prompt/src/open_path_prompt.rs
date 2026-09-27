@@ -824,9 +824,9 @@ impl PickerDelegate for OpenPathDelegate {
                         vec![],
                     )
                 } else if *parent_path == self.prompt_root {
-                    match_positions.iter_mut().for_each(|position| {
+                    for position in match_positions.iter_mut() {
                         *position += self.prompt_root.len();
-                    });
+                    }
                     (
                         format!("{}{}", self.prompt_root, candidate.path.string),
                         match_positions,
@@ -849,9 +849,9 @@ impl PickerDelegate for OpenPathDelegate {
                 ..
             } => {
                 let (label, delta) = if *parent_path == self.prompt_root {
-                    match_positions.iter_mut().for_each(|position| {
+                    for position in match_positions.iter_mut() {
                         *position += self.prompt_root.len();
-                    });
+                    }
                     (
                         format!("{}{}", self.prompt_root, candidate.path.string),
                         self.prompt_root.len(),

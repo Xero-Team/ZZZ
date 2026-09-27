@@ -200,9 +200,9 @@ impl DevContainerManifest {
         // HOME is user-specific, and we will often not run as the image user
         merged_remote_env.remove("HOME");
         if let Some(mut remote_env) = self.dev_container().remote_env.clone() {
-            remote_env.values_mut().for_each(|value| {
-                *value = Self::replace_environment_variables(value, "containerEnv", &container_env)
-            });
+            for value in remote_env.values_mut() {
+                *value = Self::replace_environment_variables(value, "containerEnv", &container_env);
+            }
             for (k, v) in remote_env {
                 merged_remote_env.insert(k, v);
             }
@@ -333,10 +333,11 @@ impl DevContainerManifest {
                 let docker_compose_manifest = self.docker_compose_manifest().await?;
                 let (_, main_service) = find_primary_service(&docker_compose_manifest, &self)?;
 
-                if let Some(_) = main_service
+                if main_service
                     .build
                     .as_ref()
                     .and_then(|b| b.dockerfile.as_ref())
+                    .is_some()
                 {
                     let dockerfile_contents = self.expanded_dockerfile_content().await?;
                     return image_from_dockerfile(

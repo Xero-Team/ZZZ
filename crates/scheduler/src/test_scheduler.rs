@@ -808,7 +808,7 @@ impl TracingWaker {
     }
 
     fn clone_raw(waker: *const ()) -> RawWaker {
-        let waker = waker as *const TracingWaker;
+        let waker = waker.cast::<TracingWaker>();
         let waker = unsafe { &*waker };
         RawWaker::new(
             Box::into_raw(Box::new(waker.clone())) as *const (),
@@ -822,7 +822,7 @@ impl TracingWaker {
     }
 
     fn wake_by_ref_raw(waker: *const ()) {
-        let waker = waker as *const TracingWaker;
+        let waker = waker.cast::<TracingWaker>();
         let waker = unsafe { &*waker };
         waker.wake_by_ref();
     }

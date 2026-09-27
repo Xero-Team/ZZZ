@@ -268,7 +268,7 @@ fn load_shell_from_passwd() -> Result<()> {
         n if n < 0 => 1024,
         n => n as usize,
     };
-    let mut buffer = Vec::with_capacity(buflen);
+    let mut buffer: Vec<u8> = Vec::with_capacity(buflen);
 
     let mut pwd: std::mem::MaybeUninit<libc::passwd> = std::mem::MaybeUninit::uninit();
     let mut result: *mut libc::passwd = std::ptr::null_mut();
@@ -278,7 +278,7 @@ fn load_shell_from_passwd() -> Result<()> {
         libc::getpwuid_r(
             uid,
             pwd.as_mut_ptr(),
-            buffer.as_mut_ptr() as *mut libc::c_char,
+            buffer.as_mut_ptr().cast::<libc::c_char>(),
             buflen,
             &mut result,
         )
@@ -425,12 +425,20 @@ pub fn set_pre_exec_to_start_new_session(
     // safety: code in pre_exec should be signal safe.
     // https://man7.org/linux/man-pages/man7/signal-safety.7.html
     #[cfg(unix)]
-    unsafe {
+    {
         use std::os::unix::process::CommandExt;
-        command.pre_exec(|| {
-            libc::setsid();
+
+        let start_new_session = || {
+            // SAFETY: `setsid` is async-signal-safe, as required by the `pre_exec` contract.
+            unsafe { libc::setsid() };
             Ok(())
-        });
+        };
+
+        // safety: code in pre_exec should be signal safe.
+        // https://man7.org/linux/man-pages/man7/signal-safety.7.html
+        unsafe {
+            command.pre_exec(start_new_session);
+        }
     };
     command
 }

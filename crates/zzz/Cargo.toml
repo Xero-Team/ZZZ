@@ -35,7 +35,6 @@ visual-tests = [
     "dep:base64",
     "dep:image",
     "dep:tempfile",
-    "dep:action_log",
     "dep:agent_servers",
     "workspace/test-support",
     "project/test-support",
@@ -44,11 +43,9 @@ visual-tests = [
     "image_viewer/test-support",
     "clock/test-support",
     "acp_thread/test-support",
-    "action_log/test-support",
     "agent_ui/test-support",
     "db/test-support",
     "agent/test-support",
-    "language_model/test-support",
     "fs/test-support",
     "recent_projects/test-support",
     "title_bar/test-support",
@@ -117,7 +114,6 @@ semver.workspace = true
 tempfile = { workspace = true, optional = true }
 clock = { workspace = true, optional = true }
 acp_thread.workspace = true
-action_log = { workspace = true, optional = true }
 agent_servers = { workspace = true, optional = true }
 gpui_tokio.workspace = true
 rayon.workspace = true
@@ -135,7 +131,6 @@ json_schema_store.workspace = true
 keymap_editor.workspace = true
 language.workspace = true
 language_extension.workspace = true
-language_model.workspace = true
 language_onboarding.workspace = true
 language_selector.workspace = true
 language_tools.workspace = true
@@ -163,13 +158,11 @@ project.workspace = true
 project_panel.workspace = true
 project_symbols.workspace = true
 prompt_store.workspace = true
-proto.workspace = true
 recent_files.workspace = true
 recent_projects.workspace = true
 release_channel.workspace = true
 remote.workspace = true
 repl.workspace = true
-reqwest.workspace = true
 reqwest_client.workspace = true
 rope.workspace = true
 search.workspace = true
@@ -195,7 +188,6 @@ theme_settings.workspace = true
 theme_extension.workspace = true
 theme_selector.workspace = true
 time.workspace = true
-time_format.workspace = true
 title_bar.workspace = true
 ztracing.workspace = true
 tracing.workspace = true

@@ -334,7 +334,8 @@ impl<F: Future> Future for LspRequest<F> {
 
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
         // SAFETY: This is standard pin projection, we're pinned so our fields must be pinned.
-        let inner = unsafe { Pin::new_unchecked(&mut self.get_unchecked_mut().request) };
+        let this = unsafe { self.get_unchecked_mut() };
+        let inner = unsafe { Pin::new_unchecked(&mut this.request) };
         inner.poll(cx)
     }
 }

@@ -628,8 +628,10 @@ actions!(
 fn timestamp_format() -> &'static [BorrowedFormatItem<'static>] {
     static FORMAT: OnceLock<Vec<BorrowedFormatItem<'static>>> = OnceLock::new();
     FORMAT.get_or_init(|| {
-        time::format_description::parse("[day] [month repr:short] [year] [hour]:[minute]")
-            .unwrap_or_default()
+        time::format_description::parse_borrowed::<1>(
+            "[day] [month repr:short] [year] [hour]:[minute]",
+        )
+        .unwrap_or_default()
     })
 }
 

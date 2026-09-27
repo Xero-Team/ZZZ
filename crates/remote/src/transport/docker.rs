@@ -504,9 +504,10 @@ impl DockerExecConnection {
 
     fn kill_inner(&self) -> Result<()> {
         if let Some(pid) = self.proxy_process.lock().take() {
-            if let Ok(_) = util::command::new_command("kill")
+            if util::command::new_command("kill")
                 .arg(pid.to_string())
                 .spawn()
+                .is_ok()
             {
                 Ok(())
             } else {

@@ -33,21 +33,25 @@ impl Connection {
                 flags,
                 ptr::null(),
             );
+        }
 
-            // Turn on extended error codes
+        // Turn on extended error codes
+        unsafe {
             sqlite3_extended_result_codes(connection.sqlite3, 1);
+        }
 
-            // Wait for the database lock to be released instead of failing
-            // immediately with SQLITE_BUSY. Some databases (e.g. the agent
-            // threads database) are shared between ZZZ instances, so transient
-            // lock contention is expected; failing fast turns it into a
-            // storm of dropped saves and retry churn.
-            if !connection.sqlite3.is_null() {
+        // Wait for the database lock to be released instead of failing
+        // immediately with SQLITE_BUSY. Some databases (e.g. the agent
+        // threads database) are shared between ZZZ instances, so transient
+        // lock contention is expected; failing fast turns it into a
+        // storm of dropped saves and retry churn.
+        if !connection.sqlite3.is_null() {
+            unsafe {
                 sqlite3_busy_timeout(connection.sqlite3, 5000);
             }
-
-            connection.last_error()?;
         }
+
+        connection.last_error()?;
 
         Ok(connection)
     }
@@ -89,17 +93,21 @@ impl Connection {
     }
 
     pub fn backup_main(&self, destination: &Connection) -> Result<()> {
-        unsafe {
-            let backup = sqlite3_backup_init(
+        let backup = unsafe {
+            sqlite3_backup_init(
                 destination.sqlite3,
                 CString::new("main")?.as_ptr(),
                 self.sqlite3,
                 CString::new("main")?.as_ptr(),
-            );
+            )
+        };
+        unsafe {
             sqlite3_backup_step(backup, -1);
-            sqlite3_backup_finish(backup);
-            destination.last_error()
         }
+        unsafe {
+            sqlite3_backup_finish(backup);
+        }
+        destination.last_error()
     }
 
     pub fn backup_main_to(&self, destination: impl AsRef<Path>) -> Result<()> {
@@ -155,14 +163,9 @@ impl Connection {
                 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
                 let offset = 0;
 
-                unsafe {
-                    (
-                        sqlite3_errcode(temp_connection.sqlite3),
-                        offset,
-                        sqlite3_errmsg(temp_connection.sqlite3),
-                        Some(temp_connection),
-                    )
-                }
+                let errcode = unsafe { sqlite3_errcode(temp_connection.sqlite3) };
+                let errmsg = unsafe { sqlite3_errmsg(temp_connection.sqlite3) };
+                (errcode, offset, errmsg, Some(temp_connection))
             } else {
                 unsafe {
                     sqlite3_prepare_v2(
@@ -180,24 +183,18 @@ impl Connection {
                 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
                 let offset = 0;
 
-                unsafe {
-                    (
-                        sqlite3_errcode(self.sqlite3),
-                        offset,
-                        sqlite3_errmsg(self.sqlite3),
-                        None,
-                    )
-                }
+                let errcode = unsafe { sqlite3_errcode(self.sqlite3) };
+                let errmsg = unsafe { sqlite3_errmsg(self.sqlite3) };
+                (errcode, offset, errmsg, None)
             };
 
             unsafe { sqlite3_finalize(raw_statement) };
 
             if res == 1 && offset >= 0 {
                 let sub_statement_correction = remaining_sql.as_ptr() as usize - sql_start as usize;
-                let err_msg = String::from_utf8_lossy(unsafe {
-                    CStr::from_ptr(message as *const _).to_bytes()
-                })
-                .into_owned();
+                let err_msg =
+                    String::from_utf8_lossy(unsafe { CStr::from_ptr(message.cast()).to_bytes() })
+                        .into_owned();
 
                 return Some((err_msg, offset as usize + sub_statement_correction));
             }
@@ -208,25 +205,23 @@ impl Connection {
     }
 
     pub(crate) fn last_error(&self) -> Result<()> {
-        unsafe {
-            let code = sqlite3_errcode(self.sqlite3);
-            const NON_ERROR_CODES: &[i32] = &[SQLITE_OK, SQLITE_ROW];
-            if NON_ERROR_CODES.contains(&code) {
-                return Ok(());
-            }
-
-            let message = sqlite3_errmsg(self.sqlite3);
-            let message = if message.is_null() {
-                None
-            } else {
-                Some(
-                    String::from_utf8_lossy(CStr::from_ptr(message as *const _).to_bytes())
-                        .into_owned(),
-                )
-            };
-
-            anyhow::bail!("Sqlite call failed with code {code} and message: {message:?}")
+        let code = unsafe { sqlite3_errcode(self.sqlite3) };
+        const NON_ERROR_CODES: &[i32] = &[SQLITE_OK, SQLITE_ROW];
+        if NON_ERROR_CODES.contains(&code) {
+            return Ok(());
         }
+
+        let message = unsafe { sqlite3_errmsg(self.sqlite3) };
+        let message = if message.is_null() {
+            None
+        } else {
+            Some(
+                String::from_utf8_lossy(unsafe { CStr::from_ptr(message.cast()).to_bytes() })
+                    .into_owned(),
+            )
+        };
+
+        anyhow::bail!("Sqlite call failed with code {code} and message: {message:?}")
     }
 
     pub(crate) fn with_write<T>(&self, callback: impl FnOnce(&Connection) -> T) -> T {

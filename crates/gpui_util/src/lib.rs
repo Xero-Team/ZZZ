@@ -311,7 +311,8 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         let level = self.1;
         let location = self.2;
-        let inner = unsafe { Pin::new_unchecked(&mut self.get_unchecked_mut().0) };
+        let this = unsafe { self.get_unchecked_mut() };
+        let inner = unsafe { Pin::new_unchecked(&mut this.0) };
         match inner.poll(cx) {
             Poll::Ready(output) => Poll::Ready(match output {
                 Ok(output) => Some(output),
@@ -338,7 +339,8 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         let level = self.1;
         let location = self.2;
-        let inner = unsafe { Pin::new_unchecked(&mut self.get_unchecked_mut().0) };
+        let this = unsafe { self.get_unchecked_mut() };
+        let inner = unsafe { Pin::new_unchecked(&mut this.0) };
         match inner.poll(cx) {
             Poll::Ready(output) => Poll::Ready(match output {
                 Ok(output) => Some(output),
@@ -362,7 +364,8 @@ where
     type Output = T;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        let inner = unsafe { Pin::new_unchecked(&mut self.get_unchecked_mut().0) };
+        let this = unsafe { self.get_unchecked_mut() };
+        let inner = unsafe { Pin::new_unchecked(&mut this.0) };
         match inner.poll(cx) {
             Poll::Ready(result) => Poll::Ready(result.unwrap()),
             Poll::Pending => Poll::Pending,

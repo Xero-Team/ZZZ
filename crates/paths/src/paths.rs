@@ -713,8 +713,11 @@ mod tests {
         let _lock = ENV_LOCK.lock().expect("env lock poisoned");
         let _portable_restore = EnvRestore::new("VSCODE_PORTABLE");
         let _appdata_restore = EnvRestore::new("VSCODE_APPDATA");
+        // SAFETY: the test holds `ENV_LOCK`, so mutating the environment is sound.
         unsafe {
             env::set_var("VSCODE_PORTABLE", "/tmp/vscode-portable");
+        }
+        unsafe {
             env::set_var("VSCODE_APPDATA", "/tmp/vscode-appdata");
         }
 

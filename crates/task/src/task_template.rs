@@ -824,7 +824,7 @@ mod tests {
                 },
             );
             assert!(
-                matches!(resolved_task_attempt, None),
+                resolved_task_attempt.is_none(),
                 "If any of the ZZZ task variables is not substituted, the task should not be resolved, but got some resolution without the variable {removed_variable:?} (index {i})"
             );
         }

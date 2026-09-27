@@ -1534,7 +1534,7 @@ impl WgpuRenderer {
     unsafe fn instance_bytes<T>(instances: &[T]) -> &[u8] {
         unsafe {
             std::slice::from_raw_parts(
-                instances.as_ptr() as *const u8,
+                instances.as_ptr().cast::<u8>(),
                 std::mem::size_of_val(instances),
             )
         }

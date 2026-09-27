@@ -122,6 +122,10 @@ pub fn run_test(
                         attempt += 1;
                         // The panic payload might itself trigger an unwind on drop:
                         // https://doc.rust-lang.org/std/panic/fn.catch_unwind.html#notes
+                        #[allow(
+                            clippy::mem_forget,
+                            reason = "dropping the panic payload could itself unwind"
+                        )]
                         std::mem::forget(error);
                     } else {
                         if is_multiple_runs {

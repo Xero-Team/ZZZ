@@ -621,6 +621,7 @@ mod tests {
     use super::*;
 
     const SAMPLES: [Sample; 5] = [0.0, 1.0, 2.0, 3.0, 4.0];
+    static SILENCE: [Sample; 40_000] = [0.0; 40_000];
 
     fn test_source() -> StaticSamplesBuffer {
         StaticSamplesBuffer::new(nz!(1), nz!(1), &SAMPLES)
@@ -723,7 +724,7 @@ mod tests {
 
         #[test]
         fn keeps_correct_amount_of_seconds() {
-            let input = StaticSamplesBuffer::new(nz!(1), nz!(16_000), &[0.0; 40_000]);
+            let input = StaticSamplesBuffer::new(nz!(1), nz!(16_000), &SILENCE);
 
             let (replay, mut source) = input
                 .replayable(Duration::from_secs(2))
@@ -743,7 +744,7 @@ mod tests {
 
         #[test]
         fn samples_ready() {
-            let input = StaticSamplesBuffer::new(nz!(1), nz!(16_000), &[0.0; 40_000]);
+            let input = StaticSamplesBuffer::new(nz!(1), nz!(16_000), &SILENCE);
             let (mut replay, source) = input
                 .replayable(Duration::from_secs(2))
                 .expect("longer than 100ms");

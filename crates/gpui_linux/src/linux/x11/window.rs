@@ -336,8 +336,7 @@ impl rwh::HasWindowHandle for X11Window {
 impl rwh::HasDisplayHandle for X11Window {
     fn display_handle(&self) -> Result<rwh::DisplayHandle<'_>, rwh::HandleError> {
         let connection =
-            as_raw_xcb_connection::AsRawXcbConnection::as_raw_xcb_connection(&*self.0.xcb)
-                as *mut _;
+            as_raw_xcb_connection::AsRawXcbConnection::as_raw_xcb_connection(&*self.0.xcb).cast();
         let Some(non_zero) = NonNull::new(connection) else {
             return Err(rwh::HandleError::Unavailable);
         };
@@ -740,7 +739,8 @@ impl X11WindowState {
                 let raw_window = RawWindow {
                     connection: as_raw_xcb_connection::AsRawXcbConnection::as_raw_xcb_connection(
                         xcb,
-                    ) as *mut _,
+                    )
+                    .cast(),
                     screen_id: x_screen_index,
                     window_id: x_window,
                     visual_id: visual.id,
@@ -1714,7 +1714,8 @@ impl PlatformWindow for X11Window {
             let raw_window = RawWindow {
                 connection: as_raw_xcb_connection::AsRawXcbConnection::as_raw_xcb_connection(
                     &*self.0.xcb,
-                ) as *mut _,
+                )
+                .cast(),
                 screen_id: inner.x_screen_index,
                 window_id: self.0.x_window,
                 visual_id: inner.visual_id,

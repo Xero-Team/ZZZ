@@ -49,7 +49,7 @@ impl Drop for SyntaxSnapshot {
                 let (tx, rx) = std::sync::mpsc::channel();
                 std::thread::Builder::new()
                     .name("SyntaxSnapshot::drop".into())
-                    .spawn(move || while let Ok(_) = rx.recv() {})
+                    .spawn(move || while rx.recv().is_ok() {})
                     .expect("failed to spawn drop thread");
                 tx
             });
