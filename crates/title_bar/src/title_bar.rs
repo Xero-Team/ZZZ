@@ -1,5 +1,4 @@
 mod application_menu;
-mod onboarding_banner;
 mod title_bar_settings;
 
 use crate::application_menu::{ApplicationMenu, show_menus};
@@ -26,7 +25,6 @@ use gpui::{
     IntoElement, MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled,
     Subscription, WeakEntity, Window, actions, div,
 };
-use onboarding_banner::OnboardingBanner;
 use project::{
     Project, git_store::GitStoreEvent, project_settings::ProjectSettings,
     trusted_worktrees::TrustedWorktrees,
@@ -46,8 +44,6 @@ use util::ResultExt;
 use workspace::{MultiWorkspace, ToggleWorktreeSecurity, Workspace};
 
 use zzz_actions::OpenRemote;
-
-pub use onboarding_banner::restore_banner;
 
 const MAX_PROJECT_NAME_LENGTH: usize = 40;
 const MAX_BRANCH_NAME_LENGTH: usize = 40;
@@ -174,7 +170,6 @@ pub struct TitleBar {
     multi_workspace: Option<WeakEntity<MultiWorkspace>>,
     application_menu: Option<Entity<ApplicationMenu>>,
     _subscriptions: Vec<Subscription>,
-    banner: Option<Entity<OnboardingBanner>>,
 }
 
 impl Render for TitleBar {
@@ -296,12 +291,6 @@ impl Render for TitleBar {
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .into_any_element(),
         );
-
-        if title_bar_settings.show_onboarding_banner {
-            if let Some(banner) = &self.banner {
-                children.push(banner.clone().into_any_element())
-            }
-        }
 
         let status = self.client.status();
         let status = &*status.borrow();
@@ -442,7 +431,6 @@ impl TitleBar {
             user_store,
             client,
             _subscriptions: subscriptions,
-            banner: None,
         }
     }
 

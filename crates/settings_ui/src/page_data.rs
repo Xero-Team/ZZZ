@@ -4605,7 +4605,7 @@ fn window_and_layout_page() -> SettingsPage {
         ]
     }
 
-    fn title_bar_section() -> [SettingsPageItem; 8] {
+    fn title_bar_section() -> [SettingsPageItem; 7] {
         [
             SettingsPageItem::SectionHeader(lt("settings_ui.page_data.section.title.bar", "Title Bar")),
             SettingsPageItem::SettingItem(SettingItem {
@@ -4669,28 +4669,6 @@ fn window_and_layout_page() -> SettingsPage {
                             .title_bar
                             .get_or_insert_default()
                             .show_project_items = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: lt("settings_ui.page_data.title.show.onboarding.banner", "Show Onboarding Banner"),
-                description: lt("settings_ui.page_data.description.show.banners.announcing.new.features.in.the.titlebar", "Show banners announcing new features in the titlebar."),
-                field: Box::new(SettingField {
-                    json_path: Some("title_bar.show_onboarding_banner"),
-                    pick: |settings_content| {
-                        settings_content
-                            .title_bar
-                            .as_ref()?
-                            .show_onboarding_banner
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .title_bar
-                            .get_or_insert_default()
-                            .show_onboarding_banner = value;
                     },
                 }),
                 metadata: None,

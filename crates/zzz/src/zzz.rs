@@ -93,9 +93,7 @@ use workspace::{
     WorkspaceSettings, create_and_open_local_file,
     notifications::simple_message_notification::MessageNotification, open_new,
 };
-use workspace::{
-    CloseIntent, CloseProject, CloseWindow, RestoreBanner, with_active_or_new_workspace,
-};
+use workspace::{CloseIntent, CloseProject, CloseWindow, with_active_or_new_workspace};
 use workspace::{Pane, notifications::DetachAndPromptErr};
 use zzz_actions::{About, OpenBrowser, OpenServerSettings, OpenSettingsFile, OpenZZZUrl, Quit};
 
@@ -153,8 +151,6 @@ pub fn init(cx: &mut App) {
     #[cfg(target_os = "macos")]
     cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
     cx.on_action(quit);
-
-    cx.on_action(|_: &RestoreBanner, cx| title_bar::restore_banner(cx));
 
     cx.observe_flag::<PanicFeatureFlag, _>({
         let mut added = false;
