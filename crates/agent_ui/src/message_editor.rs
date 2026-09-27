@@ -2050,7 +2050,6 @@ mod tests {
         AppContext, ClipboardEntry, ClipboardItem, Entity, EventEmitter, ExternalPaths,
         FocusHandle, Focusable, Task, TestAppContext, VisualTestContext,
     };
-    use language_model::LanguageModelRegistry;
     use lsp::{CompletionContext, CompletionTriggerKind};
     use parking_lot::RwLock;
     use project::{CompletionIntent, Project, ProjectPath};
@@ -3245,7 +3244,6 @@ mod tests {
     #[gpui::test]
     async fn test_insert_thread_summary(cx: &mut TestAppContext) {
         init_test(cx);
-        cx.update(LanguageModelRegistry::test);
 
         let fs = FakeFs::new(cx.executor());
         fs.insert_tree("/project", json!({"file": ""})).await;
@@ -3317,7 +3315,6 @@ mod tests {
     #[gpui::test]
     async fn test_insert_thread_summary_skipped_for_external_agents(cx: &mut TestAppContext) {
         init_test(cx);
-        cx.update(LanguageModelRegistry::test);
 
         let fs = FakeFs::new(cx.executor());
         fs.insert_tree("/project", json!({"file": ""})).await;

@@ -17,13 +17,10 @@
   - [Tool Permissions](./ai/tool-permissions.md)
   - [External Agents](./ai/external-agents.md)
 - [Parallel Agents](./ai/parallel-agents.md)
-- [Inline Assistant](./ai/inline-assistant.md)
-- [Edit Prediction (Retired)](./ai/edit-prediction.md)
 - [Skills](./ai/skills.md)
 - [Rules](./ai/rules.md)
 - [Model Context Protocol](./ai/mcp.md)
 - [Configuration](./ai/configuration.md)
-  - [LLM Providers](./ai/llm-providers.md)
   - [Agent Settings](./ai/agent-settings.md)
   - [Models](./ai/models.md)
 

@@ -30,10 +30,9 @@ that is local-first by construction.
 
 ## What stays
 
-- **AI features.** We keep the agent panel, inline assistant, and edit
-  prediction. They default to your own infrastructure: a local Ollama or
-  llama.cpp endpoint, or a provider you configure yourself. No account is
-  created, and no remote provider is selected for you.
+- **AI features.** We keep the agent panel and the ACP client. Models come
+  from an external agent you configure yourself. No account is created, and
+  no remote provider is selected for you.
 - **The agent protocol.** ZZZ speaks the open Agent Client Protocol (ACP)
   and nothing proprietary.
 - **The foundation.** GPUI, Tree-sitter, the language server integration,

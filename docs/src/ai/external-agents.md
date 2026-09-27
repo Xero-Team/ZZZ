@@ -51,7 +51,7 @@ After you have Gemini CLI running, you'll be prompted to authenticate.
 Click the "Login" button to open the Gemini CLI interactively, where you can log in with your Google account or [Vertex AI](https://cloud.google.com/vertex-ai) credentials.
 ZZZ does not see your OAuth or access tokens in this case.
 
-If the `GEMINI_API_KEY` environment variable (or `GOOGLE_AI_API_KEY`) is already set, or you have configured a Google AI API key in ZZZ's [language model provider settings](./llm-providers.md#google-ai), it will be passed to Gemini CLI automatically.
+If the `GEMINI_API_KEY` environment variable (or `GOOGLE_AI_API_KEY`) is already set, it will be passed to Gemini CLI automatically. You can also store the key in your system keychain; ZZZ reads it from there when launching Gemini CLI.
 
 For more information, see the [Gemini CLI docs](https://github.com/google-gemini/gemini-cli/blob/main/docs/index.md).
 

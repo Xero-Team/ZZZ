@@ -246,10 +246,6 @@ actions!(
         RemoveSelectedThread,
         /// Starts a chat conversation with follow-up enabled.
         ChatWithFollow,
-        /// Cycles to the next inline assist suggestion.
-        CycleNextInlineAssist,
-        /// Cycles to the previous inline assist suggestion.
-        CyclePreviousInlineAssist,
         /// Moves focus up in the interface.
         FocusUp,
         /// Moves focus down in the interface.

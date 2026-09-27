@@ -3001,35 +3001,6 @@ Example:
 }
 ```
 
-## Language Models
-
-- Description: Configuration for language model providers
-- Setting: `language_models`
-- Default:
-
-```json [settings]
-{
-  "language_models": {
-    "anthropic": {
-      "api_url": "https://api.anthropic.com"
-    },
-    "google": {
-      "api_url": "https://generativelanguage.googleapis.com"
-    },
-    "ollama": {
-      "api_url": "http://localhost:11434"
-    },
-    "openai": {
-      "api_url": "https://api.openai.com/v1"
-    }
-  }
-}
-```
-
-**Options**
-
-Configuration for various AI model providers including API URLs and authentication settings.
-
 ## Line Indicator Format
 
 - Description: Format for line indicator in the status bar

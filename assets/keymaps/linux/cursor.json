@@ -19,7 +19,6 @@
       "ctrl-shift-i": "agent::ToggleFocus",
       "ctrl-shift-l": "agent::AddSelectionToThread", // In cursor uses "Ask" mode
       "ctrl-l": "agent::AddSelectionToThread", // In cursor uses "Agent" mode
-      "ctrl-k": "assistant::InlineAssist",
     },
   },
   {
@@ -62,13 +61,6 @@
     "bindings": {
       "ctrl-enter": "agent::KeepAll",
       "ctrl-backspace": "agent::RejectAll",
-    },
-  },
-  {
-    "context": "Terminal",
-    "use_key_equivalents": true,
-    "bindings": {
-      "ctrl-k": "assistant::InlineAssist",
     },
   },
 ]

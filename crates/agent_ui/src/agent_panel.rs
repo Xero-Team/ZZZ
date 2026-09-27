@@ -3566,7 +3566,7 @@ mod tests {
     use anyhow::{Result, anyhow};
     use feature_flags::FeatureFlagAppExt;
     use fs::FakeFs;
-    use gpui::{App, TestAppContext, VisualTestContext};
+    use gpui::{App, TestAppContext, UpdateGlobal as _, VisualTestContext};
     use parking_lot::Mutex;
     use project::Project;
     use std::any::Any;
@@ -3728,7 +3728,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
 
         // Create a MultiWorkspace window with two workspaces.
@@ -3850,7 +3849,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
 
         let fs = FakeFs::new(cx.executor());
@@ -3920,7 +3918,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
 
         let fs = FakeFs::new(cx.executor());
@@ -4343,7 +4340,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
 
         let fs = FakeFs::new(cx.executor());
@@ -4520,7 +4516,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
 
         let fs = FakeFs::new(cx.executor());
@@ -4763,7 +4758,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
 
         let source_session_id = acp::SessionId::new("source-thread-session");
@@ -5050,7 +5044,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
 
         // Set up a project with one worktree.
@@ -5243,7 +5236,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             // Use an isolated DB so parallel tests can't overwrite our global key.
             cx.set_global(db::AppDatabase::test_new());
         });
@@ -5296,7 +5288,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
 
         let fs = FakeFs::new(cx.executor());
@@ -5388,7 +5379,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
 
         let fs = FakeFs::new(cx.executor());
@@ -5448,7 +5438,6 @@ mod tests {
         let fs = FakeFs::new(cx.executor());
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             <dyn fs::Fs>::set_global(fs.clone(), cx);
         });
 
@@ -5537,7 +5526,6 @@ mod tests {
         let fs = FakeFs::new(cx.executor());
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             <dyn fs::Fs>::set_global(fs.clone(), cx);
         });
 
@@ -5611,7 +5599,6 @@ mod tests {
         let fs = FakeFs::new(cx.executor());
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             <dyn fs::Fs>::set_global(fs.clone(), cx);
         });
 
@@ -5698,7 +5685,6 @@ mod tests {
         cx.update(|cx| {
             cx.update_flags(true, vec!["agent-v2".to_string()]);
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             <dyn fs::Fs>::set_global(fs.clone(), cx);
         });
 
@@ -5760,7 +5746,6 @@ mod tests {
         cx.update(|cx| {
             cx.update_flags(true, vec!["agent-v2".to_string()]);
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             <dyn fs::Fs>::set_global(fs.clone(), cx);
         });
 
@@ -5862,7 +5847,6 @@ mod tests {
         cx.update(|cx| {
             cx.update_flags(true, vec!["agent-v2".to_string()]);
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             <dyn fs::Fs>::set_global(fs.clone(), cx);
         });
 
@@ -5926,7 +5910,6 @@ mod tests {
         cx.update(|cx| {
             cx.update_flags(true, vec!["agent-v2".to_string()]);
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             <dyn fs::Fs>::set_global(fs.clone(), cx);
         });
 
@@ -6060,7 +6043,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
 
         let fs = FakeFs::new(cx.executor());
@@ -6158,7 +6140,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             vim::init(cx);
             search::init(cx);
 
@@ -6409,7 +6390,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
 
         let fs = FakeFs::new(cx.executor());
@@ -6634,7 +6614,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
 
         let fs = FakeFs::new(cx.executor());
@@ -6724,7 +6703,6 @@ mod tests {
         init_test(cx);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
 
         let fs = FakeFs::new(cx.executor());

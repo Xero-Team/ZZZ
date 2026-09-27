@@ -15,8 +15,8 @@ To let users choose based on their own threat model and risk tolerance, all work
 
 ZZZ still trusts tools it installs globally. Global MCP servers and global
 language servers such as Prettier are installed and started as usual,
-independent of worktree trust. Copilot is not installed by default; it
-starts only after you select it as a provider.
+independent of worktree trust. External agents are not installed by default;
+an agent starts only after you configure it.
 
 If a worktree is not trusted, ZZZ will indicate this with an exclamation mark icon in the title bar. Clicking this icon or using `workspace::ToggleWorktreeSecurity` action will bring up the security modal that allows the user to trust the worktree.
 

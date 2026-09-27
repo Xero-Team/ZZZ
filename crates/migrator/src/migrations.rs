@@ -370,3 +370,9 @@ pub(crate) mod m_2026_09_04 {
 
     pub(crate) use settings::map_rejected_edit_prediction_surfaces_to_absent;
 }
+
+pub(crate) mod m_2026_09_27 {
+    mod settings;
+
+    pub(crate) use settings::remove_retired_ai_provider_settings;
+}

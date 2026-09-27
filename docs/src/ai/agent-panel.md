@@ -12,14 +12,12 @@ Open it with `agent: new thread` from [the Command Palette](../getting-started.m
 
 ## Getting Started {#getting-started}
 
-If you're using the Agent Panel for the first time, configure at least one
-provider or external agent. Local Ollama and llama.cpp providers are preferred;
-you can also [use your own API keys](./llm-providers.md#use-your-own-keys) or an
+If you're using the Agent Panel for the first time, configure an
 [external agent](./external-agents.md) such as Gemini CLI or Claude Agent.
 
 ## Overview {#overview}
 
-With an LLM provider or external agent configured, type in the message editor and press `enter` to submit.
+With an external agent configured, type in the message editor and press `enter` to submit.
 Expand the editor with {#kb agent::ExpandMessageEditor} if you need more room.
 
 Responses stream in with indicators showing [which tools](./tools.md) the model is using.
@@ -272,9 +270,9 @@ You can also do this at any time with an ongoing thread via the "Agent Options" 
 
 ## Changing Models {#changing-models}
 
-After you've configured your LLM providers—locally, via [a custom API key](./llm-providers.md),
-or through an explicitly configured remote endpoint—you can switch between their
-models by clicking on the model selector on the message editor or by using the
+After you've connected an [external agent](./external-agents.md), you can switch
+between the models it reports by clicking on the model selector on the message
+editor or by using the
 {#kb agent::ToggleModelSelector} keybinding.
 
 > The same model can be offered via multiple providers - for example, Claude Sonnet 4.5 is available via OpenRouter, Anthropic directly, and more.

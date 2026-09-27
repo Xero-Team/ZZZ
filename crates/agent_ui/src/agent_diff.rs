@@ -1900,7 +1900,6 @@ mod tests {
             });
             prompt_store::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
-            language_model::init(cx);
         });
 
         let fs = FakeFs::new(cx.executor());
@@ -2058,7 +2057,6 @@ mod tests {
             i18n::init(cx);
             prompt_store::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
-            language_model::init(cx);
             workspace::register_project_item::<Editor>(cx);
         });
 

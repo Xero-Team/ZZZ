@@ -1081,8 +1081,6 @@
     "auto_replace_emoji_shortcode": true,
   },
   "agent": {
-    // Whether the inline assistant should use streaming tools, when available
-    "inline_assistant_use_streaming_tools": true,
     // Whether the agent is enabled.
     "enabled": true,
     // Whether to show the agent panel button in the status bar.
@@ -1109,31 +1107,6 @@
     // Maximum content width in pixels when limit_content_width is enabled.
     // Content will be centered within the panel.
     "max_content_width": 850,
-    // The default model to use when creating new threads.
-    // No model name is hard-coded. The runtime replaces this placeholder with
-    // a discovered Ollama model, then llama.cpp, when available.
-    "default_model": {
-      "provider": "ollama",
-      "model": "",
-    },
-    // Additional parameters for language model requests. When making a request to a model, parameters will be taken
-    // from the last entry in this list that matches the model's provider and name. In each entry, both provider
-    // and model are optional, so that you can specify parameters for either one.
-    "model_parameters": [
-      // To set parameters for all requests to OpenAI models:
-      // {
-      //   "provider": "openai",
-      //   "temperature": 0.5
-      // }
-      //
-      // To set parameters for all requests in general:
-      // {
-      //   "temperature": 0
-      // }
-      //
-      // To set parameters for a specific provider and model, add an explicit
-      // provider entry here.
-    ],
     // Permission rules for tool actions.
     //
     // The "default" setting applies when no tool-specific rules match.
@@ -2384,50 +2357,6 @@
     "Zig": {
       "format_on_save": "on",
       "language_servers": ["zls", "..."],
-    },
-  },
-  // Different settings for specific language models.
-  "language_models": {
-    "anthropic": {
-      "api_url": "https://api.anthropic.com",
-    },
-    "bedrock": {},
-    "google": {
-      "api_url": "https://generativelanguage.googleapis.com",
-    },
-    "ollama": {
-      "api_url": "http://localhost:11434",
-    },
-    "llama_cpp": {
-      "api_url": "http://localhost:8080",
-    },
-    "openai": {
-      "api_url": "https://api.openai.com/v1",
-    },
-    "openai_compatible": {},
-    "opencode": {
-      "api_url": "",
-      "show_zen_models": false,
-      "show_go_models": false,
-      "show_free_models": false,
-    },
-    "open_router": {
-      "api_url": "https://openrouter.ai/api/v1",
-    },
-    "lmstudio": {
-      "api_url": "http://localhost:1234/api/v0",
-    },
-    "deepseek": {
-      "api_url": "https://api.deepseek.com/v1",
-    },
-    "mistral": {
-      "api_url": "https://api.mistral.ai/v1",
-    },
-    "vercel_ai_gateway": {
-      "api_url": "https://ai-gateway.vercel.sh/v1",
-    },
-    "x_ai": {
-      "api_url": "https://api.x.ai/v1",
     },
   },
   "session": {

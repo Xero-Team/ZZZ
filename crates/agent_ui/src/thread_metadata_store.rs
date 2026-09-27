@@ -1768,7 +1768,6 @@ mod tests {
             <dyn Fs>::set_global(fs, cx);
             ThreadMetadataStore::init_global(cx);
             ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
         });
         cx.run_until_parked();
     }

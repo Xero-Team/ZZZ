@@ -4637,7 +4637,6 @@ pub(crate) mod tests {
         cx.update(|cx| {
             cx.update_flags(true, vec!["agent-v2".to_string()]);
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             <dyn Fs>::set_global(fs.clone(), cx);
         });
 
@@ -4742,7 +4741,6 @@ pub(crate) mod tests {
         cx.update(|cx| {
             cx.update_flags(true, vec!["agent-v2".to_string()]);
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             <dyn Fs>::set_global(fs.clone(), cx);
         });
 
@@ -4828,7 +4826,6 @@ pub(crate) mod tests {
         cx.update(|cx| {
             cx.update_flags(true, vec!["agent-v2".to_string()]);
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             <dyn Fs>::set_global(fs.clone(), cx);
         });
 
@@ -4918,7 +4915,6 @@ pub(crate) mod tests {
 
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             <dyn Fs>::set_global(fs.clone(), cx);
         });
 

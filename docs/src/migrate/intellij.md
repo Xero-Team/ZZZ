@@ -277,7 +277,7 @@ Claude Code, Gemini CLI, and OpenCode. See
 
 To use other AI models in ZZZ, you have several options:
 
-- Bring your own [API keys](../ai/llm-providers.md), no ZZZ account required
+- Bring your own models through [external agents](../ai/external-agents.md), no ZZZ account required
 - Configure a local model provider for use with an external agent
 
 ## Advanced Config and Productivity Tweaks

@@ -30,7 +30,6 @@ fn init_test(cx: &mut TestAppContext) {
         editor::init(cx);
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 }
@@ -1375,7 +1374,6 @@ async fn init_test_project_with_agent_panel(
         cx.set_global(agent_ui::MaxIdleRetainedThreads(1));
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -2240,7 +2238,6 @@ async fn test_confirm_on_historical_thread_in_new_project_group_opens_real_threa
         cx.set_global(agent_ui::MaxIdleRetainedThreads(1));
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -2873,7 +2870,6 @@ async fn test_cmd_n_shows_new_thread_entry_in_absorbed_worktree(cx: &mut TestApp
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -3474,7 +3470,6 @@ async fn test_absorbed_worktree_running_thread_shows_live_status(cx: &mut TestAp
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -3573,7 +3568,6 @@ async fn test_absorbed_worktree_completion_triggers_notification(cx: &mut TestAp
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -4047,7 +4041,6 @@ async fn test_sidebar_keeps_multi_root_thread_with_stale_main_paths(cx: &mut Tes
         cx.set_global(agent_ui::MaxIdleRetainedThreads(1));
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -4701,7 +4694,6 @@ async fn test_archive_thread_uses_next_threads_own_workspace(cx: &mut TestAppCon
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -5664,7 +5656,6 @@ async fn test_linked_worktree_threads_not_duplicated_across_groups(cx: &mut Test
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
     let fs = FakeFs::new(cx.executor());
@@ -6197,7 +6188,6 @@ async fn test_archive_thread_active_entry_management(cx: &mut TestAppContext) {
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -6368,7 +6358,6 @@ async fn test_unarchive_first_thread_in_group_does_not_create_spurious_draft(
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -6463,7 +6452,6 @@ async fn test_unarchive_into_new_workspace_does_not_create_duplicate_real_thread
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -6606,7 +6594,6 @@ async fn test_unarchive_into_existing_workspace_replaces_draft(cx: &mut TestAppC
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -6677,7 +6664,6 @@ async fn test_unarchive_into_inactive_existing_workspace_does_not_leave_active_d
         cx.set_global(agent_ui::MaxIdleRetainedThreads(1));
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -6807,7 +6793,6 @@ async fn test_unarchive_after_removing_parent_project_group_restores_real_thread
         cx.set_global(agent_ui::MaxIdleRetainedThreads(1));
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -6947,7 +6932,6 @@ async fn test_unarchive_does_not_create_duplicate_real_thread_metadata(cx: &mut 
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -7049,7 +7033,6 @@ async fn test_switch_to_workspace_with_archived_thread_shows_no_active_entry(
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -7198,7 +7181,6 @@ async fn test_archive_last_thread_on_linked_worktree_does_not_create_new_thread_
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -7370,7 +7352,6 @@ async fn test_archive_last_thread_on_linked_worktree_with_no_siblings_leaves_gro
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -7493,7 +7474,6 @@ async fn test_unarchive_linked_worktree_thread_into_project_group_shows_only_res
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -7671,7 +7651,6 @@ async fn test_archive_thread_on_linked_worktree_selects_sibling_thread(cx: &mut 
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -8010,7 +7989,6 @@ async fn init_multi_project_test(
         cx.set_global(agent_ui::MaxIdleRetainedThreads(1));
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
     let fs = FakeFs::new(cx.executor());
@@ -8295,7 +8273,6 @@ async fn test_linked_worktree_workspace_reachable_after_adding_unrelated_project
     cx.update(|cx| {
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
 
         cx.observe_new(
@@ -8811,7 +8788,6 @@ async fn test_worktree_add_only_regroups_threads_for_changed_workspace(cx: &mut 
         cx.set_global(agent_ui::MaxIdleRetainedThreads(1));
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
-        language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
     });
 
@@ -9914,7 +9890,6 @@ mod property_test {
 
             ThreadStore::init_global(cx);
             ThreadMetadataStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
             prompt_store::init(cx);
 
             // Auto-add an AgentPanel to every workspace so that implicitly

@@ -4804,7 +4804,6 @@ mod tests {
             cx.set_global(settings_store);
             i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
-            language_model::init(cx);
             git_ui::init(cx);
             project_panel::init(cx);
             init(cx);

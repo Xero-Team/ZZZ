@@ -143,15 +143,13 @@ These commands open new panes or jump to specific panes.
 
 ### In insert mode
 
-The following commands help you bring up ZZZ's completion menu, request a suggestion from GitHub Copilot, or open the inline AI assistant without leaving insert mode.
+The following commands help you bring up ZZZ's completion menu or open the code actions menu without leaving insert mode.
 
-| Command                                                                      | Default Shortcut |
-| ---------------------------------------------------------------------------- | ---------------- |
-| Open the completion menu                                                     | `ctrl-x ctrl-o`  |
-| Request GitHub Copilot suggestion (requires GitHub Copilot to be configured) | `ctrl-x ctrl-c`  |
-| Open the inline AI assistant (requires a configured assistant)               | `ctrl-x ctrl-a`  |
-| Open the code actions menu                                                   | `ctrl-x ctrl-l`  |
-| Hides all suggestions                                                        | `ctrl-x ctrl-z`  |
+| Command                    | Default Shortcut |
+| -------------------------- | ---------------- |
+| Open the completion menu   | `ctrl-x ctrl-o`  |
+| Open the code actions menu | `ctrl-x ctrl-l`  |
+| Hides all suggestions      | `ctrl-x ctrl-z`  |
 
 ### Supported plugins
 

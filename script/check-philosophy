@@ -17,7 +17,6 @@ check() {
 check_default_settings() {
     rg -q '"auto_update": false' "$root/assets/settings/default.json" \
         && rg -q '"server_url": "http://127\.0\.0\.1:7331"' "$root/assets/settings/default.json" \
-        && rg -q '"show_zen_models": false' "$root/assets/settings/default.json" \
         && rg -q '"auto_install_extensions"' "$root/assets/settings/default.json" \
         && ! rg -q '"auto_update_extensions"' "$root/assets/settings/default.json"
 }
@@ -92,7 +91,7 @@ check_product_surfaces_no_hosted_docs() {
         "$root/crates/theme_selector/src" "$root/crates/debugger_ui/src" "$root/crates/repl/src" \
         "$root/crates/install_cli/src" "$root/crates/language_onboarding/src" "$root/crates/feedback/src" \
         "$root/crates/extensions_ui/src" "$root/crates/editor/src/editor.rs" \
-        "$root/crates/workspace/src/notifications.rs" "$root/crates/language_models/src" \
+        "$root/crates/workspace/src/notifications.rs" \
         "$root/crates/recent_projects/src" "$root/crates/cli/src/main.rs" \
         "$root/crates/project/src/project.rs"
 }
@@ -133,10 +132,6 @@ check_cloudflare_workers_absent() {
     ! test -d "$root/.cloudflare" \
         && ! rg -n 'cloudflare/wrangler-action|deploy \.cloudflare/' \
             "$root/tooling/xtask/src/tasks/workflows/deploy_docs.rs"
-}
-
-check_open_router_no_zed_identity() {
-    ! rg -n 'HTTP-Referer.*zed\.dev|X-Title.*, "Zed Editor"' "$root/crates/open_router"
 }
 
 check_keymaps_no_hosted_docs() {
@@ -259,11 +254,6 @@ check_no_unconditional_copilot_chat_init() {
     ! rg -n 'copilot_chat::init' "$root/crates/zzz/src/main.rs"
 }
 
-check_no_unconditional_copilot_chat_register() {
-    ! rg -n 'register_provider\(Arc::new\(CopilotChatLanguageModelProvider' \
-        "$root/crates/language_models/src/language_models.rs"
-}
-
 check_eval_clis_absent() {
     ! test -d "$root/crates/eval_cli" \
         && ! test -d "$root/crates/edit_prediction_cli"
@@ -330,7 +320,6 @@ check_title_bar_has_no_upgrade_required() {
 
 check_no_hosted_cloud_provider() {
     ! test -d "$root/crates/language_models_cloud" \
-        && ! test -f "$root/crates/language_models/src/provider/cloud.rs" \
         && ! rg -n 'CloudLanguageModelProvider|ZedDotDevAvailable|zed_dot_dev|language_models_cloud' \
             "$root/crates" "$root/assets/settings"
 }
@@ -433,7 +422,6 @@ check "docs have no Discord community invite" check_no_discord_community
 check "development clone URLs point at this repository" check_dev_docs_clone_this_repo
 check "orphan billing and account docs are absent" check_orphan_billing_docs_absent
 check "Cloudflare hosted-docs workers are absent" check_cloudflare_workers_absent
-check "OpenRouter requests do not identify as Zed" check_open_router_no_zed_identity
 check "default keymaps do not point at hosted docs" check_keymaps_no_hosted_docs
 check "privacy boundary is linked from documentation summary" check_privacy_documented
 check "docs do not say auto-update is on by default" check_docs_auto_update_off
@@ -456,7 +444,6 @@ check "ZZZ_AGENT_ID is not a live selectable agent" check_no_live_zed_agent_id
 check "agent registry init does not refresh when empty" check_registry_init_no_refresh
 check "agent registry refresh is gated on user configuration" check_registry_refresh_is_user_gated
 check "copilot_chat::init is not unconditional in main.rs" check_no_unconditional_copilot_chat_init
-check "CopilotChatLanguageModelProvider is not registered at language_models init" check_no_unconditional_copilot_chat_register
 check "eval_cli and edit_prediction_cli directories are absent" check_eval_clis_absent
 check "Item::telemetry_event_text is absent" check_no_telemetry_event_text
 check "Danger GitHub API proxy host is absent" check_no_danger_proxy

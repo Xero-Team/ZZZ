@@ -8176,7 +8176,6 @@ mod tests {
         status::{StatusCode, UnmergedStatus, UnmergedStatusCode},
     };
     use gpui::{TestAppContext, UpdateGlobal, VisualTestContext, px};
-    use indoc::indoc;
     use project::FakeFs;
     use serde_json::json;
     use settings::SettingsStore;
@@ -8208,7 +8207,6 @@ mod tests {
             cx.set_global(settings_store);
             i18n::init(cx);
             theme_settings::init(LoadThemes::JustBase, cx);
-            language_model::init(cx);
             editor::init(cx);
             crate::init(cx);
         });
@@ -10169,104 +10167,6 @@ mod tests {
                 expected_path.map(|s| s.to_string())
             );
         }
-    }
-
-    #[test]
-    fn test_compress_diff_no_truncation() {
-        let diff = indoc! {"
-            --- a/file.txt
-            +++ b/file.txt
-            @@ -1,2 +1,2 @@
-            -old
-            +new
-        "};
-        let result = GitPanel::compress_commit_diff(diff, 1000);
-        assert_eq!(result, diff);
-    }
-
-    #[test]
-    fn test_compress_diff_truncate_long_lines() {
-        let long_line = "🦀".repeat(300);
-        let diff = indoc::formatdoc! {"
-            --- a/file.txt
-            +++ b/file.txt
-            @@ -1,2 +1,3 @@
-             context
-            +{}
-             more context
-        ", long_line};
-        let result = GitPanel::compress_commit_diff(&diff, 100);
-        assert!(result.contains("...[truncated]"));
-        assert!(result.len() < diff.len());
-    }
-
-    #[test]
-    fn test_compress_diff_truncate_hunks() {
-        let diff = indoc! {"
-            --- a/file.txt
-            +++ b/file.txt
-            @@ -1,2 +1,2 @@
-             context
-            -old1
-            +new1
-            @@ -5,2 +5,2 @@
-             context 2
-            -old2
-            +new2
-            @@ -10,2 +10,2 @@
-             context 3
-            -old3
-            +new3
-        "};
-        let result = GitPanel::compress_commit_diff(diff, 100);
-        let expected = indoc! {"
-            --- a/file.txt
-            +++ b/file.txt
-            @@ -1,2 +1,2 @@
-             context
-            -old1
-            +new1
-            [...skipped 2 hunks...]
-        "};
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_commit_message_prompt_includes_instructions() {
-        let prompt = GitPanel::build_commit_message_prompt(
-            "Write a commit message.",
-            Some("Use terse commit messages."),
-            Some("Use the git_ui prefix."),
-            Some("Follow the configured commit message format."),
-            "Update generated message",
-            "diff --git a/file b/file",
-        );
-
-        assert!(prompt.contains("Use terse commit messages."));
-        assert!(prompt.contains("Use the git_ui prefix."));
-        assert!(prompt.contains("Follow the configured commit message format."));
-        assert!(prompt.contains("Update generated message"));
-        assert!(prompt.contains("diff --git a/file b/file"));
-
-        let user_agents_md_index = prompt.find("<rules>").unwrap();
-        let project_rules_index = prompt.find("<project_rules>").unwrap();
-        let instructions_index = prompt.find("<commit_message_instructions>").unwrap();
-        assert!(user_agents_md_index < project_rules_index);
-        assert!(project_rules_index < instructions_index);
-    }
-
-    #[test]
-    fn test_commit_message_prompt_omits_blank_instructions() {
-        let prompt = GitPanel::build_commit_message_prompt(
-            "Write a commit message.",
-            None,
-            None,
-            Some("   \n  "),
-            "",
-            "diff --git a/file b/file",
-        );
-
-        assert!(!prompt.contains("<commit_message_instructions>"));
     }
 
     #[gpui::test]

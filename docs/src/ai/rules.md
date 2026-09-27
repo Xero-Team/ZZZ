@@ -30,8 +30,6 @@ Other names for this file are also supported for compatibility with other agents
 The Rules Library is an interface for writing and managing rules.
 It's a full editor with syntax highlighting and all standard keybindings.
 
-You can also use the inline assistant right in the rules editor, allowing you to get quick LLM support for writing rules.
-
 > **Note:** Starting in ZZZ v1.4.0, the rules library has been replaced by [Skills](./skills.md). Skills are the recommended way to package reusable agent instructions. Learn more about [the rules -> skills migration](#migrating-to-skills).
 
 ### Opening the Rules Library
