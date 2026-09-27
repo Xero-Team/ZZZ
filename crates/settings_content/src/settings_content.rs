@@ -4,7 +4,6 @@ mod editor;
 mod extension;
 mod fallible_options;
 mod language;
-mod language_model;
 pub mod merge_from;
 mod project;
 mod serde_helper;
@@ -19,7 +18,6 @@ pub use editor::*;
 pub use extension::*;
 pub use fallible_options::*;
 pub use language::*;
-pub use language_model::*;
 pub use merge_from::MergeFrom as MergeFromTrait;
 pub use project::*;
 use serde::de::DeserializeOwned;
@@ -202,8 +200,6 @@ pub struct SettingsContent {
     pub log: Option<HashMap<String, String>>,
 
     pub line_indicator_format: Option<LineIndicatorFormat>,
-
-    pub language_models: Option<AllLanguageModelSettingsContent>,
 
     pub outline_panel: Option<OutlinePanelSettingsContent>,
 

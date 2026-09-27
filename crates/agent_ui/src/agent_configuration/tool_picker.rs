@@ -318,7 +318,6 @@ impl PickerDelegate for ToolPickerDelegate {
                                 )
                             })
                             .collect(),
-                        default_model: default_profile.default_model.clone(),
                     });
 
                 if let Some(server_id) = server_id {

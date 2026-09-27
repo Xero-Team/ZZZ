@@ -5706,7 +5706,6 @@ mod tests {
             audio_viewer::init(cx);
             video_viewer::init(cx);
             language_model::init(cx);
-            language_models::init(app_state.user_store.clone(), app_state.client.clone(), cx);
             git_graph::init(cx);
             project::AgentRegistryStore::init_global(
                 cx,

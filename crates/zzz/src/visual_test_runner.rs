@@ -204,7 +204,6 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
         });
         prompt_store::init(cx);
         language_model::init(cx);
-        language_models::init(app_state.user_store.clone(), app_state.client.clone(), cx);
         git_ui::init(cx);
         docs::init(cx);
         project::AgentRegistryStore::init_global(

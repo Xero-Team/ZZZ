@@ -6,8 +6,8 @@ use convert_case::{Case, Casing as _};
 use fs::Fs;
 use gpui::{App, SharedString};
 use settings::{
-    AgentProfileContent, ContextServerPresetContent, LanguageModelSelection, Settings as _,
-    SettingsContent, update_settings_file,
+    AgentProfileContent, ContextServerPresetContent, Settings as _, SettingsContent,
+    update_settings_file,
 };
 use util::ResultExt as _;
 
@@ -66,17 +66,12 @@ impl AgentProfile {
             .as_ref()
             .map(|profile| profile.context_servers.clone())
             .unwrap_or_default();
-        // Preserve the base profile's model preference when cloning into a new profile.
-        let default_model = base_profile
-            .as_ref()
-            .and_then(|profile| profile.default_model.clone());
 
         let profile_settings = AgentProfileSettings {
             name: name.into(),
             tools,
             enable_all_context_servers,
             context_servers,
-            default_model,
         };
 
         update_settings_file(fs, cx, {
@@ -107,8 +102,6 @@ pub struct AgentProfileSettings {
     pub tools: IndexMap<Arc<str>, bool>,
     pub enable_all_context_servers: bool,
     pub context_servers: IndexMap<Arc<str>, ContextServerPreset>,
-    /// Default language model to apply when this profile becomes active.
-    pub default_model: Option<LanguageModelSelection>,
 }
 
 impl AgentProfileSettings {
@@ -156,7 +149,6 @@ impl AgentProfileSettings {
                         )
                     })
                     .collect(),
-                default_model: self.default_model.clone(),
             },
         );
 
@@ -171,7 +163,6 @@ impl From<AgentProfileContent> for AgentProfileSettings {
             tools,
             enable_all_context_servers,
             context_servers,
-            default_model,
         } = content;
 
         Self {
@@ -182,7 +173,6 @@ impl From<AgentProfileContent> for AgentProfileSettings {
                 .into_iter()
                 .map(|(server_id, preset)| (server_id, preset.into()))
                 .collect(),
-            default_model,
         }
     }
 }
@@ -213,7 +203,6 @@ mod tests {
             tools: IndexMap::default(),
             enable_all_context_servers,
             context_servers,
-            default_model: None,
         }
     }
 

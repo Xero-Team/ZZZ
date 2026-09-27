@@ -568,9 +568,7 @@ fn main() {
             cx.background_executor().clone(),
         );
         command_palette::init(cx);
-        copilot_ui::init(&app_state, cx);
         language_model::init(cx);
-        language_models::init(app_state.user_store.clone(), app_state.client.clone(), cx);
         acp_tools::init(cx);
         zzz::remote_debug::init(cx);
         snippet_provider::init(cx);

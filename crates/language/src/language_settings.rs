@@ -14,7 +14,7 @@ use itertools::{Either, Itertools};
 use settings::{DocumentFoldingRanges, DocumentSymbols, IntoGpui, SemanticTokens};
 
 pub use settings::{
-    AutoIndentMode, CompletionSettingsContent, EditPredictionProvider, FormatOnSave, Formatter,
+    AutoIndentMode, CompletionSettingsContent, FormatOnSave, Formatter,
     FormatterList, InlayHintKind, LanguageSettingsContent, LineEndingSetting, LspInsertMode,
     REST_OF_LANGUAGE_SERVERS, RewrapBehavior, ShowWhitespaceSetting, SoftWrap, WordsCompletionMode,
 };
@@ -37,8 +37,6 @@ pub fn all_language_settings<'a>(
 /// The settings for all languages.
 #[derive(Debug, Clone, RegisterSetting)]
 pub struct AllLanguageSettings {
-    /// The edit prediction settings.
-    pub edit_predictions: EditPredictionSettings,
     pub defaults: LanguageSettings,
     languages: HashMap<LanguageName, LanguageSettings>,
     pub file_types: FxHashMap<Arc<str>, (GlobSet, Vec<String>)>,
@@ -446,25 +444,6 @@ impl InlayHintSettings {
     }
 }
 
-/// The settings for edit predictions, such as [GitHub Copilot](https://github.com/features/copilot).
-#[derive(Clone, Debug, Default)]
-pub struct EditPredictionSettings {
-    /// The provider that supplies edit predictions.
-    pub provider: settings::EditPredictionProvider,
-    /// Settings specific to GitHub Copilot.
-    pub copilot: CopilotSettings,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct CopilotSettings {
-    /// HTTP/HTTPS proxy to use for Copilot.
-    pub proxy: Option<String>,
-    /// Disable certificate verification for proxy (not recommended).
-    pub proxy_no_verify: Option<bool>,
-    /// Enterprise URI for Copilot.
-    pub enterprise_uri: Option<String>,
-}
-
 impl AllLanguageSettings {
     /// Returns the [`LanguageSettings`] for the language with the specified name.
     pub fn language<'a>(
@@ -685,20 +664,6 @@ impl settings::Settings for AllLanguageSettings {
             );
         }
 
-        let edit_prediction_provider = all_languages
-            .edit_predictions
-            .as_ref()
-            .and_then(|ep| ep.provider);
-
-        let edit_predictions = all_languages.edit_predictions.clone().unwrap_or_default();
-
-        let copilot = edit_predictions.copilot.unwrap_or_default();
-        let copilot_settings = CopilotSettings {
-            proxy: copilot.proxy,
-            proxy_no_verify: copilot.proxy_no_verify,
-            enterprise_uri: copilot.enterprise_uri,
-        };
-
         let mut file_types: FxHashMap<Arc<str>, (GlobSet, Vec<String>)> = FxHashMap::default();
 
         for (language, patterns) in all_languages.file_types.iter().flatten() {
@@ -730,14 +695,6 @@ impl settings::Settings for AllLanguageSettings {
         }
 
         Self {
-            edit_predictions: EditPredictionSettings {
-                provider: if let Some(provider) = edit_prediction_provider {
-                    provider
-                } else {
-                    EditPredictionProvider::None
-                },
-                copilot: copilot_settings,
-            },
             defaults: default_language_settings,
             languages,
             file_types,

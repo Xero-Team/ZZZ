@@ -1,9 +1,9 @@
 use collections::{HashMap, IndexMap};
-use schemars::{JsonSchema, json_schema};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings_macros::{MergeFrom, with_fallible_options};
 use std::sync::Arc;
-use std::{borrow::Cow, path::PathBuf};
+use std::path::PathBuf;
 
 use crate::ExtendingVec;
 
@@ -121,28 +121,6 @@ pub struct AgentSettingsContent {
     /// Default: 850
     #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
     pub max_content_width: Option<f32>,
-    /// The default model to use when creating new chats and for other features when a specific model is not specified.
-    pub default_model: Option<LanguageModelSelection>,
-    /// The model to use for subagents spawned via the `spawn_agent` tool. Defaults to the parent agent's model when not specified.
-    pub subagent_model: Option<LanguageModelSelection>,
-    /// Favorite models to show at the top of the model selector.
-    #[serde(default)]
-    pub favorite_models: Vec<LanguageModelSelection>,
-    /// Model to use for the inline assistant. Defaults to default_model when not specified.
-    pub inline_assistant_model: Option<LanguageModelSelection>,
-    /// Model to use for the inline assistant when streaming tools are enabled.
-    ///
-    /// Default: true
-    pub inline_assistant_use_streaming_tools: Option<bool>,
-    /// Model to use for generating git commit messages. Defaults to default_model when not specified.
-    pub commit_message_model: Option<LanguageModelSelection>,
-    /// Custom instructions to include in the prompt when generating git commit messages.
-    /// Applied in addition to any project rules files (such as `.rules` or `AGENTS.md`).
-    pub commit_message_instructions: Option<String>,
-    /// Model to use for generating thread summaries. Defaults to default_model when not specified.
-    pub thread_summary_model: Option<LanguageModelSelection>,
-    /// Additional models with which to generate alternatives when performing inline assists.
-    pub inline_alternatives: Option<Vec<LanguageModelSelection>>,
     /// The default profile to use in the Agent.
     ///
     /// Default: write
@@ -161,15 +139,6 @@ pub struct AgentSettingsContent {
     ///
     /// Default: false
     pub single_file_review: Option<bool>,
-    /// Additional parameters for language model requests. When making a request
-    /// to a model, parameters will be taken from the last entry in this list
-    /// that matches the model's provider and name. In each entry, both provider
-    /// and model are optional, so that you can specify parameters for either
-    /// one.
-    ///
-    /// Default: []
-    #[serde(default)]
-    pub model_parameters: Vec<LanguageModelParameters>,
     /// Whether to have edit cards in the agent panel expanded, showing a preview of the full diff.
     ///
     /// Default: true
@@ -230,53 +199,8 @@ impl AgentSettingsContent {
         self.flexible = Some(flexible);
     }
 
-    pub fn set_model(&mut self, language_model: LanguageModelSelection) {
-        self.default_model = Some(language_model)
-    }
-
-    pub fn set_inline_assistant_model(&mut self, provider: String, model: String) {
-        self.inline_assistant_model = Some(LanguageModelSelection {
-            provider: provider.into(),
-            model,
-            enable_thinking: false,
-            effort: None,
-            speed: None,
-        });
-    }
-
     pub fn set_profile(&mut self, profile_id: Arc<str>) {
         self.default_profile = Some(profile_id);
-    }
-
-    pub fn add_favorite_model(&mut self, model: LanguageModelSelection) {
-        // Note: this is intentional to not compare using `PartialEq`here.
-        // Full equality would treat entries that differ just in thinking/effort/speed
-        // as distinct and silently produce duplicates.
-        if !self
-            .favorite_models
-            .iter()
-            .any(|m| m.provider == model.provider && m.model == model.model)
-        {
-            self.favorite_models.push(model);
-        }
-    }
-
-    pub fn remove_favorite_model(&mut self, model: &LanguageModelSelection) {
-        self.favorite_models
-            .retain(|m| !(m.provider == model.provider && m.model == model.model));
-    }
-
-    pub fn update_favorite_model<F>(&mut self, provider: &str, model: &str, f: F)
-    where
-        F: FnOnce(&mut LanguageModelSelection),
-    {
-        if let Some(entry) = self
-            .favorite_models
-            .iter_mut()
-            .find(|m| m.provider.0 == provider && m.model == model)
-        {
-            f(entry);
-        }
     }
 
     pub fn set_tool_default_permission(&mut self, tool_id: &str, mode: ToolPermissionMode) {
@@ -329,8 +253,6 @@ pub struct AgentProfileContent {
     pub enable_all_context_servers: Option<bool>,
     #[serde(default)]
     pub context_servers: IndexMap<Arc<str>, ContextServerPresetContent>,
-    /// The default language model selected when using this profile.
-    pub default_model: Option<LanguageModelSelection>,
 }
 
 #[with_fallible_options]
@@ -388,76 +310,6 @@ impl PlaySoundWhenAgentDone {
             PlaySoundWhenAgentDone::WhenHidden => !visible,
             PlaySoundWhenAgentDone::Always => true,
         }
-    }
-}
-
-#[with_fallible_options]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
-pub struct LanguageModelSelection {
-    pub provider: LanguageModelProviderSetting,
-    pub model: String,
-    #[serde(default)]
-    pub enable_thinking: bool,
-    pub effort: Option<String>,
-    pub speed: Option<language_model_core::Speed>,
-}
-
-#[with_fallible_options]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
-pub struct LanguageModelParameters {
-    pub provider: Option<LanguageModelProviderSetting>,
-    pub model: Option<String>,
-    #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
-    pub temperature: Option<f32>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, MergeFrom)]
-pub struct LanguageModelProviderSetting(pub String);
-
-impl JsonSchema for LanguageModelProviderSetting {
-    fn schema_name() -> Cow<'static, str> {
-        "LanguageModelProviderSetting".into()
-    }
-
-    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        // list the builtin providers as a subset so that we still auto complete them in the settings
-        json_schema!({
-            "anyOf": [
-                {
-                    "type": "string",
-                    "enum": [
-                        "amazon-bedrock",
-                        "anthropic",
-                        "copilot_chat",
-                        "deepseek",
-                        "google",
-                        "lmstudio",
-                        "mistral",
-                        "ollama",
-                        "openai",
-                        "opencode",
-                        "openrouter",
-                        "vercel_ai_gateway",
-                        "x_ai"
-                    ]
-                },
-                {
-                    "type": "string",
-                }
-            ]
-        })
-    }
-}
-
-impl From<String> for LanguageModelProviderSetting {
-    fn from(provider: String) -> Self {
-        Self(provider)
-    }
-}
-
-impl From<&str> for LanguageModelProviderSetting {
-    fn from(provider: &str) -> Self {
-        Self(provider.to_owned())
     }
 }
 
