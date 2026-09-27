@@ -568,7 +568,6 @@ fn main() {
             cx.background_executor().clone(),
         );
         command_palette::init(cx);
-        language_model::init(cx);
         acp_tools::init(cx);
         zzz::remote_debug::init(cx);
         snippet_provider::init(cx);

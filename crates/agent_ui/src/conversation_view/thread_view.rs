@@ -15,7 +15,6 @@ use editor::actions::OpenExcerpts;
 use gpui::List;
 use heapless::Vec as ArrayVec;
 use i18n as app_i18n;
-use language_model::{LanguageModelProvider, LanguageModelRegistry};
 use ui::{SpinnerLabel, SpinnerVariant, Tab};
 use workspace::{OpenOptions, SERIALIZATION_THROTTLE_TIME};
 
@@ -24,7 +23,6 @@ use super::elicitation::{
 };
 use super::thread_search_bar::{ThreadSearchBar, ThreadSearchBarEvent};
 use super::*;
-use zzz_actions::agent::OpenSettings;
 
 fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()
@@ -1439,12 +1437,6 @@ impl ThreadView {
     fn emit_thread_error_telemetry(&self, error: &ThreadError, cx: &mut Context<Self>) {
         let (_error_kind, _acp_error_code, _message): (&str, Option<SharedString>, SharedString) =
             match error {
-                ThreadError::PaymentRequired => (
-                    "payment_required",
-                    None,
-                    "No provider is currently available for this request. Configure a local, self-hosted, or manually added provider and try again."
-                        .into(),
-                ),
                 ThreadError::Refusal => {
                     let model_or_agent_name = self.current_model_name(cx);
                     let message = format!(
@@ -1474,9 +1466,7 @@ impl ThreadView {
                 ThreadError::NoApiKey { provider } => (
                     "no_api_key",
                     None,
-                    Self::provider_by_name(provider, cx)
-                        .map(|provider| provider.missing_credentials_error_message())
-                        .unwrap_or_else(|| format!("No credentials configured for {provider}.").into()),
+                    format!("No credentials configured for {provider}.").into(),
                 ),
                 ThreadError::StreamError { provider } => (
                     "stream_error",
@@ -1486,9 +1476,7 @@ impl ThreadView {
                 ThreadError::InvalidApiKey { provider } => (
                     "invalid_api_key",
                     None,
-                    Self::provider_by_name(provider, cx)
-                        .map(|provider| provider.authentication_error_message())
-                        .unwrap_or_else(|| format!("Authentication with {provider} failed.").into()),
+                    format!("Authentication with {provider} failed.").into(),
                 ),
                 ThreadError::PermissionDenied { provider, message } => (
                     "permission_denied",
@@ -9106,13 +9094,6 @@ impl ThreadView {
         rems_from_px(13.)
     }
 
-    fn provider_by_name(name: &SharedString, cx: &App) -> Option<Arc<dyn LanguageModelProvider>> {
-        LanguageModelRegistry::read_global(cx)
-            .providers()
-            .into_iter()
-            .find(|provider| provider.name().0 == *name)
-    }
-
     pub(crate) fn render_thread_error(
         &mut self,
         window: &mut Window,
@@ -9126,7 +9107,6 @@ impl ThreadView {
             ThreadError::AuthenticationRequired(error) => {
                 self.render_authentication_required_error(error.clone(), cx)
             }
-            ThreadError::PaymentRequired => self.render_payment_required_error(cx),
             ThreadError::RateLimitExceeded { provider } => self.render_error_callout(
                 tr(
                     cx,
@@ -9163,17 +9143,13 @@ impl ThreadView {
             ),
             ThreadError::PromptTooLarge => self.render_prompt_too_large_error(cx),
             ThreadError::NoApiKey { provider } => {
-                let message = Self::provider_by_name(provider, cx)
-                    .map(|provider| provider.missing_credentials_error_message())
-                    .unwrap_or_else(|| {
-                        app_i18n::tr(
-                            cx,
-                            "agent_ui.thread_view.api_key_missing_message",
-                            "No API key is configured for {}. Add your key via the Agent Panel settings to continue.",
-                        )
-                        .replacen("{}", provider, 1)
-                        .into()
-                    });
+                let message = app_i18n::tr(
+                    cx,
+                    "agent_ui.thread_view.api_key_missing_message",
+                    "No API key is configured for {}. Add your key via the Agent Panel settings to continue.",
+                )
+                .replacen("{}", provider, 1)
+                .into();
                 self.render_error_callout(
                     tr(
                         cx,
@@ -9204,17 +9180,13 @@ impl ThreadView {
                 cx,
             ),
             ThreadError::InvalidApiKey { provider } => {
-                let message = Self::provider_by_name(provider, cx)
-                    .map(|provider| provider.authentication_error_message())
-                    .unwrap_or_else(|| {
-                        app_i18n::tr(
-                            cx,
-                            "agent_ui.thread_view.invalid_api_key_message",
-                            "The API key for {} is invalid or has expired. Update your key via the Agent Panel settings to continue.",
-                        )
-                        .replacen("{}", provider, 1)
-                        .into()
-                    });
+                let message = app_i18n::tr(
+                    cx,
+                    "agent_ui.thread_view.invalid_api_key_message",
+                    "The API key for {} is invalid or has expired. Update your key via the Agent Panel settings to continue.",
+                )
+                .replacen("{}", provider, 1)
+                .into();
                 self.render_error_callout(
                     tr(
                         cx,
@@ -9335,31 +9307,6 @@ impl ThreadView {
             .dismiss_action(self.dismiss_error_button(cx))
     }
 
-    fn render_payment_required_error(&self, cx: &mut Context<Self>) -> Callout {
-        let error_message = app_i18n::tr(
-            cx,
-            "agent_ui.thread_view.provider_setup_required_message",
-            "No provider is currently available for this request. Configure a local, self-hosted, or manually added provider and try again.",
-        );
-
-        Callout::new()
-            .severity(Severity::Error)
-            .icon(IconName::XCircle)
-            .title(tr(
-                cx,
-                "agent_ui.thread_view.provider_setup_required",
-                "Provider Setup Required",
-            ))
-            .description(error_message.clone())
-            .actions_slot(
-                h_flex()
-                    .gap_0p5()
-                    .child(self.open_settings_button(cx))
-                    .child(self.create_copy_button(error_message, cx)),
-            )
-            .dismiss_action(self.dismiss_error_button(cx))
-    }
-
     fn render_error_callout(
         &self,
         title: SharedString,
@@ -9433,21 +9380,6 @@ impl ThreadView {
         .on_click(cx.listener(|this, _, window, cx| {
             this.clear_thread_error(cx);
             window.dispatch_action(NewThread.boxed_clone(), cx);
-        }))
-    }
-
-    fn open_settings_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        Button::new(
-            "configure-agent",
-            tr(cx, "agent_ui.thread_view.open_settings", "Open Settings"),
-        )
-        .label_size(LabelSize::Small)
-        .style(ButtonStyle::Filled)
-        .on_click(cx.listener({
-            move |this, _, window, cx| {
-                this.clear_thread_error(cx);
-                window.dispatch_action(OpenSettings.boxed_clone(), cx);
-            }
         }))
     }
 

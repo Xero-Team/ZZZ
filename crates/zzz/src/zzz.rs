@@ -5705,7 +5705,6 @@ mod tests {
             pdf_viewer::init(cx);
             audio_viewer::init(cx);
             video_viewer::init(cx);
-            language_model::init(cx);
             git_graph::init(cx);
             project::AgentRegistryStore::init_global(
                 cx,

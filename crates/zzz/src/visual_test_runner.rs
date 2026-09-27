@@ -203,7 +203,6 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
             wrap_div_with_search_actions: search::buffer_search::register_pane_search_actions,
         });
         prompt_store::init(cx);
-        language_model::init(cx);
         git_ui::init(cx);
         docs::init(cx);
         project::AgentRegistryStore::init_global(

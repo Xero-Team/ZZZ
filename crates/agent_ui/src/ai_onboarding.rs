@@ -1,10 +1,6 @@
-mod agent_api_keys_onboarding;
 mod agent_panel_onboarding_card;
-mod agent_panel_onboarding_content;
 
-pub use agent_api_keys_onboarding::{ApiKeysWithProviders, ApiKeysWithoutProviders};
 pub use agent_panel_onboarding_card::AgentPanelOnboardingCard;
-pub use agent_panel_onboarding_content::AgentPanelOnboarding;
 
 use std::sync::Arc;
 

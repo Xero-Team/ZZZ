@@ -38,7 +38,7 @@ use gpui::{
 };
 use i18n as app_i18n;
 use language::{Buffer, Language, Rope};
-use language_model::{LanguageModelCompletionError, LanguageModelRegistry};
+use language_model::LanguageModelCompletionError;
 use markdown::{
     CodeBlockRenderer, CopyButtonVisibility, Markdown, MarkdownElement, MarkdownFont, MarkdownStyle,
 };
@@ -124,7 +124,6 @@ pub struct QueuedMessage {
 
 #[derive(Debug)]
 pub(crate) enum ThreadError {
-    PaymentRequired,
     Refusal,
     AuthenticationRequired(SharedString),
     RateLimitExceeded {
@@ -162,8 +161,6 @@ impl From<anyhow::Error> for ThreadError {
     fn from(error: anyhow::Error) -> Self {
         if error.is::<MaxOutputTokensError>() {
             Self::MaxOutputTokens
-        } else if error.is::<language_model::PaymentRequiredError>() {
-            Self::PaymentRequired
         } else if let Some(acp_error) = error.downcast_ref::<acp::Error>()
             && acp_error.code == acp::ErrorCode::AuthRequired
         {
@@ -1251,45 +1248,13 @@ impl ConversationView {
     fn handle_auth_required(
         this: WeakEntity<Self>,
         err: AuthRequired,
-        agent_id: AgentId,
+        _agent_id: AgentId,
         connection: Rc<dyn AgentConnection>,
         window: &mut Window,
         cx: &mut App,
     ) {
-        let (configuration_view, subscription) = if let Some(provider_id) = &err.provider_id {
-            let registry = LanguageModelRegistry::global(cx);
-
-            let sub = window.subscribe(&registry, cx, {
-                let provider_id = provider_id.clone();
-                let this = this.clone();
-                move |_, ev, window, cx| {
-                    if let language_model::Event::ProviderStateChanged(updated_provider_id) = &ev
-                        && &provider_id == updated_provider_id
-                        && LanguageModelRegistry::global(cx)
-                            .read(cx)
-                            .provider(&provider_id)
-                            .map_or(false, |provider| provider.is_authenticated(cx))
-                    {
-                        this.update(cx, |this, cx| {
-                            this.reset(window, cx);
-                        })
-                        .ok();
-                    }
-                }
-            });
-
-            let view = registry.read(cx).provider(&provider_id).map(|provider| {
-                provider.configuration_view(
-                    language_model::ConfigurationViewTargetAgent::Other(agent_id.0),
-                    window,
-                    cx,
-                )
-            });
-
-            (view, Some(sub))
-        } else {
-            (None, None)
-        };
+        let configuration_view: Option<AnyView> = None;
+        let subscription: Option<Subscription> = None;
 
         this.update(cx, |this, cx| {
             let description = err

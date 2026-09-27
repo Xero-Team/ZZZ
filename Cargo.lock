@@ -2299,22 +2299,10 @@ dependencies = [
  "anyhow",
  "chrono",
  "ciborium",
- "cloud_llm_client",
  "pretty_assertions",
  "serde",
  "serde_json",
  "strum",
-]
-
-[[package]]
-name = "cloud_llm_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
- "serde_json",
- "strum",
- "uuid",
 ]
 
 [[package]]
@@ -7916,7 +7904,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-lock",
- "cloud_llm_client",
  "futures 0.3.34",
  "gpui_shared_string",
  "http_client",
