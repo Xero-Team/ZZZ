@@ -1,9 +1,11 @@
 use editor::Editor;
-use gpui::{Entity, Subscription, WeakEntity};
+use gpui::{App, Entity, Subscription, WeakEntity};
 use i18n::tr;
 use language::LineEnding;
 use ui::{Tooltip, prelude::*};
-use workspace::{StatusBarSettings, StatusItemView, item::ItemHandle, item::Settings};
+use workspace::{
+    HideStatusItem, StatusBarSettings, StatusItemView, item::ItemHandle, item::Settings,
+};
 
 use crate::{LineEndingSelector, Toggle};
 
@@ -75,5 +77,14 @@ impl StatusItemView for LineEndingIndicator {
             self._observe_active_editor = None;
         }
         cx.notify();
+    }
+
+    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
+        Some(HideStatusItem::new(|settings| {
+            settings
+                .status_bar
+                .get_or_insert_default()
+                .line_endings_button = Some(false);
+        }))
     }
 }

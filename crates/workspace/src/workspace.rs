@@ -117,7 +117,7 @@ use sqlez::{
     statement::Statement,
 };
 use status_bar::StatusBar;
-pub use status_bar::StatusItemView;
+pub use status_bar::{HideStatusItem, StatusItemView};
 use std::{
     any::TypeId,
     borrow::Cow,
@@ -151,8 +151,9 @@ use util::{
 };
 use uuid::Uuid;
 pub use workspace_settings::{
-    AutosaveSetting, BottomDockLayout, FocusFollowsMouse, RestoreOnStartupBehavior,
-    StatusBarPosition, StatusBarSettings, TabBarSettings, WorkspaceSettings,
+    AutosaveSetting, BottomDockLayout, EncodingDisplayOptions, FocusFollowsMouse,
+    RestoreOnStartupBehavior, StatusBarPosition, StatusBarSettings, TabBarSettings,
+    WorkspaceSettings,
 };
 use zzz_actions::{Spawn, feedback::FileBugReport, theme::ToggleMode};
 

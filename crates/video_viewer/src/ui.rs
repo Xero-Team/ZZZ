@@ -1,12 +1,13 @@
 use gpui::{
-    AnyElement, Bounds, Context, CursorStyle, EventEmitter, Focusable, InteractiveElement,
+    AnyElement, App, Bounds, Context, CursorStyle, EventEmitter, Focusable, InteractiveElement,
     IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit,
     ParentElement, Pixels, Render, Styled, WeakEntity, Window, canvas, div, img, px, relative,
 };
 use i18n::tr;
 use ui::{IconName, Label, LabelSize, Tooltip, prelude::*};
 use workspace::{
-    ItemHandle, StatusItemView, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, Workspace,
+    HideStatusItem, ItemHandle, StatusItemView, ToolbarItemEvent, ToolbarItemLocation,
+    ToolbarItemView, Workspace,
 };
 
 use crate::{
@@ -591,5 +592,10 @@ impl StatusItemView for VideoInfo {
             self.parts = None;
         }
         cx.notify();
+    }
+
+    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
+        // The video info is only visible when a video viewer item is active.
+        None
     }
 }

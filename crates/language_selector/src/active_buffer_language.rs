@@ -1,13 +1,13 @@
 use editor::Editor;
 use gpui::{
-    Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription, WeakEntity, Window,
-    div,
+    App, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription, WeakEntity,
+    Window, div,
 };
 use i18n::tr;
 use language::LanguageName;
 use settings::Settings as _;
 use ui::{Button, ButtonCommon, Clickable, FluentBuilder, LabelSize, Tooltip};
-use workspace::{StatusBarSettings, StatusItemView, Workspace, item::ItemHandle};
+use workspace::{HideStatusItem, StatusBarSettings, StatusItemView, Workspace, item::ItemHandle};
 
 use crate::{LanguageSelector, Toggle};
 
@@ -96,5 +96,14 @@ impl StatusItemView for ActiveBufferLanguage {
         }
 
         cx.notify();
+    }
+
+    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
+        Some(HideStatusItem::new(|settings| {
+            settings
+                .status_bar
+                .get_or_insert_default()
+                .active_language_button = Some(false);
+        }))
     }
 }

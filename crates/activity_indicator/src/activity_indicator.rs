@@ -24,7 +24,7 @@ use std::{
 };
 use ui::{CommonAnimationExt, ContextMenu, PopoverMenu, PopoverMenuHandle, Tooltip, prelude::*};
 use util::truncate_and_trailoff;
-use workspace::{StatusItemView, Workspace, item::ItemHandle};
+use workspace::{HideStatusItem, StatusItemView, Workspace, item::ItemHandle};
 
 const GIT_OPERATION_DELAY: Duration = Duration::from_millis(0);
 
@@ -930,5 +930,10 @@ impl StatusItemView for ActivityIndicator {
         _window: &mut Window,
         _: &mut Context<Self>,
     ) {
+    }
+
+    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
+        // Activity indicator auto-hides when there's no work to display.
+        None
     }
 }

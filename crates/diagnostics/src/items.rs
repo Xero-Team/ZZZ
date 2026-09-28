@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use editor::{Editor, MultiBufferOffset};
 use gpui::{
-    Context, Entity, EventEmitter, IntoElement, ParentElement, Render, Styled, Subscription, Task,
-    WeakEntity, Window,
+    App, Context, Entity, EventEmitter, IntoElement, ParentElement, Render, Styled, Subscription,
+    Task, WeakEntity, Window,
 };
 use i18n::tr;
 use language::Diagnostic;
@@ -11,7 +11,7 @@ use project::project_settings::{GoToDiagnosticSeverityFilter, ProjectSettings};
 use settings::Settings;
 use ui::{Button, ButtonLike, Color, Icon, IconName, Label, Tooltip, h_flex, prelude::*};
 use util::ResultExt;
-use workspace::{StatusItemView, ToolbarItemEvent, Workspace, item::ItemHandle};
+use workspace::{HideStatusItem, StatusItemView, ToolbarItemEvent, Workspace, item::ItemHandle};
 
 use crate::{Deploy, IncludeWarnings, ProjectDiagnosticsEditor};
 
@@ -242,5 +242,11 @@ impl StatusItemView for DiagnosticIndicator {
             self._observe_active_editor = None;
         }
         cx.notify();
+    }
+
+    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
+        Some(HideStatusItem::new(|settings| {
+            settings.diagnostics.get_or_insert_default().button = Some(false);
+        }))
     }
 }

@@ -2544,6 +2544,7 @@
     "workspace.notifications.shift_click_to_suppress": "按住 Shift 点击以抑制",
     "workspace.notifications.suppress": "抑制",
     "workspace.notifications.suppress_with_shift_click": "按住 Shift 点击以抑制",
+    "workspace.status_bar.hide_button": "隐藏按钮",
     "workspace.status_bar.open_threads_sidebar": "打开线程侧边栏",
     "extensions_ui.extension_version_selector.incompatible": "不兼容",
     "extensions_ui.extension_card.overridden_by_dev_extension": "被开发扩展覆盖。",

@@ -19,7 +19,7 @@ use settings::Settings;
 use std::{ops::Range, sync::Arc};
 use ui::{ButtonLike, Divider, Tooltip, prelude::*};
 use util::{debug_panic, maybe};
-use workspace::{StatusItemView, Workspace, item::ItemHandle};
+use workspace::{HideStatusItem, StatusItemView, Workspace, item::ItemHandle};
 use zzz_actions::agent::{
     ConflictContent, ResolveConflictedFilesWithAgent, ResolveConflictsWithAgent,
 };
@@ -714,5 +714,14 @@ impl StatusItemView for MergeConflictIndicator {
         _window: &mut Window,
         _: &mut Context<Self>,
     ) {
+    }
+
+    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
+        Some(HideStatusItem::new(|settings| {
+            settings
+                .agent
+                .get_or_insert_default()
+                .show_merge_conflict_indicator = Some(false);
+        }))
     }
 }

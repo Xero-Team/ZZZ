@@ -11,7 +11,7 @@ use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
 use client::proto;
 use collections::HashSet;
 use editor::{Editor, EditorEvent};
-use gpui::{Anchor, Entity, Subscription, Task, WeakEntity, actions};
+use gpui::{Anchor, App, Entity, Subscription, Task, WeakEntity, actions};
 use i18n::tr;
 use language::{BinaryStatus, BufferId, ServerHealth};
 use lsp::{LanguageServerId, LanguageServerName, LanguageServerSelector};
@@ -25,7 +25,7 @@ use ui::{
 };
 
 use util::{ResultExt, paths::PathStyle, rel_path::RelPath};
-use workspace::{StatusItemView, Workspace};
+use workspace::{HideStatusItem, StatusItemView, Workspace};
 
 use crate::lsp_log_view;
 
@@ -1451,6 +1451,12 @@ impl StatusItemView for LspButton {
             });
             self.refresh_lsp_menu(false, window, cx);
         }
+    }
+
+    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
+        Some(HideStatusItem::new(|settings| {
+            settings.global_lsp_settings.get_or_insert_default().button = Some(false);
+        }))
     }
 }
 
