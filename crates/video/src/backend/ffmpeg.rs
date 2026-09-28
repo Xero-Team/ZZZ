@@ -28,6 +28,10 @@ pub struct FfmpegDecoder {
 
 // The decoder owns raw FFmpeg contexts, which are not `Sync`. Access is always
 // serialized through an `Arc<Mutex<..>>`, so it is safe to move between threads.
+#[allow(
+    clippy::non_send_fields_in_send_ty,
+    reason = "raw FFmpeg contexts are not `Send`, but access is serialized through an `Arc<Mutex<_>>`"
+)]
 unsafe impl Send for FfmpegDecoder {}
 
 impl FfmpegDecoder {

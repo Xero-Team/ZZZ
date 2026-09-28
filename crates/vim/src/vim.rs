@@ -2380,10 +2380,22 @@ impl From<settings::VimInsertModeCursorShape> for InsertModeCursorShape {
 impl From<settings::CursorShapeSettings> for CursorShapeSettings {
     fn from(settings: settings::CursorShapeSettings) -> Self {
         Self {
-            normal: settings.normal.unwrap().into(),
-            replace: settings.replace.unwrap().into(),
-            visual: settings.visual.unwrap().into(),
-            insert: settings.insert.unwrap().into(),
+            normal: settings
+                .normal
+                .unwrap_or(settings::CursorShape::Block)
+                .into(),
+            replace: settings
+                .replace
+                .unwrap_or(settings::CursorShape::Underline)
+                .into(),
+            visual: settings
+                .visual
+                .unwrap_or(settings::CursorShape::Block)
+                .into(),
+            insert: settings
+                .insert
+                .unwrap_or(settings::VimInsertModeCursorShape::Inherit)
+                .into(),
         }
     }
 }

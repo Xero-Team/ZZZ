@@ -89,6 +89,10 @@ impl SendableCx {
 // SAFETY: In test mode, GPUI is always single-threaded, and SendableCx
 // is only accessed from the main thread via the get() method which
 // requires a valid AsyncApp reference.
+#[allow(
+    clippy::non_send_fields_in_send_ty,
+    reason = "GPUI is single-threaded in tests, so the wrapped `AsyncApp` is only reached from the main thread"
+)]
 unsafe impl Send for SendableCx {}
 unsafe impl Sync for SendableCx {}
 

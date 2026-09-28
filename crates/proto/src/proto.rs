@@ -674,7 +674,7 @@ impl From<Timestamp> for SystemTime {
     fn from(val: Timestamp) -> Self {
         UNIX_EPOCH
             .checked_add(Duration::new(val.seconds, val.nanos))
-            .unwrap()
+            .unwrap_or(UNIX_EPOCH)
     }
 }
 

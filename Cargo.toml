@@ -1147,6 +1147,37 @@ elidable_lifetime_names = "deny"
 enum_glob_use = "deny"
 iter_without_into_iter = "deny"
 
+# Correctness lints promoted once the whole workspace was fixed for them.
+# `fallible_impl_from` flags `From` impls that can panic, steering callers to
+# `TryFrom` or a lossless fallback; `non_send_fields_in_send_ty` flags
+# `unsafe impl Send` types whose fields are not `Send`, each of which now
+# carries a documented `#[allow(..., reason = ...)]`.
+fallible_impl_from = "deny"
+non_send_fields_in_send_ty = "deny"
+
+# Lints added in newer Clippy releases that were already clean across the whole
+# workspace when scanned. Denying them pins the requirement: they replace a
+# hand-rolled pattern with the standard-library idiom (`is_multiple_of`,
+# `abs_diff`, `hash`, `c"..."` literals, ...) or catch a likely bug
+# (`redundant_locals`, `path_buf_push_overwrite`, `missing_transmute_annotations`).
+redundant_locals = "deny"
+doc_link_code = "deny"
+unnecessary_map_on_constructor = "deny"
+unnecessary_result_map_or_else = "deny"
+manual_hash_one = "deny"
+unnecessary_first_then_check = "deny"
+missing_transmute_annotations = "deny"
+path_buf_push_overwrite = "deny"
+manual_is_multiple_of = "deny"
+unnecessary_min_or_max = "deny"
+needless_as_bytes = "deny"
+manual_abs_diff = "deny"
+manual_c_str_literals = "deny"
+unnecessary_literal_unwrap = "deny"
+unnecessary_sort_by = "deny"
+unnecessary_get_then_check = "deny"
+redundant_as_str = "deny"
+
 # We currently do not restrict any style rules
 # as it slows down shipping code to ZZZ.
 #
@@ -1208,6 +1239,10 @@ style = { level = "allow", priority = -1 }
 #   for callers. `should_panic_without_expect` (1) is the scheduler's "parking
 #   forbidden" panic rather than the migration error the test claims to assert,
 #   so naming it would encode a test-harness detail.
+# - Newer Clippy lints evaluated in the most recent scan: the clean ones are
+#   promoted above. The two with violations are deferred as mechanical clarity
+#   churn rather than bugs: `unnecessary_map_or` (66, prefer
+#   `is_some_and`/`is_none_or`) and `deref_by_slicing` (15).
 
 # Individual rules that have violations in the codebase:
 type_complexity = "allow"

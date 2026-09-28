@@ -5523,6 +5523,13 @@ impl Deref for BufferSnapshot {
     }
 }
 
+// SAFETY: `BufferChunks` only borrows an immutable snapshot and its tree-sitter
+// query state; the non-`Send` cursors are never shared, so moving the iterator
+// to a background task is sound.
+#[allow(
+    clippy::non_send_fields_in_send_ty,
+    reason = "tree-sitter query cursors are not `Send`, but `BufferChunks` only borrows immutable data"
+)]
 unsafe impl Send for BufferChunks<'_> {}
 
 impl<'a> BufferChunks<'a> {
