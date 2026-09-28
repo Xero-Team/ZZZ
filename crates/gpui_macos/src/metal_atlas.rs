@@ -242,7 +242,7 @@ impl MetalAtlasTexture {
     }
 
     fn bytes_per_pixel(&self) -> u8 {
-        use metal::MTLPixelFormat::*;
+        use metal::MTLPixelFormat::{A8Unorm, BGRA8Unorm, R8Unorm, RGBA8Unorm};
         match self.metal_texture.pixel_format() {
             A8Unorm | R8Unorm => 1,
             RGBA8Unorm | BGRA8Unorm => 4,
@@ -273,6 +273,12 @@ fn point_from_etagere(value: etagere::Point) -> Point<DevicePixels> {
 #[derive(Deref, DerefMut)]
 struct AssertSend<T>(T);
 
+// SAFETY: Metal `Device` and `Texture` wrap thread-safe GPU objects; the
+// `metal` crate types do not implement `Send`, so this newtype asserts it.
+#[allow(
+    clippy::non_send_fields_in_send_ty,
+    reason = "Metal Device and Texture are thread-safe GPU objects; the metal crate types do not implement Send"
+)]
 unsafe impl<T> Send for AssertSend<T> {}
 
 #[cfg(test)]

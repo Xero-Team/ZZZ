@@ -90,6 +90,10 @@ struct DisplayEntry {
 // to a GCD object (which the display's io thread really does use, calling
 // `merge_data` from the output callback). All mutation of the entry itself
 // is serialized by the registry lock.
+#[allow(
+    clippy::non_send_fields_in_send_ty,
+    reason = "DisplayLink and DispatchSource are refcounted thread-safe objects; mutation is serialized by the registry lock"
+)]
 unsafe impl Send for DisplayEntry {}
 
 #[derive(Copy, Clone, PartialEq, Eq)]

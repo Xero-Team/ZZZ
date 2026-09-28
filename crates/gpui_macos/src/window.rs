@@ -854,6 +854,13 @@ impl MacWindowState {
     }
 }
 
+// SAFETY: `MacWindowState` is stored in `Arc<Mutex<_>>`, so mutation is
+// serialized. AppKit objects and UI callbacks are only used on the main
+// thread; the Metal renderer wraps thread-safe GPU handles.
+#[allow(
+    clippy::non_send_fields_in_send_ty,
+    reason = "lives in Arc<Mutex<_>> so access is serialized; AppKit objects and UI callbacks are only used on the main thread"
+)]
 unsafe impl Send for MacWindowState {}
 
 pub(crate) struct MacWindow(Arc<Mutex<MacWindowState>>);
