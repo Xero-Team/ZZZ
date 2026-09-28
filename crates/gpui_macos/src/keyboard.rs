@@ -57,14 +57,14 @@ impl MacKeyboardLayout {
 
             let id: *mut Object = TISGetInputSourceProperty(
                 current_keyboard,
-                kTISPropertyInputSourceID as *const c_void,
+                kTISPropertyInputSourceID.cast::<c_void>(),
             );
             let id: *const std::os::raw::c_char = msg_send![id, UTF8String];
             let id = CStr::from_ptr(id).to_str().unwrap().to_owned();
 
             let name: *mut Object = TISGetInputSourceProperty(
                 current_keyboard,
-                kTISPropertyLocalizedName as *const c_void,
+                kTISPropertyLocalizedName.cast::<c_void>(),
             );
             let name: *const std::os::raw::c_char = msg_send![name, UTF8String];
             let name = CStr::from_ptr(name).to_str().unwrap().to_owned();

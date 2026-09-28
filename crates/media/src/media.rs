@@ -34,63 +34,55 @@ pub mod core_media {
 
     impl CMSampleBuffer {
         pub fn attachments(&self) -> Vec<CFDictionary<CFString>> {
-            unsafe {
-                let attachments =
-                    CMSampleBufferGetSampleAttachmentsArray(self.as_concrete_TypeRef(), true);
-                CFArray::<CFDictionary>::wrap_under_get_rule(attachments)
-                    .into_iter()
-                    .map(|attachments| {
-                        CFDictionary::wrap_under_get_rule(attachments.as_concrete_TypeRef())
-                    })
-                    .collect()
-            }
+            let attachments = unsafe {
+                CMSampleBufferGetSampleAttachmentsArray(self.as_concrete_TypeRef(), true)
+            };
+            unsafe { CFArray::<CFDictionary>::wrap_under_get_rule(attachments) }
+                .into_iter()
+                .map(|attachments| unsafe {
+                    CFDictionary::wrap_under_get_rule(attachments.as_concrete_TypeRef())
+                })
+                .collect()
         }
 
         pub fn image_buffer(&self) -> Option<CVImageBuffer> {
-            unsafe {
-                let ptr = CMSampleBufferGetImageBuffer(self.as_concrete_TypeRef());
-                if ptr.is_null() {
-                    None
-                } else {
-                    Some(CVImageBuffer::wrap_under_get_rule(ptr))
-                }
+            let ptr = unsafe { CMSampleBufferGetImageBuffer(self.as_concrete_TypeRef()) };
+            if ptr.is_null() {
+                None
+            } else {
+                Some(unsafe { CVImageBuffer::wrap_under_get_rule(ptr) })
             }
         }
 
         pub fn sample_timing_info(&self, index: usize) -> Result<CMSampleTimingInfo> {
-            unsafe {
-                let mut timing_info = CMSampleTimingInfo {
-                    duration: kCMTimeInvalid,
-                    presentationTimeStamp: kCMTimeInvalid,
-                    decodeTimeStamp: kCMTimeInvalid,
-                };
-                let result = CMSampleBufferGetSampleTimingInfo(
+            let mut timing_info = CMSampleTimingInfo {
+                duration: unsafe { kCMTimeInvalid },
+                presentationTimeStamp: unsafe { kCMTimeInvalid },
+                decodeTimeStamp: unsafe { kCMTimeInvalid },
+            };
+            let result = unsafe {
+                CMSampleBufferGetSampleTimingInfo(
                     self.as_concrete_TypeRef(),
                     index as CMItemIndex,
-                    &mut timing_info,
-                );
-                anyhow::ensure!(
-                    result == 0,
-                    "error getting sample timing info, code {result}"
-                );
-                Ok(timing_info)
-            }
+                    &raw mut timing_info,
+                )
+            };
+            anyhow::ensure!(
+                result == 0,
+                "error getting sample timing info, code {result}"
+            );
+            Ok(timing_info)
         }
 
         pub fn format_description(&self) -> CMFormatDescription {
-            unsafe {
-                CMFormatDescription::wrap_under_get_rule(CMSampleBufferGetFormatDescription(
-                    self.as_concrete_TypeRef(),
-                ))
-            }
+            let format_description =
+                unsafe { CMSampleBufferGetFormatDescription(self.as_concrete_TypeRef()) };
+            unsafe { CMFormatDescription::wrap_under_get_rule(format_description) }
         }
 
         pub fn data(&self) -> CMBlockBuffer {
-            unsafe {
-                CMBlockBuffer::wrap_under_get_rule(CMSampleBufferGetDataBuffer(
-                    self.as_concrete_TypeRef(),
-                ))
-            }
+            let data_buffer = unsafe { CMSampleBufferGetDataBuffer(self.as_concrete_TypeRef()) };
+            unsafe { CMBlockBuffer::wrap_under_get_rule(data_buffer) }
         }
     }
 
@@ -125,36 +117,36 @@ pub mod core_media {
 
     impl CMFormatDescription {
         pub fn h264_parameter_set_count(&self) -> usize {
-            unsafe {
-                let mut count = 0;
-                let result = CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
+            let mut count = 0;
+            let result = unsafe {
+                CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
                     self.as_concrete_TypeRef(),
                     0,
                     ptr::null_mut(),
                     ptr::null_mut(),
-                    &mut count,
+                    &raw mut count,
                     ptr::null_mut(),
-                );
-                assert_eq!(result, 0);
-                count
-            }
+                )
+            };
+            assert_eq!(result, 0);
+            count
         }
 
         pub fn h264_parameter_set_at_index(&self, index: usize) -> Result<&[u8]> {
-            unsafe {
-                let mut bytes = ptr::null();
-                let mut len = 0;
-                let result = CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
+            let mut bytes = ptr::null();
+            let mut len = 0;
+            let result = unsafe {
+                CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
                     self.as_concrete_TypeRef(),
                     index,
-                    &mut bytes,
-                    &mut len,
+                    &raw mut bytes,
+                    &raw mut len,
                     ptr::null_mut(),
                     ptr::null_mut(),
-                );
-                anyhow::ensure!(result == 0, "error getting parameter set, code: {result}");
-                Ok(std::slice::from_raw_parts(bytes, len))
-            }
+                )
+            };
+            anyhow::ensure!(result == 0, "error getting parameter set, code: {result}");
+            Ok(unsafe { std::slice::from_raw_parts(bytes, len) })
         }
     }
 
@@ -181,19 +173,19 @@ pub mod core_media {
 
     impl CMBlockBuffer {
         pub fn bytes(&self) -> &[u8] {
-            unsafe {
-                let mut bytes = ptr::null();
-                let mut len = 0;
-                let result = CMBlockBufferGetDataPointer(
+            let mut bytes = ptr::null();
+            let mut len = 0;
+            let result = unsafe {
+                CMBlockBufferGetDataPointer(
                     self.as_concrete_TypeRef(),
                     0,
                     &mut 0,
-                    &mut len,
-                    &mut bytes,
-                );
-                assert!(result == 0, "could not get block buffer data");
-                std::slice::from_raw_parts(bytes, len)
-            }
+                    &raw mut len,
+                    &raw mut bytes,
+                )
+            };
+            assert!(result == 0, "could not get block buffer data");
+            unsafe { std::slice::from_raw_parts(bytes, len) }
         }
     }
 
@@ -254,13 +246,14 @@ pub mod core_video {
         /// metal_device must be valid according to CVMetalTextureCacheCreate
         pub unsafe fn new(metal_device: *mut MTLDevice) -> Result<Self> {
             let mut this = ptr::null();
+            let allocator = unsafe { kCFAllocatorDefault };
             let result = unsafe {
                 CVMetalTextureCacheCreate(
-                    kCFAllocatorDefault,
+                    allocator,
                     ptr::null(),
                     metal_device,
                     ptr::null(),
-                    &mut this,
+                    &raw mut this,
                 )
             };
             anyhow::ensure!(
@@ -283,9 +276,10 @@ pub mod core_video {
             plane_index: usize,
         ) -> Result<CVMetalTexture> {
             let mut this = ptr::null();
+            let allocator = unsafe { kCFAllocatorDefault };
             let result = unsafe {
                 CVMetalTextureCacheCreateTextureFromImage(
-                    kCFAllocatorDefault,
+                    allocator,
                     self.as_concrete_TypeRef(),
                     source,
                     texture_attributes,
@@ -293,7 +287,7 @@ pub mod core_video {
                     width,
                     height,
                     plane_index,
-                    &mut this,
+                    &raw mut this,
                 )
             };
             anyhow::ensure!(
@@ -337,10 +331,8 @@ pub mod core_video {
 
     impl CVMetalTexture {
         pub fn as_texture_ref(&self) -> &metal::TextureRef {
-            unsafe {
-                let texture = CVMetalTextureGetTexture(self.as_concrete_TypeRef());
-                metal::TextureRef::from_ptr(texture as *mut _)
-            }
+            let texture = unsafe { CVMetalTextureGetTexture(self.as_concrete_TypeRef()) };
+            unsafe { metal::TextureRef::from_ptr(texture.cast()) }
         }
     }
 

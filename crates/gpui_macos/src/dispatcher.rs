@@ -51,7 +51,7 @@ impl PlatformDispatcher for MacDispatcher {
     }
 
     fn dispatch(&self, runnable: RunnableVariant, priority: Priority) {
-        let context = runnable.into_raw().as_ptr() as *mut c_void;
+        let context = runnable.into_raw().as_ptr().cast::<c_void>();
 
         let queue_priority = match priority {
             Priority::RealtimeAudio => {
@@ -69,14 +69,14 @@ impl PlatformDispatcher for MacDispatcher {
     }
 
     fn dispatch_on_main_thread(&self, runnable: RunnableVariant, _priority: Priority) {
-        let context = runnable.into_raw().as_ptr() as *mut c_void;
+        let context = runnable.into_raw().as_ptr().cast::<c_void>();
         unsafe {
             DispatchQueue::main().exec_async_f(context, trampoline);
         }
     }
 
     fn dispatch_after(&self, duration: Duration, runnable: RunnableVariant) {
-        let context = runnable.into_raw().as_ptr() as *mut c_void;
+        let context = runnable.into_raw().as_ptr().cast::<c_void>();
         let queue = DispatchQueue::global_queue(GlobalQueueIdentifier::Priority(
             DispatchQueueGlobalPriority::High,
         ));
@@ -112,7 +112,7 @@ fn set_audio_thread_priority() -> anyhow::Result<()> {
         mach2::thread_policy::thread_policy_set(
             thread_id,
             THREAD_EXTENDED_POLICY,
-            &mut policy as *mut _ as *mut _,
+            std::ptr::from_mut(&mut policy).cast(),
             THREAD_EXTENDED_POLICY_COUNT,
         )
     };
@@ -130,7 +130,7 @@ fn set_audio_thread_priority() -> anyhow::Result<()> {
         mach2::thread_policy::thread_policy_set(
             thread_id,
             THREAD_PRECEDENCE_POLICY,
-            &mut precedence as *mut _ as *mut _,
+            std::ptr::from_mut(&mut precedence).cast(),
             THREAD_PRECEDENCE_POLICY_COUNT,
         )
     };
@@ -150,7 +150,7 @@ fn set_audio_thread_priority() -> anyhow::Result<()> {
 
     let mut timebase_info = mach_timebase_info_data_t { numer: 0, denom: 0 };
     // SAFETY: timebase_info is a valid pointer to a mach_timebase_info_data_t struct
-    unsafe { mach2::mach_time::mach_timebase_info(&mut timebase_info) };
+    unsafe { mach2::mach_time::mach_timebase_info(&raw mut timebase_info) };
 
     let ms_to_abs_time = ((timebase_info.denom as f32) / (timebase_info.numer as f32)) * 1000000f32;
 
@@ -167,7 +167,7 @@ fn set_audio_thread_priority() -> anyhow::Result<()> {
         mach2::thread_policy::thread_policy_set(
             thread_id,
             THREAD_TIME_CONSTRAINT_POLICY,
-            &mut time_constraints as *mut _ as *mut _,
+            std::ptr::from_mut(&mut time_constraints).cast(),
             THREAD_TIME_CONSTRAINT_POLICY_COUNT,
         )
     };
@@ -181,7 +181,7 @@ fn set_audio_thread_priority() -> anyhow::Result<()> {
 
 extern "C" fn trampoline(context: *mut c_void) {
     let runnable =
-        unsafe { Runnable::<RunnableMeta>::from_raw(NonNull::new_unchecked(context as *mut ())) };
+        unsafe { Runnable::<RunnableMeta>::from_raw(NonNull::new_unchecked(context.cast::<()>())) };
 
     let location = runnable.metadata().location;
 

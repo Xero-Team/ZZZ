@@ -236,7 +236,7 @@ impl MetalAtlasTexture {
         self.metal_texture.replace_region(
             region,
             0,
-            bytes.as_ptr() as *const _,
+            bytes.as_ptr().cast(),
             bounds.size.width.to_bytes(self.bytes_per_pixel()) as u64,
         );
     }

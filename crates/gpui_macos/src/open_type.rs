@@ -47,19 +47,19 @@ pub fn apply_features_and_fallbacks(
         }
         let attrs = CFDictionaryCreate(
             kCFAllocatorDefault,
-            keys.as_ptr() as _,
-            values.as_ptr() as _,
+            keys.as_ptr().cast(),
+            values.as_ptr().cast(),
             keys.len() as isize,
-            &kCFTypeDictionaryKeyCallBacks,
-            &kCFTypeDictionaryValueCallBacks,
+            &raw const kCFTypeDictionaryKeyCallBacks,
+            &raw const kCFTypeDictionaryValueCallBacks,
         );
 
         for value in &values {
-            CFRelease(*value as _);
+            CFRelease((*value).cast());
         }
 
         let new_descriptor = CTFontDescriptorCreateWithAttributes(attrs);
-        CFRelease(attrs as _);
+        CFRelease(attrs.cast());
         let new_descriptor = CTFontDescriptor::wrap_under_create_rule(new_descriptor);
         let new_font = CTFontCreateCopyWithAttributes(
             font.native_font().as_concrete_TypeRef(),
@@ -76,7 +76,8 @@ pub fn apply_features_and_fallbacks(
 
 fn generate_feature_array(features: &FontFeatures) -> CFMutableArrayRef {
     unsafe {
-        let feature_array = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
+        let feature_array =
+            CFArrayCreateMutable(kCFAllocatorDefault, 0, &raw const kCFTypeArrayCallBacks);
         for (tag, value) in features.tag_value_list() {
             let keys = [kCTFontOpenTypeFeatureTag, kCTFontOpenTypeFeatureValue];
             let values = [
@@ -85,15 +86,17 @@ fn generate_feature_array(features: &FontFeatures) -> CFMutableArrayRef {
             ];
             let dict = CFDictionaryCreate(
                 kCFAllocatorDefault,
-                &keys as *const _ as _,
-                &values as *const _ as _,
+                keys.as_ptr().cast(),
+                values.as_ptr().cast(),
                 2,
-                &kCFTypeDictionaryKeyCallBacks,
-                &kCFTypeDictionaryValueCallBacks,
+                &raw const kCFTypeDictionaryKeyCallBacks,
+                &raw const kCFTypeDictionaryValueCallBacks,
             );
-            values.into_iter().for_each(|value| CFRelease(value));
-            CFArrayAppendValue(feature_array, dict as _);
-            CFRelease(dict as _);
+            for value in values {
+                CFRelease(value);
+            }
+            CFArrayAppendValue(feature_array, dict.cast());
+            CFRelease(dict.cast());
         }
         feature_array
     }
@@ -104,7 +107,8 @@ fn generate_fallback_array(fallbacks: &FontFallbacks, font: &mut FontKitFont) ->
         let symbolic_traits = font.native_font().symbolic_traits();
         let all_traits = font.native_font().all_traits();
 
-        let fallback_array = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
+        let fallback_array =
+            CFArrayCreateMutable(kCFAllocatorDefault, 0, &raw const kCFTypeArrayCallBacks);
         for user_fallback in fallbacks.fallback_list() {
             let name = CFString::from(user_fallback.as_str());
 
@@ -118,32 +122,32 @@ fn generate_fallback_array(fallbacks: &FontFallbacks, font: &mut FontKitFont) ->
             let traits_values = [weight_value.as_CFTypeRef(), slant_value.as_CFTypeRef()];
             let traits = CFDictionaryCreate(
                 kCFAllocatorDefault,
-                &traits_keys as *const _ as _,
-                &traits_values as *const _ as _,
+                traits_keys.as_ptr().cast(),
+                traits_values.as_ptr().cast(),
                 traits_keys.len() as isize,
-                &kCFTypeDictionaryKeyCallBacks,
-                &kCFTypeDictionaryValueCallBacks,
+                &raw const kCFTypeDictionaryKeyCallBacks,
+                &raw const kCFTypeDictionaryValueCallBacks,
             );
             drop(weight_value);
             drop(slant_value);
 
             let attr_keys = [kCTFontFamilyNameAttribute, kCTFontTraitsAttribute];
-            let attr_values = [name.as_CFTypeRef(), traits as _];
+            let attr_values = [name.as_CFTypeRef(), traits.cast()];
             let attrs = CFDictionaryCreate(
                 kCFAllocatorDefault,
-                &attr_keys as *const _ as _,
-                &attr_values as *const _ as _,
+                attr_keys.as_ptr().cast(),
+                attr_values.as_ptr().cast(),
                 attr_keys.len() as isize,
-                &kCFTypeDictionaryKeyCallBacks,
-                &kCFTypeDictionaryValueCallBacks,
+                &raw const kCFTypeDictionaryKeyCallBacks,
+                &raw const kCFTypeDictionaryValueCallBacks,
             );
-            CFRelease(traits as _);
+            CFRelease(traits.cast());
 
             let fallback_desc = CTFontDescriptorCreateWithAttributes(attrs);
-            CFRelease(attrs as _);
+            CFRelease(attrs.cast());
 
-            CFArrayAppendValue(fallback_array, fallback_desc as _);
-            CFRelease(fallback_desc as _);
+            CFArrayAppendValue(fallback_array, fallback_desc.cast());
+            CFRelease(fallback_desc.cast());
         }
 
         let font_ref = font.native_font().as_concrete_TypeRef();
@@ -168,7 +172,7 @@ fn append_system_fallbacks(fallback_array: CFMutableArrayRef, font_ref: CTFontRe
             .iter()
             .filter(|desc| desc.font_path().is_some())
         {
-            CFArrayAppendValue(fallback_array, desc.as_concrete_TypeRef() as _);
+            CFArrayAppendValue(fallback_array, desc.as_concrete_TypeRef().cast());
         }
     }
 }

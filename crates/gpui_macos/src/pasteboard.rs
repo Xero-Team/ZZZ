@@ -98,7 +98,6 @@ impl Pasteboard {
             let types: id = self.inner.types();
             if msg_send![types, containsObject: ut_type.inner()] {
                 self.data_for_type(ut_type.inner_mut()).map(|bytes| {
-                    let bytes = bytes.to_vec();
                     let id = hash(&bytes);
 
                     ClipboardItem {
@@ -139,7 +138,7 @@ impl Pasteboard {
 
             let html = self
                 .data_for_type(NSPasteboardTypeHTML)
-                .and_then(|html_bytes| String::from_utf8(html_bytes.to_vec()).ok());
+                .and_then(|html_bytes| String::from_utf8(html_bytes).ok());
 
             Some(ClipboardEntry::String(ClipboardString {
                 text,
@@ -158,7 +157,8 @@ impl Pasteboard {
                 Some(Vec::new())
             } else {
                 Some(
-                    slice::from_raw_parts(data.bytes() as *mut u8, data.length() as usize).to_vec(),
+                    slice::from_raw_parts(data.bytes().cast::<u8>(), data.length() as usize)
+                        .to_vec(),
                 )
             }
         }
@@ -219,7 +219,7 @@ impl Pasteboard {
 
             let text_bytes = NSData::dataWithBytes_length_(
                 nil,
-                string.text.as_ptr() as *const c_void,
+                string.text.as_ptr().cast::<c_void>(),
                 string.text.len() as u64,
             );
             self.inner
@@ -228,7 +228,7 @@ impl Pasteboard {
             if let Some(html) = string.html.as_ref() {
                 let html_bytes = NSData::dataWithBytes_length_(
                     nil,
-                    html.as_ptr() as *const c_void,
+                    html.as_ptr().cast::<c_void>(),
                     html.len() as u64,
                 );
                 self.inner.setData_forType(html_bytes, NSPasteboardTypeHTML);
@@ -238,14 +238,14 @@ impl Pasteboard {
                 let hash_bytes = ClipboardString::text_hash(&string.text).to_be_bytes();
                 let hash_bytes = NSData::dataWithBytes_length_(
                     nil,
-                    hash_bytes.as_ptr() as *const c_void,
+                    hash_bytes.as_ptr().cast::<c_void>(),
                     hash_bytes.len() as u64,
                 );
                 self.inner.setData_forType(hash_bytes, *self.text_hash_type);
 
                 let metadata_bytes = NSData::dataWithBytes_length_(
                     nil,
-                    metadata.as_ptr() as *const c_void,
+                    metadata.as_ptr().cast::<c_void>(),
                     metadata.len() as u64,
                 );
                 self.inner
@@ -260,7 +260,7 @@ impl Pasteboard {
 
             let bytes = NSData::dataWithBytes_length_(
                 nil,
-                image.bytes.as_ptr() as *const c_void,
+                image.bytes.as_ptr().cast::<c_void>(),
                 image.bytes.len() as u64,
             );
 
@@ -346,7 +346,7 @@ impl UTType {
     }
 
     pub fn inner_mut(&self) -> *mut Object {
-        self.0 as *mut _
+        self.0.cast()
     }
 }
 
@@ -384,7 +384,7 @@ mod tests {
             let joined = paths.join("\n");
             let bytes = NSData::dataWithBytes_length_(
                 nil,
-                joined.as_ptr() as *const c_void,
+                joined.as_ptr().cast::<c_void>(),
                 joined.len() as u64,
             );
             pasteboard
@@ -421,7 +421,7 @@ mod tests {
         unsafe {
             let bytes = NSData::dataWithBytes_length_(
                 nil,
-                text_from_other_app.as_ptr() as *const c_void,
+                text_from_other_app.as_ptr().cast::<c_void>(),
                 text_from_other_app.len() as u64,
             );
             pasteboard
@@ -442,7 +442,7 @@ mod tests {
             let text = "plain";
             let text_bytes = NSData::dataWithBytes_length_(
                 nil,
-                text.as_ptr() as *const c_void,
+                text.as_ptr().cast::<c_void>(),
                 text.len() as u64,
             );
             pasteboard
@@ -452,7 +452,7 @@ mod tests {
             let html = "<p><em>plain</em></p>";
             let html_bytes = NSData::dataWithBytes_length_(
                 nil,
-                html.as_ptr() as *const c_void,
+                html.as_ptr().cast::<c_void>(),
                 html.len() as u64,
             );
             pasteboard
@@ -582,7 +582,7 @@ mod tests {
 
             let data = NSData::dataWithBytes_length_(
                 nil,
-                png_bytes.as_ptr() as *const c_void,
+                png_bytes.as_ptr().cast::<c_void>(),
                 png_bytes.len() as u64,
             );
             pasteboard.inner.setData_forType(data, ns_png_type);

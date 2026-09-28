@@ -9,7 +9,7 @@ use sysinfo::System;
 
 use release_channel::ReleaseChannel;
 
-const LOCALHOST: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
+const LOCALHOST: Ipv4Addr = Ipv4Addr::LOCALHOST;
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(10);
 const RECEIVE_TIMEOUT: Duration = Duration::from_millis(35);
 const SEND_TIMEOUT: Duration = Duration::from_millis(20);
@@ -105,9 +105,8 @@ pub fn ensure_only_instance() -> IsOnlyInstance {
         .name("EnsureSingleton".to_owned())
         .spawn(move || {
             for stream in listener.incoming() {
-                let mut stream = match stream {
-                    Ok(stream) => stream,
-                    Err(_) => return,
+                let Ok(mut stream) = stream else {
+                    return;
                 };
 
                 _ = stream.set_nodelay(true);

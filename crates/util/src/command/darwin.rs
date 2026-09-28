@@ -266,7 +266,7 @@ impl Child {
         }
 
         let mut status: libc::c_int = 0;
-        let result = unsafe { libc::waitpid(self.pid, &mut status, libc::WNOHANG) };
+        let result = unsafe { libc::waitpid(self.pid, &raw mut status, libc::WNOHANG) };
 
         if result == -1 {
             Err(io::Error::last_os_error())
@@ -294,7 +294,7 @@ impl Child {
 
             smol::unblock(move || {
                 let mut status: libc::c_int = 0;
-                let result = unsafe { libc::waitpid(pid, &mut status, 0) };
+                let result = unsafe { libc::waitpid(pid, &raw mut status, 0) };
                 if result == -1 {
                     Err(io::Error::last_os_error())
                 } else {
@@ -381,10 +381,8 @@ fn spawn_posix_spawn(
         let cstr = CString::new(arg.as_bytes()).map_err(|_| invalid_input_error())?;
         argv_cstrs.push(cstr);
     }
-    let mut argv_ptrs: Vec<*mut libc::c_char> = argv_cstrs
-        .iter()
-        .map(|s| s.as_ptr() as *mut libc::c_char)
-        .collect();
+    let mut argv_ptrs: Vec<*mut libc::c_char> =
+        argv_cstrs.iter().map(|s| s.as_ptr().cast_mut()).collect();
     argv_ptrs.push(ptr::null_mut());
 
     let envp: Vec<CString> = if let Some(envs) = envs {
@@ -400,10 +398,8 @@ fn spawn_posix_spawn(
     } else {
         Vec::new()
     };
-    let mut envp_ptrs: Vec<*mut libc::c_char> = envp
-        .iter()
-        .map(|s| s.as_ptr() as *mut libc::c_char)
-        .collect();
+    let mut envp_ptrs: Vec<*mut libc::c_char> =
+        envp.iter().map(|s| s.as_ptr().cast_mut()).collect();
     envp_ptrs.push(ptr::null_mut());
 
     let (stdin_read, stdin_write) = match stdin_cfg {
@@ -446,156 +442,189 @@ fn spawn_posix_spawn(
     let mut file_actions: libc::posix_spawn_file_actions_t = ptr::null_mut();
 
     unsafe {
-        cvt_nz(libc::posix_spawnattr_init(&mut attr))?;
-        cvt_nz(libc::posix_spawn_file_actions_init(&mut file_actions))?;
+        cvt_nz(libc::posix_spawnattr_init(&raw mut attr))?;
+    }
+    unsafe {
+        cvt_nz(libc::posix_spawn_file_actions_init(&raw mut file_actions))?;
+    }
 
-        // The Rust runtime sets SIGPIPE to SIG_IGN before `main`, and ignored
-        // dispositions survive exec, so without this children would never die
-        // from writing to a closed pipe. Reset it to SIG_DFL, like std does
-        // (rust-lang/rust#101077). Like std, we don't touch the signal mask,
-        // so deliberately blocked signals (e.g. via `nohup`) stay blocked.
-        let mut default_set: libc::sigset_t = std::mem::zeroed();
-        if libc::sigemptyset(&mut default_set) == -1 {
-            return Err(io::Error::last_os_error());
-        }
-        if libc::sigaddset(&mut default_set, libc::SIGPIPE) == -1 {
-            return Err(io::Error::last_os_error());
-        }
-        cvt_nz(libc::posix_spawnattr_setsigdefault(&mut attr, &default_set))?;
+    // The Rust runtime sets SIGPIPE to SIG_IGN before `main`, and ignored
+    // dispositions survive exec, so without this children would never die
+    // from writing to a closed pipe. Reset it to SIG_DFL, like std does
+    // (rust-lang/rust#101077). Like std, we don't touch the signal mask,
+    // so deliberately blocked signals (e.g. via `nohup`) stay blocked.
+    let mut default_set: libc::sigset_t = unsafe { std::mem::zeroed() };
+    if unsafe { libc::sigemptyset(&raw mut default_set) } == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    if unsafe { libc::sigaddset(&raw mut default_set, libc::SIGPIPE) } == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    unsafe {
+        cvt_nz(libc::posix_spawnattr_setsigdefault(
+            &raw mut attr,
+            &raw const default_set,
+        ))?;
+    }
 
+    unsafe {
         cvt_nz(libc::posix_spawnattr_setflags(
-            &mut attr,
+            &raw mut attr,
             (libc::POSIX_SPAWN_CLOEXEC_DEFAULT | libc::POSIX_SPAWN_SETSIGDEF) as libc::c_short,
         ))?;
+    }
 
+    unsafe {
         cvt_nz(posix_spawnattr_setexceptionports_np(
-            &mut attr,
+            &raw mut attr,
             EXC_MASK_ALL,
             MACH_PORT_NULL,
             EXCEPTION_DEFAULT as exception_behavior_t,
             THREAD_STATE_NONE,
         ))?;
+    }
 
+    unsafe {
         cvt_nz(posix_spawn_file_actions_addchdir_np(
-            &mut file_actions,
+            &raw mut file_actions,
             current_dir_cstr.as_ptr(),
         ))?;
-
-        // With POSIX_SPAWN_CLOEXEC_DEFAULT, any fd without a file action is
-        // closed in the child, so inheriting a stdio fd requires an explicit
-        // addinherit_np action; without one the child's fd 0/1/2 would start
-        // out closed and could be silently reused by its first open().
-        if let Some(fd) = &stdin_read {
-            cvt_nz(libc::posix_spawn_file_actions_adddup2(
-                &mut file_actions,
-                fd.as_raw_fd(),
-                libc::STDIN_FILENO,
-            ))?;
-        }
-        if stdin_read.is_some() || stdin_cfg == Stdio::Inherit {
-            cvt_nz(posix_spawn_file_actions_addinherit_np(
-                &mut file_actions,
-                libc::STDIN_FILENO,
-            ))?;
-        }
-
-        if let Some(fd) = &stdout_write {
-            cvt_nz(libc::posix_spawn_file_actions_adddup2(
-                &mut file_actions,
-                fd.as_raw_fd(),
-                libc::STDOUT_FILENO,
-            ))?;
-        }
-        if stdout_write.is_some() || stdout_cfg == Stdio::Inherit {
-            cvt_nz(posix_spawn_file_actions_addinherit_np(
-                &mut file_actions,
-                libc::STDOUT_FILENO,
-            ))?;
-        }
-
-        if let Some(fd) = &stderr_write {
-            cvt_nz(libc::posix_spawn_file_actions_adddup2(
-                &mut file_actions,
-                fd.as_raw_fd(),
-                libc::STDERR_FILENO,
-            ))?;
-        }
-        if stderr_write.is_some() || stderr_cfg == Stdio::Inherit {
-            cvt_nz(posix_spawn_file_actions_addinherit_np(
-                &mut file_actions,
-                libc::STDERR_FILENO,
-            ))?;
-        }
-
-        let mut pid: libc::pid_t = 0;
-
-        let spawn_result = libc::posix_spawnp(
-            &mut pid,
-            program_cstr.as_ptr(),
-            &file_actions,
-            &attr,
-            argv_ptrs.as_ptr(),
-            if envs.is_some() {
-                envp_ptrs.as_ptr()
-            } else {
-                environ
-            },
-        );
-
-        libc::posix_spawnattr_destroy(&mut attr);
-        libc::posix_spawn_file_actions_destroy(&mut file_actions);
-
-        cvt_nz(spawn_result)?;
-
-        Ok(Child {
-            pid,
-            stdin: stdin_write.map(|fd| Unblock::new(fd)),
-            stdout: stdout_read.map(|fd| Unblock::new(fd)),
-            stderr: stderr_read.map(|fd| Unblock::new(fd)),
-            kill_on_drop,
-            status: None,
-        })
     }
+
+    // With POSIX_SPAWN_CLOEXEC_DEFAULT, any fd without a file action is
+    // closed in the child, so inheriting a stdio fd requires an explicit
+    // addinherit_np action; without one the child's fd 0/1/2 would start
+    // out closed and could be silently reused by its first open().
+    if let Some(fd) = &stdin_read {
+        unsafe {
+            cvt_nz(libc::posix_spawn_file_actions_adddup2(
+                &raw mut file_actions,
+                fd.as_raw_fd(),
+                libc::STDIN_FILENO,
+            ))?;
+        }
+    }
+    if stdin_read.is_some() || stdin_cfg == Stdio::Inherit {
+        unsafe {
+            cvt_nz(posix_spawn_file_actions_addinherit_np(
+                &raw mut file_actions,
+                libc::STDIN_FILENO,
+            ))?;
+        }
+    }
+
+    if let Some(fd) = &stdout_write {
+        unsafe {
+            cvt_nz(libc::posix_spawn_file_actions_adddup2(
+                &raw mut file_actions,
+                fd.as_raw_fd(),
+                libc::STDOUT_FILENO,
+            ))?;
+        }
+    }
+    if stdout_write.is_some() || stdout_cfg == Stdio::Inherit {
+        unsafe {
+            cvt_nz(posix_spawn_file_actions_addinherit_np(
+                &raw mut file_actions,
+                libc::STDOUT_FILENO,
+            ))?;
+        }
+    }
+
+    if let Some(fd) = &stderr_write {
+        unsafe {
+            cvt_nz(libc::posix_spawn_file_actions_adddup2(
+                &raw mut file_actions,
+                fd.as_raw_fd(),
+                libc::STDERR_FILENO,
+            ))?;
+        }
+    }
+    if stderr_write.is_some() || stderr_cfg == Stdio::Inherit {
+        unsafe {
+            cvt_nz(posix_spawn_file_actions_addinherit_np(
+                &raw mut file_actions,
+                libc::STDERR_FILENO,
+            ))?;
+        }
+    }
+
+    let mut pid: libc::pid_t = 0;
+    let envp_ptr = if envs.is_some() {
+        envp_ptrs.as_ptr()
+    } else {
+        unsafe { environ }
+    };
+
+    let spawn_result = unsafe {
+        libc::posix_spawnp(
+            &raw mut pid,
+            program_cstr.as_ptr(),
+            &raw const file_actions,
+            &raw const attr,
+            argv_ptrs.as_ptr(),
+            envp_ptr,
+        )
+    };
+
+    unsafe {
+        libc::posix_spawnattr_destroy(&raw mut attr);
+    }
+    unsafe {
+        libc::posix_spawn_file_actions_destroy(&raw mut file_actions);
+    }
+
+    cvt_nz(spawn_result)?;
+
+    Ok(Child {
+        pid,
+        stdin: stdin_write.map(Unblock::new),
+        stdout: stdout_read.map(Unblock::new),
+        stderr: stderr_read.map(Unblock::new),
+        kill_on_drop,
+        status: None,
+    })
 }
 
 fn create_pipe() -> io::Result<(std::fs::File, std::fs::File)> {
     let mut fds: [libc::c_int; 2] = [0; 2];
-    unsafe {
-        let result = libc::pipe(fds.as_mut_ptr());
+    let result = unsafe { libc::pipe(fds.as_mut_ptr()) };
+    if result == -1 {
+        let error = io::Error::last_os_error();
+        return Err(error);
+    }
+
+    // Set close-on-exec on both ends of the pipe.
+    //
+    // Without this, unrelated spawns elsewhere in the process (e.g.
+    // `smol::process` or `async_process`, which on Apple platforms use
+    // `posix_spawn` *without* `POSIX_SPAWN_CLOEXEC_DEFAULT`) would inherit
+    // these file descriptors and keep the pipes open even after we drop our
+    // side.
+    for &fd in &fds {
+        let result = unsafe { libc::ioctl(fd, libc::FIOCLEX) };
         if result == -1 {
             let error = io::Error::last_os_error();
+            unsafe {
+                libc::close(fds[0]);
+            }
+            unsafe {
+                libc::close(fds[1]);
+            }
             return Err(error);
         }
-
-        // Set close-on-exec on both ends of the pipe.
-        //
-        // Without this, unrelated spawns elsewhere in the process (e.g.
-        // `smol::process` or `async_process`, which on Apple platforms use
-        // `posix_spawn` *without* `POSIX_SPAWN_CLOEXEC_DEFAULT`) would inherit
-        // these file descriptors and keep the pipes open even after we drop our
-        // side.
-        for &fd in &fds {
-            let result = libc::ioctl(fd, libc::FIOCLEX);
-            if result == -1 {
-                let error = io::Error::last_os_error();
-                libc::close(fds[0]);
-                libc::close(fds[1]);
-                return Err(error);
-            }
-        }
-
-        Ok((
-            std::fs::File::from_raw_fd(fds[0]),
-            std::fs::File::from_raw_fd(fds[1]),
-        ))
     }
+
+    Ok((unsafe { std::fs::File::from_raw_fd(fds[0]) }, unsafe {
+        std::fs::File::from_raw_fd(fds[1])
+    }))
 }
 
 fn open_dev_null(flags: libc::c_int) -> io::Result<std::fs::File> {
     // Set close-on-exec for this pipe, for the same reason as in `create_pipe`.
     let fd = unsafe {
         libc::open(
-            c"/dev/null".as_ptr() as *const libc::c_char,
+            c"/dev/null".as_ptr().cast::<libc::c_char>(),
             flags | libc::O_CLOEXEC,
         )
     };

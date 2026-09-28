@@ -9,6 +9,10 @@
 
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
+#![allow(
+    clippy::multiple_unsafe_ops_per_block,
+    reason = "Objective-C msg_send! sequences are inherently multi-op FFI"
+)]
 
 use std::{ffi::c_void, path::Path, ptr, time::Duration};
 
@@ -163,9 +167,9 @@ impl AvFoundationDecoder {
             let audio_count: usize = msg_send![audio_tracks, count];
 
             let frame_rate = (nominal_frame_rate as f64 > 0.0).then_some(nominal_frame_rate as f64);
-            let frame_interval = frame_rate
-                .map(|fps| Duration::from_secs_f64(1.0 / fps))
-                .unwrap_or(Duration::from_millis(33));
+            let frame_interval = frame_rate.map_or(Duration::from_millis(33), |fps| {
+                Duration::from_secs_f64(1.0 / fps)
+            });
 
             let (reader, output) = create_reader(asset, video_track)?;
 
@@ -179,7 +183,7 @@ impl AvFoundationDecoder {
                 video_codec,
                 audio_codec: (audio_count > 0).then(|| "Audio".to_string()),
                 has_audio: audio_count > 0,
-                file_size: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
+                file_size: std::fs::metadata(path).map_or(0, |m| m.len()),
                 format_label: format_label(extension.unwrap_or("")),
             };
 
@@ -226,20 +230,20 @@ impl AvFoundationDecoder {
                 let pts = cm_time_to_duration(timestamp).unwrap_or(self.position);
 
                 if image_buffer.is_null() {
-                    CFRelease(sample_buffer as *const c_void);
+                    CFRelease(sample_buffer.cast());
                     continue;
                 }
 
                 if let Some(skip_until) = self.skip_until {
                     if pts < skip_until {
-                        CFRelease(sample_buffer as *const c_void);
+                        CFRelease(sample_buffer.cast());
                         continue;
                     }
                     self.skip_until = None;
                 }
 
                 let frame = self.copy_pixel_buffer(image_buffer, pts);
-                CFRelease(sample_buffer as *const c_void);
+                CFRelease(sample_buffer.cast());
 
                 let frame = frame?;
                 self.position = pts;
@@ -317,7 +321,7 @@ unsafe fn create_reader(asset: Id, video_track: Id) -> anyhow::Result<(Id, Id)> 
     unsafe {
         let reader: Id = msg_send![class!(AVAssetReader), alloc];
         let mut error: Id = ptr::null_mut();
-        let reader: Id = msg_send![reader, initWithAsset: asset error: &mut error];
+        let reader: Id = msg_send![reader, initWithAsset: asset error: &raw mut error];
         if reader.is_null() {
             return Err(anyhow!(
                 "could not create AVAssetReader: {}",

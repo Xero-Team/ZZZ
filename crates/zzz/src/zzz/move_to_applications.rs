@@ -54,9 +54,8 @@ struct MoveToApplicationsRequest {
 
 impl MoveToApplicationsRequest {
     fn new(cx: &App) -> Result<Option<Self>> {
-        let app_path = match cx.app_path() {
-            Ok(app_path) => app_path,
-            Err(_) => return Ok(None),
+        let Ok(app_path) = cx.app_path() else {
+            return Ok(None);
         };
 
         if !should_offer_to_move(&app_path) {

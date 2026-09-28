@@ -26,7 +26,7 @@ use objc::{
     runtime::{Class, Object, Sel},
     sel, sel_impl,
 };
-use std::{cell::RefCell, ffi::c_void, mem, ptr, rc::Rc};
+use std::{cell::RefCell, ffi::c_void, ptr, rc::Rc};
 
 use crate::NSStringExt;
 
@@ -101,7 +101,7 @@ impl ScreenCaptureSource for MacScreenCaptureSource {
 
             output.as_mut().unwrap().set_ivar(
                 FRAME_CALLBACK_IVAR,
-                Box::into_raw(Box::new(frame_callback)) as *mut c_void,
+                Box::into_raw(Box::new(frame_callback)).cast::<c_void>(),
             );
 
             let meta = self.metadata().unwrap();
@@ -118,7 +118,7 @@ impl ScreenCaptureSource for MacScreenCaptureSource {
             let (tx, rx) = oneshot::channel();
 
             let mut error: id = nil;
-            let _: () = msg_send![stream, addStreamOutput:output type:SCStreamOutputTypeScreen sampleHandlerQueue:0 error:&mut error as *mut id];
+            let _: () = msg_send![stream, addStreamOutput:output type:SCStreamOutputTypeScreen sampleHandlerQueue:0 error:&raw mut error];
             if error != nil {
                 let message: id = msg_send![error, localizedDescription];
                 let _: () = msg_send![stream, release];
@@ -174,7 +174,7 @@ impl Drop for MacScreenCaptureStream {
     fn drop(&mut self) {
         unsafe {
             let mut error: id = nil;
-            let _: () = msg_send![self.sc_stream, removeStreamOutput:self.sc_stream_output type:SCStreamOutputTypeScreen error:&mut error as *mut _];
+            let _: () = msg_send![self.sc_stream, removeStreamOutput:self.sc_stream_output type:SCStreamOutputTypeScreen error:&raw mut error];
             if error != nil {
                 let message: id = msg_send![error, localizedDescription];
                 log::error!("failed to add stream  output {message:?}");
@@ -335,10 +335,9 @@ extern "C" fn stream_did_output_sample_buffer_of_type(
         let sample_buffer = sample_buffer as CMSampleBufferRef;
         let sample_buffer = CMSampleBuffer::wrap_under_get_rule(sample_buffer);
         if let Some(buffer) = sample_buffer.image_buffer() {
-            let callback: Box<Box<dyn Fn(ScreenCaptureFrame)>> =
-                Box::from_raw(*this.get_ivar::<*mut c_void>(FRAME_CALLBACK_IVAR) as *mut _);
-            callback(ScreenCaptureFrame(buffer));
-            mem::forget(callback);
+            let callback_ptr: *mut Box<dyn Fn(ScreenCaptureFrame)> =
+                (*this.get_ivar::<*mut c_void>(FRAME_CALLBACK_IVAR)).cast();
+            (*callback_ptr)(ScreenCaptureFrame(buffer));
         }
     }
 }

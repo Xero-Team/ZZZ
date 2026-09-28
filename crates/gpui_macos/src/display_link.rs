@@ -237,7 +237,7 @@ impl WindowFrameSource {
     pub fn new(data: *mut c_void, callback: extern "C" fn(*mut c_void)) -> Self {
         let frame_requests = unsafe {
             let frame_requests = DispatchSource::new(
-                &raw const _dispatch_source_type_data_add as *mut _,
+                (&raw const _dispatch_source_type_data_add).cast_mut(),
                 0,
                 0,
                 Some(DispatchQueue::main()),
@@ -419,7 +419,7 @@ mod sys {
             unsafe {
                 let mut display_link: *mut CVDisplayLink = 0 as _;
 
-                let code = CVDisplayLinkCreateWithActiveCGDisplays(&mut display_link);
+                let code = CVDisplayLinkCreateWithActiveCGDisplays(&raw mut display_link);
                 anyhow::ensure!(code == 0, "could not create display link, code: {}", code);
 
                 let mut display_link = DisplayLink::from_ptr(display_link);

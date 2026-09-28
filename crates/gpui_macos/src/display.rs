@@ -53,7 +53,7 @@ impl MacDisplay {
             let result = CGGetActiveDisplayList(
                 displays.capacity() as u32,
                 displays.as_mut_ptr(),
-                &mut display_count,
+                &raw mut display_count,
             );
 
             if result == 0 {
@@ -84,7 +84,7 @@ impl PlatformDisplay for MacDisplay {
         );
 
         let bytes = unsafe { CFUUIDGetUUIDBytes(cfuuid) };
-        unsafe { CFRelease(cfuuid as _) };
+        unsafe { CFRelease(cfuuid.cast()) };
         Ok(Uuid::from_bytes([
             bytes.byte0,
             bytes.byte1,
