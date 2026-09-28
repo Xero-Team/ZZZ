@@ -9883,7 +9883,7 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn wrapping_section() -> [SettingsPageItem; 6] {
+    fn wrapping_section() -> [SettingsPageItem; 7] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.wrapping",
@@ -9905,6 +9905,31 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
                     write: |settings_content, value, _| {
                         language_settings_field_mut(settings_content, value, |language, value| {
                             language.soft_wrap = value;
+                        })
+                    },
+                }),
+                metadata: None,
+                files: USER | PROJECT,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.soft.wrap.indent",
+                    "Soft Wrap Indent",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.how.to.indent.soft.wrapped.lines",
+                    "How to indent soft-wrapped lines.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("languages.$(language).soft_wrap_indent"),
+                    pick: |settings_content| {
+                        language_settings_field(settings_content, |language| {
+                            language.soft_wrap_indent.as_ref()
+                        })
+                    },
+                    write: |settings_content, value, _| {
+                        language_settings_field_mut(settings_content, value, |language, value| {
+                            language.soft_wrap_indent = value;
                         })
                     },
                 }),

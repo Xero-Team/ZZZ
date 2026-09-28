@@ -16,7 +16,8 @@ use settings::{DocumentFoldingRanges, DocumentSymbols, IntoGpui, SemanticTokens}
 pub use settings::{
     AutoIndentMode, CompletionSettingsContent, FormatOnSave, Formatter, FormatterList,
     InlayHintKind, LanguageSettingsContent, LineEndingSetting, LspInsertMode,
-    REST_OF_LANGUAGE_SERVERS, RewrapBehavior, ShowWhitespaceSetting, SoftWrap, WordsCompletionMode,
+    REST_OF_LANGUAGE_SERVERS, RewrapBehavior, ShowWhitespaceSetting, SoftWrap, SoftWrapIndent,
+    WordsCompletionMode,
 };
 use settings::{RegisterSetting, Settings, SettingsLocation, SettingsStore, merge_from::MergeFrom};
 use std::{borrow::Cow, num::NonZeroU32, sync::Arc};
@@ -58,6 +59,8 @@ pub struct LanguageSettings {
     pub hard_tabs: bool,
     /// How to soft-wrap long lines of text.
     pub soft_wrap: settings::SoftWrap,
+    /// How to indent soft-wrapped continuation lines.
+    pub soft_wrap_indent: settings::SoftWrapIndent,
     /// The column at which to soft-wrap lines, for buffers where soft-wrap
     /// is enabled.
     pub preferred_line_length: u32,
@@ -571,6 +574,7 @@ impl settings::Settings for AllLanguageSettings {
                 tab_size: settings.tab_size.unwrap(),
                 hard_tabs: settings.hard_tabs.unwrap(),
                 soft_wrap: settings.soft_wrap.unwrap(),
+                soft_wrap_indent: settings.soft_wrap_indent.unwrap(),
                 preferred_line_length: settings.preferred_line_length.unwrap(),
                 show_wrap_guides: settings.show_wrap_guides.unwrap(),
                 wrap_guides: settings.wrap_guides.unwrap(),
