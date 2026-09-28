@@ -510,7 +510,7 @@ impl RefPickerModal {
             &editor,
             window,
             |this, _editor, event: &editor::EditorEvent, window, cx| {
-                if let editor::EditorEvent::BufferEdited = event {
+                if matches!(event, editor::EditorEvent::BufferEdited) {
                     this.lookup_commit_details(window, cx);
                 }
             },

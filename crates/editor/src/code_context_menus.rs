@@ -614,7 +614,7 @@ impl CompletionsMenu {
 
         let completion_id = self.id;
         cx.spawn(async move |editor, cx| {
-            if let Some(true) = resolve_task.await.log_err() {
+            if resolve_task.await.log_err() == Some(true) {
                 editor
                     .update(cx, |editor, cx| {
                         // `resolve_completions` modified state affecting display.

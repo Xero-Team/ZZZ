@@ -90,7 +90,7 @@ impl ApplicationMenu {
         }
 
         // Remove trailing separator
-        if let Some(OwnedMenuItem::Separator) = cleaned.last() {
+        if matches!(cleaned.last(), Some(OwnedMenuItem::Separator)) {
             cleaned.pop();
         }
 

@@ -168,7 +168,7 @@ impl PartialOrd for SettingsFile {
 /// Sorted in order of precedence
 impl Ord for SettingsFile {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        use SettingsFile::*;
+        use SettingsFile::{Default, Global, Project, Server, User};
         use std::cmp::Ordering;
         match (self, other) {
             (User, User) => Ordering::Equal,

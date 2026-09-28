@@ -5641,9 +5641,7 @@ impl Repository {
         if self.commit_data.contains_key(&sha) {
             let data = &self.commit_data[&sha];
 
-            if let CommitDataState::Loading(None) = data
-                && await_result
-            {
+            if matches!(data, CommitDataState::Loading(None)) && await_result {
                 let (tx, rx) = oneshot::channel();
                 self.commit_data
                     .insert(sha, CommitDataState::Loading(Some(rx.shared())));

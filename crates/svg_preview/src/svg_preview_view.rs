@@ -78,7 +78,7 @@ impl SvgPreviewView {
             &workspace,
             window,
             move |this: &mut SvgPreviewView, workspace, event: &workspace::Event, window, cx| {
-                if let workspace::Event::ActiveItemChanged = event {
+                if matches!(event, workspace::Event::ActiveItemChanged) {
                     let workspace = workspace.read(cx);
                     if let Some(active_item) = workspace.active_item(cx)
                         && let Some(buffer) = active_item.downcast::<MultiBuffer>()

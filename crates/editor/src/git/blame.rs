@@ -323,7 +323,7 @@ impl GitBlame {
         self.sync_all(cx);
 
         for buffer in self.buffers.values() {
-            for entry in buffer.entries.iter() {
+            for entry in &buffer.entries {
                 let author_len = entry
                     .blame
                     .as_ref()

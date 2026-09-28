@@ -3971,7 +3971,7 @@ impl LinkedEditingRange {
         let Some(linked_editing_options) = capabilities.linked_editing_range_provider else {
             return false;
         };
-        if let LinkedEditingRangeServerCapabilities::Simple(false) = linked_editing_options {
+        if linked_editing_options == LinkedEditingRangeServerCapabilities::Simple(false) {
             return false;
         }
         true

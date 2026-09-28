@@ -1742,7 +1742,7 @@ impl EditorElement {
             }
 
             if let Some(collaboration_hub) = &editor.collaboration_hub {
-                if let Some(CollaboratorId::Agent) = editor.leader_id {
+                if editor.leader_id == Some(CollaboratorId::Agent) {
                     if let Some((local_selection_style, _)) = selections.first_mut() {
                         *local_selection_style = cx.theme().players().agent();
                     }
@@ -2601,7 +2601,7 @@ impl EditorElement {
             .map(|hunk| (hunk, None))
             .collect::<Vec<_>>();
         let git_gutter_setting = ProjectSettings::get_global(cx).git.git_gutter;
-        if let GitGutterSetting::TrackedFiles = git_gutter_setting {
+        if git_gutter_setting == GitGutterSetting::TrackedFiles {
             for (hunk, hitbox) in &mut display_hunks {
                 if matches!(hunk, DisplayDiffHunk::Unfolded { .. }) {
                     let hunk_bounds = Self::diff_hunk_bounds(
@@ -4937,7 +4937,10 @@ impl EditorElement {
             let editor = self.editor.read(cx);
 
             if editor.context_menu_visible()
-                && let Some(crate::ContextMenuOrigin::Cursor) = editor.context_menu_origin()
+                && matches!(
+                    editor.context_menu_origin(),
+                    Some(crate::ContextMenuOrigin::Cursor)
+                )
             {
                 let (min_height_in_lines, max_height_in_lines) = editor
                     .context_menu_options

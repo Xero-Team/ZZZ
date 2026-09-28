@@ -4818,7 +4818,7 @@ impl LspStore {
         event: &ToolchainStoreEvent,
         _: &mut Context<Self>,
     ) {
-        if let ToolchainStoreEvent::ToolchainActivated = event {
+        if matches!(event, ToolchainStoreEvent::ToolchainActivated) {
             self.request_workspace_config_refresh()
         }
     }
@@ -5064,7 +5064,7 @@ impl LspStore {
         let mut subscription = languages.subscribe();
         let mut prev_reload_count = languages.reload_count();
         cx.spawn(async move |this, cx| {
-            while let Some(()) = subscription.next().await {
+            while subscription.next().await == Some(()) {
                 if let Some(this) = this.upgrade() {
                     // If the language registry has been reloaded, then remove and
                     // re-assign the languages on all open buffers.
@@ -8826,7 +8826,7 @@ impl LspStore {
         // which writes to `external_refresh_requests`. Observing `SettingsStore` here as well would cause every
         // settings change to drive the loop twice and emit duplicate `workspace/didChangeConfiguration` notifications.
         cx.spawn(async move |this, cx| {
-            while let Some(()) = external_refresh_requests.next().await {
+            while external_refresh_requests.next().await == Some(()) {
                 this.update(cx, |this, cx| {
                     this.refresh_server_tree(cx);
                 })
@@ -9170,9 +9170,9 @@ impl LspStore {
             .log_err();
     }
 
-    pub fn merge_diagnostic_entries<'a>(
+    pub fn merge_diagnostic_entries(
         &mut self,
-        diagnostic_updates: Vec<DocumentDiagnosticsUpdate<'a, DocumentDiagnostics>>,
+        diagnostic_updates: Vec<DocumentDiagnosticsUpdate<'_, DocumentDiagnostics>>,
         merge: impl Fn(&lsp::Uri, &Diagnostic, &App) -> bool + Clone,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {

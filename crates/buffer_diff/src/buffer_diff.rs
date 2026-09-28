@@ -631,7 +631,7 @@ impl BufferDiffSnapshot {
         let original_snapshot = self.original_buffer_snapshot();
 
         let mut hunk_edits: Vec<Edit<Point>> = Vec::new();
-        for hunk in self.inner.hunks.iter() {
+        for hunk in &self.inner.hunks {
             let old_start = self
                 .base_text()
                 .offset_to_point(hunk.diff_base_byte_range.start);

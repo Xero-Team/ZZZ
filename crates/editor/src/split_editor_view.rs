@@ -188,7 +188,7 @@ impl RenderOnce for SplitEditorView {
                     .with_dynamic_prepaint_order(move |_window, cx| {
                         let lhs_needs = lhs_editor_for_order.read(cx).has_autoscroll_request();
                         let rhs_needs = rhs_editor_for_order.read(cx).has_autoscroll_request();
-                        if let (false, true) = (lhs_needs, rhs_needs) {
+                        if (lhs_needs, rhs_needs) == (false, true) {
                             smallvec![2, 1, 0]
                         } else {
                             smallvec![0, 1, 2]

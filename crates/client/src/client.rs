@@ -1062,7 +1062,7 @@ impl Client {
         let credentials = credentials.clone();
         let rpc_url = self.rpc_url(http, release_channel);
         cx.spawn(async move |cx| {
-            use HttpOrHttps::*;
+            use HttpOrHttps::{Http, Https};
 
             #[derive(Debug)]
             enum HttpOrHttps {

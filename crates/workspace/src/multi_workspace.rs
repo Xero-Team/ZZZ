@@ -582,7 +582,7 @@ impl MultiWorkspace {
         .detach();
 
         cx.subscribe_in(workspace, window, |this, workspace, event, window, cx| {
-            if let WorkspaceEvent::Activate = event {
+            if matches!(event, WorkspaceEvent::Activate) {
                 this.activate(workspace.clone(), None, window, cx);
             }
         })

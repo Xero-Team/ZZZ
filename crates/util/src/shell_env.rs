@@ -145,7 +145,7 @@ async fn capture_unix(
     }
     command_string.push_str(&format!("{} --printenv {}", quoted_zzz_path, redir));
 
-    if let ShellKind::Nushell = shell_kind {
+    if shell_kind == ShellKind::Nushell {
         command_string.push_str("; exit");
     }
 

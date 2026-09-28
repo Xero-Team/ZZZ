@@ -309,7 +309,7 @@ pub fn render_modifiers(
     }
 
     let table = {
-        use KeyOrIcon::*;
+        use KeyOrIcon::{Icon, Key};
 
         [
             Modifier {

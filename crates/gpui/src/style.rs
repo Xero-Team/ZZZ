@@ -601,10 +601,11 @@ impl Style {
         bounds: Bounds<Pixels>,
         rem_size: Pixels,
     ) -> Option<ContentMask<Pixels>> {
-        if let Point {
-            x: Overflow::Visible,
-            y: Overflow::Visible,
-        } = self.overflow
+        if self.overflow
+            == (Point {
+                x: Overflow::Visible,
+                y: Overflow::Visible,
+            })
         {
             None
         } else {

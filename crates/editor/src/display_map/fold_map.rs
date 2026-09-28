@@ -419,7 +419,7 @@ impl FoldMap {
             );
 
             let mut prev_transform_isomorphic = false;
-            for transform in self.snapshot.transforms.iter() {
+            for transform in &self.snapshot.transforms {
                 assert!(
                     transform.is_fold() || !prev_transform_isomorphic,
                     "found adjacent isomorphic transforms: {:?}",

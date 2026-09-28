@@ -201,11 +201,11 @@ impl LanguageServerTree {
         })
     }
 
-    fn get_with_adapters<'a>(
-        &'a self,
+    fn get_with_adapters(
+        &self,
         root_path: ProjectPath,
         adapters: IndexMap<LanguageServerName, (LspSettings, Arc<CachedLspAdapter>)>,
-    ) -> impl Iterator<Item = LanguageServerId> + 'a {
+    ) -> impl Iterator<Item = LanguageServerId> + '_ {
         adapters.into_iter().filter_map(move |(_, (_, adapter))| {
             let root_path = root_path.clone();
             let inner_node = self

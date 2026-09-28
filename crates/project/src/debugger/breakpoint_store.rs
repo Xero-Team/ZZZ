@@ -824,7 +824,7 @@ impl BreakpointStore {
         breakpoints: BTreeMap<Arc<Path>, Vec<SourceBreakpoint>>,
         cx: &mut Context<BreakpointStore>,
     ) -> Task<Result<()>> {
-        if let BreakpointStoreMode::Local = &self.mode {
+        if matches!(&self.mode, BreakpointStoreMode::Local) {
             let worktree_store = self.worktree_store.downgrade();
             let buffer_store = self.buffer_store.downgrade();
             cx.spawn(async move |this, cx| {

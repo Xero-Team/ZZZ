@@ -474,7 +474,7 @@ impl TerminalView {
         let rename_editor_subscription = cx.subscribe_in(&rename_editor, window, {
             let rename_editor = rename_editor.clone();
             move |_this, _, event, window, cx| {
-                if let editor::EditorEvent::Blurred = event {
+                if matches!(event, editor::EditorEvent::Blurred) {
                     // Defer to let focus settle (avoids canceling during double-click).
                     let rename_editor = rename_editor.clone();
                     cx.defer_in(window, move |this, window, cx| {
@@ -1148,7 +1148,7 @@ fn subscribe_for_terminal_events(
 
                 Event::Bell => {
                     terminal_view.has_bell = true;
-                    if let TerminalBell::System = TerminalSettings::get_global(cx).bell {
+                    if TerminalSettings::get_global(cx).bell == TerminalBell::System {
                         window.play_system_bell();
                     }
                     cx.emit(Event::Wakeup);

@@ -602,7 +602,7 @@ impl Sidebar {
         .detach();
 
         cx.subscribe(&filter_editor, |this: &mut Self, _, event, cx| {
-            if let editor::EditorEvent::BufferEdited = event {
+            if matches!(event, editor::EditorEvent::BufferEdited) {
                 let query = this.filter_editor.read(cx).text(cx);
                 if !query.is_empty() {
                     this.selection.take();

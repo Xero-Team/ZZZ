@@ -318,7 +318,7 @@ async fn load_directory_shell_environment(
     load_direnv: DirenvSettings,
     tx: mpsc::UnboundedSender<String>,
 ) -> anyhow::Result<HashMap<String, String>> {
-    if let DirenvSettings::Disabled = load_direnv {
+    if load_direnv == DirenvSettings::Disabled {
         return Ok(HashMap::default());
     }
 

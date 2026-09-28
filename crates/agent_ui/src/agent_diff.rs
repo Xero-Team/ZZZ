@@ -241,7 +241,7 @@ impl AgentDiffPane {
     }
 
     fn handle_acp_thread_event(&mut self, event: &AcpThreadEvent, cx: &mut Context<Self>) {
-        if let AcpThreadEvent::TitleUpdated = event {
+        if matches!(event, AcpThreadEvent::TitleUpdated) {
             cx.emit(EditorEvent::TitleChanged);
         }
     }

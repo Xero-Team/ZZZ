@@ -2332,7 +2332,7 @@ impl Element for MarkdownElement {
             }
 
             if handled_html_block {
-                if let MarkdownEvent::End(MarkdownTagEnd::HtmlBlock) = event {
+                if matches!(event, MarkdownEvent::End(MarkdownTagEnd::HtmlBlock)) {
                     handled_html_block = false;
                 } else {
                     continue;

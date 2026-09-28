@@ -165,7 +165,12 @@ impl From<anyhow::Error> for ThreadError {
         {
             Self::AuthenticationRequired(acp_error.message.clone().into())
         } else if let Some(lm_error) = error.downcast_ref::<LanguageModelCompletionError>() {
-            use LanguageModelCompletionError::*;
+            use LanguageModelCompletionError::{
+                ApiEndpointNotFound, ApiInternalServerError, ApiReadResponseError,
+                AuthenticationError, BadRequestFormat, DeserializeResponse, HttpResponseError,
+                HttpSend, NoApiKey, PermissionError, PromptTooLarge, RateLimitExceeded,
+                ServerOverloaded, StreamEndedUnexpectedly, UpstreamProviderError,
+            };
             match lm_error {
                 RateLimitExceeded { provider, .. } => Self::RateLimitExceeded {
                     provider: provider.to_string().into(),

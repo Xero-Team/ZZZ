@@ -863,8 +863,8 @@ impl KeymapFile {
         }
     }
 
-    pub fn update_keybinding<'a>(
-        mut operation: KeybindUpdateOperation<'a>,
+    pub fn update_keybinding(
+        mut operation: KeybindUpdateOperation<'_>,
         mut keymap_contents: String,
         tab_size: usize,
         keyboard_mapper: &dyn gpui::PlatformKeyboardMapper,
@@ -1101,9 +1101,9 @@ impl KeymapFile {
 
         return Ok(keymap_contents);
 
-        fn find_binding<'a, 'b>(
+        fn find_binding<'b>(
             keymap: &'b KeymapFile,
-            target: &KeybindUpdateTarget<'a>,
+            target: &KeybindUpdateTarget<'_>,
             target_action_value: &Value,
             keyboard_mapper: &dyn gpui::PlatformKeyboardMapper,
             deprecated_aliases: &HashMap<&'static str, &'static str>,
@@ -1146,11 +1146,11 @@ impl KeymapFile {
             None
         }
 
-        fn find_binding_in_entries<'a, 'b, T>(
+        fn find_binding_in_entries<'b, T>(
             entries: Option<&'b IndexMap<String, T>>,
             kind: BindingKind,
             index: usize,
-            target: &KeybindUpdateTarget<'a>,
+            target: &KeybindUpdateTarget<'_>,
             target_action_value: &Value,
             keyboard_mapper: &dyn gpui::PlatformKeyboardMapper,
             deprecated_aliases: &HashMap<&'static str, &'static str>,
@@ -1295,7 +1295,7 @@ pub struct KeybindUpdateTarget<'a> {
     pub action_arguments: Option<&'a str>,
 }
 
-impl<'a> KeybindUpdateTarget<'a> {
+impl KeybindUpdateTarget<'_> {
     fn action_value(&self) -> Result<Value> {
         if self.action_name == gpui::NoAction.name() {
             return Ok(Value::Null);

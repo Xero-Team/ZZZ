@@ -357,7 +357,7 @@ impl Element for Img {
                                 style.aspect_ratio = Some(image_size.width / image_size.height);
                             }
 
-                            if let Length::Auto = style.size.width {
+                            if style.size.width == Length::Auto {
                                 style.size.width = match style.size.height {
                                     Length::Definite(DefiniteLength::Absolute(abs_length)) => {
                                         let height_px = abs_length.to_pixels(window.rem_size());
@@ -371,7 +371,7 @@ impl Element for Img {
                                 };
                             }
 
-                            if let Length::Auto = style.size.height {
+                            if style.size.height == Length::Auto {
                                 style.size.height = match style.size.width {
                                     Length::Definite(DefiniteLength::Absolute(abs_length)) => {
                                         let width_px = abs_length.to_pixels(window.rem_size());

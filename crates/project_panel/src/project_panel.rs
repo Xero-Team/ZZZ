@@ -681,9 +681,10 @@ impl ProjectPanel {
                         }
                     }
                     project::Event::RevealInProjectPanel(entry_id) => {
-                        if let Some(()) = this
+                        if this
                             .reveal_entry(project.clone(), *entry_id, false, window, cx)
                             .log_err()
+                            == Some(())
                         {
                             cx.emit(PanelEvent::Activate);
                         }

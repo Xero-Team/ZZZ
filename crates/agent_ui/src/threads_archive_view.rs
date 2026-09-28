@@ -219,7 +219,7 @@ impl ThreadsArchiveView {
 
         let filter_editor_subscription =
             cx.subscribe(&filter_editor, |this: &mut Self, _, event, cx| {
-                if let editor::EditorEvent::BufferEdited = event {
+                if matches!(event, editor::EditorEvent::BufferEdited) {
                     this.update_items(cx);
                 }
             });

@@ -2844,19 +2844,19 @@ impl<'a, T: 'static> GpuiBorrow<'a, T> {
     }
 }
 
-impl<'a, T: 'static> std::borrow::Borrow<T> for GpuiBorrow<'a, T> {
+impl<T: 'static> std::borrow::Borrow<T> for GpuiBorrow<'_, T> {
     fn borrow(&self) -> &T {
         self.inner.as_ref().unwrap().borrow()
     }
 }
 
-impl<'a, T: 'static> std::borrow::BorrowMut<T> for GpuiBorrow<'a, T> {
+impl<T: 'static> std::borrow::BorrowMut<T> for GpuiBorrow<'_, T> {
     fn borrow_mut(&mut self) -> &mut T {
         self.inner.as_mut().unwrap().borrow_mut()
     }
 }
 
-impl<'a, T: 'static> std::ops::Deref for GpuiBorrow<'a, T> {
+impl<T: 'static> std::ops::Deref for GpuiBorrow<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -2864,13 +2864,13 @@ impl<'a, T: 'static> std::ops::Deref for GpuiBorrow<'a, T> {
     }
 }
 
-impl<'a, T: 'static> std::ops::DerefMut for GpuiBorrow<'a, T> {
+impl<T: 'static> std::ops::DerefMut for GpuiBorrow<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
         self.inner.as_mut().unwrap()
     }
 }
 
-impl<'a, T> Drop for GpuiBorrow<'a, T> {
+impl<T> Drop for GpuiBorrow<'_, T> {
     fn drop(&mut self) {
         let lease = self.inner.take().unwrap();
         self.app.notify(lease.id);

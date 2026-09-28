@@ -651,7 +651,7 @@ pub struct MutableSelectionsCollection<'snap, 'a> {
     selections_changed: bool,
 }
 
-impl<'snap, 'a> fmt::Debug for MutableSelectionsCollection<'snap, 'a> {
+impl fmt::Debug for MutableSelectionsCollection<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MutableSelectionsCollection")
             .field("collection", &self.collection)
@@ -660,7 +660,7 @@ impl<'snap, 'a> fmt::Debug for MutableSelectionsCollection<'snap, 'a> {
     }
 }
 
-impl<'snap, 'a> MutableSelectionsCollection<'snap, 'a> {
+impl MutableSelectionsCollection<'_, '_> {
     pub fn display_snapshot(&self) -> DisplaySnapshot {
         self.snapshot.clone()
     }

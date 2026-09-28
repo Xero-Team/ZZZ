@@ -1111,7 +1111,7 @@ impl Item for Editor {
             cx.subscribe(
                 workspace_entity,
                 |editor, _, event: &workspace::Event, cx| {
-                    if let workspace::Event::ModalOpened = event {
+                    if matches!(event, workspace::Event::ModalOpened) {
                         editor.mouse_context_menu.take();
                         editor.hide_blame_popover(true, cx);
                     }

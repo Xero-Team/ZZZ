@@ -118,16 +118,19 @@ impl HistoryManager {
                 return;
             }
             let mut deleted_ids = Vec::new();
-            if let Ok(()) = this.update(cx, |this, _| {
-                for idx in (0..this.history.len()).rev() {
-                    if let Some(entry) = this.history.get(idx)
-                        && user_removed.contains(&entry.path)
-                    {
-                        deleted_ids.push(entry.id);
-                        this.history.remove(idx);
+            if matches!(
+                this.update(cx, |this, _| {
+                    for idx in (0..this.history.len()).rev() {
+                        if let Some(entry) = this.history.get(idx)
+                            && user_removed.contains(&entry.path)
+                        {
+                            deleted_ids.push(entry.id);
+                            this.history.remove(idx);
+                        }
                     }
-                }
-            }) {
+                }),
+                Ok(())
+            ) {
                 for id in &deleted_ids {
                     db.delete_workspace_by_id(*id).await.log_err();
                 }

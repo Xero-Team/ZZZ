@@ -231,7 +231,7 @@ impl ActivityIndicator {
             cx.subscribe(
                 &project.read(cx).git_store().clone(),
                 |_, _, event: &GitStoreEvent, cx| {
-                    if let project::git_store::GitStoreEvent::JobsUpdated = event {
+                    if matches!(event, project::git_store::GitStoreEvent::JobsUpdated) {
                         cx.notify()
                     }
                 },

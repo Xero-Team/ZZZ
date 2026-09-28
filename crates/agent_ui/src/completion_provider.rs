@@ -1328,7 +1328,7 @@ impl<T: PromptCompletionProviderDelegate> CompletionProvider for PromptCompletio
                 })
             }
             PromptCompletion::Mention(MentionCompletion { mode, argument, .. }) => {
-                if let Some(PromptContextType::Diagnostics) = mode {
+                if mode == Some(PromptContextType::Diagnostics) {
                     if argument.is_some() {
                         return Task::ready(Ok(Vec::new()));
                     }

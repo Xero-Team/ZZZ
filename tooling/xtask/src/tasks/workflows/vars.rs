@@ -117,14 +117,14 @@ impl PathCondition {
         }
     }
 
-    pub fn and_always<'a>(&'a self) -> PathContextCondition<'a> {
+    pub fn and_always(&self) -> PathContextCondition<'_> {
         PathContextCondition {
             condition: self,
             run_in_merge_queue: true,
         }
     }
 
-    pub fn and_not_in_merge_queue<'a>(&'a self) -> PathContextCondition<'a> {
+    pub fn and_not_in_merge_queue(&self) -> PathContextCondition<'_> {
         PathContextCondition {
             condition: self,
             run_in_merge_queue: false,

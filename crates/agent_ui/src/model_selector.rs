@@ -109,7 +109,7 @@ impl ModelPickerDelegate {
 
                     refresh(&this, cx).await.log_err();
                     if let Some(mut rx) = rx {
-                        while let Ok(()) = rx.recv().await {
+                        while rx.recv().await == Ok(()) {
                             refresh(&this, cx).await.log_err();
                         }
                     }

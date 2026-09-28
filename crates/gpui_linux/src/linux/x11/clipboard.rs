@@ -1222,7 +1222,7 @@ impl std::error::Error for Error {}
 
 impl std::fmt::Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use Error::*;
+        use Error::{ClipboardOccupied, ContentNotAvailable, ConversionFailure, Unknown};
         macro_rules! kind_to_str {
 			($( $e: pat ),*) => {
 				match self {

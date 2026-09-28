@@ -35,6 +35,15 @@ impl<K, V> VecMap<K, V> {
     }
 }
 
+impl<'a, K, V> IntoIterator for &'a VecMap<K, V> {
+    type Item = (&'a K, &'a V);
+    type IntoIter = Iter<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 impl<K: Eq, V> VecMap<K, V> {
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
         match self.keys.iter().position(|k| k == &key) {
@@ -137,7 +146,7 @@ pub enum EntryRef<'key, 'map, K, V> {
     Vacant(VacantEntryRef<'key, 'map, K, V>),
 }
 
-impl<'key, 'map, K, V> EntryRef<'key, 'map, K, V> {
+impl<K, V> EntryRef<'_, '_, K, V> {
     pub fn key(&self) -> &K {
         match self {
             EntryRef::Occupied(entry) => entry.key,
@@ -146,7 +155,7 @@ impl<'key, 'map, K, V> EntryRef<'key, 'map, K, V> {
     }
 }
 
-impl<'key, 'map, K, V> EntryRef<'key, 'map, K, V>
+impl<'map, K, V> EntryRef<'_, 'map, K, V>
 where
     K: Clone,
 {

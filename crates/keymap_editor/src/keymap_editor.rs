@@ -3924,7 +3924,7 @@ fn normalized_ctx_eq(
     a: &gpui::KeyBindingContextPredicate,
     b: &gpui::KeyBindingContextPredicate,
 ) -> bool {
-    use gpui::KeyBindingContextPredicate::*;
+    use gpui::KeyBindingContextPredicate::{And, Descendant, Equal, Identifier, Not, NotEqual, Or};
     return match (a, b) {
         (Identifier(_), Identifier(_)) => a == b,
         (Equal(a_left, a_right), Equal(b_left, b_right)) => {
@@ -3989,7 +3989,7 @@ fn normalized_ctx_eq(
         pred: &'a gpui::KeyBindingContextPredicate,
         operands: &mut Vec<&'a gpui::KeyBindingContextPredicate>,
     ) {
-        use gpui::KeyBindingContextPredicate::*;
+        use gpui::KeyBindingContextPredicate::And;
         match pred {
             And(left, right) => {
                 flatten_and(left, operands);
@@ -4003,7 +4003,7 @@ fn normalized_ctx_eq(
         pred: &'a gpui::KeyBindingContextPredicate,
         operands: &mut Vec<&'a gpui::KeyBindingContextPredicate>,
     ) {
-        use gpui::KeyBindingContextPredicate::*;
+        use gpui::KeyBindingContextPredicate::Or;
         match pred {
             Or(left, right) => {
                 flatten_or(left, operands);

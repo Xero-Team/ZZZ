@@ -494,7 +494,7 @@ struct Context<'a> {
     right: Option<&'a [Arc<Node>]>,
 }
 
-impl<'a> Context<'a> {
+impl Context<'_> {
     /// Determine whether to trim whitespace.
     /// Uses naive HTML5 whitespace collapsing rules.
     fn trim(&self, preceding_whitespace: bool) -> (bool, bool) {

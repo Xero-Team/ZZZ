@@ -70,7 +70,7 @@ impl ConfigOptionsView {
         let rx = config_options.watch(cx);
         let refresh_task = cx.spawn_in(window, async move |this, cx| {
             if let Some(mut rx) = rx {
-                while let Ok(()) = rx.recv().await {
+                while rx.recv().await == Ok(()) {
                     this.update_in(cx, |this, window, cx| {
                         this.rebuild_selectors(window, cx);
                         cx.notify();

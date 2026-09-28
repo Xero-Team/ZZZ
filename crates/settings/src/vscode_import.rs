@@ -828,10 +828,11 @@ impl VsCodeSettings {
             git_status_indicator: None,
         };
 
-        if let (Some(false), Some(false)) = (
+        if (
             self.read_bool("explorer.decorations.badges"),
             self.read_bool("explorer.decorations.colors"),
-        ) {
+        ) == (Some(false), Some(false))
+        {
             project_panel_settings.git_status = Some(false);
             project_panel_settings.show_diagnostics = Some(ShowDiagnostics::Off);
         }

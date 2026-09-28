@@ -188,7 +188,7 @@ struct PlainTextSerializer<'a> {
     table_stack: Vec<TableContext>,
 }
 
-impl<'a> ClipboardHtmlSerializer<'a> {
+impl ClipboardHtmlSerializer<'_> {
     fn serialize_nodes(
         &mut self,
         nodes: &[ClipboardNode],
@@ -756,7 +756,7 @@ impl<'a> ClipboardHtmlSerializer<'a> {
     }
 }
 
-impl<'a> PlainTextSerializer<'a> {
+impl PlainTextSerializer<'_> {
     fn serialize_root_nodes(&mut self, nodes: &[ClipboardNode]) -> Result<(), ClipboardHtmlError> {
         let mut wrote_root = false;
         for node in nodes {

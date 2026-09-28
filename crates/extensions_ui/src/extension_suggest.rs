@@ -290,7 +290,7 @@ pub(crate) fn init(cx: &mut App) {
         cx.subscribe(
             &ExtensionStore::global(cx),
             |workspace, extension_store, event, cx| {
-                if let extension_host::Event::ExtensionsUpdated = event {
+                if matches!(event, extension_host::Event::ExtensionsUpdated) {
                     let installed = extension_store
                         .read(cx)
                         .installed_extensions()

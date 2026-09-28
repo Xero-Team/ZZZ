@@ -23719,7 +23719,7 @@ async fn test_following(cx: &mut TestAppContext) {
                         *is_still_following.borrow_mut() = false;
                     }
 
-                    if let EditorEvent::BufferEdited = event {
+                    if matches!(event, EditorEvent::BufferEdited) {
                         *follower_edit_event_count.borrow_mut() += 1;
                     }
                 },

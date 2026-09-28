@@ -815,7 +815,7 @@ impl Session {
     }
 
     pub fn kernel(&mut self, kernel: Kernel, cx: &mut Context<Self>) {
-        if let Kernel::Shutdown = kernel {
+        if matches!(kernel, Kernel::Shutdown) {
             cx.emit(SessionEvent::Shutdown(self.editor.clone()));
         }
 

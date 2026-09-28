@@ -706,7 +706,7 @@ async fn test_extension_store_with_test_extension(cx: &mut TestAppContext) {
     let executor = cx.executor();
     let _task = cx.executor().spawn(async move {
         while let Some(event) = events.next().await {
-            if let Event::StartedReloading = event {
+            if matches!(event, Event::StartedReloading) {
                 executor.advance_clock(RELOAD_DEBOUNCE_DURATION);
             }
         }

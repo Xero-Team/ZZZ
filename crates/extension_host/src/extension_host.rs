@@ -794,7 +794,7 @@ impl ExtensionStore {
             this.update(cx, |this, cx| this.reload(Some(extension_id.clone()), cx))?
                 .await;
 
-            if let ExtensionOperation::Install = operation {
+            if matches!(operation, ExtensionOperation::Install) {
                 this.update(cx, |this, cx| {
                     cx.emit(Event::ExtensionInstalled(extension_id.clone()));
                     if let Some(events) = ExtensionEvents::try_global(cx)

@@ -761,7 +761,20 @@ impl Vim {
 // https://github.com/vim/vim/blob/master/runtime/doc/motion.txt
 impl Motion {
     fn default_kind(&self) -> MotionKind {
-        use Motion::*;
+        use Motion::{
+            CurrentLine, Down, EndOfDocument, EndOfLine, EndOfLineDownward, EndOfParagraph,
+            FindBackward, FindForward, FirstNonWhitespace, GoToColumn, GoToPercentage, Jump, Left,
+            Matching, MiddleOfLine, NextComment, NextGreaterIndent, NextLesserIndent,
+            NextLineStart, NextMethodEnd, NextMethodStart, NextSameIndent, NextSectionEnd,
+            NextSectionStart, NextSubwordEnd, NextSubwordStart, NextWordEnd, NextWordStart,
+            PreviousComment, PreviousGreaterIndent, PreviousLesserIndent, PreviousLineStart,
+            PreviousMethodEnd, PreviousMethodStart, PreviousSameIndent, PreviousSectionEnd,
+            PreviousSectionStart, PreviousSubwordEnd, PreviousSubwordStart, PreviousWordEnd,
+            PreviousWordStart, RepeatFind, RepeatFindReversed, Right, SentenceBackward,
+            SentenceForward, Sneak, SneakBackward, StartOfDocument, StartOfLine,
+            StartOfLineDownward, StartOfParagraph, UnmatchedBackward, UnmatchedForward, Up,
+            WindowBottom, WindowMiddle, WindowTop, WrappingLeft, WrappingRight, ZZZSearchResult,
+        };
         match self {
             Down { .. }
             | Up { .. }
@@ -834,7 +847,20 @@ impl Motion {
     }
 
     pub(crate) fn push_to_jump_list(&self) -> bool {
-        use Motion::*;
+        use Motion::{
+            CurrentLine, Down, EndOfDocument, EndOfLine, EndOfLineDownward, EndOfParagraph,
+            FindBackward, FindForward, FirstNonWhitespace, GoToColumn, GoToPercentage, Jump, Left,
+            Matching, MiddleOfLine, NextComment, NextGreaterIndent, NextLesserIndent,
+            NextLineStart, NextMethodEnd, NextMethodStart, NextSameIndent, NextSectionEnd,
+            NextSectionStart, NextSubwordEnd, NextSubwordStart, NextWordEnd, NextWordStart,
+            PreviousComment, PreviousGreaterIndent, PreviousLesserIndent, PreviousLineStart,
+            PreviousMethodEnd, PreviousMethodStart, PreviousSameIndent, PreviousSectionEnd,
+            PreviousSectionStart, PreviousSubwordEnd, PreviousSubwordStart, PreviousWordEnd,
+            PreviousWordStart, RepeatFind, RepeatFindReversed, Right, SentenceBackward,
+            SentenceForward, Sneak, SneakBackward, StartOfDocument, StartOfLine,
+            StartOfLineDownward, StartOfParagraph, UnmatchedBackward, UnmatchedForward, Up,
+            WindowBottom, WindowMiddle, WindowTop, WrappingLeft, WrappingRight, ZZZSearchResult,
+        };
         match self {
             CurrentLine
             | Down { .. }
@@ -901,7 +927,20 @@ impl Motion {
     }
 
     pub fn infallible(&self) -> bool {
-        use Motion::*;
+        use Motion::{
+            CurrentLine, Down, EndOfDocument, EndOfLine, EndOfLineDownward, EndOfParagraph,
+            FindBackward, FindForward, FirstNonWhitespace, GoToColumn, GoToPercentage, Jump, Left,
+            Matching, MiddleOfLine, NextComment, NextGreaterIndent, NextLesserIndent,
+            NextLineStart, NextMethodEnd, NextMethodStart, NextSameIndent, NextSectionEnd,
+            NextSectionStart, NextSubwordEnd, NextSubwordStart, NextWordEnd, NextWordStart,
+            PreviousComment, PreviousGreaterIndent, PreviousLesserIndent, PreviousLineStart,
+            PreviousMethodEnd, PreviousMethodStart, PreviousSameIndent, PreviousSectionEnd,
+            PreviousSectionStart, PreviousSubwordEnd, PreviousSubwordStart, PreviousWordEnd,
+            PreviousWordStart, RepeatFind, RepeatFindReversed, Right, SentenceBackward,
+            SentenceForward, Sneak, SneakBackward, StartOfDocument, StartOfLine,
+            StartOfLineDownward, StartOfParagraph, UnmatchedBackward, UnmatchedForward, Up,
+            WindowBottom, WindowMiddle, WindowTop, WrappingLeft, WrappingRight, ZZZSearchResult,
+        };
         match self {
             StartOfDocument | EndOfDocument | CurrentLine | EndOfLine { .. } => true,
             Down { .. }
@@ -973,7 +1012,20 @@ impl Motion {
         text_layout_details: &TextLayoutDetails,
     ) -> Option<(DisplayPoint, SelectionGoal)> {
         let times = maybe_times.unwrap_or(1);
-        use Motion::*;
+        use Motion::{
+            CurrentLine, Down, EndOfDocument, EndOfLine, EndOfLineDownward, EndOfParagraph,
+            FindBackward, FindForward, FirstNonWhitespace, GoToColumn, GoToPercentage, Jump, Left,
+            Matching, MiddleOfLine, NextComment, NextGreaterIndent, NextLesserIndent,
+            NextLineStart, NextMethodEnd, NextMethodStart, NextSameIndent, NextSectionEnd,
+            NextSectionStart, NextSubwordEnd, NextSubwordStart, NextWordEnd, NextWordStart,
+            PreviousComment, PreviousGreaterIndent, PreviousLesserIndent, PreviousLineStart,
+            PreviousMethodEnd, PreviousMethodStart, PreviousSameIndent, PreviousSectionEnd,
+            PreviousSectionStart, PreviousSubwordEnd, PreviousSubwordStart, PreviousWordEnd,
+            PreviousWordStart, RepeatFind, RepeatFindReversed, Right, SentenceBackward,
+            SentenceForward, Sneak, SneakBackward, StartOfDocument, StartOfLine,
+            StartOfLineDownward, StartOfParagraph, UnmatchedBackward, UnmatchedForward, Up,
+            WindowBottom, WindowMiddle, WindowTop, WrappingLeft, WrappingRight, ZZZSearchResult,
+        };
         let infallible = self.infallible();
         let (new_point, goal) = match self {
             Left => (left(map, point, times), SelectionGoal::None),
@@ -1447,7 +1499,7 @@ impl Motion {
                     end_point.row -= 1;
                     end_point.column = 0;
                     selection.end = map.clip_point(map.next_line_boundary(end_point).1, Bias::Left);
-                } else if let Motion::EndOfParagraph = self {
+                } else if matches!(self, Motion::EndOfParagraph) {
                     // Special case: When using the "}" motion, it's possible
                     // that there's no blank lines after the paragraph the
                     // cursor is currently on.

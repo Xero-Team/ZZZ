@@ -166,7 +166,7 @@ impl PaneGroup {
     /// - Err(_) if it did not find the pane
     pub fn remove(&mut self, pane: &Entity<Pane>, cx: &mut App) -> Result<bool> {
         let result = self.remove_internal(pane);
-        if let Ok(true) = result {
+        if matches!(result, Ok(true)) {
             self.mark_positions(cx);
         }
         result
@@ -413,8 +413,8 @@ impl PaneLeaderDecorator for PaneRenderContext<'_> {
 
 impl Member {
     fn new_axis(old_pane: Entity<Pane>, new_pane: Entity<Pane>, direction: SplitDirection) -> Self {
-        use Axis::*;
-        use SplitDirection::*;
+        use Axis::{Horizontal, Vertical};
+        use SplitDirection::{Down, Left, Right, Up};
 
         let axis = match direction {
             Up | Down => Vertical,

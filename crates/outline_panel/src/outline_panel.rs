@@ -280,7 +280,7 @@ impl SearchState {
                         Ok(()) => {}
                         Err(_) => break,
                     };
-                    while let Ok(()) = notify_rx.try_recv() {
+                    while notify_rx.try_recv() == Ok(()) {
                         //
                     }
                     let update_result = outline_panel.update(cx, |_, cx| {
@@ -723,7 +723,7 @@ impl OutlinePanel {
                 &filter_editor,
                 window,
                 |outline_panel: &mut Self, _, event, window, cx| {
-                    if let editor::EditorEvent::BufferEdited = event {
+                    if matches!(event, editor::EditorEvent::BufferEdited) {
                         outline_panel.update_cached_entries(Some(UPDATE_DEBOUNCE), window, cx);
                     }
                 },
@@ -738,7 +738,7 @@ impl OutlinePanel {
                     .expect("have a &mut Workspace"),
                 window,
                 move |outline_panel, workspace, event, window, cx| {
-                    if let workspace::Event::ActiveItemChanged = event {
+                    if matches!(event, workspace::Event::ActiveItemChanged) {
                         if let Some((new_active_item, new_active_editor)) =
                             workspace_active_editor(workspace.read(cx), cx)
                         {

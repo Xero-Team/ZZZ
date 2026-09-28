@@ -2882,7 +2882,7 @@ impl LocalSnapshot {
         let mut removed_entries = Vec::new();
 
         for (_, entry_id, path_change) in entry_changes.iter() {
-            if let PathChange::Removed = path_change {
+            if matches!(path_change, PathChange::Removed) {
                 removed_entries.push(entry_id.0 as u64);
             } else if let Some(entry) = self.entry_for_id(*entry_id) {
                 updated_entries.push(proto::Entry::from(entry));
@@ -6146,7 +6146,7 @@ fn build_diff(
     new_snapshot: &Snapshot,
     event_roots: &[EventRoot],
 ) -> UpdatedEntriesSet {
-    use BackgroundScannerPhase::*;
+    use BackgroundScannerPhase::{EventsReceivedDuringInitialScan, InitialScan};
     use PathChange::{Added, AddedOrUpdated, Loaded, Removed, Updated};
 
     // Identify which paths have changed. Use the known set of changed

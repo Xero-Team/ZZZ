@@ -59,7 +59,7 @@ impl WorkflowValidationError {
         }
     }
 
-    pub fn annotation_group<'a>(&'a self) -> Group<'a> {
+    pub fn annotation_group(&self) -> Group<'_> {
         let raw_content = &self.contents.raw_content;
         let mut identical_lines = HashMap::new();
 

@@ -2345,7 +2345,7 @@ impl Editor {
             let git_store = project.read(cx).git_store().clone();
             let project = project.clone();
             project_subscriptions.push(cx.subscribe(&git_store, move |this, _, event, cx| {
-                if let GitStoreEvent::RepositoryAdded = event {
+                if matches!(event, GitStoreEvent::RepositoryAdded) {
                     this.load_diff_task = Some(
                         update_uncommitted_diff_for_buffer(
                             cx.entity(),
@@ -20165,7 +20165,7 @@ impl Editor {
         event: &SessionEvent,
         cx: &mut Context<Self>,
     ) {
-        if let SessionEvent::InvalidateInlineValue = event {
+        if matches!(event, SessionEvent::InvalidateInlineValue) {
             self.refresh_inline_values(cx);
         }
     }

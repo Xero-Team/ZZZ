@@ -250,7 +250,7 @@ impl DiagnosticSet {
         buffer: &text::BufferSnapshot,
     ) {
         let mut groups = HashMap::default();
-        for entry in self.diagnostics.iter() {
+        for entry in &self.diagnostics {
             groups
                 .entry(entry.diagnostic.group_id)
                 .or_insert(Vec::new())

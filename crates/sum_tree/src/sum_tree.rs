@@ -50,8 +50,8 @@ pub trait KeyedItem: Item {
 /// which can be used to navigate the tree
 pub trait Summary: Clone {
     type Context<'a>: Copy;
-    fn zero<'a>(cx: Self::Context<'a>) -> Self;
-    fn add_summary<'a>(&mut self, summary: &Self, cx: Self::Context<'a>);
+    fn zero(cx: Self::Context<'_>) -> Self;
+    fn add_summary(&mut self, summary: &Self, cx: Self::Context<'_>);
 }
 
 pub trait ContextLessSummary: Clone {
@@ -392,7 +392,18 @@ impl<T: Item> SumTree<T> {
     pub fn iter(&self) -> Iter<'_, T> {
         Iter::new(self)
     }
+}
 
+impl<'a, T: Item> IntoIterator for &'a SumTree<T> {
+    type Item = &'a T;
+    type IntoIter = Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<T: Item> SumTree<T> {
     /// A more efficient version of `Cursor::new()` + `Cursor::seek()` + `Cursor::item()`.
     ///
     /// Only returns the item that exactly has the target match.
@@ -1147,10 +1158,10 @@ impl<T: Item + PartialEq> PartialEq for SumTree<T> {
 impl<T: Item + Eq> Eq for SumTree<T> {}
 
 impl<T: KeyedItem> SumTree<T> {
-    pub fn insert_or_replace<'a, 'b>(
-        &'a mut self,
+    pub fn insert_or_replace(
+        &mut self,
         item: T,
-        cx: <T::Summary as Summary>::Context<'b>,
+        cx: <T::Summary as Summary>::Context<'_>,
     ) -> Option<T> {
         let mut replaced = None;
         {

@@ -15,7 +15,7 @@ impl Editor {
         }
 
         let other_subscription = cx.subscribe(&other, |this, other, other_evt, cx| {
-            if let EditorEvent::SelectionsChanged { local: true } = other_evt {
+            if matches!(other_evt, EditorEvent::SelectionsChanged { local: true }) {
                 let other_selections = other.read(cx).selections.disjoint_anchors().to_vec();
                 if other_selections.is_empty() {
                     return;
@@ -28,7 +28,7 @@ impl Editor {
         });
 
         let this_subscription = cx.subscribe_self::<EditorEvent>(move |this, this_evt, cx| {
-            if let EditorEvent::SelectionsChanged { local: true } = this_evt {
+            if matches!(this_evt, EditorEvent::SelectionsChanged { local: true }) {
                 let these_selections = this.selections.disjoint_anchors().to_vec();
                 if these_selections.is_empty() {
                     return;

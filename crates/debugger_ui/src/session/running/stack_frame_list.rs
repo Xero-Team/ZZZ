@@ -869,7 +869,7 @@ impl StackFrameList {
                 .detach();
         }
 
-        if let Some(ThreadStatus::Stopped) = thread_status {
+        if thread_status == Some(ThreadStatus::Stopped) {
             match self.list_filter {
                 StackFrameFilter::All => {
                     self.list_state.reset(self.entries.len());

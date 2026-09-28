@@ -775,7 +775,7 @@ impl<T: Item> ItemHandle for Entity<T> {
                         let leader_id = workspace.leader_for_pane(&pane);
 
                         if let Some(leader_id) = leader_id
-                            && let Some(FollowEvent::Unfollow) = item.to_follow_event(event)
+                            && matches!(item.to_follow_event(event), Some(FollowEvent::Unfollow))
                         {
                             workspace.unfollow(leader_id, window, cx);
                         }

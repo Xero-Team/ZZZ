@@ -1978,13 +1978,13 @@ impl FakeFs {
         tree: serde_json::Value,
     ) -> futures::future::BoxFuture<'a, ()> {
         use futures::FutureExt as _;
-        use serde_json::Value::*;
+        use serde_json::Value::{Null, Object, String};
 
-        fn inner<'a>(
-            this: &'a FakeFs,
+        fn inner(
+            this: &FakeFs,
             path: Arc<Path>,
             tree: serde_json::Value,
-        ) -> futures::future::BoxFuture<'a, ()> {
+        ) -> futures::future::BoxFuture<'_, ()> {
             async move {
                 match tree {
                     Object(map) => {

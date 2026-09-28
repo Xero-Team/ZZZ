@@ -576,7 +576,7 @@ impl sum_tree::KeyedItem for DiffStateSnapshot {
     }
 }
 
-impl<'a> Dimension<'a, DiffStateSummary> for Option<BufferId> {
+impl Dimension<'_, DiffStateSummary> for Option<BufferId> {
     fn zero(_cx: ()) -> Self {
         None
     }
@@ -5511,7 +5511,7 @@ impl MultiBufferSnapshot {
         self.excerpts.iter().map(|excerpt| excerpt.range.clone())
     }
 
-    fn cursor<'a, MBD, BD>(&'a self) -> MultiBufferCursor<'a, MBD, BD>
+    fn cursor<MBD, BD>(&self) -> MultiBufferCursor<'_, MBD, BD>
     where
         MBD: MultiBufferDimension + Ord + Sub + ops::AddAssign<<MBD as Sub>::Output>,
         BD: TextDimension + AddAssign<<MBD as Sub>::Output>,
@@ -6359,10 +6359,10 @@ impl MultiBufferSnapshot {
         .map(|(range, diagnostic, _)| DiagnosticEntryRef { diagnostic, range })
     }
 
-    pub fn diagnostics_with_buffer_ids_in_range<'a, MBD>(
-        &'a self,
+    pub fn diagnostics_with_buffer_ids_in_range<MBD>(
+        &self,
         range: Range<MBD>,
-    ) -> impl Iterator<Item = (BufferId, DiagnosticEntryRef<'a, MBD>)> + 'a
+    ) -> impl Iterator<Item = (BufferId, DiagnosticEntryRef<'_, MBD>)> + '_
     where
         MBD: MultiBufferDimension
             + Ord
@@ -6853,9 +6853,7 @@ impl MultiBufferSnapshot {
             .flatten()
     }
 
-    pub fn buffers_with_paths<'a>(
-        &'a self,
-    ) -> impl 'a + Iterator<Item = (&'a BufferSnapshot, &'a PathKey)> {
+    pub fn buffers_with_paths(&self) -> impl '_ + Iterator<Item = (&BufferSnapshot, &PathKey)> {
         self.buffers
             .values()
             .map(|buffer| (&buffer.buffer_snapshot, &buffer.path_key))
@@ -6972,7 +6970,7 @@ impl MultiBufferSnapshot {
         );
 
         let mut prev_transform: Option<&DiffTransform> = None;
-        for item in self.diff_transforms.iter() {
+        for item in &self.diff_transforms {
             if let DiffTransform::BufferContent {
                 summary,
                 inserted_hunk_info,
@@ -7770,7 +7768,7 @@ where
     }
 }
 
-impl<'a, MBD> sum_tree::SeekTarget<'a, DiffTransformSummary, DiffTransforms<MBD>>
+impl<MBD> sum_tree::SeekTarget<'_, DiffTransformSummary, DiffTransforms<MBD>>
     for ExcerptDimension<MBD>
 where
     MBD: MultiBufferDimension + Ord,
@@ -7792,7 +7790,7 @@ impl<'a, MBD: MultiBufferDimension> sum_tree::Dimension<'a, DiffTransformSummary
     }
 }
 
-impl<'a, MBD> sum_tree::SeekTarget<'a, DiffTransformSummary, DiffTransforms<MBD>>
+impl<MBD> sum_tree::SeekTarget<'_, DiffTransformSummary, DiffTransforms<MBD>>
     for OutputDimension<MBD>
 where
     MBD: MultiBufferDimension + Ord,

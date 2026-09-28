@@ -996,6 +996,9 @@ missing_abi = "deny"
 ffi_unwind_calls = "deny"
 noop_method_call = "deny"
 unused_extern_crates = "deny"
+# Warn-by-default in edition 2024 and already clean; denying it pins the
+# requirement so an edition or profile change cannot silently relax it.
+unsafe_op_in_unsafe_fn = "deny"
 
 [workspace.lints.clippy]
 dbg_macro = "deny"
@@ -1133,6 +1136,17 @@ manual_next_back = "deny"
 cast_enum_constructor = "deny"
 derivable_impls = "deny"
 
+# Clarity and API-consistency lints promoted once the whole workspace was fixed
+# for them. `equatable_if_let` replaces an `if let` of a literal/unit variant
+# with `==` or `matches!`, `elidable_lifetime_names` drops named lifetimes the
+# compiler can infer, `enum_glob_use` expands `use Enum::*`, and
+# `iter_without_into_iter` keeps `iter` and `IntoIterator` in step on the
+# collection types that expose only one of them.
+equatable_if_let = "deny"
+elidable_lifetime_names = "deny"
+enum_glob_use = "deny"
+iter_without_into_iter = "deny"
+
 # We currently do not restrict any style rules
 # as it slows down shipping code to ZZZ.
 #
@@ -1178,6 +1192,22 @@ style = { level = "allow", priority = -1 }
 #   `unused_qualifications` (4051), `unreachable_pub` (1817),
 #   `elided_lifetimes_in_paths` (6370). `variant_size_differences` (11) is left
 #   off because it would fight the `large_enum_variant` allow below.
+# - Evaluated in a later scan and deferred for the same reasons:
+#   `unused_async` (291) and `unused_async_trait_impl` (112) mostly fire on
+#   trait-mirroring methods kept `async` for signature parity;
+#   `match_wildcard_for_single_variants` (116) overlaps the style group;
+#   `needless_collect` (91) has false positives where the intermediate
+#   collection is load-bearing; `unnecessary_wraps` (90) would reshape
+#   intentionally-`Option`/`Result` APIs; `suboptimal_flops` (80) rewrites float
+#   math to `mul_add` and shifts results; `assigning_clones` (67) and
+#   `format_push_string` (65) are mechanical perf churn; `useless_let_if_seq`
+#   (58), `wildcard_imports` (50), `ref_option` (46, invasive signature
+#   changes), and `many_single_char_names` (36) are read as style.
+#   `into_iter_without_iter` (2) would require changing `Patch`'s existing
+#   cloning `IntoIterator` impls to borrow instead, which is a behavior change
+#   for callers. `should_panic_without_expect` (1) is the scheduler's "parking
+#   forbidden" panic rather than the migration error the test claims to assert,
+#   so naming it would encode a test-harness detail.
 
 # Individual rules that have violations in the codebase:
 type_complexity = "allow"

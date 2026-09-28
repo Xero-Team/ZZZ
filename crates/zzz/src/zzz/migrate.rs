@@ -160,7 +160,7 @@ impl ToolbarItemView for MigrationBanner {
             let fs = <dyn Fs>::global(cx);
             let should_migrate = cx.background_spawn(should_migrate_keymap(fs));
             self.should_migrate_task = Some(cx.spawn_in(window, async move |this, cx| {
-                if let Ok(true) = should_migrate.await {
+                if matches!(should_migrate.await, Ok(true)) {
                     this.update(cx, |this, cx| {
                         this.show(cx);
                     })
@@ -172,7 +172,7 @@ impl ToolbarItemView for MigrationBanner {
             let fs = <dyn Fs>::global(cx);
             let should_migrate = cx.background_spawn(should_migrate_settings(fs));
             self.should_migrate_task = Some(cx.spawn_in(window, async move |this, cx| {
-                if let Ok(true) = should_migrate.await {
+                if matches!(should_migrate.await, Ok(true)) {
                     this.update(cx, |this, cx| {
                         this.show(cx);
                     })

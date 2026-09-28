@@ -322,7 +322,7 @@ impl NewProcessModal {
         };
         let label = suggested_label(&request, debugger);
 
-        let stop_on_entry = if let NewProcessMode::Launch = &self.mode {
+        let stop_on_entry = if matches!(&self.mode, NewProcessMode::Launch) {
             Some(self.configure_mode.read(cx).stop_on_entry.selected())
         } else {
             None
@@ -347,14 +347,14 @@ impl NewProcessModal {
             return;
         }
 
-        if let NewProcessMode::Debug = &self.mode {
+        if matches!(&self.mode, NewProcessMode::Debug) {
             self.debug_picker.update(cx, |picker, cx| {
                 picker.delegate.confirm(false, window, cx);
             });
             return;
         }
 
-        if let NewProcessMode::Launch = &self.mode
+        if matches!(&self.mode, NewProcessMode::Launch)
             && self.configure_mode.read(cx).save_to_debug_json.selected()
         {
             self.save_debug_scenario(window, cx);
@@ -518,7 +518,7 @@ impl NewProcessModal {
                         weak.update(cx, |this, cx| {
                             this.debugger = Some(name.clone());
                             cx.notify();
-                            if let NewProcessMode::Attach = &this.mode {
+                            if matches!(&this.mode, NewProcessMode::Attach) {
                                 Self::update_attach_picker(&this.attach_mode, &name, window, cx);
                             }
                         })

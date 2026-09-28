@@ -410,7 +410,7 @@ pub(crate) async fn apply_devcontainer_template(
         })?;
 
         let mut content = expand_template_options(content, template_options);
-        if let Some("devcontainer.json") = &rel_path.file_name() {
+        if matches!(&rel_path.file_name(), Some("devcontainer.json")) {
             content = insert_features_into_devcontainer_json(&content, features_selected)
         }
         worktree

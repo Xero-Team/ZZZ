@@ -3258,7 +3258,7 @@ impl Project {
         cx: &mut Context<Self>,
     ) -> Option<()> {
         // TODO: handle image events from remote
-        if let ImageItemEvent::ReloadNeeded = event {
+        if matches!(event, ImageItemEvent::ReloadNeeded) {
             self.reload_images([image].into_iter().collect(), cx)
                 .detach_and_log_err(cx);
         }

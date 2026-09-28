@@ -47,7 +47,7 @@ pub trait PathMatchCandidateSet<'a>: Send + Sync {
     fn path_style(&self) -> PathStyle;
 }
 
-impl<'a> MatchCandidate for PathMatchCandidate<'a> {
+impl MatchCandidate for PathMatchCandidate<'_> {
     fn has_chars(&self, bag: CharBag) -> bool {
         self.char_bag.is_superset(bag)
     }

@@ -1213,7 +1213,7 @@ impl Element for TerminalElement {
                         size: size(cursor_width.ceil(), dimensions.line_height),
                     });
 
-                let cursor = if let AlacCursorShape::Hidden = cursor.shape {
+                let cursor = if cursor.shape == AlacCursorShape::Hidden {
                     None
                 } else {
                     let focused = self.focused;

@@ -1189,7 +1189,7 @@ pub struct Lines<'a> {
     reversed: bool,
 }
 
-impl<'a> Lines<'a> {
+impl Lines<'_> {
     pub fn next(&mut self) -> Option<&str> {
         if self.done {
             return None;

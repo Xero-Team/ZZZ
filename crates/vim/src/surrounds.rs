@@ -122,7 +122,7 @@ impl Vim {
                                 )
                                 .map(|(mut range, _)| {
                                     // The Motion::CurrentLine operation will contain the newline of the current line and leading/trailing whitespace
-                                    if let Motion::CurrentLine = motion {
+                                    if matches!(motion, Motion::CurrentLine) {
                                         range.start = motion::first_non_whitespace(
                                             &display_map,
                                             false,

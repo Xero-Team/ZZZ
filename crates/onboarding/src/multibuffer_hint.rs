@@ -118,7 +118,7 @@ impl ToolbarItemView for MultibufferHint {
             window,
             cx,
             Box::new(move |event, _, cx| {
-                if let ItemEvent::UpdateBreadcrumbs = event {
+                if event == ItemEvent::UpdateBreadcrumbs {
                     this.update(cx, |this, cx| {
                         cx.notify();
                         let location = this.determine_toolbar_location(cx);

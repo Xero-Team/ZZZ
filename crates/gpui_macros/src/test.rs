@@ -156,8 +156,8 @@ fn generate_test_function(
                     && let Type::Path(ty) = &*ty.elem
                 {
                     let last_segment = ty.path.segments.last();
-                    if let Some("TestAppContext") =
-                        last_segment.map(|s| s.ident.to_string()).as_deref()
+                    if last_segment.map(|s| s.ident.to_string()).as_deref()
+                        == Some("TestAppContext")
                     {
                         let cx_varname = format_ident!("cx_{}", ix);
                         cx_vars.extend(quote!(
@@ -219,7 +219,7 @@ fn generate_test_function(
                 if let Type::Path(ty) = &*arg.ty {
                     let last_segment = ty.path.segments.last();
 
-                    if let Some("StdRng") = last_segment.map(|s| s.ident.to_string()).as_deref() {
+                    if last_segment.map(|s| s.ident.to_string()).as_deref() == Some("StdRng") {
                         inner_fn_args.extend(quote!(rand::SeedableRng::seed_from_u64(_seed),));
                         continue;
                     }

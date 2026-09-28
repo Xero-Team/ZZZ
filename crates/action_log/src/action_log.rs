@@ -344,7 +344,7 @@ impl ActionLog {
                 let unreviewed_edits = tracked_buffer.unreviewed_edits.clone();
                 let edits = diff_snapshots(&old_snapshot, &new_snapshot);
                 async move {
-                    if let ChangeAuthor::User = author {
+                    if matches!(author, ChangeAuthor::User) {
                         apply_non_conflicting_edits(
                             &unreviewed_edits,
                             edits,
@@ -610,7 +610,7 @@ impl ActionLog {
         }
         let new_version = buffer.read(cx).version();
         let tracked_buffer = self.track_buffer_internal(buffer, false, cx);
-        if let TrackedBufferStatus::Deleted = tracked_buffer.status {
+        if matches!(tracked_buffer.status, TrackedBufferStatus::Deleted) {
             tracked_buffer.status = TrackedBufferStatus::Modified;
         }
 
@@ -660,7 +660,7 @@ impl ActionLog {
             return;
         };
 
-        if let TrackedBufferStatus::Deleted = tracked_buffer.status {
+        if matches!(tracked_buffer.status, TrackedBufferStatus::Deleted) {
             self.tracked_buffers.remove(&buffer);
             cx.notify();
         } else {
@@ -888,7 +888,7 @@ impl ActionLog {
 
     pub fn keep_all_edits(&mut self, cx: &mut Context<Self>) {
         self.tracked_buffers.retain(|_buffer, tracked_buffer| {
-            if let TrackedBufferStatus::Deleted = tracked_buffer.status {
+            if matches!(tracked_buffer.status, TrackedBufferStatus::Deleted) {
                 false
             } else {
                 if let TrackedBufferStatus::Created { .. } = &mut tracked_buffer.status {

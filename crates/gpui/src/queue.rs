@@ -80,7 +80,7 @@ impl<T> PriorityQueueState<T> {
         };
     }
 
-    fn recv<'a>(&'a self) -> Result<MutexGuard<'a, PriorityQueues<T>>, RecvError> {
+    fn recv(&self) -> Result<MutexGuard<'_, PriorityQueues<T>>, RecvError> {
         let mut queues = self.queues.lock().unwrap_or_else(PoisonError::into_inner);
 
         let sender_count = self.sender_count.load(std::sync::atomic::Ordering::Relaxed);
@@ -98,7 +98,7 @@ impl<T> PriorityQueueState<T> {
         Ok(queues)
     }
 
-    fn try_recv<'a>(&'a self) -> Result<Option<MutexGuard<'a, PriorityQueues<T>>>, RecvError> {
+    fn try_recv(&self) -> Result<Option<MutexGuard<'_, PriorityQueues<T>>>, RecvError> {
         let queues = self.queues.lock().unwrap_or_else(PoisonError::into_inner);
 
         let sender_count = self.sender_count.load(std::sync::atomic::Ordering::Relaxed);
@@ -113,7 +113,7 @@ impl<T> PriorityQueueState<T> {
         }
     }
 
-    fn spin_try_recv<'a>(&'a self) -> Result<Option<MutexGuard<'a, PriorityQueues<T>>>, RecvError> {
+    fn spin_try_recv(&self) -> Result<Option<MutexGuard<'_, PriorityQueues<T>>>, RecvError> {
         let queues = loop {
             match self.queues.try_lock() {
                 Ok(guard) => break guard,

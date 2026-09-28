@@ -1865,7 +1865,7 @@ impl Pane {
                 continue;
             }
 
-            if let Some(true) = self.items.get(index).map(|item| item.is_dirty(cx)) {
+            if self.items.get(index).is_some_and(|item| item.is_dirty(cx)) {
                 continue;
             }
 

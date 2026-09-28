@@ -3386,7 +3386,7 @@ impl AcpThread {
                         }
 
                         // Handle refusal - distinguish between user prompt and tool call refusals
-                        if let acp::StopReason::Refusal = r.stop_reason {
+                        if r.stop_reason == acp::StopReason::Refusal {
                             this.had_error = true;
                             if let Some((user_msg_ix, _)) = this.last_user_message() {
                                 // Check if there's a completed tool call with results after the last user message

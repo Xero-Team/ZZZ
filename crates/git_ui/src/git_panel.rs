@@ -2958,7 +2958,7 @@ impl GitPanel {
 
         let task = cx.spawn_in(window, async move |this, cx| {
             let result = maybe!(async {
-                if let Ok(true) = confirmation.await {
+                if matches!(confirmation.await, Ok(true)) {
                     let prior_head = prior_head.await?;
 
                     repo.update(cx, |repo, cx| {
@@ -4430,7 +4430,7 @@ impl GitPanel {
             );
 
             let status_toast = StatusToast::new(message, cx, move |this, _cx| {
-                use remote_output::SuccessStyle::*;
+                use remote_output::SuccessStyle::{PushPullRequestLink, Toast, ToastWithLog};
                 let this = this.icon(
                     Icon::new(IconName::GitBranch)
                         .size(IconSize::Small)

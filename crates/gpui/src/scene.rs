@@ -285,7 +285,7 @@ struct BatchIterator<'a> {
     surfaces_iter: Peekable<slice::Iter<'a, PaintSurface>>,
 }
 
-impl<'a> Iterator for BatchIterator<'a> {
+impl Iterator for BatchIterator<'_> {
     type Item = PrimitiveBatch;
 
     fn next(&mut self) -> Option<Self::Item> {

@@ -1258,7 +1258,7 @@ impl AgentPanel {
             self._draft_editor_observation = Some(cx.subscribe(
                 &acp_thread,
                 |this, _, e: &AcpThreadEvent, cx| {
-                    if let AcpThreadEvent::PromptUpdated = e {
+                    if matches!(e, AcpThreadEvent::PromptUpdated) {
                         this.serialize(cx);
                     }
                 },

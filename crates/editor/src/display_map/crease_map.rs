@@ -341,7 +341,7 @@ impl CreaseMap {
         if !ids_to_remove.is_empty() {
             self.snapshot.creases = {
                 let mut new_creases = SumTree::new(snapshot);
-                for item in self.snapshot.creases.iter() {
+                for item in &self.snapshot.creases {
                     if !ids_to_remove.contains(&item.id) {
                         new_creases.push(item.clone(), snapshot);
                     }

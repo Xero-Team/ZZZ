@@ -225,7 +225,7 @@ fn cleanup_html(source: &str) -> Vec<u8> {
             ..Default::default()
         },
     );
-    if let Ok(()) = minify.minify(&mut reader) {
+    if matches!(minify.minify(&mut reader), Ok(())) {
         writer.into_inner()
     } else {
         source.bytes().collect()

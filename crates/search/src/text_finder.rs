@@ -202,9 +202,10 @@ impl TextFinder {
                 })
                 .log_err();
 
-            if let PopulateProjectSearch::SupersededByNewSearch =
-                matches_to_multibuffer(&project_search_view, &matches, cx).await
-            {
+            if matches!(
+                matches_to_multibuffer(&project_search_view, &matches, cx).await,
+                PopulateProjectSearch::SupersededByNewSearch
+            ) {
                 return;
             }
 

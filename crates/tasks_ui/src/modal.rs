@@ -53,10 +53,12 @@ impl TasksModalDelegate {
         workspace: WeakEntity<Workspace>,
         cx: &App,
     ) -> Self {
-        let placeholder_text = if let Some(TaskOverrides {
-            reveal_target: Some(RevealTarget::Center),
-        }) = &task_overrides
-        {
+        let placeholder_text = if matches!(
+            &task_overrides,
+            Some(TaskOverrides {
+                reveal_target: Some(RevealTarget::Center),
+            })
+        ) {
             Arc::from(tr(
                 cx,
                 "tasks_ui.modal.placeholder.central_pane",

@@ -1850,11 +1850,14 @@ impl Buffer {
 
         self.parse_status.0.send(ParseStatus::Parsing).unwrap();
         if may_block && let Some(sync_parse_timeout) = self.sync_parse_timeout {
-            if let Ok(()) = syntax_snapshot.reparse_with_timeout(
-                &text,
-                language_registry.clone(),
-                language.clone(),
-                sync_parse_timeout,
+            if matches!(
+                syntax_snapshot.reparse_with_timeout(
+                    &text,
+                    language_registry.clone(),
+                    language.clone(),
+                    sync_parse_timeout,
+                ),
+                Ok(())
             ) {
                 self.did_finish_parsing(syntax_snapshot, Some(Duration::from_millis(300)), cx);
                 self.reparse = None;

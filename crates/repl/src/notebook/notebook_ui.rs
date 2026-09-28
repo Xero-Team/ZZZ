@@ -161,7 +161,7 @@ impl NotebookEditor {
                     let cell_id_for_editor = cell_id.clone();
                     let editor = code_cell.read(cx).editor().clone();
                     cx.subscribe(&editor, move |this, _editor, event, cx| {
-                        if let editor::EditorEvent::Focused = event {
+                        if matches!(event, editor::EditorEvent::Focused) {
                             this.select_cell_by_id(&cell_id_for_editor, cx);
                         }
                     })
@@ -192,7 +192,7 @@ impl NotebookEditor {
                     let cell_id_for_editor = cell_id.clone();
                     let editor = markdown_cell.read(cx).editor().clone();
                     cx.subscribe(&editor, move |this, _editor, event, cx| {
-                        if let editor::EditorEvent::Focused = event {
+                        if matches!(event, editor::EditorEvent::Focused) {
                             this.select_cell_by_id(&cell_id_for_editor, cx);
                         }
                     })
@@ -909,7 +909,7 @@ impl NotebookEditor {
         let cell_id_for_editor = new_cell_id.clone();
         let editor = markdown_cell.read(cx).editor().clone();
         cx.subscribe(&editor, move |this, _editor, event, cx| {
-            if let editor::EditorEvent::Focused = event {
+            if matches!(event, editor::EditorEvent::Focused) {
                 this.select_cell_by_id(&cell_id_for_editor, cx);
             }
         })
@@ -958,7 +958,7 @@ impl NotebookEditor {
         let cell_id_for_editor = new_cell_id.clone();
         let editor = code_cell.read(cx).editor().clone();
         cx.subscribe(&editor, move |this, _editor, event, cx| {
-            if let editor::EditorEvent::Focused = event {
+            if matches!(event, editor::EditorEvent::Focused) {
                 this.select_cell_by_id(&cell_id_for_editor, cx);
             }
         })

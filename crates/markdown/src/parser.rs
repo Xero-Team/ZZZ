@@ -274,7 +274,7 @@ pub(crate) fn parse_markdown_with_options(
         }
         match pulldown_event {
             pulldown_cmark::Event::Start(tag) => {
-                if let pulldown_cmark::Tag::HtmlBlock = &tag {
+                if matches!(&tag, pulldown_cmark::Tag::HtmlBlock) {
                     state.push_event(range.clone(), MarkdownEvent::Start(MarkdownTag::HtmlBlock));
 
                     if parse_html {
@@ -284,9 +284,8 @@ pub(crate) fn parse_markdown_with_options(
                             html_blocks.insert(range.start, block);
 
                             while let Some((event, end_range)) = parser.next() {
-                                if let pulldown_cmark::Event::End(
-                                    pulldown_cmark::TagEnd::HtmlBlock,
-                                ) = event
+                                if event
+                                    == pulldown_cmark::Event::End(pulldown_cmark::TagEnd::HtmlBlock)
                                 {
                                     state.push_event(
                                         end_range,
@@ -436,9 +435,9 @@ pub(crate) fn parse_markdown_with_options(
                 state.push_event(range, MarkdownEvent::Start(tag))
             }
             pulldown_cmark::Event::End(tag) => {
-                if let pulldown_cmark::TagEnd::Link = tag {
+                if tag == pulldown_cmark::TagEnd::Link {
                     within_link = false;
-                } else if let pulldown_cmark::TagEnd::CodeBlock = tag {
+                } else if tag == pulldown_cmark::TagEnd::CodeBlock {
                     within_code_block = false;
                 } else if let pulldown_cmark::TagEnd::MetadataBlock(_) = tag {
                     within_metadata = false;
@@ -459,7 +458,7 @@ pub(crate) fn parse_markdown_with_options(
                     if !parse_metadata_blocks {
                         continue;
                     }
-                } else if let pulldown_cmark::TagEnd::Table = tag {
+                } else if tag == pulldown_cmark::TagEnd::Table {
                     within_table = false;
                 }
                 state.push_event(range, MarkdownEvent::End(tag));

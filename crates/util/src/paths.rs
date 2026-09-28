@@ -1585,7 +1585,7 @@ impl WslPath {
         if server_str == "wsl.localhost" || server_str == "wsl$" {
             let mut result = OsString::from("");
             for c in components {
-                use Component::*;
+                use Component::{CurDir, Normal, ParentDir, Prefix, RootDir};
                 match c {
                     Prefix(p) => unreachable!("got {p:?}, but already stripped prefix"),
                     RootDir => unreachable!("got root dir, but already stripped root"),

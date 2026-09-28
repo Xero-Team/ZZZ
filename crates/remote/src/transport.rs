@@ -241,7 +241,7 @@ async fn build_remote_server_from_source(
     let build_remote_server =
         std::env::var("ZZZ_BUILD_REMOTE_SERVER").unwrap_or("nocompress".into());
 
-    if let "never" = &*build_remote_server {
+    if &*build_remote_server == "never" {
         return Ok(None);
     } else if let "false" | "no" | "off" | "0" = &*build_remote_server {
         if binary_exists_on_server {

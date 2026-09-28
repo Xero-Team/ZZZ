@@ -702,7 +702,7 @@ impl ExecutionView {
 
         // Check for a clear output marker as the previous output, so we can clear it out
         if let Some(output) = self.outputs.last()
-            && let Output::ClearOutputWaitMarker = output
+            && matches!(output, Output::ClearOutputWaitMarker)
         {
             self.outputs.clear();
         }

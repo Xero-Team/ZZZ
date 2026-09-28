@@ -1117,7 +1117,7 @@ fn cleanup_old_binaries() -> Result<()> {
 // we no longer download them into this folder, we use the same folder as other remote servers
 fn cleanup_old_binaries_wsl() {
     let server_dir = paths::remote_wsl_server_dir_relative();
-    if let Ok(()) = std::fs::remove_dir_all(server_dir.as_std_path()) {
+    if matches!(std::fs::remove_dir_all(server_dir.as_std_path()), Ok(())) {
         log::info!("removing old wsl remote server folder: {:?}", server_dir);
     }
 }

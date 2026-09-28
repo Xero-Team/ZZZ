@@ -467,7 +467,7 @@ impl ImageStore {
         event: &ImageItemEvent,
         cx: &mut Context<Self>,
     ) {
-        if let ImageItemEvent::FileHandleChanged = event
+        if matches!(event, ImageItemEvent::FileHandleChanged)
             && let Some(local) = self.state.as_local()
         {
             local.update(cx, |local, cx| {

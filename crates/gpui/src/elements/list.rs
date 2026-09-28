@@ -142,16 +142,18 @@ impl FollowState {
     }
 
     fn start_following(&mut self) {
-        if let FollowState::Tail {
-            is_following: false,
-        } = self
-        {
+        if matches!(
+            self,
+            FollowState::Tail {
+                is_following: false,
+            }
+        ) {
             *self = FollowState::Tail { is_following: true };
         }
     }
 
     fn stop_following(&mut self) {
-        if let FollowState::Tail { is_following: true } = self {
+        if matches!(self, FollowState::Tail { is_following: true }) {
             *self = FollowState::Tail {
                 is_following: false,
             };

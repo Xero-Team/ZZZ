@@ -569,7 +569,7 @@ pub(crate) struct GenerateAppToken<'a> {
     permissions: Option<Vec<(TokenPermissions, Level)>>,
 }
 
-impl<'a> GenerateAppToken<'a> {
+impl GenerateAppToken<'_> {
     pub fn for_repository(self, repository_target: RepositoryTarget) -> Self {
         Self {
             repository_target: Some(repository_target),

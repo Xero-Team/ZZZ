@@ -413,7 +413,7 @@ impl TerminalBuilder {
             ZZZListener(events_tx),
         );
 
-        if let AlternateScroll::Off = alternate_scroll {
+        if alternate_scroll == AlternateScroll::Off {
             term.unset_private_mode(PrivateMode::Named(NamedPrivateMode::AlternateScroll));
         }
 
@@ -630,7 +630,7 @@ impl TerminalBuilder {
             );
 
             //Alacritty defaults to alternate scrolling being on, so we just need to turn it off.
-            if let AlternateScroll::Off = alternate_scroll {
+            if alternate_scroll == AlternateScroll::Off {
                 term.unset_private_mode(PrivateMode::Named(NamedPrivateMode::AlternateScroll));
             }
 

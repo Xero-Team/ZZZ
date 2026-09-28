@@ -414,7 +414,7 @@ impl TabSnapshot {
     }
 
     #[ztracing::instrument(skip_all)]
-    fn expand_tabs<'a>(&self, mut cursor: TabStopCursor<'a>, column: u32) -> u32 {
+    fn expand_tabs(&self, mut cursor: TabStopCursor<'_>, column: u32) -> u32 {
         // we only ever act on a single row at a time
         // so the main difference is that other layers build a transform sumtree, and can then just run through that
         // we cant quite do this here, as we need to work with the previous layer chunk to understand the tabs of the corresponding row
@@ -449,9 +449,9 @@ impl TabSnapshot {
     }
 
     #[ztracing::instrument(skip_all)]
-    fn collapse_tabs<'a>(
+    fn collapse_tabs(
         &self,
-        mut cursor: TabStopCursor<'a>,
+        mut cursor: TabStopCursor<'_>,
         column: u32,
         bias: Bias,
     ) -> (u32, u32, u32) {

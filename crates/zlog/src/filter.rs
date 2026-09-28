@@ -112,7 +112,7 @@ pub fn refresh_from_settings(settings: &HashMap<String, String>) {
 }
 
 fn level_filter_from_str(level_str: &str) -> Option<log::LevelFilter> {
-    use log::LevelFilter::*;
+    use log::LevelFilter::{Debug, Error, Info, Off, Trace, Warn};
     let level = match level_str.to_ascii_lowercase().as_str() {
         "" => Trace,
         "trace" => Trace,
