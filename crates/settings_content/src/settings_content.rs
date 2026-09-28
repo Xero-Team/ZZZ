@@ -1128,6 +1128,11 @@ pub struct MarkdownPreviewSettingsContent {
     ///
     /// Default: 800
     pub max_width: Option<f32>,
+    /// Whether to render LaTeX math (`$...$`, `$$...$$` and fenced `math`
+    /// blocks) as typeset formulas in the markdown preview.
+    ///
+    /// Default: true
+    pub render_math: Option<bool>,
 }
 
 /// The settings for the image viewer.

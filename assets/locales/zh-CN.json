@@ -2285,6 +2285,8 @@
     "theme_selector.icon.view_docs": "查看图标主题文档",
     "markdown.mermaid.failed_to_load": "加载 mermaid 图表失败",
     "markdown.mermaid.rendering": "正在渲染 mermaid 图表...",
+    "markdown.math.failed_to_render": "渲染公式失败",
+    "markdown.math.rendering": "正在渲染公式...",
     "terminal_view.context_menu.clear": "清除",
     "keymap_editor.override_source.your_keymap": "你的键位映射",
     "keymap_editor.override_source.vim_keymap": "Vim 键位映射",

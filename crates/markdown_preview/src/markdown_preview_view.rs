@@ -329,6 +329,8 @@ impl MarkdownPreviewView {
                     MarkdownOptions {
                         parse_html: true,
                         render_mermaid_diagrams: true,
+                        render_math: MarkdownPreviewSettings::try_get(cx)
+                            .is_none_or(|settings| settings.render_math),
                         parse_heading_slugs: true,
                         render_metadata_blocks: true,
                         ..Default::default()

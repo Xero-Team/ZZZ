@@ -1446,6 +1446,7 @@ mod tests {
             html_blocks: parsed.html_blocks,
             metadata_blocks: parsed.metadata_blocks,
             mermaid_diagrams: BTreeMap::default(),
+            math_expressions: Arc::default(),
             heading_slugs: parsed.heading_slugs,
             footnote_definitions: parsed.footnote_definitions,
             link_definition_spans: Arc::from(parsed.link_definition_spans),

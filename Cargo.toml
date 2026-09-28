@@ -666,6 +666,10 @@ pollster = "1.0.1"
 pulldown-cmark = { version = "0.13.4", default-features = false }
 quote = "1.0.47"
 rand = "0.10"
+ratex-layout = "0.1.14"
+ratex-parser = "0.1.14"
+ratex-svg = { version = "0.1.14", features = ["embed-fonts"] }
+ratex-types = "0.1.14"
 rayon = "1.12"
 regex = "1.13"
 # WARNING: If you change this, you must also publish a new version of zed-reqwest to crates.io

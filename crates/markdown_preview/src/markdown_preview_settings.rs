@@ -7,6 +7,9 @@ pub struct MarkdownPreviewSettings {
     /// The maximum width of the rendered markdown content, or `None` to render
     /// content edge to edge.
     pub max_width: Option<Pixels>,
+    /// Whether to render LaTeX math (`$...$`, `$$...$$` and fenced `math`
+    /// blocks) as typeset formulas.
+    pub render_math: bool,
 }
 
 impl Settings for MarkdownPreviewSettings {
@@ -17,6 +20,9 @@ impl Settings for MarkdownPreviewSettings {
         } else {
             None
         };
-        Self { max_width }
+        Self {
+            max_width,
+            render_math: content.render_math.unwrap_or(true),
+        }
     }
 }

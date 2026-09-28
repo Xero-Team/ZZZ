@@ -1,5 +1,6 @@
 mod clipboard_html;
 pub mod html;
+mod math;
 mod mermaid;
 pub mod parser;
 mod path_range;
@@ -13,6 +14,10 @@ use gpui::UnderlineStyle;
 use language::LanguageName;
 
 use log::Level;
+use math::{
+    MathState, ParsedMarkdownMath, block_math_for_paragraph, extract_math_expressions,
+    fenced_math_at, math_for_text_range, render_math, shield_math_events,
+};
 use mermaid::{
     MermaidState, ParsedMarkdownMermaidDiagram, extract_mermaid_diagrams, render_mermaid_diagram,
 };
@@ -38,7 +43,7 @@ use gpui::{
     AnyElement, App, BorderStyle, Bounds, ClipboardItem, CursorStyle, DispatchPhase, Edges, Entity,
     FocusHandle, Focusable, FontStyle, FontWeight, GlobalElementId, Hitbox, Hsla, Image,
     ImageFormat, ImageSource, KeyContext, Length, MouseButton, MouseDownEvent, MouseEvent,
-    MouseMoveEvent, MouseUpEvent, Point, ScrollHandle, Stateful, StrikethroughStyle,
+    MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollHandle, Stateful, StrikethroughStyle,
     StyleRefinement, StyledText, Task, TextAlign, TextLayout, TextRun, TextStyle,
     TextStyleRefinement, WrappedLineLayout, actions, img, point, quad, relative,
 };
@@ -441,6 +446,7 @@ pub struct Markdown {
     fallback_code_block_language: Option<LanguageName>,
     options: MarkdownOptions,
     mermaid_state: MermaidState,
+    math_state: MathState,
     copied_code_blocks: HashSet<ElementId>,
     wrapped_code_blocks: HashSet<usize>,
     code_block_scroll_handles: BTreeMap<usize, ScrollHandle>,
@@ -458,6 +464,9 @@ pub struct MarkdownOptions {
     pub parse_links_only: bool,
     pub parse_html: bool,
     pub render_mermaid_diagrams: bool,
+    /// Whether to render `$...$`, `$$...$$` and fenced math expressions as
+    /// typeset formulas. Disabled by default because `$` is ambiguous in prose.
+    pub render_math: bool,
     pub parse_heading_slugs: bool,
     pub render_metadata_blocks: bool,
 }
@@ -626,6 +635,7 @@ impl Markdown {
             fallback_code_block_language,
             options,
             mermaid_state: MermaidState::default(),
+            math_state: MathState::default(),
             copied_code_blocks: HashSet::default(),
             wrapped_code_blocks: HashSet::default(),
             code_block_scroll_handles: BTreeMap::default(),
@@ -1041,6 +1051,7 @@ impl Markdown {
             self.active_root_block = None;
             self.images_by_source_offset.clear();
             self.mermaid_state.clear();
+            self.math_state.clear();
             cx.notify();
             cx.refresh_windows();
             return;
@@ -1059,6 +1070,7 @@ impl Markdown {
         let should_parse_links_only = self.options.parse_links_only;
         let should_parse_html = self.options.parse_html;
         let should_render_mermaid_diagrams = self.options.render_mermaid_diagrams;
+        let should_render_math = self.options.render_math;
         let should_parse_heading_slugs = self.options.parse_heading_slugs;
         let should_parse_metadata_blocks = self.options.render_metadata_blocks;
         let language_registry = self.language_registry.clone();
@@ -1076,6 +1088,7 @@ impl Markdown {
                         html_blocks: BTreeMap::default(),
                         metadata_blocks: BTreeMap::default(),
                         mermaid_diagrams: BTreeMap::default(),
+                        math_expressions: Arc::default(),
                         heading_slugs: HashMap::default(),
                         footnote_definitions: HashMap::default(),
                         link_definition_spans: Arc::default(),
@@ -1090,7 +1103,7 @@ impl Markdown {
                 should_parse_heading_slugs,
                 should_parse_metadata_blocks,
             );
-            let events = parsed.events;
+            let mut events = parsed.events;
             let language_names = parsed.language_names;
             let paths = parsed.language_paths;
             let root_block_starts = parsed.root_block_starts;
@@ -1103,6 +1116,13 @@ impl Markdown {
                 extract_mermaid_diagrams(&source, &events)
             } else {
                 BTreeMap::default()
+            };
+            let math_expressions = if should_render_math {
+                let math_expressions = extract_math_expressions(&source, &events);
+                shield_math_events(&mut events, &math_expressions);
+                math_expressions
+            } else {
+                Vec::new()
             };
             let mut images_by_source_offset = HashMap::default();
             let mut languages_by_name = TreeMap::default();
@@ -1171,6 +1191,7 @@ impl Markdown {
                     html_blocks,
                     metadata_blocks,
                     mermaid_diagrams,
+                    math_expressions: Arc::from(math_expressions),
                     heading_slugs,
                     footnote_definitions,
                     link_definition_spans: Arc::from(link_definition_spans),
@@ -1205,6 +1226,21 @@ impl Markdown {
             })
             .ok();
         })
+    }
+}
+
+impl Markdown {
+    /// Ensure every parsed math expression has an in-flight or completed render
+    /// for the current font size and color. Called lazily during layout, since
+    /// the resolving font size and color are only known once the element's
+    /// style is available.
+    fn ensure_math_rendered(&mut self, font_size: Pixels, color: Hsla, cx: &mut Context<Self>) {
+        if !self.options.render_math {
+            self.math_state.clear();
+            return;
+        }
+        let expressions = self.parsed_markdown.math_expressions.clone();
+        self.math_state.update(&expressions, font_size, color, cx);
     }
 }
 
@@ -1294,6 +1330,7 @@ pub struct ParsedMarkdown {
     pub(crate) html_blocks: BTreeMap<usize, html::html_parser::ParsedHtmlBlock>,
     pub(crate) metadata_blocks: BTreeMap<usize, ParsedMetadataBlock>,
     pub(crate) mermaid_diagrams: BTreeMap<usize, ParsedMarkdownMermaidDiagram>,
+    pub(crate) math_expressions: Arc<[ParsedMarkdownMath]>,
     pub heading_slugs: HashMap<SharedString, usize>,
     pub footnote_definitions: HashMap<SharedString, usize>,
     pub(crate) link_definition_spans: Arc<[Range<usize>]>,
@@ -2295,6 +2332,18 @@ impl Element for MarkdownElement {
         window: &mut Window,
         cx: &mut App,
     ) -> (gpui::LayoutId, Self::RequestLayoutState) {
+        let math_font_size = self
+            .style
+            .base_text_style
+            .font_size
+            .to_pixels(window.rem_size());
+        let math_color = self.style.base_text_style.color;
+        if self.markdown.read(cx).options.render_math {
+            self.markdown.update(cx, |markdown, cx| {
+                markdown.ensure_math_rendered(math_font_size, math_color, cx);
+            });
+        }
+
         let mut builder = MarkdownElementBuilder::new(
             &self.style.container_style,
             self.style.base_text_style.clone(),
@@ -2302,7 +2351,14 @@ impl Element for MarkdownElement {
             self.line_breaking
                 .unwrap_or_else(|| self.markdown.read(cx).line_breaking),
         );
-        let (parsed_markdown, images, active_root_block, render_mermaid_diagrams, mermaid_state) = {
+        let (
+            parsed_markdown,
+            images,
+            active_root_block,
+            render_mermaid_diagrams,
+            mermaid_state,
+            math_state,
+        ) = {
             let markdown = self.markdown.read(cx);
             (
                 markdown.parsed_markdown.clone(),
@@ -2310,6 +2366,7 @@ impl Element for MarkdownElement {
                 markdown.active_root_block,
                 markdown.options.render_mermaid_diagrams,
                 markdown.mermaid_state.clone(),
+                markdown.math_state.clone(),
             )
         };
         let markdown_end = if let Some(last) = parsed_markdown.events.last() {
@@ -2322,6 +2379,7 @@ impl Element for MarkdownElement {
         let mut current_img_block_range: Option<Range<usize>> = None;
         let mut handled_html_block = false;
         let mut rendered_mermaid_block = false;
+        let mut rendered_math_block = false;
         let mut rendered_metadata_block = false;
         for (index, (range, event)) in parsed_markdown.events.iter().enumerate() {
             // Skip alt text for images that rendered
@@ -2342,6 +2400,16 @@ impl Element for MarkdownElement {
             if rendered_mermaid_block {
                 if matches!(event, MarkdownEvent::End(MarkdownTagEnd::CodeBlock)) {
                     rendered_mermaid_block = false;
+                }
+                continue;
+            }
+
+            if rendered_math_block {
+                if matches!(
+                    event,
+                    MarkdownEvent::End(MarkdownTagEnd::CodeBlock | MarkdownTagEnd::Paragraph)
+                ) {
+                    rendered_math_block = false;
                 }
                 continue;
             }
@@ -2404,6 +2472,26 @@ impl Element for MarkdownElement {
                             }
                         }
                         MarkdownTag::Paragraph => {
+                            if let Some(math) = block_math_for_paragraph(
+                                parsed_markdown.source.as_ref(),
+                                &parsed_markdown.math_expressions,
+                                range,
+                            ) {
+                                let element =
+                                    render_math(math, &math_state, math_font_size, math_color, cx);
+                                builder.push_sourced_element(
+                                    math.source_range.clone(),
+                                    div()
+                                        .w_full()
+                                        .flex()
+                                        .justify_center()
+                                        .my(self.style.paragraph_spacing)
+                                        .child(element)
+                                        .into_any_element(),
+                                );
+                                rendered_math_block = true;
+                                continue;
+                            }
                             let text_align_override = builder
                                 .table
                                 .current_cell_alignment()
@@ -2437,6 +2525,25 @@ impl Element for MarkdownElement {
                             );
                         }
                         MarkdownTag::CodeBlock { kind, .. } => {
+                            if let Some(math) =
+                                fenced_math_at(&parsed_markdown.math_expressions, range.start)
+                            {
+                                let element =
+                                    render_math(math, &math_state, math_font_size, math_color, cx);
+                                builder.push_sourced_element(
+                                    math.source_range.clone(),
+                                    div()
+                                        .w_full()
+                                        .flex()
+                                        .justify_center()
+                                        .my(self.style.paragraph_spacing)
+                                        .child(element)
+                                        .into_any_element(),
+                                );
+                                rendered_math_block = true;
+                                continue;
+                            }
+
                             if render_mermaid_diagrams
                                 && let Some(mermaid_diagram) =
                                     parsed_markdown.mermaid_diagrams.get(&range.start)
@@ -2885,7 +2992,32 @@ impl Element for MarkdownElement {
                     _ => log::debug!("unsupported markdown tag end: {:?}", tag),
                 },
                 MarkdownEvent::Text => {
-                    builder.push_text(&parsed_markdown.source[range.clone()], range.clone());
+                    let source = parsed_markdown.source.as_ref();
+                    let math_slice = math_for_text_range(&parsed_markdown.math_expressions, range);
+                    if math_slice.is_empty() {
+                        builder.push_text(&source[range.clone()], range.clone());
+                    } else {
+                        let mut cursor = range.start;
+                        for math in math_slice {
+                            if math.source_range.start < cursor || math.source_range.end > range.end
+                            {
+                                continue;
+                            }
+                            if cursor < math.source_range.start {
+                                builder.push_text(
+                                    &source[cursor..math.source_range.start],
+                                    cursor..math.source_range.start,
+                                );
+                            }
+                            let element =
+                                render_math(math, &math_state, math_font_size, math_color, cx);
+                            builder.push_inline_sourced_element(math.source_range.clone(), element);
+                            cursor = math.source_range.end;
+                        }
+                        if cursor < range.end {
+                            builder.push_text(&source[cursor..range.end], cursor..range.end);
+                        }
+                    }
                 }
                 MarkdownEvent::SubstitutedText(text) => {
                     builder.push_text(text, range.clone());
@@ -3561,6 +3693,21 @@ impl MarkdownElementBuilder {
                 .child(element.into())
                 .into_any_element(),
         );
+    }
+
+    /// Append a sourced element that should flow inline with surrounding text,
+    /// such as an inline equation. This switches the current container to
+    /// flex-wrap so the element sits on the text baseline's line, matching how
+    /// inline images are laid out.
+    fn push_inline_sourced_element(
+        &mut self,
+        source_range: Range<usize>,
+        element: impl Into<AnyElement>,
+    ) {
+        if let Some(entry) = self.div_stack.last_mut() {
+            entry.line_break_mode = LineBreakMode::FlexWrap;
+        }
+        self.push_sourced_element(source_range, element);
     }
 
     fn push_list(&mut self, bullet_index: Option<u64>) {

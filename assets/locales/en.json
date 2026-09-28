@@ -2285,6 +2285,8 @@
     "theme_selector.icon.view_docs": "View Icon Theme Docs",
     "markdown.mermaid.failed_to_load": "Failed to load mermaid diagram",
     "markdown.mermaid.rendering": "Rendering mermaid diagram...",
+    "markdown.math.failed_to_render": "Failed to render equation",
+    "markdown.math.rendering": "Rendering equation...",
     "terminal_view.context_menu.clear": "Clear",
     "keymap_editor.override_source.your_keymap": "your keymap",
     "keymap_editor.override_source.vim_keymap": "the vim keymap",
