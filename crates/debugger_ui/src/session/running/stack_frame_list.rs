@@ -683,7 +683,7 @@ impl StackFrameList {
             .map(StackFrameEntry::Normal);
         // HERE
         let entries_len = entries.len();
-        self.entries.splice(ix..ix + 1, entries);
+        self.entries.splice(ix..=ix, entries);
         let (Ok(filtered_indices_start) | Err(filtered_indices_start)) =
             self.filter_entries_indices.binary_search(&ix);
 

@@ -510,7 +510,7 @@ pub fn replace_top_level_array_value_in_json_text(
                 replace_value.remove(idx + 1);
             }
             while let Some(idx) = replace_value.find("\n") {
-                replace_value.replace_range(idx..idx + 1, " ");
+                replace_value.replace_range(idx..=idx, " ");
             }
         }
 
@@ -607,7 +607,7 @@ pub fn append_top_level_array_value_in_json_text(
                 replace_value.remove(idx + 1);
             }
             while let Some(idx) = replace_value.find('\n') {
-                replace_value.replace_range(idx..idx + 1, " ");
+                replace_value.replace_range(idx..=idx, " ");
             }
             replace_value.insert(0, ' ');
         }

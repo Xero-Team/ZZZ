@@ -479,11 +479,11 @@ fn test_languages(
                 }
                 _ if file_name.ends_with(".scm") => {
                     let grammar = grammar.with_context(|| {
-                        format! {
+                        format!(
                             "language {} provides query {} but no grammar",
                             config.name,
                             file_path.display()
-                        }
+                        )
                     })?;
 
                     let query_source = fs::read_to_string(&file_path)?;

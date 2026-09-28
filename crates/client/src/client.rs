@@ -667,7 +667,7 @@ impl Client {
     where
         M: EnvelopedMessage,
         E: 'static,
-        H: 'static + Sync + Fn(Entity<E>, TypedEnvelope<M>, AsyncApp) -> F + Send + Sync,
+        H: 'static + Sync + Fn(Entity<E>, TypedEnvelope<M>, AsyncApp) -> F + Send,
         F: 'static + Future<Output = Result<()>>,
     {
         self.add_message_handler_impl(entity, move |entity, message, _, cx| {
@@ -683,11 +683,7 @@ impl Client {
     where
         M: EnvelopedMessage,
         E: 'static,
-        H: 'static
-            + Sync
-            + Fn(Entity<E>, TypedEnvelope<M>, AnyProtoClient, AsyncApp) -> F
-            + Send
-            + Sync,
+        H: 'static + Sync + Fn(Entity<E>, TypedEnvelope<M>, AnyProtoClient, AsyncApp) -> F + Send,
         F: 'static + Future<Output = Result<()>>,
     {
         let message_type_id = TypeId::of::<M>();
@@ -728,7 +724,7 @@ impl Client {
     where
         M: RequestMessage,
         E: 'static,
-        H: 'static + Sync + Fn(Entity<E>, TypedEnvelope<M>, AsyncApp) -> F + Send + Sync,
+        H: 'static + Sync + Fn(Entity<E>, TypedEnvelope<M>, AsyncApp) -> F + Send,
         F: 'static + Future<Output = Result<M::Response>>,
     {
         self.add_message_handler_impl(entity, move |handle, envelope, this, cx| {

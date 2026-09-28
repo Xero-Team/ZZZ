@@ -4383,8 +4383,8 @@ impl RepositorySnapshot {
         let mut updated_statuses: Vec<proto::StatusEntry> = Vec::new();
         let mut removed_statuses: Vec<String> = Vec::new();
 
-        let mut new_statuses = self.statuses_by_path.iter().peekable();
-        let mut old_statuses = old.statuses_by_path.iter().peekable();
+        let mut new_statuses = self.statuses_by_path.iter();
+        let mut old_statuses = old.statuses_by_path.iter();
 
         let mut current_new_entry = new_statuses.next();
         let mut current_old_entry = old_statuses.next();

@@ -1044,7 +1044,7 @@ async fn heuristic_syntactic_expand(
         // Remove blank lines from start and end
         if let Some(start_row) = (outline_range.start.row..outline_range.end.row)
             .find(|row| !snapshot.line_indent_for_row(*row).is_line_blank())
-            && let Some(end_row) = (outline_range.start.row..outline_range.end.row + 1)
+            && let Some(end_row) = (outline_range.start.row..=outline_range.end.row)
                 .rev()
                 .find(|row| !snapshot.line_indent_for_row(*row).is_line_blank())
         {

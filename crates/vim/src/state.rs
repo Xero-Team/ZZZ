@@ -387,18 +387,14 @@ impl MarksState {
             self.global_marks
                 .insert(name, MarkLocation::Path(path.clone()));
 
-            let project_path = project
-                .read(cx)
-                .worktrees(cx)
-                .filter_map(|worktree| {
-                    let relative = path.strip_prefix(worktree.read(cx).abs_path()).ok()?;
-                    let path = RelPath::new(relative, worktree.read(cx).path_style()).log_err()?;
-                    Some(ProjectPath {
-                        worktree_id: worktree.read(cx).id(),
-                        path: path.into_arc(),
-                    })
+            let project_path = project.read(cx).worktrees(cx).find_map(|worktree| {
+                let relative = path.strip_prefix(worktree.read(cx).abs_path()).ok()?;
+                let path = RelPath::new(relative, worktree.read(cx).path_style()).log_err()?;
+                Some(ProjectPath {
+                    worktree_id: worktree.read(cx).id(),
+                    path: path.into_arc(),
                 })
-                .next();
+            });
             if let Some(buffer) = project_path
                 .and_then(|project_path| project.read(cx).get_open_buffer(&project_path, cx))
             {

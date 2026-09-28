@@ -699,7 +699,7 @@ impl ShellKind {
 
                 if i < chars.len() && chars[i] == '"' {
                     // Backslashes followed by quote: double the backslashes and escape the quote
-                    for _ in 0..(num_backslashes * 2 + 1) {
+                    for _ in 0..=(num_backslashes * 2) {
                         result.push('\\');
                     }
                     result.push('"');

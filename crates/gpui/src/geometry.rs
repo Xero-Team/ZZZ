@@ -3390,6 +3390,10 @@ const EXPECTED_ABSOLUTE_LENGTH: &str = "number with 'px' or 'rem' suffix";
 impl TryFrom<&'_ str> for AbsoluteLength {
     type Error = anyhow::Error;
 
+    #[allow(
+        clippy::same_functions_in_if_condition,
+        reason = "the two `try_into()` calls have different target types (`Pixels`, then `Rems`)"
+    )]
     fn try_from(value: &'_ str) -> Result<Self, Self::Error> {
         if let Ok(pixels) = value.try_into() {
             Ok(Self::Pixels(pixels))

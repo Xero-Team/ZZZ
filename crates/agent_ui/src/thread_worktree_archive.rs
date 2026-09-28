@@ -337,31 +337,28 @@ async fn find_or_create_repository(
     // remote connection matches (so a local `/project` and a remote
     // `/project` are not confused).
     let live_repo = cx.update(|cx| {
-        all_open_workspaces(cx)
-            .into_iter()
-            .filter_map(|workspace| {
-                let project = workspace.read(cx).project().clone();
-                let project_connection = project.read(cx).remote_connection_options(cx);
-                if !same_remote_connection_identity(
-                    project_connection.as_ref(),
-                    remote_connection_owned.as_ref(),
-                ) {
-                    return None;
-                }
-                Some((
-                    project
-                        .read(cx)
-                        .repositories(cx)
-                        .values()
-                        .find(|repo| {
-                            repo.read(cx).snapshot().work_directory_abs_path.as_ref()
-                                == repo_path_owned.as_path()
-                        })
-                        .cloned()?,
-                    project.clone(),
-                ))
-            })
-            .next()
+        all_open_workspaces(cx).into_iter().find_map(|workspace| {
+            let project = workspace.read(cx).project().clone();
+            let project_connection = project.read(cx).remote_connection_options(cx);
+            if !same_remote_connection_identity(
+                project_connection.as_ref(),
+                remote_connection_owned.as_ref(),
+            ) {
+                return None;
+            }
+            Some((
+                project
+                    .read(cx)
+                    .repositories(cx)
+                    .values()
+                    .find(|repo| {
+                        repo.read(cx).snapshot().work_directory_abs_path.as_ref()
+                            == repo_path_owned.as_path()
+                    })
+                    .cloned()?,
+                project.clone(),
+            ))
+        })
     });
 
     if let Some((repo, project)) = live_repo {

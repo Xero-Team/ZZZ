@@ -236,7 +236,7 @@ impl DevContainerManifest {
             let var_name = &orig[var_name_start..var_name_end];
             if var_name.is_empty() {
                 // Empty variable name => paste as is.
-                replaced.push_str(&orig[..end + 1]);
+                replaced.push_str(&orig[..=end]);
                 orig = &orig[end + 1..];
                 continue;
             }

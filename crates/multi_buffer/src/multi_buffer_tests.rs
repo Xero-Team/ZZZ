@@ -2410,13 +2410,12 @@ fn test_set_excerpts_for_path_replaces_previous_buffer(cx: &mut TestAppContext) 
         let buffer_snapshot = buffer_b.read(cx).snapshot();
         ranges_b
             .into_iter()
-            .filter_map(|range| {
+            .find_map(|range| {
                 let text_range = buffer_snapshot.anchor_range_inside(range);
                 let start = snapshot.anchor_in_buffer(text_range.start)?;
                 let end = snapshot.anchor_in_buffer(text_range.end)?;
                 Some(start..end)
             })
-            .next()
             .expect("should have an anchor")
     });
 
@@ -3219,9 +3218,7 @@ impl ReferenceMultibuffer {
                 let base_buffer = diff.base_text();
 
                 let mut offset = buffer_range.start;
-                let hunks = diff
-                    .hunks_intersecting_range(excerpt.range.clone(), buffer)
-                    .peekable();
+                let hunks = diff.hunks_intersecting_range(excerpt.range.clone(), buffer);
 
                 for hunk in hunks {
                     // Ignore hunks that are outside the excerpt range.
@@ -5196,7 +5193,7 @@ fn assert_position_translation(snapshot: &MultiBufferSnapshot) {
     }
 
     for row in 0..text.max_point().row {
-        for column in 0..text.line_len(row) + 1 {
+        for column in 0..=text.line_len(row) {
             let point = Point { row, column };
             let clipped_left = snapshot.clip_point(point, Bias::Left);
             let clipped_right = snapshot.clip_point(point, Bias::Right);

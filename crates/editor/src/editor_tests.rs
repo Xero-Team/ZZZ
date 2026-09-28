@@ -42644,7 +42644,7 @@ async fn test_custom_fallback_highlights(cx: &mut TestAppContext) {
     for (test_case, expected) in test_cases {
         let custom_rust_lang = Arc::into_inner(rust_lang())
             .unwrap()
-            .with_highlights_query(format! {r#"(type_identifier) {test_case}"#}.as_str())
+            .with_highlights_query(format!(r#"(type_identifier) {test_case}"#).as_str())
             .unwrap();
         let theme = setup_syntax_highlighting(Arc::new(custom_rust_lang), &mut cx);
         let expected = expected.map_or_else(Vec::new, |expected_color| {

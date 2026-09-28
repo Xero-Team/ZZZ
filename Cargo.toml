@@ -985,6 +985,17 @@ unexpected_cfgs = { level = "allow" }
 # GPUI APIs take `impl Into<f32>` and intentionally rely on this fallback, so
 # the lint is noise here rather than an error to fix.
 float_literal_f32_fallback = { level = "allow" }
+# Opt-in or group-gated rustc lints that are already clean across the whole
+# workspace. Denying them here makes the requirement explicit and independent of
+# the `--deny warnings` passed by `script/clippy`, so a bare `cargo clippy` run
+# enforces the same bar.
+explicit_outlives_requirements = "deny"
+macro_use_extern_crate = "deny"
+meta_variable_misuse = "deny"
+missing_abi = "deny"
+ffi_unwind_calls = "deny"
+noop_method_call = "deny"
+unused_extern_crates = "deny"
 
 [workspace.lints.clippy]
 dbg_macro = "deny"
@@ -1088,6 +1099,40 @@ duration_suboptimal_units = "deny"
 manual_assert_eq = "deny"
 unnecessary_literal_bound = "deny"
 
+# Clarity and idiom lints promoted once the whole workspace was fixed for them.
+# `range_plus_one`/`range_minus_one` prefer the slice range that matches the
+# intent, `trait_duplication_in_bounds` drops bounds already implied by the
+# trait declaration, and the rest replace a hand-rolled pattern with the
+# standard-library idiom (`find_map`, empty-peek removal, `insert` return value).
+# `same_functions_in_if_condition` is denied globally but allowed with a reason
+# at the one site where the "same" call resolves to different target types.
+range_plus_one = "deny"
+range_minus_one = "deny"
+trait_duplication_in_bounds = "deny"
+filter_map_next = "deny"
+nonstandard_macro_braces = "deny"
+unused_peekable = "deny"
+set_contains_or_insert = "deny"
+same_functions_in_if_condition = "deny"
+
+# Lints that are already clean across the whole workspace as of their
+# promotion. Denying them keeps the gate honest and prevents regressions; no
+# code changes were required to enable them.
+empty_enums = "deny"
+disallowed_names = "deny"
+precedence = "deny"
+verbose_bit_mask = "deny"
+manual_ilog2 = "deny"
+checked_conversions = "deny"
+mut_mut = "deny"
+iter_not_returning_iterator = "deny"
+manual_div_ceil = "deny"
+manual_is_power_of_two = "deny"
+manual_rem_euclid = "deny"
+manual_next_back = "deny"
+cast_enum_constructor = "deny"
+derivable_impls = "deny"
+
 # We currently do not restrict any style rules
 # as it slows down shipping code to ZZZ.
 #
@@ -1104,8 +1149,35 @@ style = { level = "allow", priority = -1 }
 # We periodically evaluate style-only lints from the Clippy index, but keep
 # them out of the default gate unless they remain low-noise across the whole
 # workspace. The low-noise candidates that cleared that bar are promoted in
-# the block above. Currently deferred because they are high-noise:
-# `str_to_string`, `use_self`, `uninlined_format_args`, `semicolon_if_nothing_returned`.
+# the blocks above. Deferred after the last workspace scan, grouped by reason
+# (distinct `file:line` counts in parentheses):
+#
+# - High-noise style: `str_to_string`, `use_self` (4780),
+#   `uninlined_format_args`, `semicolon_if_nothing_returned` (3663).
+# - Kept alive but never read (RAII/liveness false positives):
+#   `collection_is_never_read` (15), `no_effect_underscore_binding` (8),
+#   `iter_with_drain` (11, vectors are cleared and refilled).
+# - Mechanical but high-churn: `cloned_instead_of_copied` (47),
+#   `explicit_into_iter_loop` (34), `iter_on_single_items` (42),
+#   `inconsistent_struct_constructor` (33),
+#   `unnecessary_struct_initialization` (42), `unnecessary_trailing_comma` (35),
+#   `literal_string_with_formatting_args` (34), `format_collect` (13),
+#   `transmute_ptr_to_ptr` (3, its replacement pointer cast is not expressible
+#   for the unsized types here without tripping `ref_as_ptr`/`ptr_as_ptr`).
+# - Behavioral or API-shape changes: `case_sensitive_file_extension_comparisons`
+#   (12), `zero_sized_map_values` (11), `suspicious_operation_groupings` (12),
+#   `float_cmp` (25), `option_option` (8), `implicit_hasher` (10),
+#   `unnecessary_box_returns` (8), `missing_fields_in_debug` (25),
+#   `branches_sharing_code` (22), `collapsible_else_if` (16),
+#   `fn_params_excessive_bools` (11), `ignore_without_reason` (7),
+#   `pub_underscore_fields` (2), `used_underscore_items` (5), `while_float` (5),
+#   `single_option_map` (4).
+# - rustc opt-in lints, similarly deferred: `unused_lifetimes` (15),
+#   `trivial_numeric_casts` (34), `trivial_casts` (167),
+#   `single_use_lifetimes` (45), `let_underscore_drop` (321),
+#   `unused_qualifications` (4051), `unreachable_pub` (1817),
+#   `elided_lifetimes_in_paths` (6370). `variant_size_differences` (11) is left
+#   off because it would fight the `large_enum_variant` allow below.
 
 # Individual rules that have violations in the codebase:
 type_complexity = "allow"

@@ -10,7 +10,7 @@ pub struct Topic<T>(Mutex<Vec<Weak<Mutex<Patch<T>>>>>);
 
 pub struct Subscription<T>(Arc<Mutex<Patch<T>>>);
 
-impl<T: Default, TDelta> Topic<T>
+impl<T, TDelta> Topic<T>
 where
     T: 'static
         + Copy

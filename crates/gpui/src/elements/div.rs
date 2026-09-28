@@ -1153,20 +1153,14 @@ pub trait InteractiveElement: Sized {
 
     /// Set the given styles to be applied when this element, specifically, is focused.
     /// Requires that the element is focusable. Elements can be made focusable using [`InteractiveElement::track_focus`].
-    fn focus(mut self, f: impl FnOnce(StyleRefinement) -> StyleRefinement) -> Self
-    where
-        Self: Sized,
-    {
+    fn focus(mut self, f: impl FnOnce(StyleRefinement) -> StyleRefinement) -> Self {
         self.interactivity().focus_style = Some(Box::new(f(StyleRefinement::default())));
         self
     }
 
     /// Set the given styles to be applied when this element is inside another element that is focused.
     /// Requires that the element is focusable. Elements can be made focusable using [`InteractiveElement::track_focus`].
-    fn in_focus(mut self, f: impl FnOnce(StyleRefinement) -> StyleRefinement) -> Self
-    where
-        Self: Sized,
-    {
+    fn in_focus(mut self, f: impl FnOnce(StyleRefinement) -> StyleRefinement) -> Self {
         self.interactivity().in_focus_style = Some(Box::new(f(StyleRefinement::default())));
         self
     }
@@ -1175,10 +1169,7 @@ pub trait InteractiveElement: Sized {
     /// This is similar to CSS's `:focus-visible` pseudo-class - it only applies when the element
     /// is focused AND the user is navigating via keyboard (not mouse clicks).
     /// Requires that the element is focusable. Elements can be made focusable using [`InteractiveElement::track_focus`].
-    fn focus_visible(mut self, f: impl FnOnce(StyleRefinement) -> StyleRefinement) -> Self
-    where
-        Self: Sized,
-    {
+    fn focus_visible(mut self, f: impl FnOnce(StyleRefinement) -> StyleRefinement) -> Self {
         self.interactivity().focus_visible_style = Some(Box::new(f(StyleRefinement::default())));
         self
     }

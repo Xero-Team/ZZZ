@@ -3724,6 +3724,10 @@ impl OutlinePanel {
                                 .map(|(anchor, _)| anchor.buffer_id);
 
                             let mut any_folded = false;
+                            #[allow(
+                                clippy::set_contains_or_insert,
+                                reason = "the `HashSet` entry API is unstable, so the `contains`/`insert` pair is required"
+                            )]
                             for buffer_id in
                                 [Some(start_buffer_id), end_buffer_id].into_iter().flatten()
                             {

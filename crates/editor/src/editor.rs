@@ -4376,7 +4376,7 @@ impl Editor {
             let mut indent_edits = Vec::new();
             let multibuffer_snapshot = editor.buffer.read(cx).snapshot(cx);
             for row in rows {
-                let indents = multibuffer_snapshot.suggested_indents(row..row + 1, cx);
+                let indents = multibuffer_snapshot.suggested_indents(row..=row, cx);
                 for (row, indent) in indents {
                     if indent.len == 0 {
                         continue;
@@ -4460,7 +4460,7 @@ impl Editor {
             let mut indent_edits = Vec::new();
             let multibuffer_snapshot = editor.buffer.read(cx).snapshot(cx);
             for row in rows.into_iter().flatten() {
-                let indents = multibuffer_snapshot.suggested_indents(row..row + 1, cx);
+                let indents = multibuffer_snapshot.suggested_indents(row..=row, cx);
                 for (row, indent) in indents {
                     if indent.len == 0 {
                         continue;

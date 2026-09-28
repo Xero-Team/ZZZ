@@ -3936,7 +3936,7 @@ impl Workspace {
 
     pub fn most_recent_active_path(&self, cx: &App) -> Option<PathBuf> {
         self.recent_navigation_history_iter(cx)
-            .filter_map(|(path, abs_path)| {
+            .find_map(|(path, abs_path)| {
                 let worktree = self
                     .project
                     .read(cx)
@@ -3954,7 +3954,6 @@ impl Workspace {
                 }
                 abs_path
             })
-            .next()
     }
 
     pub fn save_active_item(

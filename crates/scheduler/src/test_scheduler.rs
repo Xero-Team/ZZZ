@@ -895,7 +895,7 @@ fn exclude_wakers_from_trace(mut trace: Backtrace) -> Backtrace {
     });
 
     if let Some(waker_clone_frame_ix) = waker_clone_frame_ix {
-        frames.drain(..waker_clone_frame_ix + 1);
+        frames.drain(..=waker_clone_frame_ix);
     }
 
     Backtrace::from(frames)

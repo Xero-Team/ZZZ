@@ -535,7 +535,7 @@ pub fn start_of_paragraph(
     }
 
     let mut found_non_blank_line = false;
-    for row in (0..point.row + 1).rev() {
+    for row in (0..=point.row).rev() {
         let blank = map.buffer_snapshot().is_line_blank(MultiBufferRow(row));
         if found_non_blank_line && blank {
             if count <= 1 {

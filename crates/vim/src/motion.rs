@@ -2257,7 +2257,7 @@ pub(crate) fn start_of_paragraph(
     }
 
     let mut found_non_empty_line = false;
-    for row in (0..point.row + 1).rev() {
+    for row in (0..=point.row).rev() {
         let empty = map.buffer_snapshot().line_len(MultiBufferRow(row)) == 0;
         if found_non_empty_line && empty {
             if count <= 1 {

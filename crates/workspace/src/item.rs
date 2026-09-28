@@ -244,10 +244,7 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
         workspace_id: Option<WorkspaceId>,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Task<Option<Entity<Self>>>
-    where
-        Self: Sized,
-    {
+    ) -> Task<Option<Entity<Self>>> {
         _ = (workspace_id, window, cx);
         unimplemented!("clone_on_split() must be implemented if can_split() returns true")
     }

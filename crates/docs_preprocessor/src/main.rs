@@ -442,7 +442,7 @@ fn template_and_validate_json_snippets(book: &mut Book, errors: &mut HashSet<Pre
                     errors.insert(PreprocessorError::new_for_invalid_settings_json(
                         chapter,
                         loc,
-                        chapter.content[loc..tag_end + 1].to_string(),
+                        chapter.content[loc..=tag_end].to_string(),
                         "Missing closing code block".to_owned(),
                     ));
                     continue;

@@ -431,7 +431,7 @@ impl AnyProtoClient {
     where
         M: RequestMessage,
         E: 'static,
-        H: 'static + Sync + Fn(Entity<E>, TypedEnvelope<M>, AsyncApp) -> F + Send + Sync,
+        H: 'static + Sync + Fn(Entity<E>, TypedEnvelope<M>, AsyncApp) -> F + Send,
         F: 'static + Future<Output = Result<M::Response>>,
     {
         self.0

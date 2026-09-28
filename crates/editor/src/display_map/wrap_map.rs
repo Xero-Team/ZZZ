@@ -1313,7 +1313,7 @@ impl Transform {
                     longest_row_chars: indent,
                 },
             },
-            display_text: Some(&WRAP_TEXT[..1 + indent as usize]),
+            display_text: Some(&WRAP_TEXT[..=indent as usize]),
         }
     }
 

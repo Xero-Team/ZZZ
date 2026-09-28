@@ -74,36 +74,24 @@ pub trait Settings: 'static + Send + Sync + Sized {
     fn from_settings(content: &SettingsContent) -> Self;
 
     #[track_caller]
-    fn register(cx: &mut App)
-    where
-        Self: Sized,
-    {
+    fn register(cx: &mut App) {
         SettingsStore::update_global(cx, |store, _| {
             store.register_setting::<Self>();
         });
     }
 
     #[track_caller]
-    fn get<'a>(path: Option<SettingsLocation>, cx: &'a App) -> &'a Self
-    where
-        Self: Sized,
-    {
+    fn get<'a>(path: Option<SettingsLocation>, cx: &'a App) -> &'a Self {
         cx.global::<SettingsStore>().get(path)
     }
 
     #[track_caller]
-    fn get_global(cx: &App) -> &Self
-    where
-        Self: Sized,
-    {
+    fn get_global(cx: &App) -> &Self {
         cx.global::<SettingsStore>().get(None)
     }
 
     #[track_caller]
-    fn try_get(cx: &App) -> Option<&Self>
-    where
-        Self: Sized,
-    {
+    fn try_get(cx: &App) -> Option<&Self> {
         if cx.has_global::<SettingsStore>() {
             cx.global::<SettingsStore>().try_get(None)
         } else {
@@ -112,18 +100,12 @@ pub trait Settings: 'static + Send + Sync + Sized {
     }
 
     #[track_caller]
-    fn try_read_global<R>(cx: &AsyncApp, f: impl FnOnce(&Self) -> R) -> Option<R>
-    where
-        Self: Sized,
-    {
+    fn try_read_global<R>(cx: &AsyncApp, f: impl FnOnce(&Self) -> R) -> Option<R> {
         cx.try_read_global(|s: &SettingsStore, _| f(s.get(None)))
     }
 
     #[track_caller]
-    fn override_global(settings: Self, cx: &mut App)
-    where
-        Self: Sized,
-    {
+    fn override_global(settings: Self, cx: &mut App) {
         cx.global_mut::<SettingsStore>().override_global(settings)
     }
 }

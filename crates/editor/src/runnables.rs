@@ -383,7 +383,7 @@ impl Editor {
                 .runnables
                 .get(&buffer_id)
                 .into_iter()
-                .flat_map(|(_, tasks)| tasks.range(0..starting_point.row + 1))
+                .flat_map(|(_, tasks)| tasks.range(0..=starting_point.row))
             {
                 if !tasks
                     .context_range
