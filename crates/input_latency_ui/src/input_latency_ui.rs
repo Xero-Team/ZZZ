@@ -32,8 +32,6 @@ struct ReporterState {
 
 impl Global for ReporterState {}
 
-pub fn report_input_latency_telemetry(_window: &Window, _cx: &mut App) {}
-
 fn format_report(snapshot: &InputLatencySnapshot, previous: &ReporterState) -> String {
     let histogram = &snapshot.latency_histogram;
     let total = histogram.len();

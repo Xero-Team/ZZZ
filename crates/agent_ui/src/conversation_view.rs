@@ -9,7 +9,7 @@ use acp_thread::{
     ToolCallStatus, UserMessageId,
 };
 use acp_thread::{AgentConnection, Plan};
-use action_log::{ActionLog, ActionLogTelemetry, DiffStats};
+use action_log::{ActionLog, DiffStats};
 use agent::ThreadStore;
 use agent_client_protocol::schema::v1 as acp;
 #[cfg(test)]
@@ -153,7 +153,6 @@ pub(crate) enum ThreadError {
     },
     Other {
         message: SharedString,
-        acp_error_code: Option<SharedString>,
     },
 }
 
@@ -201,24 +200,12 @@ impl From<anyhow::Error> for ThreadError {
                 },
                 _ => {
                     let message: SharedString = format!("{:#}", error).into();
-                    Self::Other {
-                        message,
-                        acp_error_code: None,
-                    }
+                    Self::Other { message }
                 }
             }
         } else {
             let message: SharedString = format!("{:#}", error).into();
-
-            // Extract ACP error code if available
-            let acp_error_code = error
-                .downcast_ref::<acp::Error>()
-                .map(|acp_error| SharedString::from(acp_error.code.to_string()));
-
-            Self::Other {
-                message,
-                acp_error_code,
-            }
+            Self::Other { message }
         }
     }
 }
@@ -1306,7 +1293,6 @@ impl ConversationView {
                 self.focus_handle.focus(window, cx)
             }
         }
-        self.emit_load_error_telemetry(&err);
         self.set_server_state(ServerState::LoadError { error: err }, cx);
     }
 
@@ -2177,10 +2163,6 @@ impl ConversationView {
                     }),
             )
             .into_any_element()
-    }
-
-    fn emit_load_error_telemetry(&self, error: &LoadError) {
-        let _ = error;
     }
 
     fn render_load_error(

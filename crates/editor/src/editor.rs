@@ -117,7 +117,6 @@ use collections::TypeIdHashMap;
 use collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use convert_case::{Case, Casing};
 use cursor_animation::CursorAnimationStates;
-use dap::TelemetrySpawnLocation;
 use display_map::*;
 use document_colors::LspColorData;
 use document_links::LspDocumentLinks;
@@ -6027,7 +6026,6 @@ impl Editor {
                 let context = actions_menu.actions.context.into();
 
                 workspace.update(cx, |workspace, cx| {
-                    dap::send_telemetry(&scenario, TelemetrySpawnLocation::Gutter, cx);
                     workspace.start_debug_session(
                         scenario,
                         context,

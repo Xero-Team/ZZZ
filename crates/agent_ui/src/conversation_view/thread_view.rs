@@ -538,7 +538,6 @@ pub struct ThreadView {
     pub(super) thread_error: Option<ThreadError>,
     pub thread_error_markdown: Option<Entity<Markdown>>,
     pub token_limit_callout_dismissed: bool,
-    pub last_token_limit_telemetry: Option<acp_thread::TokenUsageRatio>,
     pub list_state: ListState,
     pub session_capabilities: SharedSessionCapabilities,
     /// Tracks which tool calls have their content/output expanded.
@@ -800,7 +799,6 @@ impl ThreadView {
             thread_error: None,
             thread_error_markdown: None,
             token_limit_callout_dismissed: false,
-            last_token_limit_telemetry: None,
             expanded_tool_calls: HashSet::default(),
             expanded_tool_call_raw_inputs: HashSet::default(),
             collapsed_sandbox_authorization_details: HashSet::default(),
@@ -1112,37 +1110,8 @@ impl ThreadView {
         if let Some(usage) = self.thread.read(cx).token_usage() {
             if let Some(tokens) = &mut self.turn_fields.turn_tokens {
                 *tokens += usage.output_tokens;
-                self.emit_token_limit_telemetry_if_needed(cx);
             }
         }
-    }
-
-    fn emit_token_limit_telemetry_if_needed(&mut self, cx: &App) {
-        let ratio = {
-            let thread_data = self.thread.read(cx);
-            let Some(token_usage) = thread_data.token_usage() else {
-                return;
-            };
-            token_usage.ratio()
-        };
-
-        match ratio {
-            acp_thread::TokenUsageRatio::Normal => {
-                self.last_token_limit_telemetry = None;
-                return;
-            }
-            acp_thread::TokenUsageRatio::Warning | acp_thread::TokenUsageRatio::Exceeded => {}
-        }
-
-        let should_skip = self
-            .last_token_limit_telemetry
-            .as_ref()
-            .is_some_and(|last| *last >= ratio);
-        if should_skip {
-            return;
-        }
-
-        self.last_token_limit_telemetry = Some(ratio);
     }
 
     // sending
@@ -1429,91 +1398,8 @@ impl ThreadView {
         cx: &mut Context<Self>,
     ) {
         let error = error.into();
-        self.emit_thread_error_telemetry(&error, cx);
         self.thread_error = Some(error);
         cx.notify();
-    }
-
-    fn emit_thread_error_telemetry(&self, error: &ThreadError, cx: &mut Context<Self>) {
-        let (_error_kind, _acp_error_code, _message): (&str, Option<SharedString>, SharedString) =
-            match error {
-                ThreadError::Refusal => {
-                    let model_or_agent_name = self.current_model_name(cx);
-                    let message = format!(
-                        "{} refused to respond to this prompt. This can happen when a model believes the prompt violates its content policy or safety guidelines, so rephrasing it can sometimes address the issue.",
-                        model_or_agent_name
-                    );
-                    ("refusal", None, message.into())
-                }
-                ThreadError::AuthenticationRequired(message) => {
-                    ("authentication_required", None, message.clone())
-                }
-                ThreadError::RateLimitExceeded { provider } => (
-                    "rate_limit_exceeded",
-                    None,
-                    format!("{provider}'s rate limit was reached.").into(),
-                ),
-                ThreadError::ServerOverloaded { provider } => (
-                    "server_overloaded",
-                    None,
-                    format!("{provider}'s servers are temporarily unavailable.").into(),
-                ),
-                ThreadError::PromptTooLarge => (
-                    "prompt_too_large",
-                    None,
-                    "Context too large for the model's context window.".into(),
-                ),
-                ThreadError::NoApiKey { provider } => (
-                    "no_api_key",
-                    None,
-                    format!("No credentials configured for {provider}.").into(),
-                ),
-                ThreadError::StreamError { provider } => (
-                    "stream_error",
-                    None,
-                    format!("Connection to {provider}'s API was interrupted.").into(),
-                ),
-                ThreadError::InvalidApiKey { provider } => (
-                    "invalid_api_key",
-                    None,
-                    format!("Authentication with {provider} failed.").into(),
-                ),
-                ThreadError::PermissionDenied { provider, message } => (
-                    "permission_denied",
-                    None,
-                    message.clone().unwrap_or_else(|| {
-                        format!(
-                            "{provider}'s API rejected the request due to insufficient permissions."
-                        )
-                        .into()
-                    }),
-                ),
-                ThreadError::RequestFailed => (
-                    "request_failed",
-                    None,
-                    "Request could not be completed after multiple attempts.".into(),
-                ),
-                ThreadError::MaxOutputTokens => (
-                    "max_output_tokens",
-                    None,
-                    "Model reached its maximum output length.".into(),
-                ),
-                ThreadError::ApiError { provider } => (
-                    "api_error",
-                    None,
-                    format!("{provider}'s API returned an unexpected error.").into(),
-                ),
-                ThreadError::Other {
-                    acp_error_code,
-                    message,
-                } => ("other", acp_error_code.clone(), message.clone()),
-            };
-
-        let _parent_session_id = self
-            .thread
-            .read(cx)
-            .parent_session_id()
-            .map(|id| id.to_string());
     }
 
     pub fn cancel_generation(&mut self, cx: &mut Context<Self>) {
@@ -1591,7 +1477,7 @@ impl ThreadView {
             if has_earlier_edits {
                 thread.update(cx, |thread, cx| {
                     thread.action_log().update(cx, |action_log, cx| {
-                        action_log.keep_all_edits(None, cx);
+                        action_log.keep_all_edits(cx);
                     });
                 });
             }
@@ -2371,23 +2257,17 @@ impl ThreadView {
 
     pub fn keep_all(&mut self, _: &KeepAll, _window: &mut Window, cx: &mut Context<Self>) {
         let thread = &self.thread;
-        let telemetry = ActionLogTelemetry::from(thread.read(cx));
         let action_log = thread.read(cx).action_log().clone();
-        action_log.update(cx, |action_log, cx| {
-            action_log.keep_all_edits(Some(telemetry), cx)
-        });
+        action_log.update(cx, |action_log, cx| action_log.keep_all_edits(cx));
     }
 
     pub fn reject_all(&mut self, _: &RejectAll, _window: &mut Window, cx: &mut Context<Self>) {
         let thread = &self.thread;
-        let telemetry = ActionLogTelemetry::from(thread.read(cx));
         let action_log = thread.read(cx).action_log().clone();
         let has_changes = action_log.read(cx).changed_buffers(cx).len() > 0;
 
         action_log
-            .update(cx, |action_log, cx| {
-                action_log.reject_all_edits(Some(telemetry), cx)
-            })
+            .update(cx, |action_log, cx| action_log.reject_all_edits(cx))
             .detach();
 
         if has_changes {
@@ -2547,7 +2427,6 @@ impl ThreadView {
     ) -> Option<AnyElement> {
         let thread = self.thread.read(cx);
         let action_log = thread.action_log();
-        let telemetry = ActionLogTelemetry::from(thread);
         let changed_buffers = action_log.read(cx).changed_buffers(cx);
         let plan = thread.plan();
         let queue_is_empty = !self.has_queued_messages();
@@ -2633,7 +2512,6 @@ impl ThreadView {
                             .when(edits_expanded, |parent| {
                                 parent.child(self.render_edited_files(
                                     action_log,
-                                    telemetry.clone(),
                                     &changed_buffers,
                                     pending_edits,
                                     cx,
@@ -2658,7 +2536,6 @@ impl ThreadView {
     fn render_edited_files(
         &self,
         action_log: &Entity<ActionLog>,
-        telemetry: ActionLogTelemetry,
         changed_buffers: &BTreeMap<Entity<Buffer>, Entity<BufferDiff>>,
         pending_edits: bool,
         cx: &Context<Self>,
@@ -2727,7 +2604,6 @@ impl ThreadView {
                             index,
                             buffer,
                             action_log,
-                            &telemetry,
                             pending_edits,
                             editor_bg_color,
                             cx,
@@ -2799,7 +2675,6 @@ impl ThreadView {
         index: usize,
         buffer: &Entity<Buffer>,
         action_log: &Entity<ActionLog>,
-        telemetry: &ActionLogTelemetry,
         pending_edits: bool,
         editor_bg_color: Hsla,
         cx: &Context<Self>,
@@ -2840,7 +2715,6 @@ impl ThreadView {
                 .on_click({
                     let buffer = buffer.clone();
                     let action_log = action_log.clone();
-                    let telemetry = telemetry.clone();
                     move |_, _, cx| {
                         action_log.update(cx, |action_log, cx| {
                             action_log
@@ -2849,7 +2723,6 @@ impl ThreadView {
                                     vec![Anchor::min_max_range_for_buffer(
                                         buffer.read(cx).remote_id(),
                                     )],
-                                    Some(telemetry.clone()),
                                     cx,
                                 )
                                 .0
@@ -2868,13 +2741,11 @@ impl ThreadView {
                 .on_click({
                     let buffer = buffer.clone();
                     let action_log = action_log.clone();
-                    let telemetry = telemetry.clone();
                     move |_, _, cx| {
                         action_log.update(cx, |action_log, cx| {
                             action_log.keep_edits_in_range(
                                 buffer.clone(),
                                 Anchor::min_max_range_for_buffer(buffer.read(cx).remote_id()),
-                                Some(telemetry.clone()),
                                 cx,
                             );
                         })
@@ -9093,7 +8964,7 @@ impl ThreadView {
         cx: &mut Context<Self>,
     ) -> Option<Div> {
         let content = match self.thread_error.as_ref()? {
-            ThreadError::Other { message, .. } => {
+            ThreadError::Other { message } => {
                 self.render_any_thread_error(message.clone(), window, cx)
             }
             ThreadError::Refusal => self.render_refusal_error(cx),

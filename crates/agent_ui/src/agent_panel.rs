@@ -6498,7 +6498,6 @@ mod tests {
                     view.handle_thread_error(
                         crate::conversation_view::ThreadError::Other {
                             message: "simulated error".into(),
-                            acp_error_code: None,
                         },
                         cx,
                     );

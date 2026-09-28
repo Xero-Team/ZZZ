@@ -9,7 +9,6 @@ pub mod transport;
 use std::net::IpAddr;
 
 pub use dap_types::*;
-use gpui::App;
 pub use registry::{DapLocator, DapRegistry};
 pub use task::DebugRequest;
 
@@ -19,7 +18,7 @@ pub type StackFrameId = u64;
 
 #[cfg(any(test, feature = "test-support"))]
 pub use adapters::FakeAdapter;
-use task::{DebugScenario, TcpArgumentsTemplate};
+use task::TcpArgumentsTemplate;
 
 pub async fn configure_tcp_connection(
     tcp_connection: TcpArgumentsTemplate,
@@ -35,12 +34,3 @@ pub async fn configure_tcp_connection(
 
     Ok((host, port, timeout))
 }
-
-#[derive(Clone, Copy)]
-pub enum TelemetrySpawnLocation {
-    Gutter,
-    ScenarioList,
-    Custom,
-}
-
-pub fn send_telemetry(_scenario: &DebugScenario, _location: TelemetrySpawnLocation, _cx: &App) {}

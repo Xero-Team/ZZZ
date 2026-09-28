@@ -2,7 +2,7 @@ mod connection;
 mod diff;
 mod mention;
 mod terminal;
-use action_log::{ActionLog, ActionLogTelemetry};
+use action_log::ActionLog;
 use agent_client_protocol::schema::{MaybeUndefined, v1 as acp};
 use anyhow::{Context as _, Result, anyhow};
 use collections::HashSet;
@@ -1879,15 +1879,6 @@ impl StreamingTextBuffer {
     const REVEAL_TARGET: f32 = 200.0;
 }
 
-impl From<&AcpThread> for ActionLogTelemetry {
-    fn from(value: &AcpThread) -> Self {
-        Self {
-            agent_telemetry_id: value.connection().telemetry_id(),
-            session_id: value.session_id.0.clone(),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub enum AcpThreadEvent {
     PromptUpdated,
@@ -3540,7 +3531,6 @@ impl AcpThread {
         };
 
         Self::flush_streaming_text(&mut self.streaming_text_buffer, cx);
-        let telemetry = ActionLogTelemetry::from(&*self);
         cx.spawn(async move |this, cx| {
             cx.update(|cx| truncate.run(id.clone(), cx)).await?;
             this.update(cx, |this, cx| {
@@ -3565,9 +3555,8 @@ impl AcpThread {
                         }
                     }
                 }
-                this.action_log().update(cx, |action_log, cx| {
-                    action_log.reject_all_edits(Some(telemetry), cx)
-                })
+                this.action_log()
+                    .update(cx, |action_log, cx| action_log.reject_all_edits(cx))
             })?
             .await;
             Ok(())
