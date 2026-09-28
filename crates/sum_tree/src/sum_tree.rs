@@ -843,7 +843,7 @@ impl<T: Item> SumTree<T> {
                     let left_trees;
                     let right_trees;
 
-                    let midpoint = (child_count + child_count % 2) / 2;
+                    let midpoint = usize::midpoint(child_count, child_count % 2);
                     {
                         let mut all_summaries = child_summaries
                             .iter()
@@ -886,7 +886,7 @@ impl<T: Item> SumTree<T> {
                     let left_summaries;
                     let right_summaries: ArrayVec<T::Summary, { 2 * TREE_BASE }, u8>;
 
-                    let midpoint = (child_count + child_count % 2) / 2;
+                    let midpoint = usize::midpoint(child_count, child_count % 2);
                     {
                         let mut all_items = items.iter().chain(other_node.items().iter()).cloned();
                         left_items = all_items.by_ref().take(midpoint).collect();

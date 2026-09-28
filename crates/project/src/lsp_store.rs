@@ -2528,7 +2528,7 @@ impl LocalLspStore {
             .await
             .map(Some)
         } else {
-            Ok(Some(Vec::with_capacity(0)))
+            Ok(Some(Vec::new()))
         }
     }
 
@@ -2608,7 +2608,7 @@ impl LocalLspStore {
             })?
             .await
         } else {
-            Ok(Vec::with_capacity(0))
+            Ok(Vec::new())
         }
     }
 

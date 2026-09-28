@@ -83,7 +83,7 @@ impl WslRunningKernel {
             // because WSL2 runs in a lightweight VM with its own network namespace.
             // The kernel will bind to 127.0.0.1 inside WSL, and we connect to localhost.
             // WSL2 localhost forwarding handles the rest.
-            let bind_ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+            let bind_ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
 
             // Use 127.0.0.1 and rely on WSL 2 localhost forwarding.
             // This avoids issues where the VM IP is unreachable or binding fails on Windows.

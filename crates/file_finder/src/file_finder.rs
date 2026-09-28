@@ -1828,7 +1828,7 @@ impl PickerDelegate for FileFinderDelegate {
                     }),
                     self.currently_opened_path.as_ref(),
                     None,
-                    None.into_iter(),
+                    std::iter::empty(),
                     false,
                     path_style,
                 );

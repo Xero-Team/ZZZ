@@ -473,8 +473,7 @@ impl PickerDelegate for TasksModalDelegate {
                     .tags
                     .iter()
                     .map(|tag| format!("\n#{}", tag))
-                    .collect::<Vec<_>>()
-                    .join("")
+                    .collect::<String>()
                     .as_str(),
             );
         }

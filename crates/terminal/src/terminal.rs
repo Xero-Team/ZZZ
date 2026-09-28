@@ -1978,13 +1978,13 @@ impl Terminal {
 
     pub fn focus_in(&self) {
         if self.last_content.mode.contains(TermMode::FOCUS_IN_OUT) {
-            self.write_to_pty("\x1b[I".as_bytes());
+            self.write_to_pty(b"\x1b[I");
         }
     }
 
     pub fn focus_out(&mut self) {
         if self.last_content.mode.contains(TermMode::FOCUS_IN_OUT) {
-            self.write_to_pty("\x1b[O".as_bytes());
+            self.write_to_pty(b"\x1b[O");
         }
     }
 

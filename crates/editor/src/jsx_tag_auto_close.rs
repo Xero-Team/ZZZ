@@ -111,7 +111,7 @@ pub(crate) fn generate_auto_close_edits(
         ) else {
             continue;
         };
-        assert!(open_tag.kind() == config.open_tag_node_name);
+        assert_eq!(open_tag.kind(), config.open_tag_node_name);
         let tag_name = open_tag
             .named_child(TS_NODE_TAG_NAME_CHILD_INDEX)
             .filter(|node| {

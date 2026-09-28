@@ -130,7 +130,7 @@ impl PdfView {
             );
         }
 
-        let range_center = (visible_start + visible_end) / 2;
+        let range_center = usize::midpoint(visible_start, visible_end);
         self.evict_over_budget(range_center);
         self.arm_idle_prefetch(window, cx);
     }

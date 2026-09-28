@@ -72,10 +72,8 @@ impl YarnPathStore {
     ) -> Task<Option<(Arc<Path>, Arc<RelPath>)>> {
         let mut is_zip = protocol.eq("zip");
 
-        let path: &Path = if let Some(non_zip_part) = path
-            .as_os_str()
-            .as_encoded_bytes()
-            .strip_prefix("/zip:".as_bytes())
+        let path: &Path = if let Some(non_zip_part) =
+            path.as_os_str().as_encoded_bytes().strip_prefix(b"/zip:")
         {
             // typescript-language-server prepends the paths with zip:, which is messy.
             is_zip = true;

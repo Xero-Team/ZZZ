@@ -757,7 +757,7 @@ impl LanguageServer {
             write!(content_len_buffer, "{}", message.len()).unwrap();
             stdin.write_all(CONTENT_LEN_HEADER.as_bytes()).await?;
             stdin.write_all(&content_len_buffer).await?;
-            stdin.write_all("\r\n\r\n".as_bytes()).await?;
+            stdin.write_all(b"\r\n\r\n").await?;
             stdin.write_all(message.as_bytes()).await?;
             stdin.flush().await?;
         }

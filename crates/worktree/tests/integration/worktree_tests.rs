@@ -3439,7 +3439,7 @@ async fn test_global_gitignore(executor: BackgroundExecutor, cx: &mut TestAppCon
     // Ignore statuses are updated when excludesFile changes
     fs.write(
         &home.join(".config").join("git").join("ignore"),
-        "/bar\nbaz\n*.com\n".as_bytes(),
+        b"/bar\nbaz\n*.com\n",
     )
     .await
     .unwrap();
@@ -3728,7 +3728,7 @@ async fn test_repo_exclude(executor: BackgroundExecutor, cx: &mut TestAppContext
     // Ignore statuses are updated when .git/info/exclude file changes
     fs.write(
         &project_dir.join(DOT_GIT).join(REPO_EXCLUDE),
-        ".env.example".as_bytes(),
+        b".env.example",
     )
     .await
     .unwrap();
@@ -4112,7 +4112,7 @@ async fn test_root_repo_common_dir_for_relative_gitdir(
 
     fs.write(
         Path::new(path!("/repo/.git")).join(REPO_EXCLUDE).as_ref(),
-        "file.txt\n".as_bytes(),
+        b"file.txt\n",
     )
     .await
     .unwrap();
@@ -4169,12 +4169,9 @@ async fn test_root_repo_common_dir(executor: BackgroundExecutor, cx: &mut TestAp
         },
     )
     .await;
-    fs.write(
-        path!("/linked_worktree/file.txt").as_ref(),
-        "content".as_bytes(),
-    )
-    .await
-    .unwrap();
+    fs.write(path!("/linked_worktree/file.txt").as_ref(), b"content")
+        .await
+        .unwrap();
 
     let tree = Worktree::local(
         path!("/linked_worktree").as_ref(),
@@ -4461,12 +4458,9 @@ async fn test_noisy_dot_git_events_do_not_emit_git_repo_update(
         },
     )
     .await;
-    fs.write(
-        path!("/linked_worktree/file.txt").as_ref(),
-        "content".as_bytes(),
-    )
-    .await
-    .unwrap();
+    fs.write(path!("/linked_worktree/file.txt").as_ref(), b"content")
+        .await
+        .unwrap();
 
     let tree = Worktree::local(
         path!("/linked_worktree").as_ref(),
@@ -4721,12 +4715,9 @@ async fn test_linked_worktree_event_in_unregistered_common_git_dir_does_not_pani
         },
     )
     .await;
-    fs.write(
-        path!("/linked_worktree/file.txt").as_ref(),
-        "content".as_bytes(),
-    )
-    .await
-    .unwrap();
+    fs.write(path!("/linked_worktree/file.txt").as_ref(), b"content")
+        .await
+        .unwrap();
 
     let tree = Worktree::local(
         path!("/linked_worktree").as_ref(),

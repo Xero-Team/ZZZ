@@ -3999,13 +3999,9 @@ impl BufferSnapshot {
             if let Some(range) = range
                 && smallest_range_and_depth.as_ref().is_none_or(
                     |(smallest_range, smallest_range_depth)| {
-                        if layer.depth > *smallest_range_depth {
-                            true
-                        } else if layer.depth == *smallest_range_depth {
-                            range.len() < smallest_range.len()
-                        } else {
-                            false
-                        }
+                        layer.depth > *smallest_range_depth
+                            || (layer.depth == *smallest_range_depth
+                                && range.len() < smallest_range.len())
                     },
                 )
             {

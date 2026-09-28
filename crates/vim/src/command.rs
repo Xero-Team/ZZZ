@@ -3026,16 +3026,10 @@ mod test {
         // Insert a new file
         let fs = cx.workspace(|workspace, _, cx| workspace.project().read(cx).fs().clone());
         fs.as_fake()
-            .insert_file(
-                path!("/root/dir/file2.rs"),
-                "This is file2.rs".as_bytes().to_vec(),
-            )
+            .insert_file(path!("/root/dir/file2.rs"), b"This is file2.rs".to_vec())
             .await;
         fs.as_fake()
-            .insert_file(
-                path!("/root/dir/file3.rs"),
-                "go to file3".as_bytes().to_vec(),
-            )
+            .insert_file(path!("/root/dir/file3.rs"), b"go to file3".to_vec())
             .await;
 
         // Put the path to the second file into the currently open buffer
@@ -3374,7 +3368,7 @@ mod test {
         // `:tabnew`, it opens the existing file in a new tab.
         let fs = cx.workspace(|workspace, _, cx| workspace.project().read(cx).fs().clone());
         fs.as_fake()
-            .insert_file(path!("/root/dir/file_2.rs"), "file_2".as_bytes().to_vec())
+            .insert_file(path!("/root/dir/file_2.rs"), b"file_2".to_vec())
             .await;
 
         cx.simulate_keystrokes(": tabnew");
@@ -3427,7 +3421,7 @@ mod test {
         // `:tabedit`, it opens the existing file in a new tab.
         let fs = cx.workspace(|workspace, _, cx| workspace.project().read(cx).fs().clone());
         fs.as_fake()
-            .insert_file(path!("/root/dir/file_2.rs"), "file_2".as_bytes().to_vec())
+            .insert_file(path!("/root/dir/file_2.rs"), b"file_2".to_vec())
             .await;
 
         cx.simulate_keystrokes(": tabedit");

@@ -4565,8 +4565,7 @@ async fn test_stored_diagnostics_not_replayed_after_entry_removal(cx: &mut gpui:
         .unwrap();
     cx.executor().run_until_parked();
 
-    fs.insert_file(path!("/dir/a.rs"), "one".as_bytes().to_vec())
-        .await;
+    fs.insert_file(path!("/dir/a.rs"), b"one".to_vec()).await;
     cx.executor().run_until_parked();
 
     let buffer = project
@@ -7112,7 +7111,7 @@ async fn test_buffer_is_dirty(cx: &mut gpui::TestAppContext) {
 
     // after the first edit, the buffer is dirty, and emits a dirtied event.
     buffer1.update(cx, |buffer, cx| {
-        assert!(buffer.text() == "ac");
+        assert_eq!(buffer.text(), "ac");
         assert!(buffer.is_dirty());
         assert_eq!(
             *events.lock(),
@@ -7141,7 +7140,7 @@ async fn test_buffer_is_dirty(cx: &mut gpui::TestAppContext) {
 
     // after editing again, the buffer is dirty, and emits another dirty event.
     buffer1.update(cx, |buffer, cx| {
-        assert!(buffer.text() == "aBDc");
+        assert_eq!(buffer.text(), "aBDc");
         assert!(buffer.is_dirty());
         assert_eq!(
             *events.lock(),
@@ -7156,7 +7155,7 @@ async fn test_buffer_is_dirty(cx: &mut gpui::TestAppContext) {
         // After restoring the buffer to its previously-saved state,
         // the buffer is not considered dirty anymore.
         buffer.edit([(1..3, "")], None, cx);
-        assert!(buffer.text() == "ac");
+        assert_eq!(buffer.text(), "ac");
         assert!(!buffer.is_dirty());
     });
 

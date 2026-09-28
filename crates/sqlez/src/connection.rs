@@ -29,7 +29,7 @@ impl Connection {
         unsafe {
             sqlite3_open_v2(
                 CString::new(uri)?.as_ptr(),
-                &mut connection.sqlite3,
+                &raw mut connection.sqlite3,
                 flags,
                 ptr::null(),
             );
@@ -152,8 +152,8 @@ impl Connection {
                         temp_connection.sqlite3,
                         remaining_sql.as_ptr(),
                         -1,
-                        &mut raw_statement,
-                        &mut remaining_sql_ptr,
+                        &raw mut raw_statement,
+                        &raw mut remaining_sql_ptr,
                     )
                 };
 
@@ -172,8 +172,8 @@ impl Connection {
                         self.sqlite3,
                         remaining_sql.as_ptr(),
                         -1,
-                        &mut raw_statement,
-                        &mut remaining_sql_ptr,
+                        &raw mut raw_statement,
+                        &raw mut remaining_sql_ptr,
                     )
                 };
 

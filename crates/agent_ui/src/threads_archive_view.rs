@@ -1449,8 +1449,7 @@ impl PickerDelegate for ProjectPickerDelegate {
                     .identity_paths
                     .ordered_paths()
                     .map(|path| path.compact().to_string_lossy().into_owned())
-                    .collect::<Vec<_>>()
-                    .join("");
+                    .collect::<String>();
                 StringMatchCandidate::new(id, &combined_string)
             })
             .collect();
@@ -1485,8 +1484,7 @@ impl PickerDelegate for ProjectPickerDelegate {
                     .identity_paths
                     .ordered_paths()
                     .map(|path| path.compact().to_string_lossy().into_owned())
-                    .collect::<Vec<_>>()
-                    .join("");
+                    .collect::<String>();
                 StringMatchCandidate::new(id, &combined_string)
             })
             .collect();

@@ -187,7 +187,8 @@ impl PlatformDispatcher for LinuxDispatcher {
                 unsafe { MaybeUninit::<libc::sched_param>::zeroed().assume_init() };
             sched_param.sched_priority = sched_priority;
             // SAFETY: sched_param is a valid initialized structure
-            let result = unsafe { libc::pthread_setschedparam(thread_id, policy, &sched_param) };
+            let result =
+                unsafe { libc::pthread_setschedparam(thread_id, policy, &raw const sched_param) };
             if result != 0 {
                 log::warn!("failed to set realtime thread priority");
             }

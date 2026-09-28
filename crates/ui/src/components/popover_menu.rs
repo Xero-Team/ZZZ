@@ -13,10 +13,7 @@ pub trait PopoverTrigger: IntoElement + Clickable + Toggleable + 'static {}
 
 impl<T: IntoElement + Clickable + Toggleable + 'static> PopoverTrigger for T {}
 
-impl<T: Clickable> Clickable for gpui::AnimationElement<T>
-where
-    T: Clickable + 'static,
-{
+impl<T: Clickable + 'static> Clickable for gpui::AnimationElement<T> {
     fn on_click(
         self,
         handler: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
@@ -29,10 +26,7 @@ where
     }
 }
 
-impl<T: Toggleable> Toggleable for gpui::AnimationElement<T>
-where
-    T: Toggleable + 'static,
-{
+impl<T: Toggleable + 'static> Toggleable for gpui::AnimationElement<T> {
     fn toggle_state(self, selected: bool) -> Self {
         self.map_element(|e| e.toggle_state(selected))
     }

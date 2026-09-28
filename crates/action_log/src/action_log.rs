@@ -1987,8 +1987,7 @@ mod tests {
         );
 
         // Simulate file1 being recreated externally.
-        fs.insert_file(path!("/dir/file1"), "LOREM".as_bytes().to_vec())
-            .await;
+        fs.insert_file(path!("/dir/file1"), b"LOREM".to_vec()).await;
 
         // Simulate file2 being recreated by a tool.
         let buffer2 = project

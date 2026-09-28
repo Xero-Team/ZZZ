@@ -5690,6 +5690,10 @@ impl Render for Sidebar {
     }
 }
 
+#[allow(
+    clippy::iter_on_empty_collections,
+    reason = "`std::iter::empty()` would give the early return a different concrete type than the thread iterator"
+)]
 fn all_thread_infos_for_workspace(
     workspace: &Entity<Workspace>,
     cx: &App,

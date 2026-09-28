@@ -64,7 +64,7 @@ impl LspCommand for ExpandMacro {
     type LspRequest = LspExtExpandMacro;
     type ProtoRequest = proto::LspExtExpandMacro;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Expand macro"
     }
 
@@ -196,7 +196,7 @@ impl LspCommand for OpenDocs {
     type LspRequest = LspOpenDocs;
     type ProtoRequest = proto::LspExtOpenDocs;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Open docs"
     }
 
@@ -330,7 +330,7 @@ impl LspCommand for SwitchSourceHeader {
     type LspRequest = LspSwitchSourceHeader;
     type ProtoRequest = proto::LspExtSwitchSourceHeader;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Switch source header"
     }
 
@@ -412,7 +412,7 @@ impl LspCommand for GoToParentModule {
     type LspRequest = LspGoToParentModule;
     type ProtoRequest = proto::LspExtGoToParentModule;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Go to parent module"
     }
 
@@ -668,7 +668,7 @@ impl LspCommand for GetLspRunnables {
     type LspRequest = Runnables;
     type ProtoRequest = proto::LspExtRunnables;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "LSP Runnables"
     }
 

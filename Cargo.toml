@@ -1073,6 +1073,34 @@ explicit_iter_loop = "deny"
 stable_sort_primitive = "deny"
 manual_instant_elapsed = "deny"
 
+# Correctness, resource-usage, and clarity lints, promoted once the workspace
+# was fixed for them. They flag likely bugs (if-chains comparing the same
+# expression, mutable calls erased from `debug_assert!`), missed standard-library
+# idioms (`Iterator::empty`, `manual_midpoint`, `Duration` constructors), or
+# redundant bounds. `same_length_and_capacity` is allowed inside `extension_api`
+# because wit-bindgen emits the pattern in generated code.
+comparison_chain = "deny"
+debug_assert_with_mut_call = "deny"
+borrow_as_ptr = "deny"
+ref_as_ptr = "deny"
+type_repetition_in_bounds = "deny"
+same_length_and_capacity = "deny"
+expl_impl_clone_on_copy = "deny"
+doc_link_with_quotes = "deny"
+ip_constant = "deny"
+search_is_some = "deny"
+iter_on_empty_collections = "deny"
+option_as_ref_cloned = "deny"
+clear_with_drain = "deny"
+with_capacity_zero = "deny"
+unnecessary_join = "deny"
+string_lit_as_bytes = "deny"
+imprecise_flops = "deny"
+manual_midpoint = "deny"
+duration_suboptimal_units = "deny"
+manual_assert_eq = "deny"
+unnecessary_literal_bound = "deny"
+
 # We currently do not restrict any style rules
 # as it slows down shipping code to ZZZ.
 #

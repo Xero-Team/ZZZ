@@ -232,7 +232,7 @@ mod tests {
             .await
             .expect("Timeout should be noop");
 
-        let long_duration = Duration::from_secs(6000);
+        let long_duration = Duration::from_mins(100);
         let short_duration = Duration::from_secs(1);
         cx.executor()
             .timer(long_duration)

@@ -1085,7 +1085,7 @@ impl WrapSnapshot {
                 let mut transforms = self.transforms.cursor::<()>(()).peekable();
                 while let Some(transform) = transforms.next() {
                     if let Some(next_transform) = transforms.peek() {
-                        assert!(transform.is_isomorphic() != next_transform.is_isomorphic());
+                        assert_ne!(transform.is_isomorphic(), next_transform.is_isomorphic());
                     }
                 }
             }

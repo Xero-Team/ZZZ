@@ -119,7 +119,7 @@ impl RelPath {
 
     fn new_unchecked(s: &str) -> &Self {
         // Safety: `RelPath` is a transparent wrapper around `str`.
-        unsafe { &*(s as *const str as *const Self) }
+        unsafe { &*(std::ptr::from_ref::<str>(s) as *const Self) }
     }
 
     pub fn is_empty(&self) -> bool {

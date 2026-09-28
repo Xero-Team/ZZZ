@@ -1551,14 +1551,16 @@ fn up_down_buffer_rows(
     let bias = if times < 0 { Bias::Left } else { Bias::Right };
 
     while map.is_folded_buffer_header(point.row()) {
-        if times < 0 {
-            (point, _) = movement::up(map, point, goal, true, text_layout_details);
-            times += 1;
-        } else if times > 0 {
-            (point, _) = movement::down(map, point, goal, true, text_layout_details);
-            times -= 1;
-        } else {
-            break;
+        match times.signum() {
+            -1 => {
+                (point, _) = movement::up(map, point, goal, true, text_layout_details);
+                times += 1;
+            }
+            1 => {
+                (point, _) = movement::down(map, point, goal, true, text_layout_details);
+                times -= 1;
+            }
+            _ => break,
         }
     }
 

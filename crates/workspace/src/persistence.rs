@@ -2781,12 +2781,7 @@ async fn resolve_local_workspace_identity(fs: &dyn Fs, paths: &PathList) -> Opti
     let resolved_paths: Vec<PathBuf> = raw_paths
         .iter()
         .zip(resolved_paths.iter())
-        .map(|(original, resolved)| {
-            resolved
-                .as_ref()
-                .cloned()
-                .unwrap_or_else(|| original.clone())
-        })
+        .map(|(original, resolved)| resolved.clone().unwrap_or_else(|| original.clone()))
         .collect();
     let resolved_path_refs: Vec<&Path> = resolved_paths.iter().map(PathBuf::as_path).collect();
     Some(PathList::new(&resolved_path_refs))

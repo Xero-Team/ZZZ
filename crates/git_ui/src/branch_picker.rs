@@ -825,8 +825,7 @@ fn force_delete_prompt_for_branch_delete_error(error: &anyhow::Error) -> bool {
     let normalized_error_message = error.to_string().to_lowercase();
     BRANCH_DELETE_FORCE_DELETE_PROMPTS
         .iter()
-        .find(|prompt| prompt.matches(&normalized_error_message))
-        .is_some()
+        .any(|prompt| prompt.matches(&normalized_error_message))
 }
 
 struct DeleteBranchTooltip {

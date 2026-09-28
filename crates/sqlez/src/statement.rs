@@ -60,8 +60,8 @@ impl<'a> Statement<'a> {
                     connection.sqlite3,
                     remaining_sql.as_ptr(),
                     -1,
-                    &mut raw_statement,
-                    &mut remaining_sql_ptr,
+                    &raw mut raw_statement,
+                    &raw mut remaining_sql_ptr,
                 )
             };
 

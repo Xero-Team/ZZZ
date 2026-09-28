@@ -937,7 +937,7 @@ impl HoverState {
         let dy: f32 = ((point.y - center_y).abs() - bounds.size.height / 2.)
             .max(px(0.0))
             .into();
-        px((dx.powi(2) + dy.powi(2)).sqrt())
+        px(dx.hypot(dy))
     }
 
     pub(crate) fn render(

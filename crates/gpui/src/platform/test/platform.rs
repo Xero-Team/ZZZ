@@ -507,11 +507,11 @@ impl TestScreenCaptureSource {
 struct TestKeyboardLayout;
 
 impl PlatformKeyboardLayout for TestKeyboardLayout {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "zzz.keyboard.example"
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "zzz.keyboard.example"
     }
 }

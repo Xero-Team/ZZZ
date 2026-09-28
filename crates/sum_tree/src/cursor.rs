@@ -680,7 +680,6 @@ pub struct FilterCursor<'a, 'b, F, T: Item, D> {
 impl<'a, 'b, F, T: Item, D> FilterCursor<'a, 'b, F, T, D>
 where
     F: FnMut(&T::Summary) -> bool,
-    T: Item,
     D: Dimension<'a, T::Summary>,
 {
     pub fn new(

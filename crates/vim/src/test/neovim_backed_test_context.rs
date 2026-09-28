@@ -363,11 +363,7 @@ impl NeovimBackedTestContext {
             neovim_mode: mode,
             editor: self.editor_state(),
             editor_mode: self.mode(),
-            initial: self
-                .last_set_state
-                .as_ref()
-                .cloned()
-                .unwrap_or("N/A".to_string()),
+            initial: self.last_set_state.clone().unwrap_or("N/A".to_string()),
             recent_keystrokes: self.recent_keystrokes.join(" "),
         }
     }

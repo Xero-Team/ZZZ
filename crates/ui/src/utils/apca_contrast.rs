@@ -217,7 +217,7 @@ fn adjust_lightness_for_contrast(
     let mut best_l = foreground.l;
 
     for _ in 0..20 {
-        let mid = (low + high) / 2.0;
+        let mid = f32::midpoint(low, high);
         let test_color = Hsla {
             h: foreground.h,
             s: foreground.s,
@@ -305,7 +305,7 @@ mod tests {
 
         let max = r.max(g).max(b);
         let min = r.min(g).min(b);
-        let l = (max + min) / 2.0;
+        let l = f32::midpoint(max, min);
 
         if max == min {
             // Achromatic

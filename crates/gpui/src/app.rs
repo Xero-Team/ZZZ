@@ -1919,7 +1919,7 @@ impl App {
     /// Clear all stored globals. Does not notify global observers.
     #[cfg(any(test, feature = "test-support"))]
     pub fn clear_globals(&mut self) {
-        self.globals_by_type.drain();
+        self.globals_by_type.clear();
     }
 
     /// Remove the global of the given type from the app context. Does not notify global observers.

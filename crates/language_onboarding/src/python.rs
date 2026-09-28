@@ -113,7 +113,7 @@ impl ToolbarItemView for BasedPyrightBanner {
             && let Some(editor) = item.act_as::<Editor>(cx)
             && let Some(path) = editor.update(cx, |editor, cx| editor.target_file_abs_path(cx))
             && let Some(file_name) = path.file_name()
-            && file_name.as_encoded_bytes().ends_with(".py".as_bytes())
+            && file_name.as_encoded_bytes().ends_with(b".py")
         {
             return ToolbarItemLocation::Secondary;
         }

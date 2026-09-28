@@ -1125,7 +1125,7 @@ impl OAuthCallback {
 
 /// How long to wait for the browser to complete the OAuth flow before giving
 /// up and releasing the loopback port.
-const CALLBACK_TIMEOUT: Duration = Duration::from_secs(2 * 60);
+const CALLBACK_TIMEOUT: Duration = Duration::from_mins(2);
 
 /// Start a loopback HTTP server to receive the OAuth authorization callback.
 ///
@@ -2037,7 +2037,7 @@ mod tests {
         let body =
             dcr_registration_body("http://127.0.0.1:12345/callback", Some(&server_types), &[]);
         assert_eq!(body["grant_types"][0], "authorization_code");
-        assert!(body["grant_types"].as_array().unwrap().len() == 1);
+        assert_eq!(body["grant_types"].as_array().unwrap().len(), 1);
 
         // When the server supports both, include both.
         let server_types = vec![

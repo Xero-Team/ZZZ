@@ -658,7 +658,7 @@ impl From<Rgba> for Hsla {
         let min = r.min(g.min(b));
         let delta = max - min;
 
-        let l = (max + min) / 2.0;
+        let l = f32::midpoint(max, min);
         let s = if l == 0.0 || l == 1.0 {
             0.0
         } else if l < 0.5 {

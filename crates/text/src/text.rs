@@ -2680,6 +2680,10 @@ impl BufferSnapshot {
             .map(|item| item.0)
     }
 
+    #[allow(
+        clippy::iter_on_empty_collections,
+        reason = "`std::iter::empty()` would give the early return a different concrete type than the `Edits` branch"
+    )]
     pub fn anchored_edits_since_in_range<'a, D>(
         &'a self,
         since: &'a clock::Global,

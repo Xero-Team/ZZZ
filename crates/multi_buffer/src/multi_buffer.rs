@@ -6797,7 +6797,7 @@ impl MultiBufferSnapshot {
         &self,
         range: Range<text::Anchor>,
     ) -> impl Iterator<Item = Range<Anchor>> {
-        assert!(range.start.buffer_id == range.end.buffer_id);
+        assert_eq!(range.start.buffer_id, range.end.buffer_id);
 
         let buffer_id = range.start.buffer_id;
         self.buffers

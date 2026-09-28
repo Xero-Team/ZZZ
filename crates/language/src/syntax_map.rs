@@ -1296,7 +1296,7 @@ impl<'a> SyntaxMapMatches<'a> {
             cursor.set_max_start_depth(options.max_start_depth);
 
             if let Some(max_bytes_to_query) = options.max_bytes_to_query {
-                let midpoint = (range.start + range.end) / 2;
+                let midpoint = usize::midpoint(range.start, range.end);
                 let containing_range_start = midpoint.saturating_sub(max_bytes_to_query / 2);
                 let containing_range_end =
                     containing_range_start.saturating_add(max_bytes_to_query);

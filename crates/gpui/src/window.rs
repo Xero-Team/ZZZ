@@ -302,7 +302,7 @@ impl ElementArenaScope {
     pub(crate) fn enter(arena: &RefCell<Arena>) -> Self {
         let previous = CURRENT_ELEMENT_ARENA.with(|current| {
             let prev = current.get();
-            current.set(Some(arena as *const RefCell<Arena>));
+            current.set(Some(std::ptr::from_ref::<RefCell<Arena>>(arena)));
             prev
         });
         Self { previous }
@@ -327,7 +327,7 @@ impl ArenaClearNeeded {
     /// Create a new ArenaClearNeeded that will clear the given arena.
     pub(crate) fn new(arena: &RefCell<Arena>) -> Self {
         Self {
-            arena: arena as *const RefCell<Arena>,
+            arena: std::ptr::from_ref::<RefCell<Arena>>(arena),
         }
     }
 
@@ -5037,7 +5037,7 @@ impl Window {
             if !cx.propagate_event {
                 continue 'replay;
             }
-            if let Some(input) = replay.keystroke.key_char.as_ref().cloned()
+            if let Some(input) = replay.keystroke.key_char.clone()
                 && let Some(mut input_handler) = self.platform_window.take_input_handler()
             {
                 input_handler.dispatch_input(&input, self, cx);

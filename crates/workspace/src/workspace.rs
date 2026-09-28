@@ -7620,7 +7620,7 @@ fn open_items(
                 opened_items.push(None);
             }
         }
-        assert!(opened_items.len() == project_paths_to_open.len());
+        assert_eq!(opened_items.len(), project_paths_to_open.len());
 
         let tasks =
             project_paths_to_open

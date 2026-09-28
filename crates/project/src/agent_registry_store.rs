@@ -18,7 +18,7 @@ use util::ResultExt;
 use crate::{AgentId, DisableAiSettings};
 
 const REGISTRY_URL: &str = "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json";
-const REFRESH_THROTTLE_DURATION: Duration = Duration::from_secs(60 * 60);
+const REFRESH_THROTTLE_DURATION: Duration = Duration::from_hours(1);
 // Bound the full request lifecycle, including response body reads; the shared
 // HTTP client only has a connect timeout.
 const REGISTRY_FETCH_TIMEOUT: Duration = Duration::from_secs(30);

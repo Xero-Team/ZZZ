@@ -317,7 +317,7 @@ mod tests {
     #[test]
     fn waveform_coverage_keeps_limited_analysis_on_the_full_timeline() {
         assert_eq!(
-            waveform_coverage_ratio(Duration::from_secs(600), Duration::from_secs(1200)),
+            waveform_coverage_ratio(Duration::from_secs(600), Duration::from_mins(20)),
             0.5
         );
         assert_eq!(peak_count_before_playhead(0.25, 0.5, 100), 50);

@@ -356,8 +356,7 @@ fn should_prompt_force_delete_for_worktree_remove_error(error: &anyhow::Error) -
     let normalized_error_message = error.to_string().to_lowercase();
     WORKTREE_REMOVE_FORCE_DELETE_PROMPTS
         .iter()
-        .find(|prompt| prompt.matches(&normalized_error_message))
-        .is_some()
+        .any(|prompt| prompt.matches(&normalized_error_message))
 }
 
 struct DeleteWorktreeTooltip {

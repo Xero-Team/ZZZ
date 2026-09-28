@@ -280,7 +280,7 @@ fn load_shell_from_passwd() -> Result<()> {
             pwd.as_mut_ptr(),
             buffer.as_mut_ptr().cast::<libc::c_char>(),
             buflen,
-            &mut result,
+            &raw mut result,
         )
     };
     anyhow::ensure!(!result.is_null(), "passwd entry for uid {} not found", uid);

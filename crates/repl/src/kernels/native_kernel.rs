@@ -122,7 +122,7 @@ impl NativeRunningKernel {
         cx: &mut App,
     ) -> Task<Result<Box<dyn RunningKernel>>> {
         window.spawn(cx, async move |cx| {
-            let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+            let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
             let ports = peek_ports(ip).await?;
 
             let connection_info = ConnectionInfo {

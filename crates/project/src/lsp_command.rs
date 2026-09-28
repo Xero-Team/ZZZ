@@ -336,7 +336,7 @@ impl LspCommand for PrepareRename {
     type LspRequest = lsp::request::PrepareRenameRequest;
     type ProtoRequest = proto::PrepareRename;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Prepare rename"
     }
 
@@ -530,7 +530,7 @@ impl LspCommand for PerformRename {
     type LspRequest = lsp::request::Rename;
     type ProtoRequest = proto::PerformRename;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Rename"
     }
 
@@ -659,7 +659,7 @@ impl LspCommand for GetDefinitions {
     type LspRequest = lsp::request::GotoDefinition;
     type ProtoRequest = proto::GetDefinition;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Get definition"
     }
 
@@ -771,7 +771,7 @@ impl LspCommand for GetDeclarations {
     type LspRequest = lsp::request::GotoDeclaration;
     type ProtoRequest = proto::GetDeclaration;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Get declaration"
     }
 
@@ -874,7 +874,7 @@ impl LspCommand for GetImplementations {
     type LspRequest = lsp::request::GotoImplementation;
     type ProtoRequest = proto::GetImplementation;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Get implementation"
     }
 
@@ -976,7 +976,7 @@ impl LspCommand for GetTypeDefinitions {
     type LspRequest = lsp::request::GotoTypeDefinition;
     type ProtoRequest = proto::GetTypeDefinition;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Get type definition"
     }
 
@@ -1365,7 +1365,7 @@ impl LspCommand for GetReferences {
     type LspRequest = lsp::request::References;
     type ProtoRequest = proto::GetReferences;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Find all references"
     }
 
@@ -1543,7 +1543,7 @@ impl LspCommand for GetDocumentHighlights {
     type LspRequest = lsp::request::DocumentHighlightRequest;
     type ProtoRequest = proto::GetDocumentHighlights;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Get document highlights"
     }
 
@@ -1698,7 +1698,7 @@ impl LspCommand for GetDocumentSymbols {
     type LspRequest = lsp::request::DocumentSymbolRequest;
     type ProtoRequest = proto::GetDocumentSymbols;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Get document symbols"
     }
 
@@ -1896,7 +1896,7 @@ impl LspCommand for GetSignatureHelp {
     type LspRequest = lsp::SignatureHelpRequest;
     type ProtoRequest = proto::GetSignatureHelp;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Get signature help"
     }
 
@@ -2020,7 +2020,7 @@ impl LspCommand for GetHover {
     type LspRequest = lsp::request::HoverRequest;
     type ProtoRequest = proto::GetHover;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Get hover"
     }
 
@@ -2260,7 +2260,7 @@ impl LspCommand for GetCompletions {
     type LspRequest = lsp::request::Completion;
     type ProtoRequest = proto::GetCompletions;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Get completion"
     }
 
@@ -2598,7 +2598,7 @@ impl LspCommand for GetCodeActions {
     type LspRequest = lsp::request::CodeActionRequest;
     type ProtoRequest = proto::GetCodeActions;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Get code actions"
     }
 
@@ -2865,7 +2865,7 @@ impl LspCommand for OnTypeFormatting {
     type LspRequest = lsp::request::OnTypeFormatting;
     type ProtoRequest = proto::OnTypeFormatting;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Formatting on typing"
     }
 
@@ -3392,7 +3392,7 @@ impl LspCommand for InlayHints {
     type LspRequest = lsp::InlayHintRequest;
     type ProtoRequest = proto::InlayHints;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Inlay hints"
     }
 
@@ -3543,7 +3543,7 @@ impl LspCommand for SemanticTokensFull {
     type LspRequest = lsp::SemanticTokensFullRequest;
     type ProtoRequest = proto::SemanticTokens;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Semantic tokens full"
     }
 
@@ -3694,7 +3694,7 @@ impl LspCommand for SemanticTokensDelta {
     type LspRequest = lsp::SemanticTokensFullDeltaRequest;
     type ProtoRequest = proto::SemanticTokens;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Semantic tokens delta"
     }
 
@@ -3847,7 +3847,7 @@ impl LspCommand for GetCodeLens {
     type LspRequest = lsp::CodeLensRequest;
     type ProtoRequest = proto::GetCodeLens;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Code Lens"
     }
 
@@ -3984,7 +3984,7 @@ impl LspCommand for LinkedEditingRange {
     type LspRequest = lsp::request::LinkedEditingRange;
     type ProtoRequest = proto::LinkedEditingRange;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Linked editing range"
     }
 
@@ -4418,7 +4418,7 @@ impl LspCommand for GetDocumentDiagnostics {
     type LspRequest = lsp::request::DocumentDiagnosticRequest;
     type ProtoRequest = proto::GetDocumentDiagnostics;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Get diagnostics"
     }
 
@@ -4607,7 +4607,7 @@ impl LspCommand for GetDocumentColor {
     type LspRequest = lsp::request::DocumentColor;
     type ProtoRequest = proto::GetDocumentColor;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Document color"
     }
 
@@ -4750,7 +4750,7 @@ impl LspCommand for GetFoldingRanges {
     type LspRequest = lsp::request::FoldingRangeRequest;
     type ProtoRequest = proto::GetFoldingRanges;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Folding ranges"
     }
 
@@ -4906,7 +4906,7 @@ impl LspCommand for GetDocumentLinks {
     type LspRequest = lsp::request::DocumentLinkRequest;
     type ProtoRequest = proto::GetDocumentLinks;
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Document links"
     }
 

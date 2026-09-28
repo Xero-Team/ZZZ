@@ -158,7 +158,7 @@ impl DbScope for ReleaseChannel {
 pub struct GlobalDbScope;
 
 impl DbScope for GlobalDbScope {
-    fn scope_name(&self) -> &str {
+    fn scope_name(&self) -> &'static str {
         "global"
     }
 }

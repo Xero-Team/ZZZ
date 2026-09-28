@@ -277,10 +277,10 @@ mod easing {
         move |delta| {
             // Use a combination of sine and cubic functions for a more natural breathing rhythm
             let t = (delta * 2.0 * PI).sin();
-            let breath = (t * t * t + t) / 2.0;
+            let breath = f32::midpoint(t * t * t, t);
 
             // Map the breath to our desired alpha range
-            let normalized_alpha = (breath + 1.0) / 2.0;
+            let normalized_alpha = f32::midpoint(breath, 1.0);
 
             min + (normalized_alpha * range)
         }

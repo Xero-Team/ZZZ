@@ -265,7 +265,7 @@ fn poll_read_buf(
 
         // Safety: `chunk_mut()` returns a `&mut UninitSlice`, and `UninitSlice` is a
         // transparent wrapper around `[std::mem::MaybeUninit<u8>]`.
-        let dst = unsafe { &mut *(dst as *mut _ as *mut [std::mem::MaybeUninit<u8>]) };
+        let dst = unsafe { &mut *(std::ptr::from_mut(dst) as *mut [std::mem::MaybeUninit<u8>]) };
         let mut read_buf = tokio::io::ReadBuf::uninit(dst);
         let unfilled_portion = read_buf.initialize_unfilled();
         // SAFETY: Pin projection

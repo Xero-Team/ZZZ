@@ -80,8 +80,7 @@ impl ModeIndicator {
                     .post_count
                     .map(|count| format!("{}", count)),
             )
-            .collect::<Vec<_>>()
-            .join("")
+            .collect::<String>()
     }
 }
 

@@ -1003,7 +1003,7 @@ async fn test_fake_fs_restore(executor: BackgroundExecutor) {
         ]
     );
 
-    fs.write(path, "New File A".as_bytes()).await.unwrap();
+    fs.write(path, b"New File A").await.unwrap();
 
     assert_eq!(fs.trash_entries().len(), 1);
     assert_eq!(

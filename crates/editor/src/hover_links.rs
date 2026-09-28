@@ -2315,10 +2315,7 @@ mod tests {
         // Insert a new file
         let fs = cx.update_workspace(|workspace, _, cx| workspace.project().read(cx).fs().clone());
         fs.as_fake()
-            .insert_file(
-                path!("/root/dir/file2.rs"),
-                "This is file2.rs".as_bytes().to_vec(),
-            )
+            .insert_file(path!("/root/dir/file2.rs"), b"This is file2.rs".to_vec())
             .await;
 
         // Base document with {ABS} placeholder for absolute path prefix.
@@ -2621,7 +2618,7 @@ Sentence ending file2.rs.
         fs.as_fake()
             .insert_file(
                 path!("/root/dir/file2.rs"),
-                "line 1\nline 2\nline 3\n".as_bytes().to_vec(),
+                b"line 1\nline 2\nline 3\n".to_vec(),
             )
             .await;
         cx.run_until_parked();
@@ -2753,7 +2750,7 @@ Sentence ending file2.rs.
         // Insert a new file
         let fs = cx.update_workspace(|workspace, _, cx| workspace.project().read(cx).fs().clone());
         fs.as_fake()
-            .insert_file("/root/dir/file2.rs", "This is file2.rs".as_bytes().to_vec())
+            .insert_file("/root/dir/file2.rs", b"This is file2.rs".to_vec())
             .await;
 
         cx.set_state(indoc! {"
