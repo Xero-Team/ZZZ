@@ -531,42 +531,48 @@ mod macos {
         // Convert timestamp to macOS absolute time
         let timestamp_macos = timestamp.unix_timestamp() - UNIX_TO_CF_ABSOLUTE_TIME_OFFSET;
         let cf_absolute_time = timestamp_macos as CFAbsoluteTime;
-        unsafe {
-            let s = CFDateFormatterCreateStringWithAbsoluteTime(
-                kCFAllocatorDefault,
-                fmt,
-                cf_absolute_time,
-            );
-            CFString::wrap_under_create_rule(s).to_string()
-        }
+        let allocator = unsafe { kCFAllocatorDefault };
+        let s = unsafe {
+            CFDateFormatterCreateStringWithAbsoluteTime(allocator, fmt, cf_absolute_time)
+        };
+        unsafe { CFString::wrap_under_create_rule(s) }.to_string()
     }
 
     thread_local! {
         static CURRENT_LOCALE: CFLocaleRef = unsafe { CFLocaleCopyCurrent() };
-        static TIME_FORMATTER: CFDateFormatterRef = unsafe {
-            CFDateFormatterCreate(
-                kCFAllocatorDefault,
-                CURRENT_LOCALE.with(|locale| *locale),
-                kCFDateFormatterNoStyle,
-                kCFDateFormatterShortStyle,
-            )
+        static TIME_FORMATTER: CFDateFormatterRef = {
+            let allocator = unsafe { kCFAllocatorDefault };
+            unsafe {
+                CFDateFormatterCreate(
+                    allocator,
+                    CURRENT_LOCALE.with(|locale| *locale),
+                    kCFDateFormatterNoStyle,
+                    kCFDateFormatterShortStyle,
+                )
+            }
         };
-        static DATE_FORMATTER: CFDateFormatterRef = unsafe {
-            CFDateFormatterCreate(
-                kCFAllocatorDefault,
-                CURRENT_LOCALE.with(|locale| *locale),
-                kCFDateFormatterShortStyle,
-                kCFDateFormatterNoStyle,
-            )
+        static DATE_FORMATTER: CFDateFormatterRef = {
+            let allocator = unsafe { kCFAllocatorDefault };
+            unsafe {
+                CFDateFormatterCreate(
+                    allocator,
+                    CURRENT_LOCALE.with(|locale| *locale),
+                    kCFDateFormatterShortStyle,
+                    kCFDateFormatterNoStyle,
+                )
+            }
         };
 
-        static MEDIUM_DATE_FORMATTER: CFDateFormatterRef = unsafe {
-            CFDateFormatterCreate(
-                kCFAllocatorDefault,
-                CURRENT_LOCALE.with(|locale| *locale),
-                kCFDateFormatterMediumStyle,
-                kCFDateFormatterNoStyle,
-            )
+        static MEDIUM_DATE_FORMATTER: CFDateFormatterRef = {
+            let allocator = unsafe { kCFAllocatorDefault };
+            unsafe {
+                CFDateFormatterCreate(
+                    allocator,
+                    CURRENT_LOCALE.with(|locale| *locale),
+                    kCFDateFormatterMediumStyle,
+                    kCFDateFormatterNoStyle,
+                )
+            }
         };
     }
 }

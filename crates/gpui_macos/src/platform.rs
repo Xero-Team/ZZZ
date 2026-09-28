@@ -512,7 +512,7 @@ impl Platform for MacPlatform {
             let app_delegate: id = msg_send![APP_DELEGATE_CLASS, new];
             app.setDelegate_(app_delegate);
 
-            let self_ptr = self as *const Self as *const c_void;
+            let self_ptr = std::ptr::from_ref::<Self>(self).cast::<c_void>();
             (*app).set_ivar(MAC_PLATFORM_IVAR, self_ptr);
             (*app_delegate).set_ivar(MAC_PLATFORM_IVAR, self_ptr);
 
@@ -1132,14 +1132,14 @@ impl Platform for MacPlatform {
                 // update the username and password.
                 let mut verb = "updating";
                 let mut query_attrs = CFMutableDictionary::with_capacity(2);
-                query_attrs.set(kSecClass as *const _, kSecClassInternetPassword as *const _);
-                query_attrs.set(kSecAttrServer as *const _, url.as_CFTypeRef());
+                query_attrs.set(kSecClass.cast(), kSecClassInternetPassword.cast());
+                query_attrs.set(kSecAttrServer.cast(), url.as_CFTypeRef());
 
                 let mut attrs = CFMutableDictionary::with_capacity(4);
-                attrs.set(kSecClass as *const _, kSecClassInternetPassword as *const _);
-                attrs.set(kSecAttrServer as *const _, url.as_CFTypeRef());
-                attrs.set(kSecAttrAccount as *const _, username.as_CFTypeRef());
-                attrs.set(kSecValueData as *const _, password.as_CFTypeRef());
+                attrs.set(kSecClass.cast(), kSecClassInternetPassword.cast());
+                attrs.set(kSecAttrServer.cast(), url.as_CFTypeRef());
+                attrs.set(kSecAttrAccount.cast(), username.as_CFTypeRef());
+                attrs.set(kSecValueData.cast(), password.as_CFTypeRef());
 
                 let mut status = SecItemUpdate(
                     query_attrs.as_concrete_TypeRef(),
@@ -1168,13 +1168,13 @@ impl Platform for MacPlatform {
 
                 // Find any credentials for the given server URL.
                 let mut attrs = CFMutableDictionary::with_capacity(5);
-                attrs.set(kSecClass as *const _, kSecClassInternetPassword as *const _);
-                attrs.set(kSecAttrServer as *const _, url.as_CFTypeRef());
-                attrs.set(kSecReturnAttributes as *const _, cf_true);
-                attrs.set(kSecReturnData as *const _, cf_true);
+                attrs.set(kSecClass.cast(), kSecClassInternetPassword.cast());
+                attrs.set(kSecAttrServer.cast(), url.as_CFTypeRef());
+                attrs.set(kSecReturnAttributes.cast(), cf_true);
+                attrs.set(kSecReturnData.cast(), cf_true);
 
                 let mut result = CFTypeRef::from(ptr::null());
-                let status = SecItemCopyMatching(attrs.as_concrete_TypeRef(), &mut result);
+                let status = SecItemCopyMatching(attrs.as_concrete_TypeRef(), &raw mut result);
                 match status {
                     security::errSecSuccess => {}
                     security::errSecItemNotFound | security::errSecUserCanceled => return Ok(None),
@@ -1185,13 +1185,13 @@ impl Platform for MacPlatform {
                     .downcast::<CFDictionary>()
                     .context("keychain item was not a dictionary")?;
                 let username = result
-                    .find(kSecAttrAccount as *const _)
+                    .find(kSecAttrAccount.cast())
                     .context("account was missing from keychain item")?;
                 let username = CFType::wrap_under_get_rule(*username)
                     .downcast::<CFString>()
                     .context("account was not a string")?;
                 let password = result
-                    .find(kSecValueData as *const _)
+                    .find(kSecValueData.cast())
                     .context("password was missing from keychain item")?;
                 let password = CFType::wrap_under_get_rule(*password)
                     .downcast::<CFData>()
@@ -1211,8 +1211,8 @@ impl Platform for MacPlatform {
 
                 let url = CFString::from(url.as_str());
                 let mut query_attrs = CFMutableDictionary::with_capacity(2);
-                query_attrs.set(kSecClass as *const _, kSecClassInternetPassword as *const _);
-                query_attrs.set(kSecAttrServer as *const _, url.as_CFTypeRef());
+                query_attrs.set(kSecClass.cast(), kSecClassInternetPassword.cast());
+                query_attrs.set(kSecAttrServer.cast(), url.as_CFTypeRef());
 
                 let status = SecItemDelete(query_attrs.as_concrete_TypeRef());
                 anyhow::ensure!(status == errSecSuccess, "delete password failed: {status}");
@@ -1246,7 +1246,7 @@ unsafe fn apply_window_appearance(appearance: Option<WindowAppearance>) {
 
 unsafe fn path_from_objc(path: id) -> PathBuf {
     let len = msg_send![path, lengthOfBytesUsingEncoding: NSUTF8StringEncoding];
-    let bytes = unsafe { path.UTF8String() as *const u8 };
+    let bytes = unsafe { path.UTF8String().cast::<u8>() };
     let path = str::from_utf8(unsafe { slice::from_raw_parts(bytes, len) }).unwrap();
     PathBuf::from(path)
 }
@@ -1366,7 +1366,9 @@ extern "C" fn on_thermal_state_change(this: &mut Object, _: Sel, _: id) {
     // as NSNotificationCenter delivers this notification synchronously and it may fire while
     // the App is already borrowed (same pattern as quit() above).
     let platform = unsafe { get_mac_platform(this) };
-    let platform_ptr = platform as *const MacPlatform as *mut c_void;
+    let platform_ptr = std::ptr::from_ref::<MacPlatform>(platform)
+        .cast::<c_void>()
+        .cast_mut();
     unsafe {
         DispatchQueue::main().exec_async_f(platform_ptr, on_thermal_state_change);
     }
@@ -1391,7 +1393,7 @@ extern "C" fn open_urls(this: &mut Object, _: Sel, _: id, urls: id) {
         (0..urls.count())
             .filter_map(|i| {
                 let url = urls.objectAtIndex(i);
-                match CStr::from_ptr(url.absoluteString().UTF8String() as *mut c_char).to_str() {
+                match CStr::from_ptr(url.absoluteString().UTF8String().cast()).to_str() {
                     Ok(string) => Some(string.to_owned()),
                     Err(err) => {
                         log::error!("error converting path to string: {}", err);

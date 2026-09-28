@@ -751,8 +751,7 @@ fn get_baseline_path(test_name: &str) -> PathBuf {
     let workspace_root = PathBuf::from(manifest_dir)
         .parent()
         .and_then(|p| p.parent())
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("."));
+        .map_or_else(|| PathBuf::from("."), |p| p.to_path_buf());
 
     workspace_root
         .join(BASELINE_DIR)

@@ -60,7 +60,6 @@ use smallvec::SmallVec;
 use std::{
     cell::Cell,
     ffi::{CStr, c_void},
-    mem,
     ops::Range,
     path::PathBuf,
     ptr::{self, NonNull},
@@ -506,9 +505,10 @@ static SIMPLE_FULLSCREEN_APP_STATE: Mutex<Option<SimpleFullscreenAppState>> = Mu
 
 unsafe fn push_simple_fullscreen_presentation_options() {
     let mut app_state = SIMPLE_FULLSCREEN_APP_STATE.lock();
-    match app_state.as_mut() {
-        Some(app_state) => app_state.window_count += 1,
-        None => unsafe {
+    if let Some(app_state) = app_state.as_mut() {
+        app_state.window_count += 1
+    } else {
+        unsafe {
             let app = NSApplication::sharedApplication(nil);
             let saved_presentation_options: NSUInteger = msg_send![app, presentationOptions];
             let _: () = msg_send![
@@ -520,7 +520,7 @@ unsafe fn push_simple_fullscreen_presentation_options() {
                 window_count: 1,
                 saved_presentation_options,
             });
-        },
+        }
     }
 }
 
@@ -751,7 +751,7 @@ impl MacWindowState {
             // AppKit can temporarily report no screen while displays are being reconfigured.
             return;
         };
-        let data = self.native_view.as_ptr() as *mut c_void;
+        let data = self.native_view.as_ptr().cast::<c_void>();
         self.frame_source
             .get_or_insert_with(|| WindowFrameSource::new(data, step))
             .start(display_id)
@@ -1000,8 +1000,8 @@ impl MacWindow {
                 frame_source: None,
                 renderer: renderer::new_renderer(
                     renderer_context,
-                    native_window as *mut _,
-                    native_view as *mut _,
+                    native_window.cast(),
+                    native_view.cast(),
                     bounds.size.map(|pixels| pixels.as_f32()),
                     false,
                 ),
@@ -1045,12 +1045,12 @@ impl MacWindow {
 
             (*native_window).set_ivar(
                 WINDOW_STATE_IVAR,
-                Arc::into_raw(window.0.clone()) as *const c_void,
+                Arc::into_raw(window.0.clone()).cast::<c_void>(),
             );
             native_window.setDelegate_(native_window);
             (*native_view).set_ivar(
                 WINDOW_STATE_IVAR,
-                Arc::into_raw(window.0.clone()) as *const c_void,
+                Arc::into_raw(window.0.clone()).cast::<c_void>(),
             );
 
             if let Some(title) = titlebar
@@ -1257,16 +1257,16 @@ impl MacWindow {
             let key = ns_string("AppleWindowTabbingMode");
 
             let dict: id = msg_send![defaults, persistentDomainForName: domain];
-            let value: id = if !dict.is_null() {
-                msg_send![dict, objectForKey: key]
-            } else {
+            let value: id = if dict.is_null() {
                 nil
+            } else {
+                msg_send![dict, objectForKey: key]
             };
 
-            let value_str = if !value.is_null() {
-                CStr::from_ptr(NSString::UTF8String(value)).to_string_lossy()
-            } else {
+            let value_str = if value.is_null() {
                 "".into()
+            } else {
+                CStr::from_ptr(NSString::UTF8String(value)).to_string_lossy()
             };
 
             match value_str.as_ref() {
@@ -1357,8 +1357,10 @@ impl PlatformWindow for MacWindow {
         }
 
         unsafe {
-            DispatchQueue::main()
-                .exec_async_f(native_window as *mut std::ffi::c_void, merge_windows_async);
+            DispatchQueue::main().exec_async_f(
+                native_window.cast::<std::ffi::c_void>(),
+                merge_windows_async,
+            );
         }
     }
 
@@ -1374,7 +1376,7 @@ impl PlatformWindow for MacWindow {
 
         unsafe {
             DispatchQueue::main()
-                .exec_async_f(native_window as *mut std::ffi::c_void, move_tab_async);
+                .exec_async_f(native_window.cast::<std::ffi::c_void>(), move_tab_async);
         }
     }
 
@@ -1553,14 +1555,14 @@ impl PlatformWindow for MacWindow {
             let executor = lock.foreground_executor.clone();
             executor
                 .spawn(async move {
-                    if !closed.load(Ordering::Acquire) {
+                    if closed.load(Ordering::Acquire) {
+                        let _: () = msg_send![alert, release];
+                    } else {
                         let _: () = msg_send![
                             alert,
                             beginSheetModalForWindow: native_window
                             completionHandler: block
                         ];
-                    } else {
-                        let _: () = msg_send![alert, release];
                     }
                 })
                 .detach();
@@ -1625,7 +1627,7 @@ impl PlatformWindow for MacWindow {
         unsafe {
             let title: id = msg_send![self.0.lock().native_window, title];
             if title.is_null() {
-                "".to_owned()
+                String::new()
             } else {
                 title.to_str().to_owned()
             }
@@ -1929,16 +1931,16 @@ impl PlatformWindow for MacWindow {
                         let key = ns_string("AppleActionOnDoubleClick");
 
                         let dict: id = msg_send![defaults, persistentDomainForName: domain];
-                        let action: id = if !dict.is_null() {
-                            msg_send![dict, objectForKey: key]
-                        } else {
+                        let action: id = if dict.is_null() {
                             nil
+                        } else {
+                            msg_send![dict, objectForKey: key]
                         };
 
-                        let action_str = if !action.is_null() {
-                            CStr::from_ptr(NSString::UTF8String(action)).to_string_lossy()
-                        } else {
+                        let action_str = if action.is_null() {
                             "".into()
+                        } else {
+                            CStr::from_ptr(NSString::UTF8String(action)).to_string_lossy()
                         };
 
                         match action_str.as_ref() {
@@ -2043,17 +2045,16 @@ unsafe fn is_gpui_window(window: id) -> bool {
 unsafe fn get_window_state(object: &Object) -> Arc<Mutex<MacWindowState>> {
     unsafe {
         let raw: *mut c_void = *object.get_ivar(WINDOW_STATE_IVAR);
-        let rc1 = Arc::from_raw(raw as *mut Mutex<MacWindowState>);
-        let rc2 = rc1.clone();
-        mem::forget(rc1);
-        rc2
+        let ptr = raw.cast::<Mutex<MacWindowState>>();
+        Arc::increment_strong_count(ptr);
+        Arc::from_raw(ptr)
     }
 }
 
 unsafe fn drop_window_state(object: &Object) {
     unsafe {
         let raw: *mut c_void = *object.get_ivar(WINDOW_STATE_IVAR);
-        Arc::from_raw(raw as *mut Mutex<MacWindowState>);
+        Arc::from_raw(raw.cast::<Mutex<MacWindowState>>());
     }
 }
 
@@ -2135,7 +2136,7 @@ extern "C" fn reset_cursor_rects(this: &Object, _: Sel) {
             CursorStyle::ContextualMenu => msg_send![class!(NSCursor), contextualMenuCursor],
         };
 
-        let bounds = NSView::bounds(this as *const Object as id);
+        let bounds = NSView::bounds(std::ptr::from_ref::<Object>(this).cast_mut());
         let _: () = msg_send![this, addCursorRect: bounds cursor: cursor];
     }
 }
@@ -2197,7 +2198,7 @@ unsafe fn is_ime_input_source_active() -> bool {
         }
 
         let source_type =
-            TISGetInputSourceProperty(source, kTISPropertyInputSourceType as *const c_void);
+            TISGetInputSourceProperty(source, kTISPropertyInputSourceType.cast::<c_void>());
         let is_input_mode = !source_type.is_null()
             && CFEqual(
                 source_type as CFTypeRef,
@@ -2206,7 +2207,7 @@ unsafe fn is_ime_input_source_active() -> bool {
 
         let is_ascii = TISGetInputSourceProperty(
             source,
-            kTISPropertyInputSourceIsASCIICapable as *const c_void,
+            kTISPropertyInputSourceIsASCIICapable.cast::<c_void>(),
         );
         let is_ascii_capable = !is_ascii.is_null() && CFBooleanGetValue(is_ascii as CFBooleanRef);
 
@@ -2943,7 +2944,11 @@ extern "C" fn attributed_substring_for_proposed_range(
         if let Some(adjusted) = adjusted
             && adjusted != range
         {
-            unsafe { (actual_range as *mut NSRange).write(NSRange::from(adjusted)) };
+            unsafe {
+                actual_range
+                    .cast::<NSRange>()
+                    .write(NSRange::from(adjusted))
+            };
         }
         unsafe {
             let string: id = msg_send![class!(NSAttributedString), alloc];
@@ -3027,8 +3032,7 @@ extern "C" fn character_index_for_point(this: &Object, _: Sel, position: NSPoint
         input_handler.character_index_for_point(position)
     })
     .flatten()
-    .map(|index| index as u64)
-    .unwrap_or(NSNotFound as u64)
+    .map_or(NSNotFound as u64, |index| index as u64)
 }
 
 fn screen_point_to_gpui_point(this: &Object, position: NSPoint) -> Point<Pixels> {

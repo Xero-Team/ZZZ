@@ -365,7 +365,7 @@ unsafe fn parse_keystroke(native_event: id) -> Keystroke {
                 key_char = Some("\t".to_owned());
                 "tab".to_owned()
             }
-            Some(ENTER_KEY) | Some(NUMPAD_ENTER_KEY) => {
+            Some(ENTER_KEY | NUMPAD_ENTER_KEY) => {
                 key_char = Some("\n".to_owned());
                 "enter".to_owned()
             }
@@ -527,45 +527,45 @@ fn chars_for_modified_key(code: CGKeyCode, modifiers: u32) -> String {
 
     let keyboard = unsafe { TISCopyCurrentKeyboardLayoutInputSource() };
     if keyboard.is_null() {
-        return "".to_owned();
+        return String::new();
     }
     let layout_data = unsafe {
-        TISGetInputSourceProperty(keyboard, kTISPropertyUnicodeKeyLayoutData as *const c_void)
+        TISGetInputSourceProperty(keyboard, kTISPropertyUnicodeKeyLayoutData.cast::<c_void>())
             as CFDataRef
     };
     if layout_data.is_null() {
         unsafe {
             let _: () = msg_send![keyboard, release];
         }
-        return "".to_owned();
+        return String::new();
     }
     let keyboard_layout = unsafe { CFDataGetBytePtr(layout_data) };
 
     unsafe {
         UCKeyTranslate(
-            keyboard_layout as *const c_void,
+            keyboard_layout.cast::<c_void>(),
             code,
             kUCKeyActionDown,
             modifiers,
             keyboard_type,
             kUCKeyTranslateNoDeadKeysMask,
-            &mut dead_key_state,
+            &raw mut dead_key_state,
             BUFFER_SIZE,
-            &mut buffer_size as *mut usize,
-            &mut buffer as *mut u16,
+            &raw mut buffer_size,
+            buffer.as_mut_ptr(),
         );
         if dead_key_state != 0 {
             UCKeyTranslate(
-                keyboard_layout as *const c_void,
+                keyboard_layout.cast::<c_void>(),
                 CG_SPACE_KEY,
                 kUCKeyActionDown,
                 modifiers,
                 keyboard_type,
                 kUCKeyTranslateNoDeadKeysMask,
-                &mut dead_key_state,
+                &raw mut dead_key_state,
                 BUFFER_SIZE,
-                &mut buffer_size as *mut usize,
-                &mut buffer as *mut u16,
+                &raw mut buffer_size,
+                buffer.as_mut_ptr(),
             );
         }
         let _: () = msg_send![keyboard, release];

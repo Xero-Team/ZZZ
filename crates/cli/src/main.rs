@@ -1466,19 +1466,21 @@ mod mac_os {
                 Self::App { app_bundle, .. } => {
                     let app_path = app_bundle;
 
-                    let status = unsafe {
-                        let app_url = CFURL::from_path(app_path, true)
-                            .with_context(|| format!("invalid app path {app_path:?}"))?;
-                        let url_to_open = CFURL::wrap_under_create_rule(CFURLCreateWithBytes(
+                    let app_url = CFURL::from_path(app_path, true)
+                        .with_context(|| format!("invalid app path {app_path:?}"))?;
+                    let created_url = unsafe {
+                        CFURLCreateWithBytes(
                             ptr::null(),
                             url.as_ptr(),
                             url.len() as CFIndex,
                             kCFStringEncodingUTF8,
                             ptr::null(),
-                        ));
-                        // equivalent to: open zzz-cli:... -a /Applications/ZZZ\ Preview.app
-                        let urls_to_open =
-                            CFArray::from_copyable(&[url_to_open.as_concrete_TypeRef()]);
+                        )
+                    };
+                    let url_to_open = unsafe { CFURL::wrap_under_create_rule(created_url) };
+                    // equivalent to: open zzz-cli:... -a /Applications/ZZZ\ Preview.app
+                    let urls_to_open = CFArray::from_copyable(&[url_to_open.as_concrete_TypeRef()]);
+                    let status = unsafe {
                         LSOpenFromURLSpec(
                             &LSLaunchURLSpec {
                                 appURL: app_url.as_concrete_TypeRef(),

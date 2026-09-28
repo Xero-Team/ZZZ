@@ -1,5 +1,9 @@
 #![cfg(target_os = "macos")]
 #![allow(deprecated)]
+#![allow(
+    clippy::multiple_unsafe_ops_per_block,
+    reason = "Objective-C msg_send! sequences are inherently multi-op FFI"
+)]
 //! macOS platform implementation for GPUI.
 //!
 //! macOS screens have a y axis that goes up from the bottom of the screen and
@@ -36,10 +40,7 @@ use cocoa::{
 };
 
 use objc::runtime::{BOOL, NO, YES};
-use std::{
-    ffi::{CStr, c_char},
-    ops::Range,
-};
+use std::{ffi::CStr, ops::Range};
 
 pub(crate) use dispatcher::*;
 pub(crate) use display::*;
@@ -74,7 +75,7 @@ impl NSStringExt for id {
             if cstr.is_null() {
                 ""
             } else {
-                CStr::from_ptr(cstr as *mut c_char).to_str().unwrap()
+                CStr::from_ptr(cstr.cast()).to_str().unwrap()
             }
         }
     }

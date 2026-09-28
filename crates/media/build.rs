@@ -52,8 +52,12 @@ fn main() {
 fn clear_zig_bindgen_args() {
     unsafe {
         env::remove_var("BINDGEN_EXTRA_CLANG_ARGS");
-        if let Ok(target) = env::var("TARGET") {
+    }
+    if let Ok(target) = env::var("TARGET") {
+        unsafe {
             env::remove_var(format!("BINDGEN_EXTRA_CLANG_ARGS_{target}"));
+        }
+        unsafe {
             env::remove_var(format!(
                 "BINDGEN_EXTRA_CLANG_ARGS_{}",
                 target.replace('-', "_")

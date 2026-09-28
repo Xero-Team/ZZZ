@@ -477,7 +477,7 @@ impl MacTextSystemState {
         if params.is_emoji {
             bytes = vec![0; bitmap_size.width.0 as usize * 4 * bitmap_size.height.0 as usize];
             cx = CGContext::create_bitmap_context(
-                Some(bytes.as_mut_ptr() as *mut _),
+                Some(bytes.as_mut_ptr().cast()),
                 bitmap_size.width.0 as usize,
                 bitmap_size.height.0 as usize,
                 8,
@@ -488,7 +488,7 @@ impl MacTextSystemState {
         } else {
             bytes = vec![0; bitmap_size.width.0 as usize * bitmap_size.height.0 as usize];
             cx = CGContext::create_bitmap_context(
-                Some(bytes.as_mut_ptr() as *mut _),
+                Some(bytes.as_mut_ptr().cast()),
                 bitmap_size.width.0 as usize,
                 bitmap_size.height.0 as usize,
                 8,
@@ -723,8 +723,9 @@ fn ct_font_weight(font: &CTFont) -> FontWeight {
             .get(kCTFontWeightTrait)
             .downcast::<CFNumber>()
             .and_then(|weight| weight.to_f64())
-            .map(|weight| FontWeight((((weight as f32) + 1.0) * 500.0).clamp(100.0, 900.0)))
-            .unwrap_or(FontWeight::NORMAL)
+            .map_or(FontWeight::NORMAL, |weight| {
+                FontWeight((((weight as f32) + 1.0) * 500.0).clamp(100.0, 900.0))
+            })
     }
 }
 
@@ -862,7 +863,7 @@ mod lenient_font_attributes {
     unsafe fn wrap_under_get_rule(reference: CFStringRef) -> CFString {
         unsafe {
             assert!(!reference.is_null(), "Attempted to create a NULL object.");
-            let reference = CFRetain(reference as *const ::std::os::raw::c_void) as CFStringRef;
+            let reference = CFRetain(reference.cast::<::std::os::raw::c_void>()) as CFStringRef;
             TCFType::wrap_under_create_rule(reference)
         }
     }
