@@ -12673,8 +12673,6 @@ dependencies = [
  "rand 0.10.3",
  "rsa",
  "serde",
- "serde_json",
- "strum",
  "tracing",
  "util",
  "zlog",
