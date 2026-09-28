@@ -11,7 +11,6 @@ workspace = true
 [lib]
 path = "src/docs.rs"
 doctest = false
-test = false
 
 [dependencies]
 assets.workspace = true

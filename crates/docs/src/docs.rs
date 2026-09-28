@@ -5,7 +5,7 @@
 //! and links inside the pages navigate between documents. `SearchDocs` opens
 //! a picker over every embedded page.
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use assets::{all_docs, lookup_docs_text};
 use gpui::{
@@ -53,6 +53,8 @@ pub struct DocumentationView {
     current: SharedString,
     back: Vec<SharedString>,
     forward: Vec<SharedString>,
+    /// A `#fragment` to scroll to once the current page finishes parsing.
+    pending_fragment: Option<SharedString>,
 }
 
 impl DocumentationView {
@@ -69,7 +71,7 @@ impl DocumentationView {
             .register_action(|workspace, action: &OpenDocsAt, window, cx| {
                 Self::open_documentation_page(
                     workspace,
-                    Some(action.path.clone().into()),
+                    Some(DocTarget::from_href(&action.path)),
                     window,
                     cx,
                 );
@@ -89,31 +91,29 @@ impl DocumentationView {
 
     pub fn open_documentation_page(
         workspace: &mut Workspace,
-        path: Option<SharedString>,
+        target: Option<DocTarget>,
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
-        let path = path.unwrap_or_else(|| SharedString::from(DEFAULT_DOC));
+        let target = target.unwrap_or_else(|| DocTarget::page(DEFAULT_DOC));
 
         if let Some(existing) = workspace.item_of_type::<DocumentationView>(cx) {
             workspace.activate_item(&existing, true, true, window, cx);
             existing.update(cx, |this, cx| {
-                this.navigate(path, window, cx);
+                this.navigate(target, cx);
             });
             return;
         }
 
         let language_registry = workspace.project().read(cx).languages().clone();
-        let view =
-            cx.new(|cx| Self::new(path, workspace.weak_handle(), language_registry, window, cx));
+        let view = cx.new(|cx| Self::new(target, workspace.weak_handle(), language_registry, cx));
         workspace.add_item_to_active_pane(Box::new(view), None, true, window, cx);
     }
 
     fn new(
-        path: SharedString,
+        target: DocTarget,
         workspace: WeakEntity<Workspace>,
         language_registry: Arc<LanguageRegistry>,
-        _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let markdown = cx.new(|cx| {
@@ -136,32 +136,57 @@ impl DocumentationView {
             current: SharedString::default(),
             back: Vec::new(),
             forward: Vec::new(),
+            pending_fragment: None,
         };
-        this.set_path(path, cx);
+        cx.observe(&this.markdown, |this, _markdown, cx| {
+            this.consume_pending_fragment(cx);
+        })
+        .detach();
+        this.set_path(&target, cx);
         this
     }
 
-    /// Navigates to `path`, recording it in the history.
-    fn navigate(&mut self, path: SharedString, _window: &mut Window, cx: &mut Context<Self>) {
-        if path == self.current {
+    /// Navigates to `target`, recording it in the history.
+    fn navigate(&mut self, target: DocTarget, cx: &mut Context<Self>) {
+        if target.path == self.current && target.fragment.is_none() {
             return;
         }
-        if !self.current.is_empty() {
+        if !self.current.is_empty() && target.path != self.current {
             self.back.push(self.current.clone());
         }
         self.forward.clear();
-        self.set_path(path, cx);
+        self.set_path(&target, cx);
     }
 
-    fn set_path(&mut self, path: SharedString, cx: &mut Context<Self>) {
-        let Some(text) = lookup_docs_text(&path) else {
+    fn set_path(&mut self, target: &DocTarget, cx: &mut Context<Self>) {
+        let Some(raw) = lookup_docs_text(&target.path) else {
             return;
         };
-        self.current = path;
+        let text = strip_front_matter(&raw);
+        self.current = target.path.clone();
+        self.pending_fragment = target.fragment.clone();
         self.markdown
             .update(cx, |markdown, cx| markdown.reset(text.into(), cx));
         self.scroll_handle.set_offset(point(px(0.), px(0.)));
+        // The document may already be parsed if the source is unchanged, in
+        // which case the observe callback above will not fire.
+        self.consume_pending_fragment(cx);
         cx.notify();
+    }
+
+    /// Scrolls to the pending `#fragment` if it resolves in the parsed page.
+    /// Keeps the fragment pending while the page is still parsing so it can be
+    /// retried once parsing completes.
+    fn consume_pending_fragment(&mut self, cx: &mut Context<Self>) {
+        let Some(fragment) = self.pending_fragment.clone() else {
+            return;
+        };
+        let resolved = self
+            .markdown
+            .update(cx, |markdown, cx| markdown.scroll_to_heading(&fragment, cx));
+        if resolved.is_some() {
+            self.pending_fragment = None;
+        }
     }
 
     fn go_back(&mut self, cx: &mut Context<Self>) {
@@ -169,7 +194,7 @@ impl DocumentationView {
             return;
         };
         self.forward.push(self.current.clone());
-        self.set_path(previous, cx);
+        self.set_path(&DocTarget::page(previous), cx);
     }
 
     fn go_forward(&mut self, cx: &mut Context<Self>) {
@@ -177,7 +202,7 @@ impl DocumentationView {
             return;
         };
         self.back.push(self.current.clone());
-        self.set_path(next, cx);
+        self.set_path(&DocTarget::page(next), cx);
     }
 
     fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -222,7 +247,7 @@ impl Render for DocumentationView {
         let markdown_element = MarkdownElement::new(self.markdown.clone(), markdown_style)
             .scroll_handle(self.scroll_handle.clone())
             .on_url_click(move |url, window, cx| {
-                open_doc_url(url, &current, &workspace, window, cx);
+                handle_doc_link(url, &current, &workspace, window, cx);
             });
 
         v_flex()
@@ -267,103 +292,163 @@ impl Item for DocumentationView {
     fn to_item_events(_event: &Self::Event, _f: &mut dyn FnMut(ItemEvent)) {}
 }
 
-/// Resolves a link from a documentation page and opens the target.
-fn open_doc_url(
+/// A documentation page plus an optional `#fragment` to scroll to.
+#[derive(Clone, PartialEq, Eq)]
+pub struct DocTarget {
+    path: SharedString,
+    fragment: Option<SharedString>,
+}
+
+impl DocTarget {
+    fn page(path: impl Into<SharedString>) -> Self {
+        Self {
+            path: path.into(),
+            fragment: None,
+        }
+    }
+
+    /// Parses a `path` or `path#fragment` string into a target.
+    fn from_href(href: impl AsRef<str>) -> Self {
+        let href = href.as_ref();
+        match href.split_once('#') {
+            Some((path, fragment)) if !fragment.is_empty() => Self {
+                path: path.into(),
+                fragment: Some(fragment.into()),
+            },
+            _ => Self::page(href),
+        }
+    }
+}
+
+/// A parsed documentation link, ready to be dispatched.
+enum DocLink {
+    /// An action name whose keybinding should be shown.
+    Keybinding(SharedString),
+    /// Another page in the bundled documentation.
+    Docs(DocTarget),
+    /// An external URL to open in the system browser.
+    External(SharedString),
+    /// A `zzz://` URL handled elsewhere in the application.
+    AppUrl(SharedString),
+}
+
+/// Parses a link from a documentation page. Returns `None` when the link
+/// points outside the bundled documentation.
+fn resolve_doc_link(current_path: &str, href: &str) -> Option<DocLink> {
+    if let Some(action) = href.strip_prefix("zzz://kb/") {
+        return Some(DocLink::Keybinding(action.to_string().into()));
+    }
+    if let Some(action) = href.strip_prefix("zzz://action/") {
+        return Some(DocLink::Keybinding(action.to_string().into()));
+    }
+    if let Some(path) = href.strip_prefix("zzz://docs/") {
+        return Some(DocLink::Docs(DocTarget::from_href(path)));
+    }
+    if href.starts_with("http://") || href.starts_with("https://") {
+        return Some(DocLink::External(href.to_string().into()));
+    }
+    if href.starts_with("zzz://") {
+        return Some(DocLink::AppUrl(href.to_string().into()));
+    }
+
+    let (path, fragment) = match href.split_once('#') {
+        Some((path, fragment)) if !fragment.is_empty() => (path, Some(fragment)),
+        _ => (href, None),
+    };
+
+    // A bare `#fragment` scrolls within the current page.
+    if path.is_empty() {
+        let fragment = fragment?;
+        let mut target = DocTarget::page(current_path);
+        target.fragment = Some(fragment.into());
+        return Some(DocLink::Docs(target));
+    }
+
+    let resolved = resolve_relative_path(current_path, path)?;
+    let mut target = DocTarget::page(resolved);
+    target.fragment = fragment.map(SharedString::from);
+    Some(DocLink::Docs(target))
+}
+
+/// Resolves `path` relative to the directory of `current_path`, treating the
+/// documentation root as a virtual boundary. Returns `None` if the link
+/// escapes the root or is otherwise unusable.
+fn resolve_relative_path(current_path: &str, path: &str) -> Option<String> {
+    let path = path.trim_start_matches('/');
+    let base = match current_path.rsplit_once('/') {
+        Some((dir, _)) => dir,
+        None => "",
+    };
+
+    let mut components: Vec<&str> = base
+        .split('/')
+        .filter(|component| !component.is_empty())
+        .collect();
+
+    for component in path.split('/') {
+        match component {
+            "" | "." => {}
+            ".." => {
+                // Never step above the documentation root.
+                components.pop()?;
+            }
+            component => components.push(component),
+        }
+    }
+
+    if components.is_empty() {
+        return None;
+    }
+
+    let mut resolved = components.join("/");
+    if !resolved.ends_with(".md") {
+        resolved.push_str(".md");
+    }
+    Some(resolved)
+}
+
+/// Handles a clicked documentation link without re-entering the workspace
+/// while it is being updated.
+fn handle_doc_link(
     url: SharedString,
     current_path: &SharedString,
     workspace: &WeakEntity<Workspace>,
     window: &mut Window,
     cx: &mut App,
 ) {
-    if let Some(action) = url.strip_prefix("zzz://kb/") {
-        window.dispatch_action(
-            Box::new(ChangeKeybinding {
-                action: action.to_string(),
-            }),
-            cx,
-        );
+    let Some(link) = resolve_doc_link(current_path.as_ref(), url.as_ref()) else {
         return;
-    }
-    if let Some(action) = url.strip_prefix("zzz://action/") {
-        window.dispatch_action(
-            Box::new(ChangeKeybinding {
-                action: action.to_string(),
-            }),
-            cx,
-        );
-        return;
-    }
-    if let Some(path) = url.strip_prefix("zzz://docs/") {
-        workspace
-            .update(cx, |workspace, cx| {
-                DocumentationView::open_documentation_page(
-                    workspace,
-                    Some(path.to_string().into()),
-                    window,
-                    cx,
-                );
-            })
-            .log_err();
-        return;
-    }
-    if url.starts_with("http://") || url.starts_with("https://") {
-        cx.open_url(&url);
-        return;
-    }
-    if url.starts_with("zzz://") {
-        window.dispatch_action(
-            Box::new(zzz_actions::OpenZZZUrl {
-                url: url.to_string(),
-            }),
-            cx,
-        );
-        return;
-    }
-
-    // Relative link: resolve it against the current document.
-    let url = url.split_once('#').map_or(url.as_ref(), |(path, _)| path);
-    if url.is_empty() {
-        return;
-    }
-    let base = Path::new(current_path.as_ref()).parent();
-    let resolved = match base {
-        Some(base) if !url.starts_with('/') => normalize_path(&base.join(url))
-            .to_string_lossy()
-            .into_owned(),
-        _ => url.trim_start_matches('/').to_string(),
-    };
-    let resolved = if resolved.ends_with(".md") {
-        resolved
-    } else {
-        format!("{resolved}.md")
     };
 
-    workspace
-        .update(cx, |workspace, cx| {
-            DocumentationView::open_documentation_page(
-                workspace,
-                Some(resolved.into()),
-                window,
+    match link {
+        DocLink::Keybinding(action) => {
+            window.dispatch_action(
+                Box::new(ChangeKeybinding {
+                    action: action.into(),
+                }),
                 cx,
             );
-        })
-        .log_err();
-}
-
-/// Normalizes `.` and `..` components in a relative path without touching the
-/// filesystem.
-fn normalize_path(path: &Path) -> std::path::PathBuf {
-    let mut components = Vec::new();
-    for component in path.components() {
-        match component {
-            std::path::Component::CurDir => {}
-            std::path::Component::ParentDir => {
-                components.pop();
-            }
-            component => components.push(component.as_os_str().to_owned()),
+        }
+        DocLink::External(url) => cx.open_url(&url),
+        DocLink::AppUrl(url) => {
+            window.dispatch_action(Box::new(zzz_actions::OpenZZZUrl { url: url.into() }), cx);
+        }
+        DocLink::Docs(target) => {
+            let workspace = workspace.clone();
+            window.defer(cx, move |window, cx| {
+                workspace
+                    .update(cx, |workspace, cx| {
+                        DocumentationView::open_documentation_page(
+                            workspace,
+                            Some(target),
+                            window,
+                            cx,
+                        );
+                    })
+                    .log_err();
+            });
         }
     }
-    components.into_iter().collect()
 }
 
 // -- Documentation search ---------------------------------------------------
@@ -492,10 +577,10 @@ impl PickerDelegate for DocsSearchDelegate {
 
     fn confirm(&mut self, _secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
         if let Some(ix) = self.matches.get(self.selected_index) {
-            let path = self.entries[*ix].path.clone();
+            let target = DocTarget::page(self.entries[*ix].path.clone());
             self.workspace
                 .update(cx, |workspace, cx| {
-                    DocumentationView::open_documentation_page(workspace, Some(path), window, cx);
+                    DocumentationView::open_documentation_page(workspace, Some(target), window, cx);
                 })
                 .log_err();
         }
@@ -540,4 +625,118 @@ fn humanize_path(path: &str) -> String {
     let name = path.rsplit('/').next().unwrap_or(path);
     let name = name.strip_suffix(".md").unwrap_or(name);
     name.replace(['-', '_'], " ")
+}
+
+/// Removes a leading YAML front matter block, which the documentation uses for
+/// mdBook navigation and search metadata. The block is only stripped when the
+/// file opens with a `---` line that is later closed by another `---` line, so
+/// a document that legitimately starts with a horizontal rule is preserved.
+fn strip_front_matter(content: &str) -> String {
+    let Some(rest) = content.strip_prefix("---\n") else {
+        return content.to_string();
+    };
+    let Some(closing) = rest.find("\n---\n") else {
+        return content.to_string();
+    };
+    rest[closing + "\n---\n".len()..].to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_front_matter_removes_leading_yaml_block() {
+        let content = "---\ntitle: AI\n---\n\n# AI\n\nBody\n";
+
+        assert_eq!(strip_front_matter(content), "\n# AI\n\nBody\n");
+    }
+
+    #[test]
+    fn strip_front_matter_keeps_documents_without_front_matter() {
+        let content = "# Getting Started\n\nNo metadata here.\n";
+
+        assert_eq!(strip_front_matter(content), content);
+    }
+
+    #[test]
+    fn strip_front_matter_keeps_unterminated_block() {
+        let content = "---\ntitle: Broken\n\n# Heading\n";
+
+        assert_eq!(strip_front_matter(content), content);
+    }
+
+    #[test]
+    fn resolve_relative_path_resolves_sibling_and_parent_links() {
+        assert_eq!(
+            resolve_relative_path("ai/overview.md", "./external-agents.md").as_deref(),
+            Some("ai/external-agents.md")
+        );
+        assert_eq!(
+            resolve_relative_path("ai/overview.md", "../getting-started.md").as_deref(),
+            Some("getting-started.md")
+        );
+        assert_eq!(
+            resolve_relative_path("development/debuggers.md", "../debugger.md").as_deref(),
+            Some("debugger.md")
+        );
+    }
+
+    #[test]
+    fn resolve_relative_path_adds_markdown_extension() {
+        assert_eq!(
+            resolve_relative_path("index.md", "getting-started").as_deref(),
+            Some("getting-started.md")
+        );
+    }
+
+    #[test]
+    fn resolve_relative_path_refuses_to_escape_the_documentation_root() {
+        assert_eq!(resolve_relative_path("index.md", "../secrets.md"), None);
+        assert_eq!(
+            resolve_relative_path("ai/overview.md", "../../outside.md"),
+            None
+        );
+    }
+
+    #[test]
+    fn resolve_doc_link_carries_the_fragment() {
+        let link = resolve_doc_link("ai/overview.md", "../getting-started.md#command-palette");
+        let Some(DocLink::Docs(target)) = link else {
+            panic!("expected a documentation link");
+        };
+        assert_eq!(target.path.as_ref(), "getting-started.md");
+        assert_eq!(target.fragment.as_deref(), Some("command-palette"));
+    }
+
+    #[test]
+    fn resolve_doc_link_treats_bare_fragment_as_current_page() {
+        let link = resolve_doc_link("repl.md", "#python");
+        let Some(DocLink::Docs(target)) = link else {
+            panic!("expected a documentation link");
+        };
+        assert_eq!(target.path.as_ref(), "repl.md");
+        assert_eq!(target.fragment.as_deref(), Some("python"));
+    }
+
+    #[test]
+    fn resolve_doc_link_classifies_external_and_action_links() {
+        assert!(matches!(
+            resolve_doc_link("index.md", "https://example.com"),
+            Some(DocLink::External(_))
+        ));
+        assert!(matches!(
+            resolve_doc_link("index.md", "zzz://kb/editor::MoveUp"),
+            Some(DocLink::Keybinding(_))
+        ));
+        assert!(matches!(
+            resolve_doc_link("index.md", "zzz://docs/key-bindings"),
+            Some(DocLink::Docs(target)) if target.path.as_ref() == "key-bindings"
+        ));
+    }
+
+    #[test]
+    fn resolve_doc_link_ignores_links_that_escape_the_root() {
+        assert!(resolve_doc_link("index.md", "../../etc/passwd").is_none());
+    }
 }
