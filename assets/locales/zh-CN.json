@@ -2379,6 +2379,8 @@
     "workspace.dock.position.left": "左侧",
     "workspace.dock.position.right": "右侧",
     "workspace.dock.position_menu": "停靠到{}",
+    "workspace.dock.move_button_left": "左移按钮",
+    "workspace.dock.move_button_right": "右移按钮",
     "workspace.security_modal.folder_to_trust": "要信任的文件夹",
     "title_bar.layout.agentic": "Agentic",
     "title_bar.layout.classic": "经典",

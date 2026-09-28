@@ -25,6 +25,9 @@ use util::ResultExt as _;
 
 pub(crate) const RESIZE_HANDLE_SIZE: Pixels = px(6.);
 
+/// Key-value store scope used to persist the order of panel buttons per dock.
+pub(crate) const PANEL_BUTTON_ORDER_KEY: &str = "dock_panel_button_order";
+
 pub enum PanelEvent {
     ZoomIn,
     ZoomOut,
@@ -289,6 +292,11 @@ pub struct Dock {
     pub(crate) serialized_dock: Option<DockData>,
     zoom_layer_open: bool,
     modal_layer: Entity<ModalLayer>,
+    /// Persisted order of panel buttons within this dock, by `persistent_name`.
+    ///
+    /// Empty means no user override: the order falls back to each panel's
+    /// `activation_priority`.
+    button_order: Vec<SharedString>,
     _subscriptions: [Subscription; 2],
 }
 
@@ -356,6 +364,15 @@ impl DockPosition {
         match self {
             Self::Left | Self::Right => Axis::Horizontal,
             Self::Bottom => Axis::Vertical,
+        }
+    }
+
+    /// Stable, version-independent suffix used to persist per-dock state.
+    pub(crate) fn storage_key(&self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Bottom => "bottom",
+            Self::Right => "right",
         }
     }
 }
@@ -444,6 +461,7 @@ impl Dock {
                 _subscriptions: [focus_subscription, zoom_subscription],
                 serialized_dock: None,
                 zoom_layer_open: false,
+                button_order: Vec::new(),
                 modal_layer,
             }
         });
@@ -777,6 +795,7 @@ impl Dock {
         }
         let size_state = panel.read(cx).initial_size_state(window, cx);
 
+        let panel_id = Entity::entity_id(&panel);
         self.panel_entries.insert(
             index,
             PanelEntry {
@@ -787,6 +806,13 @@ impl Dock {
         );
 
         self.restore_state(window, cx);
+        self.apply_button_order();
+
+        let index = self
+            .panel_entries
+            .iter()
+            .position(|entry| entry.panel.panel_id() == panel_id)
+            .unwrap_or(index);
 
         if panel.read(cx).starts_open(window, cx) {
             self.activate_panel(index, window, cx);
@@ -1125,6 +1151,154 @@ impl Dock {
             .flatten()
             .and_then(|json| serde_json::from_str::<PanelSizeState>(&json).log_err())
     }
+
+    /// Loads the persisted panel button order for `position` within the given
+    /// workspace. Returns an empty vector when no order has been stored.
+    pub(crate) fn load_persisted_button_order(
+        workspace_id: &str,
+        position: DockPosition,
+        cx: &App,
+    ) -> Vec<SharedString> {
+        let kvp = KeyValueStore::global(cx);
+        let scope = kvp.scoped(PANEL_BUTTON_ORDER_KEY);
+        scope
+            .read(&format!("{workspace_id}:{}", position.storage_key()))
+            .log_err()
+            .flatten()
+            .and_then(|json| serde_json::from_str::<Vec<SharedString>>(&json).log_err())
+            .unwrap_or_default()
+    }
+
+    /// Reorders the panel button identified by `panel_key` to `target_index`,
+    /// clamping the target into range.
+    pub fn move_panel_button_to(
+        &mut self,
+        panel_key: &str,
+        target_index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(from_index) = self
+            .panel_entries
+            .iter()
+            .position(|entry| entry.panel.panel_key() == panel_key)
+        else {
+            return;
+        };
+        if from_index == target_index {
+            return;
+        }
+
+        let active_key = self.active_panel_key();
+        let entry = self.panel_entries.remove(from_index);
+        let target_index = target_index.min(self.panel_entries.len());
+        self.panel_entries.insert(target_index, entry);
+
+        self.finish_panel_button_reorder(active_key, window, cx);
+    }
+
+    /// Moves the panel button identified by `panel_key` by `delta` positions
+    /// within this dock.
+    pub fn move_panel_button_by(
+        &mut self,
+        panel_key: &str,
+        delta: isize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(from_index) = self
+            .panel_entries
+            .iter()
+            .position(|entry| entry.panel.panel_key() == panel_key)
+        else {
+            return;
+        };
+        let last_index = self.panel_entries.len().saturating_sub(1) as isize;
+        let target_index = (from_index as isize + delta).clamp(0, last_index) as usize;
+        self.move_panel_button_to(panel_key, target_index, window, cx);
+    }
+
+    /// Sets the persisted panel button order for this dock. Panels added later
+    /// are ordered according to this value.
+    pub fn set_button_order(&mut self, order: Vec<SharedString>) {
+        self.button_order = order;
+        self.apply_button_order();
+    }
+
+    fn active_panel_key(&self) -> Option<&'static str> {
+        self.active_panel_index
+            .and_then(|index| self.panel_entries.get(index))
+            .map(|entry| entry.panel.persistent_name())
+    }
+
+    /// Re-derives the active panel index and persists `button_order` after the
+    /// panel entries have been reordered.
+    fn finish_panel_button_reorder(
+        &mut self,
+        active_key: Option<&'static str>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(active_key) = active_key {
+            self.active_panel_index = self
+                .panel_entries
+                .iter()
+                .position(|entry| entry.panel.persistent_name() == active_key);
+        }
+
+        self.button_order = self
+            .panel_entries
+            .iter()
+            .map(|entry| SharedString::from(entry.panel.persistent_name()))
+            .collect();
+
+        let order = self.button_order.clone();
+        let position = self.position;
+        self.workspace
+            .update(cx, |workspace, cx| {
+                workspace.persist_panel_button_order(position, order, cx);
+            })
+            .ok();
+
+        cx.notify();
+    }
+
+    /// Applies the persisted `button_order` to `panel_entries`, falling back to
+    /// the current insertion order for panels not present in the stored order.
+    fn apply_button_order(&mut self) {
+        if self.button_order.is_empty() || self.panel_entries.len() < 2 {
+            return;
+        }
+
+        let active_key = self.active_panel_key();
+        let mut indices: Vec<usize> = (0..self.panel_entries.len()).collect();
+        indices.sort_by_key(|&index| {
+            let name = self.panel_entries[index].panel.persistent_name();
+            self.button_order
+                .iter()
+                .position(|stored| stored.as_ref() == name)
+                .unwrap_or(usize::MAX)
+        });
+
+        let mut entries: Vec<Option<PanelEntry>> = std::mem::take(&mut self.panel_entries)
+            .into_iter()
+            .map(Some)
+            .collect();
+        let mut reordered = Vec::with_capacity(entries.len());
+        for index in indices {
+            if let Some(entry) = entries[index].take() {
+                reordered.push(entry);
+            }
+        }
+        self.panel_entries = reordered;
+
+        if let Some(active_key) = active_key {
+            self.active_panel_index = self
+                .panel_entries
+                .iter()
+                .position(|entry| entry.panel.persistent_name() == active_key);
+        }
+    }
 }
 
 impl Render for Dock {
@@ -1247,12 +1421,26 @@ impl PanelButtons {
     }
 }
 
+#[derive(Clone)]
+struct DraggedPanelButton {
+    dock_id: EntityId,
+    panel_key: &'static str,
+    index: usize,
+}
+
+impl Render for DraggedPanelButton {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        gpui::Empty
+    }
+}
+
 impl Render for PanelButtons {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let dock = self.dock.read(cx);
         let active_index = dock.active_panel_index;
         let is_open = dock.is_open;
         let dock_position = dock.position;
+        let panel_count = dock.panel_entries.len();
 
         let (menu_anchor, menu_attach) = match dock.position {
             DockPosition::Left => (Anchor::BottomLeft, Anchor::TopLeft),
@@ -1275,6 +1463,7 @@ impl Render for PanelButtons {
                     })
                     .log_err()?;
                 let name = entry.panel.persistent_name();
+                let panel_key = entry.panel.panel_key();
                 let panel = entry.panel.clone();
                 let supports_flexible = panel.supports_flexible_size(cx);
                 let currently_flexible = panel.has_flexible_size(window, cx);
@@ -1298,6 +1487,20 @@ impl Render for PanelButtons {
 
                 let focus_handle = dock.focus_handle(cx);
                 let icon_label = entry.panel.icon_label(window, cx);
+                let is_right_dock = dock_position == DockPosition::Right;
+                let (can_move_left, can_move_right, move_left_delta, move_right_delta) =
+                    if is_right_dock {
+                        (i + 1 < panel_count, i > 0, 1isize, -1isize)
+                    } else {
+                        (i > 0, i + 1 < panel_count, -1isize, 1isize)
+                    };
+                let dock_id = dock_entity.entity_id();
+                let dock_for_drop = dock_entity.clone();
+                let dragged_panel_button = DraggedPanelButton {
+                    dock_id,
+                    panel_key,
+                    index: i,
+                };
 
                 Some(
                     right_click_menu(name)
@@ -1310,6 +1513,7 @@ impl Render for PanelButtons {
 
                             let panel_hide = panel.hide_button_setting(cx);
                             ContextMenu::build(window, cx, |mut menu, _, cx| {
+                                let dock_for_move = dock_for_menu.clone();
                                 let mut has_position_entries = false;
                                 for position in POSITIONS {
                                     if panel.position_is_valid(position, cx) {
@@ -1381,6 +1585,51 @@ impl Render for PanelButtons {
                                         },
                                     );
                                 }
+                                if can_move_left {
+                                    let dock_for_move = dock_for_move.clone();
+                                    menu = menu.toggleable_entry(
+                                        tr(
+                                            cx,
+                                            "workspace.dock.move_button_left",
+                                            "Move Button Left",
+                                        ),
+                                        false,
+                                        IconPosition::Start,
+                                        None,
+                                        move |window, cx| {
+                                            dock_for_move.update(cx, |dock, cx| {
+                                                dock.move_panel_button_by(
+                                                    panel_key,
+                                                    move_left_delta,
+                                                    window,
+                                                    cx,
+                                                );
+                                            });
+                                        },
+                                    );
+                                }
+                                if can_move_right {
+                                    menu = menu.toggleable_entry(
+                                        tr(
+                                            cx,
+                                            "workspace.dock.move_button_right",
+                                            "Move Button Right",
+                                        ),
+                                        false,
+                                        IconPosition::Start,
+                                        None,
+                                        move |window, cx| {
+                                            dock_for_move.update(cx, |dock, cx| {
+                                                dock.move_panel_button_by(
+                                                    panel_key,
+                                                    move_right_delta,
+                                                    window,
+                                                    cx,
+                                                );
+                                            });
+                                        },
+                                    );
+                                }
                                 if let Some(hide) = panel_hide {
                                     menu = crate::status_bar::add_hide_button_entry(
                                         menu.separator(),
@@ -1412,13 +1661,51 @@ impl Render for PanelButtons {
                                     })
                                 });
 
-                            div().relative().child(button).when_some(
-                                icon_label
-                                    .clone()
-                                    .filter(|_| !is_active_button)
-                                    .and_then(|label| label.parse::<usize>().ok()),
-                                |this, count| this.child(CountBadge::new(count)),
-                            )
+                            div()
+                                .id((dock_position.storage_key(), i))
+                                .relative()
+                                .child(button)
+                                .when_some(
+                                    icon_label
+                                        .clone()
+                                        .filter(|_| !is_active_button)
+                                        .and_then(|label| label.parse::<usize>().ok()),
+                                    |this, count| this.child(CountBadge::new(count)),
+                                )
+                                .on_drag(dragged_panel_button.clone(), |drag, _, _, cx| {
+                                    cx.new(|_| drag.clone())
+                                })
+                                .drag_over::<DraggedPanelButton>(move |this, dragged, _, cx| {
+                                    if dragged.dock_id != dock_id || dragged.index == i {
+                                        return this;
+                                    }
+                                    let insert_after = if is_right_dock {
+                                        i < dragged.index
+                                    } else {
+                                        i > dragged.index
+                                    };
+                                    let this = this
+                                        .bg(cx.theme().colors().drop_target_background)
+                                        .border_color(cx.theme().colors().drop_target_border)
+                                        .border_0();
+                                    if insert_after {
+                                        this.border_r_2()
+                                    } else {
+                                        this.border_l_2()
+                                    }
+                                })
+                                .on_drop(move |dragged: &DraggedPanelButton, window, cx| {
+                                    if dragged.dock_id == dock_for_drop.entity_id() {
+                                        dock_for_drop.update(cx, |dock, cx| {
+                                            dock.move_panel_button_to(
+                                                dragged.panel_key,
+                                                i,
+                                                window,
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                })
                         }),
                 )
             })
@@ -1434,12 +1721,12 @@ impl Render for PanelButtons {
             .gap_1()
             .when(
                 has_buttons
-                    && (dock.position == DockPosition::Bottom
-                        || dock.position == DockPosition::Right),
+                    && (dock_position == DockPosition::Bottom
+                        || dock_position == DockPosition::Right),
                 |this| this.child(Divider::vertical().color(DividerColor::Border)),
             )
             .children(buttons)
-            .when(has_buttons && dock.position == DockPosition::Left, |this| {
+            .when(has_buttons && dock_position == DockPosition::Left, |this| {
                 this.child(Divider::vertical().color(DividerColor::Border))
             })
     }

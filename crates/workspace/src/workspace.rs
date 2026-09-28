@@ -1704,6 +1704,17 @@ impl Workspace {
 
         let session_id = app_state.session.read(cx).id().to_owned();
 
+        let button_order_key =
+            workspace_id.map_or_else(|| session_id.clone(), |id| i64::from(id).to_string());
+        for (dock, position) in [
+            (&left_dock, DockPosition::Left),
+            (&bottom_dock, DockPosition::Bottom),
+            (&right_dock, DockPosition::Right),
+        ] {
+            let order = Dock::load_persisted_button_order(&button_order_key, position, cx);
+            dock.update(cx, |dock, _| dock.set_button_order(order));
+        }
+
         let (serializable_items_tx, serializable_items_rx) =
             mpsc::unbounded::<Box<dyn SerializableItemHandle>>();
         let _items_serializer = cx.spawn_in(window, async move |this, cx| {
@@ -2309,6 +2320,34 @@ impl Workspace {
                 .write(
                     format!("{workspace_id}:{panel_key}"),
                     serde_json::to_string(&size_state)?,
+                )
+                .await
+        })
+        .detach_and_log_err(cx);
+    }
+
+    /// Persists the order of panel buttons for the given dock in this workspace.
+    pub fn persist_panel_button_order(
+        &self,
+        position: DockPosition,
+        order: Vec<SharedString>,
+        cx: &mut App,
+    ) {
+        let Some(workspace_id) = self
+            .database_id()
+            .map(|id| i64::from(id).to_string())
+            .or(self.session_id())
+        else {
+            return;
+        };
+
+        let kvp = db::kvp::KeyValueStore::global(cx);
+        cx.background_spawn(async move {
+            let scope = kvp.scoped(dock::PANEL_BUTTON_ORDER_KEY);
+            scope
+                .write(
+                    format!("{workspace_id}:{}", position.storage_key()),
+                    serde_json::to_string(&order)?,
                 )
                 .await
         })

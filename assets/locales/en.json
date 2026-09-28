@@ -2379,6 +2379,8 @@
     "workspace.dock.position.left": "Left",
     "workspace.dock.position.right": "Right",
     "workspace.dock.position_menu": "Dock {}",
+    "workspace.dock.move_button_left": "Move Button Left",
+    "workspace.dock.move_button_right": "Move Button Right",
     "workspace.security_modal.folder_to_trust": "Folder to trust",
     "title_bar.layout.agentic": "Agentic",
     "title_bar.layout.classic": "Classic",
