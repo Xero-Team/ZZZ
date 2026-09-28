@@ -534,7 +534,7 @@ pub fn global_ssh_config_file() -> Option<&'static Path> {
 /// Returns candidate paths for the vscode user settings file
 pub fn vscode_settings_file_paths() -> Vec<PathBuf> {
     let mut paths = vscode_user_data_paths();
-    for path in paths.iter_mut() {
+    for path in &mut paths {
         path.push("User/settings.json");
     }
     paths
@@ -543,7 +543,7 @@ pub fn vscode_settings_file_paths() -> Vec<PathBuf> {
 /// Returns candidate paths for the cursor user settings file
 pub fn cursor_settings_file_paths() -> Vec<PathBuf> {
     let mut paths = cursor_user_data_paths();
-    for path in paths.iter_mut() {
+    for path in &mut paths {
         path.push("User/settings.json");
     }
     paths

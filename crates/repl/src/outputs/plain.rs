@@ -94,8 +94,7 @@ pub fn terminal_size(window: &mut Window, cx: &mut App) -> terminal::TerminalBou
 
     let cell_width = text_system
         .advance(font_id, font_pixels, 'w')
-        .map(|advance| advance.width)
-        .unwrap_or(Pixels::ZERO);
+        .map_or(Pixels::ZERO, |advance| advance.width);
 
     let num_lines = ReplSettings::get_global(cx).max_lines;
     let columns = ReplSettings::get_global(cx).max_columns;
@@ -129,8 +128,7 @@ pub fn max_width_for_columns(
     let font_id = text_system.resolve_font(&text_style.font());
     let cell_width = text_system
         .advance(font_id, font_pixels, 'w')
-        .map(|advance| advance.width)
-        .unwrap_or(Pixels::ZERO);
+        .map_or(Pixels::ZERO, |advance| advance.width);
 
     Some(cell_width * columns as f32)
 }
@@ -298,8 +296,7 @@ mod tests {
             let font_id = text_system.resolve_font(&text_style.font());
             let cell_width = text_system
                 .advance(font_id, font_pixels, 'w')
-                .map(|advance| advance.width)
-                .unwrap_or(gpui::Pixels::ZERO);
+                .map_or(gpui::Pixels::ZERO, |advance| advance.width);
             let result = max_width_for_columns(columns, window, cx);
             (result, cell_width * columns as f32)
         });
@@ -350,8 +347,7 @@ impl Render for TerminalOutput {
 
         let cell_width = text_system
             .advance(font_id, font_pixels, 'w')
-            .map(|advance| advance.width)
-            .unwrap_or(Pixels::ZERO);
+            .map_or(Pixels::ZERO, |advance| advance.width);
 
         canvas(
             // prepaint

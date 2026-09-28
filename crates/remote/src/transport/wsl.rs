@@ -442,13 +442,13 @@ impl RemoteConnection for WslRemoteConnection {
         }
 
         let shell_kind = self.shell_kind;
-        let working_dir = working_dir
-            .map(|working_dir| RemotePathBuf::new(working_dir, PathStyle::Posix).to_string())
-            .unwrap_or("~".to_owned());
+        let working_dir = working_dir.map_or("~".to_owned(), |working_dir| {
+            RemotePathBuf::new(working_dir, PathStyle::Posix).to_string()
+        });
 
         let mut exec = String::from("exec env ");
 
-        for (key, value) in env.iter() {
+        for (key, value) in env {
             let assignment = format!("{key}={value}");
             let assignment = shell_kind.try_quote(&assignment).context("shell quoting")?;
             write!(exec, "{assignment} ")?;

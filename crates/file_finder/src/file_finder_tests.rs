@@ -479,7 +479,7 @@ async fn test_row_column_numbers_query_inside_file(cx: &mut TestAppContext) {
         .update_in(cx, |finder, window, cx| {
             finder
                 .delegate
-                .update_matches(query_inside_file.to_string(), window, cx)
+                .update_matches(query_inside_file.clone(), window, cx)
         })
         .await;
     picker.update(cx, |finder, _| {
@@ -555,7 +555,7 @@ async fn test_row_column_numbers_query_inside_unicode_file(cx: &mut TestAppConte
         .update_in(cx, |finder, window, cx| {
             finder
                 .delegate
-                .update_matches(query_inside_file.to_string(), window, cx)
+                .update_matches(query_inside_file.clone(), window, cx)
         })
         .await;
     picker.update(cx, |finder, _| {
@@ -643,7 +643,7 @@ async fn test_row_column_numbers_query_outside_file(cx: &mut TestAppContext) {
         .update_in(cx, |picker, window, cx| {
             picker
                 .delegate
-                .update_matches(query_outside_file.to_string(), window, cx)
+                .update_matches(query_outside_file.clone(), window, cx)
         })
         .await;
     picker.update(cx, |finder, _| {
@@ -2106,7 +2106,7 @@ async fn test_history_labels_do_not_include_worktree_root_name(cx: &mut gpui::Te
         let matches = &finder.delegate.matches.matches;
         assert!(matches.len() >= 2);
 
-        for m in matches.iter() {
+        for m in matches {
             if let Match::History { panel_match, .. } = m {
                 assert!(
                     panel_match.is_none(),
@@ -3039,7 +3039,7 @@ async fn test_keep_opened_file_on_top_of_search_results_and_select_next_one(
     // get back to the initial state
     picker
         .update_in(cx, |finder, window, cx| {
-            finder.delegate.update_matches("".to_string(), window, cx)
+            finder.delegate.update_matches(String::new(), window, cx)
         })
         .await;
     picker.update(cx, |finder, _| {
@@ -3208,7 +3208,7 @@ async fn test_non_separate_history_items(cx: &mut TestAppContext) {
     // get back to the initial state
     picker
         .update_in(cx, |finder, window, cx| {
-            finder.delegate.update_matches("".to_string(), window, cx)
+            finder.delegate.update_matches(String::new(), window, cx)
         })
         .await;
     picker.update(cx, |finder, _| {

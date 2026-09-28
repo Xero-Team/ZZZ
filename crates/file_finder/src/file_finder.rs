@@ -1205,9 +1205,7 @@ impl FileFinderDelegate {
 
             self.prepend_selected_matches();
 
-            self.selected_index = if !self.selected_matches.is_empty() {
-                0
-            } else {
+            self.selected_index = if self.selected_matches.is_empty() {
                 let query_has_position = query.path_position.row.is_some();
                 selected_match.map_or_else(
                     || self.calculate_selected_index(query_has_position, cx),
@@ -1217,6 +1215,8 @@ impl FileFinderDelegate {
                             .unwrap_or(0)
                     },
                 )
+            } else {
+                0
             };
 
             self.latest_search_query = Some(query);
@@ -1286,7 +1286,7 @@ impl FileFinderDelegate {
                         1,
                     ),
                     vec![],
-                    String::from(""),
+                    String::new(),
                     vec![],
                 ),
             };

@@ -616,7 +616,7 @@ impl TrustedWorktreesStore {
                 let host = self.worktree_stores.get(&worktree_store)?.host.clone();
                 let abs_paths = paths
                     .iter()
-                    .flat_map(|path| match path {
+                    .filter_map(|path| match path {
                         PathTrust::Worktree(worktree_id) => worktree_store
                             .upgrade()
                             .and_then(|worktree_store| {
@@ -675,8 +675,10 @@ impl TrustedWorktreesStore {
                     .map(|path_trust| match path_trust {
                         PathTrust::AbsPath(abs_path) => {
                             find_worktree_in_store(worktree_store.read(cx), &abs_path, cx)
-                                .map(|(worktree_id, _)| PathTrust::Worktree(worktree_id))
-                                .unwrap_or_else(|| PathTrust::AbsPath(abs_path))
+                                .map_or_else(
+                                    || PathTrust::AbsPath(abs_path),
+                                    |(worktree_id, _)| PathTrust::Worktree(worktree_id),
+                                )
                         }
                         other => other,
                     })

@@ -114,9 +114,10 @@ fn generate_reflected_trait(trait_item: ItemTrait) -> TokenStream {
     let method_info_entries = method_infos.iter().map(|(method_name, doc, cfg_attrs)| {
         let method_name_str = method_name.to_string();
         let wrapper_name = Ident::new(&format!("__wrapper_{}", method_name), method_name.span());
-        let doc_expr = match doc {
-            Some(doc_str) => quote! { Some(#doc_str) },
-            None => quote! { None },
+        let doc_expr = if let Some(doc_str) = doc {
+            quote! { Some(#doc_str) }
+        } else {
+            quote! { None }
         };
         quote! {
             #(#cfg_attrs)*

@@ -1225,13 +1225,13 @@ fn render_user_pattern_row(
                         cx,
                     );
 
-                    let validation_error = if !updated {
-                        Some(duplicate_pattern_message(cx))
-                    } else {
+                    let validation_error = if updated {
                         match regex::Regex::new(&new_pattern) {
                             Err(err) => Some(invalid_regex_message(&err.to_string(), cx)),
                             Ok(_) => None,
                         }
+                    } else {
+                        Some(duplicate_pattern_message(cx))
                     };
                     settings_window
                         .update(cx, |this, cx| {

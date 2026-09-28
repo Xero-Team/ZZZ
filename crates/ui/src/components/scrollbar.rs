@@ -853,7 +853,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
         [ScrollbarAxis::Horizontal, ScrollbarAxis::Vertical]
             .into_iter()
             .filter(|&axis| self.visibility.along(axis).is_visible())
-            .flat_map(move |axis| {
+            .filter_map(move |axis| {
                 let max_offset = max_offset.along(axis);
                 let viewport_size = viewport_size.along(axis);
                 if max_offset.is_zero() || viewport_size.is_zero() {
@@ -1343,8 +1343,7 @@ impl<T: ScrollableHandle> Element for ScrollbarElement<T> {
 
                     let blend_color = track_config
                         .as_ref()
-                        .map(|(_, colors)| colors.background)
-                        .unwrap_or(colors.surface_background);
+                        .map_or(colors.surface_background, |(_, colors)| colors.background);
 
                     let blending_color = if hovered || reserved_space.needs_scroll_track() {
                         blend_color
@@ -1503,8 +1502,7 @@ impl<T: ScrollableHandle> Element for ScrollbarElement<T> {
                         }
                         _ => state.update(cx, |state, cx| {
                             match state.update_parent_hovered(window) {
-                                hover @ ParentHoverEvent::Entered
-                                | hover @ ParentHoverEvent::Within
+                                hover @ (ParentHoverEvent::Entered | ParentHoverEvent::Within)
                                     if event.pressed_button.is_none() =>
                                 {
                                     if matches!(hover, ParentHoverEvent::Entered) {

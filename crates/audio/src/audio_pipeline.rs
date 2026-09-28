@@ -296,15 +296,12 @@ impl<S: Source> Iterator for SampleCountingSource<S> {
     type Item = RodioSample;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.inner.next() {
-            Some(sample) => {
-                self.control.sample_position.fetch_add(1, Ordering::Relaxed);
-                Some(sample)
-            }
-            None => {
-                self.control.finished.store(true, Ordering::Relaxed);
-                None
-            }
+        if let Some(sample) = self.inner.next() {
+            self.control.sample_position.fetch_add(1, Ordering::Relaxed);
+            Some(sample)
+        } else {
+            self.control.finished.store(true, Ordering::Relaxed);
+            None
         }
     }
 

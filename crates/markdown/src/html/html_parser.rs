@@ -595,10 +595,10 @@ fn html_style_from_html_styles(styles: HashMap<String, String>) -> Option<HtmlHi
         }
     }
 
-    if html_style != HtmlHighlightStyle::default() {
-        Some(html_style)
-    } else {
+    if html_style == HtmlHighlightStyle::default() {
         None
+    } else {
+        Some(html_style)
     }
 }
 

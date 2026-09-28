@@ -183,8 +183,7 @@ impl Client {
         let server_name = binary
             .executable
             .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(String::new);
+            .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
 
         let timeout = binary.timeout.map(Duration::from_secs);
         let transport = Arc::new(StdioTransport::new(binary, working_directory, &cx)?);
@@ -293,7 +292,7 @@ impl Client {
                 if let Some(handlers) = response_handlers.lock().as_mut()
                     && let Some(handler) = handlers.remove(&response.id)
                 {
-                    handler(message.to_string());
+                    handler(message.clone());
                 }
             } else if let Ok(notification) = serde_json::from_str::<AnyNotification>(&message) {
                 subscription_set.lock().notify(

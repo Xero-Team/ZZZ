@@ -425,7 +425,7 @@ impl MarksState {
 
         let mut loaded_marks = HashMap::default();
         let buffer = buffer_handle.read(cx);
-        for (name, points) in serialized_marks.iter() {
+        for (name, points) in serialized_marks {
             loaded_marks.insert(
                 name.clone(),
                 points
@@ -835,14 +835,7 @@ impl VimGlobals {
     ) {
         if let Some(register) = register {
             let lower = register.to_lowercase().next().unwrap_or(register);
-            if lower != register {
-                let current = self.registers.entry(lower).or_default();
-                current.text = (current.text.to_string() + &content.text).into();
-                // not clear how to support appending to registers with multiple cursors
-                current.clipboard_selections.take();
-                let yanked = current.clone();
-                self.registers.insert('"', yanked);
-            } else {
+            if lower == register {
                 match lower {
                     '_' | ':' | '.' | '%' | '#' | '=' | '/' => {}
                     '+' => {
@@ -865,6 +858,13 @@ impl VimGlobals {
                         self.registers.insert(lower, content);
                     }
                 }
+            } else {
+                let current = self.registers.entry(lower).or_default();
+                current.text = (current.text.to_string() + &content.text).into();
+                // not clear how to support appending to registers with multiple cursors
+                current.clipboard_selections.take();
+                let yanked = current.clone();
+                self.registers.insert('"', yanked);
             }
         } else {
             let setting = VimSettings::get_global(cx).use_system_clipboard;
@@ -1408,7 +1408,7 @@ impl RegistersView {
                     })
                 }
             }
-            for (name, register) in globals.registers.iter() {
+            for (name, register) in &globals.registers {
                 if ['"', '+', '*', '%'].contains(name) {
                     continue;
                 };
@@ -1582,7 +1582,7 @@ impl PickerDelegate for MarksViewDelegate {
                     }
                 }
 
-                for (name, mark_location) in marks_state.global_marks.iter() {
+                for (name, mark_location) in &marks_state.global_marks {
                     if has_seen.contains(name) {
                         continue;
                     }
@@ -1671,7 +1671,7 @@ impl PickerDelegate for MarksViewDelegate {
         let Some(text): Option<Arc<str>> = self
             .matches
             .get(self.selected_index)
-            .map(|m| Arc::from(m.name.to_string().into_boxed_str()))
+            .map(|m| Arc::from(m.name.clone().into_boxed_str()))
         else {
             return;
         };

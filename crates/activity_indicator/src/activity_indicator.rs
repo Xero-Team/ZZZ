@@ -462,7 +462,7 @@ impl ActivityIndicator {
             .and_then(Repository::current_job);
         // Show any long-running git command
         if let Some(job_info) = current_job
-            && Instant::now() - job_info.start >= GIT_OPERATION_DELAY
+            && job_info.start.elapsed() >= GIT_OPERATION_DELAY
         {
             return Some(Content {
                 icon: Some(

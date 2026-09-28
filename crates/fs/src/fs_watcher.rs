@@ -4,7 +4,6 @@ use parking_lot::Mutex;
 use std::{
     collections::HashMap,
     fs, io,
-    ops::DerefMut,
     path::Path,
     sync::{Arc, LazyLock, OnceLock},
     time::{Duration, Instant},
@@ -56,22 +55,19 @@ impl FsWatcher {
             log::trace!("path to watch is already watched: {path:?}");
             return Ok(());
         }
-        match register_existing_path(
+        if let Some(registration) = register_existing_path(
             path.clone(),
             case_insensitive,
             self.tx.clone(),
             self.pending_path_events.clone(),
         )? {
-            Some(registration) => {
-                self.registrations.lock().insert(key, registration);
-            }
-            None => {
-                // Registration was skipped (e.g. the native watch-limit cooldown
-                // is active). Retry in the background rather than silently leaving
-                // the path unwatched forever.
-                log::warn!("watch registration for {path:?} was skipped; retrying in background");
-                self.add_pending_path(path);
-            }
+            self.registrations.lock().insert(key, registration);
+        } else {
+            // Registration was skipped (e.g. the native watch-limit cooldown
+            // is active). Retry in the background rather than silently leaving
+            // the path unwatched forever.
+            log::warn!("watch registration for {path:?} was skipped; retrying in background");
+            self.add_pending_path(path);
         }
         Ok(())
     }
@@ -101,7 +97,7 @@ impl Drop for FsWatcher {
         let mut registrations = HashMap::new();
         {
             let old = &mut self.registrations.lock();
-            std::mem::swap(old.deref_mut(), &mut registrations);
+            std::mem::swap(&mut **old, &mut registrations);
         }
 
         let global_watcher = global_watcher();

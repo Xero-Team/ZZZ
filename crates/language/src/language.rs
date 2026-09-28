@@ -69,7 +69,7 @@ use std::{
     fmt::Debug,
     hash::Hash,
     mem,
-    ops::{DerefMut, Range},
+    ops::Range,
     path::{Path, PathBuf},
     str,
     sync::{Arc, LazyLock},
@@ -153,7 +153,7 @@ where
     F: FnOnce(&mut QueryCursor) -> R,
 {
     let mut cursor = QueryCursorHandle::new();
-    func(cursor.deref_mut())
+    func(&mut cursor)
 }
 
 static WASM_ENGINE: LazyLock<wasmtime::Engine> = LazyLock::new(|| {
@@ -721,7 +721,7 @@ where
         mut cx: AsyncApp,
     ) -> LanguageServerBinaryLocations {
         async move {
-            let cached_binary_deref = cached_binary.deref_mut();
+            let cached_binary_deref = &mut *cached_binary;
             // First we check whether the adapter can give us a user-installed binary.
             // If so, we do *not* want to cache that, because each worktree might give us a different
             // binary:

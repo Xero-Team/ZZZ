@@ -294,7 +294,7 @@ impl Element for Img {
                 })
             });
 
-            let mut frame_index = state.as_ref().map(|state| state.frame_index).unwrap_or(0);
+            let mut frame_index = state.as_ref().map_or(0, |state| state.frame_index);
 
             let layout_id = self.interactivity.request_layout(
                 global_id,

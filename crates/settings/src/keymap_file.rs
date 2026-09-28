@@ -252,7 +252,7 @@ impl KeymapFile {
             unbind,
             bindings,
             unrecognized_fields,
-        } in keymap_file.0.iter()
+        } in &keymap_file.0
         {
             let context_predicate: Option<Rc<KeyBindingContextPredicate>> = if context.is_empty() {
                 None
@@ -1305,18 +1305,15 @@ impl KeybindUpdateOperation<'_> {
             } => (None, Some(target), Some(*target_keybind_source)),
         };
 
-        let new_binding = new_binding
-            .map(KeybindUpdateTarget::telemetry_string)
-            .unwrap_or("null".to_owned());
-        let removed_binding = removed_binding
-            .map(KeybindUpdateTarget::telemetry_string)
-            .unwrap_or("null".to_owned());
+        let new_binding =
+            new_binding.map_or("null".to_owned(), KeybindUpdateTarget::telemetry_string);
+        let removed_binding =
+            removed_binding.map_or("null".to_owned(), KeybindUpdateTarget::telemetry_string);
 
         let source = source
             .as_ref()
             .map(KeybindSource::name)
-            .map(ToOwned::to_owned)
-            .unwrap_or("null".to_owned());
+            .map_or("null".to_owned(), ToOwned::to_owned);
 
         (new_binding, removed_binding, source)
     }

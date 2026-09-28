@@ -487,7 +487,7 @@ mod tests {
         // Spawn more updates such that in the end, there are again no matches.
         symbols.update_in(cx, |p, window, cx| {
             p.update_matches("o".to_string(), window, cx);
-            p.update_matches("".to_string(), window, cx);
+            p.update_matches(String::new(), window, cx);
         });
 
         cx.run_until_parked();

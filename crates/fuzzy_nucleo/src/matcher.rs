@@ -6,8 +6,7 @@ pub const LENGTH_PENALTY: f64 = 0.01;
 
 fn pool_cap() -> usize {
     std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(8)
+        .map_or(8, |n| n.get())
         .max(1)
 }
 

@@ -297,7 +297,7 @@ impl PickerDelegate for TasksModalDelegate {
                             let prefer_lsp = workspace
                                 .active_item(cx)
                                 .and_then(|item| item.downcast::<Editor>())
-                                .map(|editor| {
+                                .is_some_and(|editor| {
                                     editor
                                         .read(cx)
                                         .buffer()
@@ -305,8 +305,7 @@ impl PickerDelegate for TasksModalDelegate {
                                         .language_settings(cx)
                                         .tasks
                                         .prefer_lsp
-                                })
-                                .unwrap_or(false);
+                                });
                             (lsp_tasks, prefer_lsp)
                         }) else {
                             return Vec::new();
@@ -677,20 +676,19 @@ impl PickerDelegate for TasksModalDelegate {
                 .justify_between()
                 .border_t_1()
                 .border_color(cx.theme().colors().border_variant)
-                .child(
-                    left_button
-                        .map(|(label, action)| {
-                            let keybind = KeyBinding::for_action(&*action, cx);
+                .child(left_button.map_or_else(
+                    || h_flex().into_any_element(),
+                    |(label, action)| {
+                        let keybind = KeyBinding::for_action(&*action, cx);
 
-                            Button::new("edit-current-task", label)
-                                .key_binding(keybind)
-                                .on_click(move |_, window, cx| {
-                                    window.dispatch_action(action.boxed_clone(), cx);
-                                })
-                                .into_any_element()
-                        })
-                        .unwrap_or_else(|| h_flex().into_any_element()),
-                )
+                        Button::new("edit-current-task", label)
+                            .key_binding(keybind)
+                            .on_click(move |_, window, cx| {
+                                window.dispatch_action(action.boxed_clone(), cx);
+                            })
+                            .into_any_element()
+                    },
+                ))
                 .map(|this| {
                     if (current_modifiers.alt || self.matches.is_empty()) && !self.prompt.is_empty()
                     {

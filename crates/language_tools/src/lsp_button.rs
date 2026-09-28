@@ -88,8 +88,7 @@ impl ProcessMemoryCache {
     fn get_memory_usage(&mut self, process_id: u32) -> u64 {
         let cache_expired = self
             .last_refresh
-            .map(|last| last.elapsed() >= PROCESS_MEMORY_CACHE_DURATION)
-            .unwrap_or(true);
+            .map_or(true, |last| last.elapsed() >= PROCESS_MEMORY_CACHE_DURATION);
 
         if cache_expired {
             let refresh_kind = RefreshKind::nothing()
@@ -232,8 +231,9 @@ impl LanguageServerState {
         let path_style = self
             .workspace
             .upgrade()
-            .map(|workspace| workspace.read(cx).path_style(cx))
-            .unwrap_or_else(PathStyle::local);
+            .map_or_else(PathStyle::local, |workspace| {
+                workspace.read(cx).path_style(cx)
+            });
 
         let server_metadata =
             self.lsp_store
@@ -810,8 +810,10 @@ fn tooltip_for_server_binary(
                 .iter()
                 .find(|argument| !argument.to_string_lossy().starts_with('-'))
         })
-        .map(|argument| argument.to_string_lossy().into_owned())
-        .unwrap_or_else(|| binary_path.into_owned());
+        .map_or_else(
+            || binary_path.into_owned(),
+            |argument| argument.to_string_lossy().into_owned(),
+        );
     let display_path = path_style.normalize(&target_path);
 
     match runtime {

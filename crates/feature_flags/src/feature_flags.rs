@@ -236,9 +236,10 @@ impl FeatureFlagAppExt for App {
     }
 
     fn has_flag<T: FeatureFlag>(&self) -> bool {
-        self.try_global::<FeatureFlagStore>()
-            .map(|store| store.has_flag::<T>(self))
-            .unwrap_or_else(|| FeatureFlagStore::has_flag_default::<T>())
+        self.try_global::<FeatureFlagStore>().map_or_else(
+            || FeatureFlagStore::has_flag_default::<T>(),
+            |store| store.has_flag::<T>(self),
+        )
     }
 
     fn flag_value<T: FeatureFlag>(&self) -> T::Value {
@@ -249,8 +250,7 @@ impl FeatureFlagAppExt for App {
 
     fn is_staff(&self) -> bool {
         self.try_global::<FeatureFlagStore>()
-            .map(|store| store.is_staff())
-            .unwrap_or(false)
+            .is_some_and(|store| store.is_staff())
     }
 
     fn on_flags_ready<F>(&mut self, mut callback: F) -> Subscription

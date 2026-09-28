@@ -182,8 +182,8 @@ fn find_visuals(xcb: &XCBConnection, screen_index: usize) -> VisualSet {
         black_pixel: screen.black_pixel,
     };
 
-    for depth_info in screen.allowed_depths.iter() {
-        for visual_type in depth_info.visuals.iter() {
+    for depth_info in &screen.allowed_depths {
+        for visual_type in &depth_info.visuals {
             let visual = Visual {
                 id: visual_type.visual_id,
                 colormap: 0,
@@ -465,12 +465,11 @@ impl X11WindowState {
 
         let visual_set = find_visuals(xcb, x_screen_index);
 
-        let visual = match visual_set.transparent {
-            Some(visual) => visual,
-            None => {
-                log::warn!("Unable to find a transparent visual",);
-                visual_set.inherit
-            }
+        let visual = if let Some(visual) = visual_set.transparent {
+            visual
+        } else {
+            log::warn!("Unable to find a transparent visual",);
+            visual_set.inherit
         };
         log::info!("Using {:?}", visual);
 

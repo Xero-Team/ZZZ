@@ -180,22 +180,25 @@ fn conflicts_updated(
     let old_range = maybe!({
         let conflict_addon = editor.addon_mut::<ConflictAddon>().unwrap();
         let buffer_conflicts = conflict_addon.buffers.get(&buffer_id)?;
-        match buffer_conflicts.block_ids.get(event.old_range.clone()) {
-            Some(_) => Some(event.old_range.clone()),
-            None => {
-                debug_panic!(
-                    "conflicts updated event old range is invalid for buffer conflicts view (block_ids len is {:?}, old_range is {:?})",
-                    buffer_conflicts.block_ids.len(),
-                    event.old_range,
-                );
-                if event.old_range.start <= event.old_range.end {
-                    Some(
-                        event.old_range.start.min(buffer_conflicts.block_ids.len())
-                            ..event.old_range.end.min(buffer_conflicts.block_ids.len()),
-                    )
-                } else {
-                    None
-                }
+        if buffer_conflicts
+            .block_ids
+            .get(event.old_range.clone())
+            .is_some()
+        {
+            Some(event.old_range.clone())
+        } else {
+            debug_panic!(
+                "conflicts updated event old range is invalid for buffer conflicts view (block_ids len is {:?}, old_range is {:?})",
+                buffer_conflicts.block_ids.len(),
+                event.old_range,
+            );
+            if event.old_range.start <= event.old_range.end {
+                Some(
+                    event.old_range.start.min(buffer_conflicts.block_ids.len())
+                        ..event.old_range.end.min(buffer_conflicts.block_ids.len()),
+                )
+            } else {
+                None
             }
         }
     });

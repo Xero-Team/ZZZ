@@ -115,7 +115,7 @@ impl Display for DevContainerError {
                     "Error downloading resources locally".to_owned(),
                 DevContainerError::ResourceFetchFailed =>
                     "Failed to fetch resources from template or feature repository".to_owned(),
-                DevContainerError::DevContainerValidationFailed(failure) => failure.to_string(),
+                DevContainerError::DevContainerValidationFailed(failure) => failure.clone(),
                 DevContainerError::MultipleMatchingContainers(ids) => format!(
                     "Multiple containers match this project's dev container labels ({}). \
                      ZZZ can't decide which to connect to. Stop and remove the stale one(s) with \
@@ -358,8 +358,7 @@ pub(crate) async fn apply_devcontainer_template(
 
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_millis());
     let extract_dir = std::env::temp_dir()
         .join(&template.id)
         .join(format!("extracted-{timestamp}"));
@@ -477,8 +476,7 @@ fn get_backup_project_name(remote_workspace_folder: &str, container_id: &str) ->
     Path::new(remote_workspace_folder)
         .file_name()
         .and_then(|name| name.to_str())
-        .map(|string| string.to_owned())
-        .unwrap_or_else(|| container_id.to_owned())
+        .map_or_else(|| container_id.to_owned(), |string| string.to_owned())
 }
 
 #[cfg(test)]

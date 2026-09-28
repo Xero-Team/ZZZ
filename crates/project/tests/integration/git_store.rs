@@ -1137,7 +1137,7 @@ mod git_traversal {
         .await;
         fs.set_head_and_index_for_repo(
             path!("/root/.git").as_ref(),
-            &[("a.txt", "".into()), ("b/c.txt", "".into())],
+            &[("a.txt", String::new()), ("b/c.txt", String::new())],
         );
         cx.run_until_parked();
 
@@ -1172,7 +1172,10 @@ mod git_traversal {
         // detected.
         fs.set_head_for_repo(
             path!("/root/.git").as_ref(),
-            &[("a.txt", "".into()), ("b/c.txt", "something-else".into())],
+            &[
+                ("a.txt", String::new()),
+                ("b/c.txt", "something-else".into()),
+            ],
             "deadbeef",
         );
         cx.executor().run_until_parked();

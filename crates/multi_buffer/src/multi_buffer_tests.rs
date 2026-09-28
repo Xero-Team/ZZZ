@@ -2864,7 +2864,7 @@ async fn test_diff_hunks_with_multiple_excerpts(cx: &mut TestAppContext) {
             Some((base_id_1, "four".into())),
             Some((base_id_1, "five".into())),
             Some((id_1, "six".into())),
-            Some((id_1, "".into())),
+            Some((id_1, String::new())),
             Some((base_id_2, "seven".into())),
             Some((id_2, "  eight".into())),
             Some((id_2, "nine".into())),
@@ -2873,7 +2873,7 @@ async fn test_diff_hunks_with_multiple_excerpts(cx: &mut TestAppContext) {
             Some((base_id_2, "twelve".into())),
             Some((id_2, "THIRTEEN".into())),
             Some((id_2, "FOURTEEN".into())),
-            Some((id_2, "".into())),
+            Some((id_2, String::new())),
         ]
     );
 
@@ -3594,9 +3594,8 @@ async fn test_random_set_ranges(cx: &mut TestAppContext, mut rng: StdRng) {
     let buf = cx.update(|cx| cx.new(|cx| Buffer::local(base_text, cx)));
     let multibuffer = cx.new(|_| MultiBuffer::new(Capability::ReadWrite));
 
-    let operations = env::var("OPERATIONS")
-        .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-        .unwrap_or(10);
+    let operations =
+        env::var("OPERATIONS").map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
     fn row_ranges(ranges: &Vec<Range<Point>>) -> Vec<Range<u32>> {
         ranges
@@ -3666,9 +3665,8 @@ async fn test_random_set_ranges(cx: &mut TestAppContext, mut rng: StdRng) {
 
 #[gpui::test(iterations = 100)]
 async fn test_random_multibuffer(cx: &mut TestAppContext, mut rng: StdRng) {
-    let operations = env::var("OPERATIONS")
-        .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-        .unwrap_or(10);
+    let operations =
+        env::var("OPERATIONS").map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
     let multibuffer = cx.new(|_| MultiBuffer::new(Capability::ReadWrite));
     let mut buffers: Vec<Entity<Buffer>> = Vec::new();
     let mut base_texts: HashMap<BufferId, String> = HashMap::default();

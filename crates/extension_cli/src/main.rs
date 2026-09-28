@@ -545,7 +545,7 @@ async fn test_snippets(
         let snippets_file = serde_json_lenient::from_slice::<VsSnippetsFile>(&snippets_content)
             .with_context(|| anyhow!("Failed to parse snippet file at {snippet_path:?}"))?;
         let snippet_errors = file_to_snippets(snippets_file, &snippet_path)
-            .flat_map(Result::err)
+            .filter_map(Result::err)
             .collect::<Vec<_>>();
         let error_count = snippet_errors.len();
 

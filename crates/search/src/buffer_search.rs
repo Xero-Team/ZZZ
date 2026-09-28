@@ -350,8 +350,7 @@ impl Render for BufferSearchBar {
                 let matches_count = self
                     .searchable_items_with_matches
                     .get(&searchable_item.downgrade())
-                    .map(|(matches, _)| matches.len())
-                    .unwrap_or(0);
+                    .map_or(0, |(matches, _)| matches.len());
                 if let Some(match_ix) = self.active_match_index {
                     Some(format!("{}/{}", match_ix + 1, matches_count))
                 } else {
@@ -1993,12 +1992,13 @@ impl BufferSearchBar {
     /// Clears them when the search bar is dismissed so that
     /// only the editor's settings are respected.
     fn sync_select_search_options(&self, cx: &mut Context<Self>) {
-        let search_options = match self.dismissed {
-            true => None,
-            false => Some(SelectSearchOptions {
+        let search_options = if self.dismissed {
+            None
+        } else {
+            Some(SelectSearchOptions {
                 case_sensitive: self.search_options.contains(SearchOptions::CASE_SENSITIVE),
                 whole_word: self.search_options.contains(SearchOptions::WHOLE_WORD),
-            }),
+            })
         };
 
         if let Some(active_searchable_item) = self.active_searchable_item.as_ref() {

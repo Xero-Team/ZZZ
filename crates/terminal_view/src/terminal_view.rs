@@ -977,7 +977,7 @@ impl TerminalView {
         self.clear_bell(cx);
         self.blink_manager.update(cx, BlinkManager::pause_blinking);
         self.terminal.update(cx, |term, _| {
-            term.input(text.0.to_string().into_bytes());
+            term.input(text.0.clone().into_bytes());
         });
     }
 
@@ -1261,11 +1261,10 @@ struct TerminalScrollbarSettingsWrapper;
 
 impl ScrollbarVisibility for TerminalScrollbarSettingsWrapper {
     fn visibility(&self, cx: &App) -> scrollbars::ShowScrollbar {
-        TerminalSettings::get_global(cx)
-            .scrollbar
-            .show
-            .map(ui_scrollbar_settings_from_raw)
-            .unwrap_or_else(|| EditorSettings::get_global(cx).scrollbar.show)
+        TerminalSettings::get_global(cx).scrollbar.show.map_or_else(
+            || EditorSettings::get_global(cx).scrollbar.show,
+            ui_scrollbar_settings_from_raw,
+        )
     }
 }
 
@@ -2081,7 +2080,9 @@ impl SearchableItem for TerminalView {
         // associated with a match. Therefore, if there are no matches, we should
         // report None, no matter the state of the terminal
 
-        if !matches.is_empty() {
+        if matches.is_empty() {
+            None
+        } else {
             if let Some(selection_head) = self.terminal().read(cx).selection_head {
                 // If selection head is contained in a match. Return that match
                 match direction {
@@ -2096,8 +2097,7 @@ impl SearchableItem for TerminalView {
                                     search_match.contains(&selection_head)
                                         || search_match.start() < &selection_head
                                 })
-                                .map(|(ix, _)| ix)
-                                .unwrap_or(0),
+                                .map_or(0, |(ix, _)| ix),
                         )
                     }
                     Direction::Next => {
@@ -2110,8 +2110,7 @@ impl SearchableItem for TerminalView {
                                     search_match.contains(&selection_head)
                                         || search_match.start() > &selection_head
                                 })
-                                .map(|(ix, _)| ix)
-                                .unwrap_or(matches.len().saturating_sub(1)),
+                                .map_or(matches.len().saturating_sub(1), |(ix, _)| ix),
                         )
                     }
                 }
@@ -2119,8 +2118,6 @@ impl SearchableItem for TerminalView {
                 // Matches found but no active selection, return the first last one (closest to cursor)
                 Some(matches.len().saturating_sub(1))
             }
-        } else {
-            None
         }
     }
     fn replace(
@@ -3068,7 +3065,7 @@ mod tests {
             view.set_custom_title(Some("test".to_string()), cx);
             assert_eq!(view.custom_title(), Some("test"));
 
-            view.set_custom_title(Some("".to_string()), cx);
+            view.set_custom_title(Some(String::new()), cx);
             assert!(view.custom_title().is_none());
 
             view.set_custom_title(Some("  ".to_string()), cx);
@@ -3291,7 +3288,7 @@ mod tests {
             .unwrap();
 
         terminal_view.update(cx, |view, cx| {
-            view.custom_title = Some("".to_string());
+            view.custom_title = Some(String::new());
             let text = view.tab_content_text(0, cx);
             assert!(
                 !text.is_empty(),

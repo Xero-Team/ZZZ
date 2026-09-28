@@ -282,7 +282,7 @@ impl Match {
     pub fn score(&self) -> f64 {
         match self {
             Match::File(file) => file.mat.score,
-            Match::Entry(mode) => mode.mat.as_ref().map(|mat| mat.score).unwrap_or(1.),
+            Match::Entry(mode) => mode.mat.as_ref().map_or(1., |mat| mat.score),
             Match::Thread(_) => 1.,
             Match::RecentThread(_) => 1.,
             Match::Symbol(_) => 1.,
@@ -941,22 +941,22 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
 
             Some(PromptContextType::Thread) => {
                 let sessions = collect_session_matches(cx);
-                if !sessions.is_empty() {
+                if sessions.is_empty() {
+                    Task::ready(Vec::new())
+                } else {
                     let search_task =
                         filter_sessions_by_query(query, cancellation_flag, sessions, cx);
                     cx.spawn(async move |_cx| {
                         search_task.await.into_iter().map(Match::Thread).collect()
                     })
-                } else {
-                    Task::ready(Vec::new())
                 }
             }
 
             Some(PromptContextType::Fetch) => {
-                if !query.is_empty() {
-                    Task::ready(vec![Match::Fetch(query.into())])
-                } else {
+                if query.is_empty() {
                     Task::ready(Vec::new())
+                } else {
+                    Task::ready(vec![Match::Fetch(query.into())])
                 }
             }
 
@@ -1398,8 +1398,10 @@ impl<T: PromptCompletionProviderDelegate> CompletionProvider for PromptCompletio
                                         project
                                             .read(cx)
                                             .worktree_for_id(project_path.worktree_id, cx)
-                                            .map(|wt| wt.read(cx).root_name().into())
-                                            .unwrap_or_else(|| mat.path_prefix.clone())
+                                            .map_or_else(
+                                                || mat.path_prefix.clone(),
+                                                |wt| wt.read(cx).root_name().into(),
+                                            )
                                     } else {
                                         mat.path_prefix.clone()
                                     };
@@ -1536,12 +1538,11 @@ impl<T: PromptCompletionProviderDelegate> CompletionProvider for PromptCompletio
                     );
                     !is_slash_command_with_argument
                 })
-                .map(|completion| {
+                .is_some_and(|completion| {
                     completion.source_range().start <= offset_to_line + position.column as usize
                         && completion.source_range().end
                             >= offset_to_line + position.column as usize
                 })
-                .unwrap_or(false)
         } else {
             false
         }
@@ -1926,8 +1927,7 @@ pub(crate) fn search_files(
                 let path_prefix = if include_root_name {
                     project
                         .worktree_for_id(project_path.worktree_id, cx)
-                        .map(|wt| wt.read(cx).root_name().into())
-                        .unwrap_or_else(|| RelPath::empty_arc())
+                        .map_or_else(|| RelPath::empty_arc(), |wt| wt.read(cx).root_name().into())
                 } else {
                     RelPath::empty_arc()
                 };
@@ -2173,7 +2173,7 @@ pub(crate) fn search_rules(
         search_task
             .await
             .into_iter()
-            .flat_map(|metadata| {
+            .filter_map(|metadata| {
                 // Default prompts are filtered out as they are automatically included.
                 if metadata.default {
                     None

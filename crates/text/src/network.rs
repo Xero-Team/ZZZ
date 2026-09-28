@@ -61,7 +61,7 @@ impl<T: Clone, R: rand::Rng> Network<T, R> {
             return;
         }
 
-        for (replica, inbox) in self.inboxes.iter_mut() {
+        for (replica, inbox) in &mut self.inboxes {
             if *replica != sender && !self.disconnected_peers.contains(replica) {
                 for message in &messages {
                     // Insert one or more duplicates of this message, potentially *before* the previous

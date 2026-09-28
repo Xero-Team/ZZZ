@@ -436,10 +436,10 @@ impl AgentServerStore {
                 continue;
             };
 
-            if new_version != &old_version {
-                tx.send(Some(new_version.to_string())).ok();
-            } else {
+            if new_version == &old_version {
                 entry.server.set_new_version_available_tx(tx);
+            } else {
+                tx.send(Some(new_version.to_string())).ok();
             }
         }
 
@@ -849,8 +849,7 @@ fn registry_archive_kind_for_url(archive_url: &str) -> Result<RegistryArchiveKin
 
     let archive_path = Url::parse(archive_url)
         .ok()
-        .map(|url| url.path().to_owned())
-        .unwrap_or_else(|| archive_url.to_owned());
+        .map_or_else(|| archive_url.to_owned(), |url| url.path().to_owned());
     let lowercase_path = archive_path.to_lowercase();
 
     if lowercase_path.ends_with(".zip") {

@@ -1626,13 +1626,15 @@ impl RemoteServerProjects {
                         .read_with(cx, |project, cx| project.resolve_abs_path("~", cx))
                         .await
                         .and_then(|path| path.into_abs_path())
-                        .map(|path| RemotePathBuf::new(path, path_style))
-                        .unwrap_or_else(|| match path_style {
-                            PathStyle::Posix => RemotePathBuf::from_str("/", PathStyle::Posix),
-                            PathStyle::Windows => {
-                                RemotePathBuf::from_str("C:\\", PathStyle::Windows)
-                            }
-                        });
+                        .map_or_else(
+                            || match path_style {
+                                PathStyle::Posix => RemotePathBuf::from_str("/", PathStyle::Posix),
+                                PathStyle::Windows => {
+                                    RemotePathBuf::from_str("C:\\", PathStyle::Windows)
+                                }
+                            },
+                            |path| RemotePathBuf::new(path, path_style),
+                        );
 
                     workspace
                         .update_in(cx, |workspace, window, cx| {
@@ -1698,13 +1700,13 @@ impl RemoteServerProjects {
     fn cancel(&mut self, _: &menu::Cancel, window: &mut Window, cx: &mut Context<Self>) {
         match &self.mode {
             Mode::Default(_) => {
-                if !self.filter_editor.read(cx).text(cx).is_empty() {
+                if self.filter_editor.read(cx).text(cx).is_empty() {
+                    cx.emit(DismissEvent);
+                } else {
                     self.filter_editor.update(cx, |editor, cx| {
                         editor.set_text("", window, cx);
                     });
                     cx.notify();
-                } else {
-                    cx.emit(DismissEvent);
                 }
             }
             Mode::CreateRemoteServer(state) if state.ssh_prompt.is_some() => {
@@ -2275,9 +2277,10 @@ impl RemoteServerProjects {
             return;
         };
 
-        let config_path = config
-            .map(|c| c.config_path)
-            .unwrap_or_else(|| PathBuf::from(".devcontainer/devcontainer.json"));
+        let config_path = config.map_or_else(
+            || PathBuf::from(".devcontainer/devcontainer.json"),
+            |c| c.config_path,
+        );
 
         workspace.update(cx, |workspace, cx| {
             let project = workspace.project().clone();
@@ -3327,26 +3330,20 @@ impl RemoteServerProjects {
                 cx.notify();
             }));
 
-        let has_open_project = self
-            .workspace
-            .upgrade()
-            .map(|workspace| {
-                workspace
-                    .read(cx)
-                    .project()
-                    .read(cx)
-                    .visible_worktrees(cx)
-                    .next()
-                    .is_some()
-            })
-            .unwrap_or(false);
+        let has_open_project = self.workspace.upgrade().is_some_and(|workspace| {
+            workspace
+                .read(cx)
+                .project()
+                .read(cx)
+                .visible_worktrees(cx)
+                .next()
+                .is_some()
+        });
 
         // We cannot currently connect a dev container from within a remote server due to the remote_server architecture
-        let is_local = self
-            .workspace
-            .upgrade()
-            .map(|workspace| workspace.read(cx).project().read(cx).is_local())
-            .unwrap_or(true);
+        let is_local = self.workspace.upgrade().map_or(true, |workspace| {
+            workspace.read(cx).project().read(cx).is_local()
+        });
 
         let modal_section = v_flex()
             .track_focus(&self.focus_handle)

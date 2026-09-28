@@ -709,7 +709,7 @@ impl DapStore {
 
         cx.spawn(async move |_, cx| {
             let mut inlay_hints = Vec::with_capacity(inline_value_locations.len());
-            for inline_value_location in inline_value_locations.iter() {
+            for inline_value_location in &inline_value_locations {
                 let point = snapshot.point_to_point_utf16(language::Point::new(
                     inline_value_location.row as u32,
                     inline_value_location.column as u32,

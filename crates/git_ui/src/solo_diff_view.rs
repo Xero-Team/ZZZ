@@ -300,8 +300,7 @@ impl SoloDiffView {
             .repository
             .read(cx)
             .status_for_path(&self.repo_path)
-            .map(|entry| entry.status.staging())
-            .unwrap_or(StageStatus::Unstaged);
+            .map_or(StageStatus::Unstaged, |entry| entry.status.staging());
 
         SoloDiffButtonStates {
             stage,
@@ -399,13 +398,15 @@ impl Item for SoloDiffView {
             self.buffer
                 .read(cx)
                 .file()
-                .map(|file| file.full_path(cx).compact().to_string_lossy().into_owned())
-                .unwrap_or_else(|| {
-                    self.repo_path
-                        .as_ref()
-                        .display(PathStyle::local())
-                        .into_owned()
-                })
+                .map_or_else(
+                    || {
+                        self.repo_path
+                            .as_ref()
+                            .display(PathStyle::local())
+                            .into_owned()
+                    },
+                    |file| file.full_path(cx).compact().to_string_lossy().into_owned(),
+                )
                 .into(),
         )
     }

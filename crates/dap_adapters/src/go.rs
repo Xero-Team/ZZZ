@@ -418,10 +418,10 @@ impl DebugAdapter for GoDebugAdapter {
                 })
             }
             dap::DebugRequest::Launch(launch_config) => {
-                let mode = if launch_config.program != "." {
-                    "exec"
-                } else {
+                let mode = if launch_config.program == "." {
                     "debug"
+                } else {
+                    "exec"
                 };
 
                 json!({
@@ -508,8 +508,10 @@ impl DebugAdapter for GoDebugAdapter {
                 .config
                 .get("cwd")
                 .and_then(|s| s.as_str())
-                .map(PathBuf::from)
-                .unwrap_or_else(|| delegate.worktree_root_path().to_path_buf()),
+                .map_or_else(
+                    || delegate.worktree_root_path().to_path_buf(),
+                    PathBuf::from,
+                ),
         );
 
         let arguments;

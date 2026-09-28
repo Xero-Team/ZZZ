@@ -846,9 +846,10 @@ impl Item for Editor {
     }
 
     fn buffer_kind(&self, cx: &App) -> ItemBufferKind {
-        match self.buffer.read(cx).is_singleton() {
-            true => ItemBufferKind::Singleton,
-            false => ItemBufferKind::Multibuffer,
+        if self.buffer.read(cx).is_singleton() {
+            ItemBufferKind::Singleton
+        } else {
+            ItemBufferKind::Multibuffer
         }
     }
 
@@ -1646,13 +1647,12 @@ impl Editor {
                         .project_item_restoration_data
                         .entry(kind)
                         .or_insert_with(|| Box::new(EditorRestorationData::default()) as Box<_>);
-                    let data = match data.downcast_mut::<EditorRestorationData>() {
-                        Some(data) => data,
-                        None => {
-                            *data = Box::new(EditorRestorationData::default());
-                            data.downcast_mut::<EditorRestorationData>()
-                                .expect("just written the type downcasted to")
-                        }
+                    let data = if let Some(data) = data.downcast_mut::<EditorRestorationData>() {
+                        data
+                    } else {
+                        *data = Box::new(EditorRestorationData::default());
+                        data.downcast_mut::<EditorRestorationData>()
+                            .expect("just written the type downcasted to")
                     };
 
                     let data = data.entries.entry(file_abs_path).or_default();

@@ -149,10 +149,9 @@ fn calculate_seeds(
     iterations: u64,
     explicit_seeds: &[u64],
 ) -> (impl Iterator<Item = u64> + '_, bool) {
-    let iterations = env::var("ITERATIONS")
-        .ok()
-        .map(|var| var.parse().expect("invalid ITERATIONS variable"))
-        .unwrap_or(iterations);
+    let iterations = env::var("ITERATIONS").ok().map_or(iterations, |var| {
+        var.parse().expect("invalid ITERATIONS variable")
+    });
 
     let env_num = env::var("SEED")
         .map(|seed| seed.parse().expect("invalid SEED variable as integer"))
@@ -173,7 +172,7 @@ fn calculate_seeds(
         // otherwise, do `0..iterations`
         let iterations_range = match (iterations, env_num) {
             (1, None) if explicit_seeds.is_empty() => 0..1,
-            (1, None) | (1, Some(_)) => empty_range(),
+            (1, None | Some(_)) => empty_range(),
             (iterations, Some(env)) => env..env + iterations,
             (iterations, None) => 0..iterations,
         };

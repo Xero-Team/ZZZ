@@ -1748,7 +1748,7 @@ fn open_log_file(workspace: &mut Workspace, window: &mut Window, cx: &mut Contex
             });
 
             let buffer =
-                cx.new(|cx| MultiBuffer::singleton(buffer, cx).with_title(log_title.to_string()));
+                cx.new(|cx| MultiBuffer::singleton(buffer, cx).with_title(log_title.clone()));
 
             let editor = cx
                 .new_window_entity(|window, cx| {
@@ -1796,44 +1796,37 @@ fn notify_settings_errors(result: settings::SettingsParseResult, is_user: bool, 
     };
     let id = NotificationId::Named(format!("failed-to-parse-settings-{is_user}").into());
 
-    let showed_parse_error = match error {
-        Some(error) => {
-            if let Some(InvalidSettingsError::LocalSettings { .. }) =
-                error.downcast_ref::<InvalidSettingsError>()
-            {
-                false
-                // Local settings errors are displayed by the projects
-            } else {
-                show_app_notification(id, cx, move |cx| {
-                    let message = tr(
-                        cx,
-                        "zzz.settings.invalid_settings_file",
-                        "Invalid {} settings file\n{}",
-                    )
-                    .replacen("{}", &settings_scope, 1)
-                    .replacen("{}", &error.to_string(), 1);
-                    let open_settings_file =
-                        tr(cx, "menu.settings.open_file", "Open Settings File");
-                    cx.new(|cx| {
-                        MessageNotification::new(message, cx)
-                            .primary_message(open_settings_file)
-                            .primary_icon(IconName::Settings)
-                            .primary_on_click(|window, cx| {
-                                window.dispatch_action(
-                                    zzz_actions::OpenSettingsFile.boxed_clone(),
-                                    cx,
-                                );
-                                cx.emit(DismissEvent);
-                            })
-                    })
-                });
-                true
-            }
-        }
-        None => {
-            dismiss_app_notification(&id, cx);
+    let showed_parse_error = if let Some(error) = error {
+        if let Some(InvalidSettingsError::LocalSettings { .. }) =
+            error.downcast_ref::<InvalidSettingsError>()
+        {
             false
+            // Local settings errors are displayed by the projects
+        } else {
+            show_app_notification(id, cx, move |cx| {
+                let message = tr(
+                    cx,
+                    "zzz.settings.invalid_settings_file",
+                    "Invalid {} settings file\n{}",
+                )
+                .replacen("{}", &settings_scope, 1)
+                .replacen("{}", &error.to_string(), 1);
+                let open_settings_file = tr(cx, "menu.settings.open_file", "Open Settings File");
+                cx.new(|cx| {
+                    MessageNotification::new(message, cx)
+                        .primary_message(open_settings_file)
+                        .primary_icon(IconName::Settings)
+                        .primary_on_click(|window, cx| {
+                            window.dispatch_action(zzz_actions::OpenSettingsFile.boxed_clone(), cx);
+                            cx.emit(DismissEvent);
+                        })
+                })
+            });
+            true
         }
+    } else {
+        dismiss_app_notification(&id, cx);
+        false
     };
     let id = NotificationId::Named(format!("failed-to-migrate-settings-{is_user}").into());
 
@@ -6776,11 +6769,10 @@ mod tests {
                     .filter(|window| {
                         window
                             .read_with(cx, |mw, cx| mw.workspace().read(cx).root_paths(cx))
-                            .map(|active_paths| {
+                            .is_ok_and(|active_paths| {
                                 active_paths.iter().any(|p| p.as_ref() == Path::new(dir1))
                                     || active_paths.iter().any(|p| p.as_ref() == Path::new(dir3))
                             })
-                            .unwrap_or(false)
                     })
                     .count(),
                 2,

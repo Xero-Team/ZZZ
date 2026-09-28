@@ -48,20 +48,21 @@ pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
         #proptest_args
     };
 
-    let run_test_body = match &asyncness {
-        None => quote! {
+    let run_test_body = if asyncness == None {
+        quote! {
             #cx_vars
             let result = #inner_fn_name(#inner_args);
             #cx_teardowns
             result
-        },
-        Some(_) => quote! {
+        }
+    } else {
+        quote! {
             let foreground_executor = gpui::ForegroundExecutor::new(std::sync::Arc::new(dispatcher.clone()));
             #cx_vars
             let result = foreground_executor.block_test(#inner_fn_name(#inner_args));
             #cx_teardowns
             result
-        },
+        }
     };
 
     let fixed_macro_invocation = args.render();

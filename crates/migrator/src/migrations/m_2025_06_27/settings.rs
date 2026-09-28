@@ -79,8 +79,7 @@ fn flatten_context_server_command(
     let command_pair_start = command_pair.start_byte();
     let line_start = contents[..command_pair_start]
         .rfind('\n')
-        .map(|pos| pos + 1)
-        .unwrap_or(0);
+        .map_or(0, |pos| pos + 1);
     let indent = &contents[line_start..command_pair_start];
 
     // Build the replacement string

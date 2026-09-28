@@ -652,8 +652,7 @@ impl ProjectDiff {
         let status = git_repo
             .read(cx)
             .status_for_path(&repo_path)
-            .map(|entry| entry.status)
-            .unwrap_or(FileStatus::Untracked);
+            .map_or(FileStatus::Untracked, |entry| entry.status);
         let path_key = project_diff_path_key(&git_repo.read(cx), &repo_path, status, cx);
         self.move_to_path(path_key, window, cx)
     }
@@ -1184,9 +1183,7 @@ fn name_sort_path(repo_path: &RelPath) -> Arc<RelPath> {
         return repo_path.into_arc();
     };
     let synthetic = format!("{}/{}", file_name, repo_path.as_unix_str());
-    RelPath::unix(&synthetic)
-        .map(|path| path.into_arc())
-        .unwrap_or_else(|_| repo_path.into_arc())
+    RelPath::unix(&synthetic).map_or_else(|_| repo_path.into_arc(), |path| path.into_arc())
 }
 
 /// Builds a synthetic path whose natural component-wise ordering reproduces a
@@ -1209,9 +1206,7 @@ fn tree_sort_path(repo_path: &RelPath) -> Arc<RelPath> {
         }
         synthetic.push_str(component);
     }
-    RelPath::unix(&synthetic)
-        .map(|path| path.into_arc())
-        .unwrap_or_else(|_| repo_path.into_arc())
+    RelPath::unix(&synthetic).map_or_else(|_| repo_path.into_arc(), |path| path.into_arc())
 }
 
 impl EventEmitter<EditorEvent> for ProjectDiff {}

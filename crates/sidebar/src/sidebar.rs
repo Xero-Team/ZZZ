@@ -1167,13 +1167,13 @@ impl Sidebar {
                 // workspace's root paths match the thread's folder_paths, use
                 // Open; otherwise use Closed.
                 let resolve_workspace = |row: &ThreadMetadata| -> ThreadEntryWorkspace {
-                    workspace_by_path_list
-                        .get(row.folder_paths())
-                        .map(|ws| ThreadEntryWorkspace::Open((*ws).clone()))
-                        .unwrap_or_else(|| ThreadEntryWorkspace::Closed {
+                    workspace_by_path_list.get(row.folder_paths()).map_or_else(
+                        || ThreadEntryWorkspace::Closed {
                             folder_paths: row.folder_paths().clone(),
                             project_group_key: group_key.clone(),
-                        })
+                        },
+                        |ws| ThreadEntryWorkspace::Open((*ws).clone()),
+                    )
                 };
 
                 // Build a ThreadEntry from a metadata row.
@@ -1383,9 +1383,7 @@ impl Sidebar {
                 }
             }
 
-            let has_threads = if !threads.is_empty() {
-                true
-            } else {
+            let has_threads = if threads.is_empty() {
                 let store = ThreadMetadataStore::global(cx).read(cx);
                 store
                     .entries_for_main_worktree_path(group_key.path_list(), group_host.as_ref())
@@ -1395,9 +1393,59 @@ impl Sidebar {
                         .entries_for_path(group_key.path_list(), group_host.as_ref())
                         .next()
                         .is_some()
+            } else {
+                true
             };
 
-            if !query.is_empty() {
+            if query.is_empty() {
+                let has_terminal_notifications = false;
+
+                // When collapsed, threads aren't loaded into `threads`, so we
+                // query the store for thread IDs to check notifications and
+                // to prevent the retain below from purging them.
+                let has_thread_notifications = if threads.is_empty() && !notified_threads.is_empty()
+                {
+                    let thread_store = ThreadMetadataStore::global(cx);
+                    let store = thread_store.read(cx);
+                    let group_thread_ids = store
+                        .entries_for_main_worktree_path(group_key.path_list(), group_host.as_ref())
+                        .chain(store.entries_for_path(group_key.path_list(), group_host.as_ref()))
+                        .map(|m| m.thread_id)
+                        .collect::<HashSet<_>>();
+                    current_thread_ids.extend(group_thread_ids.iter());
+                    group_thread_ids
+                        .iter()
+                        .any(|id| notified_threads.contains(id))
+                } else {
+                    threads
+                        .iter()
+                        .any(|t| notified_threads.contains(&t.metadata.thread_id))
+                };
+
+                project_header_indices.push(entries.len());
+                entries.push(ListEntry::ProjectHeader {
+                    key: group_key.clone(),
+                    label,
+                    highlight_positions: Vec::new(),
+                    has_running_threads,
+                    waiting_thread_count,
+                    has_notifications: has_thread_notifications || has_terminal_notifications,
+                    is_active,
+                    has_threads,
+                });
+
+                if is_collapsed {
+                    continue;
+                }
+
+                for thread in threads {
+                    if let Some(sid) = &thread.metadata.session_id {
+                        current_session_ids.insert(sid.clone());
+                    }
+                    current_thread_ids.insert(thread.metadata.thread_id);
+                    entries.push(thread.into());
+                }
+            } else {
                 let workspace_highlight_positions =
                     fuzzy_match_positions(&query, &label).unwrap_or_default();
                 let workspace_matched = !workspace_highlight_positions.is_empty();
@@ -1455,54 +1503,6 @@ impl Sidebar {
                 for thread in matched_threads {
                     if let Some(sid) = thread.metadata.session_id.clone() {
                         current_session_ids.insert(sid);
-                    }
-                    current_thread_ids.insert(thread.metadata.thread_id);
-                    entries.push(thread.into());
-                }
-            } else {
-                let has_terminal_notifications = false;
-
-                // When collapsed, threads aren't loaded into `threads`, so we
-                // query the store for thread IDs to check notifications and
-                // to prevent the retain below from purging them.
-                let has_thread_notifications = if threads.is_empty() && !notified_threads.is_empty()
-                {
-                    let thread_store = ThreadMetadataStore::global(cx);
-                    let store = thread_store.read(cx);
-                    let group_thread_ids = store
-                        .entries_for_main_worktree_path(group_key.path_list(), group_host.as_ref())
-                        .chain(store.entries_for_path(group_key.path_list(), group_host.as_ref()))
-                        .map(|m| m.thread_id)
-                        .collect::<HashSet<_>>();
-                    current_thread_ids.extend(group_thread_ids.iter());
-                    group_thread_ids
-                        .iter()
-                        .any(|id| notified_threads.contains(id))
-                } else {
-                    threads
-                        .iter()
-                        .any(|t| notified_threads.contains(&t.metadata.thread_id))
-                };
-
-                project_header_indices.push(entries.len());
-                entries.push(ListEntry::ProjectHeader {
-                    key: group_key.clone(),
-                    label,
-                    highlight_positions: Vec::new(),
-                    has_running_threads,
-                    waiting_thread_count,
-                    has_notifications: has_thread_notifications || has_terminal_notifications,
-                    is_active,
-                    has_threads,
-                });
-
-                if is_collapsed {
-                    continue;
-                }
-
-                for thread in threads {
-                    if let Some(sid) = &thread.metadata.session_id {
-                        current_session_ids.insert(sid.clone());
                     }
                     current_thread_ids.insert(thread.metadata.thread_id);
                     entries.push(thread.into());
@@ -3846,10 +3846,8 @@ impl Sidebar {
             let multi_workspace = self.multi_workspace.upgrade().unwrap();
             let session_id = session_id.clone();
 
-            let (fallback_paths, project_group_key) = neighbor
-                .as_ref()
-                .map(|(_, paths, project_group_key)| (paths.clone(), project_group_key.clone()))
-                .unwrap_or_else(|| {
+            let (fallback_paths, project_group_key) = neighbor.as_ref().map_or_else(
+                || {
                     workspaces_to_remove
                         .first()
                         .map(|ws| {
@@ -3857,7 +3855,9 @@ impl Sidebar {
                             (key.path_list().clone(), key)
                         })
                         .unwrap_or_default()
-                });
+                },
+                |(_, paths, project_group_key)| (paths.clone(), project_group_key.clone()),
+            );
 
             let excluded = workspaces_to_remove.clone();
             let remove_task = multi_workspace.update(cx, |mw, cx| {
@@ -4476,10 +4476,10 @@ impl Sidebar {
             if thread.icon == IconName::Terminal && thread.icon_from_external_svg.is_none() {
                 match split_leading_icon_char(&display_title, &thread.highlight_positions) {
                     Some((icon_char, title, positions)) => (Some(icon_char), title, positions),
-                    None => (None, display_title, thread.highlight_positions.to_vec()),
+                    None => (None, display_title, thread.highlight_positions.clone()),
                 }
             } else {
-                (None, display_title, thread.highlight_positions.to_vec())
+                (None, display_title, thread.highlight_positions.clone())
             };
         let metadata = thread.metadata.clone();
         let thread_workspace = thread.workspace.clone();
@@ -4638,8 +4638,7 @@ impl Sidebar {
         let focus_handle = workspace
             .as_ref()
             .and_then(|ws| ws.upgrade())
-            .map(|w| w.read(cx).focus_handle(cx))
-            .unwrap_or_else(|| cx.focus_handle());
+            .map_or_else(|| cx.focus_handle(), |w| w.read(cx).focus_handle(cx));
 
         let window_project_groups: Vec<ProjectGroupKey> = multi_workspace
             .as_ref()
@@ -5246,17 +5245,14 @@ impl Sidebar {
     }
 
     fn should_render_acp_import_onboarding(&self, cx: &App) -> bool {
-        let has_external_agents = self
-            .active_workspace(cx)
-            .map(|ws| {
-                ws.read(cx)
-                    .project()
-                    .read(cx)
-                    .agent_server_store()
-                    .read(cx)
-                    .has_external_agents()
-            })
-            .unwrap_or(false);
+        let has_external_agents = self.active_workspace(cx).is_some_and(|ws| {
+            ws.read(cx)
+                .project()
+                .read(cx)
+                .agent_server_store()
+                .read(cx)
+                .has_external_agents()
+        });
 
         has_external_agents && !AcpThreadImportOnboarding::dismissed(cx)
     }
@@ -5842,7 +5838,19 @@ pub fn dump_workspace_info(
             } else {
                 let effective_key = mw.read(cx).project_group_key_for_workspace(ws, cx);
                 let workspace_key = ws.read(cx).project_group_key(cx);
-                if effective_key != workspace_key {
+                if effective_key == workspace_key {
+                    writeln!(
+                        output,
+                        "{}",
+                        tr_format(
+                            cx,
+                            "sidebar.dump.project_group_key",
+                            "ProjectGroupKey: {}",
+                            [format!("{effective_key:?}")],
+                        )
+                    )
+                    .ok();
+                } else {
                     writeln!(
                         output,
                         "{}",
@@ -5862,18 +5870,6 @@ pub fn dump_workspace_info(
                             "sidebar.dump.project_group_key_workspace_disagrees",
                             "ProjectGroupKey (workspace, DISAGREES): {}",
                             [format!("{workspace_key:?}")],
-                        )
-                    )
-                    .ok();
-                } else {
-                    writeln!(
-                        output,
-                        "{}",
-                        tr_format(
-                            cx,
-                            "sidebar.dump.project_group_key",
-                            "ProjectGroupKey: {}",
-                            [format!("{effective_key:?}")],
                         )
                     )
                     .ok();
@@ -5990,7 +5986,7 @@ fn dump_single_workspace(workspace: &Workspace, output: &mut String, cx: &gpui::
             .iter()
             .find(|snapshot| abs_path.starts_with(&*snapshot.work_directory_abs_path));
 
-        let is_linked = repo_info.map(|s| s.is_linked_worktree()).unwrap_or(false);
+        let is_linked = repo_info.is_some_and(|s| s.is_linked_worktree());
         let main_worktree_path = repo_info.and_then(|s| s.main_worktree_abs_path());
         let branch = repo_info.and_then(|s| s.branch.as_ref().map(|b| b.ref_name.clone()));
 

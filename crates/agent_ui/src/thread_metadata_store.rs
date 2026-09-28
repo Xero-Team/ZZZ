@@ -508,13 +508,14 @@ impl gpui::Global for TestMetadataDbName {}
 #[cfg(any(test, feature = "test-support"))]
 impl TestMetadataDbName {
     pub fn global(cx: &App) -> String {
-        cx.try_global::<Self>()
-            .map(|g| g.0.clone())
-            .unwrap_or_else(|| {
+        cx.try_global::<Self>().map_or_else(
+            || {
                 let thread = std::thread::current();
                 let test_name = thread.name().unwrap_or("unknown_test");
                 format!("THREAD_METADATA_DB_{}", test_name)
-            })
+            },
+            |g| g.0.clone(),
+        )
     }
 }
 
@@ -1194,9 +1195,7 @@ impl ThreadMetadataStore {
             .and_then(|t| t.created_at)
             .unwrap_or(updated_at);
 
-        let interacted_at = existing_thread
-            .map(|t| t.interacted_at)
-            .unwrap_or(Some(updated_at));
+        let interacted_at = existing_thread.map_or(Some(updated_at), |t| t.interacted_at);
 
         let agent_id = thread_ref.connection().agent_id();
 
@@ -1223,9 +1222,7 @@ impl ThreadMetadataStore {
         // window) are archived by default so they don't get lost,
         // because they won't show up in the sidebar. Users can reload
         // them from the archive.
-        let archived = existing_thread
-            .map(|t| t.archived)
-            .unwrap_or(worktree_paths.is_empty());
+        let archived = existing_thread.map_or(worktree_paths.is_empty(), |t| t.archived);
 
         let metadata = ThreadMetadata {
             thread_id,
@@ -1606,9 +1603,7 @@ impl Column for ThreadMetadata {
         let (remote_connection_json, next): (Option<String>, i32) =
             Column::column(statement, next)?;
 
-        let agent_id = agent_id
-            .map(|id| AgentId::new(id))
-            .unwrap_or(ZZZ_AGENT_ID.clone());
+        let agent_id = agent_id.map_or(ZZZ_AGENT_ID.clone(), |id| AgentId::new(id));
 
         let updated_at = DateTime::parse_from_rfc3339(&updated_at_str)?.with_timezone(&Utc);
         let created_at = created_at_str
@@ -2298,8 +2293,8 @@ mod tests {
         for (session_id, title, paths, updated_at) in &threads_to_save {
             let save_task = cx.update(|cx| {
                 let thread_store = ThreadStore::global(cx);
-                let session_id = session_id.to_string();
-                let title = title.to_string();
+                let session_id = session_id.clone();
+                let title = title.clone();
                 let paths = paths.clone();
                 thread_store.update(cx, |store, cx| {
                     store.save_thread(

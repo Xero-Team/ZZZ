@@ -279,8 +279,7 @@ impl ProfilerWindow {
         if self.source.is_remote() {
             let elapsed_since_poll = self
                 .remote_received_at
-                .map(|at| Instant::now().duration_since(at).as_nanos())
-                .unwrap_or(0);
+                .map_or(0, |at| Instant::now().duration_since(at).as_nanos());
             self.remote_now_nanos + elapsed_since_poll
         } else {
             Instant::now()

@@ -955,10 +955,10 @@ pub async fn derive_paths_with_position(
     for path_str in path_strings {
         let original_path = Path::new(path_str.as_ref());
         let mut parsed = PathWithPosition::parse_str(path_str.as_ref());
-        let original_metadata = if parsed.path != original_path {
-            fs.metadata(original_path).await.ok().flatten()
-        } else {
+        let original_metadata = if parsed.path == original_path {
             None
+        } else {
+            fs.metadata(original_path).await.ok().flatten()
         };
 
         // Prefer the original path when it already exists and parsing only

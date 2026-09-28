@@ -93,10 +93,10 @@ impl Vim {
             return;
         };
 
-        if !prefix.is_empty() {
-            self.handle_literal_input(prefix, "", window, cx);
-        } else {
+        if prefix.is_empty() {
             self.pop_operator(window, cx);
+        } else {
+            self.handle_literal_input(prefix, "", window, cx);
         }
 
         // give another chance to handle the binding outside

@@ -18128,7 +18128,7 @@ async fn test_organize_imports_manual_trigger(cx: &mut TestAppContext) {
                                         lsp::Position::new(1, 0),
                                         lsp::Position::new(2, 0),
                                     ),
-                                    "".to_string(),
+                                    String::new(),
                                 )],
                             )]
                             .into_iter()
@@ -22450,7 +22450,7 @@ async fn test_no_duplicated_completion_requests(cx: &mut TestAppContext) {
                     character: 22,
                 },
             },
-            new_text: "".to_string(),
+            new_text: String::new(),
         }]),
         ..Default::default()
     };
@@ -25333,7 +25333,7 @@ async fn test_completions_with_additional_edits(cx: &mut TestAppContext) {
                     character: 22,
                 },
             },
-            new_text: "".to_string(),
+            new_text: String::new(),
         }]),
         ..Default::default()
     };
@@ -25585,7 +25585,7 @@ async fn test_completions_with_additional_edits_undo(cx: &mut TestAppContext) {
                     character: 22,
                 },
             },
-            new_text: "".to_string(),
+            new_text: String::new(),
         }]),
         ..Default::default()
     };
@@ -25923,7 +25923,7 @@ async fn test_context_menus_hide_hover_popover(cx: &mut gpui::TestAppContext) {
                                         lsp::Position::new(5, 4),
                                         lsp::Position::new(5, 27),
                                     ),
-                                    new_text: "".to_string(),
+                                    new_text: String::new(),
                                 }],
                             )]
                             .into_iter()
@@ -32712,7 +32712,7 @@ impl BookmarkTestContext {
                 .iter()
                 .map(|b| b.row)
                 .collect();
-            rows.sort();
+            rows.sort_unstable();
             assert_eq!(expected_rows, rows);
         }
     }
@@ -39340,7 +39340,7 @@ async fn test_multibuffer_selections_with_folding(cx: &mut TestAppContext) {
 
     // Scenario 2: Select "2", then fold second buffer before insertion
     cx.update_multibuffer(|mb, cx| {
-        for buffer_id in buffer_ids.iter() {
+        for buffer_id in &buffer_ids {
             let buffer = mb.buffer(*buffer_id).unwrap();
             buffer.update(cx, |buffer, cx| {
                 buffer.edit([(0..buffer.len(), "1\n2\n3\n")], None, cx);
@@ -39391,7 +39391,7 @@ async fn test_multibuffer_selections_with_folding(cx: &mut TestAppContext) {
 
     // Scenario 3: Select "2", then fold first buffer before insertion
     cx.update_multibuffer(|mb, cx| {
-        for buffer_id in buffer_ids.iter() {
+        for buffer_id in &buffer_ids {
             let buffer = mb.buffer(*buffer_id).unwrap();
             buffer.update(cx, |buffer, cx| {
                 buffer.edit([(0..buffer.len(), "1\n2\n3\n")], None, cx);

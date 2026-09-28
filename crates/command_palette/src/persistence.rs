@@ -172,7 +172,7 @@ mod tests {
         assert!(retrieved_cmd.is_some());
         let retrieved_cmd = retrieved_cmd.expect("is some");
         assert_eq!(retrieved_cmd.command_name, "editor: backspace".to_string());
-        assert_eq!(retrieved_cmd.user_query, "".to_string());
+        assert_eq!(retrieved_cmd.user_query, String::new());
     }
 
     #[gpui::test]

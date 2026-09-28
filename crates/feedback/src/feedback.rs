@@ -105,7 +105,7 @@ fn format_installed_extensions_for_clipboard(cx: &mut App) -> String {
     let store = store.read(cx);
     let mut lines = Vec::with_capacity(store.extension_index.extensions.len());
 
-    for (extension_id, entry) in store.extension_index.extensions.iter() {
+    for (extension_id, entry) in &store.extension_index.extensions {
         let line = format!(
             "- {} ({}) v{}{}",
             entry.manifest.name,

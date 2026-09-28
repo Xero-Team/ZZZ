@@ -184,7 +184,10 @@ fn parse_csv_with_positions(
                 field_start_offset = current_offset + char_byte_len;
             }
             '\n' => {
-                if !in_quotes {
+                if in_quotes {
+                    // Newline inside quotes - preserve it
+                    current_field.push(ch);
+                } else {
                     current_line += 1;
                     // Row separator (only when not inside quotes)
                     let field_end_offset = current_offset;
@@ -213,9 +216,6 @@ fn parse_csv_with_positions(
                     current_row = Vec::new();
                     row_start_line = current_line;
                     field_start_offset = current_offset + char_byte_len;
-                } else {
-                    // Newline inside quotes - preserve it
-                    current_field.push(ch);
                 }
             }
             '\r' => {
@@ -225,7 +225,10 @@ fn parse_csv_with_positions(
                     continue;
                 }
 
-                if !in_quotes {
+                if in_quotes {
+                    // \r inside quotes - preserve it
+                    current_field.push(ch);
+                } else {
                     // Standalone \r row separator
                     current_line += 1;
                     // Row separator (only when not inside quotes)
@@ -252,9 +255,6 @@ fn parse_csv_with_positions(
                     current_row = Vec::new();
                     row_start_line = current_line;
                     field_start_offset = current_offset + char_byte_len;
-                } else {
-                    // \r inside quotes - preserve it
-                    current_field.push(ch);
                 }
             }
             _ => {
@@ -430,7 +430,7 @@ Jane,"Simple name""#;
 
     #[test]
     fn test_empty_csv() {
-        let parsed = TableLikeContent::from_str("".to_string());
+        let parsed = TableLikeContent::from_str(String::new());
         assert_eq!(parsed.headers.cols(), 0);
         assert!(parsed.rows.is_empty());
     }

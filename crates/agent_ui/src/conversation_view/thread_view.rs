@@ -2283,45 +2283,43 @@ impl ThreadView {
     ) {
         let tool_call_id = acp::ToolCallId::new(action.tool_call_id.clone());
 
-        match self.permission_selections.get_mut(&tool_call_id) {
-            Some(PermissionSelection::SelectedPatterns(checked)) => {
-                // Already in pattern mode — toggle the individual pattern.
-                if let Some(pos) = checked.iter().position(|&i| i == action.pattern_index) {
-                    checked.swap_remove(pos);
-                } else {
-                    checked.push(action.pattern_index);
-                }
+        if let Some(PermissionSelection::SelectedPatterns(checked)) =
+            self.permission_selections.get_mut(&tool_call_id)
+        {
+            // Already in pattern mode — toggle the individual pattern.
+            if let Some(pos) = checked.iter().position(|&i| i == action.pattern_index) {
+                checked.swap_remove(pos);
+            } else {
+                checked.push(action.pattern_index);
             }
-            _ => {
-                // First click: activate "Select options" with all patterns checked.
-                let thread = self.thread.read(cx);
-                let pattern_count = thread
-                    .entries()
-                    .iter()
-                    .find_map(|entry| {
-                        if let AgentThreadEntry::ToolCall(call) = entry {
-                            if call.id == tool_call_id {
-                                if let ToolCallStatus::WaitingForConfirmation { options, .. } =
-                                    &call.status
+        } else {
+            // First click: activate "Select options" with all patterns checked.
+            let thread = self.thread.read(cx);
+            let pattern_count = thread
+                .entries()
+                .iter()
+                .find_map(|entry| {
+                    if let AgentThreadEntry::ToolCall(call) = entry {
+                        if call.id == tool_call_id {
+                            if let ToolCallStatus::WaitingForConfirmation { options, .. } =
+                                &call.status
+                            {
+                                if let PermissionOptions::DropdownWithPatterns {
+                                    patterns, ..
+                                } = options
                                 {
-                                    if let PermissionOptions::DropdownWithPatterns {
-                                        patterns,
-                                        ..
-                                    } = options
-                                    {
-                                        return Some(patterns.len());
-                                    }
+                                    return Some(patterns.len());
                                 }
                             }
                         }
-                        None
-                    })
-                    .unwrap_or(0);
-                self.permission_selections.insert(
-                    tool_call_id,
-                    PermissionSelection::SelectedPatterns((0..pattern_count).collect()),
-                );
-            }
+                    }
+                    None
+                })
+                .unwrap_or(0);
+            self.permission_selections.insert(
+                tool_call_id,
+                PermissionSelection::SelectedPatterns((0..pattern_count).collect()),
+            );
         }
         cx.notify();
     }
@@ -2680,7 +2678,7 @@ impl ThreadView {
             .max_h_40()
             .overflow_y_scroll()
             .child(
-                v_flex().children(sorted_buffers.into_iter().enumerate().flat_map(
+                v_flex().children(sorted_buffers.into_iter().enumerate().filter_map(
                     |(index, (buffer, diff))| {
                         let file = buffer.read(cx).file()?;
                         let path = file.path();
@@ -2714,12 +2712,14 @@ impl ThreadView {
 
                         let file_icon = FileIcons::get_icon(path.as_std_path(), cx)
                             .map(Icon::from_path)
-                            .map(|icon| icon.color(Color::Muted).size(IconSize::Small))
-                            .unwrap_or_else(|| {
-                                Icon::new(IconName::File)
-                                    .color(Color::Muted)
-                                    .size(IconSize::Small)
-                            });
+                            .map_or_else(
+                                || {
+                                    Icon::new(IconName::File)
+                                        .color(Color::Muted)
+                                        .size(IconSize::Small)
+                                },
+                                |icon| icon.color(Color::Muted).size(IconSize::Small),
+                            );
 
                         let file_stats = DiffStats::single_file(buffer.read(cx), diff.read(cx), cx);
 
@@ -3220,66 +3220,64 @@ impl ThreadView {
             .max_h_40()
             .overflow_y_scroll()
             .child(
-                v_flex().children(plan.entries.iter().enumerate().flat_map(|(index, entry)| {
+                v_flex().children(plan.entries.iter().enumerate().map(|(index, entry)| {
                     let entry_bg = cx.theme().colors().editor_background;
                     let tooltip_text: SharedString =
                         entry.content.read(cx).source().to_owned().into();
 
-                    Some(
-                        h_flex()
-                            .id(("plan_entry_row", index))
-                            .py_1()
-                            .px_2()
-                            .gap_2()
-                            .justify_between()
-                            .relative()
-                            .bg(entry_bg)
-                            .when(index < plan.entries.len() - 1, |parent| {
-                                parent.border_color(cx.theme().colors().border).border_b_1()
-                            })
-                            .overflow_hidden()
-                            .child(
-                                h_flex()
-                                    .id(("plan_entry", index))
-                                    .gap_1p5()
-                                    .min_w_0()
-                                    .text_xs()
-                                    .text_color(cx.theme().colors().text_muted)
-                                    .child(match entry.status {
-                                        acp::PlanEntryStatus::InProgress => {
-                                            Icon::new(IconName::TodoProgress)
-                                                .size(IconSize::Small)
-                                                .color(Color::Accent)
-                                                .with_rotate_animation(2)
-                                                .into_any_element()
-                                        }
-                                        acp::PlanEntryStatus::Completed => {
-                                            Icon::new(IconName::TodoComplete)
-                                                .size(IconSize::Small)
-                                                .color(Color::Success)
-                                                .into_any_element()
-                                        }
-                                        acp::PlanEntryStatus::Pending | _ => {
-                                            Icon::new(IconName::TodoPending)
-                                                .size(IconSize::Small)
-                                                .color(Color::Muted)
-                                                .into_any_element()
-                                        }
-                                    })
-                                    .child(MarkdownElement::new(
-                                        entry.content.clone(),
-                                        plan_label_markdown_style(&entry.status, window, cx),
-                                    )),
-                            )
-                            .child(div().absolute().top_0().right_0().h_full().w_8().bg(
-                                linear_gradient(
-                                    90.,
-                                    linear_color_stop(entry_bg, 1.),
-                                    linear_color_stop(entry_bg.opacity(0.), 0.),
-                                ),
-                            ))
-                            .tooltip(Tooltip::text(tooltip_text)),
-                    )
+                    h_flex()
+                        .id(("plan_entry_row", index))
+                        .py_1()
+                        .px_2()
+                        .gap_2()
+                        .justify_between()
+                        .relative()
+                        .bg(entry_bg)
+                        .when(index < plan.entries.len() - 1, |parent| {
+                            parent.border_color(cx.theme().colors().border).border_b_1()
+                        })
+                        .overflow_hidden()
+                        .child(
+                            h_flex()
+                                .id(("plan_entry", index))
+                                .gap_1p5()
+                                .min_w_0()
+                                .text_xs()
+                                .text_color(cx.theme().colors().text_muted)
+                                .child(match entry.status {
+                                    acp::PlanEntryStatus::InProgress => {
+                                        Icon::new(IconName::TodoProgress)
+                                            .size(IconSize::Small)
+                                            .color(Color::Accent)
+                                            .with_rotate_animation(2)
+                                            .into_any_element()
+                                    }
+                                    acp::PlanEntryStatus::Completed => {
+                                        Icon::new(IconName::TodoComplete)
+                                            .size(IconSize::Small)
+                                            .color(Color::Success)
+                                            .into_any_element()
+                                    }
+                                    acp::PlanEntryStatus::Pending | _ => {
+                                        Icon::new(IconName::TodoPending)
+                                            .size(IconSize::Small)
+                                            .color(Color::Muted)
+                                            .into_any_element()
+                                    }
+                                })
+                                .child(MarkdownElement::new(
+                                    entry.content.clone(),
+                                    plan_label_markdown_style(&entry.status, window, cx),
+                                )),
+                        )
+                        .child(div().absolute().top_0().right_0().h_full().w_8().bg(
+                            linear_gradient(
+                                90.,
+                                linear_color_stop(entry_bg, 1.),
+                                linear_color_stop(entry_bg.opacity(0.), 0.),
+                            ),
+                        ))
+                        .tooltip(Tooltip::text(tooltip_text))
                 })),
             )
             .into_any_element()
@@ -4787,7 +4785,7 @@ impl Render for TokenUsageTooltip {
                                                                 workspace.project().read(cx);
                                                             let paths = project_entry_ids
                                                                 .iter()
-                                                                .flat_map(|id| {
+                                                                .filter_map(|id| {
                                                                     project.path_for_entry(*id, cx)
                                                                 })
                                                                 .collect::<Vec<_>>();
@@ -6287,13 +6285,11 @@ impl ThreadView {
         let start_index = (0..entry_index)
             .rev()
             .find(|&i| matches!(entries.get(i), Some(AgentThreadEntry::UserMessage(_))))
-            .map(|i| i + 1)
-            .unwrap_or(0);
+            .map_or(0, |i| i + 1);
 
         let end_index = (entry_index + 1..entries.len())
             .find(|&i| matches!(entries.get(i), Some(AgentThreadEntry::UserMessage(_))))
-            .map(|i| i - 1)
-            .unwrap_or(entries.len() - 1);
+            .map_or(entries.len() - 1, |i| i - 1);
 
         let parts: Vec<String> = (start_index..=end_index)
             .filter_map(|i| entries.get(i))
@@ -6458,7 +6454,7 @@ impl ThreadView {
             );
         let truncated_output =
             output.is_some_and(|output| output.original_content_len > output.content.len());
-        let output_line_count = output.map(|output| output.content_line_count).unwrap_or(0);
+        let output_line_count = output.map_or(0, |output| output.content_line_count);
 
         let command_failed = command_finished
             && output.is_some_and(|o| o.exit_status.is_some_and(|status| !status.success()));
@@ -6482,17 +6478,17 @@ impl ThreadView {
             .blend(cx.theme().colors().editor_foreground.opacity(0.025));
         let border_color = cx.theme().colors().border.opacity(0.6);
 
-        let working_dir = working_dir
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|| {
+        let working_dir = working_dir.as_ref().map_or_else(
+            || {
                 tr(
                     cx,
                     "agent_ui.thread_view.current_directory",
                     "current directory",
                 )
                 .to_string()
-            });
+            },
+            |path| path.display().to_string(),
+        );
 
         let command_element = self.render_collapsible_command(
             header_group.clone(),
@@ -7431,13 +7427,10 @@ impl ThreadView {
                     "Always for selected commands",
                 )
             } else {
-                choices
-                    .get(selected_index)
-                    .or(choices.last())
-                    .map(|choice| localize_permission_label(cx, choice.label().as_ref()))
-                    .unwrap_or_else(|| {
-                        tr(cx, "agent_ui.thread_view.only_this_time", "Only this time")
-                    })
+                choices.get(selected_index).or(choices.last()).map_or_else(
+                    || tr(cx, "agent_ui.thread_view.only_this_time", "Only this time"),
+                    |choice| localize_permission_label(cx, choice.label().as_ref()),
+                )
             };
         let dropdown_label: SharedString =
             util::truncate_and_trailoff(&raw_dropdown_label, PERMISSION_DROPDOWN_LABEL_MAX_CHARS)
@@ -7595,7 +7588,7 @@ impl ThreadView {
                 let options = menu_options.clone();
 
                 Some(ContextMenu::build(window, cx, move |mut menu, _, _| {
-                    for (index, display_name) in options.iter() {
+                    for (index, display_name) in &options {
                         let display_name = display_name.clone();
                         let index = *index;
                         let tool_call_id_for_entry = tool_call_id.clone();
@@ -7710,7 +7703,7 @@ impl ThreadView {
                             matches!(selection, Some(PermissionSelection::SelectedPatterns(_)));
 
                         // Granularity choices: "Always for terminal", "Only this time"
-                        for (index, display_name) in options.iter() {
+                        for (index, display_name) in &options {
                             let display_name = display_name.clone();
                             let index = *index;
                             let tool_call_id_for_entry = tool_call_id.clone();
@@ -7745,7 +7738,7 @@ impl ThreadView {
                             "Select Options...",
                         ));
 
-                        for (pattern_index, label) in patterns.iter() {
+                        for (pattern_index, label) in &patterns {
                             let label = label.clone();
                             let pattern_index = *pattern_index;
                             let tool_call_id_for_pattern = tool_call_id.clone();
@@ -7975,9 +7968,10 @@ impl ThreadView {
         let is_subagent_tool_call = tool_call.is_subagent();
 
         let file_icon = if has_location {
-            FileIcons::get_icon(&tool_call.locations[0].path, cx)
-                .map(|from_path| Icon::from_path(from_path).color(Color::Muted))
-                .unwrap_or(Icon::new(IconName::ToolPencil).color(Color::Muted))
+            FileIcons::get_icon(&tool_call.locations[0].path, cx).map_or(
+                Icon::new(IconName::ToolPencil).color(Color::Muted),
+                |from_path| Icon::from_path(from_path).color(Color::Muted),
+            )
         } else {
             Icon::new(IconName::ToolPencil).color(Color::Muted)
         };
@@ -9004,8 +8998,7 @@ impl ThreadView {
             info.message_start_index
                 ..info
                     .message_end_index
-                    .map(|i| (i + 1).min(total_entries))
-                    .unwrap_or(total_entries)
+                    .map_or(total_entries, |i| (i + 1).min(total_entries))
         } else {
             0..total_entries
         };
@@ -9640,8 +9633,10 @@ impl ThreadView {
             .ordered_paths()
             .next()
             .and_then(|p| p.file_name())
-            .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| tr(cx, "agent_ui.thread_view.one_folder", "one folder").to_string());
+            .map_or_else(
+                || tr(cx, "agent_ui.thread_view.one_folder", "one folder").to_string(),
+                |name| name.to_string_lossy().to_string(),
+            );
 
         let description = app_i18n::tr(
             cx,
@@ -10218,9 +10213,10 @@ impl Render for ThreadView {
             .children(self.render_thread_retry_status_callout(cx))
             .children(self.render_thread_error(window, cx))
             .when_some(
-                match has_messages {
-                    true => None,
-                    false => self.new_server_version_available.clone(),
+                if has_messages {
+                    None
+                } else {
+                    self.new_server_version_available.clone()
                 },
                 |this, version| this.child(self.render_new_version_callout(&version, cx)),
             )

@@ -718,10 +718,12 @@ impl Vim {
     }
 
     pub(crate) fn motion(&mut self, motion: Motion, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(Operator::FindForward { .. })
-        | Some(Operator::Sneak { .. })
-        | Some(Operator::SneakBackward { .. })
-        | Some(Operator::FindBackward { .. }) = self.active_operator()
+        if let Some(
+            Operator::FindForward { .. }
+            | Operator::Sneak { .. }
+            | Operator::SneakBackward { .. }
+            | Operator::FindBackward { .. },
+        ) = self.active_operator()
         {
             self.pop_operator(window, cx);
         }
@@ -1874,9 +1876,8 @@ fn previous_word_end(
                 let left_kind = classifier.kind(left);
                 let right_kind = classifier.kind(right);
                 match (left_kind, right_kind) {
-                    (CharKind::Punctuation, CharKind::Whitespace)
+                    (CharKind::Punctuation | CharKind::Word, CharKind::Whitespace)
                     | (CharKind::Punctuation, CharKind::Word)
-                    | (CharKind::Word, CharKind::Whitespace)
                     | (CharKind::Word, CharKind::Punctuation) => true,
                     (CharKind::Whitespace, CharKind::Whitespace) => left == '\n' && right == '\n',
                     _ => false,
@@ -2021,8 +2022,7 @@ fn previous_subword_end(
                 }
 
                 match (left_kind, right_kind) {
-                    (CharKind::Word, CharKind::Whitespace)
-                    | (CharKind::Word, CharKind::Punctuation) => true,
+                    (CharKind::Word, CharKind::Whitespace | CharKind::Punctuation) => true,
                     (CharKind::Punctuation, _) if is_stopping_punct(left) => true,
                     (CharKind::Whitespace, CharKind::Whitespace) => left == '\n' && right == '\n',
                     _ => false,
@@ -2756,17 +2756,16 @@ fn matching(
             }
         }
 
-        closest_pair_destination
-            .map(|destination| destination.to_display_point(map))
-            .unwrap_or_else(|| {
+        closest_pair_destination.map_or_else(
+            || {
                 find_matching_bracket_text_based(map, offset, line_range.clone())
-                    .map(|o| o.to_display_point(map))
-                    .unwrap_or(display_point)
-            })
+                    .map_or(display_point, |o| o.to_display_point(map))
+            },
+            |destination| destination.to_display_point(map),
+        )
     } else {
         find_matching_bracket_text_based(map, offset, line_range)
-            .map(|o| o.to_display_point(map))
-            .unwrap_or(display_point)
+            .map_or(display_point, |o| o.to_display_point(map))
     }
 }
 
@@ -2815,9 +2814,9 @@ fn unmatched_forward(
             }
         }
 
-        let new_point = closest_closing_destination
-            .map(|destination| destination.to_display_point(map))
-            .unwrap_or(display_point);
+        let new_point = closest_closing_destination.map_or(display_point, |destination| {
+            destination.to_display_point(map)
+        });
         if new_point == display_point {
             break;
         }
@@ -2858,9 +2857,9 @@ fn unmatched_backward(
             }
         }
 
-        let new_point = closest_starting_destination
-            .map(|destination| destination.to_display_point(map))
-            .unwrap_or(display_point);
+        let new_point = closest_starting_destination.map_or(display_point, |destination| {
+            destination.to_display_point(map)
+        });
         if new_point == display_point {
             break;
         }

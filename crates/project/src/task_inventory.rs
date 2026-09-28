@@ -87,12 +87,10 @@ impl<T: InventoryContents> InventoryFor<T> {
         worktree: WorktreeId,
     ) -> impl '_ + Iterator<Item = (TaskSourceKind, T)> {
         let worktree_dirs = self.worktree.get(&worktree);
-        let has_zzz_dir = worktree_dirs
-            .map(|dirs| {
-                dirs.keys()
-                    .any(|dir| dir.file_name().is_some_and(|name| name == ".zzz"))
-            })
-            .unwrap_or(false);
+        let has_zzz_dir = worktree_dirs.is_some_and(|dirs| {
+            dirs.keys()
+                .any(|dir| dir.file_name().is_some_and(|name| name == ".zzz"))
+        });
 
         worktree_dirs
             .into_iter()
@@ -404,16 +402,13 @@ impl Inventory {
         label: &str,
         cx: &App,
     ) -> Task<Option<TaskTemplate>> {
-        let (buffer_worktree_id, language) = buffer
-            .as_ref()
-            .map(|buffer| {
-                let buffer = buffer.read(cx);
-                (
-                    buffer.file().as_ref().map(|file| file.worktree_id(cx)),
-                    buffer.language().cloned(),
-                )
-            })
-            .unwrap_or((None, None));
+        let (buffer_worktree_id, language) = buffer.as_ref().map_or((None, None), |buffer| {
+            let buffer = buffer.read(cx);
+            (
+                buffer.file().as_ref().map(|file| file.worktree_id(cx)),
+                buffer.language().cloned(),
+            )
+        });
 
         let tasks = self.list_tasks(buffer, language, worktree_id.or(buffer_worktree_id), cx);
         let label = label.to_owned();
@@ -580,7 +575,7 @@ impl Inventory {
                     templates
                         .0
                         .into_iter()
-                        .flat_map(|task| Some((task_source_kind.clone()?, task)))
+                        .filter_map(|task| Some((task_source_kind.clone()?, task)))
                 })
             } else {
                 None
@@ -592,7 +587,7 @@ impl Inventory {
                 .chain(global_tasks);
 
             let new_resolved_tasks = worktree_tasks
-                .flat_map(|(kind, task)| {
+                .filter_map(|(kind, task)| {
                     let id_base = kind.to_id_base();
 
                     if let TaskSourceKind::Worktree { id, .. } = &kind {

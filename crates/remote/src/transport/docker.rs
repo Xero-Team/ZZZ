@@ -320,7 +320,7 @@ impl DockerExecConnection {
                 .context("shell quoting")?;
             format!("chmod {server_mode} {orig_tmp_path} && mv {orig_tmp_path} {dst_path}",)
         };
-        let args = shell_kind.args_for_shell(false, script.to_string());
+        let args = shell_kind.args_for_shell(false, script.clone());
         self.run_docker_exec(
             "sh",
             Some(&remote_dir_for_server),
@@ -559,11 +559,11 @@ impl RemoteConnection for DockerExecConnection {
 
         docker_args.extend([
             "-u".to_owned(),
-            self.connection_options.remote_user.to_string(),
+            self.connection_options.remote_user.clone(),
             "-w".to_owned(),
             self.remote_dir_for_server.clone(),
             "-i".to_owned(),
-            self.connection_options.container_id.to_string(),
+            self.connection_options.container_id.clone(),
         ]);
 
         let val = remote_binary_relpath
@@ -694,7 +694,7 @@ impl RemoteConnection for DockerExecConnection {
             Interactive::Yes => docker_args.push("-it".to_owned()),
             Interactive::No => docker_args.push("-i".to_owned()),
         }
-        docker_args.push(self.connection_options.container_id.to_string());
+        docker_args.push(self.connection_options.container_id.clone());
 
         docker_args.append(&mut inner_program);
 

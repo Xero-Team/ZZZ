@@ -490,8 +490,7 @@ impl SecurityModal {
         let path_style = self
             .worktree_store
             .upgrade()
-            .map(|store| store.read(cx).path_style())
-            .unwrap_or_else(PathStyle::local);
+            .map_or_else(PathStyle::local, |store| store.read(cx).path_style());
         validate_trust_scope(&typed, &project, self.home_dir.as_deref(), path_style)
             .map(Some)
             .map_err(|error| error.message(cx))

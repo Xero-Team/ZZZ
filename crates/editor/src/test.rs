@@ -218,7 +218,7 @@ pub fn editor_content_with_blocks_and_size(
                         lines[row.0 as usize].push_str(block_lines[0].trim_end());
                         for i in 1..height as usize {
                             if row.0 as usize + i >= lines.len() {
-                                lines.push("".to_owned());
+                                lines.push(String::new());
                             };
                             lines[row.0 as usize + i].push_str("§ ");
                             lines[row.0 as usize + i].push_str(block_lines[i].trim_end());
@@ -239,8 +239,7 @@ pub fn editor_content_with_blocks_and_size(
                         first_excerpt
                             .buffer(snapshot.buffer_snapshot())
                             .file()
-                            .map(|file| file.file_name(cx))
-                            .unwrap_or("<no file>")
+                            .map_or("<no file>", |file| file.file_name(cx))
                     )
                 }));
                 for row in row.0 + 1..row.0 + height {
@@ -268,8 +267,7 @@ pub fn editor_content_with_blocks_and_size(
                         excerpt
                             .buffer(snapshot.buffer_snapshot())
                             .file()
-                            .map(|file| file.file_name(cx))
-                            .unwrap_or("<no file>")
+                            .map_or("<no file>", |file| file.file_name(cx))
                     )
                 }));
                 for row in row.0 + 1..row.0 + height {

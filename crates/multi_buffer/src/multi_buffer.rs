@@ -65,7 +65,7 @@ pub use self::path_key::PathKey;
 pub static EXCERPT_CONTEXT_LINES: OnceLock<fn(&App) -> u32> = OnceLock::new();
 
 pub fn excerpt_context_lines(cx: &App) -> u32 {
-    EXCERPT_CONTEXT_LINES.get().map(|f| f(cx)).unwrap_or(2)
+    EXCERPT_CONTEXT_LINES.get().map_or(2, |f| f(cx))
 }
 
 /// One or more [`Buffers`](Buffer) being edited in a single view.
@@ -1265,7 +1265,7 @@ impl MultiBuffer {
     pub fn clone(&self, new_cx: &mut Context<Self>) -> Self {
         let mut buffers = BTreeMap::default();
         let buffer_changed_since_sync = Rc::new(Cell::new(false));
-        for (buffer_id, buffer_state) in self.buffers.iter() {
+        for (buffer_id, buffer_state) in &self.buffers {
             buffer_state.buffer.update(new_cx, |buffer, _| {
                 buffer.record_changes(Rc::downgrade(&buffer_changed_since_sync));
             });
@@ -1281,7 +1281,7 @@ impl MultiBuffer {
             );
         }
         let mut diff_bases = HashMap::default();
-        for (buffer_id, diff) in self.diffs.iter() {
+        for (buffer_id, diff) in &self.diffs {
             diff_bases.insert(*buffer_id, DiffState::new(diff.diff.clone(), new_cx));
         }
         Self {
@@ -1737,7 +1737,7 @@ impl MultiBuffer {
             }
         }
 
-        for (buffer_id, buffer_state) in self.buffers.iter() {
+        for (buffer_id, buffer_state) in &self.buffers {
             if !selections_by_buffer.contains_key(buffer_id) {
                 buffer_state
                     .buffer
@@ -2119,8 +2119,10 @@ impl MultiBuffer {
             .excerpts
             .first()
             .and_then(|excerpt| self.buffer(excerpt.range.context.start.buffer_id))
-            .map(|buffer| LanguageSettings::for_buffer(&buffer.read(cx), cx))
-            .unwrap_or_else(move || self.language_settings_at(MultiBufferOffset::default(), cx))
+            .map_or_else(
+                move || self.language_settings_at(MultiBufferOffset::default(), cx),
+                |buffer| LanguageSettings::for_buffer(&buffer.read(cx), cx),
+            )
     }
 
     pub fn language_settings_at<'a, T: ToOffset>(
@@ -3222,8 +3224,7 @@ impl MultiBuffer {
         use util::RandomCharIter;
 
         let max_buffers = env::var("MAX_BUFFERS")
-            .map(|i| i.parse().expect("invalid `MAX_EXCERPTS` variable"))
-            .unwrap_or(5);
+            .map_or(5, |i| i.parse().expect("invalid `MAX_EXCERPTS` variable"));
 
         let mut buffers = Vec::new();
         for _ in 0..mutation_count {
@@ -4884,65 +4885,63 @@ impl MultiBufferSnapshot {
             }
 
             let mut position = diff_transforms.start().1;
-            match item {
-                Some(DiffTransform::DeletedHunk {
-                    buffer_id,
-                    base_text_byte_range,
-                    hunk_info,
-                    ..
-                }) => {
-                    if let Some(diff_base_anchor) = anchor.diff_base_anchor
-                        && let Some(base_text) =
-                            self.diff_state(*buffer_id).map(|diff| diff.base_text())
-                        && diff_base_anchor.is_valid(&base_text)
+            if let Some(DiffTransform::DeletedHunk {
+                buffer_id,
+                base_text_byte_range,
+                hunk_info,
+                ..
+            }) = item
+            {
+                if let Some(diff_base_anchor) = anchor.diff_base_anchor
+                    && let Some(base_text) =
+                        self.diff_state(*buffer_id).map(|diff| diff.base_text())
+                    && diff_base_anchor.is_valid(&base_text)
+                {
+                    // The anchor carries a diff-base position — resolve it
+                    // to a location inside the deleted hunk.
+                    let base_text_offset = diff_base_anchor.to_offset(base_text);
+                    if base_text_offset >= base_text_byte_range.start
+                        && base_text_offset <= base_text_byte_range.end
                     {
-                        // The anchor carries a diff-base position — resolve it
-                        // to a location inside the deleted hunk.
-                        let base_text_offset = diff_base_anchor.to_offset(base_text);
-                        if base_text_offset >= base_text_byte_range.start
-                            && base_text_offset <= base_text_byte_range.end
-                        {
-                            let position_in_hunk = base_text
-                                .text_summary_for_range::<MBD::TextDimension, _>(
-                                    base_text_byte_range.start..base_text_offset,
-                                );
-                            position.0.add_text_dim(&position_in_hunk);
-                        } else if at_transform_end {
-                            // diff_base offset falls outside this hunk's range;
-                            // advance to see if the next transform is a better fit.
-                            diff_transforms.next();
-                            continue;
-                        }
-                    } else if at_transform_end
-                        && anchor
-                            .text_anchor()
-                            .cmp(&hunk_info.hunk_start_anchor, excerpt_buffer)
-                            .is_gt()
-                    {
-                        // The anchor has no (valid) diff-base position, so it
-                        // belongs in the buffer content, not in the deleted
-                        // hunk. However, after an edit deletes the text between
-                        // the hunk boundary and this anchor, both resolve to
-                        // the same excerpt_position—landing us here on the
-                        // DeletedHunk left behind by the shared cursor. Use the
-                        // CRDT ordering to detect that the anchor is strictly
-                        // *past* the hunk boundary and skip to the following
-                        // BufferContent.
+                        let position_in_hunk = base_text
+                            .text_summary_for_range::<MBD::TextDimension, _>(
+                                base_text_byte_range.start..base_text_offset,
+                            );
+                        position.0.add_text_dim(&position_in_hunk);
+                    } else if at_transform_end {
+                        // diff_base offset falls outside this hunk's range;
+                        // advance to see if the next transform is a better fit.
                         diff_transforms.next();
                         continue;
                     }
+                } else if at_transform_end
+                    && anchor
+                        .text_anchor()
+                        .cmp(&hunk_info.hunk_start_anchor, excerpt_buffer)
+                        .is_gt()
+                {
+                    // The anchor has no (valid) diff-base position, so it
+                    // belongs in the buffer content, not in the deleted
+                    // hunk. However, after an edit deletes the text between
+                    // the hunk boundary and this anchor, both resolve to
+                    // the same excerpt_position—landing us here on the
+                    // DeletedHunk left behind by the shared cursor. Use the
+                    // CRDT ordering to detect that the anchor is strictly
+                    // *past* the hunk boundary and skip to the following
+                    // BufferContent.
+                    diff_transforms.next();
+                    continue;
                 }
-                _ => {
-                    // On a BufferContent (or no transform). If the anchor
-                    // carries a diff_base_anchor it needs a DeletedHunk, so
-                    // advance to find one.
-                    if at_transform_end && anchor.diff_base_anchor.is_some() {
-                        diff_transforms.next();
-                        continue;
-                    }
-                    let overshoot = excerpt_position - diff_transforms.start().0;
-                    position += overshoot;
+            } else {
+                // On a BufferContent (or no transform). If the anchor
+                // carries a diff_base_anchor it needs a DeletedHunk, so
+                // advance to find one.
+                if at_transform_end && anchor.diff_base_anchor.is_some() {
+                    diff_transforms.next();
+                    continue;
                 }
+                let overshoot = excerpt_position - diff_transforms.start().0;
+                position += overshoot;
             }
 
             return position.0;
@@ -6225,7 +6224,7 @@ impl MultiBufferSnapshot {
                 _ => {}
             }
 
-            for indent in indent_stack.iter_mut() {
+            for indent in &mut indent_stack {
                 indent.end_row = last_row;
             }
         }
@@ -6252,8 +6251,10 @@ impl MultiBufferSnapshot {
         self.excerpts
             .first()
             .map(|excerpt| excerpt.buffer_snapshot(self))
-            .map(|buffer| LanguageSettings::for_buffer_snapshot(buffer, None, cx))
-            .unwrap_or_else(move || self.language_settings_at(MultiBufferOffset::ZERO, cx))
+            .map_or_else(
+                move || self.language_settings_at(MultiBufferOffset::ZERO, cx),
+                |buffer| LanguageSettings::for_buffer_snapshot(buffer, None, cx),
+            )
     }
 
     pub fn language_settings_at<'a, T: ToOffset>(
@@ -6460,31 +6461,29 @@ impl MultiBufferSnapshot {
             buffer_snapshot.remote_id(),
             buffer_snapshot
                 .symbols_containing(
-                    anchor
-                        .excerpt_anchor()
-                        .map(|anchor| anchor.text_anchor())
-                        .unwrap_or(text::Anchor::min_for_buffer(buffer_snapshot.remote_id())),
+                    anchor.excerpt_anchor().map_or(
+                        text::Anchor::min_for_buffer(buffer_snapshot.remote_id()),
+                        |anchor| anchor.text_anchor(),
+                    ),
                     theme,
                 )
                 .into_iter()
-                .flat_map(|item| {
-                    Some(OutlineItem {
-                        depth: item.depth,
-                        source_range_for_text: Anchor::range_in_buffer(
-                            excerpt.path_key_index,
-                            item.source_range_for_text,
-                        ),
-                        range: Anchor::range_in_buffer(excerpt.path_key_index, item.range),
-                        text: item.text,
-                        highlight_ranges: item.highlight_ranges,
-                        name_ranges: item.name_ranges,
-                        body_range: item.body_range.map(|body_range| {
-                            Anchor::range_in_buffer(excerpt.path_key_index, body_range)
-                        }),
-                        annotation_range: item.annotation_range.map(|body_range| {
-                            Anchor::range_in_buffer(excerpt.path_key_index, body_range)
-                        }),
-                    })
+                .map(|item| OutlineItem {
+                    depth: item.depth,
+                    source_range_for_text: Anchor::range_in_buffer(
+                        excerpt.path_key_index,
+                        item.source_range_for_text,
+                    ),
+                    range: Anchor::range_in_buffer(excerpt.path_key_index, item.range),
+                    text: item.text,
+                    highlight_ranges: item.highlight_ranges,
+                    name_ranges: item.name_ranges,
+                    body_range: item.body_range.map(|body_range| {
+                        Anchor::range_in_buffer(excerpt.path_key_index, body_range)
+                    }),
+                    annotation_range: item.annotation_range.map(|body_range| {
+                        Anchor::range_in_buffer(excerpt.path_key_index, body_range)
+                    }),
                 })
                 .collect(),
         ))

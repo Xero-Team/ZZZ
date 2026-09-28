@@ -328,7 +328,7 @@ impl ConflictState {
         for (index, binding) in key_bindings
             .iter()
             .enumerate()
-            .flat_map(|(index, binding)| Some(index).zip(binding.keybind_information()))
+            .filter_map(|(index, binding)| Some(index).zip(binding.keybind_information()))
         {
             let mapping = binding.get_action_mapping();
             let predicate = mapping
@@ -849,8 +849,7 @@ impl KeymapEditor {
 
             let source = key_binding
                 .meta()
-                .map(KeybindSource::from_meta)
-                .unwrap_or(KeybindSource::Unknown);
+                .map_or(KeybindSource::Unknown, KeybindSource::from_meta);
 
             let keystroke_text = ui::text_for_keybinding_keystrokes(key_binding.keystrokes(), cx);
             let is_no_action = gpui::is_no_action(key_binding.action());
@@ -858,15 +857,15 @@ impl KeymapEditor {
                 binding_is_unbound_by_unbind(key_binding, binding_index, &key_bindings);
             let binding = KeyBinding::new(key_binding, source);
 
-            let context = key_binding
-                .predicate()
-                .map(|predicate| {
-                    KeybindContextString::Local(
-                        predicate.to_string().into(),
-                        zzz_keybind_context_language.clone(),
-                    )
-                })
-                .unwrap_or(KeybindContextString::Global);
+            let context =
+                key_binding
+                    .predicate()
+                    .map_or(KeybindContextString::Global, |predicate| {
+                        KeybindContextString::Local(
+                            predicate.to_string().into(),
+                            zzz_keybind_context_language.clone(),
+                        )
+                    });
 
             let action_name = key_binding.action().name();
             unmapped_action_names.remove(&action_name);
@@ -1026,16 +1025,16 @@ impl KeymapEditor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self
+        if self
             .filter_editor
             .focus_handle(cx)
             .contains_focused(window, cx)
         {
-            window.focus(&self.filter_editor.focus_handle(cx), cx);
-        } else {
             self.filter_editor.update(cx, |editor, cx| {
                 editor.select_all(&Default::default(), window, cx);
             });
+        } else {
+            window.focus(&self.filter_editor.focus_handle(cx), cx);
         }
         self.selected_index.take();
     }
@@ -2171,7 +2170,7 @@ impl Render for KeymapEditor {
                         self.current_widths.clone(),
                     ))
                     .header(vec![
-                        "".into(),
+                        String::new(),
                         tr(cx, "keymap_editor.column.action", "Action"),
                         tr(cx, "keymap_editor.column.arguments", "Arguments"),
                         tr(cx, "keymap_editor.column.keystrokes", "Keystrokes"),
@@ -2205,16 +2204,16 @@ impl Render for KeymapEditor {
                                     let action = div()
                                         .id(("keymap action", index))
                                         .child({
-                                            if action_name != gpui::NoAction.name() {
+                                            if action_name == gpui::NoAction.name() {
+                                                const NULL: SharedString =
+                                                    SharedString::new_static("<null>");
+                                                muted_styled_text(NULL, cx)
+                                                    .into_any_element()
+                                            } else {
                                                 binding
                                                     .action()
                                                     .humanized_name
                                                     .clone()
-                                                    .into_any_element()
-                                            } else {
-                                                const NULL: SharedString =
-                                                    SharedString::new_static("<null>");
-                                                muted_styled_text(NULL, cx)
                                                     .into_any_element()
                                             }
                                         })
@@ -2872,7 +2871,7 @@ impl KeybindingEditorModal {
         let fs = self.fs.clone();
 
         let mut new_keystrokes = self.validate_keystrokes(cx).map_err(InputError::error)?;
-        for keystroke in new_keystrokes.iter_mut() {
+        for keystroke in &mut new_keystrokes {
             keystroke.remove_key_char();
         }
 
@@ -2895,7 +2894,7 @@ impl KeybindingEditorModal {
                 self.creating.not().then_some(self.editing_keybind_idx),
             );
 
-        conflicting_indices.map(|KeybindConflict {
+        conflicting_indices.map_or(Ok(()), |KeybindConflict {
             first_conflict_index,
             remaining_conflict_amount,
         }|
@@ -2907,24 +2906,21 @@ impl KeybindingEditorModal {
                 .get(first_conflict_index)
                 .map(|keybind| keybind.action().name);
 
-            let warning_message = match conflicting_action_name {
-                Some(name) => {
-                     if remaining_conflict_amount > 0 {
-                        format!(
-                            "Your keybind would conflict with the \"{}\" action and {} other bindings",
-                            name, remaining_conflict_amount
-                        )
-                    } else {
-                        format!("Your keybind would conflict with the \"{}\" action", name)
-                    }
+            let warning_message = if let Some(name) = conflicting_action_name {
+                 if remaining_conflict_amount > 0 {
+                    format!(
+                        "Your keybind would conflict with the \"{}\" action and {} other bindings",
+                        name, remaining_conflict_amount
+                    )
+                } else {
+                    format!("Your keybind would conflict with the \"{}\" action", name)
                 }
-                None => {
-                    log::info!(
-                        "Could not find action in keybindings with index {}",
-                        first_conflict_index
-                    );
-                    "Your keybind would conflict with other actions".to_owned()
-                }
+            } else {
+                log::info!(
+                    "Could not find action in keybindings with index {}",
+                    first_conflict_index
+                );
+                "Your keybind would conflict with other actions".to_owned()
             };
 
             let warning = InputError::warning(warning_message);
@@ -2933,7 +2929,7 @@ impl KeybindingEditorModal {
            } else {
                 Err(warning)
             }
-        }).unwrap_or(Ok(()))?;
+        })?;
 
         let create = self.creating;
         let keyboard_mapper = cx.keyboard_mapper().clone();
@@ -3546,15 +3542,14 @@ impl ActionArgumentsEditor {
         let (temp_file_path, temp_dir) = {
             let file_name = file_name.clone();
             async move {
-                let temp_dir_backup = match temp_dir.as_ref() {
-                    Some(_) => None,
-                    None => {
-                        let temp_dir = paths::temp_dir();
-                        let sub_temp_dir = tempfile::Builder::new()
-                            .tempdir_in(temp_dir)
-                            .context("Failed to create temporary directory")?;
-                        Some(sub_temp_dir)
-                    }
+                let temp_dir_backup = if temp_dir.as_ref().is_some() {
+                    None
+                } else {
+                    let temp_dir = paths::temp_dir();
+                    let sub_temp_dir = tempfile::Builder::new()
+                        .tempdir_in(temp_dir)
+                        .context("Failed to create temporary directory")?;
+                    Some(sub_temp_dir)
                 };
                 let dir_path = temp_dir.as_deref().unwrap_or_else(|| {
                     temp_dir_backup
@@ -3784,16 +3779,16 @@ async fn save_keybinding_update(
         action_arguments: new_args,
     };
 
-    let operation = if !create {
+    let operation = if create {
+        settings::KeybindUpdateOperation::Add {
+            source,
+            from: Some(target),
+        }
+    } else {
         settings::KeybindUpdateOperation::Replace {
             target,
             target_keybind_source: existing.keybind_source().unwrap_or(KeybindSource::User),
             source,
-        }
-    } else {
-        settings::KeybindUpdateOperation::Add {
-            source,
-            from: Some(target),
         }
     };
 

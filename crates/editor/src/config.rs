@@ -2,12 +2,11 @@ use super::*;
 
 impl Editor {
     pub fn style(&mut self, cx: &App) -> &EditorStyle {
-        match self.style {
-            Some(ref style) => style,
-            None => {
-                let style = self.create_style(cx);
-                self.style.insert(style)
-            }
+        if let Some(ref style) = self.style {
+            style
+        } else {
+            let style = self.create_style(cx);
+            self.style.insert(style)
         }
     }
 

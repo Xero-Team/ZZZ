@@ -102,9 +102,9 @@ fn main() -> Result<()> {
         .context(format!("failed to parse theme {theme_file_path:?}"))?;
 
     let theme_metadata = ThemeMetadata {
-        name: vscode_theme.name.clone().unwrap_or("".to_owned()),
+        name: vscode_theme.name.clone().unwrap_or(String::new()),
         appearance: ThemeAppearanceJson::Dark,
-        file_name: "".to_owned(),
+        file_name: String::new(),
     };
 
     let converter = VsCodeThemeConverter::new(vscode_theme, theme_metadata, IndexMap::default());

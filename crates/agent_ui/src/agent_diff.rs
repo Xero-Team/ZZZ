@@ -1310,14 +1310,14 @@ impl Global for AgentDiffGlobal {}
 
 impl AgentDiff {
     fn global(cx: &mut App) -> Entity<Self> {
-        cx.try_global::<AgentDiffGlobal>()
-            .map(|global| global.0.clone())
-            .unwrap_or_else(|| {
-                let entity = cx.new(|_cx| Self::default());
-                let global = AgentDiffGlobal(entity.clone());
-                cx.set_global(global);
-                entity
-            })
+        if let Some(global) = cx.try_global::<AgentDiffGlobal>() {
+            global.0.clone()
+        } else {
+            let entity = cx.new(|_cx| Self::default());
+            let global = AgentDiffGlobal(entity.clone());
+            cx.set_global(global);
+            entity
+        }
     }
 
     pub fn set_active_thread(

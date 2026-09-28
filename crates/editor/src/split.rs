@@ -585,10 +585,10 @@ impl SplittableEditor {
 
         let rhs_has_headers = self.rhs_multibuffer.read(cx).snapshot(cx).show_headers();
         let lhs_multibuffer = cx.new(|cx| {
-            let mut multibuffer = if !rhs_has_headers {
-                MultiBuffer::without_headers(Capability::ReadOnly)
-            } else {
+            let mut multibuffer = if rhs_has_headers {
                 MultiBuffer::new(Capability::ReadOnly)
+            } else {
+                MultiBuffer::without_headers(Capability::ReadOnly)
             };
             multibuffer.set_all_diff_hunks_expanded(cx);
             multibuffer
@@ -820,13 +820,13 @@ impl SplittableEditor {
         cx: &mut Context<Self>,
     ) {
         if let Some(lhs) = &self.lhs {
-            if !lhs.was_last_focused {
+            if lhs.was_last_focused {
+                cx.propagate();
+            } else {
                 lhs.editor.read(cx).focus_handle(cx).focus(window, cx);
                 lhs.editor.update(cx, |editor, cx| {
                     editor.request_autoscroll(Autoscroll::fit(), cx);
                 });
-            } else {
-                cx.propagate();
             }
         } else {
             cx.propagate();
@@ -2319,8 +2319,7 @@ mod tests {
 
         let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
         let operations = std::env::var("OPERATIONS")
-            .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-            .unwrap_or(10);
+            .map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
         let rng = &mut rng;
         for _ in 0..operations {
             let buffers = editor.update(cx, |editor, cx| {
@@ -3707,7 +3706,7 @@ mod tests {
         "
         .unindent();
 
-        let buffer2 = cx.new(|cx| Buffer::local(current_text.to_string(), cx));
+        let buffer2 = cx.new(|cx| Buffer::local(current_text.clone(), cx));
         let diff2 = cx.new(|cx| BufferDiff::new(&buffer2.read(cx).text_snapshot(), cx));
 
         editor.update(cx, |editor, cx| {

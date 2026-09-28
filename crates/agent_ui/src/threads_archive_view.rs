@@ -146,8 +146,7 @@ fn archive_match_positions(
     let title = session
         .title
         .as_ref()
-        .map(|title| title.as_ref())
-        .unwrap_or(default_title);
+        .map_or(default_title, |title| title.as_ref());
 
     if let Some(positions) = fuzzy_match_positions(query, title) {
         return Some(positions);
@@ -560,27 +559,24 @@ impl ThreadsArchiveView {
     }
 
     fn select_previous(&mut self, _: &SelectPrevious, window: &mut Window, cx: &mut Context<Self>) {
-        match self.selection {
-            Some(ix) => {
-                if let Some(prev) = (ix > 0)
-                    .then(|| self.find_previous_selectable(ix - 1))
-                    .flatten()
-                {
-                    self.selection = Some(prev);
-                    self.list_state.scroll_to_reveal_item(prev);
-                } else {
-                    self.selection = None;
-                    self.focus_filter_editor(window, cx);
-                }
-                cx.notify();
+        if let Some(ix) = self.selection {
+            if let Some(prev) = (ix > 0)
+                .then(|| self.find_previous_selectable(ix - 1))
+                .flatten()
+            {
+                self.selection = Some(prev);
+                self.list_state.scroll_to_reveal_item(prev);
+            } else {
+                self.selection = None;
+                self.focus_filter_editor(window, cx);
             }
-            None => {
-                let last = self.items.len().saturating_sub(1);
-                if let Some(prev) = self.find_previous_selectable(last) {
-                    self.selection = Some(prev);
-                    self.list_state.scroll_to_reveal_item(prev);
-                    cx.notify();
-                }
+            cx.notify();
+        } else {
+            let last = self.items.len().saturating_sub(1);
+            if let Some(prev) = self.find_previous_selectable(last) {
+                self.selection = Some(prev);
+                self.list_state.scroll_to_reveal_item(prev);
+                cx.notify();
             }
         }
     }
@@ -1385,8 +1381,7 @@ impl PickerDelegate for ProjectPickerDelegate {
             self.thread
                 .title
                 .as_ref()
-                .map(|t| t.as_ref())
-                .unwrap_or(default_thread_title(cx).as_ref()),
+                .map_or(default_thread_title(cx).as_ref(), |t| t.as_ref()),
             1,
         )
         .into()

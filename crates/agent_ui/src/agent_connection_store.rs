@@ -93,8 +93,9 @@ impl AgentConnectionStore {
     pub fn connection_status(&self, key: &Agent, cx: &App) -> AgentConnectionStatus {
         self.entries
             .get(key)
-            .map(|entry| entry.read(cx).status())
-            .unwrap_or(AgentConnectionStatus::Disconnected)
+            .map_or(AgentConnectionStatus::Disconnected, |entry| {
+                entry.read(cx).status()
+            })
     }
 
     pub fn agent_version(&self, key: &Agent, cx: &App) -> Option<SharedString> {

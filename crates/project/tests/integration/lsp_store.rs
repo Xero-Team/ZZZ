@@ -131,7 +131,7 @@ async fn test_diagnostic_batches_skip_paths_without_worktrees(cx: &mut TestAppCo
                         buffer
                             .buffer_diagnostics(Some(server_id))
                             .iter()
-                            .map(|entry| entry.diagnostic.message.to_string())
+                            .map(|entry| entry.diagnostic.message.clone())
                             .collect::<Vec<_>>(),
                         message.into_iter().map(str::to_string).collect::<Vec<_>>()
                     );

@@ -135,21 +135,20 @@ impl DebugAdapterClient {
         );
         log::debug!("  response: {response:?}");
 
-        match response.success {
-            true => {
-                if let Some(json) = response.body {
-                    Ok(serde_json::from_value(json)?)
-                // Note: dap types configure themselves to return `None` when an empty object is received,
-                // which then fails here...
-                } else if let Ok(result) =
-                    serde_json::from_value(serde_json::Value::Object(Default::default()))
-                {
-                    Ok(result)
-                } else {
-                    Ok(serde_json::from_value(Default::default())?)
-                }
+        if response.success {
+            if let Some(json) = response.body {
+                Ok(serde_json::from_value(json)?)
+            // Note: dap types configure themselves to return `None` when an empty object is received,
+            // which then fails here...
+            } else if let Ok(result) =
+                serde_json::from_value(serde_json::Value::Object(Default::default()))
+            {
+                Ok(result)
+            } else {
+                Ok(serde_json::from_value(Default::default())?)
             }
-            false => anyhow::bail!("Request failed: {}", response.message.unwrap_or_default()),
+        } else {
+            anyhow::bail!("Request failed: {}", response.message.unwrap_or_default())
         }
     }
 

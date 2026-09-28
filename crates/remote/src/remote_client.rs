@@ -337,7 +337,7 @@ impl ConnectionIdentifier {
     // So our strings should be at most 20 characters or so.
     fn to_string(&self, cx: &App) -> String {
         let identifier_prefix = match ReleaseChannel::global(cx) {
-            ReleaseChannel::Stable => "".to_owned(),
+            ReleaseChannel::Stable => String::new(),
             release_channel => format!("{}-", release_channel.dev_name()),
         };
         match self {
@@ -541,8 +541,7 @@ impl RemoteClient {
         let can_reconnect = self
             .state
             .as_ref()
-            .map(|state| state.can_reconnect())
-            .unwrap_or(false);
+            .is_some_and(|state| state.can_reconnect());
         if !can_reconnect {
             let state = if let Some(state) = self.state.as_ref() {
                 state.to_string()
@@ -985,8 +984,7 @@ impl RemoteClient {
     pub fn connection_state(&self) -> ConnectionState {
         self.state
             .as_ref()
-            .map(ConnectionState::from)
-            .unwrap_or(ConnectionState::Disconnected)
+            .map_or(ConnectionState::Disconnected, ConnectionState::from)
     }
 
     pub fn is_disconnected(&self) -> bool {
@@ -1688,8 +1686,10 @@ impl ChannelClient {
                     } else {
                         let terminal_stream_response = matches!(
                             &incoming.payload,
-                            Some(proto::envelope::Payload::Error(_))
-                                | Some(proto::envelope::Payload::EndStream(_))
+                            Some(
+                                proto::envelope::Payload::Error(_)
+                                    | proto::envelope::Payload::EndStream(_)
+                            )
                         );
                         let sender = if terminal_stream_response {
                             this.stream_response_channels.lock().remove(&request_id)

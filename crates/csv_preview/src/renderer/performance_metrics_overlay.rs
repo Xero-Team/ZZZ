@@ -84,10 +84,10 @@ fn format_performance_metrics(
 
     // Add timing metrics using the display method
     let timing_display = metrics.display();
-    if !timing_display.is_empty() {
-        lines.extend(timing_display.lines().map(|line| format!("- {}", line)));
-    } else {
+    if timing_display.is_empty() {
         lines.push(no_timing_data_yet.to_owned());
+    } else {
+        lines.extend(timing_display.lines().map(|line| format!("- {}", line)));
     }
 
     // Add rendered indices information

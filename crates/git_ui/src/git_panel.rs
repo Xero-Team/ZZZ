@@ -822,10 +822,10 @@ pub struct GitStatusEntry {
 
 impl GitStatusEntry {
     fn display_name(&self, path_style: PathStyle) -> String {
-        self.repo_path
-            .file_name()
-            .map(|name| name.to_owned())
-            .unwrap_or_else(|| self.repo_path.display(path_style).to_string())
+        self.repo_path.file_name().map_or_else(
+            || self.repo_path.display(path_style).to_string(),
+            |name| name.to_owned(),
+        )
     }
 
     fn parent_dir(&self, path_style: PathStyle) -> Option<String> {
@@ -2013,9 +2013,7 @@ impl GitPanel {
             }
             let filename = path.path.file_name()?.to_owned();
 
-            if !entry.status.is_created() {
-                self.perform_checkout(vec![entry.clone()], window, cx);
-            } else {
+            if entry.status.is_created() {
                 let trash = tr(cx, "git_ui.git_panel.trash", "Trash");
                 let cancel = tr(cx, "prompt.common.cancel", "Cancel");
                 let prompt = window.prompt(
@@ -2051,6 +2049,8 @@ impl GitPanel {
                     cx,
                     |e, _, _| Some(format!("{e}")),
                 );
+            } else {
+                self.perform_checkout(vec![entry.clone()], window, cx);
             }
             Some(())
         });
@@ -2746,11 +2746,10 @@ impl GitPanel {
     ) -> bool {
         if commit_editor_focus_handle.contains_focused(window, cx) {
             if self.head_commit(cx).is_some() {
-                if !self.amend_pending {
-                    self.toggle_amend_pending(cx);
-                } else {
+                if self.amend_pending {
                     return self.commit(commit_editor_focus_handle, window, cx);
                 }
+                self.toggle_amend_pending(cx);
             }
             false
         } else {
@@ -4507,7 +4506,7 @@ impl GitPanel {
             Self::item_width_estimate(0, entry.display_name(path_style).len(), depth)
         } else {
             Self::item_width_estimate(
-                entry.parent_dir(path_style).map(|s| s.len()).unwrap_or(0),
+                entry.parent_dir(path_style).map_or(0, |s| s.len()),
                 entry.display_name(path_style).len(),
                 0,
             )
@@ -5741,8 +5740,7 @@ impl GitPanel {
             .as_ref()
             .and_then(|b| b.upstream.as_ref())
             .and_then(|u| u.tracking.status())
-            .map(|s| s.ahead as usize)
-            .unwrap_or(0);
+            .map_or(0, |s| s.ahead as usize);
 
         Some(
             v_flex()
@@ -5811,16 +5809,18 @@ impl GitPanel {
                                         .and_then(|ts| {
                                             time::OffsetDateTime::from_unix_timestamp(ts).ok()
                                         })
-                                        .map(|dt| {
-                                            time_format::format_localized_timestamp(
-                                                dt,
-                                                now,
-                                                local_offset,
-                                                time_format::TimestampFormat::Relative,
-                                            )
-                                            .into()
-                                        })
-                                        .unwrap_or_else(|| "".into());
+                                        .map_or_else(
+                                            || "".into(),
+                                            |dt| {
+                                                time_format::format_localized_timestamp(
+                                                    dt,
+                                                    now,
+                                                    local_offset,
+                                                    time_format::TimestampFormat::Relative,
+                                                )
+                                                .into()
+                                            },
+                                        );
 
                                     let avatar = CommitAvatar::new(
                                         &sha_shared,
@@ -6748,19 +6748,18 @@ impl GitPanel {
             .flex_1()
             .gap_1()
             .when(settings.file_icons, |this| {
-                this.child(
-                    file_icon
-                        .map(|file_icon| {
-                            Icon::from_path(file_icon)
-                                .size(IconSize::Small)
-                                .color(Color::Muted)
-                        })
-                        .unwrap_or_else(|| {
-                            Icon::new(IconName::File)
-                                .size(IconSize::Small)
-                                .color(Color::Muted)
-                        }),
-                )
+                this.child(file_icon.map_or_else(
+                    || {
+                        Icon::new(IconName::File)
+                            .size(IconSize::Small)
+                            .color(Color::Muted)
+                    },
+                    |file_icon| {
+                        Icon::from_path(file_icon)
+                            .size(IconSize::Small)
+                            .color(Color::Muted)
+                    },
+                ))
             })
             .when(status_style != StatusStyle::LabelColor, |el| {
                 el.child(git_status_icon(status))
@@ -6969,19 +6968,18 @@ impl GitPanel {
             .min_w_0()
             .gap_1()
             .pl(px(entry.depth as f32 * TREE_INDENT))
-            .child(
-                folder_icon
-                    .map(|folder_icon| {
-                        Icon::from_path(folder_icon)
-                            .size(IconSize::Small)
-                            .color(Color::Muted)
-                    })
-                    .unwrap_or_else(|| {
-                        Icon::new(fallback_folder_icon)
-                            .size(IconSize::Small)
-                            .color(Color::Muted)
-                    }),
-            )
+            .child(folder_icon.map_or_else(
+                || {
+                    Icon::new(fallback_folder_icon)
+                        .size(IconSize::Small)
+                        .color(Color::Muted)
+                },
+                |folder_icon| {
+                    Icon::from_path(folder_icon)
+                        .size(IconSize::Small)
+                        .color(Color::Muted)
+                },
+            ))
             .child(self.entry_label(entry.name.clone(), label_color).truncate());
 
         h_flex()
@@ -7628,10 +7626,9 @@ impl RenderOnce for PanelRepoFooter {
             })
             .unzip();
 
-        let single_repo = project
-            .as_ref()
-            .map(|project| project.read(cx).git_store().read(cx).repositories().len() == 1)
-            .unwrap_or(true);
+        let single_repo = project.as_ref().map_or(true, |project| {
+            project.read(cx).git_store().read(cx).repositories().len() == 1
+        });
 
         const MAX_SHORT_SHA_LEN: usize = 8;
         let branch_name = self

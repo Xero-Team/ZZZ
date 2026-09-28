@@ -60,9 +60,7 @@ impl CsvPreviewView {
         resize_behaviors[0] = TableResizeBehavior::None;
 
         self.column_widths.widths.update(cx, |state, _cx| {
-            if state.cols() != cols {
-                *state = ResizableColumnsState::new(cols, widths, resize_behaviors);
-            } else {
+            if state.cols() == cols {
                 for (column_index, (width, resize_behavior)) in
                     widths.into_iter().zip(resize_behaviors).enumerate()
                 {
@@ -72,6 +70,8 @@ impl CsvPreviewView {
                         state.sync_auto_column_configuration(column_index, width, resize_behavior);
                     }
                 }
+            } else {
+                *state = ResizableColumnsState::new(cols, widths, resize_behaviors);
             }
         });
     }
@@ -351,8 +351,7 @@ fn estimate_data_column_width_px(contents: &TableLikeContent, column_index: usiz
     let header_width = contents
         .headers
         .get(column_index)
-        .map(estimated_cell_width_px)
-        .unwrap_or(DEFAULT_COLUMN_WIDTH_PX);
+        .map_or(DEFAULT_COLUMN_WIDTH_PX, estimated_cell_width_px);
 
     let sample_width = contents
         .rows

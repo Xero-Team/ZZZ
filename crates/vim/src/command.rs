@@ -286,7 +286,7 @@ impl Deref for WrappedAction {
 
 pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
     Vim::action(editor, cx, |vim, action: &VimSet, _, cx| {
-        for option in action.options.iter() {
+        for option in &action.options {
             vim.update_editor(cx, |_, editor, cx| match option {
                 VimOption::Wrap(true) => {
                     editor
@@ -1190,8 +1190,7 @@ impl VimCommand {
             } else {
                 rel_path
                     .parent()
-                    .map(|rel_path| rel_path.to_rel_path_buf())
-                    .unwrap_or(RelPathBuf::new())
+                    .map_or(RelPathBuf::new(), |rel_path| rel_path.to_rel_path_buf())
             };
 
             let task = workspace.project().update(cx, |project, cx| {
@@ -1211,8 +1210,7 @@ impl VimCommand {
                 .iter()
                 .map(|dir| {
                     let path = RelPath::new(dir.path.as_path(), PathStyle::local())
-                        .map(|cow| cow.into_owned())
-                        .unwrap_or(RelPathBuf::new());
+                        .map_or(RelPathBuf::new(), |cow| cow.into_owned());
                     let mut path_string = args_path
                         .join(&path)
                         .display(PathStyle::local())
@@ -1232,7 +1230,7 @@ impl VimCommand {
             .to_owned()
             .chars()
             .zip_longest(self.suffix.to_owned().chars())
-            .skip_while(|e| e.clone().both().map(|(s, q)| s == q).unwrap_or(false))
+            .skip_while(|e| e.clone().both().is_some_and(|(s, q)| s == q))
             .filter_map(|e| e.left())
             .collect::<String>();
         let has_bang = rest.starts_with('!');
@@ -1240,7 +1238,7 @@ impl VimCommand {
         let args = if has_bang {
             rest.strip_prefix('!')?.trim_start().to_owned()
         } else if rest.is_empty() {
-            "".into()
+            String::new()
         } else {
             rest.strip_prefix(' ')?.trim_start().to_owned()
         };
@@ -1529,13 +1527,13 @@ fn generate_commands(_: &App) -> Vec<VimCommand> {
             ("w", "rite"),
             VimSave {
                 save_intent: Some(SaveIntent::Save),
-                filename: "".into(),
+                filename: String::new(),
                 range: None,
             },
         )
         .bang(VimSave {
             save_intent: Some(SaveIntent::Overwrite),
-            filename: "".into(),
+            filename: String::new(),
             range: None,
         })
         .filename(|action, filename| {
@@ -1563,7 +1561,7 @@ fn generate_commands(_: &App) -> Vec<VimCommand> {
             ("r", "ead"),
             VimRead {
                 range: None,
-                filename: "".into(),
+                filename: String::new(),
             },
         )
         .filename(|_, filename| {
@@ -1716,7 +1714,7 @@ fn generate_commands(_: &App) -> Vec<VimCommand> {
         VimCommand::new(
             ("norm", "al"),
             VimNorm {
-                command: "".into(),
+                command: String::new(),
                 range: None,
                 override_rows: None,
             },

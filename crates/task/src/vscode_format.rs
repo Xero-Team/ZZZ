@@ -574,7 +574,7 @@ mod tests {
         );
         assert_eq!(
             generate_label(&Some(Command::Shell {
-                command: "".to_string(),
+                command: String::new(),
                 args: vec![]
             })),
             "shell"

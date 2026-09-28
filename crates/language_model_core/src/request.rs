@@ -35,7 +35,7 @@ impl LanguageModelImage {
     pub fn from_json(obj: &serde_json::Map<String, serde_json::Value>) -> Option<Self> {
         let mut source = None;
 
-        for (k, v) in obj.iter() {
+        for (k, v) in obj {
             match k.to_lowercase().as_str() {
                 "source" => source = v.as_str(),
                 _ => {}

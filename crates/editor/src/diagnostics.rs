@@ -485,10 +485,10 @@ impl Editor {
                             .message
                             .split_once('\n')
                             .map(|(line, _)| line)
-                            .map(SharedString::new)
-                            .unwrap_or_else(|| {
-                                SharedString::new(&*diagnostic_entry.diagnostic.message)
-                            });
+                            .map_or_else(
+                                || SharedString::new(&*diagnostic_entry.diagnostic.message),
+                                SharedString::new,
+                            );
                         let start_anchor = snapshot.anchor_before(diagnostic_entry.range.start);
                         let (Ok(i) | Err(i)) = inline_diagnostics
                             .binary_search_by(|(probe, _)| probe.cmp(&start_anchor, &snapshot));

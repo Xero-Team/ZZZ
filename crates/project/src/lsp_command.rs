@@ -400,8 +400,10 @@ impl LspCommand for PrepareRename {
         cx: AsyncApp,
     ) -> Result<PrepareRenameResponse> {
         buffer.read_with(&cx, |buffer, _| match message {
-            Some(lsp::PrepareRenameResponse::Range(range))
-            | Some(lsp::PrepareRenameResponse::RangeWithPlaceholder { range, .. }) => {
+            Some(
+                lsp::PrepareRenameResponse::Range(range)
+                | lsp::PrepareRenameResponse::RangeWithPlaceholder { range, .. },
+            ) => {
                 let Range { start, end } = range_from_lsp(range);
                 if buffer.clip_point_utf16(start, Bias::Left) == start.0
                     && buffer.clip_point_utf16(end, Bias::Left) == end.0
@@ -2354,52 +2356,49 @@ impl LspCommand for GetCompletions {
                     }
                 });
 
-                let edit = match lsp_edit {
+                let edit = if let Some(completion_text_edit) = lsp_edit {
                     // If the language server provides a range to overwrite, then
                     // check that the range is valid.
-                    Some(completion_text_edit) => {
-                        match parse_completion_text_edit(&completion_text_edit, &snapshot) {
-                            Some(edit) => edit,
-                            None => return false,
-                        }
-                    }
+                    let Some(edit) = parse_completion_text_edit(&completion_text_edit, &snapshot)
+                    else {
+                        return false;
+                    };
+                    edit
+                } else {
                     // If the language server does not provide a range, then infer
                     // the range based on the syntax tree.
-                    None => {
-                        if self.position != clipped_position {
-                            log::info!("completion out of expected range ");
-                            return false;
-                        }
+                    if self.position != clipped_position {
+                        log::info!("completion out of expected range ");
+                        return false;
+                    }
 
-                        let range = range_for_token
-                            .get_or_insert_with(|| {
-                                let offset = self.position.to_offset(&snapshot);
-                                let (range, kind) = snapshot
-                                    .surrounding_word(offset, Some(CharScopeContext::Completion));
-                                let range = if kind == Some(CharKind::Word) {
-                                    range
-                                } else {
-                                    offset..offset
-                                };
+                    let range = range_for_token
+                        .get_or_insert_with(|| {
+                            let offset = self.position.to_offset(&snapshot);
+                            let (range, kind) = snapshot
+                                .surrounding_word(offset, Some(CharScopeContext::Completion));
+                            let range = if kind == Some(CharKind::Word) {
+                                range
+                            } else {
+                                offset..offset
+                            };
 
-                                snapshot.anchor_before(range.start)
-                                    ..snapshot.anchor_after(range.end)
-                            })
-                            .clone();
+                            snapshot.anchor_before(range.start)..snapshot.anchor_after(range.end)
+                        })
+                        .clone();
 
-                        // We already know text_edit is None here
-                        let text = lsp_completion
-                            .insert_text
-                            .as_ref()
-                            .unwrap_or(&lsp_completion.label)
-                            .clone();
+                    // We already know text_edit is None here
+                    let text = lsp_completion
+                        .insert_text
+                        .as_ref()
+                        .unwrap_or(&lsp_completion.label)
+                        .clone();
 
-                        let insert_range = Some(range.start..snapshot.anchor_after(self.position));
-                        ParsedCompletionEdit {
-                            replace_range: range,
-                            insert_range,
-                            new_text: text,
-                        }
+                    let insert_range = Some(range.start..snapshot.anchor_after(self.position));
+                    ParsedCompletionEdit {
+                        replace_range: range,
+                        insert_range,
+                        new_text: text,
                     }
                 };
 

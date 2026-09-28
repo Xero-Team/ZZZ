@@ -269,7 +269,7 @@ async fn resolve_pasted_context_items(
                 }
             }
             ClipboardEntry::ExternalPaths(paths) => {
-                for path in paths.paths().iter() {
+                for path in paths.paths() {
                     if let Some((image, name)) = cx
                         .background_spawn({
                             let path = path.clone();
@@ -1075,7 +1075,7 @@ impl MessageEditor {
         // Handle text paste with potential markdown mention links before
         // clipboard context entries so markdown text still pastes as text.
         let clipboard_text = clipboard.entries().iter().find_map(|entry| match entry {
-            ClipboardEntry::String(text) => Some(text.text().to_string()),
+            ClipboardEntry::String(text) => Some(text.text().clone()),
             _ => None,
         });
         if let Some(clipboard_text) = clipboard_text.as_deref() {
@@ -1595,7 +1595,7 @@ impl MessageEditor {
                                 "agent_ui.mention_set.default_image_name",
                                 "Image",
                             )
-                            .to_string(),
+                            .clone(),
                         })
                     };
                     let Some(mention_uri) = mention_uri.log_err() else {
@@ -4385,7 +4385,7 @@ mod tests {
         let clipboard_text = cx
             .read_from_clipboard()
             .and_then(|item| match item.entries().first().cloned() {
-                Some(ClipboardEntry::String(entry)) => Some(entry.text().to_string()),
+                Some(ClipboardEntry::String(entry)) => Some(entry.text().clone()),
                 _ => None,
             })
             .expect("cut should write serialized text to clipboard");
@@ -4420,7 +4420,7 @@ mod tests {
         let clipboard_text = cx
             .read_from_clipboard()
             .and_then(|item| match item.entries().first().cloned() {
-                Some(ClipboardEntry::String(entry)) => Some(entry.text().to_string()),
+                Some(ClipboardEntry::String(entry)) => Some(entry.text().clone()),
                 _ => None,
             })
             .expect("cut should write serialized text to clipboard");

@@ -1922,8 +1922,9 @@ impl ContextMenu {
                                                 // (prevents accidental close when moving diagonally toward submenu)
                                                 let should_close = parent
                                                     .submenu_safety_threshold_x
-                                                    .map(|threshold_x| mouse_pos.x < threshold_x)
-                                                    .unwrap_or(true);
+                                                    .map_or(true, |threshold_x| {
+                                                        mouse_pos.x < threshold_x
+                                                    });
 
                                                 if should_close {
                                                     parent.close_submenu(true, cx);
@@ -1957,11 +1958,10 @@ impl ContextMenu {
                             .child(label_element)
                             .debug_selector(|| format!("MENU_ITEM-{}", label))
                             .children(action.as_ref().map(|action| {
-                                let binding = self
-                                    .action_context
-                                    .as_ref()
-                                    .map(|focus| KeyBinding::for_action_in(&**action, focus, cx))
-                                    .unwrap_or_else(|| KeyBinding::for_action(&**action, cx));
+                                let binding = self.action_context.as_ref().map_or_else(
+                                    || KeyBinding::for_action(&**action, cx),
+                                    |focus| KeyBinding::for_action_in(&**action, focus, cx),
+                                );
 
                                 div()
                                     .ml_4()
@@ -1994,19 +1994,16 @@ impl ContextMenu {
                                         let title = title.clone();
                                         let action = action.boxed_clone();
                                         move |_window, cx| {
-                                            action_context
-                                                .as_ref()
-                                                .map(|focus| {
-                                                    Tooltip::for_action_in(
-                                                        title.clone(),
-                                                        &*action,
-                                                        focus,
-                                                        cx,
-                                                    )
-                                                })
-                                                .unwrap_or_else(|| {
-                                                    Tooltip::for_action(title.clone(), &*action, cx)
-                                                })
+                                            if let Some(focus) = action_context.as_ref() {
+                                                Tooltip::for_action_in(
+                                                    title.clone(),
+                                                    &*action,
+                                                    focus,
+                                                    cx,
+                                                )
+                                            } else {
+                                                Tooltip::for_action(title.clone(), &*action, cx)
+                                            }
                                         }
                                     })
                                     .on_click({
@@ -2215,7 +2212,7 @@ impl Render for ContextMenu {
                             el.on_boxed_action(&**action, cx.listener(ContextMenu::end_slot))
                         })
                         .when(!self.delayed, |mut el| {
-                            for item in self.items.iter() {
+                            for item in &self.items {
                                 if let ContextMenuItem::Entry(ContextMenuEntry {
                                     action: Some(action),
                                     disabled: false,

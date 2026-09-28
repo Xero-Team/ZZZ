@@ -1606,11 +1606,11 @@ pub mod test {
         ) -> bool {
             if let Some(state) = state.downcast_ref::<Box<String>>() {
                 let state = *state.clone();
-                if state != self.state {
-                    false
-                } else {
+                if state == self.state {
                     self.state = state;
                     true
+                } else {
+                    false
                 }
             } else {
                 false

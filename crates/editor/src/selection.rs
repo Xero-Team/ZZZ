@@ -510,10 +510,10 @@ impl Editor {
             ColumnarMode::FromMouse => Some(ColumnarSelectionState::FromMouse {
                 selection_tail: selection_anchor,
                 display_point: if reset {
-                    if position.column() != goal_column {
-                        Some(DisplayPoint::new(position.row(), goal_column))
-                    } else {
+                    if position.column() == goal_column {
                         None
+                    } else {
+                        Some(DisplayPoint::new(position.row(), goal_column))
                     }
                 } else {
                     None

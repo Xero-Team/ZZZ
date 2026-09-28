@@ -1087,7 +1087,7 @@ impl PickerDelegate for ToolchainSelectorDelegate {
             .iter()
             .cloned()
             .partition::<Vec<_>, _>(|index| *index < label.len());
-        for index in path_highlights.iter_mut() {
+        for index in &mut path_highlights {
             *index -= label.len();
         }
         let id: SharedString = format!("toolchain-{ix}",).into();

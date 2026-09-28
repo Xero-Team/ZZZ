@@ -158,8 +158,8 @@ struct LifecycleScriptInternal {
 
 impl LifecycleScriptInternal {
     fn from_args(args: Vec<String>) -> Self {
-        let command = args.get(0).map(|a| a.to_string());
-        let remaining = args.iter().skip(1).map(|a| a.to_string()).collect();
+        let command = args.get(0).map(|a| a.clone());
+        let remaining = args.iter().skip(1).map(|a| a.clone()).collect();
         Self {
             command,
             args: remaining,

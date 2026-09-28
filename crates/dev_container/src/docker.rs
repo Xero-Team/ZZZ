@@ -209,7 +209,7 @@ impl Docker {
                 .args(["buildx", "version"])
                 .output()
                 .await;
-            output.map(|o| o.status.success()).unwrap_or(false)
+            output.is_ok_and(|o| o.status.success())
         };
         if !has_buildx && docker_cli != "podman" {
             log::info!(
@@ -350,7 +350,7 @@ impl DockerClient for Docker {
 
         command.args(&["exec", "-w", remote_folder, "-u", user]);
 
-        for (k, v) in env.iter() {
+        for (k, v) in env {
             command.arg("-e");
             let env_declaration = format!("{}={}", k, v);
             command.arg(&env_declaration);
@@ -842,7 +842,7 @@ mod test {
         let empty_output = Output {
             status: ExitStatus::default(),
             stderr: vec![],
-            stdout: String::from("").into_bytes(),
+            stdout: String::new().into_bytes(),
         };
 
         let result: Option<DockerPs> = deserialize_json_output(empty_output).unwrap();

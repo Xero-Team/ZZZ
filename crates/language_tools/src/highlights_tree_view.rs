@@ -226,24 +226,20 @@ impl HighlightsTreeView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let active_editor = match active_item {
-            Some(active_item) => {
-                if active_item.item_id() == cx.entity_id() {
-                    return;
-                }
-
-                match active_item.downcast::<Editor>() {
-                    Some(active_editor) => active_editor,
-                    None => {
-                        self.clear(cx);
-                        return;
-                    }
-                }
+        let active_editor = if let Some(active_item) = active_item {
+            if active_item.item_id() == cx.entity_id() {
+                return;
             }
-            None => {
+
+            if let Some(active_editor) = active_item.downcast::<Editor>() {
+                active_editor
+            } else {
                 self.clear(cx);
                 return;
             }
+        } else {
+            self.clear(cx);
+            return;
         };
 
         let is_different_editor = self
@@ -995,18 +991,15 @@ impl HighlightsTreeToolbarItemView {
     }
 
     fn render_settings_button(&self, cx: &Context<Self>) -> PopoverMenu<ContextMenu> {
-        let (show_text, show_syntax, show_semantic) = self
-            .tree_view
-            .as_ref()
-            .map(|view| {
+        let (show_text, show_syntax, show_semantic) =
+            self.tree_view.as_ref().map_or((true, true, true), |view| {
                 let v = view.read(cx);
                 (
                     v.show_text_highlights,
                     v.show_syntax_tokens,
                     v.show_semantic_tokens,
                 )
-            })
-            .unwrap_or((true, true, true));
+            });
 
         let tree_view = self.tree_view.as_ref().map(|v| v.downgrade());
 
@@ -1148,11 +1141,13 @@ fn excerpt_label_for(
         .anchor_to_buffer_anchor(entry.range.start)
         .and_then(|(anchor, _)| snapshot.buffer_for_id(anchor.buffer_id))
         .and_then(|buf| buf.file())
-        .map(|file| {
-            let full_path = file.full_path(cx);
-            full_path.to_string_lossy().to_string()
-        })
-        .unwrap_or_else(|| "untitled".to_owned());
+        .map_or_else(
+            || "untitled".to_owned(),
+            |file| {
+                let full_path = file.full_path(cx);
+                full_path.to_string_lossy().to_string()
+            },
+        );
     path_label.into()
 }
 
@@ -1241,8 +1236,10 @@ fn build_highlight_entries(
                 .highlights_config
                 .as_ref()
                 .and_then(|config| config.query.capture_names().get(capture.index as usize))
-                .map(|capture_name| SharedString::from((*capture_name).to_owned()))
-                .unwrap_or_else(|| SharedString::from("unknown"));
+                .map_or_else(
+                    || SharedString::from("unknown"),
+                    |capture_name| SharedString::from((*capture_name).to_owned()),
+                );
 
             let start_anchor = buffer_snapshot.anchor_before(capture.node.start_byte());
             let end_anchor = buffer_snapshot.anchor_after(capture.node.end_byte());

@@ -323,18 +323,17 @@ impl KernelSpecification {
     pub fn type_name(&self, cx: &App) -> SharedString {
         match self {
             Self::Jupyter(_) => tr(cx, "repl.kernels.type.jupyter", "Jupyter").into(),
-            Self::PythonEnv(spec) => spec
-                .environment_kind
-                .as_deref()
-                .map(|kind| localized_environment_kind(kind, cx))
-                .unwrap_or_else(|| {
+            Self::PythonEnv(spec) => spec.environment_kind.as_deref().map_or_else(
+                || {
                     tr(
                         cx,
                         "repl.kernels.type.python_environment",
                         "Python Environment",
                     )
                     .into()
-                }),
+                },
+                |kind| localized_environment_kind(kind, cx),
+            ),
             Self::JupyterServer(_) => {
                 tr(cx, "repl.kernels.type.jupyter_server", "Jupyter Server").into()
             }
@@ -347,7 +346,7 @@ impl KernelSpecification {
         SharedString::from(match self {
             Self::Jupyter(spec) => spec.path.to_string_lossy().into_owned(),
             Self::PythonEnv(spec) => spec.path.to_string_lossy().into_owned(),
-            Self::JupyterServer(spec) => spec.url.to_string(),
+            Self::JupyterServer(spec) => spec.url.clone(),
             Self::SshRemote(spec) => spec.path.to_string(),
             Self::WslRemote(spec) => spec.distro.clone(),
         })
@@ -398,8 +397,7 @@ impl KernelSpecification {
 
         file_icons::FileIcons::get(cx)
             .get_icon_for_type(&lang_name.to_lowercase(), cx)
-            .map(Icon::from_path)
-            .unwrap_or(Icon::new(IconName::ReplNeutral))
+            .map_or(Icon::new(IconName::ReplNeutral), Icon::from_path)
     }
 }
 
@@ -580,8 +578,7 @@ pub fn python_env_kernel_specifications(
                         .args(&["-c", "import ipykernel"])
                         .output()
                         .await
-                        .map(|output| output.status.success())
-                        .unwrap_or(false);
+                        .is_ok_and(|output| output.status.success());
 
                     let mut env = HashMap::new();
                     if let Some(python_bin_dir) = PathBuf::from(&python_path).parent() {

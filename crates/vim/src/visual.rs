@@ -782,7 +782,7 @@ impl Vim {
                     .collect::<Vec<_>>();
 
                 let mut edits = Vec::new();
-                for selection in selections.iter() {
+                for selection in &selections {
                     let selection = selection.clone();
                     for row_range in
                         movement::split_display_range_by_lines(&display_map, selection.range())

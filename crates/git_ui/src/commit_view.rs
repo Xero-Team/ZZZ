@@ -321,11 +321,10 @@ impl CommitView {
                     })
                     .context("project has no worktrees")?;
                 let short_sha = commit_sha.get(0..7).unwrap_or(&commit_sha);
-                let file_name = file
-                    .path
-                    .file_name()
-                    .map(|name| name.to_owned())
-                    .unwrap_or_else(|| file.path.display(PathStyle::local()).to_string());
+                let file_name = file.path.file_name().map_or_else(
+                    || file.path.display(PathStyle::local()).to_string(),
+                    |name| name.to_owned(),
+                );
                 let display_name = format!("{short_sha} - {file_name}");
 
                 let file = Arc::new(GitBlob {
@@ -1366,8 +1365,7 @@ fn stash_matches_index(sha: &str, stash_index: usize, repo: &Repository) -> bool
     repo.stash_entries
         .entries
         .get(stash_index)
-        .map(|entry| entry.oid.to_string() == sha)
-        .unwrap_or(false)
+        .is_some_and(|entry| entry.oid.to_string() == sha)
 }
 
 #[cfg(test)]

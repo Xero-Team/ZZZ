@@ -468,11 +468,11 @@ impl FoldedAncestors {
             .max_ancestor_depth()
             .saturating_sub(1)
             .saturating_sub(index);
-        if self.current_ancestor_depth != new_depth {
+        if self.current_ancestor_depth == new_depth {
+            false
+        } else {
             self.current_ancestor_depth = new_depth;
             true
-        } else {
-            false
         }
     }
 
@@ -673,10 +673,9 @@ impl ProjectPanel {
                             .workspace
                             .upgrade()
                             .and_then(|ws| ws.read(cx).active_item(cx))
-                            .map(|item| {
+                            .is_some_and(|item| {
                                 item.act_as_type(TypeId::of::<FileDiffView>(), cx).is_some()
-                            })
-                            .unwrap_or(false);
+                            });
                         if !is_active_item_file_diff_view {
                             this.marked_entries.clear();
                         }
@@ -2643,7 +2642,9 @@ impl ProjectPanel {
 
             let file_name = entry.path.file_name()?.to_owned();
 
-            let answer = if !action.skip_prompt {
+            let answer = if action.skip_prompt {
+                None
+            } else {
                 let prompt = tr(
                     cx,
                     "project_panel.restore_file.prompt",
@@ -2659,8 +2660,6 @@ impl ProjectPanel {
                     &[restore.as_str(), cancel.as_str()],
                     cx,
                 ))
-            } else {
-                None
             };
 
             cx.spawn_in(window, async move |panel, cx| {
@@ -2865,7 +2864,9 @@ impl ProjectPanel {
             if file_paths.is_empty() {
                 return None;
             }
-            let answer = if !skip_prompt {
+            let answer = if skip_prompt {
+                None
+            } else {
                 let operation = if trash {
                     tr(cx, "project_panel.delete.trash", "Trash")
                 } else {
@@ -2988,8 +2989,6 @@ impl ProjectPanel {
                     &[operation.as_str(), cancel.as_str()],
                     cx,
                 ))
-            } else {
-                None
             };
             let next_selection = self.find_next_selection_after_deletion(items_to_delete, cx);
             cx.spawn_in(window, async move |panel, cx| {
@@ -3663,7 +3662,7 @@ impl ProjectPanel {
             while worktree.entry_for_path(&new_path).is_some() {
                 new_path.pop();
 
-                let mut new_file_name = file_name_without_extension.to_string();
+                let mut new_file_name = file_name_without_extension.clone();
 
                 let disambiguation = " copy";
                 let mut disambiguation_len = disambiguation.len();
@@ -3852,7 +3851,7 @@ impl ProjectPanel {
         // For directories, we collect all files under them recursively
         let mut files_to_download: Vec<(WorktreeId, Arc<RelPath>, PathBuf)> = Vec::new();
 
-        for selected in entries.iter() {
+        for selected in &entries {
             let Some(worktree) = project.worktree_for_id(selected.worktree_id, cx) else {
                 continue;
             };
@@ -3892,11 +3891,8 @@ impl ProjectPanel {
 
                     if child_entry.is_file() {
                         // Calculate relative path from the directory root
-                        let relative_path = child_entry
-                            .path
-                            .strip_prefix(&base_path)
-                            .map(|p| PathBuf::from(dir_name.clone()).join(p.as_unix_str()))
-                            .unwrap_or_else(|_| {
+                        let relative_path = child_entry.path.strip_prefix(&base_path).map_or_else(
+                            |_| {
                                 PathBuf::from(
                                     child_entry
                                         .path
@@ -3904,7 +3900,9 @@ impl ProjectPanel {
                                         .map(str::to_owned)
                                         .unwrap_or_default(),
                                 )
-                            });
+                            },
+                            |p| PathBuf::from(dir_name.clone()).join(p.as_unix_str()),
+                        );
                         files_to_download.push((
                             selected.worktree_id,
                             child_entry.path.clone(),
@@ -4109,7 +4107,7 @@ impl ProjectPanel {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        for entry in self.effective_entries().iter() {
+        for entry in &self.effective_entries() {
             let worktree_id = entry.worktree_id;
             self.project
                 .update(cx, |project, cx| project.remove_worktree(worktree_id, cx));
@@ -4208,22 +4206,21 @@ impl ProjectPanel {
                 entry.path.clone()
             } else {
                 // entry is a file, use its parent directory
-                match entry.path.parent() {
-                    Some(parent) => Arc::from(parent),
-                    None => {
-                        // File at root, open search with empty filter
-                        self.workspace
-                            .update(cx, |workspace, cx| {
-                                search::ProjectSearchView::new_search_in_directory(
-                                    workspace,
-                                    RelPath::empty(),
-                                    window,
-                                    cx,
-                                );
-                            })
-                            .ok();
-                        return;
-                    }
+                if let Some(parent) = entry.path.parent() {
+                    Arc::from(parent)
+                } else {
+                    // File at root, open search with empty filter
+                    self.workspace
+                        .update(cx, |workspace, cx| {
+                            search::ProjectSearchView::new_search_in_directory(
+                                workspace,
+                                RelPath::empty(),
+                                window,
+                                cx,
+                            );
+                        })
+                        .ok();
+                    return;
                 }
             };
 
@@ -5455,7 +5452,7 @@ impl ProjectPanel {
                 let entries = visible
                     .index
                     .get_or_init(|| visible.entries.iter().map(|e| e.path.clone()).collect());
-                for entry in visible.entries[entry_range].iter() {
+                for entry in &visible.entries[entry_range] {
                     let status = if git_status_setting {
                         entry.git_summary
                     } else {
@@ -6494,9 +6491,9 @@ impl ProjectPanel {
                         if let Some((_, decoration_color)) =
                             entry_diagnostic_aware_icon_decoration_and_color(diagnostic_severity)
                         {
-                            let is_warning = diagnostic_severity
-                                .map(|severity| matches!(severity, DiagnosticSeverity::WARNING))
-                                .unwrap_or(false);
+                            let is_warning = diagnostic_severity.is_some_and(|severity| {
+                                matches!(severity, DiagnosticSeverity::WARNING)
+                            });
                             div().child(
                                 DecoratedIcon::new(
                                     Icon::from_path(icon.clone()).color(Color::Muted),
@@ -6852,8 +6849,7 @@ impl ProjectPanel {
             .state
             .expanded_dir_ids
             .get(&worktree_id)
-            .map(Vec::as_slice)
-            .unwrap_or(&[]);
+            .map_or(&[] as &[ProjectEntryId], Vec::as_slice);
         let is_expanded = expanded_entry_ids.binary_search(&entry.id).is_ok();
 
         let icon = match entry.kind {
@@ -6885,11 +6881,10 @@ impl ProjectPanel {
                     suffix.display(path_style).to_string()
                 })
         } else {
-            entry
-                .path
-                .file_name()
-                .map(|name| name.to_owned())
-                .unwrap_or_else(|| root_name.as_unix_str().to_owned())
+            entry.path.file_name().map_or_else(
+                || root_name.as_unix_str().to_owned(),
+                |name| name.to_owned(),
+            )
         };
 
         let selection = SelectedEntry {
@@ -6995,8 +6990,7 @@ impl ProjectPanel {
             .workspace
             .upgrade()
             .and_then(|ws| ws.read(cx).active_item(cx))
-            .map(|item| item.act_as_type(TypeId::of::<FileDiffView>(), cx).is_some())
-            .unwrap_or(false);
+            .is_some_and(|item| item.act_as_type(TypeId::of::<FileDiffView>(), cx).is_some());
         if is_active_item_file_diff_view {
             return Ok(());
         }
@@ -7029,8 +7023,7 @@ impl ProjectPanel {
                     .state
                     .expanded_dir_ids
                     .get(&worktree.id())
-                    .map(|ids| ids.binary_search(&entry.id).is_ok())
-                    .unwrap_or(false);
+                    .is_some_and(|ids| ids.binary_search(&entry.id).is_ok());
             if is_expanded_dir {
                 break;
             }

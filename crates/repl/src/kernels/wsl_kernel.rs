@@ -258,10 +258,10 @@ impl WslRunningKernel {
                     String::new()
                 };
 
-                let env_prefix_inline = if !env_assignments.is_empty() {
-                    format!("env {} ", env_assignments.join(" "))
-                } else {
+                let env_prefix_inline = if env_assignments.is_empty() {
                     String::new()
+                } else {
+                    format!("env {} ", env_assignments.join(" "))
                 };
 
                 format!("{cd_command}exec {env_prefix_inline}{args_string}")

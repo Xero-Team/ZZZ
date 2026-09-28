@@ -485,7 +485,7 @@ impl RunningMode {
                             "Failed to set breakpoints for {failed_path}{}",
                             match errors_by_path.len() {
                                 0 => unreachable!(),
-                                1 => "".into(),
+                                1 => String::new(),
                                 2 => " and 1 other path".into(),
                                 n => format!(" and {} other paths", n - 1),
                             }
@@ -501,8 +501,10 @@ impl RunningMode {
                                 defaults
                                     .exception_breakpoints
                                     .get(&filter.filter)
-                                    .map(|options| options.enabled)
-                                    .unwrap_or_else(|| filter.default.unwrap_or_default())
+                                    .map_or_else(
+                                        || filter.default.unwrap_or_default(),
+                                        |options| options.enabled,
+                                    )
                             } else {
                                 filter.default.unwrap_or_default()
                             };
@@ -2129,14 +2131,13 @@ impl Session {
         thread_id: ThreadId,
     ) -> impl FnOnce(&mut Self, Result<T::Response>, &mut Context<Self>) -> Option<T::Response> + 'static
     {
-        move |this, response, cx| match response.log_err() {
-            Some(response) => {
+        move |this, response, cx| {
+            if let Some(response) = response.log_err() {
                 this.breakpoint_store.update(cx, |store, cx| {
                     store.remove_active_position(Some(this.session_id()), cx)
                 });
                 Some(response)
-            }
-            None => {
+            } else {
                 this.active_snapshot.thread_states.stop_thread(thread_id);
                 cx.notify();
                 None
@@ -2152,8 +2153,8 @@ impl Session {
         &mut Context<Self>,
     ) -> Option<dap::ContinueResponse>
     + 'static {
-        move |this, response, cx| match response.log_err() {
-            Some(response) => {
+        move |this, response, cx| {
+            if let Some(response) = response.log_err() {
                 if response.all_threads_continued.unwrap_or(true) {
                     this.active_snapshot.thread_states.continue_all_threads();
                 } else {
@@ -2167,8 +2168,7 @@ impl Session {
                 this.invalidate_generic();
                 cx.notify();
                 Some(response)
-            }
-            None => {
+            } else {
                 this.active_snapshot.thread_states.stop_thread(thread_id);
                 cx.notify();
                 None
@@ -2587,7 +2587,7 @@ impl Session {
                         return
                     };
 
-                    for scope in scopes.iter() {
+                    for scope in &scopes {
                         this.variables(scope.variables_reference, cx);
                     }
 
@@ -2709,15 +2709,13 @@ impl Session {
                 };
 
                 if this.adapter.0.as_ref() == "Debugpy" {
-                    for variable in variables.iter_mut() {
+                    for variable in &mut variables {
                         if variable.type_ == Some("str".into()) {
                             // reverse Python repr() escaping
                             let mut unescaped = String::with_capacity(variable.value.len());
                             let mut chars = variable.value.chars();
                             while let Some(c) = chars.next() {
-                                if c != '\\' {
-                                    unescaped.push(c);
-                                } else {
+                                if c == '\\' {
                                     match chars.next() {
                                         Some('\\') => unescaped.push('\\'),
                                         Some('n') => unescaped.push('\n'),
@@ -2731,6 +2729,8 @@ impl Session {
                                         }
                                         None => {}
                                     }
+                                } else {
+                                    unescaped.push(c);
                                 }
                             }
                             variable.value = unescaped;

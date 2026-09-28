@@ -606,30 +606,27 @@ impl Transport for TcpTransport {
                 },
                 result = executor.clone().spawn(async move {
                     loop {
-                        match TcpStream::connect(address).await {
-                            Ok(stream) => {
-                                let (read, write) = stream.split();
-                                return Ok((Box::new(write) as _, Box::new(read) as _))
-                            },
-                            Err(_) => {
-                                let has_process = process.lock().is_some();
-                                if has_process {
-                                    let status = process.lock().as_mut().unwrap().try_status();
-                                    if let Ok(Some(_)) = status {
-                                        let child = process.lock().take().unwrap();
-                                        let output = child.output().await?;
-                                        let output = if output.stderr.is_empty() {
-                                            String::from_utf8_lossy(&output.stdout).to_string()
-                                        } else {
-                                            String::from_utf8_lossy(&output.stderr).to_string()
-                                        };
-                                        anyhow::bail!("{output}\nerror: process exited before debugger attached.");
-                                    }
-                                }
+                        if let Ok(stream) = TcpStream::connect(address).await {
+                            let (read, write) = stream.split();
+                            return Ok((Box::new(write) as _, Box::new(read) as _))
+                        }
 
-                                executor.timer(Duration::from_millis(100)).await;
+                        let has_process = process.lock().is_some();
+                        if has_process {
+                            let status = process.lock().as_mut().unwrap().try_status();
+                            if let Ok(Some(_)) = status {
+                                let child = process.lock().take().unwrap();
+                                let output = child.output().await?;
+                                let output = if output.stderr.is_empty() {
+                                    String::from_utf8_lossy(&output.stdout).to_string()
+                                } else {
+                                    String::from_utf8_lossy(&output.stderr).to_string()
+                                };
+                                anyhow::bail!("{output}\nerror: process exited before debugger attached.");
                             }
                         }
+
+                        executor.timer(Duration::from_millis(100)).await;
                     }
                 }).fuse() => result
             }

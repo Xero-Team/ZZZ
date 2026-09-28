@@ -342,12 +342,14 @@ impl Item for SvgPreviewView {
         self.buffer
             .as_ref()
             .and_then(|svg_path| svg_path.read(cx).file())
-            .map(|name| {
-                tr(cx, "svg_preview.preview_title", "Preview {}")
-                    .replacen("{}", name.file_name(cx).as_ref(), 1)
-                    .into()
-            })
-            .unwrap_or_else(|| tr(cx, "svg_preview.tab_title", "SVG Preview").into())
+            .map_or_else(
+                || tr(cx, "svg_preview.tab_title", "SVG Preview").into(),
+                |name| {
+                    tr(cx, "svg_preview.preview_title", "Preview {}")
+                        .replacen("{}", name.file_name(cx).as_ref(), 1)
+                        .into()
+                },
+            )
     }
 
     fn to_item_events(_event: &Self::Event, _f: &mut dyn FnMut(workspace::item::ItemEvent)) {}

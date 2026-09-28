@@ -514,8 +514,9 @@ impl Inner {
                 Entry::Vacant(entry) => {
                     let s = self
                         .query_atom_name(atom)
-                        .map(|s| Box::leak(s.into_boxed_str()) as &str)
-                        .unwrap_or("FAILED-TO-GET-THE-ATOM-NAME");
+                        .map_or("FAILED-TO-GET-THE-ATOM-NAME", |s| {
+                            Box::leak(s.into_boxed_str()) as &str
+                        });
                     entry.insert(s);
                     s
                 }

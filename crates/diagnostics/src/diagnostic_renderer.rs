@@ -37,7 +37,7 @@ impl DiagnosticRenderer {
         let primary = &diagnostic_group[primary_ix];
         let group_id = primary.diagnostic.group_id;
         let mut results = vec![];
-        for entry in diagnostic_group.iter() {
+        for entry in &diagnostic_group {
             let mut markdown = Self::markdown(&entry.diagnostic);
             if entry.diagnostic.is_primary {
                 let diagnostic = &primary.diagnostic;

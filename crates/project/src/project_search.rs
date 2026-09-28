@@ -938,7 +938,7 @@ impl PathInclusionMatcher {
                 query
                     .files_to_include()
                     .sources()
-                    .flat_map(|glob| Some(wax::Glob::new(glob).ok()?.partition().0)),
+                    .filter_map(|glob| Some(wax::Glob::new(glob).ok()?.partition().0)),
             );
         }
         Self { included, query }
@@ -1053,31 +1053,28 @@ impl<T: 'static + Send> AdaptiveBatcher<T> {
             loop {
                 select_biased! {
                     item = rx.recv().fuse() => {
-                        match item {
-                            Ok(new_item) => {
-                                let is_fresh_batch = current_batch.is_empty();
-                                items_produced_so_far += 1;
-                                current_batch.push(new_item);
-                                if is_fresh_batch {
-                                    // Chosen arbitrarily based on some experimentation with plots.
-                                    let desired_duration_ms = (20 * (items_produced_so_far + 2).ilog2() as u64).min(300);
-                                    let desired_duration = Duration::from_millis(desired_duration_ms);
-                                    let _executor = executor.clone();
-                                    let _flush = flush_batch_tx.clone();
-                                    let new_timer = executor.spawn_with_priority(Priority::High, async move {
-                                        _executor.timer(desired_duration).await;
-                                        _ = _flush.send(false).await;
-                                    });
-                                    _schedule_flush_after_delay = Some(new_timer);
-                                }
+                        if let Ok(new_item) = item {
+                            let is_fresh_batch = current_batch.is_empty();
+                            items_produced_so_far += 1;
+                            current_batch.push(new_item);
+                            if is_fresh_batch {
+                                // Chosen arbitrarily based on some experimentation with plots.
+                                let desired_duration_ms = (20 * (items_produced_so_far + 2).ilog2() as u64).min(300);
+                                let desired_duration = Duration::from_millis(desired_duration_ms);
+                                let _executor = executor.clone();
+                                let _flush = flush_batch_tx.clone();
+                                let new_timer = executor.spawn_with_priority(Priority::High, async move {
+                                    _executor.timer(desired_duration).await;
+                                    _ = _flush.send(false).await;
+                                });
+                                _schedule_flush_after_delay = Some(new_timer);
                             }
-                            Err(_) => {
-                                // Items channel closed - send any remaining batch before exiting
-                                if !current_batch.is_empty() {
-                                    _ = batch_tx.send(std::mem::take(&mut current_batch)).await;
-                                }
-                                break;
+                        } else {
+                            // Items channel closed - send any remaining batch before exiting
+                            if !current_batch.is_empty() {
+                                _ = batch_tx.send(std::mem::take(&mut current_batch)).await;
                             }
+                            break;
                         }
                     }
                     should_break_afterwards = flush.next() => {

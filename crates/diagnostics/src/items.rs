@@ -66,10 +66,10 @@ impl Render for DiagnosticIndicator {
                 .split_once('\n')
                 .map_or(&*diagnostic.message, |(first, _)| first);
             let diagnostics_already_active = self.any_active_diagnostics(cx);
-            let tooltip = if !diagnostics_already_active {
-                tr(cx, "diagnostics.expand_diagnostics", "Expand Diagnostics")
-            } else {
+            let tooltip = if diagnostics_already_active {
                 tr(cx, "diagnostics.next_diagnostic", "Next Diagnostic")
+            } else {
+                tr(cx, "diagnostics.expand_diagnostics", "Expand Diagnostics")
             };
             Some(
                 Button::new("diagnostic_message", SharedString::new(message))

@@ -828,7 +828,7 @@ async fn test_remote_project_root_dir_changes_update_groups(cx: &mut TestAppCont
                 updated_entries: vec![proto::Entry {
                     id: 1,
                     is_dir: true,
-                    path: "".to_string(),
+                    path: String::new(),
                     inode: 1,
                     mtime: Some(proto::Timestamp {
                         seconds: 0,

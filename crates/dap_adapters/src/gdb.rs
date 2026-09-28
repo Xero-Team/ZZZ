@@ -241,12 +241,11 @@ impl DebugAdapter for GdbDebugAdapter {
             .config
             .get("env")
             .and_then(|v| v.as_object())
-            .map(|obj| {
+            .map_or_else(HashMap::default, |obj| {
                 obj.iter()
                     .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_owned())))
                     .collect::<HashMap<String, String>>()
-            })
-            .unwrap_or_else(HashMap::default);
+            });
 
         base_env.extend(config_env);
 

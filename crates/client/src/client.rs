@@ -1124,7 +1124,7 @@ impl Client {
             request_headers.insert("x-zzz-app-version", HeaderValue::from_str(&app_version)?);
             request_headers.insert(
                 "x-zzz-release-channel",
-                HeaderValue::from_str(release_channel.map(|r| r.dev_name()).unwrap_or("unknown"))?,
+                HeaderValue::from_str(release_channel.map_or("unknown", |r| r.dev_name()))?,
             );
             if let Some(user_agent) = user_agent {
                 request_headers.insert(http::header::USER_AGENT, user_agent);

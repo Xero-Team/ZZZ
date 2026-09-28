@@ -46,7 +46,7 @@ impl Mode {
         let mut builtin_profiles = Vec::new();
         let mut custom_profiles = Vec::new();
 
-        for (profile_id, profile) in settings.profiles.iter() {
+        for (profile_id, profile) in &settings.profiles {
             let entry = ProfileEntry {
                 id: profile_id.clone(),
                 name: profile.name.clone(),
@@ -530,11 +530,10 @@ impl ManageProfilesModal {
         let settings = AgentSettings::get_global(cx);
 
         let base_profile_name = mode.base_profile_id.as_ref().map(|base_profile_id| {
-            settings
-                .profiles
-                .get(base_profile_id)
-                .map(|profile| profile.name.clone())
-                .unwrap_or_else(|| tr(cx, "agent_ui.manage_profiles.unknown", "Unknown"))
+            settings.profiles.get(base_profile_id).map_or_else(
+                || tr(cx, "agent_ui.manage_profiles.unknown", "Unknown"),
+                |profile| profile.name.clone(),
+            )
         });
 
         v_flex()
@@ -564,11 +563,10 @@ impl ManageProfilesModal {
     ) -> impl IntoElement {
         let settings = AgentSettings::get_global(cx);
 
-        let profile_name = settings
-            .profiles
-            .get(&mode.profile_id)
-            .map(|profile| profile.name.clone())
-            .unwrap_or_else(|| tr(cx, "agent_ui.manage_profiles.unknown", "Unknown"));
+        let profile_name = settings.profiles.get(&mode.profile_id).map_or_else(
+            || tr(cx, "agent_ui.manage_profiles.unknown", "Unknown"),
+            |profile| profile.name.clone(),
+        );
 
         let icon = match mode.profile_id.as_str() {
             "write" => IconName::Pencil,
@@ -875,11 +873,10 @@ impl Render for ManageProfilesModal {
                     tool_picker,
                     ..
                 } => {
-                    let profile_name = settings
-                        .profiles
-                        .get(profile_id)
-                        .map(|profile| profile.name.clone())
-                        .unwrap_or_else(|| tr(cx, "agent_ui.manage_profiles.unknown", "Unknown"));
+                    let profile_name = settings.profiles.get(profile_id).map_or_else(
+                        || tr(cx, "agent_ui.manage_profiles.unknown", "Unknown"),
+                        |profile| profile.name.clone(),
+                    );
 
                     v_flex()
                         .pb_1()
@@ -903,11 +900,10 @@ impl Render for ManageProfilesModal {
                     tool_picker,
                     ..
                 } => {
-                    let profile_name = settings
-                        .profiles
-                        .get(profile_id)
-                        .map(|profile| profile.name.clone())
-                        .unwrap_or_else(|| tr(cx, "agent_ui.manage_profiles.unknown", "Unknown"));
+                    let profile_name = settings.profiles.get(profile_id).map_or_else(
+                        || tr(cx, "agent_ui.manage_profiles.unknown", "Unknown"),
+                        |profile| profile.name.clone(),
+                    );
 
                     v_flex()
                         .pb_1()

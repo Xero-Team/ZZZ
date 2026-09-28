@@ -293,18 +293,15 @@ mod tests {
                             zlog::info!("{}: dropping recv future", receiver_id);
                         }
                         result = recv => {
-                            match result {
-                                Ok(value) => {
-                                    zlog::info!("{}: received {}", receiver_id, value);
-                                    assert_eq!(value, next_id.load(SeqCst) - 1);
-                                    assert_ne!(value, prev_observed_value);
-                                    prev_observed_value = value;
-                                }
-                                Err(NoSenderError) => {
-                                    zlog::info!("{}: closed", receiver_id);
-                                    assert!(closed.load(SeqCst));
-                                    break;
-                                }
+                            if let Ok(value) = result {
+                                zlog::info!("{}: received {}", receiver_id, value);
+                                assert_eq!(value, next_id.load(SeqCst) - 1);
+                                assert_ne!(value, prev_observed_value);
+                                prev_observed_value = value;
+                            } else {
+                                zlog::info!("{}: closed", receiver_id);
+                                assert!(closed.load(SeqCst));
+                                break;
                             }
                         }
                     }

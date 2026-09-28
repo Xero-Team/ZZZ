@@ -109,19 +109,20 @@ impl ParentElement for Tab {
 impl RenderOnce for Tab {
     #[allow(refining_impl_trait)]
     fn render(self, _: &mut Window, cx: &mut App) -> Stateful<Div> {
-        let (text_color, tab_bg, _tab_hover_bg, _tab_active_bg) = match self.selected {
-            false => (
-                cx.theme().colors().text_muted,
-                cx.theme().colors().tab_inactive_background,
-                cx.theme().colors().ghost_element_hover,
-                cx.theme().colors().ghost_element_active,
-            ),
-            true => (
+        let (text_color, tab_bg, _tab_hover_bg, _tab_active_bg) = if self.selected {
+            (
                 cx.theme().colors().text,
                 cx.theme().colors().tab_active_background,
                 cx.theme().colors().element_hover,
                 cx.theme().colors().element_active,
-            ),
+            )
+        } else {
+            (
+                cx.theme().colors().text_muted,
+                cx.theme().colors().tab_inactive_background,
+                cx.theme().colors().ghost_element_hover,
+                cx.theme().colors().ghost_element_active,
+            )
         };
 
         let (start_slot, end_slot) = {

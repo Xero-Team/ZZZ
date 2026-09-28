@@ -919,15 +919,15 @@ impl PlatformTextSystem for NoopTextSystem {
             }
         }
         let mut runs = Vec::default();
-        if !glyphs.is_empty() {
+        if glyphs.is_empty() {
+            position = px(0.);
+        } else {
             runs.push(ShapedRun {
                 font_id: FontId(0),
                 synthetic_italic: Default::default(),
                 synthetic_bold: Default::default(),
                 glyphs,
             });
-        } else {
-            position = px(0.);
         }
 
         LineLayout {
@@ -2110,7 +2110,7 @@ impl ClipboardItem {
     pub fn text(&self) -> Option<String> {
         let mut answer = String::new();
 
-        for entry in self.entries.iter() {
+        for entry in &self.entries {
             if let ClipboardEntry::String(ClipboardString {
                 text,
                 html: _,
@@ -2122,7 +2122,7 @@ impl ClipboardItem {
         }
 
         if answer.is_empty() {
-            for entry in self.entries.iter() {
+            for entry in &self.entries {
                 if let ClipboardEntry::ExternalPaths(paths) = entry {
                     for path in &paths.0 {
                         use std::fmt::Write as _;
@@ -2132,10 +2132,10 @@ impl ClipboardItem {
             }
         }
 
-        if !answer.is_empty() {
-            Some(answer)
-        } else {
+        if answer.is_empty() {
             None
+        } else {
+            Some(answer)
         }
     }
 

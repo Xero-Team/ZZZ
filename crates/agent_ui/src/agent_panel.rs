@@ -81,8 +81,7 @@ fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
 }
 
 fn tr_optional(cx: Option<&App>, key: &'static str, fallback: &'static str) -> String {
-    cx.map(|cx| app_i18n::tr(cx, key, fallback))
-        .unwrap_or_else(|| fallback.to_owned())
+    cx.map_or_else(|| fallback.to_owned(), |cx| app_i18n::tr(cx, key, fallback))
 }
 
 /// Maximum number of idle threads kept in the agent panel's retained list.
@@ -1153,18 +1152,15 @@ impl AgentPanel {
     pub fn is_visible(workspace: &Entity<Workspace>, cx: &App) -> bool {
         let workspace_read = workspace.read(cx);
 
-        workspace_read
-            .panel::<AgentPanel>(cx)
-            .map(|panel| {
-                let panel_id = Entity::entity_id(&panel);
+        workspace_read.panel::<AgentPanel>(cx).is_some_and(|panel| {
+            let panel_id = Entity::entity_id(&panel);
 
-                workspace_read.all_docks().iter().any(|dock| {
-                    dock.read(cx)
-                        .visible_panel()
-                        .is_some_and(|visible_panel| visible_panel.panel_id() == panel_id)
-                })
+            workspace_read.all_docks().iter().any(|dock| {
+                dock.read(cx)
+                    .visible_panel()
+                    .is_some_and(|visible_panel| visible_panel.panel_id() == panel_id)
             })
-            .unwrap_or(false)
+        })
     }
 
     /// Clear the active view, retaining any running thread in the background.
@@ -2283,8 +2279,7 @@ impl AgentPanel {
         });
         let thread_id = existing_metadata
             .as_ref()
-            .map(|m| m.thread_id)
-            .unwrap_or_else(ThreadId::new);
+            .map_or_else(ThreadId::new, |m| m.thread_id);
         let workspace = self.workspace.clone();
         let project = self.project.clone();
 
@@ -3021,8 +3016,7 @@ impl AgentPanel {
 
         let is_thread_loading = self
             .active_conversation_view()
-            .map(|thread| thread.read(cx).is_loading())
-            .unwrap_or(false);
+            .is_some_and(|thread| thread.read(cx).is_loading());
 
         let has_custom_icon = selected_agent_custom_icon.is_some();
         let selected_agent_builtin_icon = self.selected_agent.icon();
@@ -3107,13 +3101,12 @@ impl AgentPanel {
         };
 
         let use_v2_empty_toolbar = is_empty_state && !is_in_history_or_config;
-        let empty_thread_title =
-            use_v2_empty_toolbar.then(|| {
-                self.active_thread_id(cx)
-                    .and_then(|thread_id| self.editor_text(thread_id, cx))
-                    .and_then(|text| crate::thread_title_from_prompt(&text))
-                    .map(|title| Label::new(title).truncate().into_any_element())
-                    .unwrap_or_else(|| {
+        let empty_thread_title = use_v2_empty_toolbar.then(|| {
+            self.active_thread_id(cx)
+                .and_then(|thread_id| self.editor_text(thread_id, cx))
+                .and_then(|text| crate::thread_title_from_prompt(&text))
+                .map_or_else(
+                    || {
                         Label::new(
                             tr(cx, "agent_ui.panel.new_thread_for_agent", "New {} Thread")
                                 .replacen("{}", selected_agent_label.as_ref(), 1),
@@ -3121,8 +3114,10 @@ impl AgentPanel {
                         .color(Color::Muted)
                         .truncate()
                         .into_any_element()
-                    })
-            });
+                    },
+                    |title| Label::new(title).truncate().into_any_element(),
+                )
+        });
 
         let max_content_width = AgentSettings::get_global(cx).max_content_width;
 

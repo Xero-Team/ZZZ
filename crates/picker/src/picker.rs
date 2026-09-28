@@ -491,8 +491,7 @@ impl<D: PickerDelegate> Picker<D> {
         let element_container = Self::create_element_container(container);
         let initial_preview_layout = preview
             .as_ref()
-            .map(|preview| preview.layout)
-            .unwrap_or(preview::Layout::Hidden);
+            .map_or(preview::Layout::Hidden, |preview| preview.layout);
         let mut this = Self {
             delegate,
             head,
@@ -518,10 +517,10 @@ impl<D: PickerDelegate> Picker<D> {
             let focus_handle = this.focus_handle(cx);
             workspace::register_reopenable_picker(&focus_handle, cx);
         }
-        this.update_matches("".to_owned(), window, cx);
+        this.update_matches(String::new(), window, cx);
         // give the delegate 4ms to render the first set of suggestions.
         this.delegate
-            .finalize_update_matches("".to_owned(), Duration::from_millis(4), window, cx);
+            .finalize_update_matches(String::new(), Duration::from_millis(4), window, cx);
         this
     }
 
@@ -1091,7 +1090,7 @@ impl<D: PickerDelegate> Picker<D> {
     pub fn query(&self, cx: &App) -> String {
         match &self.head {
             Head::Editor(editor) => editor.text(cx),
-            Head::Empty(_) => "".to_owned(),
+            Head::Empty(_) => String::new(),
         }
     }
 

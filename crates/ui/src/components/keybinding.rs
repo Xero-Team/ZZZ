@@ -158,12 +158,11 @@ fn render_key(
     size: impl Into<Option<AbsoluteLength>>,
 ) -> AnyElement {
     let key_icon = icon_for_key(key, platform_style);
-    match key_icon {
-        Some(icon) => KeyIcon::new(icon, color).size(size).into_any_element(),
-        None => {
-            let key = capitalize(key);
-            Key::new(&key, color).size(size).into_any_element()
-        }
+    if let Some(icon) = key_icon {
+        KeyIcon::new(icon, color).size(size).into_any_element()
+    } else {
+        let key = capitalize(key);
+        Key::new(&key, color).size(size).into_any_element()
     }
 }
 
@@ -513,9 +512,10 @@ fn keystroke_text(
     let delimiter = '-';
 
     if modifiers.function {
-        match vim_mode {
-            false => text.push_str("Fn"),
-            true => text.push_str("fn"),
+        if vim_mode {
+            text.push_str("fn");
+        } else {
+            text.push_str("Fn");
         }
 
         text.push(delimiter);

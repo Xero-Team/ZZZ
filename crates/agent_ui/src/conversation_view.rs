@@ -842,18 +842,8 @@ impl ConversationView {
     }
 
     fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let (resume_session_id, work_dirs, title) = self
-            .root_thread_view()
-            .map(|thread_view| {
-                let tv = thread_view.read(cx);
-                let thread = tv.thread.read(cx);
-                (
-                    Some(thread.session_id().clone()),
-                    thread.work_dirs().cloned(),
-                    thread.title(),
-                )
-            })
-            .unwrap_or_else(|| {
+        let (resume_session_id, work_dirs, title) = self.root_thread_view().map_or_else(
+            || {
                 let session_id = self.root_session_id.clone();
                 let (work_dirs, title) = session_id
                     .as_ref()
@@ -864,7 +854,17 @@ impl ConversationView {
                     })
                     .unwrap_or((None, None));
                 (session_id, work_dirs, title)
-            });
+            },
+            |thread_view| {
+                let tv = thread_view.read(cx);
+                let thread = tv.thread.read(cx);
+                (
+                    Some(thread.session_id().clone()),
+                    thread.work_dirs().cloned(),
+                    thread.title(),
+                )
+            },
+        );
 
         let state = Self::initial_state(
             self.agent.clone(),
@@ -1569,7 +1569,9 @@ impl ConversationView {
                 // Skip notifying when a queued message is about to be auto-sent: the agent
                 // is not actually idle and a notification here would fire just before the
                 // next turn starts.
-                if !should_send_queued {
+                if should_send_queued {
+                    self.send_queued_message_at_index(0, false, window, cx);
+                } else {
                     let used_tools = thread.read(cx).used_tools_since_last_user_message();
                     self.notify_with_sound(
                         if used_tools {
@@ -1585,8 +1587,6 @@ impl ConversationView {
                         window,
                         cx,
                     );
-                } else {
-                    self.send_queued_message_at_index(0, false, window, cx);
                 }
             }
             AcpThreadEvent::Refusal => {
@@ -3346,9 +3346,10 @@ impl ConversationView {
     }
 
     pub(crate) fn activation_focus_handle(&self, cx: &App) -> FocusHandle {
-        self.active_thread()
-            .map(|thread| thread.read(cx).activation_focus_handle(cx))
-            .unwrap_or_else(|| self.focus_handle.clone())
+        self.active_thread().map_or_else(
+            || self.focus_handle.clone(),
+            |thread| thread.read(cx).activation_focus_handle(cx),
+        )
     }
 }
 

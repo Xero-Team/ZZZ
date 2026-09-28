@@ -41,14 +41,14 @@ impl<T> TableRow<T> {
     /// This is a fallible alternative to `from_vec`, allowing you to handle inconsistent row lengths gracefully.
     /// Returns `Ok(TableRow)` if the length matches, or an `Err` with a descriptive message otherwise.
     pub fn try_from_vec(data: Vec<T>, expected_len: usize) -> Result<Self, String> {
-        if data.len() != expected_len {
+        if data.len() == expected_len {
+            Ok(Self(data))
+        } else {
             Err(format!(
                 "Row length {} does not match expected {}",
                 data.len(),
                 expected_len
             ))
-        } else {
-            Ok(Self(data))
         }
     }
 

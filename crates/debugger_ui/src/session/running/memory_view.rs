@@ -257,13 +257,14 @@ impl MemoryView {
         let Ok(as_address) = parse::<u64>(memory_reference) else {
             return;
         };
-        let access_size = evaluate_name
-            .map(|typ| {
+        let access_size = evaluate_name.map_or_else(
+            || Task::ready(None),
+            |typ| {
                 self.session.update(cx, |this, cx| {
                     this.data_access_size(stack_frame_id, typ, cx)
                 })
-            })
-            .unwrap_or_else(|| Task::ready(None));
+            },
+        );
         cx.spawn(async move |this, cx| {
             let access_size = access_size.await.unwrap_or(1);
             this.update(cx, |this, cx| {
@@ -398,7 +399,21 @@ impl MemoryView {
         if is_writing_memory == self.is_writing_memory {
             return;
         }
-        if !self.is_writing_memory {
+        if self.is_writing_memory {
+            self.query_editor.update(cx, |this, cx| {
+                this.clear(window, cx);
+                this.set_placeholder_text(
+                    &tr(
+                        cx,
+                        "debugger_ui.memory_view.goto_memory_address_or_expression",
+                        "Go to Memory Address / Expression",
+                    ),
+                    window,
+                    cx,
+                );
+            });
+            self.is_writing_memory = false;
+        } else {
             self.query_editor.update(cx, |this, cx| {
                 this.clear(window, cx);
                 this.set_placeholder_text(
@@ -413,20 +428,6 @@ impl MemoryView {
             });
             self.is_writing_memory = true;
             self.query_editor.focus_handle(cx).focus(window, cx);
-        } else {
-            self.query_editor.update(cx, |this, cx| {
-                this.clear(window, cx);
-                this.set_placeholder_text(
-                    &tr(
-                        cx,
-                        "debugger_ui.memory_view.goto_memory_address_or_expression",
-                        "Go to Memory Address / Expression",
-                    ),
-                    window,
-                    cx,
-                );
-            });
-            self.is_writing_memory = false;
         }
     }
 
@@ -479,11 +480,13 @@ impl MemoryView {
             // Go into memory writing mode.
             if !self.is_writing_memory {
                 let should_return = self.session.update(cx, |session, cx| {
-                    if !session
+                    if session
                         .capabilities()
                         .supports_write_memory_request
                         .unwrap_or_default()
                     {
+                        false
+                    } else {
                         let adapter_name = session.adapter();
                         // We cannot write memory with this adapter.
                         _ = self.workspace.update(cx, |this, cx| {
@@ -512,8 +515,6 @@ impl MemoryView {
                             );
                         });
                         true
-                    } else {
-                        false
                     }
                 });
                 if should_return {
@@ -789,11 +790,10 @@ fn render_single_memory_view_line(
                             })
                         })
                         .child(
-                            Label::new(
-                                cell.0
-                                    .map(|val| HEX_BYTES_MEMOIZED[val as usize].clone())
-                                    .unwrap_or_else(|| UNKNOWN_BYTE.clone()),
-                            )
+                            Label::new(cell.0.map_or_else(
+                                || UNKNOWN_BYTE.clone(),
+                                |val| HEX_BYTES_MEMOIZED[val as usize].clone(),
+                            ))
                             .buffer_font(cx)
                             .when(cell.0.is_none(), |this| this.color(Color::Muted))
                             .size(ui::LabelSize::Small),

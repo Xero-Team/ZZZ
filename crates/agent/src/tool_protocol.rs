@@ -188,20 +188,19 @@ impl ToolPermissionContext {
 
         // Extract patterns from all input values. Only offer a pattern-specific
         // "always allow/deny" button when every value produces the same pattern.
-        let (pattern, pattern_display) = match input_values.as_slice() {
-            [single] => extract_for_value(single),
-            _ => {
-                let mut iter = input_values.iter().map(|v| extract_for_value(v));
-                match iter.next() {
-                    Some(first) => {
-                        if iter.all(|pair| pair.0 == first.0) {
-                            first
-                        } else {
-                            (None, None)
-                        }
+        let (pattern, pattern_display) = if let [single] = input_values.as_slice() {
+            extract_for_value(single)
+        } else {
+            let mut iter = input_values.iter().map(|v| extract_for_value(v));
+            match iter.next() {
+                Some(first) => {
+                    if iter.all(|pair| pair.0 == first.0) {
+                        first
+                    } else {
+                        (None, None)
                     }
-                    None => (None, None),
                 }
+                None => (None, None),
             }
         };
 

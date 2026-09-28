@@ -87,30 +87,35 @@ fn register_entry(
     let display_rel = common_root
         .as_ref()
         .and_then(|root| entry.new_path.strip_prefix(root).ok())
-        .map(|rel| {
-            RelPath::new(rel, PathStyle::local())
-                .map(|r| r.into_owned().into())
-                .unwrap_or_else(|_| {
-                    RelPath::new(Path::new("untitled"), PathStyle::Posix)
-                        .unwrap()
-                        .into_owned()
-                        .into()
-                })
-        })
-        .unwrap_or_else(|| {
-            entry
-                .new_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .and_then(|s| RelPath::new(Path::new(s), PathStyle::Posix).ok())
-                .map(|r| r.into_owned().into())
-                .unwrap_or_else(|| {
-                    RelPath::new(Path::new("untitled"), PathStyle::Posix)
-                        .unwrap()
-                        .into_owned()
-                        .into()
-                })
-        });
+        .map_or_else(
+            || {
+                entry
+                    .new_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .and_then(|s| RelPath::new(Path::new(s), PathStyle::Posix).ok())
+                    .map_or_else(
+                        || {
+                            RelPath::new(Path::new("untitled"), PathStyle::Posix)
+                                .unwrap()
+                                .into_owned()
+                                .into()
+                        },
+                        |r| r.into_owned().into(),
+                    )
+            },
+            |rel| {
+                RelPath::new(rel, PathStyle::local()).map_or_else(
+                    |_| {
+                        RelPath::new(Path::new("untitled"), PathStyle::Posix)
+                            .unwrap()
+                            .into_owned()
+                            .into()
+                    },
+                    |r| r.into_owned().into(),
+                )
+            },
+        );
 
     let path_key = PathKey::with_sort_prefix(entry.index as u64, display_rel);
 

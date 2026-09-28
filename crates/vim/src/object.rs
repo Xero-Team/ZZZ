@@ -749,7 +749,7 @@ impl Object {
                 // Fallback: find nearest pair if not inside any quotes
                 QUOTE_PAIRS
                     .iter()
-                    .flat_map(|&SurroundPair { open, close }| {
+                    .filter_map(|&SurroundPair { open, close }| {
                         surrounding_markers(
                             map,
                             relative_to,
@@ -822,7 +822,7 @@ impl Object {
                 // Fallback: find nearest bracket pair if not inside any
                 BRACKET_PAIRS
                     .iter()
-                    .flat_map(|&SurroundPair { open, close }| {
+                    .filter_map(|&SurroundPair { open, close }| {
                         surrounding_markers(
                             map,
                             relative_to,
@@ -980,14 +980,10 @@ fn in_subword(
         .buffer_snapshot()
         .char_classifier_at(relative_to.to_point(map))
         .ignore_punctuation(ignore_punctuation);
-    let in_subword = map
-        .buffer_chars_at(offset)
-        .next()
-        .map(|(c, _)| {
-            let is_separator = "._-".contains(c);
-            !classifier.is_whitespace(c) && !is_separator
-        })
-        .unwrap_or(false);
+    let in_subword = map.buffer_chars_at(offset).next().is_some_and(|(c, _)| {
+        let is_separator = "._-".contains(c);
+        !classifier.is_whitespace(c) && !is_separator
+    });
 
     let start = if in_subword {
         movement::find_preceding_boundary_display_point(
@@ -1137,8 +1133,7 @@ fn around_word(
     let in_word = map
         .buffer_chars_at(offset)
         .next()
-        .map(|(c, _)| !classifier.is_whitespace(c))
-        .unwrap_or(false);
+        .is_some_and(|(c, _)| !classifier.is_whitespace(c));
 
     if in_word {
         around_containing_word(map, relative_to, ignore_punctuation, times)
@@ -1586,7 +1581,7 @@ fn is_sentence_end(map: &DisplaySnapshot, offset: MultiBufferOffset) -> bool {
     let mut next_chars = map.buffer_chars_at(offset).peekable();
     if let Some((char, _)) = next_chars.next() {
         // We are at a double newline. This position is a sentence end.
-        if char == '\n' && next_chars.peek().map(|(c, _)| c == &'\n').unwrap_or(false) {
+        if char == '\n' && next_chars.peek().is_some_and(|(c, _)| c == &'\n') {
             return true;
         }
 

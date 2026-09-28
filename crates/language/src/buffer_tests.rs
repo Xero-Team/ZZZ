@@ -861,7 +861,7 @@ async fn test_outline(cx: &mut gpui::TestAppContext) {
             ("LoggedIn", 2, Some("person: Person, time: Instant,".to_string())),
             ("person", 3, None),
             ("time", 3, None),
-            ("impl Eq for Person", 0, Some("".to_string())),
+            ("impl Eq for Person", 0, Some(String::new())),
             (
                 "impl Drop for Person",
                 0,
@@ -3712,15 +3712,12 @@ async fn test_preview_edits(cx: &mut TestAppContext) {
 
 #[gpui::test(iterations = 100)]
 fn test_random_collaboration(cx: &mut App, mut rng: StdRng) {
-    let min_peers = env::var("MIN_PEERS")
-        .map(|i| i.parse().expect("invalid `MIN_PEERS` variable"))
-        .unwrap_or(1);
-    let max_peers = env::var("MAX_PEERS")
-        .map(|i| i.parse().expect("invalid `MAX_PEERS` variable"))
-        .unwrap_or(5);
-    let operations = env::var("OPERATIONS")
-        .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-        .unwrap_or(10);
+    let min_peers =
+        env::var("MIN_PEERS").map_or(1, |i| i.parse().expect("invalid `MIN_PEERS` variable"));
+    let max_peers =
+        env::var("MAX_PEERS").map_or(5, |i| i.parse().expect("invalid `MAX_PEERS` variable"));
+    let operations =
+        env::var("OPERATIONS").map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
     let base_text_len = rng.random_range(0..10);
     let base_text = RandomCharIter::new(&mut rng)

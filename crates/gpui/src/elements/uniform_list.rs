@@ -221,10 +221,10 @@ impl UniformListScrollHandle {
     #[cfg(any(test, feature = "test-support"))]
     pub fn logical_scroll_top_index(&self) -> usize {
         let this = self.0.borrow();
-        this.deferred_scroll_to_item
-            .as_ref()
-            .map(|deferred| deferred.item_index)
-            .unwrap_or_else(|| this.base_handle.logical_scroll_top().0)
+        this.deferred_scroll_to_item.as_ref().map_or_else(
+            || this.base_handle.logical_scroll_top().0,
+            |deferred| deferred.item_index,
+        )
     }
 
     /// Checks if the list can be scrolled vertically.

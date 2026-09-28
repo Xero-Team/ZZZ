@@ -375,7 +375,7 @@ fn start_server(
 }
 
 fn init_paths() -> anyhow::Result<()> {
-    for path in [
+    for path in &[
         paths::config_dir(),
         paths::extensions_dir(),
         paths::languages_dir(),
@@ -384,9 +384,7 @@ fn init_paths() -> anyhow::Result<()> {
         paths::hang_traces_dir(),
         paths::remote_extensions_dir(),
         paths::remote_extensions_uploads_dir(),
-    ]
-    .iter()
-    {
+    ] {
         std::fs::create_dir_all(path).with_context(|| format!("creating directory {path:?}"))?;
     }
     Ok(())
@@ -1079,7 +1077,7 @@ pub fn handle_settings_file_changes(
 }
 
 fn read_proxy_settings(cx: &mut Context<HeadlessProject>) -> Option<Url> {
-    let proxy_str = ProxySettings::get_global(cx).proxy.to_owned();
+    let proxy_str = ProxySettings::get_global(cx).proxy.clone();
 
     proxy_str
         .as_deref()

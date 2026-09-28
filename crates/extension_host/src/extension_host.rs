@@ -771,25 +771,22 @@ impl ExtensionStore {
                     .await
                     .and_then(|()| tempfile::tempdir_in(&staging_dir).map_err(Into::into));
 
-                match temp_dir {
-                    Ok(temp_dir) => {
-                        archive.unpack(temp_dir.path()).await?;
-                        remove_dir().await?;
-                        fs.rename(
-                            temp_dir.path(),
-                            &extension_dir,
-                            RenameOptions {
-                                overwrite: true,
-                                ignore_if_exists: true,
-                                create_parents: true,
-                            },
-                        )
-                        .await
-                    }
-                    Err(_) => {
-                        remove_dir().await?;
-                        archive.unpack(extension_dir).await.map_err(Into::into)
-                    }
+                if let Ok(temp_dir) = temp_dir {
+                    archive.unpack(temp_dir.path()).await?;
+                    remove_dir().await?;
+                    fs.rename(
+                        temp_dir.path(),
+                        &extension_dir,
+                        RenameOptions {
+                            overwrite: true,
+                            ignore_if_exists: true,
+                            create_parents: true,
+                        },
+                    )
+                    .await
+                } else {
+                    remove_dir().await?;
+                    archive.unpack(extension_dir).await.map_err(Into::into)
                 }
             })
             .await?;
@@ -1729,7 +1726,7 @@ impl ExtensionStore {
                 .await?
             }
 
-            for language_path in loaded_extension.manifest.languages.iter() {
+            for language_path in &loaded_extension.manifest.languages {
                 if fs
                     .is_file(&src_dir.join(language_path).join(CONFIG_TOML))
                     .await
@@ -1744,7 +1741,7 @@ impl ExtensionStore {
                 }
             }
 
-            for (adapter_name, meta) in loaded_extension.manifest.debug_adapters.iter() {
+            for (adapter_name, meta) in &loaded_extension.manifest.debug_adapters {
                 let schema_path = extension::build_debug_adapter_schema_path(adapter_name, meta)?;
 
                 if fs.is_file(&src_dir.join(&schema_path)).await {

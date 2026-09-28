@@ -536,7 +536,10 @@ impl ShellKind {
                 let source = &source[1..];
                 if let Some(end) = source.find('}') {
                     let var_name = &source[..end];
-                    if !var_name.is_empty() {
+                    if var_name.is_empty() {
+                        text.push_str("${}");
+                        &source[end + 1..]
+                    } else {
                         if !is_start {
                             text.push_str("(");
                         }
@@ -545,9 +548,6 @@ impl ShellKind {
                         if !is_start {
                             text.push_str(")");
                         }
-                        &source[end + 1..]
-                    } else {
-                        text.push_str("${}");
                         &source[end + 1..]
                     }
                 } else {

@@ -190,9 +190,10 @@ impl Render for ProfileSelector {
         let profile_id = self.provider.profile_id(cx);
         let profile = settings.profiles.get(&profile_id);
 
-        let selected_profile = profile
-            .map(|profile| profile.name.clone())
-            .unwrap_or_else(|| tr(cx, "agent_ui.profile_selector.unknown", "Unknown"));
+        let selected_profile = profile.map_or_else(
+            || tr(cx, "agent_ui.profile_selector.unknown", "Unknown"),
+            |profile| profile.name.clone(),
+        );
 
         let icon = if self.picker_handle.is_deployed() {
             IconName::ChevronUp
@@ -429,8 +430,7 @@ impl ProfilePickerDelegate {
             matches!(entry, ProfilePickerEntry::Profile(profile) if self
                 .candidates
                 .get(profile.candidate_index)
-                .map(|candidate| &candidate.id == profile_id)
-                .unwrap_or(false))
+                .is_some_and(|candidate| &candidate.id == profile_id))
         })
     }
 

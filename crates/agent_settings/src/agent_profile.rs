@@ -86,7 +86,7 @@ impl AgentProfile {
     /// Returns a map of AgentProfileIds to their names
     pub fn available_profiles(cx: &App) -> AvailableProfiles {
         let mut profiles = AvailableProfiles::default();
-        for (id, profile) in AgentSettings::get_global(cx).profiles.iter() {
+        for (id, profile) in &AgentSettings::get_global(cx).profiles {
             profiles.insert(id.clone(), profile.name.clone());
         }
         profiles

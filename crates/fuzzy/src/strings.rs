@@ -182,7 +182,7 @@ where
                             candidate_id: candidate.id,
                             score,
                             positions: positions.clone(),
-                            string: candidate.string.to_string(),
+                            string: candidate.string.clone(),
                         },
                     );
                 });

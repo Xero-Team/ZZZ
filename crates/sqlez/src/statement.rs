@@ -92,7 +92,7 @@ impl<'a> Statement<'a> {
 
     pub fn reset(&mut self) {
         unsafe {
-            for raw_statement in self.raw_statements.iter() {
+            for raw_statement in &self.raw_statements {
                 sqlite3_reset(*raw_statement);
             }
         }
@@ -112,7 +112,7 @@ impl<'a> Statement<'a> {
     fn bind_index_with(&self, index: i32, bind: &dyn Fn(&*mut sqlite3_stmt)) -> Result<()> {
         let mut any_succeed = false;
         unsafe {
-            for raw_statement in self.raw_statements.iter() {
+            for raw_statement in &self.raw_statements {
                 if index <= sqlite3_bind_parameter_count(*raw_statement) {
                     bind(raw_statement);
                     self.connection
@@ -383,7 +383,7 @@ impl<'a> Statement<'a> {
 impl Drop for Statement<'_> {
     fn drop(&mut self) {
         unsafe {
-            for raw_statement in self.raw_statements.iter() {
+            for raw_statement in &self.raw_statements {
                 sqlite3_finalize(*raw_statement);
             }
         }

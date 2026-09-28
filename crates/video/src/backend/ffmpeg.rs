@@ -34,9 +34,7 @@ impl FfmpegDecoder {
     /// Open `path` and read the video track's metadata.
     pub fn open(path: &Path) -> anyhow::Result<Self> {
         ffmpeg::init().context("initializing ffmpeg")?;
-        let file_size = std::fs::metadata(path)
-            .map(|metadata| metadata.len())
-            .unwrap_or(0);
+        let file_size = std::fs::metadata(path).map_or(0, |metadata| metadata.len());
 
         let input =
             ffmpeg::format::input(&path).with_context(|| format!("opening {}", path.display()))?;

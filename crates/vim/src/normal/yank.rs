@@ -175,7 +175,7 @@ impl Vim {
 
         {
             let mut is_first = true;
-            for selection in selections.iter() {
+            for selection in &selections {
                 let start = selection.start;
                 let end = selection.end;
                 if is_first {

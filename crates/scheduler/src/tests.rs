@@ -541,14 +541,14 @@ fn test_nondeterministic_wake_allowed_with_parking() {
         type Output = ();
 
         fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-            if !self.waker_sent {
+            if self.waker_sent {
+                Poll::Ready(())
+            } else {
                 self.waker_sent = true;
                 if let Some(tx) = self.waker_tx.take() {
                     tx.send(cx.waker().clone()).ok();
                 }
                 Poll::Pending
-            } else {
-                Poll::Ready(())
             }
         }
     }

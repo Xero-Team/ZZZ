@@ -677,7 +677,7 @@ impl WindowTextSystem {
         let mut font_runs = self.font_runs_pool.lock().pop().unwrap_or_default();
         font_runs.clear();
 
-        for run in runs.iter() {
+        for run in runs {
             let decoration_changed = if let Some(last_run) = last_run
                 && last_run.color == run.color
                 && last_run.underline == run.underline
@@ -741,7 +741,7 @@ impl WindowTextSystem {
         let mut font_runs = self.font_runs_pool.lock().pop().unwrap_or_default();
         font_runs.clear();
 
-        for run in runs.iter() {
+        for run in runs {
             let decoration_changed = if let Some(last_run) = last_run
                 && last_run.color == run.color
                 && last_run.underline == run.underline
@@ -807,7 +807,7 @@ impl WindowTextSystem {
         let mut font_runs = self.font_runs_pool.lock().pop().unwrap_or_default();
         font_runs.clear();
 
-        for run in runs.iter() {
+        for run in runs {
             let decoration_changed = if let Some(last_run) = last_run
                 && last_run.color == run.color
                 && last_run.underline == run.underline

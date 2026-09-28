@@ -308,13 +308,13 @@ impl<T> PriorityQueueReceiver<T> {
     fn pop_inner(&mut self, block: bool) -> Result<Option<T>, RecvError> {
         use Priority as P;
 
-        let mut queues = if !block {
+        let mut queues = if block {
+            self.state.recv()?
+        } else {
             let Some(queues) = self.state.try_recv()? else {
                 return Ok(None);
             };
             queues
-        } else {
-            self.state.recv()?
         };
 
         let high = P::High.weight() * !queues.high_priority.is_empty() as u32;

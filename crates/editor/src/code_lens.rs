@@ -771,8 +771,7 @@ mod tests {
             let total_blocks: usize = editor
                 .code_lens
                 .as_ref()
-                .map(|s| s.blocks.values().map(|v| v.len()).sum())
-                .unwrap_or(0);
+                .map_or(0, |s| s.blocks.values().map(|v| v.len()).sum());
             assert_eq!(total_blocks, 2, "Should have inserted two code lens blocks");
         });
     }
@@ -1229,8 +1228,7 @@ mod tests {
             let total_blocks: usize = editor
                 .code_lens
                 .as_ref()
-                .map(|s| s.blocks.values().map(|v| v.len()).sum())
-                .unwrap_or(0);
+                .map_or(0, |s| s.blocks.values().map(|v| v.len()).sum());
             assert_eq!(total_blocks, 1, "Should have one code lens block");
         });
 
@@ -1316,8 +1314,7 @@ mod tests {
             let total_blocks: usize = editor
                 .code_lens
                 .as_ref()
-                .map(|s| s.blocks.values().map(|v| v.len()).sum())
-                .unwrap_or(0);
+                .map_or(0, |s| s.blocks.values().map(|v| v.len()).sum());
             assert_eq!(
                 total_blocks, 2,
                 "Unresolved lenses should have been resolved and displayed"

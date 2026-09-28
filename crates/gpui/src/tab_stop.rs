@@ -328,7 +328,7 @@ mod tests {
             FocusHandle::new(&focus_map).tab_stop(true).tab_index(2),
         ];
 
-        for handle in focus_handles.iter() {
+        for handle in &focus_handles {
             tab_index_map.insert(handle);
         }
         let expected = [

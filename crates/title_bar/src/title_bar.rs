@@ -649,13 +649,12 @@ impl TitleBar {
     }
 
     pub fn render_restricted_mode(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let has_restricted_worktrees = TrustedWorktrees::try_get_global(cx)
-            .map(|trusted_worktrees| {
+        let has_restricted_worktrees =
+            TrustedWorktrees::try_get_global(cx).is_some_and(|trusted_worktrees| {
                 trusted_worktrees
                     .read(cx)
                     .has_restricted_worktrees(&self.project.read(cx).worktree_store(), cx)
-            })
-            .unwrap_or(false);
+            });
         if !has_restricted_worktrees {
             return None;
         }
@@ -781,16 +780,14 @@ impl TitleBar {
             .multi_workspace
             .as_ref()
             .and_then(|mw| mw.upgrade())
-            .map(|mw| mw.read(cx).sidebar_open())
-            .unwrap_or(false)
+            .is_some_and(|mw| mw.read(cx).sidebar_open())
             && PlatformTitleBar::is_multi_workspace_enabled(cx);
 
         let is_threads_list_view_active = self
             .multi_workspace
             .as_ref()
             .and_then(|mw| mw.upgrade())
-            .map(|mw| mw.read(cx).is_threads_list_view_active(cx))
-            .unwrap_or(false);
+            .is_some_and(|mw| mw.read(cx).is_threads_list_view_active(cx));
 
         if is_sidebar_open && is_threads_list_view_active {
             return self
@@ -800,8 +797,7 @@ impl TitleBar {
 
         let focus_handle = workspace
             .upgrade()
-            .map(|w| w.read(cx).focus_handle(cx))
-            .unwrap_or_else(|| cx.focus_handle());
+            .map_or_else(|| cx.focus_handle(), |w| w.read(cx).focus_handle(cx));
 
         let window_project_groups: Vec<_> = self
             .multi_workspace
@@ -859,8 +855,7 @@ impl TitleBar {
 
         let focus_handle = workspace
             .upgrade()
-            .map(|w| w.read(cx).focus_handle(cx))
-            .unwrap_or_else(|| cx.focus_handle());
+            .map_or_else(|| cx.focus_handle(), |w| w.read(cx).focus_handle(cx));
 
         let window_project_groups: Vec<_> = self
             .multi_workspace
@@ -958,14 +953,11 @@ impl TitleBar {
         let worktree_label: SharedString =
             linked_worktree_name.unwrap_or_else(|| tr(cx, "sidebar.worktree.main", "main").into());
 
-        let (creation_in_progress, is_switch) = self
-            .workspace
-            .upgrade()
-            .map(|ws| {
+        let (creation_in_progress, is_switch) =
+            self.workspace.upgrade().map_or((None, false), |ws| {
                 let creation = ws.read(cx).active_worktree_creation();
                 (creation.label.clone(), creation.is_switch)
-            })
-            .unwrap_or((None, false));
+            });
         let is_creating = creation_in_progress.is_some();
 
         let display_label: SharedString = if let Some(ref name) = creation_in_progress {

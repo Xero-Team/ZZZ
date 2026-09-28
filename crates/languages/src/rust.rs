@@ -633,7 +633,7 @@ impl LspAdapter for RustLspAdapter {
             lsp::SymbolKind::ENUM_MEMBER => {
                 let prefix = "enum E {";
                 return Some(CodeLabel::new(
-                    name.to_string(),
+                    name.clone(),
                     0..name.len(),
                     language.highlight_text(
                         &Rope::from_iter([prefix, name, "}"]),
@@ -983,8 +983,9 @@ impl ContextProvider for RustContextProvider {
                         ),
                     ]));
                     if target.required_features.is_empty() {
-                        variables.insert(RUST_BIN_REQUIRED_FEATURES_FLAG_TASK_VARIABLE, "".into());
-                        variables.insert(RUST_BIN_REQUIRED_FEATURES_TASK_VARIABLE, "".into());
+                        variables
+                            .insert(RUST_BIN_REQUIRED_FEATURES_FLAG_TASK_VARIABLE, String::new());
+                        variables.insert(RUST_BIN_REQUIRED_FEATURES_TASK_VARIABLE, String::new());
                     } else {
                         variables.insert(
                             RUST_BIN_REQUIRED_FEATURES_FLAG_TASK_VARIABLE.clone(),
@@ -1359,14 +1360,14 @@ fn package_name_from_pkgid(pkgid: &str) -> Option<&str> {
     }
 
     let (version_prefix, version_suffix) = pkgid.trim().rsplit_once('#')?;
-    let package_name = match version_suffix.rsplit_once('@') {
-        Some((custom_package_name, _version)) => custom_package_name,
-        None => {
+    let package_name =
+        if let Some((custom_package_name, _version)) = version_suffix.rsplit_once('@') {
+            custom_package_name
+        } else {
             let host_and_path = split_off_suffix(version_prefix, '?');
             let (_, package_name) = host_and_path.rsplit_once('/')?;
             package_name
-        }
-    };
+        };
     Some(package_name)
 }
 

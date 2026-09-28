@@ -209,12 +209,12 @@ impl Console {
                                 ));
                             }
 
-                            for (range, _) in spans.iter_mut() {
+                            for (range, _) in &mut spans {
                                 let start_offset = len + range.start;
                                 *range = start_offset..len + range.end;
                             }
 
-                            for (range, _) in background_spans.iter_mut() {
+                            for (range, _) in &mut background_spans {
                                 let start_offset = len + range.start;
                                 *range = start_offset..len + range.end;
                             }

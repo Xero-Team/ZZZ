@@ -91,7 +91,7 @@ impl EditorTestContext {
 
         cx.run_until_parked();
         Self {
-            cx: VisualTestContext::from_window(*editor.deref(), cx),
+            cx: VisualTestContext::from_window(*editor, cx),
             window: editor.into(),
             editor: editor_view,
             assertion_cx: AssertionContextManager::new(),
@@ -121,7 +121,7 @@ impl EditorTestContext {
     pub async fn for_editor(editor: WindowHandle<Editor>, cx: &mut gpui::TestAppContext) -> Self {
         let editor_view = editor.root(cx).unwrap();
         Self {
-            cx: VisualTestContext::from_window(*editor.deref(), cx),
+            cx: VisualTestContext::from_window(*editor, cx),
             window: editor.into(),
             editor: editor_view,
             assertion_cx: AssertionContextManager::new(),
@@ -168,7 +168,7 @@ impl EditorTestContext {
 
         let editor_view = editor.root(cx).unwrap();
         Self {
-            cx: VisualTestContext::from_window(*editor.deref(), cx),
+            cx: VisualTestContext::from_window(*editor, cx),
             window: editor.into(),
             editor: editor_view,
             assertion_cx: AssertionContextManager::new(),
@@ -516,17 +516,17 @@ impl EditorTestContext {
                             .cmp(&s.head(), &multibuffer_snapshot)
                             .is_ge()
                 });
-                if !expected_selections.is_empty() {
+                if expected_selections.is_empty() {
                     assert!(
-                        is_selected,
-                        "excerpt {ix} should contain selections. got {:?}{}",
-                        self.editor_state(),
+                        !is_selected,
+                        "excerpt {ix} should not contain selections, got: {selections:?}{}",
                         fmt_additional_notes(),
                     );
                 } else {
                     assert!(
-                        !is_selected,
-                        "excerpt {ix} should not contain selections, got: {selections:?}{}",
+                        is_selected,
+                        "excerpt {ix} should contain selections. got {:?}{}",
+                        self.editor_state(),
                         fmt_additional_notes(),
                     );
                 }

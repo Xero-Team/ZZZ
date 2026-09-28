@@ -261,8 +261,7 @@ impl AgentRegistryStore {
     pub fn refresh_if_stale(&mut self, cx: &mut Context<Self>) {
         let should_refresh = self
             .last_refresh
-            .map(|last| last.elapsed() >= REFRESH_THROTTLE_DURATION)
-            .unwrap_or(true);
+            .map_or(true, |last| last.elapsed() >= REFRESH_THROTTLE_DURATION);
 
         if should_refresh {
             self.refresh(cx);
@@ -411,7 +410,7 @@ async fn build_registry_agents(
             }
 
             let mut targets = HashMap::default();
-            for (platform, target) in binary.iter() {
+            for (platform, target) in binary {
                 targets.insert(
                     platform.clone(),
                     RegistryTargetConfig {
@@ -574,7 +573,7 @@ async fn fetch_url_body(
 fn resolve_icon_url(entry: &RegistryEntry) -> Option<String> {
     let icon = entry.icon.as_ref()?;
     if icon.starts_with("https://") || icon.starts_with("http://") {
-        return Some(icon.to_string());
+        return Some(icon.clone());
     }
 
     let relative_icon = icon.trim_start_matches("./");

@@ -183,8 +183,10 @@ impl ProjectEnvironment {
             })
             .ok()
             .flatten()
-            .map(|path| Arc::<Path>::from(path))
-            .unwrap_or_else(|| paths::home_dir().as_path().into());
+            .map_or_else(
+                || paths::home_dir().as_path().into(),
+                |path| Arc::<Path>::from(path),
+            );
         self.local_directory_environment(&Shell::System, abs_path, cx)
     }
 

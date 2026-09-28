@@ -24,7 +24,7 @@ impl ProtobufLanguageServer {
         let args = binary_settings
             .as_ref()
             .and_then(|binary_settings| binary_settings.arguments.clone())
-            .unwrap_or_else(|| vec!["-logs".into(), "".into()]);
+            .unwrap_or_else(|| vec!["-logs".into(), String::new()]);
 
         if let Some(path) = binary_settings.and_then(|binary_settings| binary_settings.path) {
             Ok(zzz::Command {

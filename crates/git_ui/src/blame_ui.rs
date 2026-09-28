@@ -220,8 +220,7 @@ impl BlameRenderer for GitBlameRenderer {
 
         let short_commit_id = sha
             .get(..8)
-            .map(|sha| sha.to_owned().into())
-            .unwrap_or_else(|| sha.clone());
+            .map_or_else(|| sha.clone(), |sha| sha.to_owned().into());
         let local_offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
         let absolute_timestamp = time_format::format_localized_timestamp(
             commit_time,
@@ -246,12 +245,11 @@ impl BlameRenderer for GitBlameRenderer {
 
         let message = details
             .as_ref()
-            .map(|_| {
+            .map_or("<no commit message>".into_any(), |_| {
                 MarkdownElement::new(markdown.clone(), markdown_style)
                     .scroll_handle(scroll_handle.clone())
                     .into_any()
-            })
-            .unwrap_or("<no commit message>".into_any());
+            });
 
         let pull_request = details
             .as_ref()

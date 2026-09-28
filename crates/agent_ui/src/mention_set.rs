@@ -979,7 +979,7 @@ pub(crate) async fn insert_images_as_context(
                         format: LanguageModelImage::FORMAT,
                     }))
                 } else {
-                    Err(failed_to_convert_image.to_string())
+                    Err(failed_to_convert_image.clone())
                 }
             })
             .shared();
@@ -1046,11 +1046,10 @@ pub(crate) fn load_external_image_from_path(
     let format = image::guess_format(&content)
         .ok()
         .and_then(image_format_from_external_content)?;
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(|name| SharedString::from(name.to_owned()))
-        .unwrap_or_else(|| default_name.clone());
+    let name = path.file_name().and_then(|name| name.to_str()).map_or_else(
+        || default_name.clone(),
+        |name| SharedString::from(name.to_owned()),
+    );
 
     Some((Image::from_bytes(format, content), name))
 }

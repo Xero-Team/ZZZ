@@ -249,7 +249,7 @@ impl CommitTooltip {
                     .clone()
                     .unwrap_or("<no name>".to_owned())
                     .into(),
-                author_email: blame.author_mail.clone().unwrap_or("".to_owned()).into(),
+                author_email: blame.author_mail.clone().unwrap_or(String::new()).into(),
                 message: details,
                 tag_names,
             },
@@ -299,8 +299,7 @@ impl Render for CommitTooltip {
             .commit
             .sha
             .get(0..8)
-            .map(|sha| sha.to_owned().into())
-            .unwrap_or_else(|| self.commit.sha.clone());
+            .map_or_else(|| self.commit.sha.clone(), |sha| sha.to_owned().into());
         let full_sha = self.commit.sha.to_string();
         let local_offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
         let absolute_timestamp = time_format::format_localized_timestamp(
@@ -318,12 +317,11 @@ impl Render for CommitTooltip {
             .commit
             .message
             .as_ref()
-            .map(|_| {
+            .map_or("<no commit message>".into_any(), |_| {
                 MarkdownElement::new(self.markdown.clone(), markdown_style)
                     .scroll_handle(self.scroll_handle.clone())
                     .into_any()
-            })
-            .unwrap_or("<no commit message>".into_any());
+            });
 
         let pull_request = self
             .commit

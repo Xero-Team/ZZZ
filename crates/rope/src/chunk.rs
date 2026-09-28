@@ -872,7 +872,7 @@ mod tests {
     fn test_nth_set_bit_random(mut rng: StdRng) {
         let set_count = rng.random_range(0..=128);
         let mut set_bits = (0..128).sample(&mut rng, set_count);
-        set_bits.sort();
+        set_bits.sort_unstable();
         let mut n = 0;
         for ix in set_bits.iter().copied() {
             n |= 1 << ix;

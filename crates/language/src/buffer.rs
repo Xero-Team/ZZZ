@@ -1238,10 +1238,10 @@ impl Buffer {
             syntax_map.snapshot()
         };
 
-        let tree_sitter_data = if self.text.version() != *self.tree_sitter_data.version() {
-            Arc::new(TreeSitterData::new(text))
-        } else {
+        let tree_sitter_data = if self.text.version() == *self.tree_sitter_data.version() {
             self.tree_sitter_data.clone()
+        } else {
+            Arc::new(TreeSitterData::new(text))
         };
 
         BufferSnapshot {
@@ -1518,11 +1518,11 @@ impl Buffer {
 
     /// Assign the buffer [`ModelineSettings`].
     pub fn set_modeline(&mut self, modeline: Option<ModelineSettings>) -> bool {
-        if modeline.as_ref() != self.modeline.as_deref() {
+        if modeline.as_ref() == self.modeline.as_deref() {
+            false
+        } else {
             self.modeline = modeline.map(Arc::new);
             true
-        } else {
-            false
         }
     }
 
@@ -1796,12 +1796,11 @@ impl Buffer {
         tree_sitter_data: &mut Arc<TreeSitterData>,
         snapshot: &text::BufferSnapshot,
     ) {
-        match Arc::get_mut(tree_sitter_data) {
-            Some(tree_sitter_data) => tree_sitter_data.clear(snapshot),
-            None => {
-                let new_tree_sitter_data = TreeSitterData::new(snapshot);
-                *tree_sitter_data = Arc::new(new_tree_sitter_data)
-            }
+        if let Some(tree_sitter_data) = Arc::get_mut(tree_sitter_data) {
+            tree_sitter_data.clear(snapshot)
+        } else {
+            let new_tree_sitter_data = TreeSitterData::new(snapshot);
+            *tree_sitter_data = Arc::new(new_tree_sitter_data)
         }
     }
 
@@ -2110,10 +2109,10 @@ impl Buffer {
                             let suggested_indent = indent_sizes
                                 .get(&suggestion.basis_row)
                                 .copied()
-                                .map(|e| e.0)
-                                .unwrap_or_else(|| {
-                                    snapshot.indent_size_for_line(suggestion.basis_row)
-                                })
+                                .map_or_else(
+                                    || snapshot.indent_size_for_line(suggestion.basis_row),
+                                    |e| e.0,
+                                )
                                 .with_delta(suggestion.delta, language_indent_size);
 
                             if old_suggestions.get(&new_row).is_none_or(
@@ -2410,7 +2409,7 @@ impl Buffer {
             return true;
         }
         match self.file.as_ref().map(|f| f.disk_state()) {
-            Some(DiskState::New) | Some(DiskState::Deleted) => {
+            Some(DiskState::New | DiskState::Deleted) => {
                 !self.is_empty() && self.has_unsaved_edits()
             }
             _ => self.has_unsaved_edits(),
@@ -3027,9 +3026,10 @@ impl Buffer {
         let mut deferred_ops = Vec::new();
         let buffer_ops = ops
             .into_iter()
-            .filter_map(|op| match op {
-                Operation::Buffer(op) => Some(op),
-                _ => {
+            .filter_map(|op| {
+                if let Operation::Buffer(op) = op {
+                    Some(op)
+                } else {
                     if self.can_apply_op(&op) {
                         self.apply_op(op, cx);
                     } else {
@@ -3039,7 +3039,7 @@ impl Buffer {
                 }
             })
             .collect::<Vec<_>>();
-        for operation in buffer_ops.iter() {
+        for operation in &buffer_ops {
             self.send_operation(Operation::Buffer(operation.clone()), false, cx);
         }
         self.text.apply_ops(buffer_ops);
@@ -3623,10 +3623,8 @@ impl BufferSnapshot {
             |row, line| {
                 let indent_len = self.indent_size_for_line(row).len;
                 let row_language = self.language_at(Point::new(row, indent_len)).cloned();
-                let row_language_config = row_language
-                    .as_ref()
-                    .map(|lang| lang.config())
-                    .unwrap_or(config);
+                let row_language_config =
+                    row_language.as_ref().map_or(config, |lang| lang.config());
 
                 if row_language_config
                     .decrease_indent_pattern
@@ -4822,7 +4820,7 @@ impl BufferSnapshot {
 
                 // Build valid pairs by walking through closes in order
                 let mut unique_opens_vec: Vec<_> = unique_opens.iter().copied().collect();
-                unique_opens_vec.sort();
+                unique_opens_vec.sort_unstable();
 
                 let mut valid_pairs: HashSet<((usize, usize, usize), (usize, usize, usize))> =
                     HashSet::default();
@@ -5014,7 +5012,7 @@ impl BufferSnapshot {
                     let byte_range = capture.node.byte_range();
 
                     let mut found = false;
-                    for (range, existing) in captures.iter_mut() {
+                    for (range, existing) in &mut captures {
                         if existing == &text_object {
                             range.start = range.start.min(byte_range.start);
                             range.end = range.end.max(byte_range.end);
@@ -5082,7 +5080,7 @@ impl BufferSnapshot {
                     let byte_range = capture.node.byte_range();
 
                     let mut found = false;
-                    for (range, existing) in captures.iter_mut() {
+                    for (range, existing) in &mut captures {
                         if existing == &text_object {
                             range.start = range.start.min(byte_range.start);
                             range.end = range.end.max(byte_range.end);
@@ -5307,7 +5305,7 @@ impl BufferSnapshot {
             let (next_ix, _) = iterators
                 .iter_mut()
                 .enumerate()
-                .flat_map(|(ix, iter)| Some((ix, iter.peek()?)))
+                .filter_map(|(ix, iter)| Some((ix, iter.peek()?)))
                 .min_by(|(_, a), (_, b)| {
                     let cmp = a
                         .range

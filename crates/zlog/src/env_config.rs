@@ -12,22 +12,19 @@ pub fn parse(filter: &str) -> Result<EnvFilter> {
     let mut directive_levels = Vec::new();
 
     for directive in filter.split(',') {
-        match directive.split_once('=') {
-            Some((name, level)) => {
-                anyhow::ensure!(!level.contains('='), "Invalid directive: {directive}");
-                let level = parse_level(level.trim())?;
-                directive_names.push(name.trim().trim_end_matches(".rs").to_owned());
-                directive_levels.push(level);
-            }
-            None => {
-                let Ok(level) = parse_level(directive.trim()) else {
-                    directive_names.push(directive.trim().trim_end_matches(".rs").to_owned());
-                    directive_levels.push(log::LevelFilter::max() /* Enable all levels */);
-                    continue;
-                };
-                anyhow::ensure!(max_level.is_none(), "Cannot set multiple max levels");
-                max_level.replace(level);
-            }
+        if let Some((name, level)) = directive.split_once('=') {
+            anyhow::ensure!(!level.contains('='), "Invalid directive: {directive}");
+            let level = parse_level(level.trim())?;
+            directive_names.push(name.trim().trim_end_matches(".rs").to_owned());
+            directive_levels.push(level);
+        } else {
+            let Ok(level) = parse_level(directive.trim()) else {
+                directive_names.push(directive.trim().trim_end_matches(".rs").to_owned());
+                directive_levels.push(log::LevelFilter::max() /* Enable all levels */);
+                continue;
+            };
+            anyhow::ensure!(max_level.is_none(), "Cannot set multiple max levels");
+            max_level.replace(level);
         };
     }
 

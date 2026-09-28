@@ -38,8 +38,7 @@ pub fn init_global(cx: &mut App) {
 
 pub fn global(cx: &App) -> Arc<dyn CredentialsProvider> {
     cx.try_global::<ZZZCredentialsProvider>()
-        .map(|provider| provider.0.clone())
-        .unwrap_or_else(|| new(cx))
+        .map_or_else(|| new(cx), |provider| provider.0.clone())
 }
 
 fn new(cx: &App) -> Arc<dyn CredentialsProvider> {

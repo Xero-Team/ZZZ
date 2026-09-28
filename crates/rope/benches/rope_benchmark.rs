@@ -76,7 +76,7 @@ fn rope_benchmarks(c: &mut Criterion) {
     let sizes = [4 * KB, 64 * KB];
 
     let mut group = c.benchmark_group("push");
-    for size in sizes.iter() {
+    for size in &sizes {
         group.throughput(Throughput::Bytes(*size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             let mut rng = StdRng::seed_from_u64(SEED);
@@ -93,7 +93,7 @@ fn rope_benchmarks(c: &mut Criterion) {
     group.finish();
 
     let mut group = c.benchmark_group("append");
-    for size in sizes.iter() {
+    for size in &sizes {
         group.throughput(Throughput::Bytes(*size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             let mut rng = StdRng::seed_from_u64(SEED);
@@ -114,7 +114,7 @@ fn rope_benchmarks(c: &mut Criterion) {
     group.finish();
 
     let mut group = c.benchmark_group("slice");
-    for size in sizes.iter() {
+    for size in &sizes {
         group.throughput(Throughput::Bytes(*size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             let mut rng = StdRng::seed_from_u64(SEED);
@@ -123,7 +123,7 @@ fn rope_benchmarks(c: &mut Criterion) {
             b.iter_batched(
                 || generate_random_rope_ranges(&mut rng, &rope),
                 |ranges| {
-                    for range in ranges.iter() {
+                    for range in &ranges {
                         rope.slice(range.clone());
                     }
                 },
@@ -134,7 +134,7 @@ fn rope_benchmarks(c: &mut Criterion) {
     group.finish();
 
     let mut group = c.benchmark_group("bytes_in_range");
-    for size in sizes.iter() {
+    for size in &sizes {
         group.throughput(Throughput::Bytes(*size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             let mut rng = StdRng::seed_from_u64(SEED);
@@ -143,7 +143,7 @@ fn rope_benchmarks(c: &mut Criterion) {
             b.iter_batched(
                 || generate_random_rope_ranges(&mut rng, &rope),
                 |ranges| {
-                    for range in ranges.iter() {
+                    for range in &ranges {
                         let bytes = rope.bytes_in_range(range.clone());
                         assert!(bytes.into_iter().count() > 0);
                     }
@@ -155,7 +155,7 @@ fn rope_benchmarks(c: &mut Criterion) {
     group.finish();
 
     let mut group = c.benchmark_group("chars");
-    for size in sizes.iter() {
+    for size in &sizes {
         group.throughput(Throughput::Bytes(*size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             let mut rng = StdRng::seed_from_u64(SEED);
@@ -170,7 +170,7 @@ fn rope_benchmarks(c: &mut Criterion) {
     group.finish();
 
     let mut group = c.benchmark_group("clip_point");
-    for size in sizes.iter() {
+    for size in &sizes {
         group.throughput(Throughput::Bytes(*size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             let mut rng = StdRng::seed_from_u64(SEED);
@@ -179,7 +179,7 @@ fn rope_benchmarks(c: &mut Criterion) {
             b.iter_batched(
                 || generate_random_rope_points(&mut rng, &rope),
                 |offsets| {
-                    for offset in offsets.iter() {
+                    for offset in &offsets {
                         black_box(rope.clip_point(*offset, Bias::Left));
                         black_box(rope.clip_point(*offset, Bias::Right));
                     }
@@ -191,7 +191,7 @@ fn rope_benchmarks(c: &mut Criterion) {
     group.finish();
 
     let mut group = c.benchmark_group("point_to_offset");
-    for size in sizes.iter() {
+    for size in &sizes {
         group.throughput(Throughput::Bytes(*size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             let mut rng = StdRng::seed_from_u64(SEED);
@@ -200,7 +200,7 @@ fn rope_benchmarks(c: &mut Criterion) {
             b.iter_batched(
                 || generate_random_rope_points(&mut rng, &rope),
                 |offsets| {
-                    for offset in offsets.iter() {
+                    for offset in &offsets {
                         black_box(rope.point_to_offset(*offset));
                     }
                 },
@@ -211,7 +211,7 @@ fn rope_benchmarks(c: &mut Criterion) {
     group.finish();
 
     let mut group = c.benchmark_group("cursor");
-    for size in sizes.iter() {
+    for size in &sizes {
         group.throughput(Throughput::Bytes(*size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             let mut rng = StdRng::seed_from_u64(SEED);
@@ -228,7 +228,7 @@ fn rope_benchmarks(c: &mut Criterion) {
                     points
                 },
                 |offsets| {
-                    for offset in offsets.iter() {
+                    for offset in &offsets {
                         black_box(rope.cursor(*offset));
                     }
                 },

@@ -292,8 +292,9 @@ impl VariableList {
                 if scope
                     .presentation_hint
                     .as_ref()
-                    .map(|hint| *hint == ScopePresentationHint::Locals)
-                    .unwrap_or(scope.name.to_lowercase().starts_with("local"))
+                    .map_or(scope.name.to_lowercase().starts_with("local"), |hint| {
+                        *hint == ScopePresentationHint::Locals
+                    })
                 {
                     contains_local_scope = true;
                 }
@@ -337,26 +338,25 @@ impl VariableList {
                 DapEntry::Scope(dap) => path = path.with_child(dap.name.clone().into()),
             }
 
-            let var_state = self
-                .entry_states
-                .entry(path.clone())
-                .and_modify(|state| {
-                    state.parent_reference = container_reference;
-                    state.has_children = variables_reference != 0;
-                })
-                .or_insert(EntryState {
-                    depth: path.indices.len(),
-                    is_expanded: dap_kind.as_scope().is_some_and(|scope| {
-                        (scopes_count == 1 && !contains_local_scope)
-                            || scope
-                                .presentation_hint
-                                .as_ref()
-                                .map(|hint| *hint == ScopePresentationHint::Locals)
-                                .unwrap_or(scope.name.to_lowercase().starts_with("local"))
-                    }),
-                    parent_reference: container_reference,
-                    has_children: variables_reference != 0,
-                });
+            let var_state =
+                self.entry_states
+                    .entry(path.clone())
+                    .and_modify(|state| {
+                        state.parent_reference = container_reference;
+                        state.has_children = variables_reference != 0;
+                    })
+                    .or_insert(EntryState {
+                        depth: path.indices.len(),
+                        is_expanded: dap_kind.as_scope().is_some_and(|scope| {
+                            (scopes_count == 1 && !contains_local_scope)
+                                || scope.presentation_hint.as_ref().map_or(
+                                    scope.name.to_lowercase().starts_with("local"),
+                                    |hint| *hint == ScopePresentationHint::Locals,
+                                )
+                        }),
+                        parent_reference: container_reference,
+                        has_children: variables_reference != 0,
+                    });
 
             entries.push(ListEntry {
                 entry: dap_kind,
@@ -1071,7 +1071,7 @@ impl VariableList {
         let mut scopes: Vec<(dap::Scope, Vec<_>)> = Vec::new();
         let mut idx = 0;
 
-        for entry in self.entries.iter() {
+        for entry in &self.entries {
             match &entry.entry {
                 DapEntry::Watcher { .. } => {}
                 DapEntry::Variable(dap) => scopes[idx].1.push(dap.clone()),
@@ -1165,7 +1165,9 @@ impl VariableList {
         value: String,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        if !value.is_empty() {
+        if value.is_empty() {
+            Empty.into_any_element()
+        } else {
             div()
                 .w_full()
                 .id(entry.item_value_id())
@@ -1220,8 +1222,6 @@ impl VariableList {
                     }
                 })
                 .into_any_element()
-        } else {
-            Empty.into_any_element()
         }
     }
 
@@ -1287,10 +1287,10 @@ impl VariableList {
         let var_ref = watcher.variables_reference;
 
         let colors = get_entry_color(cx);
-        let bg_hover_color = if !is_selected {
-            colors.hover
-        } else {
+        let bg_hover_color = if is_selected {
             colors.default
+        } else {
+            colors.hover
         };
         let border_color = if is_selected {
             colors.marked_active
@@ -1426,10 +1426,10 @@ impl VariableList {
             .is_some_and(|selection| selection == &entry.path);
 
         let colors = get_entry_color(cx);
-        let bg_hover_color = if !is_selected {
-            colors.hover
-        } else {
+        let bg_hover_color = if is_selected {
             colors.default
+        } else {
+            colors.hover
         };
         let border_color = if is_selected {
             colors.marked_active
@@ -1502,10 +1502,10 @@ impl VariableList {
             .as_ref()
             .is_some_and(|selected_path| *selected_path == variable.path);
 
-        let bg_hover_color = if !is_selected {
-            colors.hover
-        } else {
+        let bg_hover_color = if is_selected {
             colors.default
+        } else {
+            colors.hover
         };
         let border_color = if is_selected && self.focus_handle.contains_focused(window, cx) {
             colors.marked_active

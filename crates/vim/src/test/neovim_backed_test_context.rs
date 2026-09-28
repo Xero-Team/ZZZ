@@ -64,10 +64,10 @@ impl SharedState {
             return;
         }
 
-        let message = if self.neovim != marked_text {
-            "Test is incorrect (currently expected != neovim_state)"
-        } else {
+        let message = if self.neovim == marked_text {
             "Editor does not match nvim behavior"
+        } else {
+            "Test is incorrect (currently expected != neovim_state)"
         };
         panic!(
             indoc! {"{}
@@ -107,10 +107,10 @@ impl SharedClipboard {
             return;
         }
 
-        let message = if expected != self.neovim {
-            "Test is incorrect (currently expected != neovim_state)"
-        } else {
+        let message = if expected == self.neovim {
             "Editor does not match nvim behavior"
+        } else {
+            "Test is incorrect (currently expected != neovim_state)"
         };
 
         panic!(
@@ -380,7 +380,7 @@ impl NeovimBackedTestContext {
     ) -> SharedState {
         let (unmarked_text, cursor_offsets) = marked_text_offsets(marked_positions);
 
-        for cursor_offset in cursor_offsets.iter() {
+        for cursor_offset in &cursor_offsets {
             let mut marked_text = unmarked_text.clone();
             marked_text.insert(*cursor_offset, 'ˇ');
 

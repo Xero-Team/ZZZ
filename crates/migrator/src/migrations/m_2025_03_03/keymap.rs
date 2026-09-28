@@ -25,7 +25,7 @@ fn replace_string_action(
     if let Some((new_action_name, options)) = STRING_TO_ARRAY_REPLACE.get(action_name) {
         let full_string_range = action_name_node.parent()?.byte_range();
         let mut options_parts = Vec::new();
-        for (key, value) in options.iter() {
+        for (key, value) in options {
             options_parts.push(format!("\"{}\": {}", key, value));
         }
         let options_str = options_parts.join(", ");

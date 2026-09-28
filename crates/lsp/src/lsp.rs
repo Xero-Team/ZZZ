@@ -7,7 +7,7 @@ use anyhow::{Context as _, Result, anyhow};
 use collections::{BTreeMap, HashMap};
 use futures::{
     AsyncRead, AsyncWrite, Future, FutureExt,
-    channel::oneshot::{self, Canceled},
+    channel::oneshot::{self},
     future::{self, Either},
     io::BufWriter,
     select,
@@ -549,8 +549,9 @@ impl LanguageServer {
                 .await
             }
         });
-        let stderr_input_task = stderr
-            .map(|stderr| {
+        let stderr_input_task = stderr.map_or_else(
+            || Task::ready(None),
+            |stderr| {
                 let io_handlers = io_handlers.clone();
                 let stderr_captures = stderr_capture.clone();
                 cx.background_spawn(async move {
@@ -558,8 +559,8 @@ impl LanguageServer {
                         .log_err()
                         .await
                 })
-            })
-            .unwrap_or_else(|| Task::ready(None));
+            },
+        );
         let input_task = cx.background_spawn(async move {
             let (stdout, stderr) = futures::join!(stdout_input_task, stderr_input_task);
             stdout.or(stderr)
@@ -793,12 +794,10 @@ impl LanguageServer {
         #[allow(deprecated)]
         InitializeParams {
             process_id: Some(std::process::id()),
-            root_path: Some(
-                self.root_uri
-                    .to_file_path()
-                    .map(|path| path.to_string_lossy().into_owned())
-                    .unwrap_or_else(|_| self.root_uri.path().to_owned()),
-            ),
+            root_path: Some(self.root_uri.to_file_path().map_or_else(
+                |_| self.root_uri.path().to_owned(),
+                |path| path.to_string_lossy().into_owned(),
+            )),
             root_uri: Some(self.root_uri.clone()),
             initialization_options: None,
             capabilities: ClientCapabilities {
@@ -1541,12 +1540,9 @@ impl LanguageServer {
                     let elapsed = started.elapsed();
                     log::trace!("Took {elapsed:?} to receive response to {method:?} id {id}");
                     cancel_on_drop.abort();
-                    match response {
-                        Ok(response_result) => ConnectionResult::Result(response_result),
-                        Err(Canceled) => {
-                            log::error!("Server reset connection for a request {method:?} id {id}");
-                            ConnectionResult::ConnectionReset
-                        },
+                    if let Ok(response_result) = response { ConnectionResult::Result(response_result) } else {
+                        log::error!("Server reset connection for a request {method:?} id {id}");
+                        ConnectionResult::ConnectionReset
                     }
                 }
 
@@ -1912,7 +1908,7 @@ impl FakeLanguageServer {
                     move |msg| {
                         notifications_tx
                             .try_send((
-                                msg.method.to_string(),
+                                msg.method.clone(),
                                 msg.params.as_ref().unwrap_or(&Value::Null).to_string(),
                             ))
                             .ok();
@@ -2172,7 +2168,7 @@ mod tests {
                     Uri::from_str("file://a/b").unwrap(),
                     "rust".to_string(),
                     0,
-                    "".to_string(),
+                    String::new(),
                 ),
             })
             .unwrap();

@@ -1036,12 +1036,10 @@ impl AcpConnection {
         });
 
         let agent_info = response.agent_info;
-        let telemetry_id = agent_info
-            .as_ref()
-            // Use the one the agent provides if we have one
-            .map(|info| SharedString::from(info.name.clone()))
-            // Otherwise, just use the name
-            .unwrap_or_else(|| agent_id.0.clone());
+        let telemetry_id = agent_info.as_ref().map_or_else(
+            || agent_id.0.clone(),
+            |info| SharedString::from(info.name.clone()),
+        );
         let agent_version = agent_info
             .and_then(|info| (!info.version.is_empty()).then(|| SharedString::from(info.version)));
         let agent_supports_delete = response
@@ -4165,41 +4163,40 @@ fn handle_session_notification(
     // Extract everything we need from the session while briefly borrowing.
     let (thread, session_modes, config_opts_data) = {
         let sessions = ctx.sessions.borrow();
-        match sessions.get(&notification.session_id) {
-            Some(session) => (
+        if let Some(session) = sessions.get(&notification.session_id) {
+            (
                 session.thread.clone(),
                 session.session_modes.clone(),
                 session
                     .config_options
                     .as_ref()
                     .map(|opts| (opts.config_options.clone(), opts.tx.clone())),
-            ),
-            None => {
-                // A session is only registered once `open_or_create_session` builds
-                // its thread on the foreground executor, so a notification can arrive
-                // while the session is still pending. Wait for the pending load instead
-                // of dropping the notification.
-                let pending_task = ctx
-                    .pending_sessions
-                    .borrow()
-                    .get(&notification.session_id)
-                    .map(|pending| pending.task.clone());
-                if let Some(pending_task) = pending_task {
-                    let ctx = ctx.clone();
-                    cx.spawn(async move |cx| {
-                        if pending_task.await.is_ok() {
-                            handle_session_notification(notification, cx, &ctx);
-                        }
-                    })
-                    .detach();
-                } else {
-                    log::warn!(
-                        "Received session notification for unknown session: {:?}",
-                        notification.session_id
-                    );
-                }
-                return;
+            )
+        } else {
+            // A session is only registered once `open_or_create_session` builds
+            // its thread on the foreground executor, so a notification can arrive
+            // while the session is still pending. Wait for the pending load instead
+            // of dropping the notification.
+            let pending_task = ctx
+                .pending_sessions
+                .borrow()
+                .get(&notification.session_id)
+                .map(|pending| pending.task.clone());
+            if let Some(pending_task) = pending_task {
+                let ctx = ctx.clone();
+                cx.spawn(async move |cx| {
+                    if pending_task.await.is_ok() {
+                        handle_session_notification(notification, cx, &ctx);
+                    }
+                })
+                .detach();
+            } else {
+                log::warn!(
+                    "Received session notification for unknown session: {:?}",
+                    notification.session_id
+                );
             }
+            return;
         }
     };
     // Borrow is dropped here.

@@ -791,17 +791,15 @@ impl WasmHost {
         let mut existing = normalized.as_path();
         let mut tail_components = Vec::new();
         let canonical_prefix = loop {
-            match self.fs.canonicalize(existing).await {
-                Ok(canonical) => break canonical,
-                Err(_) => {
-                    if let Some(file_name) = existing.file_name() {
-                        tail_components.push(file_name.to_owned());
-                    }
-                    existing = existing
-                        .parent()
-                        .context(format!("cannot resolve path {path:?}"))?;
-                }
+            if let Ok(canonical) = self.fs.canonicalize(existing).await {
+                break canonical;
             }
+            if let Some(file_name) = existing.file_name() {
+                tail_components.push(file_name.to_owned());
+            }
+            existing = existing
+                .parent()
+                .context(format!("cannot resolve path {path:?}"))?;
         };
 
         let mut resolved = canonical_prefix;

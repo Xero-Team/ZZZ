@@ -1189,8 +1189,7 @@ impl RenderOnce for Table {
                     }
                     let h_scroll_offset = scroll_handle_for_drag
                         .as_ref()
-                        .map(|h| h.offset().x)
-                        .unwrap_or(px(0.));
+                        .map_or(px(0.), |h| h.offset().x);
                     entity.update(cx, |state, cx| {
                         state.on_drag_move(event, h_scroll_offset, window, cx)
                     });

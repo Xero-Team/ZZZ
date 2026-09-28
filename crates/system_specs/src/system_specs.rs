@@ -113,7 +113,7 @@ impl Display for SystemSpecs {
             if let Some(bundle_type) = &self.bundle_type {
                 format!("({bundle_type})")
             } else {
-                "".to_owned()
+                String::new()
             },
             if cfg!(debug_assertions) {
                 "(Taylor's Version)"

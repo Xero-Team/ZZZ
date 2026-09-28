@@ -311,20 +311,18 @@ impl LspStore {
                         }
                         let links_data = lsp_data.document_links.as_mut()?;
                         links_data.link_resolves.remove(&key);
-                        let updated = match resolved {
-                            Some(resolved) => lsp_store
-                                .cache_resolved_link(buffer_id, server_id, link_id, &resolved)?,
-                            None => {
-                                // No further resolution is possible (no capability,
-                                // missing server, or LSP error); mark as resolved so we
-                                // do not keep retrying on every hover, and yield the
-                                // entry as-is so awaiters can still surface it.
-                                let links_data = lsp_data.document_links.as_mut()?;
-                                let link =
-                                    links_data.links.get_mut(&server_id)?.get_mut(&link_id)?;
-                                link.resolved = true;
-                                link.clone()
-                            }
+                        let updated = if let Some(resolved) = resolved {
+                            lsp_store
+                                .cache_resolved_link(buffer_id, server_id, link_id, &resolved)?
+                        } else {
+                            // No further resolution is possible (no capability,
+                            // missing server, or LSP error); mark as resolved so we
+                            // do not keep retrying on every hover, and yield the
+                            // entry as-is so awaiters can still surface it.
+                            let links_data = lsp_data.document_links.as_mut()?;
+                            let link = links_data.links.get_mut(&server_id)?.get_mut(&link_id)?;
+                            link.resolved = true;
+                            link.clone()
                         };
                         Some((link_id, updated))
                     })

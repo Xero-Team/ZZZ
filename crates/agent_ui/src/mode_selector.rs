@@ -157,8 +157,10 @@ impl Render for ModeSelector {
             .all_modes()
             .iter()
             .find(|mode| mode.id == current_mode_id)
-            .map(|mode| mode.name.clone())
-            .unwrap_or_else(|| app_i18n::tr(cx, "agent_ui.mode_selector.unknown", "Unknown"));
+            .map_or_else(
+                || app_i18n::tr(cx, "agent_ui.mode_selector.unknown", "Unknown"),
+                |mode| mode.name.clone(),
+            );
 
         let this = cx.weak_entity();
 

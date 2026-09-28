@@ -154,7 +154,7 @@ impl EditorconfigStore {
             .values()
             .flat_map(|w| w.external_config_paths.iter())
             .collect();
-        for path in removed.external_config_paths.iter() {
+        for path in &removed.external_config_paths {
             if !paths_in_use.contains(path) {
                 self.external_configs.remove(path);
                 self.local_external_config_watchers.remove(path);
@@ -399,7 +399,7 @@ fn apply_relevant_properties(
         FinalNewline::key(),
         TrimTrailingWs::key(),
     ];
-    for (key, value) in section.props().iter() {
+    for (key, value) in section.props() {
         if relevant_keys.contains(&key) {
             properties.insert_raw_for_key(key, value.clone());
         }

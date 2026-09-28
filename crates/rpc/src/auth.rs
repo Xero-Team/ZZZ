@@ -42,7 +42,7 @@ pub fn keypair() -> Result<(PublicKey, PrivateKey)> {
 pub fn random_token() -> String {
     let mut rng = rand::rng();
     let mut token_bytes = [0; 48];
-    for byte in token_bytes.iter_mut() {
+    for byte in &mut token_bytes {
         *byte = rng.random();
     }
     BASE64_URL_SAFE.encode(token_bytes)

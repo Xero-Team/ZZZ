@@ -3482,7 +3482,7 @@ impl AcpThread {
     }
 
     fn mark_pending_tools_as_canceled(&mut self) {
-        for entry in self.entries.iter_mut() {
+        for entry in &mut self.entries {
             if let AgentThreadEntry::ToolCall(call) = entry {
                 let cancel = matches!(
                     call.status,
@@ -3844,10 +3844,10 @@ impl AcpThread {
                     project.set_agent_location(
                         Some(AgentLocation {
                             buffer: buffer.downgrade(),
-                            position: edits
-                                .last()
-                                .map(|(range, _)| range.end)
-                                .unwrap_or(Anchor::min_for_buffer(buffer.read(cx).remote_id())),
+                            position: edits.last().map_or(
+                                Anchor::min_for_buffer(buffer.read(cx).remote_id()),
+                                |(range, _)| range.end,
+                            ),
                         }),
                         cx,
                     );

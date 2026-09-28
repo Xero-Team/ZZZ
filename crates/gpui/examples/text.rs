@@ -305,8 +305,9 @@ impl Render for TextExample {
                         let new_family = FONT_FAMILIES
                             .iter()
                             .position(|f| *f == this.font_family.as_str())
-                            .map(|idx| FONT_FAMILIES[(idx + 1) % FONT_FAMILIES.len()])
-                            .unwrap_or(FONT_FAMILIES[0]);
+                            .map_or(FONT_FAMILIES[0], |idx| {
+                                FONT_FAMILIES[(idx + 1) % FONT_FAMILIES.len()]
+                            });
 
                         this.font_family = SharedString::new(new_family);
                         cx.notify();

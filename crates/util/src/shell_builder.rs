@@ -84,13 +84,13 @@ impl ShellBuilder {
         task_args: &[String],
     ) -> (String, Vec<String>) {
         if let Some(task_command) = task_command {
-            let task_command = if !task_args.is_empty() {
+            let task_command = if task_args.is_empty() {
+                task_command
+            } else {
                 match self.kind.try_quote_prefix_aware(&task_command) {
                     Some(task_command) => task_command.into_owned(),
                     None => task_command,
                 }
-            } else {
-                task_command
             };
             let mut combined_command = task_args.iter().fold(task_command, |mut command, arg| {
                 command.push(' ');

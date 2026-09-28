@@ -290,17 +290,17 @@ impl AcpTools {
     }
 
     fn selected_connection_label(&self, cx: &App) -> SharedString {
-        self.selected_connection
-            .as_ref()
-            .map(|agent_id| agent_id.0.clone())
-            .unwrap_or_else(|| {
+        self.selected_connection.as_ref().map_or_else(
+            || {
                 app_i18n::tr(
                     cx,
                     "acp_tools.no_connection_selected",
                     "No connection selected",
                 )
                 .into()
-            })
+            },
+            |agent_id| agent_id.0.clone(),
+        )
     }
 
     fn connection_menu(&self, window: &mut Window, cx: &mut Context<Self>) -> Entity<ContextMenu> {

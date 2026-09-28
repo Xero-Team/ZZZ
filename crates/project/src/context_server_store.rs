@@ -958,48 +958,46 @@ impl ContextServerStore {
         let server: Arc<ContextServer> = this.update(cx, |this, cx| {
             let global_timeout = this.timeout_for_server(&id, cx);
 
-            match configuration.as_ref() {
-                ContextServerConfiguration::Http {
-                    url,
-                    headers,
-                    timeout,
-                    oauth: _,
-                } => {
-                    let transport = HttpTransport::new_with_token_provider(
-                        cx.http_client(),
-                        url.to_string(),
-                        headers.clone(),
-                        cx.background_executor().clone(),
-                        cached_token_provider.clone(),
-                    );
-                    anyhow::Ok(Arc::new(ContextServer::new_with_timeout(
-                        id,
-                        Arc::new(transport),
-                        Some(Duration::from_secs(
-                            timeout.unwrap_or(global_timeout).min(MAX_TIMEOUT_SECS),
-                        )),
-                    )))
-                }
-                _ => {
-                    let mut command = configuration
-                        .command()
-                        .context("Missing command configuration for stdio context server")?
-                        .clone();
-                    command.timeout = Some(
-                        command
-                            .timeout
-                            .unwrap_or(global_timeout)
-                            .min(MAX_TIMEOUT_SECS),
-                    );
+            if let ContextServerConfiguration::Http {
+                url,
+                headers,
+                timeout,
+                oauth: _,
+            } = configuration.as_ref()
+            {
+                let transport = HttpTransport::new_with_token_provider(
+                    cx.http_client(),
+                    url.to_string(),
+                    headers.clone(),
+                    cx.background_executor().clone(),
+                    cached_token_provider.clone(),
+                );
+                anyhow::Ok(Arc::new(ContextServer::new_with_timeout(
+                    id,
+                    Arc::new(transport),
+                    Some(Duration::from_secs(
+                        timeout.unwrap_or(global_timeout).min(MAX_TIMEOUT_SECS),
+                    )),
+                )))
+            } else {
+                let mut command = configuration
+                    .command()
+                    .context("Missing command configuration for stdio context server")?
+                    .clone();
+                command.timeout = Some(
+                    command
+                        .timeout
+                        .unwrap_or(global_timeout)
+                        .min(MAX_TIMEOUT_SECS),
+                );
 
-                    // Don't pass remote paths as working directory for locally-spawned processes
-                    let working_directory = if is_remote_project { None } else { root_path };
-                    anyhow::Ok(Arc::new(ContextServer::stdio(
-                        id,
-                        command,
-                        working_directory,
-                    )))
-                }
+                // Don't pass remote paths as working directory for locally-spawned processes
+                let working_directory = if is_remote_project { None } else { root_path };
+                anyhow::Ok(Arc::new(ContextServer::stdio(
+                    id,
+                    command,
+                    working_directory,
+                )))
             }
         })??;
 
@@ -1822,21 +1820,20 @@ async fn resolve_start_failure(
         };
 
         let credentials_provider = cx.update(|cx| zzz_credentials_provider::global(cx));
-        match ContextServerStore::load_session(&credentials_provider, &server_url, cx).await {
-            Ok(Some(_)) => {
-                log::info!("{id} start failed with a cached OAuth session present; clearing it");
-                ContextServerStore::clear_session(&credentials_provider, &server_url, cx)
-                    .await
-                    .log_err();
-            }
-            _ => {
-                log::error!("{id} context server failed to start: {err}");
-                return ContextServerState::Error {
-                    configuration,
-                    server,
-                    error: err.to_string().into(),
-                };
-            }
+        if let Ok(Some(_)) =
+            ContextServerStore::load_session(&credentials_provider, &server_url, cx).await
+        {
+            log::info!("{id} start failed with a cached OAuth session present; clearing it");
+            ContextServerStore::clear_session(&credentials_provider, &server_url, cx)
+                .await
+                .log_err();
+        } else {
+            log::error!("{id} context server failed to start: {err}");
+            return ContextServerState::Error {
+                configuration,
+                server,
+                error: err.to_string().into(),
+            };
         }
     }
 
@@ -1877,16 +1874,15 @@ async fn resolve_auth_required(
         };
     }
 
-    let server_url = match configuration.as_ref() {
-        ContextServerConfiguration::Http { url, .. } => url.clone(),
-        _ => {
-            log::error!("{id} got OAuth 401 on a non-HTTP transport");
-            return ContextServerState::Error {
-                configuration,
-                server,
-                error: "Server returned 401 Unauthorized on a non-HTTP transport".into(),
-            };
-        }
+    let server_url = if let ContextServerConfiguration::Http { url, .. } = configuration.as_ref() {
+        url.clone()
+    } else {
+        log::error!("{id} got OAuth 401 on a non-HTTP transport");
+        return ContextServerState::Error {
+            configuration,
+            server,
+            error: "Server returned 401 Unauthorized on a non-HTTP transport".into(),
+        };
     };
 
     let http_client = cx.update(|cx| cx.http_client());

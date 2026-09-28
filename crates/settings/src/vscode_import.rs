@@ -49,7 +49,7 @@ impl VsCodeSettings {
             VsCodeSettingsSource::Cursor => cursor_settings_file_paths(),
         };
         let mut path = None;
-        for candidate_path in candidate_paths.iter() {
+        for candidate_path in &candidate_paths {
             if fs.is_file(candidate_path).await {
                 path = Some(candidate_path.clone());
             }
@@ -441,12 +441,10 @@ impl VsCodeSettings {
 
                                 let foreground = v
                                     .get("foreground")
-                                    .and_then(|v| Rgba::try_from(v.as_str()?).ok())
-                                    .map(|s| s.to_owned());
+                                    .and_then(|v| Rgba::try_from(v.as_str()?).ok());
                                 let background = v
                                     .get("background")
-                                    .and_then(|v| Rgba::try_from(v.as_str()?).ok())
-                                    .map(|s| s.to_owned());
+                                    .and_then(|v| Rgba::try_from(v.as_str()?).ok());
 
                                 Some(SemanticTokenRule {
                                     token_type: Some(k.clone()),
@@ -623,7 +621,7 @@ impl VsCodeSettings {
                 .and_then(|v| v.as_array())
                 .map(|v| {
                     v.iter()
-                        .flat_map(|n| n.as_u64().map(|n| n as usize))
+                        .filter_map(|n| n.as_u64().map(|n| n as usize))
                         .collect()
                 }),
             word_diff_enabled: None,

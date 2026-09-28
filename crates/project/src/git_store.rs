@@ -229,10 +229,10 @@ impl StatusEntry {
             FileStatus::Tracked(TrackedStatus {
                 index_status,
                 worktree_status,
-            }) => tracked_status_to_proto(if worktree_status != StatusCode::Unmodified {
-                worktree_status
-            } else {
+            }) => tracked_status_to_proto(if worktree_status == StatusCode::Unmodified {
                 index_status
+            } else {
+                worktree_status
             }),
         };
 
@@ -1687,7 +1687,7 @@ impl GitStore {
     ) {
         let id = repo.read(cx).id;
         let repo_snapshot = repo.read(cx).snapshot.clone();
-        for (buffer_id, diff) in self.diffs.iter() {
+        for (buffer_id, diff) in &self.diffs {
             if let Some((buffer_repo, repo_path)) =
                 self.repository_and_path_for_buffer_id(*buffer_id, cx)
                 && buffer_repo == repo
@@ -1755,13 +1755,11 @@ impl GitStore {
     ) {
         let mut removed_ids = Vec::new();
 
-        let is_trusted = TrustedWorktrees::try_get_global(cx)
-            .map(|trusted_worktrees| {
-                trusted_worktrees.update(cx, |trusted_worktrees, cx| {
-                    trusted_worktrees.can_trust(&self.worktree_store, worktree_id, cx)
-                })
+        let is_trusted = TrustedWorktrees::try_get_global(cx).is_some_and(|trusted_worktrees| {
+            trusted_worktrees.update(cx, |trusted_worktrees, cx| {
+                trusted_worktrees.can_trust(&self.worktree_store, worktree_id, cx)
             })
-            .unwrap_or(false);
+        });
 
         for update in updated_git_repositories.iter() {
             if let Some((id, existing)) = self.repositories.iter().find(|(_, repo)| {
@@ -2197,9 +2195,10 @@ impl GitStore {
                 cx.background_spawn(async move {
                     let result = request.await?;
 
-                    match result.success {
-                        true => Ok(()),
-                        false => Err(anyhow!("Git Clone failed")),
+                    if result.success {
+                        Ok(())
+                    } else {
+                        Err(anyhow!("Git Clone failed"))
                     }
                 })
             }
@@ -6702,12 +6701,10 @@ impl Repository {
         let askpass_id = util::post_inc(&mut self.latest_askpass_id);
         let id = self.id;
 
-        let args = options
-            .map(|option| match option {
-                PushOptions::SetUpstream => " --set-upstream",
-                PushOptions::Force => " --force-with-lease",
-            })
-            .unwrap_or("");
+        let args = options.map_or("", |option| match option {
+            PushOptions::SetUpstream => " --set-upstream",
+            PushOptions::Force => " --force-with-lease",
+        });
 
         let updates_tx = self
             .git_store()
@@ -8723,14 +8720,14 @@ pub fn linked_worktree_short_name(
 
     let project_name = main_worktree_path.file_name()?.to_str()?;
     let directory_name = linked_worktree_path.file_name()?.to_str()?;
-    let name = if directory_name != project_name {
-        directory_name.to_owned()
-    } else {
+    let name = if directory_name == project_name {
         linked_worktree_path
             .parent()?
             .file_name()?
             .to_str()?
             .to_owned()
+    } else {
+        directory_name.to_owned()
     };
     Some(name.into())
 }
@@ -9048,24 +9045,23 @@ fn proto_to_branch(proto: &proto::Branch) -> git::repository::Branch {
             .upstream
             .as_ref()
             .map(|upstream| git::repository::Upstream {
-                ref_name: upstream.ref_name.to_string().into(),
-                tracking: upstream
-                    .tracking
-                    .as_ref()
-                    .map(|tracking| {
+                ref_name: upstream.ref_name.clone().into(),
+                tracking: upstream.tracking.as_ref().map_or(
+                    git::repository::UpstreamTracking::Gone,
+                    |tracking| {
                         git::repository::UpstreamTracking::Tracked(UpstreamTrackingStatus {
                             ahead: tracking.ahead as u32,
                             behind: tracking.behind as u32,
                         })
-                    })
-                    .unwrap_or(git::repository::UpstreamTracking::Gone),
+                    },
+                ),
             }),
         most_recent_commit: proto.most_recent_commit.as_ref().map(|commit| {
             git::repository::CommitSummary {
-                sha: commit.sha.to_string().into(),
-                subject: commit.subject.to_string().into(),
+                sha: commit.sha.clone().into(),
+                subject: commit.subject.clone().into(),
                 commit_timestamp: commit.commit_timestamp,
-                author_name: commit.author_name.to_string().into(),
+                author_name: commit.author_name.clone().into(),
                 has_parent: true,
             }
         }),

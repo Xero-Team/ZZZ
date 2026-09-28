@@ -548,12 +548,12 @@ impl PermissionOptionChoice {
     pub fn build_outcome(&self, is_allow: bool) -> crate::SelectedPermissionOutcome {
         let option = if is_allow { &self.allow } else { &self.deny };
 
-        let params = if !self.sub_patterns.is_empty() {
+        let params = if self.sub_patterns.is_empty() {
+            None
+        } else {
             Some(crate::SelectedPermissionParams::Terminal {
                 patterns: self.sub_patterns.clone(),
             })
-        } else {
-            None
         };
 
         crate::SelectedPermissionOutcome::new(option.option_id.clone(), option.kind).params(params)
@@ -736,12 +736,13 @@ mod test_support {
 
     impl StubSessionCounter {
         pub fn next(cx: &App) -> usize {
-            cx.try_global::<Self>()
-                .map(|g| g.0.fetch_add(1, Ordering::SeqCst))
-                .unwrap_or_else(|| {
+            cx.try_global::<Self>().map_or_else(
+                || {
                     static FALLBACK: AtomicUsize = AtomicUsize::new(0);
                     FALLBACK.fetch_add(1, Ordering::SeqCst)
-                })
+                },
+                |g| g.0.fetch_add(1, Ordering::SeqCst),
+            )
         }
     }
 

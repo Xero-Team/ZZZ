@@ -1575,18 +1575,17 @@ impl FakeFsState {
                         let current_entry = *entry_stack.last()?;
                         if let FakeFsEntry::Dir { entries, .. } = current_entry {
                             let name_str = name.to_str().unwrap();
-                            let (canonical_name, entry) = match entries.get(name_str) {
-                                Some(entry) => (name_str, entry),
-                                None => {
-                                    if !self.case_sensitive {
-                                        entries
-                                            .iter()
-                                            .find(|(key, _)| key.eq_ignore_ascii_case(name_str))
-                                            .map(|(key, entry)| (key.as_str(), entry))?
-                                    } else {
-                                        return None;
-                                    }
+                            let (canonical_name, entry) = if let Some(entry) = entries.get(name_str)
+                            {
+                                (name_str, entry)
+                            } else {
+                                if self.case_sensitive {
+                                    return None;
                                 }
+                                entries
+                                    .iter()
+                                    .find(|(key, _)| key.eq_ignore_ascii_case(name_str))
+                                    .map(|(key, entry)| (key.as_str(), entry))?
                             };
                             if (path_components.peek().is_some() || follow_symlink)
                                 && let FakeFsEntry::Symlink { target, .. } = entry
@@ -2073,16 +2072,15 @@ impl FakeFs {
             ..
         } = &mut *entry
         {
-            let path = match git_dir_path {
-                Some(path) => path,
-                None => {
-                    let path = std::str::from_utf8(content)
-                        .ok()
-                        .and_then(|content| content.strip_prefix("gitdir:"))
-                        .context("not a valid gitfile")?
-                        .trim();
-                    git_dir_path.insert(normalize_path(&dot_git.parent().unwrap().join(path)))
-                }
+            let path = if let Some(path) = git_dir_path {
+                path
+            } else {
+                let path = std::str::from_utf8(content)
+                    .ok()
+                    .and_then(|content| content.strip_prefix("gitdir:"))
+                    .context("not a valid gitfile")?
+                    .trim();
+                git_dir_path.insert(normalize_path(&dot_git.parent().unwrap().join(path)))
             }
             .clone();
             let Some((git_dir_entry, canonical_path)) = state.try_entry(&path, true) else {
@@ -2472,7 +2470,7 @@ impl FakeFs {
                             }
                             StatusCode::Added => {}
                             StatusCode::Deleted  => {
-                                head_content = Some("".into());
+                                head_content = Some(String::new());
                             }
                             StatusCode::Renamed | StatusCode::Copied => {
                                 panic!("cannot create these statuses for an existing file");

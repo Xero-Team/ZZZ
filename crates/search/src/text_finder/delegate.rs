@@ -923,16 +923,12 @@ impl PickerDelegate for Delegate {
         let now = std::time::Instant::now();
         let is_click = self
             .last_selection_change_time
-            .map(|t| now.duration_since(t) < CLICK_THRESHOLD)
-            .unwrap_or(false);
+            .is_some_and(|t| now.duration_since(t) < CLICK_THRESHOLD);
 
         if is_click {
-            let is_double_click = self
-                .last_click
-                .map(|(ix, t)| {
-                    ix == self.selected_index && now.duration_since(t) < DOUBLE_CLICK_THRESHOLD
-                })
-                .unwrap_or(false);
+            let is_double_click = self.last_click.is_some_and(|(ix, t)| {
+                ix == self.selected_index && now.duration_since(t) < DOUBLE_CLICK_THRESHOLD
+            });
             self.last_click = Some((self.selected_index, now));
 
             if !is_double_click {

@@ -246,11 +246,10 @@ impl WgpuAtlasTextures {
     }
 
     fn upload_texture(&mut self, id: AtlasTextureId, bounds: Bounds<DevicePixels>, bytes: &[u8]) {
-        let data = self
-            .storage
-            .get(id)
-            .map(|texture| swizzle_upload_data(bytes, texture.format))
-            .unwrap_or_else(|| bytes.to_vec());
+        let data = self.storage.get(id).map_or_else(
+            || bytes.to_vec(),
+            |texture| swizzle_upload_data(bytes, texture.format),
+        );
 
         self.pending_uploads
             .push(PendingUpload { id, bounds, data });

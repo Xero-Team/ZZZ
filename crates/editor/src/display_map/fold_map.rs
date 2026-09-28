@@ -1987,8 +1987,7 @@ mod tests {
     fn test_random_folds(cx: &mut gpui::App, mut rng: StdRng) {
         init_test(cx);
         let operations = env::var("OPERATIONS")
-            .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-            .unwrap_or(10);
+            .map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
         let len = rng.random_range(0..10);
         let text = RandomCharIter::new(&mut rng).take(len).collect::<String>();
@@ -2038,7 +2037,7 @@ mod tests {
             let (snapshot, edits) = map.read(inlay_snapshot.clone(), inlay_edits);
             snapshot_edits.push((snapshot.clone(), edits));
 
-            let mut expected_text: String = inlay_snapshot.text().to_string();
+            let mut expected_text: String = inlay_snapshot.text().clone();
             for fold_range in map.merged_folds().into_iter().rev() {
                 let fold_inlay_start = inlay_snapshot.to_inlay_offset(fold_range.start);
                 let fold_inlay_end = inlay_snapshot.to_inlay_offset(fold_range.end);

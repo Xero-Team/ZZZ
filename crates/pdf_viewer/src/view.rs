@@ -587,9 +587,7 @@ impl PdfView {
     }
 
     pub fn page_count(&self) -> usize {
-        self.loaded()
-            .map(|state| state.summary.page_count)
-            .unwrap_or(0)
+        self.loaded().map_or(0, |state| state.summary.page_count)
     }
 
     pub fn current_page(&self) -> usize {
@@ -715,12 +713,10 @@ impl PdfView {
     }
 
     pub(crate) fn file_name(&self, cx: &App) -> String {
-        self.pdf_item
-            .read(cx)
-            .path
-            .file_name()
-            .map(|name| name.to_owned())
-            .unwrap_or_else(|| tr(cx, "pdf_viewer.file_name.fallback", "PDF"))
+        self.pdf_item.read(cx).path.file_name().map_or_else(
+            || tr(cx, "pdf_viewer.file_name.fallback", "PDF"),
+            |name| name.to_owned(),
+        )
     }
 
     pub(crate) fn abs_path(&self, cx: &App) -> Option<PathBuf> {

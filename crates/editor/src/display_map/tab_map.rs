@@ -435,10 +435,10 @@ impl TabSnapshot {
             seek_target = end_column - cursor.byte_offset;
         }
 
-        let left_over_char_bytes = if !cursor.is_char_boundary() {
-            cursor.bytes_until_next_char().unwrap_or(0) as u32
-        } else {
+        let left_over_char_bytes = if cursor.is_char_boundary() {
             0
+        } else {
+            cursor.bytes_until_next_char().unwrap_or(0) as u32
         };
 
         let collapsed_bytes = cursor.byte_offset() + left_over_char_bytes;

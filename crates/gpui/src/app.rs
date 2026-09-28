@@ -480,7 +480,7 @@ impl SystemWindowTabController {
     /// Update the position of a tab within its group.
     pub fn update_tab_position(cx: &mut App, id: WindowId, ix: usize) {
         let mut controller = cx.global_mut::<SystemWindowTabController>();
-        for (_, windows) in controller.tab_groups.iter_mut() {
+        for (_, windows) in &mut controller.tab_groups {
             if let Some(current_pos) = windows.iter().position(|tab| tab.id == id) {
                 if ix < windows.len() && current_pos != ix {
                     let window_tab = windows.remove(current_pos);
@@ -1066,14 +1066,14 @@ impl App {
     ) {
         let mut tracked_entities =
             std::mem::take(self.tracked_entities.entry(window_handle.id).or_default());
-        for entity in tracked_entities.iter() {
+        for entity in &tracked_entities {
             self.window_invalidators_by_entity
                 .entry(*entity)
                 .and_modify(|windows| {
                     windows.remove(&window_handle.id);
                 });
         }
-        for entity in entities.iter() {
+        for entity in entities {
             self.window_invalidators_by_entity
                 .entry(*entity)
                 .or_default()
@@ -1174,7 +1174,7 @@ impl App {
     pub fn windows(&self) -> Vec<AnyWindowHandle> {
         self.windows
             .keys()
-            .flat_map(|window_id| self.window_handles.get(&window_id).copied())
+            .filter_map(|window_id| self.window_handles.get(&window_id).copied())
             .collect()
     }
 
@@ -1873,10 +1873,10 @@ impl App {
     /// Access the global of the given type. Panics if a global for that type has not been assigned.
     #[track_caller]
     pub fn global<G: Global>(&self) -> &G {
-        self.globals_by_type
-            .get(&TypeId::of::<G>())
-            .map(|any_state| any_state.downcast_ref::<G>().unwrap())
-            .unwrap_or_else(|| panic!("no state of type {} exists", type_name::<G>()))
+        self.globals_by_type.get(&TypeId::of::<G>()).map_or_else(
+            || panic!("no state of type {} exists", type_name::<G>()),
+            |any_state| any_state.downcast_ref::<G>().unwrap(),
+        )
     }
 
     /// Access the global of the given type if a value has been assigned.

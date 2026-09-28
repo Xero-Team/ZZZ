@@ -1235,10 +1235,10 @@ impl BlockMap {
                 let new_buffer_id = match (&excerpt_boundary.prev, &excerpt_boundary.next) {
                     (None, next) => Some(next.buffer_id()),
                     (Some(prev), next) => {
-                        if prev.buffer_id() != next.buffer_id() {
-                            Some(next.buffer_id())
-                        } else {
+                        if prev.buffer_id() == next.buffer_id() {
                             None
+                        } else {
+                            Some(next.buffer_id())
                         }
                     }
                 };
@@ -1626,8 +1626,10 @@ impl BlockMap {
                 })
         });
         blocks.dedup_by(|right, left| match (left.0.clone(), right.0.clone()) {
-            (BlockPlacement::Replace(range), BlockPlacement::Above(row))
-            | (BlockPlacement::Replace(range), BlockPlacement::Below(row)) => range.contains(&row),
+            (
+                BlockPlacement::Replace(range),
+                BlockPlacement::Above(row) | BlockPlacement::Below(row),
+            ) => range.contains(&row),
             (BlockPlacement::Replace(range_a), BlockPlacement::Replace(range_b)) => {
                 if range_a.end() >= range_b.start() && range_a.start() <= range_b.end() {
                     left.0 = BlockPlacement::Replace(
@@ -2519,32 +2521,27 @@ impl BlockSnapshot {
                 let input_start = Point::new(input_start_row.0, 0);
                 let input_end = Point::new(input_end_row.0, 0);
 
-                match transform.block.as_ref() {
-                    Some(block) => {
-                        if block.is_replacement()
-                            && (((bias == Bias::Left || search_left) && output_start <= point.0)
-                                || (!search_left && output_start >= point.0))
-                        {
-                            return BlockPoint(output_start);
-                        }
+                if let Some(block) = transform.block.as_ref() {
+                    if block.is_replacement()
+                        && (((bias == Bias::Left || search_left) && output_start <= point.0)
+                            || (!search_left && output_start >= point.0))
+                    {
+                        return BlockPoint(output_start);
                     }
-                    None => {
-                        let input_point = if point.row >= output_end_row.0 {
-                            let line_len = self.wrap_snapshot.line_len(input_end_row - RowDelta(1));
-                            self.wrap_snapshot.clip_point(
-                                WrapPoint::new(input_end_row - RowDelta(1), line_len),
-                                bias,
-                            )
-                        } else {
-                            let output_overshoot = point.0.saturating_sub(output_start);
-                            self.wrap_snapshot
-                                .clip_point(WrapPoint(input_start + output_overshoot), bias)
-                        };
+                } else {
+                    let input_point = if point.row >= output_end_row.0 {
+                        let line_len = self.wrap_snapshot.line_len(input_end_row - RowDelta(1));
+                        self.wrap_snapshot
+                            .clip_point(WrapPoint::new(input_end_row - RowDelta(1), line_len), bias)
+                    } else {
+                        let output_overshoot = point.0.saturating_sub(output_start);
+                        self.wrap_snapshot
+                            .clip_point(WrapPoint(input_start + output_overshoot), bias)
+                    };
 
-                        if (input_start..input_end).contains(&input_point.0) {
-                            let input_overshoot = input_point.0.saturating_sub(input_start);
-                            return BlockPoint(output_start + input_overshoot);
-                        }
+                    if (input_start..input_end).contains(&input_point.0) {
+                        let input_overshoot = input_point.0.saturating_sub(input_start);
+                        return BlockPoint(output_start + input_overshoot);
                     }
                 }
 
@@ -2600,25 +2597,22 @@ impl BlockSnapshot {
             Bias::Right,
         );
         if let Some(transform) = item {
-            match transform.block.as_ref() {
-                Some(block) => {
-                    if block.place_below() {
-                        let wrap_row = start.1 - RowDelta(1);
-                        WrapPoint::new(wrap_row, self.wrap_snapshot.line_len(wrap_row))
-                    } else if block.place_above() {
-                        WrapPoint::new(start.1, 0)
-                    } else if bias == Bias::Left {
-                        WrapPoint::new(start.1, 0)
-                    } else {
-                        let wrap_row = end.1 - RowDelta(1);
-                        WrapPoint::new(wrap_row, self.wrap_snapshot.line_len(wrap_row))
-                    }
+            if let Some(block) = transform.block.as_ref() {
+                if block.place_below() {
+                    let wrap_row = start.1 - RowDelta(1);
+                    WrapPoint::new(wrap_row, self.wrap_snapshot.line_len(wrap_row))
+                } else if block.place_above() {
+                    WrapPoint::new(start.1, 0)
+                } else if bias == Bias::Left {
+                    WrapPoint::new(start.1, 0)
+                } else {
+                    let wrap_row = end.1 - RowDelta(1);
+                    WrapPoint::new(wrap_row, self.wrap_snapshot.line_len(wrap_row))
                 }
-                None => {
-                    let overshoot = block_point.row() - start.0;
-                    let wrap_row = start.1 + RowDelta(overshoot.0);
-                    WrapPoint::new(wrap_row, block_point.column)
-                }
+            } else {
+                let overshoot = block_point.row() - start.0;
+                let wrap_row = start.1 + RowDelta(overshoot.0);
+                WrapPoint::new(wrap_row, block_point.column)
             }
         } else {
             self.wrap_snapshot.max_point()
@@ -4052,8 +4046,7 @@ mod tests {
         cx.update(init_test);
 
         let operations = env::var("OPERATIONS")
-            .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-            .unwrap_or(10);
+            .map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
         let wrap_width = if rng.random_bool(0.2) {
             None

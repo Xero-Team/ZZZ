@@ -307,8 +307,7 @@ impl LspLogView {
                 .status
                 .server_version
                 .as_ref()
-                .map(|version| version.as_ref())
-                .unwrap_or("Unknown"),
+                .map_or("Unknown", |version| version.as_ref()),
             BINARY = info
                 .status
                 .binary
@@ -357,8 +356,10 @@ impl LspLogView {
                     let worktree_root_name = state
                         .worktree_id
                         .and_then(|id| self.project.read(cx).worktree_for_id(id, cx))
-                        .map(|worktree| worktree.read(cx).root_name_str().to_owned())
-                        .unwrap_or_else(|| "Unknown worktree".to_owned());
+                        .map_or_else(
+                            || "Unknown worktree".to_owned(),
+                            |worktree| worktree.read(cx).root_name_str().to_owned(),
+                        );
 
                     LogMenuItem {
                         server_id: *server_id,
@@ -415,8 +416,7 @@ impl LspLogView {
             .read(cx)
             .language_servers
             .get(&server_id)
-            .map(|v| v.log_level)
-            .unwrap_or(MessageType::LOG);
+            .map_or(MessageType::LOG, |v| v.log_level);
         let log_contents = self
             .log_store
             .read(cx)
@@ -923,15 +923,15 @@ impl Render for LspLogToolbarItemView {
             .trigger(
                 Button::new(
                     "language_server_menu_header",
-                    current_server
-                        .as_ref()
-                        .map(|row| {
+                    current_server.as_ref().map_or_else(
+                        || "No server selected".into(),
+                        |row| {
                             Cow::Owned(format!(
                                 "{} ({})",
                                 row.server_name.0, row.worktree_root_name,
                             ))
-                        })
-                        .unwrap_or_else(|| "No server selected".into()),
+                        },
+                    ),
                 )
                 .end_icon(
                     Icon::new(IconName::ChevronDown)
@@ -945,7 +945,7 @@ impl Render for LspLogToolbarItemView {
                     let log_view = log_view.clone();
                     ContextMenu::build(window, cx, |mut menu, window, _| {
                         for (server_id, name, worktree_root, active_entry_kind) in
-                            available_language_servers.iter()
+                            &available_language_servers
                         {
                             let label = format!("{name} ({worktree_root})");
                             let server_id = *server_id;

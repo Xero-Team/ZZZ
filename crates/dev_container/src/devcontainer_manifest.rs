@@ -246,8 +246,7 @@ impl DevContainerManifest {
             replaced.push_str(
                 environment
                     .get(var_name)
-                    .map(|value| value.as_str())
-                    .unwrap_or(default),
+                    .map_or(default, |value| value.as_str()),
             );
             orig = &orig[end + 1..];
         }
@@ -350,7 +349,7 @@ impl DevContainerManifest {
                     });
                 }
                 if let Some(image) = &main_service.image {
-                    return Ok(image.to_string());
+                    return Ok(image.clone());
                 }
 
                 log::error!("No valid base image found in docker-compose configuration");
@@ -432,8 +431,7 @@ impl DevContainerManifest {
         let temp_base = std::env::temp_dir().join("devcontainer-zzz");
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_millis());
 
         let features_content_dir = temp_base.join(format!("container-features-{}", timestamp));
         let empty_context_dir = temp_base.join("empty-folder");
@@ -709,7 +707,7 @@ impl DevContainerManifest {
         let dest = FEATURES_CONTAINER_TEMP_DEST_FOLDER;
 
         let feature_content_source_stage = if use_buildkit {
-            "".to_owned()
+            String::new()
         } else {
             "\nFROM dev_container_feature_content_temp as dev_containers_feature_content_source\n"
                 .to_owned()
@@ -976,15 +974,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
 
             let dockerfile_path = &features_build_info.dockerfile_path;
 
-            let build_args = if !supports_buildkit {
-                HashMap::from([
-                    (
-                        "_DEV_CONTAINERS_BASE_IMAGE".to_owned(),
-                        "dev_container_auto_added_stage_label".to_owned(),
-                    ),
-                    ("_DEV_CONTAINERS_IMAGE_USER".to_owned(), "root".to_owned()),
-                ])
-            } else {
+            let build_args = if supports_buildkit {
                 HashMap::from([
                     ("BUILDKIT_INLINE_CACHE".to_owned(), "1".to_owned()),
                     (
@@ -993,11 +983,17 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                     ),
                     ("_DEV_CONTAINERS_IMAGE_USER".to_owned(), "root".to_owned()),
                 ])
+            } else {
+                HashMap::from([
+                    (
+                        "_DEV_CONTAINERS_BASE_IMAGE".to_owned(),
+                        "dev_container_auto_added_stage_label".to_owned(),
+                    ),
+                    ("_DEV_CONTAINERS_IMAGE_USER".to_owned(), "root".to_owned()),
+                ])
             };
 
-            let additional_contexts = if !supports_buildkit {
-                None
-            } else {
+            let additional_contexts = if supports_buildkit {
                 Some(HashMap::from([(
                     "dev_containers_feature_content_source".to_owned(),
                     features_build_info
@@ -1005,6 +1001,8 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                         .display()
                         .to_string(),
                 )]))
+            } else {
+                None
             };
 
             let build_override = DockerComposeConfig {
@@ -1085,22 +1083,20 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
 
                 let dockerfile_path = &features_build_info.dockerfile_path;
 
-                let build_args = if !supports_buildkit {
-                    HashMap::from([
-                        ("_DEV_CONTAINERS_BASE_IMAGE".to_owned(), image.clone()),
-                        ("_DEV_CONTAINERS_IMAGE_USER".to_owned(), "root".to_owned()),
-                    ])
-                } else {
+                let build_args = if supports_buildkit {
                     HashMap::from([
                         ("BUILDKIT_INLINE_CACHE".to_owned(), "1".to_owned()),
                         ("_DEV_CONTAINERS_BASE_IMAGE".to_owned(), image.clone()),
                         ("_DEV_CONTAINERS_IMAGE_USER".to_owned(), "root".to_owned()),
                     ])
+                } else {
+                    HashMap::from([
+                        ("_DEV_CONTAINERS_BASE_IMAGE".to_owned(), image.clone()),
+                        ("_DEV_CONTAINERS_IMAGE_USER".to_owned(), "root".to_owned()),
+                    ])
                 };
 
-                let additional_contexts = if !supports_buildkit {
-                    None
-                } else {
+                let additional_contexts = if supports_buildkit {
                     Some(HashMap::from([(
                         "dev_containers_feature_content_source".to_owned(),
                         features_build_info
@@ -1108,6 +1104,8 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                             .display()
                             .to_string(),
                     )]))
+                } else {
+                    None
                 };
 
                 let build_override = DockerComposeConfig {
@@ -1237,7 +1235,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
         }
 
         for (k, v) in self.identifying_labels() {
-            runtime_labels.insert(k.to_owned(), v.to_string());
+            runtime_labels.insert(k.to_owned(), v.clone());
         }
 
         let config_volumes: HashMap<String, DockerComposeVolume> = resources
@@ -1298,7 +1296,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                     ForwardPort::String(port) => {
                         let parts: Vec<&str> = port.split(":").collect();
                         if parts.len() <= 1 {
-                            Some(port.to_string())
+                            Some(port.clone())
                         } else if parts.len() == 2 {
                             if parts[0] == main_service_name {
                                 Some(parts[1].to_owned())
@@ -1347,14 +1345,14 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                     ForwardPort::Number(_) => None,
                     ForwardPort::String(port) => {
                         let parts: Vec<&str> = port.split(":").collect();
-                        if parts.len() != 2 {
-                            None
-                        } else {
+                        if parts.len() == 2 {
                             if parts[0] == main_service_name {
                                 None
                             } else {
                                 Some((parts[0], parts[1]))
                             }
+                        } else {
+                            None
                         }
                     }
                 })
@@ -2608,10 +2606,10 @@ fn derive_project_name(
             // NOT the `.devcontainer` dir's basename.
             format!("{workspace_fallback}_devcontainer")
         }
-        Some(dir) => dir
-            .file_name()
-            .map(|f| f.to_string_lossy().into_owned())
-            .unwrap_or_else(|| workspace_fallback.to_owned()),
+        Some(dir) => dir.file_name().map_or_else(
+            || workspace_fallback.to_owned(),
+            |f| f.to_string_lossy().into_owned(),
+        ),
         None => format!("{workspace_fallback}_devcontainer"),
     };
     sanitize_compose_project_name(&raw)
@@ -2935,7 +2933,7 @@ fn get_remote_user_from_config(
     }
     if let Some(image_user) = &docker_config.config.image_user {
         if !image_user.is_empty() {
-            return Ok(image_user.to_string());
+            return Ok(image_user.clone());
         }
     }
     Ok("root".to_owned())
@@ -2947,7 +2945,7 @@ fn get_container_user_from_config(
     devcontainer: &DevContainerManifest,
 ) -> Result<String, DevContainerError> {
     if let Some(user) = &devcontainer.dev_container().container_user {
-        return Ok(user.to_string());
+        return Ok(user.clone());
     }
     if let Some(metadata) = &docker_config.config.labels.metadata {
         for metadatum in metadata {
@@ -2959,7 +2957,7 @@ fn get_container_user_from_config(
         }
     }
     if let Some(image_user) = &docker_config.config.image_user {
-        return Ok(image_user.to_string());
+        return Ok(image_user.clone());
     }
 
     Ok("root".to_owned())

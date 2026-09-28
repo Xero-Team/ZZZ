@@ -283,8 +283,9 @@ fn collect_linux_proc_info() -> anyhow::Result<Value> {
             Ok(contents) => contents
                 .lines()
                 .find(|l| l.starts_with("State:"))
-                .map(|l| Value::String(l.trim_start_matches("State:").trim().to_owned()))
-                .unwrap_or(Value::Null),
+                .map_or(Value::Null, |l| {
+                    Value::String(l.trim_start_matches("State:").trim().to_owned())
+                }),
             Err(err) => {
                 log::warn!("git runtime diagnostics: failed to read /proc/{pid_u32}/status: {err}");
                 Value::Null

@@ -101,8 +101,7 @@ impl<M: Migrator> ThreadSafeConnectionBuilder<M> {
                 let foreign_keys_enabled: bool =
                     connection.select_row::<i32>("PRAGMA foreign_keys")?()
                         .unwrap_or(None)
-                        .map(|enabled| enabled != 0)
-                        .unwrap_or(false);
+                        .is_some_and(|enabled| enabled != 0);
 
                 connection.exec("PRAGMA foreign_keys = OFF;")?()?;
 
@@ -182,7 +181,7 @@ impl ThreadSafeConnection {
 
         let thread_safe_connection = (*self).clone();
         write_channel(Box::new(move || {
-            let connection = thread_safe_connection.deref();
+            let connection = &*thread_safe_connection;
             let result = connection.with_write(|connection| callback(connection));
             sender.send(result).ok();
         }));

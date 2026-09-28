@@ -33,7 +33,7 @@ impl Blame {
 
         let mut unique_shas = HashSet::default();
 
-        for entry in entries.iter_mut() {
+        for entry in &mut entries {
             unique_shas.insert(entry.sha);
         }
 
@@ -413,9 +413,8 @@ mod tests {
         // We always want to save with a trailing newline.
         have_json.push('\n');
 
-        let update = std::env::var("UPDATE_GOLDEN")
-            .map(|val| val.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
+        let update =
+            std::env::var("UPDATE_GOLDEN").is_ok_and(|val| val.eq_ignore_ascii_case("true"));
 
         if update {
             std::fs::create_dir_all(path.parent().unwrap())

@@ -500,7 +500,9 @@ impl ThreadSearchBar {
             }
         }
 
-        if !self.matches.is_empty() {
+        if self.matches.is_empty() {
+            cx.notify();
+        } else {
             let preserved_ix = previous_active_key
                 .as_ref()
                 .and_then(|key| self.matches.iter().position(|mat| &mat.key() == key));
@@ -509,8 +511,6 @@ impl ThreadSearchBar {
                 .unwrap_or(0);
             let scroll_to_match = preserved_ix.is_none();
             self.activate_match(active_match_ix, scroll_to_match, window, cx);
-        } else {
-            cx.notify();
         }
     }
 

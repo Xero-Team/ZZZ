@@ -321,7 +321,7 @@ impl ToolPermissionDecision {
                 }
                 // No always_allow rules, so we can still check deny/confirm patterns.
                 return check_commands(
-                    inputs.iter().map(|s| s.to_string()),
+                    inputs.iter().map(|s| s.clone()),
                     rules,
                     tool_name,
                     false,
@@ -333,12 +333,11 @@ impl ToolPermissionDecision {
             let mut all_commands = Vec::new();
             let mut any_parse_failed = false;
             for input in inputs {
-                match extract_commands(input) {
-                    Some(commands) => all_commands.extend(commands),
-                    None => {
-                        any_parse_failed = true;
-                        all_commands.push(input.to_string());
-                    }
+                if let Some(commands) = extract_commands(input) {
+                    all_commands.extend(commands)
+                } else {
+                    any_parse_failed = true;
+                    all_commands.push(input.clone());
                 }
             }
             // If any command failed to parse, disable allow patterns for safety.
@@ -351,7 +350,7 @@ impl ToolPermissionDecision {
             )
         } else {
             check_commands(
-                inputs.iter().map(|s| s.to_string()),
+                inputs.iter().map(|s| s.clone()),
                 rules,
                 tool_name,
                 true,

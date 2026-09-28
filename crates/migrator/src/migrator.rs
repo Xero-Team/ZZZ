@@ -76,7 +76,7 @@ fn run_migrations(text: &str, migrations: &[MigrationType]) -> Result<Option<Str
     let mut current_text = text.to_owned();
     let mut result: Option<String> = None;
     let json_indent_size = infer_json_indent_size(&current_text);
-    for migration in migrations.iter() {
+    for migration in migrations {
         let migrated_text = match migration {
             MigrationType::TreeSitter(patterns, query) => migrate(&current_text, patterns, query)?,
             MigrationType::Json(callback) => {
@@ -88,7 +88,9 @@ fn run_migrations(text: &str, migrations: &[MigrationType]) -> Result<Option<Str
                 let old_value = serde_json::to_value(&old_content).unwrap();
                 let mut new_value = old_value.clone();
                 callback(&mut new_value)?;
-                if new_value != old_value {
+                if new_value == old_value {
+                    None
+                } else {
                     let mut current = current_text.clone();
                     let mut edits = vec![];
                     update_value_in_json_text(
@@ -104,8 +106,6 @@ fn run_migrations(text: &str, migrations: &[MigrationType]) -> Result<Option<Str
                         migrated_text.replace_range(range, &replacement);
                     }
                     Some(migrated_text)
-                } else {
-                    None
                 }
             }
         };

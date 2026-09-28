@@ -104,7 +104,7 @@ impl TableView {
             ..Default::default()
         }];
 
-        for field in table.schema.fields.iter() {
+        for field in &table.schema.fields {
             runs[0].len = field.name.len();
             let mut width = text_system
                 .layout_line(&field.name, font_size, &runs, None)
@@ -264,7 +264,7 @@ impl TableView {
             .collect::<Vec<_>>();
 
         let mut total_width = px(0.);
-        for width in self.widths.iter() {
+        for width in &self.widths {
             // Width fudge factor: border + 2 (heading), padding
             total_width += *width + px(22.);
         }

@@ -146,8 +146,7 @@ impl PromptBuilder {
             cx,
         }))
         .log_err()
-        .map(Arc::new)
-        .unwrap_or_else(|| Arc::new(Self::new(None).unwrap()))
+        .map_or_else(|| Arc::new(Self::new(None).unwrap()), Arc::new)
     }
 
     pub fn new(loading_params: Option<PromptLoadingParams>) -> Result<Self> {
@@ -421,14 +420,14 @@ impl PromptBuilder {
             document_content.push_str(chunk);
         }
 
-        let rewrite_section = if !is_insert {
+        let rewrite_section = if is_insert {
+            None
+        } else {
             let mut section = String::new();
             for chunk in buffer.text_for_range(range.clone()) {
                 section.push_str(chunk);
             }
             Some(section)
-        } else {
-            None
         };
         let diagnostics = buffer.diagnostics_in_range::<_, Point>(range, false);
         let diagnostic_errors: Vec<ContentPromptDiagnosticContext> = diagnostics

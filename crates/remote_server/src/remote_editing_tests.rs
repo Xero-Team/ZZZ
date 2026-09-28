@@ -1719,7 +1719,7 @@ async fn test_remote_root_repo_common_dir(cx: &mut TestAppContext, server_cx: &m
             .worktree_paths(cx)
             .main_worktree_path_list()
             .ordered_paths()
-            .map(|path| path.to_path_buf())
+            .map(|path| path.clone())
             .collect::<Vec<_>>()
     });
     assert_eq!(

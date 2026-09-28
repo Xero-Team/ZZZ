@@ -110,8 +110,7 @@ impl PdfWorker {
     /// summary (page count, dimensions, outline, metadata) is available.
     pub async fn open(path: PathBuf, data: Arc<[u8]>, password: Vec<u8>) -> anyhow::Result<Self> {
         let thread_count = thread::available_parallelism()
-            .map(|count| count.get().saturating_sub(1))
-            .unwrap_or(1)
+            .map_or(1, |count| count.get().saturating_sub(1))
             .clamp(1, MAX_WORKER_THREADS);
 
         let shared = Arc::new(Shared {

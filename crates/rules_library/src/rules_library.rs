@@ -196,7 +196,7 @@ impl PickerDelegate for RulePickerDelegate {
     fn can_select(&self, ix: usize, _: &mut Window, _: &mut Context<Picker<Self>>) -> bool {
         match self.filtered_entries.get(ix) {
             Some(RulePickerEntry::Rule(_)) => true,
-            Some(RulePickerEntry::Header(_)) | Some(RulePickerEntry::Separator) | None => false,
+            Some(RulePickerEntry::Header(_) | RulePickerEntry::Separator) | None => false,
         }
     }
 
@@ -498,10 +498,10 @@ impl RulesLibrary {
         });
 
         Self {
-            title_bar: if !cfg!(target_os = "macos") {
-                Some(cx.new(|cx| PlatformTitleBar::new("rules-library-title-bar", cx)))
-            } else {
+            title_bar: if cfg!(target_os = "macos") {
                 None
+            } else {
+                Some(cx.new(|cx| PlatformTitleBar::new("rules-library-title-bar", cx)))
             },
             store,
             language_registry,

@@ -738,10 +738,10 @@ fn run() -> Result<()> {
             // project-specific vars (e.g. those set by direnv).
             // By setting env to None here, the LSP will use worktree env vars instead,
             // which is what we want.
-            if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
-                None
-            } else {
+            if std::io::IsTerminal::is_terminal(&std::io::stdout()) {
                 Some(std::env::vars().collect::<HashMap<_, _>>())
+            } else {
+                None
             }
         }
 
@@ -794,9 +794,9 @@ fn run() -> Result<()> {
     #[cfg(not(target_os = "windows"))]
     let wsl = None;
 
-    for path in args.paths_with_position.iter() {
+    for path in &args.paths_with_position {
         if URL_PREFIX.iter().any(|&prefix| path.starts_with(prefix)) {
-            urls.push(path.to_string());
+            urls.push(path.clone());
         } else if path == "-" && args.paths_with_position.len() == 1 {
             let file = NamedTempFile::new()?;
             paths.push(file.path().to_string_lossy().into_owned());
@@ -1012,23 +1012,21 @@ mod linux {
             format!(
                 "ZZZ {}{}{} – {}",
                 if *release_channel::RELEASE_CHANNEL_NAME == "stable" {
-                    "".to_owned()
+                    String::new()
                 } else {
                     format!("{} ", *release_channel::RELEASE_CHANNEL_NAME)
                 },
                 option_env!("RELEASE_VERSION").unwrap_or_default(),
                 match option_env!("ZZZ_COMMIT_SHA") {
                     Some(commit_sha) => format!(" {commit_sha} "),
-                    None => "".to_owned(),
+                    None => String::new(),
                 },
                 self.0.display(),
             )
         }
 
         fn launch(&self, ipc_url: String, user_data_dir: Option<&str>) -> anyhow::Result<()> {
-            let data_dir = user_data_dir
-                .map(PathBuf::from)
-                .unwrap_or_else(|| paths::data_dir().clone());
+            let data_dir = user_data_dir.map_or_else(|| paths::data_dir().clone(), PathBuf::from);
 
             let sock_path = data_dir.join(format!(
                 "zzz-{}.sock",

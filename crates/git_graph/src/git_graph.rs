@@ -87,8 +87,7 @@ impl CopiedState {
 
     fn is_copied(&self) -> bool {
         self.copied_at
-            .map(|t| t.elapsed() < COPIED_STATE_DURATION)
-            .unwrap_or(false)
+            .is_some_and(|t| t.elapsed() < COPIED_STATE_DURATION)
     }
 
     fn mark_copied(&mut self) {
@@ -360,20 +359,21 @@ impl ChangedFileDirectoryEntry {
 
         let path = self.path.clone();
         let expanded = self.expanded;
-        let folder_icon = FileIcons::get_folder_icon(expanded, path.as_std_path(), cx)
-            .map(|icon| {
-                Icon::from_path(icon)
-                    .size(IconSize::Small)
-                    .color(Color::Muted)
-            })
-            .unwrap_or_else(|| {
+        let folder_icon = FileIcons::get_folder_icon(expanded, path.as_std_path(), cx).map_or_else(
+            || {
                 let icon = if expanded {
                     IconName::FolderOpen
                 } else {
                     IconName::Folder
                 };
                 Icon::new(icon).size(IconSize::Small).color(Color::Muted)
-            });
+            },
+            |icon| {
+                Icon::from_path(icon)
+                    .size(IconSize::Small)
+                    .color(Color::Muted)
+            },
+        );
 
         ListItem::new(("changed-file-dir", ix))
             .spacing(ListItemSpacing::Sparse)
@@ -707,7 +707,9 @@ impl LaneState {
                             Some(CommitLineSegment::Straight { to_row })
                                 if *to_row == usize::MAX =>
                             {
-                                if final_destination != lane_column {
+                                if final_destination == lane_column {
+                                    *to_row = ending_row;
+                                } else {
                                     *to_row = ending_row - 1;
 
                                     let curved_line = CommitLineSegment::Curve {
@@ -722,8 +724,6 @@ impl LaneState {
                                     } else {
                                         segments.push(curved_line);
                                     }
-                                } else {
-                                    *to_row = ending_row;
                                 }
                             }
                             Some(CommitLineSegment::Curve {
@@ -737,7 +737,11 @@ impl LaneState {
                                 if matches!(curve_kind, CurveKind::Merge) {
                                     *on_row = starting_row + 1;
                                     if *on_row < ending_row {
-                                        if *to_column != final_destination {
+                                        if *to_column == final_destination {
+                                            segments.push(CommitLineSegment::Straight {
+                                                to_row: ending_row,
+                                            });
+                                        } else {
                                             segments.push(CommitLineSegment::Straight {
                                                 to_row: ending_row - 1,
                                             });
@@ -745,10 +749,6 @@ impl LaneState {
                                                 to_column: final_destination,
                                                 on_row: ending_row,
                                                 curve_kind: CurveKind::Checkout,
-                                            });
-                                        } else {
-                                            segments.push(CommitLineSegment::Straight {
-                                                to_row: ending_row,
                                             });
                                         }
                                     } else if *to_column != final_destination {
@@ -776,7 +776,11 @@ impl LaneState {
                                 on_row, to_column, ..
                             }) => {
                                 if *on_row < ending_row {
-                                    if *to_column != final_destination {
+                                    if *to_column == final_destination {
+                                        segments.push(CommitLineSegment::Straight {
+                                            to_row: ending_row,
+                                        });
+                                    } else {
                                         segments.push(CommitLineSegment::Straight {
                                             to_row: ending_row - 1,
                                         });
@@ -784,10 +788,6 @@ impl LaneState {
                                             to_column: final_destination,
                                             on_row: ending_row,
                                             curve_kind: CurveKind::Checkout,
-                                        });
-                                    } else {
-                                        segments.push(CommitLineSegment::Straight {
-                                            to_row: ending_row,
                                         });
                                     }
                                 } else if *to_column != final_destination {
@@ -966,7 +966,7 @@ impl GraphData {
         self.commits.reserve(commits.len());
         self.lines.reserve(commits.len() / 2);
 
-        for commit in commits.iter() {
+        for commit in commits {
             let commit_row = self.commits.len();
 
             let commit_lane = self
@@ -2827,8 +2827,7 @@ impl GitGraph {
                                     "{}/{}",
                                     self.search_state
                                         .selected_index
-                                        .map(|index| index + 1)
-                                        .unwrap_or(0),
+                                        .map_or(0, |index| index + 1),
                                     self.search_state.matches.len()
                                 ))
                                 .size(LabelSize::Small)
@@ -2932,8 +2931,7 @@ impl GitGraph {
         let changed_files_count = self
             .selected_commit_diff
             .as_ref()
-            .map(|diff| diff.files.len())
-            .unwrap_or(0);
+            .map_or(0, |diff| diff.files.len());
 
         let (total_lines_added, total_lines_removed) =
             self.selected_commit_diff_stats.unwrap_or((0, 0));
@@ -3387,8 +3385,7 @@ impl GitGraph {
             .0
             .borrow()
             .last_item_size
-            .map(|size| size.item.height)
-            .unwrap_or(window.viewport_size().height);
+            .map_or(window.viewport_size().height, |size| size.item.height);
         let loaded_commit_count = self.graph_data.commits.len();
 
         let content_height = row_height * loaded_commit_count;
@@ -3789,16 +3786,13 @@ impl GitGraph {
         match self.graph_data.max_commit_count {
             AllCommitCount::FullyLoaded(count) => (count, false),
             AllCommitCount::Loading(count) => {
-                let is_loading = self
-                    .get_repository(cx)
-                    .map(|repository| {
-                        repository.update(cx, |repository, cx| {
-                            repository
-                                .graph_data(self.log_source.clone(), self.log_order, 0..0, cx)
-                                .is_loading
-                        })
+                let is_loading = self.get_repository(cx).is_some_and(|repository| {
+                    repository.update(cx, |repository, cx| {
+                        repository
+                            .graph_data(self.log_source.clone(), self.log_order, 0..0, cx)
+                            .is_loading
                     })
-                    .unwrap_or(false);
+                });
 
                 (count, is_loading)
             }
@@ -4044,7 +4038,29 @@ impl Render for GitGraph {
                         .flex()
                         .flex_col()
                         .child(render_table_header(
-                            if !is_path_history {
+                            if is_path_history {
+                                TableRow::from_vec(
+                                    vec![
+                                        Label::new(tr(
+                                            cx,
+                                            "git_graph.column.description",
+                                            "Description",
+                                        ))
+                                        .color(Color::Muted)
+                                        .into_any_element(),
+                                        Label::new(tr(cx, "git_graph.column.date", "Date"))
+                                            .color(Color::Muted)
+                                            .into_any_element(),
+                                        Label::new(tr(cx, "git_graph.column.author", "Author"))
+                                            .color(Color::Muted)
+                                            .into_any_element(),
+                                        Label::new(tr(cx, "git_graph.column.commit", "Commit"))
+                                            .color(Color::Muted)
+                                            .into_any_element(),
+                                    ],
+                                    4,
+                                )
+                            } else {
                                 TableRow::from_vec(
                                     vec![
                                         Label::new(tr(cx, "git_graph.column.graph", "Graph"))
@@ -4069,28 +4085,6 @@ impl Render for GitGraph {
                                             .into_any_element(),
                                     ],
                                     5,
-                                )
-                            } else {
-                                TableRow::from_vec(
-                                    vec![
-                                        Label::new(tr(
-                                            cx,
-                                            "git_graph.column.description",
-                                            "Description",
-                                        ))
-                                        .color(Color::Muted)
-                                        .into_any_element(),
-                                        Label::new(tr(cx, "git_graph.column.date", "Date"))
-                                            .color(Color::Muted)
-                                            .into_any_element(),
-                                        Label::new(tr(cx, "git_graph.column.author", "Author"))
-                                            .color(Color::Muted)
-                                            .into_any_element(),
-                                        Label::new(tr(cx, "git_graph.column.commit", "Commit"))
-                                            .color(Color::Muted)
-                                            .into_any_element(),
-                                    ],
-                                    4,
                                 )
                             },
                             header_context,
@@ -4379,11 +4373,10 @@ impl Item for GitGraph {
 
     fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
         if let LogSource::Path(path) = &self.log_source {
-            return path
-                .as_ref()
-                .file_name()
-                .map(|name| SharedString::from(name.to_owned()))
-                .unwrap_or_else(|| SharedString::from(path.as_unix_str().to_owned()));
+            return path.as_ref().file_name().map_or_else(
+                || SharedString::from(path.as_unix_str().to_owned()),
+                |name| SharedString::from(name.to_owned()),
+            );
         }
 
         self.get_repository(cx)

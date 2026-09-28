@@ -125,10 +125,9 @@ impl Render for RunningState {
         } else {
             div().into_any_element()
         };
-        let thread_status = self
-            .thread_id
-            .map(|thread_id| self.session.read(cx).thread_status(thread_id))
-            .unwrap_or(ThreadStatus::Exited);
+        let thread_status = self.thread_id.map_or(ThreadStatus::Exited, |thread_id| {
+            self.session.read(cx).thread_status(thread_id)
+        });
 
         self.variable_list.update(cx, |this, cx| {
             this.disabled(thread_status != ThreadStatus::Stopped, cx);

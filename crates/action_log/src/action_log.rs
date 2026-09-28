@@ -664,59 +664,54 @@ impl ActionLog {
         };
 
         let mut metrics = ActionLogMetrics::for_buffer(buffer.read(cx));
-        match tracked_buffer.status {
-            TrackedBufferStatus::Deleted => {
-                metrics.add_edits(tracked_buffer.unreviewed_edits.edits());
-                self.tracked_buffers.remove(&buffer);
-                cx.notify();
-            }
-            _ => {
-                let buffer = buffer.read(cx);
-                let buffer_range =
-                    buffer_range.start.to_point(buffer)..buffer_range.end.to_point(buffer);
-                let mut delta = 0i32;
-                tracked_buffer.unreviewed_edits.retain_mut(|edit| {
-                    edit.old.start = (edit.old.start as i32 + delta) as u32;
-                    edit.old.end = (edit.old.end as i32 + delta) as u32;
+        if let TrackedBufferStatus::Deleted = tracked_buffer.status {
+            metrics.add_edits(tracked_buffer.unreviewed_edits.edits());
+            self.tracked_buffers.remove(&buffer);
+            cx.notify();
+        } else {
+            let buffer = buffer.read(cx);
+            let buffer_range =
+                buffer_range.start.to_point(buffer)..buffer_range.end.to_point(buffer);
+            let mut delta = 0i32;
+            tracked_buffer.unreviewed_edits.retain_mut(|edit| {
+                edit.old.start = (edit.old.start as i32 + delta) as u32;
+                edit.old.end = (edit.old.end as i32 + delta) as u32;
 
-                    if buffer_range.end.row < edit.new.start
-                        || buffer_range.start.row > edit.new.end
-                    {
-                        true
-                    } else {
-                        let old_range = tracked_buffer
-                            .diff_base
-                            .point_to_offset(Point::new(edit.old.start, 0))
-                            ..tracked_buffer.diff_base.point_to_offset(cmp::min(
-                                Point::new(edit.old.end, 0),
-                                tracked_buffer.diff_base.max_point(),
-                            ));
-                        let new_range = tracked_buffer
+                if buffer_range.end.row < edit.new.start || buffer_range.start.row > edit.new.end {
+                    true
+                } else {
+                    let old_range = tracked_buffer
+                        .diff_base
+                        .point_to_offset(Point::new(edit.old.start, 0))
+                        ..tracked_buffer.diff_base.point_to_offset(cmp::min(
+                            Point::new(edit.old.end, 0),
+                            tracked_buffer.diff_base.max_point(),
+                        ));
+                    let new_range = tracked_buffer
+                        .snapshot
+                        .point_to_offset(Point::new(edit.new.start, 0))
+                        ..tracked_buffer.snapshot.point_to_offset(cmp::min(
+                            Point::new(edit.new.end, 0),
+                            tracked_buffer.snapshot.max_point(),
+                        ));
+                    tracked_buffer.diff_base.replace(
+                        old_range,
+                        &tracked_buffer
                             .snapshot
-                            .point_to_offset(Point::new(edit.new.start, 0))
-                            ..tracked_buffer.snapshot.point_to_offset(cmp::min(
-                                Point::new(edit.new.end, 0),
-                                tracked_buffer.snapshot.max_point(),
-                            ));
-                        tracked_buffer.diff_base.replace(
-                            old_range,
-                            &tracked_buffer
-                                .snapshot
-                                .text_for_range(new_range)
-                                .collect::<String>(),
-                        );
-                        delta += edit.new_len() as i32 - edit.old_len() as i32;
-                        metrics.add_edit(edit);
-                        false
-                    }
-                });
-                if tracked_buffer.unreviewed_edits.is_empty()
-                    && let TrackedBufferStatus::Created { .. } = &mut tracked_buffer.status
-                {
-                    tracked_buffer.status = TrackedBufferStatus::Modified;
+                            .text_for_range(new_range)
+                            .collect::<String>(),
+                    );
+                    delta += edit.new_len() as i32 - edit.old_len() as i32;
+                    metrics.add_edit(edit);
+                    false
                 }
-                tracked_buffer.schedule_diff_update(ChangeAuthor::User, cx);
+            });
+            if tracked_buffer.unreviewed_edits.is_empty()
+                && let TrackedBufferStatus::Created { .. } = &mut tracked_buffer.status
+            {
+                tracked_buffer.status = TrackedBufferStatus::Modified;
             }
+            tracked_buffer.schedule_diff_update(ChangeAuthor::User, cx);
         }
         if let Some(telemetry) = telemetry {
             telemetry_report_accepted_edits(&telemetry, metrics);
@@ -919,17 +914,16 @@ impl ActionLog {
             if let Some(telemetry) = telemetry.as_ref() {
                 telemetry_report_accepted_edits(telemetry, metrics);
             }
-            match tracked_buffer.status {
-                TrackedBufferStatus::Deleted => false,
-                _ => {
-                    if let TrackedBufferStatus::Created { .. } = &mut tracked_buffer.status {
-                        tracked_buffer.status = TrackedBufferStatus::Modified;
-                    }
-                    tracked_buffer.unreviewed_edits.clear();
-                    tracked_buffer.diff_base = tracked_buffer.snapshot.as_rope().clone();
-                    tracked_buffer.schedule_diff_update(ChangeAuthor::User, cx);
-                    true
+            if let TrackedBufferStatus::Deleted = tracked_buffer.status {
+                false
+            } else {
+                if let TrackedBufferStatus::Created { .. } = &mut tracked_buffer.status {
+                    tracked_buffer.status = TrackedBufferStatus::Modified;
                 }
+                tracked_buffer.unreviewed_edits.clear();
+                tracked_buffer.diff_base = tracked_buffer.snapshot.as_rope().clone();
+                tracked_buffer.schedule_diff_update(ChangeAuthor::User, cx);
+                true
             }
         });
 
@@ -1710,7 +1704,7 @@ mod tests {
                 vec![HunkStatus {
                     range: Point::new(0, 0)..Point::new(0, 5),
                     diff_status: DiffHunkStatusKind::Added,
-                    old_text: "".into(),
+                    old_text: String::new(),
                 }],
             )]
         );
@@ -1724,7 +1718,7 @@ mod tests {
                 vec![HunkStatus {
                     range: Point::new(0, 0)..Point::new(0, 6),
                     diff_status: DiffHunkStatusKind::Added,
-                    old_text: "".into(),
+                    old_text: String::new(),
                 }],
             )]
         );
@@ -2341,7 +2335,7 @@ mod tests {
                 vec![HunkStatus {
                     range: Point::new(0, 0)..Point::new(0, 7),
                     diff_status: DiffHunkStatusKind::Added,
-                    old_text: "".into(),
+                    old_text: String::new(),
                 }],
             )]
         );
@@ -2573,8 +2567,7 @@ mod tests {
         init_test(cx);
 
         let operations = env::var("OPERATIONS")
-            .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-            .unwrap_or(20);
+            .map_or(20, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
         let text = RandomCharIter::new(&mut rng).take(50).collect::<String>();
         let fs = FakeFs::new(cx.executor());
@@ -2741,7 +2734,7 @@ mod tests {
                     HunkStatus {
                         range: Point::new(6, 0)..Point::new(7, 0),
                         diff_status: DiffHunkStatusKind::Added,
-                        old_text: "".into()
+                        old_text: String::new()
                     },
                     HunkStatus {
                         range: Point::new(8, 0)..Point::new(8, 1),
@@ -2777,7 +2770,7 @@ mod tests {
                     HunkStatus {
                         range: Point::new(6, 0)..Point::new(7, 0),
                         diff_status: DiffHunkStatusKind::Added,
-                        old_text: "".into()
+                        old_text: String::new()
                     },
                     HunkStatus {
                         range: Point::new(8, 0)..Point::new(8, 1),
@@ -2803,7 +2796,7 @@ mod tests {
                     HunkStatus {
                         range: Point::new(6, 0)..Point::new(7, 0),
                         diff_status: DiffHunkStatusKind::Added,
-                        old_text: "".into()
+                        old_text: String::new()
                     },
                     HunkStatus {
                         range: Point::new(8, 0)..Point::new(8, 1),
@@ -3163,7 +3156,7 @@ mod tests {
             vec![HunkStatus {
                 range: Point::new(0, 0)..Point::new(0, 5),
                 diff_status: DiffHunkStatusKind::Added,
-                old_text: "".into(),
+                old_text: String::new(),
             }],
         )];
         assert_eq!(

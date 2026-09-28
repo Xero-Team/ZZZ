@@ -524,8 +524,7 @@ impl Project {
         let shell = remote_client
             .as_ref()
             .and_then(|remote_client| remote_client.read(cx).shell())
-            .map(Shell::Program)
-            .unwrap_or(Shell::System);
+            .map_or(Shell::System, Shell::Program);
         let is_windows = self.path_style(cx).is_windows();
         let builder = ShellBuilder::new(&shell, is_windows).non_interactive();
         let (command, args) = builder.build(Some(command), &Vec::new());
@@ -542,29 +541,26 @@ impl Project {
             env.extend(settings.env);
 
             project.update(cx, move |_, cx| {
-                match remote_client {
-                    Some(remote_client) => {
-                        let command_template = remote_client.read(cx).build_command(
-                            Some(command),
-                            &args,
-                            &env,
-                            None,
-                            None,
-                        )?;
-                        let mut command = new_std_command(command_template.program);
-                        command.args(command_template.args);
-                        command.envs(command_template.env);
-                        Ok(command)
+                if let Some(remote_client) = remote_client {
+                    let command_template = remote_client.read(cx).build_command(
+                        Some(command),
+                        &args,
+                        &env,
+                        None,
+                        None,
+                    )?;
+                    let mut command = new_std_command(command_template.program);
+                    command.args(command_template.args);
+                    command.envs(command_template.env);
+                    Ok(command)
+                } else {
+                    let mut command = new_std_command(command);
+                    command.args(args);
+                    command.envs(env);
+                    if let Some(path) = path {
+                        command.current_dir(path);
                     }
-                    None => {
-                        let mut command = new_std_command(command);
-                        command.args(args);
-                        command.envs(env);
-                        if let Some(path) = path {
-                            command.current_dir(path);
-                        }
-                        Ok(command)
-                    }
+                    Ok(command)
                 }
                 .map(|mut process| {
                     util::set_pre_exec_to_start_new_session(&mut process);

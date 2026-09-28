@@ -186,7 +186,7 @@ async fn test_default_session_work_dirs_falls_back_to_home_for_empty_project(
     let work_dirs = project.read_with(cx, |project, cx| project.default_path_list(cx));
     let ordered_paths = work_dirs.ordered_paths().cloned().collect::<Vec<_>>();
 
-    assert_eq!(ordered_paths, vec![paths::home_dir().to_path_buf()]);
+    assert_eq!(ordered_paths, vec![paths::home_dir().clone()]);
 }
 
 // NOTE:
@@ -3528,7 +3528,7 @@ async fn test_selecting_a_language_clears_the_old_servers_diagnostics(
         buffer
             .snapshot()
             .diagnostics_in_range::<_, usize>(0..buffer.len(), false)
-            .map(|entry| entry.diagnostic.message.to_string())
+            .map(|entry| entry.diagnostic.message.clone())
             .collect::<Vec<_>>()
     };
 
@@ -3611,7 +3611,7 @@ async fn test_selecting_a_language_clears_diagnostics_when_the_server_keeps_othe
         buffer
             .snapshot()
             .diagnostics_in_range::<_, usize>(0..buffer.len(), false)
-            .map(|entry| entry.diagnostic.message.to_string())
+            .map(|entry| entry.diagnostic.message.clone())
             .collect::<Vec<_>>()
     };
 
@@ -4580,7 +4580,7 @@ async fn test_stored_diagnostics_not_replayed_after_entry_removal(cx: &mut gpui:
             buffer
                 .snapshot()
                 .diagnostics_in_range::<_, usize>(0..buffer.len(), false)
-                .map(|entry| entry.diagnostic.message.to_string())
+                .map(|entry| entry.diagnostic.message.clone())
                 .collect::<Vec<_>>(),
             Vec::<String>::new(),
         );
@@ -4974,7 +4974,7 @@ async fn test_edits_from_lsp2_with_past_version(cx: &mut gpui::TestAppContext) {
                     },
                     lsp::TextEdit {
                         range: lsp::Range::new(lsp::Position::new(7, 5), lsp::Position::new(7, 6)),
-                        new_text: "".into(),
+                        new_text: String::new(),
                     },
                 ],
                 LanguageServerId(0),
@@ -5072,7 +5072,7 @@ async fn test_edits_from_lsp2_with_edits_on_adjacent_lines(cx: &mut gpui::TestAp
                     // Delete everything after the first newline of the file.
                     lsp::TextEdit {
                         range: lsp::Range::new(lsp::Position::new(1, 0), lsp::Position::new(7, 0)),
-                        new_text: "".into(),
+                        new_text: String::new(),
                     },
                 ],
                 LanguageServerId(0),
@@ -5226,7 +5226,7 @@ async fn test_invalid_edits_from_lsp2(cx: &mut gpui::TestAppContext) {
                     },
                     lsp::TextEdit {
                         range: lsp::Range::new(lsp::Position::new(1, 0), lsp::Position::new(99, 0)),
-                        new_text: "".into(),
+                        new_text: String::new(),
                     },
                     lsp::TextEdit {
                         range: lsp::Range::new(lsp::Position::new(0, 9), lsp::Position::new(0, 9)),
@@ -5414,10 +5414,10 @@ async fn test_lsp_server_document_matches_buffer_line_endings(cx: &mut gpui::Tes
     fn offset_of(document: &str, position: lsp::Position) -> usize {
         let mut offset = 0;
         for _ in 0..position.line {
-            offset += document[offset..]
-                .find('\n')
-                .map(|newline_offset| newline_offset + 1)
-                .unwrap_or_else(|| document.len() - offset);
+            offset += document[offset..].find('\n').map_or_else(
+                || document.len() - offset,
+                |newline_offset| newline_offset + 1,
+            );
         }
         offset + position.character as usize
     }
@@ -6477,7 +6477,7 @@ async fn test_save_file_spawns_language_server(cx: &mut gpui::TestAppContext) {
         lsp::TextDocumentItem {
             uri: lsp::Uri::from_file_path(path!("/dir/file.rs")).unwrap(),
             version: 0,
-            text: "".to_string(),
+            text: String::new(),
             language_id: "rust".to_string(),
         }
     );
@@ -9981,7 +9981,7 @@ async fn test_hovers_with_empty_parts(cx: &mut gpui::TestAppContext) {
         move |_, _| async move {
             Ok(Some(lsp::Hover {
                 contents: lsp::HoverContents::Array(vec![
-                    lsp::MarkedString::String("".to_string()),
+                    lsp::MarkedString::String(String::new()),
                     lsp::MarkedString::String("      ".to_string()),
                     lsp::MarkedString::String("\n\n\n".to_string()),
                 ]),
@@ -11432,9 +11432,8 @@ async fn test_staging_random_hunks(
     _executor: BackgroundExecutor,
     cx: &mut gpui::TestAppContext,
 ) {
-    let operations = env::var("OPERATIONS")
-        .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-        .unwrap_or(20);
+    let operations =
+        env::var("OPERATIONS").map_or(20, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
     use DiffHunkSecondaryStatus::*;
     init_test(cx);
@@ -13961,7 +13960,7 @@ async fn test_rescan_with_gitignore(cx: &mut gpui::TestAppContext) {
         path!("/root/tree/.git").as_ref(),
         &[
             (".gitignore", "ignored-dir\n".into()),
-            ("tracked-dir/tracked-file1", "".into()),
+            ("tracked-dir/tracked-file1", String::new()),
         ],
     );
 
@@ -14020,8 +14019,8 @@ async fn test_rescan_with_gitignore(cx: &mut gpui::TestAppContext) {
         path!("/root/tree/.git").as_ref(),
         &[
             (".gitignore", "ignored-dir\n".into()),
-            ("tracked-dir/tracked-file1", "".into()),
-            ("tracked-dir/tracked-file2", "".into()),
+            ("tracked-dir/tracked-file1", String::new()),
+            ("tracked-dir/tracked-file2", String::new()),
         ],
     );
     fs.create_file(

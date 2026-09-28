@@ -2576,7 +2576,9 @@ impl Editor {
             stored_review_comments: Vec::new(),
             next_review_comment_id: 0,
             hovered_diff_hunk_row: None,
-            _subscriptions: if !is_minimap {
+            _subscriptions: if is_minimap {
+                Default::default()
+            } else {
                 {
                     vec![
                         cx.observe(&multi_buffer, Self::on_buffer_changed),
@@ -2588,8 +2590,6 @@ impl Editor {
                         observe_buffer_font_size_adjustment(cx, |_, cx| cx.notify()),
                     ]
                 }
-            } else {
-                Default::default()
             },
             runnables: RunnableData::new(),
             pull_diagnostics_task: Task::ready(()),
@@ -2685,22 +2685,17 @@ impl Editor {
                 }
                 EditorEvent::Edited { .. } => {
                     let vim_mode = vim_mode_setting::VimModeSetting::try_get(cx)
-                        .map(|vim_mode| vim_mode.0)
-                        .unwrap_or(false);
+                        .is_some_and(|vim_mode| vim_mode.0);
                     if !vim_mode {
                         let display_map = editor.display_snapshot(cx);
                         let selections = editor.selections.all_adjusted_display(&display_map);
-                        let pop_state = editor
-                            .change_list
-                            .last()
-                            .map(|previous| {
-                                previous.len() == selections.len()
-                                    && previous.iter().enumerate().all(|(ix, p)| {
-                                        p.to_display_point(&display_map).row()
-                                            == selections[ix].head().row()
-                                    })
-                            })
-                            .unwrap_or(false);
+                        let pop_state = editor.change_list.last().is_some_and(|previous| {
+                            previous.len() == selections.len()
+                                && previous.iter().enumerate().all(|(ix, p)| {
+                                    p.to_display_point(&display_map).row()
+                                        == selections[ix].head().row()
+                                })
+                        });
                         let new_positions = selections
                             .into_iter()
                             .map(|s| display_map.display_point_to_anchor(s.head(), Bias::Left))
@@ -3548,7 +3543,7 @@ impl Editor {
 
         // Current range has associated linked ranges.
         let mut linked_edits = HashMap::<_, Vec<_>>::default();
-        for range in linked_ranges.iter() {
+        for range in linked_ranges {
             let start_offset = TO::to_offset(&range.start, &buffer_snapshot);
             let end_offset = start_offset + end_difference;
             let start_offset = start_offset + start_difference;
@@ -3849,7 +3844,7 @@ impl Editor {
                 );
 
                 // Remove shortcode from buffer
-                edits.push((emoji_shortcode_start..selection.start, "".to_owned().into()));
+                edits.push((emoji_shortcode_start..selection.start, String::new().into()));
                 new_selections.push((
                     Selection {
                         id: selection.id,
@@ -4245,8 +4240,7 @@ impl Editor {
                                     0
                                 };
                                 let extra_line_len = extra_line_additional_indent
-                                    .map(|i| 1 + existing_indent_len + i.len as usize)
-                                    .unwrap_or(0);
+                                    .map_or(0, |i| 1 + existing_indent_len + i.len as usize);
                                 let mut new_text = String::with_capacity(
                                     1 + capacity_for_delimiter
                                         + existing_indent_len
@@ -5030,8 +5024,7 @@ impl Editor {
                 ignore_word_threshold = ignore_threshold;
                 None
             }
-            Some(CompletionsMenuSource::SnippetChoices)
-            | Some(CompletionsMenuSource::SnippetsOnly) => {
+            Some(CompletionsMenuSource::SnippetChoices | CompletionsMenuSource::SnippetsOnly) => {
                 log::error!("bug: SnippetChoices requested_source is not handled");
                 None
             }
@@ -5628,7 +5621,7 @@ impl Editor {
 
         let tx_id = self.transact(window, cx, |editor, window, cx| {
             if let Some(mut snippet) = snippet {
-                snippet.text = new_text.to_string();
+                snippet.text = new_text.clone();
                 let offset_ranges = ranges
                     .iter()
                     .map(|range| range.to_offset(&multibuffer_snapshot))
@@ -5783,7 +5776,7 @@ impl Editor {
         self.completion_tasks.clear();
 
         let multibuffer_point = match &action.deployed_from {
-            Some(CodeActionSource::Indicator(row)) | Some(CodeActionSource::RunMenu(row)) => {
+            Some(CodeActionSource::Indicator(row) | CodeActionSource::RunMenu(row)) => {
                 DisplayPoint::new(*row, 0).to_point(&snapshot)
             }
             _ => self
@@ -5810,48 +5803,46 @@ impl Editor {
             .map(|t| Arc::new(t.to_owned()));
 
         let project = self.project.clone();
-        let runnable_task = match deployed_from {
-            Some(CodeActionSource::Indicator(_)) => Task::ready(Ok(Default::default())),
-            _ => {
-                let mut task_context_task = Task::ready(Ok(None));
-                let workspace = self.workspace().map(|w| w.downgrade());
-                if let Some(tasks) = &tasks
-                    && let Some(project) = project
-                {
-                    task_context_task =
-                        Self::build_tasks_context(&project, &buffer, buffer_row, tasks, cx);
-                }
-
-                cx.spawn_in(window, {
-                    let buffer = buffer.clone();
-                    async move |editor, cx| {
-                        let task_context = match workspace {
-                            Some(ws) => task_context_task
-                                .await
-                                .notify_workspace_async_err(ws, cx)
-                                .flatten(),
-                            None => task_context_task.await.ok().flatten(),
-                        };
-
-                        let resolved_tasks =
-                            tasks
-                                .zip(task_context.clone())
-                                .map(|(tasks, task_context)| ResolvedTasks {
-                                    templates: tasks.resolve(&task_context).collect(),
-                                    position: snapshot.buffer_snapshot().anchor_before(Point::new(
-                                        multibuffer_point.row,
-                                        tasks.column,
-                                    )),
-                                });
-                        let debug_scenarios = editor
-                            .update(cx, |editor, cx| {
-                                editor.debug_scenarios(&resolved_tasks, &buffer, cx)
-                            })?
-                            .await;
-                        anyhow::Ok((resolved_tasks, debug_scenarios, task_context))
-                    }
-                })
+        let runnable_task = if let Some(CodeActionSource::Indicator(_)) = deployed_from {
+            Task::ready(Ok(Default::default()))
+        } else {
+            let mut task_context_task = Task::ready(Ok(None));
+            let workspace = self.workspace().map(|w| w.downgrade());
+            if let Some(tasks) = &tasks
+                && let Some(project) = project
+            {
+                task_context_task =
+                    Self::build_tasks_context(&project, &buffer, buffer_row, tasks, cx);
             }
+
+            cx.spawn_in(window, {
+                let buffer = buffer.clone();
+                async move |editor, cx| {
+                    let task_context = match workspace {
+                        Some(ws) => task_context_task
+                            .await
+                            .notify_workspace_async_err(ws, cx)
+                            .flatten(),
+                        None => task_context_task.await.ok().flatten(),
+                    };
+
+                    let resolved_tasks =
+                        tasks
+                            .zip(task_context.clone())
+                            .map(|(tasks, task_context)| ResolvedTasks {
+                                templates: tasks.resolve(&task_context).collect(),
+                                position: snapshot
+                                    .buffer_snapshot()
+                                    .anchor_before(Point::new(multibuffer_point.row, tasks.column)),
+                            });
+                    let debug_scenarios = editor
+                        .update(cx, |editor, cx| {
+                            editor.debug_scenarios(&resolved_tasks, &buffer, cx)
+                        })?
+                        .await;
+                    anyhow::Ok((resolved_tasks, debug_scenarios, task_context))
+                }
+            })
         };
 
         let toggle_task = cx.spawn_in(window, async move |editor, cx| {
@@ -7040,8 +7031,7 @@ impl Editor {
                     .buffer_snapshot()
                     .buffer_line_for_row(multibuffer_row)
                     .map(|(buffer_snapshot, _)| buffer_snapshot.remote_id())
-                    .map(|buffer_id| self.is_buffer_folded(buffer_id, cx))
-                    .unwrap_or(false);
+                    .is_some_and(|buffer_id| self.is_buffer_folded(buffer_id, cx));
                 if buffer_folded {
                     return None;
                 }
@@ -8704,7 +8694,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.manipulate_immutable_lines(window, cx, |lines| lines.sort())
+        self.manipulate_immutable_lines(window, cx, |lines| lines.sort_unstable())
     }
 
     pub fn sort_lines_by_length(
@@ -8782,11 +8772,7 @@ impl Editor {
         let mut edits = Vec::new();
         let mut boundaries = Vec::new();
 
-        for selection in self
-            .selections
-            .all_adjusted(&self.display_snapshot(cx))
-            .iter()
-        {
+        for selection in &self.selections.all_adjusted(&self.display_snapshot(cx)) {
             let Some(wrap_config) = snapshot
                 .language_at(selection.start)
                 .and_then(|lang| lang.config().wrap_characters.clone())
@@ -8889,7 +8875,7 @@ impl Editor {
 
         let ranges = buffer_ids
             .into_iter()
-            .flat_map(|buffer_id| snapshot.range_for_buffer(buffer_id))
+            .filter_map(|buffer_id| snapshot.range_for_buffer(buffer_id))
             .collect::<Vec<_>>();
 
         self.restore_hunks_in_ranges(ranges, window, cx);
@@ -9334,14 +9320,12 @@ impl Editor {
                 let cursor_position: Point = selection.head().to_point(&snapshot.buffer_snapshot());
 
                 let breakpoint_position = self
-                    .breakpoint_at_row(cursor_position.row, window, cx)
-                    .map(|bp| bp.0)
-                    .unwrap_or_else(|| {
+                    .breakpoint_at_row(cursor_position.row, window, cx).map_or_else(|| {
                         snapshot
                             .display_snapshot
                             .buffer_snapshot()
                             .anchor_after(Point::new(cursor_position.row, 0))
-                    });
+                    }, |bp| bp.0);
 
                 let breakpoint = self
                     .breakpoint_at_anchor(breakpoint_position, &snapshot, cx)
@@ -11136,12 +11120,12 @@ impl Editor {
             } else {
                 let clipboard_is_url = is_standalone_url(&clipboard_text);
 
-                let auto_indent_mode = if !clipboard_text.is_empty() {
+                let auto_indent_mode = if clipboard_text.is_empty() {
+                    None
+                } else {
                     Some(AutoindentMode::Block {
                         original_indent_columns: Vec::new(),
                     })
-                } else {
-                    None
                 };
 
                 let selection_anchors = this.buffer.update(cx, |buffer, cx| {
@@ -11225,7 +11209,7 @@ impl Editor {
 
         let clipboard_text = cx.read_from_clipboard().and_then(|item| {
             item.entries().iter().find_map(|entry| match entry {
-                ClipboardEntry::String(text) => Some(text.text().to_string()),
+                ClipboardEntry::String(text) => Some(text.text().clone()),
                 _ => None,
             })
         });
@@ -11618,8 +11602,7 @@ impl Editor {
             .context_menu
             .borrow_mut()
             .as_mut()
-            .map(|menu| menu.select_first(self.completion_provider.as_deref(), window, cx))
-            .unwrap_or(false)
+            .is_some_and(|menu| menu.select_first(self.completion_provider.as_deref(), window, cx))
         {
             return;
         }
@@ -11735,8 +11718,7 @@ impl Editor {
             .context_menu
             .borrow_mut()
             .as_mut()
-            .map(|menu| menu.select_last(self.completion_provider.as_deref(), window, cx))
-            .unwrap_or(false)
+            .is_some_and(|menu| menu.select_last(self.completion_provider.as_deref(), window, cx))
         {
             return;
         }
@@ -12888,7 +12870,7 @@ impl Editor {
         // intermediate selections may have been clamped to shorter lines.
         let mut goal_columns_by_selection_id = if skip_soft_wrap {
             let mut map = HashMap::default();
-            for group in state.groups.iter() {
+            for group in &state.groups {
                 if let Some(oldest_id) = group.stack.first() {
                     if let Some(oldest_selection) =
                         columnar_selections.iter().find(|s| s.id == *oldest_id)
@@ -12910,7 +12892,7 @@ impl Editor {
         };
 
         let mut last_added_item_per_group = HashMap::default();
-        for group in state.groups.iter_mut() {
+        for group in &mut state.groups {
             if let Some(last_id) = group.stack.last() {
                 last_added_item_per_group.insert(*last_id, group);
             }
@@ -13885,7 +13867,7 @@ impl Editor {
                             .zip(prefix_trimmed_lengths.iter().copied())
                             .map(|(prefix, trimmed_prefix_len)| {
                                 comment_prefix_range(
-                                    snapshot.deref(),
+                                    &snapshot,
                                     row,
                                     &prefix[..trimmed_prefix_len],
                                     &prefix[trimmed_prefix_len..],
@@ -13935,14 +13917,14 @@ impl Editor {
                     let comment_prefix = full_comment_prefix.trim_end_matches(' ');
                     let comment_prefix_whitespace = &full_comment_prefix[comment_prefix.len()..];
                     let prefix_range = comment_prefix_range(
-                        snapshot.deref(),
+                        &snapshot,
                         start_row,
                         comment_prefix,
                         comment_prefix_whitespace,
                         ignore_indent,
                     );
                     let suffix_range = comment_suffix_range(
-                        snapshot.deref(),
+                        &snapshot,
                         end_row,
                         comment_suffix.trim_start_matches(' '),
                         comment_suffix.starts_with(' '),
@@ -15380,13 +15362,13 @@ impl Editor {
             return;
         };
 
-        let end_position = if head != tail {
+        let end_position = if head == tail {
+            None
+        } else {
             let Some((_, pos)) = self.buffer.read(cx).text_anchor_for_position(tail, cx) else {
                 return;
             };
             Some(pos)
-        } else {
-            None
         };
 
         let url_finder = cx.spawn_in(window, async move |_editor, cx| {
@@ -17779,10 +17761,10 @@ impl Editor {
             buffer_snapshot.anchor_after(start_point)..buffer_snapshot.anchor_before(line_end);
 
         // Compute the hunk key for this display row
-        let file_path = buffer_snapshot
-            .file_at(start_point)
-            .map(|file: &Arc<dyn language::File>| file.path().clone())
-            .unwrap_or_else(|| Arc::from(util::rel_path::RelPath::empty()));
+        let file_path = buffer_snapshot.file_at(start_point).map_or_else(
+            || Arc::from(util::rel_path::RelPath::empty()),
+            |file: &Arc<dyn language::File>| file.path().clone(),
+        );
         let hunk_start_anchor = buffer_snapshot.anchor_before(start_point);
         let new_hunk_key = DiffHunkKey {
             file_path,
@@ -18049,12 +18031,10 @@ impl Editor {
         let end_point = overlay.anchor_range.end.to_point(&snapshot);
         let start_row = snapshot
             .point_to_buffer_point(start_point)
-            .map(|(_, p)| p.row)
-            .unwrap_or(start_point.row);
+            .map_or(start_point.row, |(_, p)| p.row);
         let end_row = snapshot
             .point_to_buffer_point(end_point)
-            .map(|(_, p)| p.row)
-            .unwrap_or(end_point.row);
+            .map_or(end_point.row, |(_, p)| p.row);
         Some((start_row, end_row))
     }
 
@@ -18085,8 +18065,9 @@ impl Editor {
             .find(|(k, _)| {
                 k.file_path == key.file_path && k.hunk_start_anchor.to_point(snapshot) == key_point
             })
-            .map(|(_, comments)| comments.as_slice())
-            .unwrap_or(&[])
+            .map_or(&[] as &[StoredReviewComment], |(_, comments)| {
+                comments.as_slice()
+            })
     }
 
     /// Returns the total count of stored review comments across all hunks.
@@ -18105,8 +18086,7 @@ impl Editor {
             .find(|(k, _)| {
                 k.file_path == key.file_path && k.hunk_start_anchor.to_point(snapshot) == key_point
             })
-            .map(|(_, v)| v.len())
-            .unwrap_or(0)
+            .map_or(0, |(_, v)| v.len())
     }
 
     /// Adds a new review comment to a specific hunk.
@@ -18145,7 +18125,7 @@ impl Editor {
 
     /// Removes a review comment by ID from any hunk.
     pub fn remove_review_comment(&mut self, id: usize, cx: &mut Context<Self>) -> bool {
-        for (_, comments) in self.stored_review_comments.iter_mut() {
+        for (_, comments) in &mut self.stored_review_comments {
             if let Some(index) = comments.iter().position(|c| c.id == id) {
                 comments.remove(index);
                 cx.emit(EditorEvent::ReviewCommentsChanged {
@@ -18165,7 +18145,7 @@ impl Editor {
         new_comment: String,
         cx: &mut Context<Self>,
     ) -> bool {
-        for (_, comments) in self.stored_review_comments.iter_mut() {
+        for (_, comments) in &mut self.stored_review_comments {
             if let Some(comment) = comments.iter_mut().find(|c| c.id == id) {
                 comment.comment = new_comment;
                 comment.is_editing = false;
@@ -18181,7 +18161,7 @@ impl Editor {
 
     /// Sets a comment's editing state.
     pub fn set_comment_editing(&mut self, id: usize, is_editing: bool, cx: &mut Context<Self>) {
-        for (_, comments) in self.stored_review_comments.iter_mut() {
+        for (_, comments) in &mut self.stored_review_comments {
             if let Some(comment) = comments.iter_mut().find(|c| c.id == id) {
                 comment.is_editing = is_editing;
                 cx.notify();
@@ -18533,9 +18513,9 @@ impl Editor {
         let colors = theme.colors();
 
         let (comments, comments_expanded, inline_editors, user_avatar_uri, line_ranges) =
-            editor_handle
-                .upgrade()
-                .map(|editor| {
+            editor_handle.upgrade().map_or(
+                (Vec::new(), true, HashMap::default(), None, None),
+                |editor| {
                     let editor = editor.read(cx);
                     let snapshot = editor.buffer().read(cx).snapshot(cx);
                     let comments = editor.comments_for_hunk(hunk_key, &snapshot).to_vec();
@@ -18545,7 +18525,7 @@ impl Editor {
                         .find(|overlay| {
                             Editor::hunk_keys_match(&overlay.hunk_key, hunk_key, &snapshot)
                         })
-                        .map(|o| {
+                        .map_or((true, HashMap::default(), None, None), |o| {
                             let start_point = o.anchor_range.start.to_point(&snapshot);
                             let end_point = o.anchor_range.end.to_point(&snapshot);
                             // Get line ranges per excerpt to detect discontinuities
@@ -18569,11 +18549,10 @@ impl Editor {
                                     Some(ranges)
                                 },
                             )
-                        })
-                        .unwrap_or((true, HashMap::default(), None, None));
+                        });
                     (comments, expanded, editors, avatar_uri, line_ranges)
-                })
-                .unwrap_or((Vec::new(), true, HashMap::default(), None, None));
+                },
+            );
 
         let comment_count = comments.len();
         let avatar_size = px(20.);
@@ -20511,7 +20490,7 @@ impl Editor {
                     .into_iter()
                     .flatten(),
             )
-            .flat_map(|accent| accent.0.clone().map(SharedString::from))
+            .filter_map(|accent| accent.0.clone().map(SharedString::from))
             .collect();
 
         Some(AccentData {
@@ -21029,9 +21008,8 @@ impl Editor {
             .and_then(|e| e.to_str())
             .map(|a| a.to_owned()));
 
-        let vim_mode = vim_mode_setting::VimModeSetting::try_get(cx)
-            .map(|vim_mode| vim_mode.0)
-            .unwrap_or(false);
+        let vim_mode =
+            vim_mode_setting::VimModeSetting::try_get(cx).is_some_and(|vim_mode| vim_mode.0);
 
         let project = project.read(cx);
         let _ = (
@@ -21292,7 +21270,7 @@ impl Editor {
             .collect();
 
         if !self.input_enabled || self.read_only || !self.focus_handle.is_focused(window) {
-            pending = "".to_owned();
+            pending = String::new();
         }
 
         let existing_pending = self
@@ -22050,7 +22028,7 @@ fn process_completion_for_edit(
             && let Some(label) = completion.label()
             && matches!(
                 completion.kind(),
-                Some(CompletionItemKind::FUNCTION) | Some(CompletionItemKind::METHOD)
+                Some(CompletionItemKind::FUNCTION | CompletionItemKind::METHOD)
             )
         {
             snippet_source = label;
@@ -25153,7 +25131,6 @@ fn render_diff_hunk_controls(
 
 pub fn multibuffer_context_lines(cx: &App) -> u32 {
     EditorSettings::try_get(cx)
-        .map(|settings| settings.excerpt_context_lines)
-        .unwrap_or(2)
+        .map_or(2, |settings| settings.excerpt_context_lines)
         .min(32)
 }

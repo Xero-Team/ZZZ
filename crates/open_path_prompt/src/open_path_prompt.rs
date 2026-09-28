@@ -400,7 +400,7 @@ impl PickerDelegate for OpenPathDelegate {
                                         !exists || is_dir
                                     });
 
-                                    let new_id = new_id.map(|id| id + 1).unwrap_or(0);
+                                    let new_id = new_id.map_or(0, |id| id + 1);
                                     let user_input = if suffix.is_empty() {
                                         None
                                     } else {
@@ -592,10 +592,10 @@ impl PickerDelegate for OpenPathDelegate {
                         }),
                     },
                     DirectoryState::Create { user_input, .. } => {
-                        let (new_id, exists, is_dir) = user_input
-                            .as_ref()
-                            .map(|input| (input.file.id, input.exists, input.is_dir))
-                            .unwrap_or_else(|| (0, false, false));
+                        let (new_id, exists, is_dir) = user_input.as_ref().map_or_else(
+                            || (0, false, false),
+                            |input| (input.file.id, input.exists, input.is_dir),
+                        );
                         DirectoryState::Create {
                             entries: new_entries,
                             parent_path: dir.clone(),
@@ -824,7 +824,7 @@ impl PickerDelegate for OpenPathDelegate {
                         vec![],
                     )
                 } else if *parent_path == self.prompt_root {
-                    for position in match_positions.iter_mut() {
+                    for position in &mut match_positions {
                         *position += self.prompt_root.len();
                     }
                     (
@@ -849,7 +849,7 @@ impl PickerDelegate for OpenPathDelegate {
                 ..
             } => {
                 let (label, delta) = if *parent_path == self.prompt_root {
-                    for position in match_positions.iter_mut() {
+                    for position in &mut match_positions {
                         *position += self.prompt_root.len();
                     }
                     (
@@ -1039,7 +1039,7 @@ mod tests {
 
     #[test]
     fn test_get_dir_and_suffix_with_windows_style() {
-        let (dir, suffix) = get_dir_and_suffix("".into(), PathStyle::Windows);
+        let (dir, suffix) = get_dir_and_suffix(String::new(), PathStyle::Windows);
         assert_eq!(dir, "C:\\");
         assert_eq!(suffix, "");
 
@@ -1101,7 +1101,7 @@ mod tests {
 
     #[test]
     fn test_get_dir_and_suffix_with_posix_style() {
-        let (dir, suffix) = get_dir_and_suffix("".into(), PathStyle::Posix);
+        let (dir, suffix) = get_dir_and_suffix(String::new(), PathStyle::Posix);
         assert_eq!(dir, "/");
         assert_eq!(suffix, "");
 

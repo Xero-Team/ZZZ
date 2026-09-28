@@ -279,8 +279,7 @@ fn extract_zip(zip_path: &std::path::Path, extract_dir: &std::path::Path) -> boo
             &extract_dir.to_string_lossy(),
         ])
         .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+        .is_ok_and(|status| status.success())
     {
         return true;
     }

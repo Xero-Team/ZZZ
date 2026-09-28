@@ -129,7 +129,7 @@ impl KeystrokeInput {
     fn dummy(modifiers: Modifiers) -> KeybindingKeystroke {
         KeybindingKeystroke::from_keystroke(Keystroke {
             modifiers,
-            key: "".to_owned(),
+            key: String::new(),
             key_char: None,
         })
     }
@@ -738,7 +738,7 @@ mod tests {
 
             // Remove the dummy key if we added it for modifier-only keystrokes
             if keystroke_input.ends_with('-') && keystroke_str.ends_with("_") {
-                keystroke.key = "".to_string();
+                keystroke.key = String::new();
             }
 
             // Combine current modifiers with keystroke modifiers
@@ -813,7 +813,7 @@ mod tests {
 
                     // Remove the dummy key if we added it for modifier-only keystrokes
                     if s.ends_with('-') && keystroke_str.ends_with("_") {
-                        keystroke.key = "".to_string();
+                        keystroke.key = String::new();
                     }
 
                     Ok(keystroke)

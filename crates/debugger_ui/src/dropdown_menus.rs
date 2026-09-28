@@ -193,7 +193,7 @@ impl DebugPanel {
                         .and_then(|parent_id| session_depths.get(&parent_id).cloned());
                     let self_depth = *session_depths
                         .entry(session_id)
-                        .or_insert_with(|| parent_depth.map(|depth| depth + 1).unwrap_or(0usize));
+                        .or_insert_with(|| parent_depth.map_or(0usize, |depth| depth + 1));
                     this = this.custom_entry(
                         {
                             let weak = weak.clone();

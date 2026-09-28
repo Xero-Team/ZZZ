@@ -327,11 +327,11 @@ impl Iterator for MemoryIterator {
             }
             self.current_known_page.take();
         }
-        if !self.fetch_next_page() {
+        if self.fetch_next_page() {
+            self.next()
+        } else {
             self.start += 1;
             Some(MemoryCell(None))
-        } else {
-            self.next()
         }
     }
 }

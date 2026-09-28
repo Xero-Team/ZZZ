@@ -268,7 +268,7 @@ impl HeadlessProject {
         let extensions = HeadlessExtensionStore::new(
             fs.clone(),
             http_client.clone(),
-            paths::remote_extensions_dir().to_path_buf(),
+            paths::remote_extensions_dir().clone(),
             proxy,
             node_runtime,
             cx,
@@ -483,7 +483,7 @@ impl HeadlessProject {
                     actions: prompt
                         .actions
                         .iter()
-                        .map(|action| action.title.to_string())
+                        .map(|action| action.title.clone())
                         .collect(),
                     level: Some(prompt_to_proto(prompt)),
                     lsp_name: prompt.lsp_name.clone(),
@@ -664,9 +664,10 @@ impl HeadlessProject {
         let image_id =
             ImageId::from(NonZeroU64::new(NEXT_ID.fetch_add(1, Ordering::Relaxed)).unwrap());
 
-        let format = image::guess_format(&content)
-            .map(|f| format!("{:?}", f).to_lowercase())
-            .unwrap_or_else(|_| "unknown".to_owned());
+        let format = image::guess_format(&content).map_or_else(
+            |_| "unknown".to_owned(),
+            |f| format!("{:?}", f).to_lowercase(),
+        );
 
         let state = proto::ImageState {
             id: image_id.to_proto(),
@@ -995,7 +996,13 @@ impl HeadlessProject {
         let spawn_kernel = |binary: &str, args: &[String]| {
             let mut command = smol::process::Command::new(binary);
 
-            if !args.is_empty() {
+            if args.is_empty() {
+                command
+                    .arg("-m")
+                    .arg("ipykernel_launcher")
+                    .arg("-f")
+                    .arg(&connection_file_path);
+            } else {
                 for arg in args {
                     if arg == "{connection_file}" {
                         command.arg(&connection_file_path);
@@ -1003,12 +1010,6 @@ impl HeadlessProject {
                         command.arg(arg);
                     }
                 }
-            } else {
-                command
-                    .arg("-m")
-                    .arg("ipykernel_launcher")
-                    .arg("-f")
-                    .arg(&connection_file_path);
             }
 
             // This ensures subprocesses spawned from the kernel use the correct Python environment
@@ -1218,7 +1219,7 @@ impl HeadlessProject {
         let expanded = PathBuf::from(shellexpand::tilde(&envelope.payload.path).to_string());
 
         let metadata = fs.metadata(&expanded).await?;
-        let is_dir = metadata.map(|metadata| metadata.is_dir).unwrap_or(false);
+        let is_dir = metadata.is_some_and(|metadata| metadata.is_dir);
 
         Ok(proto::GetPathMetadataResponse {
             exists: metadata.is_some(),

@@ -446,10 +446,10 @@ pub fn init(cx: &mut App) {
                 .and_then(|editor| editor.read(cx).addon::<VimAddon>().cloned());
             let Some(vim) = vim else { return };
             vim.entity.update(cx, |vim, cx| {
-                if !vim.search.cmd_f_search {
-                    cx.defer_in(window, |vim, window, cx| vim.search_submit(window, cx))
-                } else {
+                if vim.search.cmd_f_search {
                     cx.propagate()
+                } else {
+                    cx.defer_in(window, |vim, window, cx| vim.search_submit(window, cx))
                 }
             })
         });

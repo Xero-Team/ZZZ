@@ -766,7 +766,9 @@ impl Pane {
             return;
         };
         let show_diagnostics = ItemSettings::get_global(cx).show_diagnostics;
-        self.diagnostics = if show_diagnostics != ShowDiagnostics::Off {
+        self.diagnostics = if show_diagnostics == ShowDiagnostics::Off {
+            HashMap::default()
+        } else {
             project
                 .read(cx)
                 .diagnostic_summaries(false, cx)
@@ -782,8 +784,6 @@ impl Pane {
                     }
                 })
                 .collect()
-        } else {
-            HashMap::default()
         }
     }
 
@@ -1170,17 +1170,14 @@ impl Pane {
                     }
                 }
 
-                let resulting_item = match already_open_view {
-                    Some(already_open_view) => {
-                        if let Some(index) = self.index_for_item_id(already_open_view.item_id()) {
-                            set_up_existing_item(index, self, window, cx);
-                        }
-                        Box::new(already_open_view) as Box<_>
+                let resulting_item = if let Some(already_open_view) = already_open_view {
+                    if let Some(index) = self.index_for_item_id(already_open_view.item_id()) {
+                        set_up_existing_item(index, self, window, cx);
                     }
-                    None => {
-                        set_up_new_item(new_item.clone(), destination_index, self, window, cx);
-                        new_item
-                    }
+                    Box::new(already_open_view) as Box<_>
+                } else {
+                    set_up_new_item(new_item.clone(), destination_index, self, window, cx);
+                    new_item
                 };
 
                 self.close_items(window, cx, SaveIntent::Skip, &|existing_item| {
@@ -1855,7 +1852,7 @@ impl Pane {
         // Close least recently used items to reach target count.
         // The target count is allowed to be exceeded, as we protect pinned
         // items, dirty items, and sometimes, the active item.
-        for entry in self.activation_history.iter() {
+        for entry in &self.activation_history {
             if items_len < target_count {
                 break;
             }
@@ -2877,10 +2874,7 @@ impl Pane {
         cx: &mut Context<Pane>,
     ) -> impl IntoElement + use<> {
         let is_active = ix == self.active_item_index;
-        let is_preview = self
-            .preview_item_id
-            .map(|id| id == item.item_id())
-            .unwrap_or(false);
+        let is_preview = self.preview_item_id.is_some_and(|id| id == item.item_id());
 
         let label = item.tab_content(
             TabContentParams {
@@ -5077,11 +5071,13 @@ fn dirty_message_for(buffer_path: Option<ProjectPath>, path_style: PathStyle, cx
             let path = p.path.display(path_style);
             if path.is_empty() { None } else { Some(path) }
         })
-        .map(|path| {
-            let path = truncate_and_remove_front(&path, 80);
-            MarkdownInlineCode(&path).to_string()
-        })
-        .unwrap_or(tr(cx, "workspace.pane.this_buffer", "This buffer"));
+        .map_or(
+            tr(cx, "workspace.pane.this_buffer", "This buffer"),
+            |path| {
+                let path = truncate_and_remove_front(&path, 80);
+                MarkdownInlineCode(&path).to_string()
+            },
+        );
     tr(
         cx,
         "workspace.pane.unsaved_edits",

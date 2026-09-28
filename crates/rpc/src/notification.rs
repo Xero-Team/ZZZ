@@ -58,7 +58,7 @@ impl Notification {
     pub fn from_proto(notification: &proto::Notification) -> Option<Self> {
         let mut value = serde_json::from_str::<Value>(&notification.content).ok()?;
         let object = value.as_object_mut()?;
-        object.insert(KIND.into(), notification.kind.to_string().into());
+        object.insert(KIND.into(), notification.kind.clone().into());
         if let Some(entity_id) = notification.entity_id {
             object.insert(ENTITY_ID.into(), entity_id.into());
         }

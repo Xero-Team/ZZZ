@@ -1291,14 +1291,14 @@ impl PickerDelegate for WorktreePickerDelegate {
                 from_branch,
                 disabled_reason,
             } => {
-                let branch_label = from_branch
-                    .as_ref()
-                    .map(RemoteBranchName::display_name)
-                    .unwrap_or_else(|| {
+                let branch_label = from_branch.as_ref().map_or_else(
+                    || {
                         self.current_branch_name
                             .clone()
                             .unwrap_or_else(|| "HEAD".to_owned())
-                    });
+                    },
+                    RemoteBranchName::display_name,
+                );
                 let label = app_i18n::tr(
                     cx,
                     "git_ui.worktree_picker.create_named_worktree_based_on",

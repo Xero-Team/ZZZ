@@ -45,8 +45,7 @@ impl Rope {
         }
         let (start, _, item) = self.chunks.find::<usize, _>((), &offset, Bias::Left);
         let chunk_offset = offset - start;
-        item.map(|chunk| chunk.is_char_boundary(chunk_offset))
-            .unwrap_or(false)
+        item.is_some_and(|chunk| chunk.is_char_boundary(chunk_offset))
     }
 
     #[track_caller]
@@ -1887,8 +1886,7 @@ mod tests {
     #[gpui::test(iterations = 100)]
     fn test_random_rope(mut rng: StdRng) {
         let operations = env::var("OPERATIONS")
-            .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-            .unwrap_or(10);
+            .map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
         let mut expected = String::new();
         let mut actual = Rope::new();

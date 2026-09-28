@@ -10,9 +10,7 @@ use crate::{
 use anyhow::{anyhow, bail};
 use futures::{Stream, StreamExt, channel::oneshot};
 
-use std::{
-    cell::RefCell, future::Future, ops::Deref, path::PathBuf, rc::Rc, sync::Arc, time::Duration,
-};
+use std::{cell::RefCell, future::Future, path::PathBuf, rc::Rc, sync::Arc, time::Duration};
 
 /// A TestAppContext is provided to tests created with `#[gpui::test]`, it provides
 /// an implementation of `Context` with additional methods that are useful in tests.
@@ -276,7 +274,7 @@ impl TestAppContext {
             )
             .unwrap();
         drop(cx);
-        let cx = VisualTestContext::from_window(*window.deref(), self).into_mut();
+        let cx = VisualTestContext::from_window(*window, self).into_mut();
         cx.run_until_parked();
         cx
     }
@@ -305,7 +303,7 @@ impl TestAppContext {
             .unwrap();
         drop(cx);
         let view = window.root(self).unwrap();
-        let cx = VisualTestContext::from_window(*window.deref(), self).into_mut();
+        let cx = VisualTestContext::from_window(*window, self).into_mut();
         cx.run_until_parked();
 
         // it might be nice to try and cleanup these at the end of each test.

@@ -610,7 +610,15 @@ impl Vim {
                 .iter()
                 .any(|selection| !selection.is_empty());
 
-            if !has_selection {
+            if has_selection {
+                // Yank the selection(s)
+                vim.yank_selections_content(
+                    editor,
+                    crate::motion::MotionKind::Exclusive,
+                    window,
+                    cx,
+                );
+            } else {
                 // If no selection, expand to current character (like 'v' does)
                 editor.change_selections(Default::default(), window, cx, |s| {
                     s.move_with(&mut |map, selection| {
@@ -631,14 +639,6 @@ impl Vim {
                         selection.collapse_to(selection.start, SelectionGoal::None);
                     });
                 });
-            } else {
-                // Yank the selection(s)
-                vim.yank_selections_content(
-                    editor,
-                    crate::motion::MotionKind::Exclusive,
-                    window,
-                    cx,
-                );
             }
         });
 
@@ -1211,8 +1211,7 @@ impl Vim {
             // Get the primary cursor position for alternating forward/backward labeling
             let cursor_offset = selections
                 .first()
-                .map(|s| buffer_snapshot.point_to_offset(s.head()))
-                .unwrap_or(start_offset);
+                .map_or(start_offset, |s| buffer_snapshot.point_to_offset(s.head()));
 
             let style = editor.style(cx);
             let font = style.text.font();
@@ -1546,10 +1545,10 @@ impl Vim {
     ) -> bool {
         let font_id = text_system.resolve_font(font);
         let width_of_char = |ch| {
-            text_system
-                .advance(font_id, font_size, ch)
-                .map(|size| size.width)
-                .unwrap_or_else(|_| text_system.layout_width(font_id, font_size, ch))
+            text_system.advance(font_id, font_size, ch).map_or_else(
+                |_| text_system.layout_width(font_id, font_size, ch),
+                |size| size.width,
+            )
         };
 
         let a = width_of_char('i');
@@ -1712,7 +1711,7 @@ impl Vim {
         let preserve_full_scale = hit_line_break_after_word && next_non_ws.is_none()
             || matches!(
                 buffer.chars_at(candidate.word_end).next(),
-                None | Some('\n') | Some('\r')
+                None | Some('\n' | '\r')
             );
 
         if ws_count > 0 {
@@ -2032,8 +2031,9 @@ mod test {
             let skip_data = Vim::selection_skip_offsets(buffer_snapshot, &selections, false);
             let cursor_offset = selections
                 .first()
-                .map(|selection| buffer_snapshot.point_to_offset(selection.head()))
-                .unwrap_or(MultiBufferOffset(0));
+                .map_or(MultiBufferOffset(0), |selection| {
+                    buffer_snapshot.point_to_offset(selection.head())
+                });
             let style = editor.style(cx);
             let font = style.text.font();
             let font_size = style.text.font_size.to_pixels(window.rem_size());
@@ -4072,8 +4072,9 @@ mod test {
             let skip_data = Vim::selection_skip_offsets(buffer_snapshot, &selections, false);
             let cursor_offset = selections
                 .first()
-                .map(|selection| buffer_snapshot.point_to_offset(selection.head()))
-                .unwrap_or(MultiBufferOffset(0));
+                .map_or(MultiBufferOffset(0), |selection| {
+                    buffer_snapshot.point_to_offset(selection.head())
+                });
             let style = editor.style(cx);
             let font = style.text.font();
             let font_size = style.text.font_size.to_pixels(window.rem_size());

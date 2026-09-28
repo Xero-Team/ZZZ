@@ -460,11 +460,8 @@ impl TabSwitcherDelegate {
             let candidates = all_items
                 .iter()
                 .enumerate()
-                .flat_map(|(ix, tab_match)| {
-                    Some(StringMatchCandidate::new(
-                        ix,
-                        &tab_match.item.tab_content_text(0, cx),
-                    ))
+                .map(|(ix, tab_match)| {
+                    StringMatchCandidate::new(ix, &tab_match.item.tab_content_text(0, cx))
                 })
                 .collect::<Vec<_>>();
             fuzzy_nucleo::match_strings(
@@ -813,7 +810,7 @@ impl PickerDelegate for TabSwitcherDelegate {
         };
 
         self.restored_items = true;
-        for (pane, index) in self.original_items.iter() {
+        for (pane, index) in &self.original_items {
             pane.update(cx, |this, cx| {
                 this.activate_item(*index, false, false, window, cx);
             })
@@ -835,7 +832,7 @@ impl PickerDelegate for TabSwitcherDelegate {
 
     fn dismissed(&mut self, window: &mut Window, cx: &mut Context<Picker<TabSwitcherDelegate>>) {
         if !self.restored_items {
-            for (pane, index) in self.original_items.iter() {
+            for (pane, index) in &self.original_items {
                 pane.update(cx, |this, cx| {
                     this.activate_item(*index, false, false, window, cx);
                 })

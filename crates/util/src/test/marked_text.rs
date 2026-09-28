@@ -214,14 +214,11 @@ pub fn generate_marked_text(
                 }
             }
         } else {
-            match range.start.cmp(&range.end) {
-                Ordering::Equal => {
-                    marked_text.insert(range.start, 'ˇ');
-                }
-                _ => {
-                    marked_text.insert(range.end, '»');
-                    marked_text.insert(range.start, '«');
-                }
+            if range.start.cmp(&range.end) == Ordering::Equal {
+                marked_text.insert(range.start, 'ˇ');
+            } else {
+                marked_text.insert(range.end, '»');
+                marked_text.insert(range.start, '«');
             }
         }
     }

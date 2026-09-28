@@ -1159,7 +1159,7 @@ impl<'a> SyntaxMapCaptures<'a> {
             // TODO - add a Tree-sitter API to remove the need for this.
             let cursor = unsafe {
                 std::mem::transmute::<&mut tree_sitter::QueryCursor, &'static mut QueryCursor>(
-                    query_cursor.deref_mut(),
+                    &mut *query_cursor,
                 )
             };
 
@@ -1290,7 +1290,7 @@ impl<'a> SyntaxMapMatches<'a> {
             // TODO - add a Tree-sitter API to remove the need for this.
             let cursor = unsafe {
                 std::mem::transmute::<&mut tree_sitter::QueryCursor, &'static mut QueryCursor>(
-                    query_cursor.deref_mut(),
+                    &mut *query_cursor,
                 )
             };
             cursor.set_max_start_depth(options.max_start_depth);
@@ -1577,9 +1577,12 @@ fn parse_text(
                     *parse_budget = parse_budget.saturating_sub(now.elapsed());
                 }
             })
-            .ok_or_else(|| match timed_out {
-                true => anyhow::anyhow!(ParseTimeout),
-                false => anyhow::anyhow!("parsing failed"),
+            .ok_or_else(|| {
+                if timed_out {
+                    anyhow::anyhow!(ParseTimeout)
+                } else {
+                    anyhow::anyhow!("parsing failed")
+                }
             })
     })
 }

@@ -298,19 +298,17 @@ pub struct TerminalError {
 
 impl TerminalError {
     pub fn fmt_directory(&self) -> String {
-        self.directory
-            .clone()
-            .map(|path| {
-                match path
-                    .into_os_string()
-                    .into_string()
-                    .map_err(|os_str| format!("<non-utf8 path> {}", os_str.to_string_lossy()))
-                {
-                    Ok(s) => s,
-                    Err(s) => s,
-                }
-            })
-            .unwrap_or_else(|| "<none specified>".to_owned())
+        self.directory.clone().map_or_else(
+            || "<none specified>".to_owned(),
+            |path| match path
+                .into_os_string()
+                .into_string()
+                .map_err(|os_str| format!("<non-utf8 path> {}", os_str.to_string_lossy()))
+            {
+                Ok(s) => s,
+                Err(s) => s,
+            },
+        )
     }
 
     pub fn fmt_shell(&self) -> String {
@@ -736,10 +734,10 @@ impl TerminalBuilder {
             })
         };
         // the thread we spawn things on has an effect on signal handling
-        if !cfg!(target_os = "windows") {
-            cx.spawn(async move |_| fut.await)
-        } else {
+        if cfg!(target_os = "windows") {
             cx.background_spawn(fut)
+        } else {
+            cx.spawn(async move |_| fut.await)
         }
     }
 
@@ -1276,19 +1274,16 @@ impl Terminal {
                 )
                 .grid_clamp(term, Boundary::Grid);
 
-                match terminal_hyperlinks::find_from_grid_point(
+                if let Some(hyperlink) = terminal_hyperlinks::find_from_grid_point(
                     term,
                     point,
                     &mut self.hyperlink_regex_searches,
                     self.path_style,
                 ) {
-                    Some(hyperlink) => {
-                        self.process_hyperlink(hyperlink, *open, cx);
-                    }
-                    None => {
-                        self.last_content.last_hovered_word = None;
-                        cx.emit(Event::NewNavigationTarget(None));
-                    }
+                    self.process_hyperlink(hyperlink, *open, cx);
+                } else {
+                    self.last_content.last_hovered_word = None;
+                    cx.emit(Event::NewNavigationTarget(None));
                 }
             }
             InternalEvent::ProcessHyperlink(hyperlink, open) => {
@@ -1974,10 +1969,10 @@ impl Terminal {
 
     fn process_line(&self, line: String) -> Option<String> {
         let trimmed = line.trim_end().to_owned();
-        if !trimmed.is_empty() {
-            Some(trimmed)
-        } else {
+        if trimmed.is_empty() {
             None
+        } else {
+            Some(trimmed)
         }
     }
 
@@ -1994,19 +1989,16 @@ impl Terminal {
     }
 
     pub fn mouse_changed(&mut self, point: AlacPoint, side: AlacDirection) -> bool {
-        match self.last_mouse {
-            Some((old_point, old_side)) => {
-                if old_point == point && old_side == side {
-                    false
-                } else {
-                    self.last_mouse = Some((point, side));
-                    true
-                }
-            }
-            None => {
+        if let Some((old_point, old_side)) = self.last_mouse {
+            if old_point == point && old_side == side {
+                false
+            } else {
                 self.last_mouse = Some((point, side));
                 true
             }
+        } else {
+            self.last_mouse = Some((point, side));
+            true
         }
     }
 
@@ -2103,11 +2095,10 @@ impl Terminal {
                     self.last_content.display_offset,
                 );
 
-                if !hyperlink_range.contains(&point) {
-                    self.mouse_down_hyperlink = None;
-                } else {
+                if hyperlink_range.contains(&point) {
                     return;
                 }
+                self.mouse_down_hyperlink = None;
             }
 
             self.selection_phase = SelectionPhase::Selecting;
@@ -2415,14 +2406,11 @@ impl Terminal {
             }
             None => self
                 .title_override
-                .as_ref()
-                .map(|title_override| title_override.to_string())
+                .clone()
                 .unwrap_or_else(|| match &self.terminal_type {
-                    TerminalType::Pty { info, .. } => info
-                        .current
-                        .read()
-                        .as_ref()
-                        .map(|fpi| {
+                    TerminalType::Pty { info, .. } => info.current.read().as_ref().map_or_else(
+                        || "Terminal".to_owned(),
+                        |fpi| {
                             let process_file = fpi
                                 .cwd
                                 .file_name()
@@ -2433,10 +2421,10 @@ impl Terminal {
                             let process_name = format!(
                                 "{}{}",
                                 fpi.name,
-                                if !argv.is_empty() {
-                                    format!(" {}", (argv[1..]).join(" "))
+                                if argv.is_empty() {
+                                    String::new()
                                 } else {
-                                    "".to_owned()
+                                    format!(" {}", (argv[1..]).join(" "))
                                 }
                             );
                             let (process_file, process_name) = if truncate {
@@ -2448,8 +2436,8 @@ impl Terminal {
                                 (process_file, process_name)
                             };
                             format!("{process_file} — {process_name}")
-                        })
-                        .unwrap_or_else(|| "Terminal".to_owned()),
+                        },
+                    ),
                     TerminalType::DisplayOnly => "Terminal".to_owned(),
                 }),
         }

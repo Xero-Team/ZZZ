@@ -279,7 +279,7 @@ fn run_example() {
 
         cx.open_window(window_options, |_, cx| {
             cx.new(|ctx| ImageGallery {
-                image_key: "".into(),
+                image_key: String::new(),
                 items_count: IMAGES_IN_GALLERY,
                 total_count: 0,
                 image_cache: RetainAllImageCache::new(ctx),

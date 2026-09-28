@@ -230,7 +230,7 @@ impl AgentServer for CustomAgentServer {
         if is_registry_agent {
             match agent_id.as_ref() {
                 CLAUDE_AGENT_ID => {
-                    extra_env.insert("ANTHROPIC_API_KEY".into(), "".into());
+                    extra_env.insert("ANTHROPIC_API_KEY".into(), String::new());
                 }
                 CODEX_ID => {
                     if let Ok(api_key) = std::env::var("CODEX_API_KEY") {
@@ -305,8 +305,7 @@ fn api_key_for_gemini_cli(cx: &mut App) -> Task<Result<String>> {
 fn is_registry_agent(agent_id: impl Into<AgentId>, cx: &App) -> bool {
     let agent_id = agent_id.into();
     let is_in_registry = project::AgentRegistryStore::try_global(cx)
-        .map(|store| store.read(cx).agent(&agent_id).is_some())
-        .unwrap_or(false);
+        .is_some_and(|store| store.read(cx).agent(&agent_id).is_some());
     let is_settings_registry = cx.read_global(|settings: &SettingsStore, _| {
         settings
             .get::<AllAgentServersSettings>(None)

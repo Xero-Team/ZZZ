@@ -893,8 +893,7 @@ mod tests {
     fn test_random_diffs() {
         random_test(|mut rng| {
             let old_text_len = env::var("OLD_TEXT_LEN")
-                .map(|i| i.parse().expect("invalid `OLD_TEXT_LEN` variable"))
-                .unwrap_or(10);
+                .map_or(10, |i| i.parse().expect("invalid `OLD_TEXT_LEN` variable"));
 
             let old = random_text(&mut rng, old_text_len);
             println!("old text: {:?}", old);
@@ -952,12 +951,9 @@ mod tests {
         F: FnMut(StdRng),
     {
         let iterations = env::var("ITERATIONS")
-            .map(|i| i.parse().expect("invalid `ITERATIONS` variable"))
-            .unwrap_or(100);
+            .map_or(100, |i| i.parse().expect("invalid `ITERATIONS` variable"));
 
-        let seed: u64 = env::var("SEED")
-            .map(|s| s.parse().expect("invalid `SEED` variable"))
-            .unwrap_or(0);
+        let seed: u64 = env::var("SEED").map_or(0, |s| s.parse().expect("invalid `SEED` variable"));
 
         println!(
             "Running test with {} iterations and seed {}",

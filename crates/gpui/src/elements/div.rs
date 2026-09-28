@@ -2242,8 +2242,7 @@ impl Interactivity {
         let is_focused = self
             .tracked_focus_handle
             .as_ref()
-            .map(|handle| handle.is_focused(window))
-            .unwrap_or(false);
+            .is_some_and(|handle| handle.is_focused(window));
 
         // If this element can be focused, register a mouse down listener
         // that will automatically transfer focus when hitting the element.
@@ -2861,8 +2860,7 @@ impl Interactivity {
                         element_state
                             .hover_state
                             .as_ref()
-                            .map(|state| state.borrow().group)
-                            .unwrap_or(false)
+                            .is_some_and(|state| state.borrow().group)
                     } else {
                         false
                     };
@@ -2879,8 +2877,7 @@ impl Interactivity {
                     element_state
                         .hover_state
                         .as_ref()
-                        .map(|state| state.borrow().element)
-                        .unwrap_or(false)
+                        .is_some_and(|state| state.borrow().element)
                 } else {
                     false
                 };

@@ -386,8 +386,7 @@ impl CommandPaletteDelegate {
         let action_ix = self
             .matches
             .get(self.selected_ix)
-            .map(|m| m.candidate_id)
-            .unwrap_or(self.selected_ix);
+            .map_or(self.selected_ix, |m| m.candidate_id);
         // this gets called in headless tests where there are no commands loaded
         // so we need to return an Option here
         self.commands.get(action_ix)
@@ -576,18 +575,15 @@ impl PickerDelegate for CommandPaletteDelegate {
             return true;
         };
 
-        match cx
+        if let Ok(Some((commands, matches, interceptor_result))) = cx
             .foreground_executor()
             .block_with_timeout(duration, rx.clone().recv())
         {
-            Ok(Some((commands, matches, interceptor_result))) => {
-                self.matches_updated(query, commands, matches, interceptor_result, cx);
-                true
-            }
-            _ => {
-                self.updating_matches = Some((task, rx));
-                false
-            }
+            self.matches_updated(query, commands, matches, interceptor_result, cx);
+            true
+        } else {
+            self.updating_matches = Some((task, rx));
+            false
         }
     }
 

@@ -70,19 +70,17 @@ impl Editor {
 
         let state = &mut self.active_indent_guides_state;
 
-        if state
-            .active_indent_range
-            .as_ref()
-            .map(|active_indent_range| {
+        if state.active_indent_range.as_ref().map_or(
+            state.cursor_row != cursor_row,
+            |active_indent_range| {
                 should_recalculate_indented_range(
                     state.cursor_row,
                     cursor_row,
                     active_indent_range,
                     snapshot,
                 )
-            })
-            .unwrap_or(state.cursor_row != cursor_row)
-        {
+            },
+        ) {
             state.dirty = true;
         } else {
             state.cursor_row = cursor_row;

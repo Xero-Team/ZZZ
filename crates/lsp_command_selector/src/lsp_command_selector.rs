@@ -492,7 +492,6 @@ mod tests {
     use project::{Project, ProjectPath};
     use serde_json::json;
     use std::{
-        ops::Deref,
         path::PathBuf,
         sync::{Arc, Mutex},
     };
@@ -1086,7 +1085,7 @@ mod tests {
         let window =
             cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
         let multi_workspace = window.root(cx).expect("window should have a root");
-        let mut cx = VisualTestContext::from_window(*window.deref(), cx);
+        let mut cx = VisualTestContext::from_window(*window, cx);
         let cx = &mut cx;
         let workspace =
             multi_workspace.read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone());

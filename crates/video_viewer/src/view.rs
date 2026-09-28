@@ -423,12 +423,10 @@ impl VideoView {
     }
 
     pub(crate) fn file_name(&self, cx: &App) -> String {
-        self.video_item
-            .read(cx)
-            .path
-            .file_name()
-            .map(|name| name.to_owned())
-            .unwrap_or_else(|| tr(cx, "video_viewer.file_name.fallback", "Video"))
+        self.video_item.read(cx).path.file_name().map_or_else(
+            || tr(cx, "video_viewer.file_name.fallback", "Video"),
+            |name| name.to_owned(),
+        )
     }
 
     pub(crate) fn abs_path(&self, cx: &App) -> Option<PathBuf> {
@@ -577,8 +575,7 @@ impl VideoView {
         let generation = self.generation;
         let frame_interval = self
             .loaded()
-            .map(|loaded| loaded.frame_interval)
-            .unwrap_or(Duration::from_millis(33));
+            .map_or(Duration::from_millis(33), |loaded| loaded.frame_interval);
         let tick = frame_interval.clamp(MIN_TICK, MAX_TICK);
 
         self._pump_task = Some(cx.spawn(async move |this, cx| {
@@ -845,8 +842,7 @@ impl VideoView {
         }
         let interval = self
             .loaded()
-            .map(|loaded| loaded.frame_interval)
-            .unwrap_or(Duration::from_millis(33));
+            .map_or(Duration::from_millis(33), |loaded| loaded.frame_interval);
         let target = if direction >= 0 {
             self.position.saturating_add(interval)
         } else {

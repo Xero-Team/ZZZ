@@ -335,10 +335,7 @@ impl ConfigOptionSelector {
             .config_options()
             .into_iter()
             .find(|opt| opt.id == config_id);
-        let option_count = current_option
-            .as_ref()
-            .map(count_config_options)
-            .unwrap_or(0);
+        let option_count = current_option.as_ref().map_or(0, count_config_options);
         let is_select = current_option
             .as_ref()
             .is_some_and(|option| matches!(&option.kind, acp::SessionConfigKind::Select(_)));

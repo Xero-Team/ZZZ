@@ -923,9 +923,9 @@ impl TextLayout {
     pub fn wrapped_text(&self) -> String {
         let mut accumulator = String::new();
 
-        for wrapped in self.0.borrow().as_ref().unwrap().lines.iter() {
+        for wrapped in &self.0.borrow().as_ref().unwrap().lines {
             let mut seen = 0;
-            for boundary in wrapped.layout.wrap_boundaries.iter() {
+            for boundary in &wrapped.layout.wrap_boundaries {
                 let index = wrapped.layout.unwrapped_layout.runs[boundary.run_ix].glyphs
                     [boundary.glyph_ix]
                     .index;

@@ -424,7 +424,7 @@ impl WaylandWindowState {
     pub fn primary_output_scale(&mut self) -> i32 {
         let mut scale = 1;
         let mut current_output = self.display.take();
-        for (id, output) in self.outputs.iter() {
+        for (id, output) in &self.outputs {
             if let Some((_, output_data)) = &current_output {
                 if output.scale > output_data.scale {
                     current_output = Some((id.clone(), output.clone()));
@@ -615,8 +615,7 @@ impl WaylandWindowStatePtr {
         let ime_enabled = state
             .input_handler
             .as_mut()
-            .map(|input_handler| input_handler.query_accepts_text_input())
-            .unwrap_or(false);
+            .is_some_and(|input_handler| input_handler.query_accepts_text_input());
         drop(state);
 
         if Some(ime_enabled) == client.ime_enabled() {
@@ -1342,10 +1341,10 @@ impl PlatformWindow for WaylandWindow {
     fn zoom(&self) {
         let state = self.borrow();
         if let Some(toplevel) = state.surface_state.toplevel() {
-            if !state.maximized {
-                toplevel.set_maximized();
-            } else {
+            if state.maximized {
                 toplevel.unset_maximized();
+            } else {
+                toplevel.set_maximized();
             }
         }
     }
@@ -1353,10 +1352,10 @@ impl PlatformWindow for WaylandWindow {
     fn toggle_fullscreen(&self) {
         let state = self.borrow();
         if let Some(toplevel) = state.surface_state.toplevel() {
-            if !state.fullscreen {
-                toplevel.set_fullscreen(None);
-            } else {
+            if state.fullscreen {
                 toplevel.unset_fullscreen();
+            } else {
+                toplevel.set_fullscreen(None);
             }
         }
     }
@@ -1533,21 +1532,18 @@ impl PlatformWindow for WaylandWindow {
 
     fn request_decorations(&self, decorations: WindowDecorations) {
         let mut state = self.borrow_mut();
-        match state.surface_state.decoration().as_ref() {
-            Some(decoration) => {
-                decoration.set_mode(decorations.to_xdg());
-                state.decorations = decorations;
-                update_window(state);
+        if let Some(decoration) = state.surface_state.decoration().as_ref() {
+            decoration.set_mode(decorations.to_xdg());
+            state.decorations = decorations;
+            update_window(state);
+        } else {
+            if matches!(decorations, WindowDecorations::Server) {
+                log::info!(
+                    "Server-side decorations requested, but the Wayland server does not support them. Falling back to client-side decorations."
+                );
             }
-            None => {
-                if matches!(decorations, WindowDecorations::Server) {
-                    log::info!(
-                        "Server-side decorations requested, but the Wayland server does not support them. Falling back to client-side decorations."
-                    );
-                }
-                state.decorations = WindowDecorations::Client;
-                update_window(state);
-            }
+            state.decorations = WindowDecorations::Client;
+            update_window(state);
         }
     }
 

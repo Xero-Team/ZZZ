@@ -39,7 +39,7 @@ impl Diff {
                 buffer.update(cx, |buffer, _| buffer.parsing_idle()).await;
 
                 let diff = build_buffer_diff(
-                    old_text.unwrap_or("".into()).into(),
+                    old_text.unwrap_or(String::new()).into(),
                     &buffer,
                     Some(language_registry.clone()),
                     cx,
@@ -276,8 +276,9 @@ impl PendingDiff {
 
         let path = new_buffer
             .file()
-            .map(|file| file.path().display(file.path_style(cx)))
-            .unwrap_or("untitled".into())
+            .map_or("untitled".into(), |file| {
+                file.path().display(file.path_style(cx))
+            })
             .into();
         let replica_id = new_buffer.replica_id();
 

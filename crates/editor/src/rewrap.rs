@@ -295,23 +295,23 @@ impl Editor {
                         }),
                     ) = &comment_prefix
                     {
-                        let line_trimmed = line_trimmed
-                            .strip_prefix(start.as_ref())
-                            .map(|s| {
-                                let mut indent_size = indent_size;
-                                indent_size.len -= tab_size;
-                                let indent_prefix: String = indent_size.chars().collect();
-                                first_line_delimiter = Some((indent_prefix, start));
-                                s.trim_start()
-                            })
-                            .unwrap_or(line_trimmed);
-                        let line_trimmed = line_trimmed
-                            .strip_suffix(end.as_ref())
-                            .map(|s| {
-                                last_line_delimiter = Some(end);
-                                s.trim_end()
-                            })
-                            .unwrap_or(line_trimmed);
+                        let line_trimmed =
+                            line_trimmed
+                                .strip_prefix(start.as_ref())
+                                .map_or(line_trimmed, |s| {
+                                    let mut indent_size = indent_size;
+                                    indent_size.len -= tab_size;
+                                    let indent_prefix: String = indent_size.chars().collect();
+                                    first_line_delimiter = Some((indent_prefix, start));
+                                    s.trim_start()
+                                });
+                        let line_trimmed =
+                            line_trimmed
+                                .strip_suffix(end.as_ref())
+                                .map_or(line_trimmed, |s| {
+                                    last_line_delimiter = Some(end);
+                                    s.trim_end()
+                                });
                         let line_trimmed = line_trimmed
                             .strip_prefix(prefix.as_ref())
                             .unwrap_or(line_trimmed);
@@ -755,8 +755,8 @@ mod tests {
         );
         assert_eq!(
             wrap_with_prefix(
-                "".to_string(),
-                "".to_string(),
+                String::new(),
+                String::new(),
                 "\thello world".to_string(),
                 8,
                 NonZeroU32::new(4).unwrap(),

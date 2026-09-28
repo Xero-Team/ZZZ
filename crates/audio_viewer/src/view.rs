@@ -341,12 +341,10 @@ impl AudioView {
     }
 
     pub(crate) fn file_name(&self, cx: &App) -> String {
-        self.audio_item
-            .read(cx)
-            .path
-            .file_name()
-            .map(|name| name.to_owned())
-            .unwrap_or_else(|| tr(cx, "audio_viewer.file_name.fallback", "Audio"))
+        self.audio_item.read(cx).path.file_name().map_or_else(
+            || tr(cx, "audio_viewer.file_name.fallback", "Audio"),
+            |name| name.to_owned(),
+        )
     }
 
     pub(crate) fn abs_path(&self, cx: &App) -> Option<PathBuf> {

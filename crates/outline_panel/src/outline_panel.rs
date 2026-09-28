@@ -259,7 +259,7 @@ impl SearchState {
                         }
                     }
 
-                    for (range, _) in highlight_ranges.iter_mut() {
+                    for (range, _) in &mut highlight_ranges {
                         range.start = range.start.saturating_sub(left_whitespaces_count);
                         range.end = range.end.saturating_sub(left_whitespaces_count);
                     }
@@ -528,7 +528,7 @@ impl SearchData {
                 .chars_at(extended_context_right_border)
                 .next()
                 .is_some_and(|c| !c.is_whitespace());
-        for range in search_match_indices.iter_mut() {
+        for range in &mut search_match_indices {
             range.start = range.start.saturating_sub(left_whitespaces_offset);
             range.end = range.end.saturating_sub(left_whitespaces_offset);
         }
@@ -785,7 +785,9 @@ impl OutlinePanel {
                         let old_expansion_depth = outline_panel_settings.expand_outlines_with_depth;
                         outline_panel_settings = *new_settings;
 
-                        if old_expansion_depth != new_settings.expand_outlines_with_depth {
+                        if old_expansion_depth == new_settings.expand_outlines_with_depth {
+                            cx.notify();
+                        } else {
                             let old_collapsed_entries = outline_panel.collapsed_entries.clone();
                             outline_panel
                                 .collapsed_entries
@@ -822,8 +824,6 @@ impl OutlinePanel {
                                     cx,
                                 );
                             }
-                        } else {
-                            cx.notify();
                         }
                     }
 
@@ -1413,19 +1413,20 @@ impl OutlinePanel {
     ) {
         self.select_entry(entry.clone(), true, window, cx);
         let is_root = match &entry {
-            PanelEntry::Fs(FsEntry::File(FsEntryFile {
-                worktree_id, entry, ..
-            }))
-            | PanelEntry::Fs(FsEntry::Directory(FsEntryDirectory {
-                worktree_id, entry, ..
-            })) => self
+            PanelEntry::Fs(
+                FsEntry::File(FsEntryFile {
+                    worktree_id, entry, ..
+                })
+                | FsEntry::Directory(FsEntryDirectory {
+                    worktree_id, entry, ..
+                }),
+            ) => self
                 .project
                 .read(cx)
                 .worktree_for_id(*worktree_id, cx)
-                .map(|worktree| {
+                .is_some_and(|worktree| {
                     worktree.read(cx).root_entry().map(|entry| entry.id) == Some(entry.id)
-                })
-                .unwrap_or(false),
+                }),
             PanelEntry::FoldedDirs(FoldedDirsEntry {
                 worktree_id,
                 entries,
@@ -2339,13 +2340,11 @@ impl OutlinePanel {
             .contains(&CollapsedEntry::Outline(outline.range.clone()));
 
         let icon = if has_children {
-            FileIcons::get_chevron_icon(is_expanded, cx)
-                .map(|icon_path| {
-                    Icon::from_path(icon_path)
-                        .color(entry_label_color(is_active))
-                        .into_any_element()
-                })
-                .unwrap_or_else(empty_icon)
+            FileIcons::get_chevron_icon(is_expanded, cx).map_or_else(empty_icon, |icon_path| {
+                Icon::from_path(icon_path)
+                    .color(entry_label_color(is_active))
+                    .into_any_element()
+            })
         } else {
             empty_icon()
         };
@@ -2528,14 +2527,10 @@ impl OutlinePanel {
             .map(Icon::from_path)
             .map(|icon| icon.color(color).into_any_element());
             (
-                ElementId::from(
-                    folded_dir
-                        .entries
-                        .last()
-                        .map(|entry| entry.id.to_proto())
-                        .unwrap_or_else(|| folded_dir.worktree_id.to_proto())
-                        as usize,
-                ),
+                ElementId::from(folded_dir.entries.last().map_or_else(
+                    || folded_dir.worktree_id.to_proto(),
+                    |entry| entry.id.to_proto(),
+                ) as usize),
                 HighlightedLabel::new(
                     name,
                     string_match
@@ -2729,19 +2724,16 @@ impl OutlinePanel {
         match self.project.read(cx).worktree_for_id(*worktree_id, cx) {
             Some(worktree) => {
                 let worktree = worktree.read(cx);
-                match worktree.snapshot().root_entry() {
-                    Some(root_entry) => {
-                        if root_entry.id == entry.id {
-                            file_name(worktree.abs_path().as_ref())
-                        } else {
-                            let path = worktree.absolutize(entry.path.as_ref());
-                            file_name(&path)
-                        }
-                    }
-                    None => {
+                if let Some(root_entry) = worktree.snapshot().root_entry() {
+                    if root_entry.id == entry.id {
+                        file_name(worktree.abs_path().as_ref())
+                    } else {
                         let path = worktree.absolutize(entry.path.as_ref());
                         file_name(&path)
                     }
+                } else {
+                    let path = worktree.absolutize(entry.path.as_ref());
+                    file_name(&path)
                 }
             }
             None => file_name(entry.path.as_std_path()),
@@ -3059,17 +3051,17 @@ impl OutlinePanel {
 
                                             if !children.may_be_fold_part()
                                                 || (children.dirs == 0
-                                                    && visited_dirs
-                                                        .last()
-                                                        .map(|(parent_dir_id, _)| {
+                                                    && visited_dirs.last().map_or(
+                                                        true,
+                                                        |(parent_dir_id, _)| {
                                                             new_unfolded_dirs
                                                                 .get(&directory.worktree_id)
                                                                 .is_none_or(|unfolded_dirs| {
                                                                     unfolded_dirs
                                                                         .contains(parent_dir_id)
                                                                 })
-                                                        })
-                                                        .unwrap_or(true))
+                                                        },
+                                                    ))
                                             {
                                                 new_unfolded_dirs
                                                     .entry(directory.worktree_id)
@@ -3320,7 +3312,7 @@ impl OutlinePanel {
             .get(&selection_anchor.buffer_id)
             .into_iter()
             .flat_map(|buffer| buffer.iter_outlines())
-            .flat_map(|outline| {
+            .filter_map(|outline| {
                 let range = multi_buffer_snapshot
                     .buffer_anchor_range_to_anchor_range(outline.range.clone())?;
                 Some((
@@ -3368,19 +3360,17 @@ impl OutlinePanel {
 
         let outline_item = matching_outline_indices
             .into_iter()
-            .flat_map(|i| Some((i, excerpt_outlines.get(i)?)))
+            .filter_map(|i| Some((i, excerpt_outlines.get(i)?)))
             .filter(|(i, _)| {
-                children
-                    .get(i)
-                    .map(|children| {
-                        children.iter().all(|child_index| {
-                            excerpt_outlines
-                                .get(*child_index)
-                                .map(|(child_range, _)| child_range.start > selection_display_point)
-                                .unwrap_or(false)
-                        })
+                children.get(i).map_or(true, |children| {
+                    children.iter().all(|child_index| {
+                        excerpt_outlines
+                            .get(*child_index)
+                            .is_some_and(|(child_range, _)| {
+                                child_range.start > selection_display_point
+                            })
                     })
-                    .unwrap_or(true)
+                })
             })
             .min_by_key(|(_, (outline_range, outline))| {
                 let distance_from_start = if outline_range.start > selection_display_point {
@@ -3542,7 +3532,7 @@ impl OutlinePanel {
     fn invalidate_outlines(&mut self, ids: &[BufferId]) {
         self.outline_fetch_tasks.clear();
         let mut ids = ids.iter().collect::<HashSet<_>>();
-        for (buffer_id, buffer) in self.buffers.iter_mut() {
+        for (buffer_id, buffer) in &mut self.buffers {
             if ids.remove(&buffer_id) {
                 buffer.invalidate_outlines();
             }
@@ -3817,8 +3807,8 @@ impl OutlinePanel {
                                 None => false,
                             };
                             let folded = folded || auto_fold;
-                            let (depth, parent_expanded, parent_folded) = match parent_dirs.last() {
-                                Some(parent) => {
+                            let (depth, parent_expanded, parent_folded) =
+                                if let Some(parent) = parent_dirs.last() {
                                     let parent_folded = parent.folded;
                                     let parent_expanded = parent.expanded;
                                     let new_depth = if parent_folded {
@@ -3833,8 +3823,7 @@ impl OutlinePanel {
                                         depth: new_depth,
                                     });
                                     (new_depth, parent_expanded, parent_folded)
-                                }
-                                None => {
+                                } else {
                                     parent_dirs.push(ParentStats {
                                         path: directory_entry.entry.path.clone(),
                                         folded,
@@ -3842,8 +3831,7 @@ impl OutlinePanel {
                                         depth: fs_depth,
                                     });
                                     (fs_depth, true, false)
-                                }
-                            };
+                                };
 
                             if let Some((folded_depth, mut folded_dirs)) = folded_dirs_entry.take()
                             {
@@ -4404,8 +4392,7 @@ impl OutlinePanel {
             for (i, &outline) in all_outlines.iter().enumerate() {
                 let has_children = all_outlines
                     .get(i + 1)
-                    .map(|next| next.depth > outline.depth)
-                    .unwrap_or(false);
+                    .is_some_and(|next| next.depth > outline.depth);
 
                 outline_has_children.insert((outline.range.clone(), outline.depth), has_children);
 
@@ -5136,7 +5123,7 @@ impl Render for OutlinePanel {
             _ => None,
         };
 
-        let search_query_text = search_query.map(|sq| sq.query.to_string());
+        let search_query_text = search_query.map(|sq| sq.query.clone());
 
         v_flex()
             .id("outline-panel")

@@ -660,9 +660,8 @@ async fn test_diagnostics_multiple_servers(cx: &mut TestAppContext) {
 async fn test_random_diagnostics_blocks(cx: &mut TestAppContext, mut rng: StdRng) {
     init_test(cx);
 
-    let operations = env::var("OPERATIONS")
-        .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-        .unwrap_or(10);
+    let operations =
+        env::var("OPERATIONS").map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
     let fs = FakeFs::new(cx.executor());
     fs.insert_tree(path!("/test"), json!({})).await;
@@ -835,9 +834,8 @@ async fn test_random_diagnostics_blocks(cx: &mut TestAppContext, mut rng: StdRng
 async fn test_random_diagnostics_with_inlays(cx: &mut TestAppContext, mut rng: StdRng) {
     init_test(cx);
 
-    let operations = env::var("OPERATIONS")
-        .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-        .unwrap_or(10);
+    let operations =
+        env::var("OPERATIONS").map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
     let fs = FakeFs::new(cx.executor());
     fs.insert_tree(path!("/test"), json!({})).await;

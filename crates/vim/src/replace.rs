@@ -284,7 +284,7 @@ impl Vim {
     pub fn paste_replace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let clipboard_text = cx.read_from_clipboard().and_then(|item| {
             item.entries().iter().find_map(|entry| match entry {
-                ClipboardEntry::String(text) => Some(text.text().to_string()),
+                ClipboardEntry::String(text) => Some(text.text().clone()),
                 _ => None,
             })
         });

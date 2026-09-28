@@ -558,19 +558,16 @@ impl PickerDelegate for FeaturePickerDelegate {
                 log::error!("Selected index not in range of matches");
                 return;
             };
-            current.toggle_state = match current.toggle_state {
-                ToggleState::Selected => {
-                    self.template_entry
-                        .features_selected
-                        .remove(&current.feature);
-                    ToggleState::Unselected
-                }
-                _ => {
-                    self.template_entry
-                        .features_selected
-                        .insert(current.feature.clone());
-                    ToggleState::Selected
-                }
+            current.toggle_state = if current.toggle_state == ToggleState::Selected {
+                self.template_entry
+                    .features_selected
+                    .remove(&current.feature);
+                ToggleState::Unselected
+            } else {
+                self.template_entry
+                    .features_selected
+                    .insert(current.feature.clone());
+                ToggleState::Selected
             };
         }
     }
@@ -1274,7 +1271,7 @@ impl StatefulModal for DevContainerModal {
                     description: first_option
                         .description
                         .clone()
-                        .unwrap_or_else(|| "".to_owned()),
+                        .unwrap_or_else(|| String::new()),
                     navigable_options: next_option_entries,
                 });
 
@@ -1316,7 +1313,7 @@ impl StatefulModal for DevContainerModal {
                     description: next_option
                         .description
                         .clone()
-                        .unwrap_or_else(|| "".to_owned()),
+                        .unwrap_or_else(|| String::new()),
                     navigable_options: next_option_entries,
                 });
 
@@ -1528,7 +1525,7 @@ struct DevContainerFeature {
 impl DevContainerFeature {
     fn major_version(&self) -> String {
         let Some(mv) = self.version.get(..1) else {
-            return "".to_owned();
+            return String::new();
         };
         mv.to_owned()
     }

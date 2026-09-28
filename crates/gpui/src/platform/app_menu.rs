@@ -343,8 +343,7 @@ pub(crate) fn init_app_menus(platform: &dyn Platform, cx: &App) {
         move |action| {
             cx.app
                 .upgrade()
-                .map(|app| app.borrow_mut().update(|cx| cx.is_action_available(action)))
-                .unwrap_or(false)
+                .is_some_and(|app| app.borrow_mut().update(|cx| cx.is_action_available(action)))
         }
     }));
 

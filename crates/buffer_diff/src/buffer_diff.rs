@@ -1236,7 +1236,13 @@ fn compare_hunks(
                         new_cursor.next();
                     }
                     Ordering::Equal => {
-                        if new_hunk != old_hunk {
+                        if new_hunk == old_hunk {
+                            if !has_changes {
+                                last_unchanged_new_hunk_end = Some(new_hunk.buffer_range.end);
+                            } else if extended_end_candidate.is_none() {
+                                extended_end_candidate = Some(new_hunk.buffer_range.start);
+                            }
+                        } else {
                             has_changes = true;
                             extended_end_candidate = None;
                             start.get_or_insert(new_hunk.buffer_range.start);
@@ -1263,12 +1269,6 @@ fn compare_hunks(
                                 *old_hunk_diff_base_range_end
                                     .max(&new_hunk_diff_base_range_end, new_base_text),
                             );
-                        } else {
-                            if !has_changes {
-                                last_unchanged_new_hunk_end = Some(new_hunk.buffer_range.end);
-                            } else if extended_end_candidate.is_none() {
-                                extended_end_candidate = Some(new_hunk.buffer_range.start);
-                            }
                         }
 
                         new_cursor.next();
@@ -3217,8 +3217,7 @@ mod tests {
         }
 
         let operations = std::env::var("OPERATIONS")
-            .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-            .unwrap_or(10);
+            .map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
         let rng = &mut rng;
         let head_text = ('a'..='z').fold(String::new(), |mut s, c| {

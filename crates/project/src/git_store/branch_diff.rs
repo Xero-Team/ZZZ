@@ -237,11 +237,13 @@ impl BranchDiff {
             // but *does* exist in work-tree
             // and *does* exist in merge-base
             (
-                Some(FileStatus::Untracked)
-                | Some(FileStatus::Tracked(TrackedStatus {
-                    index_status: StatusCode::Added,
-                    worktree_status: _,
-                })),
+                Some(
+                    FileStatus::Untracked
+                    | FileStatus::Tracked(TrackedStatus {
+                        index_status: StatusCode::Added,
+                        worktree_status: _,
+                    }),
+                ),
                 Some(_),
             ) => Some(FileStatus::Tracked(TrackedStatus {
                 index_status: StatusCode::Modified,
@@ -375,7 +377,7 @@ impl BranchDiff {
                 return;
             };
 
-            for (path, branch_diff) in tree_diff.entries.iter() {
+            for (path, branch_diff) in &tree_diff.entries {
                 if seen.contains(&path) {
                     continue;
                 }

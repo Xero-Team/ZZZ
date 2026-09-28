@@ -76,10 +76,10 @@ impl Vim {
                         Point::new(row, snapshot.line_len(multi_buffer::MultiBufferRow(row)))
                     };
 
-                    let find_result = if !selection.is_empty() {
-                        find_target(&snapshot, start, end, true)
-                    } else {
+                    let find_result = if selection.is_empty() {
                         find_target(&snapshot, start, end, false)
+                    } else {
+                        find_target(&snapshot, start, end, true)
                     };
 
                     if let Some((range, target, radix)) = find_result {
@@ -106,7 +106,7 @@ impl Vim {
                 let snapshot = editor.buffer().read(cx).snapshot(cx);
                 editor.change_selections(Default::default(), window, cx, |s| {
                     let mut new_ranges = Vec::new();
-                    for (visual, anchor) in new_anchors.iter() {
+                    for (visual, anchor) in &new_anchors {
                         let mut point = anchor.to_point(&snapshot);
                         if !*visual && point.column > 0 {
                             point.column -= 1;

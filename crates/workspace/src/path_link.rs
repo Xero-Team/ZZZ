@@ -336,9 +336,10 @@ fn possible_open_target_internal(
         }
     }
 
-    let enable_background_fs_checks = background_fs_checks
-        .map(|background_fs_checks| background_fs_checks == BackgroundFsChecks::Enabled)
-        .unwrap_or_else(|| workspace.read(cx).project().read(cx).is_local());
+    let enable_background_fs_checks = background_fs_checks.map_or_else(
+        || workspace.read(cx).project().read(cx).is_local(),
+        |background_fs_checks| background_fs_checks == BackgroundFsChecks::Enabled,
+    );
 
     if open_target.is_some() {
         if !enable_background_fs_checks || is_cwd_in_worktree {
@@ -417,11 +418,9 @@ fn possible_open_target_internal(
             if let Some(fs_path_to_check) = fs.canonicalize(&path_to_check.path).await.ok()
                 && let Some(metadata) = fs.metadata(&fs_path_to_check).await.ok().flatten()
             {
-                if open_target
-                    .as_ref()
-                    .map(|open_target| open_target.path().path != fs_path_to_check)
-                    .unwrap_or(true)
-                {
+                if open_target.as_ref().map_or(true, |open_target| {
+                    open_target.path().path != fs_path_to_check
+                }) {
                     path_to_check.path = fs_path_to_check;
                     return Some(OpenTarget::File(path_to_check, metadata));
                 }

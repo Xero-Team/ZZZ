@@ -625,15 +625,12 @@ fn maybe_propagate_worktree_trust(
             return;
         };
 
-        let source_is_trusted = source_workspace
-            .upgrade()
-            .map(|workspace| {
-                let source_worktree_store = workspace.read(cx).project().read(cx).worktree_store();
-                !trusted_store
-                    .read(cx)
-                    .has_restricted_worktrees(&source_worktree_store, cx)
-            })
-            .unwrap_or(false);
+        let source_is_trusted = source_workspace.upgrade().is_some_and(|workspace| {
+            let source_worktree_store = workspace.read(cx).project().read(cx).worktree_store();
+            !trusted_store
+                .read(cx)
+                .has_restricted_worktrees(&source_worktree_store, cx)
+        });
 
         if !source_is_trusted {
             return;

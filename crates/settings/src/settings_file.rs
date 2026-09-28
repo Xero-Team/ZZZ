@@ -223,7 +223,7 @@ pub fn watch_config_dir(
                                     return;
                                 }
                             }
-                            Some(PathEventKind::Created) | Some(PathEventKind::Changed) => {
+                            Some(PathEventKind::Created | PathEventKind::Changed) => {
                                 if let Ok(contents) = fs.load(&event.path).await
                                     && tx.unbounded_send(contents).is_err()
                                 {

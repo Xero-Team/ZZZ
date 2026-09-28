@@ -654,10 +654,12 @@ impl WorktreeStore {
                             }
                         })
                         .await?
-                        .map(CreatedEntry::Included)
-                        .unwrap_or_else(|| CreatedEntry::Excluded {
-                            abs_path: abs_new_path,
-                        }))
+                        .map_or_else(
+                            || CreatedEntry::Excluded {
+                                abs_path: abs_new_path,
+                            },
+                            CreatedEntry::Included,
+                        ))
                 })
             }
             WorktreeStoreState::Remote {
@@ -673,8 +675,8 @@ impl WorktreeStore {
                 });
                 cx.spawn(async move |_, cx| {
                     let response = response.await?;
-                    match response.entry {
-                        Some(entry) => new_worktree
+                    if let Some(entry) = response.entry {
+                        new_worktree
                             .update(cx, |worktree, cx| {
                                 worktree.as_remote_mut().unwrap().insert_entry(
                                     entry,
@@ -683,13 +685,12 @@ impl WorktreeStore {
                                 )
                             })
                             .await
-                            .map(CreatedEntry::Included),
-                        None => {
-                            let abs_path = new_worktree.read_with(cx, |worktree, _| {
-                                worktree.absolutize(&new_project_path.path)
-                            });
-                            Ok(CreatedEntry::Excluded { abs_path })
-                        }
+                            .map(CreatedEntry::Included)
+                    } else {
+                        let abs_path = new_worktree.read_with(cx, |worktree, _| {
+                            worktree.absolutize(&new_project_path.path)
+                        });
+                        Ok(CreatedEntry::Excluded { abs_path })
                     }
                 })
             }
@@ -1146,7 +1147,7 @@ impl WorktreeStore {
         self.downstream_client = Some((downstream_client, remote_id));
 
         // When shared, retain all worktrees
-        for worktree_handle in self.worktrees.iter_mut() {
+        for worktree_handle in &mut self.worktrees {
             match worktree_handle {
                 WorktreeHandle::Strong(_) => {}
                 WorktreeHandle::Weak(worktree) => {
@@ -1170,7 +1171,7 @@ impl WorktreeStore {
         self.downstream_client.take();
 
         // When not shared, only retain the visible worktrees
-        for worktree_handle in self.worktrees.iter_mut() {
+        for worktree_handle in &mut self.worktrees {
             if let WorktreeHandle::Strong(worktree) = worktree_handle {
                 let is_visible = worktree.update(cx, |worktree, _| {
                     worktree.stop_observing_updates();
@@ -1352,8 +1353,7 @@ impl WorktreeStore {
                             || *repo_path == folder_path.as_path()
                             || !folder_path.starts_with(*repo_path)
                     })
-                    .map(Path::to_path_buf)
-                    .unwrap_or_else(|| folder_path.clone());
+                    .map_or_else(|| folder_path.clone(), Path::to_path_buf);
                 (main_path, folder_path)
             })
             .unzip();

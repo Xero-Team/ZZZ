@@ -43,8 +43,7 @@ impl SerialTracker {
     pub fn get(&self, kind: SerialKind) -> u32 {
         self.serials
             .get(&kind)
-            .map(|serial_data| serial_data.serial)
-            .unwrap_or(0)
+            .map_or(0, |serial_data| serial_data.serial)
     }
 
     /// Returns the most recent serial across all tracked kinds.

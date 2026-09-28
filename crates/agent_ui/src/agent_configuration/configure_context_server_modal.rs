@@ -38,8 +38,7 @@ fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
 }
 
 fn template_text(cx: Option<&App>, key: &'static str, fallback: &'static str) -> String {
-    cx.map(|cx| app_i18n::tr(cx, key, fallback))
-        .unwrap_or_else(|| fallback.to_owned())
+    cx.map_or_else(|| fallback.to_owned(), |cx| app_i18n::tr(cx, key, fallback))
 }
 
 enum ConfigurationTarget {
@@ -269,7 +268,7 @@ fn context_server_input(
         }
         None => (
             "some-mcp-server".to_owned(),
-            "".to_owned(),
+            String::new(),
             "[]".to_owned(),
             "{}".to_owned(),
         ),
@@ -579,9 +578,11 @@ impl ConfigureContextServerModal {
             },
             Some(ContextServerStatus::Error(error)) => State::Error(error.into()),
 
-            Some(ContextServerStatus::Starting)
-            | Some(ContextServerStatus::Running)
-            | Some(ContextServerStatus::Stopped)
+            Some(
+                ContextServerStatus::Starting
+                | ContextServerStatus::Running
+                | ContextServerStatus::Stopped,
+            )
             | None => State::Idle,
         }
     }
@@ -998,8 +999,7 @@ impl Focusable for ConfigureContextServerModal {
             ConfigurationSource::Existing { editor, .. } => editor.focus_handle(cx),
             ConfigurationSource::Extension { editor, .. } => editor
                 .as_ref()
-                .map(|editor| editor.focus_handle(cx))
-                .unwrap_or_else(|| cx.focus_handle()),
+                .map_or_else(|| cx.focus_handle(), |editor| editor.focus_handle(cx)),
         }
     }
 }

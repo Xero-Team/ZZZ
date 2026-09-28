@@ -295,10 +295,10 @@ impl BreakpointList {
             cx.propagate();
             return;
         }
-        let ix = if !self.breakpoints.is_empty() {
-            Some(0)
-        } else {
+        let ix = if self.breakpoints.is_empty() {
             None
+        } else {
+            Some(0)
         };
         self.select_ix(ix, window, cx);
     }
@@ -308,10 +308,10 @@ impl BreakpointList {
             cx.propagate();
             return;
         }
-        let ix = if !self.breakpoints.is_empty() {
-            Some(self.breakpoints.len() - 1)
-        } else {
+        let ix = if self.breakpoints.is_empty() {
             None
+        } else {
+            Some(self.breakpoints.len() - 1)
         };
         self.select_ix(ix, window, cx);
     }
@@ -557,8 +557,9 @@ impl BreakpointList {
         let supported_breakpoint_properties = self
             .session
             .as_ref()
-            .map(|session| SupportedBreakpointProperties::from(session.read(cx).capabilities()))
-            .unwrap_or_else(SupportedBreakpointProperties::all);
+            .map_or_else(SupportedBreakpointProperties::all, |session| {
+                SupportedBreakpointProperties::from(session.read(cx).capabilities())
+            });
         let strip_mode = self.strip_mode;
 
         uniform_list(
@@ -738,8 +739,10 @@ impl Render for BreakpointList {
 
                 let dir = relative_worktree_path
                     .as_deref()
-                    .map(|rel_path| rel_path.as_std_path())
-                    .unwrap_or(&breakpoint.path.as_ref().compact())
+                    .map_or_else(
+                        || breakpoint.path.as_ref().compact(),
+                        |rel_path| rel_path.as_std_path().to_path_buf(),
+                    )
                     .parent()
                     .map(|parent| SharedString::from(parent.display().to_string()));
                 let name = file_name
@@ -795,7 +798,7 @@ impl Render for BreakpointList {
             .map(|entry| match &entry.kind {
                 BreakpointEntryKind::LineBreakpoint(line_bp) => {
                     let name_and_line = format!("{}:{}", line_bp.name, line_bp.line);
-                    let dir_len = line_bp.dir.as_ref().map(|d| d.len()).unwrap_or(0);
+                    let dir_len = line_bp.dir.as_ref().map_or(0, |d| d.len());
                     (name_and_line.len() + dir_len) as f32 * text_pixels
                 }
                 BreakpointEntryKind::ExceptionBreakpoint(exc_bp) => {

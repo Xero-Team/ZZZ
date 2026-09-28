@@ -50,9 +50,8 @@ fn test_point_for_row_and_column_from_external_source() {
 
 #[gpui::test(iterations = 100)]
 fn test_random_edits(mut rng: StdRng) {
-    let operations = env::var("OPERATIONS")
-        .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-        .unwrap_or(10);
+    let operations =
+        env::var("OPERATIONS").map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
     let reference_string_len = rng.random_range(0..3);
     let mut reference_string = RandomCharIter::new(&mut rng)
@@ -793,12 +792,9 @@ fn test_edit_partially_intersecting_a_deleted_fragment() {
 
 #[gpui::test(iterations = 100)]
 fn test_random_concurrent_edits(mut rng: StdRng) {
-    let peers = env::var("PEERS")
-        .map(|i| i.parse().expect("invalid `PEERS` variable"))
-        .unwrap_or(5);
-    let operations = env::var("OPERATIONS")
-        .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-        .unwrap_or(10);
+    let peers = env::var("PEERS").map_or(5, |i| i.parse().expect("invalid `PEERS` variable"));
+    let operations =
+        env::var("OPERATIONS").map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
     let base_text_len = rng.random_range(0..10);
     let base_text = RandomCharIter::new(&mut rng)

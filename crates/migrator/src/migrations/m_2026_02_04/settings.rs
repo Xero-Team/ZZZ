@@ -49,7 +49,7 @@ fn migrate_agent_tool_permissions(agent: &mut Value) -> Result<()> {
             agent_object.remove(ALWAYS_ALLOW_TOOL_ACTIONS);
             true
         }
-        Some(Value::Bool(false)) | Some(Value::Null) | None => {
+        Some(Value::Bool(false) | Value::Null) | None => {
             agent_object.remove(ALWAYS_ALLOW_TOOL_ACTIONS);
             false
         }

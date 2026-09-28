@@ -60,8 +60,7 @@ where
             for device in devices.iter().filter(|d| d.matches_input(is_input)) {
                 let is_current = current_device
                     .as_ref()
-                    .map(|info| info.matches(&device.id, is_input))
-                    .unwrap_or(false);
+                    .is_some_and(|info| info.matches(&device.id, is_input));
                 let device_id = device.id.clone();
 
                 menu = menu.toggleable_entry(
@@ -83,11 +82,10 @@ where
 
     DropdownMenu::new(
         dropdown_id,
-        current_device
-            .map(|info| info.desc.name().to_owned())
-            .unwrap_or_else(|| {
-                app_i18n::tr(cx, "settings_ui.audio.system_default", "System Default")
-            }),
+        current_device.map_or_else(
+            || app_i18n::tr(cx, "settings_ui.audio.system_default", "System Default"),
+            |info| info.desc.name().to_owned(),
+        ),
         menu,
     )
     .style(DropdownStyle::Outlined)

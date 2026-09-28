@@ -11,7 +11,7 @@ use crate::tasks::workflows::{
 pub fn compare_perf() -> Workflow {
     let head = WorkflowInput::string("head", None);
     let base = WorkflowInput::string("base", None);
-    let crate_name = WorkflowInput::string("crate_name", Some("".to_owned()));
+    let crate_name = WorkflowInput::string("crate_name", Some(String::new()));
     let run_perf = run_perf(&base, &head, &crate_name);
     named::workflow()
         .on(Event::default().workflow_dispatch(

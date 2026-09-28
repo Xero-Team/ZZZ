@@ -644,9 +644,8 @@ impl<T: NumberFieldType> RenderOnce for NumberField<T> {
                                         let last_synced = *self.last_synced_value.read(cx);
 
                                         // Detect if the value changed externally (e.g., reset button)
-                                        let value_changed_externally = last_synced
-                                            .map(|last| last != self.value)
-                                            .unwrap_or(true);
+                                        let value_changed_externally =
+                                            last_synced.map_or(true, |last| last != self.value);
 
                                         let should_sync = if value_changed_externally {
                                             true

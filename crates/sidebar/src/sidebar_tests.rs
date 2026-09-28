@@ -275,15 +275,12 @@ async fn start_remote_project(
     // Bare `_` on the guard so it's dropped immediately; holding onto it
     // would deadlock `connect_mock` below since the client waits on the
     // guard before completing the mock handshake.
-    let (opts, server_session) = match reuse_opts {
-        Some(existing) => {
-            let (session, _) = remote::RemoteClient::fake_server_with_opts(existing, cx, server_cx);
-            (existing.clone(), session)
-        }
-        None => {
-            let (opts, session, _) = remote::RemoteClient::fake_server(cx, server_cx);
-            (opts, session)
-        }
+    let (opts, server_session) = if let Some(existing) = reuse_opts {
+        let (session, _) = remote::RemoteClient::fake_server_with_opts(existing, cx, server_cx);
+        (existing.clone(), session)
+    } else {
+        let (opts, session, _) = remote::RemoteClient::fake_server(cx, server_cx);
+        (opts, session)
     };
 
     server_cx.update(remote_server::HeadlessProject::init);
@@ -352,8 +349,7 @@ fn save_thread_metadata(
             .read(cx)
             .entries()
             .find(|e| e.session_id.as_ref() == Some(&session_id))
-            .map(|e| e.thread_id)
-            .unwrap_or_else(ThreadId::new);
+            .map_or_else(ThreadId::new, |e| e.thread_id);
         let metadata = ThreadMetadata {
             thread_id,
             session_id: Some(session_id),
@@ -386,8 +382,7 @@ fn save_thread_metadata_with_main_paths(
             .read(cx)
             .entries()
             .find(|e| e.session_id.as_ref() == Some(&session_id))
-            .map(|e| e.thread_id)
-            .unwrap_or_else(ThreadId::new)
+            .map_or_else(ThreadId::new, |e| e.thread_id)
     });
     let metadata = ThreadMetadata {
         thread_id,
@@ -8559,8 +8554,7 @@ async fn test_project_header_click_restores_last_viewed(cx: &mut TestAppContext)
     let project_a_end = entries[project_a_start + 1..]
         .iter()
         .position(|e| e.starts_with("v "))
-        .map(|i| i + project_a_start + 1)
-        .unwrap_or(entries.len());
+        .map_or(entries.len(), |i| i + project_a_start + 1);
     let project_a_drafts = entries[project_a_start..project_a_end]
         .iter()
         .filter(|e| e.contains("Draft"))
@@ -10875,8 +10869,7 @@ async fn test_remote_archive_thread_with_active_connection(
         ThreadMetadataStore::global(cx)
             .read(cx)
             .entry_by_session(&wt_thread_id)
-            .map(|t| t.archived)
-            .unwrap_or(false)
+            .is_some_and(|t| t.archived)
     });
     assert!(is_archived, "worktree thread should be archived");
 
@@ -10993,8 +10986,7 @@ async fn test_remote_archive_thread_with_disconnected_remote(
         ThreadMetadataStore::global(cx)
             .read(cx)
             .entry_by_session(&thread_id)
-            .map(|t| t.archived)
-            .unwrap_or(false)
+            .is_some_and(|t| t.archived)
     });
     assert!(
         is_archived,

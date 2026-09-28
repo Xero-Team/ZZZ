@@ -745,16 +745,16 @@ impl RecentProjects {
         window: &mut Window,
         cx: &mut App,
     ) -> Entity<Self> {
-        let (open_folders, fs) = workspace
-            .upgrade()
-            .map(|workspace| {
+        let (open_folders, fs) = workspace.upgrade().map_or_else(
+            || (Vec::new(), None),
+            |workspace| {
                 let workspace = workspace.read(cx);
                 (
                     get_open_folders(workspace, cx),
                     Some(workspace.app_state().fs.clone()),
                 )
-            })
-            .unwrap_or_else(|| (Vec::new(), None));
+            },
+        );
 
         let create_new_window = create_new_window.unwrap_or_else(|| default_open_in_new_window(cx));
 
@@ -2115,13 +2115,12 @@ impl PickerDelegate for RecentProjectsDelegate {
                                 Some(ProjectPickerEntry::RecentProject(hit)) => self
                                     .workspaces
                                     .get(hit.candidate_id)
-                                    .map(|workspace| {
+                                    .is_some_and(|workspace| {
                                         matches!(
                                             workspace.location,
                                             SerializedWorkspaceLocation::Local
                                         )
-                                    })
-                                    .unwrap_or(false),
+                                    }),
                                 _ => false,
                             };
 

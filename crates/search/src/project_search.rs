@@ -2928,8 +2928,7 @@ fn register_workspace_action_for_present_search<A: Action>(
             .toolbar()
             .read(cx)
             .item_of_type::<ProjectSearchBar>()
-            .map(|search_bar| search_bar.read(cx).active_project_search.is_some())
-            .unwrap_or(false);
+            .is_some_and(|search_bar| search_bar.read(cx).active_project_search.is_some());
         if should_notify {
             callback(workspace, action, window, cx);
             cx.notify();
@@ -5821,7 +5820,7 @@ pub mod tests {
             ProjectSearchView::deploy_search(
                 workspace,
                 &workspace::DeploySearch {
-                    query: Some("".into()),
+                    query: Some(String::new()),
                     ..Default::default()
                 },
                 window,

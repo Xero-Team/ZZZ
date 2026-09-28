@@ -808,14 +808,11 @@ impl LanguageRegistry {
                     // our candidate is better only if the name is longer
                     (
                         Some(LanguageMatchPrecedence::PathOrContent(new_len)),
-                        LanguageMatchPrecedence::PathOrContent(current_len),
+                        LanguageMatchPrecedence::PathOrContent(current_len)
+                        | LanguageMatchPrecedence::UserConfigured(current_len),
                     )
                     | (
                         Some(LanguageMatchPrecedence::UserConfigured(new_len)),
-                        LanguageMatchPrecedence::UserConfigured(current_len),
-                    )
-                    | (
-                        Some(LanguageMatchPrecedence::PathOrContent(new_len)),
                         LanguageMatchPrecedence::UserConfigured(current_len),
                     ) => {
                         if new_len > current_len {
@@ -838,9 +835,7 @@ impl LanguageRegistry {
                     }
 
                     // no candidate, use current best
-                    (None, _) | (Some(LanguageMatchPrecedence::Undetermined), _) => {
-                        best_language_match
-                    }
+                    (None | Some(LanguageMatchPrecedence::Undetermined), _) => best_language_match,
                 }
             })
             .map(|(available_language, _)| available_language);
@@ -858,7 +853,7 @@ impl LanguageRegistry {
         let mut state = self.state.write();
 
         // If the language is already loaded, resolve with it immediately.
-        for loaded_language in state.languages.iter() {
+        for loaded_language in &state.languages {
             if loaded_language.id == language.id {
                 tx.send(Ok(loaded_language.clone())).unwrap();
                 return rx;
@@ -1021,7 +1016,7 @@ impl LanguageRegistry {
     }
 
     pub fn to_vec(&self) -> Vec<Arc<Language>> {
-        self.state.read().languages.to_vec()
+        self.state.read().languages.clone()
     }
 
     pub fn lsp_adapters(&self, language_name: &LanguageName) -> Vec<Arc<CachedLspAdapter>> {

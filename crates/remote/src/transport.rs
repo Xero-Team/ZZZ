@@ -265,9 +265,8 @@ async fn build_remote_server_from_source(
     }
 
     fn apply_tmpfs_zig_cache(command: &mut Command) {
-        let cache = std::env::var_os("ZIG_GLOBAL_CACHE_DIR")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| {
+        let cache = std::env::var_os("ZIG_GLOBAL_CACHE_DIR").map_or_else(
+            || {
                 #[cfg(unix)]
                 {
                     let tmp = std::path::PathBuf::from("/tmp");
@@ -276,10 +275,11 @@ async fn build_remote_server_from_source(
                     }
                 }
                 std::env::temp_dir().join("zzz-zig-cache")
-            });
+            },
+            std::path::PathBuf::from,
+        );
         let local = std::env::var_os("ZIG_LOCAL_CACHE_DIR")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| cache.join("local"));
+            .map_or_else(|| cache.join("local"), std::path::PathBuf::from);
         if let Err(error) = std::fs::create_dir_all(&local) {
             log::warn!("failed to create zig cache {}: {error}", local.display());
         }
@@ -484,7 +484,9 @@ async fn build_remote_server_from_source(
         .join("remote_server")
         .with_extension(if platform.os.is_windows() { "exe" } else { "" });
 
-    let path = if !build_remote_server.contains("nocompress") {
+    let path = if build_remote_server.contains("nocompress") {
+        bin_path
+    } else {
         delegate.set_status(Some("Compressing binary"), cx);
 
         #[cfg(not(target_os = "windows"))]
@@ -514,8 +516,6 @@ async fn build_remote_server_from_source(
         };
 
         std::env::current_dir()?.join(archive_path)
-    } else {
-        bin_path
     };
 
     Ok(Some(path))

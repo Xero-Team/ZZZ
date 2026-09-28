@@ -111,8 +111,7 @@ pub fn t(cx: &App, key: &str) -> String {
         .active_catalog
         .lookup(key)
         .or_else(|| service.fallback_catalog.lookup(key))
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| key.to_owned())
+        .map_or_else(|| key.to_owned(), ToOwned::to_owned)
 }
 
 pub fn tr(cx: &App, key: &str, fallback: &str) -> String {
@@ -121,8 +120,7 @@ pub fn tr(cx: &App, key: &str, fallback: &str) -> String {
         .active_catalog
         .lookup(key)
         .or_else(|| service.fallback_catalog.lookup(key))
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| fallback.to_owned())
+        .map_or_else(|| fallback.to_owned(), ToOwned::to_owned)
 }
 
 pub fn prompt_button(cx: &App, key: &str, fallback: &str) -> PromptButton {

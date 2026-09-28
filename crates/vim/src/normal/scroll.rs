@@ -215,9 +215,10 @@ impl Vim {
                 // which case the scroll manager's anchor column will be the
                 // maximum column for the current line, so the minimum column
                 // would end up being the same as the maximum column.
-                let min_column = match preserve_cursor_position {
-                    true => old_top.column(),
-                    false => top.column(),
+                let min_column = if preserve_cursor_position {
+                    old_top.column()
+                } else {
+                    top.column()
                 };
 
                 // As for the maximum column position, that should be either the

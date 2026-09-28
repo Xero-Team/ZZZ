@@ -352,7 +352,7 @@ pub(crate) fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
                             .zip(new_text.chars().rev())
                             .find_map(
                                 |((i, a), b)| {
-                                    if a != b { Some(i + a.len_utf8()) } else { None }
+                                    if a == b { None } else { Some(i + a.len_utf8()) }
                                 },
                             )
                             .unwrap_or(old_text.len());
@@ -361,7 +361,7 @@ pub(crate) fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
                         let common_prefix_len = old_text
                             .char_indices()
                             .zip(new_text.chars())
-                            .find_map(|((i, a), b)| if a != b { Some(i) } else { None })
+                            .find_map(|((i, a), b)| if a == b { None } else { Some(i) })
                             .unwrap_or(0);
                         points.start.column = common_prefix_len as u32;
                         old_text = old_text.split_at(common_prefix_len).1.to_owned();
@@ -755,11 +755,10 @@ impl Vim {
                     } else {
                         let indent_size = snapshot.indent_size_for_line(MultiBufferRow(row)).len;
                         let first_char = snapshot.chars_at(Point::new(row, indent_size)).next();
-                        let indent_row = if matches!(first_char, Some('}') | Some(')')) {
+                        let indent_row = if matches!(first_char, Some('}' | ')')) {
                             snapshot
                                 .prev_non_blank_row(MultiBufferRow(row))
-                                .map(|r| r.0)
-                                .unwrap_or(row)
+                                .map_or(row, |r| r.0)
                         } else {
                             row
                         };

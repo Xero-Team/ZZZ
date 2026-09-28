@@ -393,8 +393,7 @@ impl ThemeSettings {
     pub fn buffer_font_size(&self, cx: &App) -> Pixels {
         let font_size = cx
             .try_global::<BufferFontSize>()
-            .map(|size| size.0)
-            .unwrap_or(self.buffer_font_size);
+            .map_or(self.buffer_font_size, |size| size.0);
         clamp_font_size(font_size)
     }
 
@@ -402,8 +401,7 @@ impl ThemeSettings {
     pub fn ui_font_size(&self, cx: &App) -> Pixels {
         let font_size = cx
             .try_global::<UiFontSize>()
-            .map(|size| size.0)
-            .unwrap_or(self.ui_font_size);
+            .map_or(self.ui_font_size, |size| size.0);
         clamp_font_size(font_size)
     }
 
@@ -412,8 +410,7 @@ impl ThemeSettings {
         cx.try_global::<AgentUiFontSize>()
             .map(|size| size.0)
             .or(self.agent_ui_font_size)
-            .map(clamp_font_size)
-            .unwrap_or_else(|| self.ui_font_size(cx))
+            .map_or_else(|| self.ui_font_size(cx), clamp_font_size)
     }
 
     pub fn agent_ui_font_family(&self) -> &SharedString {
@@ -427,8 +424,7 @@ impl ThemeSettings {
         cx.try_global::<AgentBufferFontSize>()
             .map(|size| size.0)
             .or(self.agent_buffer_font_size)
-            .map(clamp_font_size)
-            .unwrap_or_else(|| self.buffer_font_size(cx))
+            .map_or_else(|| self.buffer_font_size(cx), clamp_font_size)
     }
 
     pub fn agent_buffer_font_family(&self) -> &SharedString {
@@ -441,8 +437,7 @@ impl ThemeSettings {
         cx.try_global::<GitCommitBufferFontSize>()
             .map(|size| size.0)
             .or(self.git_commit_buffer_font_size)
-            .map(clamp_font_size)
-            .unwrap_or_else(|| self.buffer_font_size(cx))
+            .map_or_else(|| self.buffer_font_size(cx), clamp_font_size)
     }
 
     /// Returns the font family to use in the markdown preview,
@@ -468,8 +463,7 @@ impl ThemeSettings {
     pub fn markdown_preview_font_size(&self, cx: &App) -> Pixels {
         let _ = cx;
         self.markdown_preview_font_size
-            .map(clamp_font_size)
-            .unwrap_or_else(|| clamp_font_size(self.ui_font_size))
+            .map_or_else(|| clamp_font_size(self.ui_font_size), clamp_font_size)
     }
     /// Returns the buffer font size, read from the settings.
     ///

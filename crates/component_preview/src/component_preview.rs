@@ -343,11 +343,11 @@ impl ComponentPreview {
                 .any(|component| component.id() == *component_id);
 
             if !component_still_visible {
-                if !filtered_components.is_empty() {
+                if filtered_components.is_empty() {
+                    self.set_active_page(PreviewPage::AllComponents, cx);
+                } else {
                     let first_component = &filtered_components[0];
                     self.set_active_page(PreviewPage::Component(first_component.id()), cx);
-                } else {
-                    self.set_active_page(PreviewPage::AllComponents, cx);
                 }
             }
         }
@@ -909,7 +909,9 @@ impl ComponentPreviewPage {
             ComponentStatus::WorkInProgress => Color::Warning,
         };
 
-        if status != ComponentStatus::Live {
+        if status == ComponentStatus::Live {
+            None
+        } else {
             Some(
                 ButtonLike::new("component_status")
                     .child(
@@ -926,8 +928,6 @@ impl ComponentPreviewPage {
                     .tooltip(Tooltip::text(status_description))
                     .disabled(true),
             )
-        } else {
-            None
         }
     }
 

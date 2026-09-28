@@ -3230,11 +3230,9 @@ Sentence ending file2.rs.
         cx.run_until_parked();
         cx.update_editor(|editor, _, cx| {
             let still_present = editor.hover_state.info_popovers.iter().any(|popover| {
-                popover
-                    .parsed_content
-                    .as_ref()
-                    .map(|parsed| *parsed.read(cx).parsed_markdown().source() == "Open license")
-                    .unwrap_or(false)
+                popover.parsed_content.as_ref().is_some_and(|parsed| {
+                    *parsed.read(cx).parsed_markdown().source() == "Open license"
+                })
             });
             assert!(
                 !still_present,

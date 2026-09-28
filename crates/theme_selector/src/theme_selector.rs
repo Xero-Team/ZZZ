@@ -698,7 +698,7 @@ mod tests {
         cx.run_until_parked();
 
         picker.update_in(cx, |picker, window, cx| {
-            picker.update_matches("".to_string(), window, cx);
+            picker.update_matches(String::new(), window, cx);
         });
         cx.run_until_parked();
 

@@ -39,9 +39,9 @@ fn rename_context_key(
         new_predicate = new_predicate.replace(old, new);
     }
 
-    if new_predicate != old_predicate {
-        Some((context_predicate_range, new_predicate))
-    } else {
+    if new_predicate == old_predicate {
         None
+    } else {
+        Some((context_predicate_range, new_predicate))
     }
 }

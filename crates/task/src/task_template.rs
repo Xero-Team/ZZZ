@@ -536,16 +536,16 @@ mod tests {
 
         for task_with_blank_property in &[
             TaskTemplate {
-                label: "".to_string(),
+                label: String::new(),
                 ..task_with_all_properties.clone()
             },
             TaskTemplate {
-                command: "".to_string(),
+                command: String::new(),
                 ..task_with_all_properties.clone()
             },
             TaskTemplate {
-                label: "".to_string(),
-                command: "".to_string(),
+                label: String::new(),
+                command: String::new(),
                 ..task_with_all_properties
             },
         ] {

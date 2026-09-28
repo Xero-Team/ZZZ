@@ -1347,9 +1347,8 @@ fn test_random_edits(
     language: Arc<Language>,
     mut rng: StdRng,
 ) {
-    let operations = env::var("OPERATIONS")
-        .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-        .unwrap_or(10);
+    let operations =
+        env::var("OPERATIONS").map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
     let mut buffer = Buffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), text);
 

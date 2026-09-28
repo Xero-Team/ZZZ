@@ -230,8 +230,7 @@ impl PickerDelegate for RecentFilesDelegate {
         let file_icon = self.icon_for_file(path.as_path(), cx);
         let file_name = path
             .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| homify(path));
+            .map_or_else(|| homify(path), |name| name.to_string_lossy().into_owned());
 
         Some(
             ListItem::new(ix)

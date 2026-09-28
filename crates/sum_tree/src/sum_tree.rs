@@ -924,10 +924,10 @@ impl<T: Item> SumTree<T> {
         cx: <T::Summary as Summary>::Context<'_>,
     ) -> Option<Self> {
         if small.0.height() == large.0.height() {
-            if !small.0.is_underflowing() {
-                Some(small)
-            } else {
+            if small.0.is_underflowing() {
                 Self::merge_into_right(small, large, cx)
+            } else {
+                Some(small)
             }
         } else {
             debug_assert!(small.0.height() < large.0.height());

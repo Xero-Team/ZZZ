@@ -52,16 +52,16 @@ impl Render for ModelSelectorPopover {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let selector = self.selector.read(cx);
         let model = selector.delegate.active_model();
-        let model_name = model
-            .as_ref()
-            .map(|model| model.name.clone())
-            .unwrap_or_else(|| {
+        let model_name = model.as_ref().map_or_else(
+            || {
                 tr(
                     cx,
                     "agent_ui.model_selector.select_a_model",
                     "Select a Model",
                 )
-            });
+            },
+            |model| model.name.clone(),
+        );
         // The trigger lives in the message editor toolbar, which can get very narrow. Truncate
         // long model names so they cannot push the rest of the toolbar past the panel width.
         let model_name: SharedString = util::truncate_and_trailoff(&model_name, 32).into();

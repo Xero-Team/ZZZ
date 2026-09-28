@@ -42,7 +42,7 @@ impl Autoscroll {
             GoToDefinitionScrollStrategy::Minimum => Self::fit(),
             GoToDefinitionScrollStrategy::Top => Self::focused(),
             GoToDefinitionScrollStrategy::Preserve => {
-                offset.map(Self::top_relative).unwrap_or_else(Self::center)
+                offset.map_or_else(Self::center, Self::top_relative)
             }
         }
     }
@@ -151,10 +151,10 @@ impl Editor {
             scroll_position.y = max_scroll_top;
         }
 
-        let editor_was_scrolled = if original_y != scroll_position.y {
-            self.set_scroll_position(scroll_position, window, cx)
-        } else {
+        let editor_was_scrolled = if original_y == scroll_position.y {
             WasScrolled(false)
+        } else {
+            self.set_scroll_position(scroll_position, window, cx)
         };
 
         let Some((autoscroll, local)) = autoscroll_request else {

@@ -47,7 +47,7 @@ use std::{
     hash::{Hash, Hasher},
     marker::PhantomData,
     mem,
-    ops::{DerefMut, Range},
+    ops::Range,
     rc::Rc,
     sync::{
         Arc, Weak,
@@ -1253,17 +1253,14 @@ fn default_bounds(display_id: Option<DisplayId>, cx: &mut App) -> WindowBounds {
 
     const CASCADE_OFFSET: f32 = 25.0;
 
-    let display = display_id
-        .map(|id| cx.find_display(id))
-        .unwrap_or_else(|| cx.primary_display());
+    let display = display_id.map_or_else(|| cx.primary_display(), |id| cx.find_display(id));
 
     let default_placement = || Bounds::new(point(px(0.), px(0.)), DEFAULT_WINDOW_SIZE);
 
     // Use visible_bounds to exclude taskbar/dock areas
     let display_bounds = display
         .as_ref()
-        .map(|d| d.visible_bounds())
-        .unwrap_or_else(default_placement);
+        .map_or_else(default_placement, |d| d.visible_bounds());
 
     let (
         Bounds {
@@ -1278,8 +1275,7 @@ fn default_bounds(display_id: Option<DisplayId>, cx: &mut App) -> WindowBounds {
         None => (
             display
                 .as_ref()
-                .map(|d| d.default_bounds())
-                .unwrap_or_else(default_placement),
+                .map_or_else(default_placement, |d| d.default_bounds()),
             WindowBounds::Windowed,
         ),
     };
@@ -2697,7 +2693,7 @@ impl Window {
 
     fn record_entities_accessed(&mut self, cx: &mut App) {
         let mut entities_ref = cx.entities.accessed_entities.get_mut();
-        let mut entities = mem::take(entities_ref.deref_mut());
+        let mut entities = mem::take(entities_ref);
         let handle = self.handle;
         cx.record_entities_accessed(
             handle,
@@ -2706,7 +2702,7 @@ impl Window {
             &entities,
         );
         let mut entities_ref = cx.entities.accessed_entities.get_mut();
-        mem::swap(&mut entities, entities_ref.deref_mut());
+        mem::swap(&mut entities, entities_ref);
     }
 
     fn invalidate_entities(&mut self) {
@@ -4517,15 +4513,17 @@ impl Window {
     /// binding for the action (last binding added to the keymap).
     pub fn keystroke_text_for(&self, action: &dyn Action) -> String {
         self.highest_precedence_binding_for_action(action)
-            .map(|binding| {
-                binding
-                    .keystrokes()
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            })
-            .unwrap_or_else(|| action.name().to_owned())
+            .map_or_else(
+                || action.name().to_owned(),
+                |binding| {
+                    binding
+                        .keystrokes()
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                },
+            )
     }
 
     /// Dispatch a mouse or keyboard event on the window.
@@ -4860,7 +4858,7 @@ impl Window {
         let skip_bindings = event
             .downcast_ref::<KeyDownEvent>()
             .filter(|key_down_event| key_down_event.prefer_character_input)
-            .map(|_| {
+            .is_some_and(|_| {
                 self.platform_window
                     .take_input_handler()
                     .map_or(false, |mut input_handler| {
@@ -4870,8 +4868,7 @@ impl Window {
                         // we prefer the text input over bindings.
                         accepts
                     })
-            })
-            .unwrap_or(false);
+            });
 
         if !skip_bindings {
             for binding in match_result.bindings {
@@ -5558,15 +5555,14 @@ impl Window {
     /// Toggles the inspector mode on this window.
     #[cfg(any(feature = "inspector", debug_assertions))]
     pub fn toggle_inspector(&mut self, cx: &mut App) {
-        self.inspector = match self.inspector {
-            None => Some(cx.new(|_| Inspector::new())),
-            Some(_) => {
-                self.rendered_frame.next_inspector_instance_ids = FxHashMap::default();
-                self.rendered_frame.inspector_hitboxes = FxHashMap::default();
-                self.next_frame.next_inspector_instance_ids = FxHashMap::default();
-                self.next_frame.inspector_hitboxes = FxHashMap::default();
-                None
-            }
+        self.inspector = if self.inspector == None {
+            Some(cx.new(|_| Inspector::new()))
+        } else {
+            self.rendered_frame.next_inspector_instance_ids = FxHashMap::default();
+            self.rendered_frame.inspector_hitboxes = FxHashMap::default();
+            self.next_frame.next_inspector_instance_ids = FxHashMap::default();
+            self.next_frame.inspector_hitboxes = FxHashMap::default();
+            None
         };
         self.refresh();
     }

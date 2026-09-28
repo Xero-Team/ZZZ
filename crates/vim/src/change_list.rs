@@ -54,16 +54,12 @@ impl Vim {
             let selections = editor.selections.all_adjusted_display(&display_map);
             let buffer = editor.buffer().clone();
 
-            let pop_state = editor
-                .change_list
-                .last()
-                .map(|previous| {
-                    previous.len() == selections.len()
-                        && previous.iter().enumerate().all(|(ix, p)| {
-                            p.to_display_point(&display_map).row() == selections[ix].head().row()
-                        })
-                })
-                .unwrap_or(false);
+            let pop_state = editor.change_list.last().is_some_and(|previous| {
+                previous.len() == selections.len()
+                    && previous.iter().enumerate().all(|(ix, p)| {
+                        p.to_display_point(&display_map).row() == selections[ix].head().row()
+                    })
+            });
 
             let new_positions = selections
                 .into_iter()

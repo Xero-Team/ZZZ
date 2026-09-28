@@ -435,11 +435,7 @@ impl<'a> Iterator for InlayChunks<'a> {
                     inlay_chunk.len()
                 } else if next_inlay_highlight_endpoint == 0 {
                     // Need to take at least one character to make progress
-                    inlay_chunk
-                        .chars()
-                        .next()
-                        .map(|c| c.len_utf8())
-                        .unwrap_or(1)
+                    inlay_chunk.chars().next().map_or(1, |c| c.len_utf8())
                 } else {
                     inlay_chunk.ceil_char_boundary(next_inlay_highlight_endpoint)
                 };
@@ -1936,8 +1932,7 @@ mod tests {
         init_test(cx);
 
         let operations = env::var("OPERATIONS")
-            .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-            .unwrap_or(10);
+            .map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
         let len = rng.random_range(0..30);
         let buffer = if rng.random() {

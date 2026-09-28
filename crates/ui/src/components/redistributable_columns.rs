@@ -236,20 +236,7 @@ impl RedistributableColumnsState {
             left_diff < right_diff
         };
 
-        if !go_left_first {
-            let diff_remaining =
-                Self::propagate_resize_diff(diff, col_idx, &mut widths, resize_behavior, 1);
-
-            if diff_remaining != 0.0 && col_idx > 0 {
-                Self::propagate_resize_diff(
-                    diff_remaining,
-                    col_idx,
-                    &mut widths,
-                    resize_behavior,
-                    -1,
-                );
-            }
-        } else {
+        if go_left_first {
             let diff_remaining =
                 Self::propagate_resize_diff(diff, col_idx, &mut widths, resize_behavior, -1);
 
@@ -260,6 +247,19 @@ impl RedistributableColumnsState {
                     &mut widths,
                     resize_behavior,
                     1,
+                );
+            }
+        } else {
+            let diff_remaining =
+                Self::propagate_resize_diff(diff, col_idx, &mut widths, resize_behavior, 1);
+
+            if diff_remaining != 0.0 && col_idx > 0 {
+                Self::propagate_resize_diff(
+                    diff_remaining,
+                    col_idx,
+                    &mut widths,
+                    resize_behavior,
+                    -1,
                 );
             }
         }
@@ -294,12 +294,12 @@ impl RedistributableColumnsState {
             .committed_widths
             .map_ref(|length| Self::get_fraction(length, bounds_width, rem_size));
 
-        for length in widths[0..=col_idx].iter() {
+        for length in &widths[0..=col_idx] {
             col_position += length + divider_width;
         }
 
         let mut total_length_ratio = col_position;
-        for length in widths[col_idx + 1..].iter() {
+        for length in &widths[col_idx + 1..] {
             total_length_ratio += length;
         }
         let cols = self.resize_behavior.cols();

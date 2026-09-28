@@ -391,29 +391,28 @@ pub fn deploy_context_menu(
         })
     };
 
-    editor.mouse_context_menu = match position {
-        Some(position) => MouseContextMenu::pinned_to_editor(
+    editor.mouse_context_menu = if let Some(position) = position {
+        MouseContextMenu::pinned_to_editor(
             editor,
             source_anchor,
             position,
             context_menu,
             window,
             cx,
-        ),
-        None => {
-            let character_size = editor.character_dimensions(window, cx);
-            let menu_position = MenuPosition::PinnedToEditor {
-                source: source_anchor,
-                offset: gpui::point(character_size.em_width, character_size.line_height),
-            };
-            Some(MouseContextMenu::new(
-                editor,
-                menu_position,
-                context_menu,
-                window,
-                cx,
-            ))
-        }
+        )
+    } else {
+        let character_size = editor.character_dimensions(window, cx);
+        let menu_position = MenuPosition::PinnedToEditor {
+            source: source_anchor,
+            offset: gpui::point(character_size.em_width, character_size.line_height),
+        };
+        Some(MouseContextMenu::new(
+            editor,
+            menu_position,
+            context_menu,
+            window,
+            cx,
+        ))
     };
     cx.notify();
 }

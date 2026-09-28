@@ -522,8 +522,9 @@ impl Render for DapLogToolbarItemView {
             .anchor(gpui::Anchor::TopLeft)
             .trigger(Button::new(
                 "debug_client_menu_header",
-                current_client
-                    .map(|sub_item| {
+                current_client.map_or_else(
+                    || "No adapter selected".into(),
+                    |sub_item| {
                         Cow::Owned(format!(
                             "{} - {} - {}",
                             sub_item.adapter_name,
@@ -534,8 +535,8 @@ impl Render for DapLogToolbarItemView {
                                 View::InitializationSequence => INITIALIZATION_SEQUENCE,
                             }
                         ))
-                    })
-                    .unwrap_or_else(|| "No adapter selected".into()),
+                    },
+                ),
             ))
             .menu(move |window, cx| {
                 let log_view = log_view.clone();

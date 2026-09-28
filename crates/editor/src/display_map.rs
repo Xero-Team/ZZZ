@@ -1487,7 +1487,9 @@ impl<'a> HighlightedChunk<'a> {
                 });
             }
 
-            if !text.is_empty() {
+            if text.is_empty() {
+                None
+            } else {
                 let remainder = text;
                 text = "";
                 Some(HighlightedChunk {
@@ -1497,8 +1499,6 @@ impl<'a> HighlightedChunk<'a> {
                     is_inlay,
                     replacement: renderer.clone(),
                 })
-            } else {
-                None
             }
         })
     }
@@ -2357,7 +2357,7 @@ impl DisplaySnapshot {
                         .is_some_and(|scope| {
                             matches!(
                                 scope.override_name(),
-                                Some("string") | Some("comment") | Some("comment.inclusive")
+                                Some("string" | "comment" | "comment.inclusive")
                             )
                         });
                     if in_string_or_comment_scope
@@ -2429,7 +2429,7 @@ impl DisplaySnapshot {
                 ranges
                     .1
                     .iter()
-                    .flat_map(|range| {
+                    .filter_map(|range| {
                         Some((ranges.0.color?, range.to_point(self.buffer_snapshot())))
                     })
                     .collect::<Vec<_>>()
@@ -2719,8 +2719,7 @@ pub mod tests {
     async fn test_random_display_map(cx: &mut gpui::TestAppContext, mut rng: StdRng) {
         cx.background_executor.set_block_on_ticks(0..=50);
         let operations = env::var("OPERATIONS")
-            .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-            .unwrap_or(10);
+            .map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
         let mut tab_size = rng.random_range(1..=4);
         let buffer_start_excerpt_header_height = rng.random_range(1..=5);

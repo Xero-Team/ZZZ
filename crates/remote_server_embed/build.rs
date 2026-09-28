@@ -355,12 +355,9 @@ fn zig_cache_root() -> PathBuf {
 }
 
 fn apply_tmpfs_zig_cache(command: &mut Command) {
-    let cache = env::var_os("ZIG_GLOBAL_CACHE_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(zig_cache_root);
-    let local = env::var_os("ZIG_LOCAL_CACHE_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| cache.join("local"));
+    let cache = env::var_os("ZIG_GLOBAL_CACHE_DIR").map_or_else(zig_cache_root, PathBuf::from);
+    let local =
+        env::var_os("ZIG_LOCAL_CACHE_DIR").map_or_else(|| cache.join("local"), PathBuf::from);
     if let Err(error) = fs::create_dir_all(&local) {
         println!(
             "cargo:warning=failed to create zig cache {}: {error}",

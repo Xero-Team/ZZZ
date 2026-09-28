@@ -50,7 +50,7 @@ pub fn os_version() -> String {
             log::error!(
                 "Failed to load /etc/os-release, /usr/lib/os-release, or /var/run/os-release"
             );
-            "".to_owned()
+            String::new()
         };
         let mut name = "unknown";
         let mut version = "unknown";

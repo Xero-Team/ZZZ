@@ -2676,12 +2676,8 @@ async fn test_random_worktree_operations_during_initial_scan(
     mut rng: StdRng,
 ) {
     init_test(cx);
-    let operations = env::var("OPERATIONS")
-        .map(|o| o.parse().unwrap())
-        .unwrap_or(5);
-    let initial_entries = env::var("INITIAL_ENTRIES")
-        .map(|o| o.parse().unwrap())
-        .unwrap_or(20);
+    let operations = env::var("OPERATIONS").map_or(5, |o| o.parse().unwrap());
+    let initial_entries = env::var("INITIAL_ENTRIES").map_or(20, |o| o.parse().unwrap());
 
     let root_dir = Path::new(path!("/test"));
     let fs = FakeFs::new(cx.background_executor.clone()) as Arc<dyn Fs>;
@@ -2768,12 +2764,8 @@ async fn test_random_worktree_operations_during_initial_scan(
 #[gpui::test(iterations = 100)]
 async fn test_random_worktree_changes(cx: &mut TestAppContext, mut rng: StdRng) {
     init_test(cx);
-    let operations = env::var("OPERATIONS")
-        .map(|o| o.parse().unwrap())
-        .unwrap_or(40);
-    let initial_entries = env::var("INITIAL_ENTRIES")
-        .map(|o| o.parse().unwrap())
-        .unwrap_or(20);
+    let operations = env::var("OPERATIONS").map_or(40, |o| o.parse().unwrap());
+    let initial_entries = env::var("INITIAL_ENTRIES").map_or(20, |o| o.parse().unwrap());
 
     let root_dir = Path::new(path!("/test"));
     let fs = FakeFs::new(cx.background_executor.clone()) as Arc<dyn Fs>;
@@ -2932,9 +2924,7 @@ async fn test_random_git_updates_with_watcher_overflows(cx: &mut TestAppContext,
     // `UpdatedGitRepositories`, no matter how the events reporting it are
     // batched, delayed, or lost to watcher overflows.
     init_test(cx);
-    let operations = env::var("OPERATIONS")
-        .map(|o| o.parse().unwrap())
-        .unwrap_or(40);
+    let operations = env::var("OPERATIONS").map_or(40, |o| o.parse().unwrap());
 
     let root_dir = Path::new(path!("/test"));
     let dot_git = root_dir.join(".git");
@@ -3248,7 +3238,7 @@ async fn randomly_mutate_fs(
                 )
                 .await
                 .unwrap();
-                new_path_parent.to_path_buf()
+                new_path_parent.clone()
             } else {
                 new_path_parent.join(random_filename(rng))
             };
@@ -5706,7 +5696,7 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
                 updated_entries: vec![proto::Entry {
                     id: 1,
                     is_dir: true,
-                    path: "".to_string(),
+                    path: String::new(),
                     inode: 1,
                     mtime: Some(proto::Timestamp {
                         seconds: 0,
@@ -5800,7 +5790,7 @@ async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arri
                 updated_entries: vec![proto::Entry {
                     id: 1,
                     is_dir: true,
-                    path: "".to_string(),
+                    path: String::new(),
                     inode: 1,
                     mtime: Some(proto::Timestamp {
                         seconds: 0,

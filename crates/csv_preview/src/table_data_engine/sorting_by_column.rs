@@ -30,13 +30,11 @@ pub fn sort_data_rows(
         let val_a = row_a
             .get(sorting.col_idx)
             .and_then(|tc| tc.display_value())
-            .map(|tc| tc.as_str())
-            .unwrap_or("");
+            .map_or("", |tc| tc.as_str());
         let val_b = row_b
             .get(sorting.col_idx)
             .and_then(|tc| tc.display_value())
-            .map(|tc| tc.as_str())
-            .unwrap_or("");
+            .map_or("", |tc| tc.as_str());
 
         let cmp = val_a.cmp(val_b);
         match sorting.direction {

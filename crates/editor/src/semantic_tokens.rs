@@ -66,11 +66,11 @@ impl SemanticTokenState {
     }
 
     pub(super) fn update_rules(&mut self, new_rules: SemanticTokenRules) -> bool {
-        if new_rules != self.rules {
+        if new_rules == self.rules {
+            false
+        } else {
             self.rules = new_rules;
             true
-        } else {
-            false
         }
     }
 }

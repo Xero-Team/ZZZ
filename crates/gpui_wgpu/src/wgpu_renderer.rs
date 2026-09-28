@@ -205,11 +205,10 @@ impl WgpuRenderer {
         // Use the existing context's instance if available, otherwise create a new one.
         // The surface must be created with the same instance that will be used for
         // adapter selection, otherwise wgpu will panic.
-        let instance = gpu_context
-            .borrow()
-            .as_ref()
-            .map(|ctx| ctx.instance.clone())
-            .unwrap_or_else(|| WgpuContext::instance(Box::new(window.clone())));
+        let instance = gpu_context.borrow().as_ref().map_or_else(
+            || WgpuContext::instance(Box::new(window.clone())),
+            |ctx| ctx.instance.clone(),
+        );
 
         // Safety: The caller guarantees that the window handle is valid for the
         // lifetime of this renderer. In practice, the RawWindow struct is created
@@ -1015,8 +1014,7 @@ impl WgpuRenderer {
             height,
             path_sample_count,
         )
-        .map(|(t, v)| (Some(t), Some(v)))
-        .unwrap_or((None, None));
+        .map_or((None, None), |(t, v)| (Some(t), Some(v)));
         resources.path_msaa_texture = path_msaa_texture;
         resources.path_msaa_view = path_msaa_view;
     }

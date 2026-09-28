@@ -1651,8 +1651,7 @@ mod tests {
 
         cx.background_executor.set_block_on_ticks(0..=50);
         let operations = env::var("OPERATIONS")
-            .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-            .unwrap_or(10);
+            .map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
         let text_system = cx.read(|cx| cx.text_system().clone());
         let mut wrap_width = if rng.random_bool(0.1) {

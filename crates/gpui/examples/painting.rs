@@ -357,7 +357,7 @@ impl Render for PaintingViewer {
                             move |_, _, _| {},
                             move |_, _, window, _| {
                                 // First draw background quads
-                                for (bounds, color) in background_quads.iter() {
+                                for (bounds, color) in &background_quads {
                                     window.paint_quad(quad(
                                         *bounds,
                                         px(0.),

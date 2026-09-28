@@ -742,15 +742,16 @@ impl Bounds<Pixels> {
             .and_then(|id| cx.find_display(id))
             .or_else(|| cx.primary_display());
 
-        display
-            .map(|display| {
-                let visible_bounds = display.visible_bounds();
-                Bounds::centered_at(visible_bounds.center(), size.min(&visible_bounds.size))
-            })
-            .unwrap_or_else(|| Bounds {
+        display.map_or_else(
+            || Bounds {
                 origin: point(px(0.), px(0.)),
                 size,
-            })
+            },
+            |display| {
+                let visible_bounds = display.visible_bounds();
+                Bounds::centered_at(visible_bounds.center(), size.min(&visible_bounds.size))
+            },
+        )
     }
 
     /// Generate maximized bounds for the given display or primary display if none is provided
@@ -759,12 +760,13 @@ impl Bounds<Pixels> {
             .and_then(|id| cx.find_display(id))
             .or_else(|| cx.primary_display());
 
-        display
-            .map(|display| display.bounds())
-            .unwrap_or_else(|| Bounds {
+        display.map_or_else(
+            || Bounds {
                 origin: point(px(0.), px(0.)),
                 size: size(px(1024.), px(768.)),
-            })
+            },
+            |display| display.bounds(),
+        )
     }
 }
 

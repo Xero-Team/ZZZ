@@ -2528,9 +2528,10 @@ impl Dispatch<wl_data_device::WlDataDevice, ()> for WaylandClientStatePtr {
                             let paths: SmallVec<[_; 2]> = file_list
                                 .lines()
                                 .filter_map(|path| Url::parse(path).log_err())
-                                .filter_map(|url| match url.to_file_path() {
-                                    Ok(url) => Some(url),
-                                    Err(()) => {
+                                .filter_map(|url| {
+                                    if let Ok(url) = url.to_file_path() {
+                                        Some(url)
+                                    } else {
                                         log::error!("Failed turn {url:?} into a file path");
                                         None
                                     }

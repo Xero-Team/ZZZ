@@ -1189,8 +1189,7 @@ fn resolve_preview_path(url: &str, base_directory: Option<&Path>) -> Option<Path
 
     let (path_text, _) = split_preview_url(url);
     let decoded_url = urlencoding::decode(path_text)
-        .map(|decoded| decoded.into_owned())
-        .unwrap_or_else(|_| path_text.to_owned());
+        .map_or_else(|_| path_text.to_owned(), |decoded| decoded.into_owned());
     let candidate = PathBuf::from(&decoded_url);
 
     if candidate.is_absolute() && candidate.exists() {
@@ -1222,8 +1221,7 @@ fn resolve_preview_image(
     }
 
     let decoded = urlencoding::decode(dest_url)
-        .map(|decoded| decoded.into_owned())
-        .unwrap_or_else(|_| dest_url.to_owned());
+        .map_or_else(|_| dest_url.to_owned(), |decoded| decoded.into_owned());
 
     if let Some(stripped) = ['/', '\\']
         .iter()
@@ -1426,16 +1424,16 @@ impl Item for MarkdownPreviewView {
     }
 
     fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
-        self.active_editor
-            .as_ref()
-            .map(|editor_state| {
+        self.active_editor.as_ref().map_or_else(
+            || tr(cx, "markdown_preview.tab_title", "Markdown Preview").into(),
+            |editor_state| {
                 let buffer = editor_state.editor.read(cx).buffer().read(cx);
                 let title = buffer.title(cx);
                 tr(cx, "markdown_preview.preview_title", "Preview {}")
                     .replacen("{}", &title, 1)
                     .into()
-            })
-            .unwrap_or_else(|| tr(cx, "markdown_preview.tab_title", "Markdown Preview").into())
+            },
+        )
     }
 
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString> {
@@ -1484,14 +1482,14 @@ impl Item for MarkdownPreviewView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        self.active_editor
-            .as_ref()
-            .map(|editor_state| {
+        self.active_editor.as_ref().map_or_else(
+            || Task::ready(Ok(())),
+            |editor_state| {
                 editor_state
                     .editor
                     .update(cx, |editor, cx| editor.save(options, project, window, cx))
-            })
-            .unwrap_or_else(|| Task::ready(Ok(())))
+            },
+        )
     }
 
     fn save_as(
@@ -1501,14 +1499,14 @@ impl Item for MarkdownPreviewView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        self.active_editor
-            .as_ref()
-            .map(|editor_state| {
+        self.active_editor.as_ref().map_or_else(
+            || Task::ready(Ok(())),
+            |editor_state| {
                 editor_state
                     .editor
                     .update(cx, |editor, cx| editor.save_as(project, path, window, cx))
-            })
-            .unwrap_or_else(|| Task::ready(Ok(())))
+            },
+        )
     }
 
     fn reload(
@@ -1547,10 +1545,10 @@ impl Item for MarkdownPreviewView {
 impl Render for MarkdownPreviewView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let preview_theme = self.resolve_preview_theme(cx);
-        let bg_color = preview_theme
-            .as_ref()
-            .map(|theme| theme.colors().editor_background)
-            .unwrap_or_else(|| cx.theme().colors().editor_background);
+        let bg_color = preview_theme.as_ref().map_or_else(
+            || cx.theme().colors().editor_background,
+            |theme| theme.colors().editor_background,
+        );
         div()
             .image_cache(self.image_cache.clone())
             .id("MarkdownPreview")

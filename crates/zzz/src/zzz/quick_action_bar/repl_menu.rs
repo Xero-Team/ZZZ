@@ -549,7 +549,7 @@ fn session_state(session: Entity<Session>, cx: &mut App) -> ReplMenuState {
                 "Error with kernel {}: {}",
             )
             .replacen("{}", &kernel_name, 1)
-            .replacen("{}", &e.to_string(), 1)
+            .replacen("{}", &e.clone(), 1)
             .into(),
             popover_disabled: false,
             indicator: Some(Indicator::dot().color(Color::Error)),

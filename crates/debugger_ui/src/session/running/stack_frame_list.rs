@@ -290,7 +290,7 @@ impl StackFrameList {
             .unwrap_or_default();
 
         let mut filter_entries_indices = Vec::default();
-        for stack_frame in stack_frames.iter() {
+        for stack_frame in &stack_frames {
             let frame_in_visible_worktree = stack_frame.dap.source.as_ref().is_some_and(|source| {
                 source.path.as_ref().is_some_and(|path| {
                     worktree_prefixes
@@ -301,8 +301,10 @@ impl StackFrameList {
             });
 
             match stack_frame.dap.presentation_hint {
-                Some(dap::StackFramePresentationHint::Deemphasize)
-                | Some(dap::StackFramePresentationHint::Subtle) => {
+                Some(
+                    dap::StackFramePresentationHint::Deemphasize
+                    | dap::StackFramePresentationHint::Subtle,
+                ) => {
                     collapsed_entries.push(stack_frame.dap.clone());
                 }
                 Some(dap::StackFramePresentationHint::Label) => {
@@ -802,19 +804,19 @@ impl StackFrameList {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let ix = if !self.entries.is_empty() {
-            Some(0)
-        } else {
+        let ix = if self.entries.is_empty() {
             None
+        } else {
+            Some(0)
         };
         self.select_ix(ix, cx);
     }
 
     fn select_last(&mut self, _: &menu::SelectLast, _window: &mut Window, cx: &mut Context<Self>) {
-        let ix = if !self.entries.is_empty() {
-            Some(self.entries.len() - 1)
-        } else {
+        let ix = if self.entries.is_empty() {
             None
+        } else {
+            Some(self.entries.len() - 1)
         };
         self.select_ix(ix, cx);
     }

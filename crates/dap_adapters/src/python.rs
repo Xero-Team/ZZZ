@@ -362,18 +362,8 @@ impl PythonDebugAdapter {
     ) -> Result<DebugAdapterBinary> {
         let mut tcp_connection = config.tcp_connection.clone().unwrap_or_default();
 
-        let (config_port, config_host) = config
-            .config
-            .get("connect")
-            .map(|value| {
-                (
-                    value
-                        .get("port")
-                        .and_then(|val| val.as_u64().map(|p| p as u16)),
-                    value.get("host").and_then(|val| val.as_str()),
-                )
-            })
-            .unwrap_or_else(|| {
+        let (config_port, config_host) = config.config.get("connect").map_or_else(
+            || {
                 (
                     config
                         .config
@@ -381,7 +371,16 @@ impl PythonDebugAdapter {
                         .and_then(|port| port.as_u64().map(|p| p as u16)),
                     config.config.get("host").and_then(|host| host.as_str()),
                 )
-            });
+            },
+            |value| {
+                (
+                    value
+                        .get("port")
+                        .and_then(|val| val.as_u64().map(|p| p as u16)),
+                    value.get("host").and_then(|val| val.as_str()),
+                )
+            },
+        );
 
         let is_attach_with_connect = if config
             .config

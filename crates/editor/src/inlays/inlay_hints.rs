@@ -201,10 +201,10 @@ impl LspInlayHintData {
                                 .into_iter()
                                 .filter_map(|inlay| {
                                     let inlay_kind = self.added_hints.get(&inlay.id).copied()?;
-                                    if !self.allowed_hint_kinds.contains(&inlay_kind) {
-                                        Some(inlay.id)
-                                    } else {
+                                    if self.allowed_hint_kinds.contains(&inlay_kind) {
                                         None
+                                    } else {
+                                        Some(inlay.id)
                                     }
                                 })
                                 .collect(),
@@ -237,10 +237,10 @@ impl LspInlayHintData {
                             .into_iter()
                             .filter_map(|inlay| {
                                 let inlay_kind = self.added_hints.get(&inlay.id).copied()?;
-                                if !self.allowed_hint_kinds.contains(&inlay_kind) {
-                                    Some(inlay.id)
-                                } else {
+                                if self.allowed_hint_kinds.contains(&inlay_kind) {
                                     None
+                                } else {
+                                    Some(inlay.id)
                                 }
                             })
                             .collect(),

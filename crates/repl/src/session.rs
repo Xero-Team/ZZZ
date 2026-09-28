@@ -439,13 +439,13 @@ impl Session {
                     let end_offset = code_range.end.to_offset(&snapshot);
                     let current_len = end_offset.saturating_sub(start_offset);
 
-                    if current_len != *original_len {
+                    if current_len == *original_len {
+                        true
+                    } else {
                         inlays_to_remove.push(*inlay_id);
                         gutter_ranges_to_remove.push(code_range.clone());
                         keys_to_remove.push(id.clone());
                         false
-                    } else {
-                        true
                     }
                 });
 
@@ -923,7 +923,7 @@ impl Render for Session {
             ),
             Kernel::StartingKernel(_) => (Some(tr(cx, "repl.session.starting", "Starting")), None),
             Kernel::ErroredLaunch(err) => (
-                Some(tr(cx, "repl.session.error", "Error: {}").replacen("{}", &err.to_string(), 1)),
+                Some(tr(cx, "repl.session.error", "Error: {}").replacen("{}", &err.clone(), 1)),
                 None,
             ),
             Kernel::ShuttingDown => (

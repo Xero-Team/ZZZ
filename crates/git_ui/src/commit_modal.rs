@@ -363,8 +363,7 @@ impl CommitModal {
         let branch = active_repo
             .as_ref()
             .and_then(|repo| repo.read(cx).branch.as_ref())
-            .map(|b| b.name().to_owned())
-            .unwrap_or_else(|| "<no branch>".to_owned());
+            .map_or_else(|| "<no branch>".to_owned(), |b| b.name().to_owned());
 
         let branch_picker_button = Button::new("branch_picker_button", branch)
             .start_icon(

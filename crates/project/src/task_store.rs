@@ -407,15 +407,14 @@ fn remote_task_context_for_location(
             task_variables: task_context
                 .task_variables
                 .into_iter()
-                .filter_map(
-                    |(variable_name, variable_value)| match variable_name.parse() {
-                        Ok(variable_name) => Some((variable_name, variable_value)),
-                        Err(()) => {
-                            log::error!("Unknown variable name: {variable_name}");
-                            None
-                        }
-                    },
-                )
+                .filter_map(|(variable_name, variable_value)| {
+                    if let Ok(variable_name) = variable_name.parse() {
+                        Some((variable_name, variable_value))
+                    } else {
+                        log::error!("Unknown variable name: {variable_name}");
+                        None
+                    }
+                })
                 .collect(),
             project_env: task_context.project_env.into_iter().collect(),
         }))

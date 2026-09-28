@@ -34,23 +34,20 @@ fn surrounding_pair_ranges(
     cursor: DisplayPoint,
     target_char: char,
 ) -> Option<DelimiterRange> {
-    match surround_pair_for_char_helix(target_char) {
-        Some(pair) => {
-            let range =
-                surrounding_markers_containing_cursor(display_map, cursor, pair.open, pair.close)?;
-            let open_start = range.start.to_offset(display_map, Bias::Left);
-            let open_end = open_start + pair.open.len_utf8();
-            let close_end = range.end.to_offset(display_map, Bias::Left);
-            let close_start = close_end - pair.close.len_utf8();
-            Some(DelimiterRange {
-                open: open_start..open_end,
-                close: close_start..close_end,
-            })
-        }
-        None => {
-            let cursor_range = cursor..movement::right(display_map, cursor);
-            innermost_surrounding_pair(display_map, cursor_range)
-        }
+    if let Some(pair) = surround_pair_for_char_helix(target_char) {
+        let range =
+            surrounding_markers_containing_cursor(display_map, cursor, pair.open, pair.close)?;
+        let open_start = range.start.to_offset(display_map, Bias::Left);
+        let open_end = open_start + pair.open.len_utf8();
+        let close_end = range.end.to_offset(display_map, Bias::Left);
+        let close_start = close_end - pair.close.len_utf8();
+        Some(DelimiterRange {
+            open: open_start..open_end,
+            close: close_start..close_end,
+        })
+    } else {
+        let cursor_range = cursor..movement::right(display_map, cursor);
+        innermost_surrounding_pair(display_map, cursor_range)
     }
 }
 

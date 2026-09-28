@@ -257,7 +257,7 @@ pub async fn create_terminal_entity(
 
 /// Disable interactive pagers in ACP terminal commands.
 pub(crate) fn disable_pagers_through_env(env: &mut HashMap<String, String>) {
-    env.insert("PAGER".into(), "".into());
+    env.insert("PAGER".into(), String::new());
     // Override user core.pager (e.g. delta) which Git prefers over PAGER.
     env.insert("GIT_PAGER".into(), "cat".into());
 }

@@ -1569,8 +1569,7 @@ async fn register_session_inner(
             .sessions_with_children
             .keys()
             .position(|session| Some(session) == parent_session.as_ref())
-            .map(|position| position + 1)
-            .unwrap_or(this.sessions_with_children.len());
+            .map_or(this.sessions_with_children.len(), |position| position + 1);
         // Maintain topological sort order of sessions
         let (_, old) = this.sessions_with_children.insert_before(
             insert_position,
@@ -1688,8 +1687,7 @@ impl Render for DebugPanel {
             .active_session
             .as_ref()
             .map(|session| session.read(cx).running_state())
-            .map(|state| state.read(cx).has_open_context_menu(cx))
-            .unwrap_or(false)
+            .is_some_and(|state| state.read(cx).has_open_context_menu(cx))
         {
             self.context_menu.take();
         }
@@ -1837,15 +1835,10 @@ impl Render for DebugPanel {
                 this.on_mouse_down(
                     MouseButton::Right,
                     cx.listener(|this, event: &MouseDownEvent, window, cx| {
-                        if this
-                            .active_session
-                            .as_ref()
-                            .map(|session| {
-                                let state = session.read(cx).running_state();
-                                state.read(cx).has_pane_at_position(event.position)
-                            })
-                            .unwrap_or(false)
-                        {
+                        if this.active_session.as_ref().is_some_and(|session| {
+                            let state = session.read(cx).running_state();
+                            state.read(cx).has_pane_at_position(event.position)
+                        }) {
                             this.deploy_context_menu(event.position, window, cx);
                         }
                     }),

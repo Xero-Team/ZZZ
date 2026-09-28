@@ -149,7 +149,7 @@ pub struct SshConnectionOptions {
 impl From<settings::SshConnection> for SshConnectionOptions {
     fn from(val: settings::SshConnection) -> Self {
         SshConnectionOptions {
-            host: val.host.to_string().into(),
+            host: val.host.clone().into(),
             username: val.username,
             port: val.port,
             password: None,
@@ -984,7 +984,7 @@ impl SshRemoteConnection {
                 .context("shell quoting")?;
             format!("chmod {server_mode} {orig_tmp_path} && mv {orig_tmp_path} {dst_path}",)
         };
-        let args = shell_kind.args_for_shell(false, script.to_string());
+        let args = shell_kind.args_for_shell(false, script.clone());
         self.socket
             .run_command(self.ssh_shell_kind, "sh", &args, true)
             .await?;
@@ -1475,7 +1475,7 @@ impl SshConnectionOptions {
 
         'outer: while let Some(arg) = tokens.next() {
             if ALLOWED_OPTS.contains(&(&arg as &str)) {
-                args.push(arg.to_string());
+                args.push(arg.clone());
                 continue;
             }
             if arg == "-p" {
@@ -1707,7 +1707,7 @@ fn build_command_posix(
     };
     write!(exec, "exec env ")?;
 
-    for (k, v) in input_env.iter() {
+    for (k, v) in input_env {
         let assignment = format!("{k}={v}");
         let assignment = ssh_shell_kind
             .try_quote(&assignment)

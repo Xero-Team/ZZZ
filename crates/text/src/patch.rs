@@ -542,8 +542,7 @@ mod tests {
     #[gpui::test(iterations = 100)]
     fn test_random_patch_compositions(mut rng: StdRng) {
         let operations = env::var("OPERATIONS")
-            .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-            .unwrap_or(20);
+            .map_or(20, |i| i.parse().expect("invalid `OPERATIONS` variable"));
 
         let initial_chars = (0..rng.random_range(0..=100))
             .map(|_| rng.random_range(b'a'..=b'z') as char)

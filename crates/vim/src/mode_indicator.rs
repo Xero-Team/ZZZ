@@ -136,10 +136,10 @@ impl Render for ModeIndicator {
                 .pending_keys
                 .as_ref()
                 .unwrap_or(&current_operators_description);
-            let mode = if bg_color != system_transparent {
-                mode_str.into()
-            } else {
+            let mode = if bg_color == system_transparent {
                 format!("-- {} --", mode_str).into()
+            } else {
+                mode_str.into()
             };
             (pending.into(), Some(mode))
         };

@@ -23,8 +23,7 @@ pub fn measure<R>(label: &str, f: impl FnOnce() -> R) -> R {
     static ZZZ_MEASUREMENTS: OnceLock<bool> = OnceLock::new();
     let zzz_measurements = ZZZ_MEASUREMENTS.get_or_init(|| {
         env::var("ZZZ_MEASUREMENTS")
-            .map(|measurements| measurements == "1" || measurements == "true")
-            .unwrap_or(false)
+            .is_ok_and(|measurements| measurements == "1" || measurements == "true")
     });
 
     if *zzz_measurements {
@@ -416,10 +415,10 @@ impl std::hash::Hasher for TypeIdHasher {
     #[inline]
     fn write(&mut self, bytes: &[u8]) {
         if let Some(bytes) = bytes.get(..8) {
-            bytes
-                .as_array()
-                .map(|&array| self.value = u64::from_ne_bytes(array))
-                .unwrap_or_else(|| unreachable!("slice was sliced to 8 bytes"));
+            bytes.as_array().map_or_else(
+                || unreachable!("slice was sliced to 8 bytes"),
+                |&array| self.value = u64::from_ne_bytes(array),
+            );
         } else {
             debug_panic!(
                 "expected a 64-bit value, did you use this hasher with something other than a TypeId?"

@@ -40,8 +40,7 @@ impl<R: ToString> ReportEntry<R> {
     fn pull_request_cell(&self) -> String {
         self.commit
             .pr_number()
-            .map(|pr_number| format!("#{pr_number}"))
-            .unwrap_or_else(|| "—".to_owned())
+            .map_or_else(|| "—".to_owned(), |pr_number| format!("#{pr_number}"))
     }
 
     fn author_cell(&self) -> String {

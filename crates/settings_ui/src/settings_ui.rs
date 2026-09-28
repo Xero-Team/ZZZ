@@ -1754,10 +1754,10 @@ impl SettingsWindow {
         })
         .detach();
 
-        let title_bar = if !cfg!(target_os = "macos") {
-            Some(cx.new(|cx| PlatformTitleBar::new("settings-title-bar", cx)))
-        } else {
+        let title_bar = if cfg!(target_os = "macos") {
             None
+        } else {
+            Some(cx.new(|cx| PlatformTitleBar::new("settings-title-bar", cx)))
         };
 
         let list_state = gpui::ListState::new(0, gpui::ListAlignment::Top, px(0.0)).measure_all();
@@ -1992,17 +1992,17 @@ impl SettingsWindow {
                         discriminant: SettingItem { files, .. },
                         ..
                     }) => {
-                        if !files.contains(current_file) {
-                            page_filter[index] = false;
-                        } else {
+                        if files.contains(current_file) {
                             any_found_since_last_header = true;
+                        } else {
+                            page_filter[index] = false;
                         }
                     }
                     SettingsPageItem::ActionLink(ActionLink { files, .. }) => {
-                        if !files.contains(current_file) {
-                            page_filter[index] = false;
-                        } else {
+                        if files.contains(current_file) {
                             any_found_since_last_header = true;
+                        } else {
+                            page_filter[index] = false;
                         }
                     }
                 }
@@ -3393,10 +3393,9 @@ impl SettingsWindow {
                         return gpui::Empty.into_any_element();
                     };
 
-                    let next_is_header = visible_items
-                        .next()
-                        .map(|(_, item)| matches!(item, SettingsPageItem::SectionHeader(_)))
-                        .unwrap_or(false);
+                    let next_is_header = visible_items.next().is_some_and(|(_, item)| {
+                        matches!(item, SettingsPageItem::SectionHeader(_))
+                    });
 
                     let is_last = Some(actual_item_index) == last_non_header_index;
                     let is_last_in_section = next_is_header || is_last;
@@ -4530,10 +4529,10 @@ fn render_editable_number_field<T: NumberFieldType + Send + Sync>(
     let (_, value) = SettingsStore::global(cx).get_value_from_file(file.to_settings(), field.pick);
     let value = value.copied().unwrap_or_else(T::min_value);
 
-    let id = field
-        .json_path
-        .map(|p| format!("numeric_stepper_{}", p))
-        .unwrap_or_else(|| "numeric_stepper".to_owned());
+    let id = field.json_path.map_or_else(
+        || "numeric_stepper".to_owned(),
+        |p| format!("numeric_stepper_{}", p),
+    );
 
     NumberField::new(id, value, window, cx)
         .mode(NumberFieldMode::Edit, cx)
@@ -4671,8 +4670,7 @@ fn render_theme_picker(
     let (_, value) = SettingsStore::global(cx).get_value_from_file(file.to_settings(), field.pick);
     let current_value = value
         .cloned()
-        .map(|theme_name| theme_name.0.into())
-        .unwrap_or_else(|| cx.theme().name.clone());
+        .map_or_else(|| cx.theme().name.clone(), |theme_name| theme_name.0.into());
 
     PopoverMenu::new("theme-picker")
         .trigger(render_picker_trigger_button(
@@ -4725,8 +4723,7 @@ fn render_icon_theme_picker(
     let (_, value) = SettingsStore::global(cx).get_value_from_file(file.to_settings(), field.pick);
     let current_value = value
         .cloned()
-        .map(|theme_name| theme_name.0.into())
-        .unwrap_or_else(|| cx.theme().name.clone());
+        .map_or_else(|| cx.theme().name.clone(), |theme_name| theme_name.0.into());
 
     PopoverMenu::new("icon-theme-picker")
         .trigger(render_picker_trigger_button(

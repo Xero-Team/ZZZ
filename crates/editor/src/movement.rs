@@ -598,10 +598,7 @@ fn is_comment_paragraph_line(snapshot: &MultiBufferSnapshot, row: u32) -> bool {
     let indent_len = snapshot.indent_size_for_line(buffer_row).len;
     let indent_end = Point::new(row, indent_len);
     let in_comment = snapshot.language_scope_at(indent_end).is_some_and(|scope| {
-        matches!(
-            scope.override_name(),
-            Some("comment") | Some("comment.inclusive")
-        )
+        matches!(scope.override_name(), Some("comment" | "comment.inclusive"))
     });
     if !in_comment {
         return false;

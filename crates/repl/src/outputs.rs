@@ -443,7 +443,7 @@ impl Output {
                     display_id,
                 }
             }
-            Some(MimeType::Png(data)) | Some(MimeType::Jpeg(data)) => match ImageView::from(data) {
+            Some(MimeType::Png(data) | MimeType::Jpeg(data)) => match ImageView::from(data) {
                 Ok(view) => Output::Image {
                     content: cx.new(|_| view),
                     display_id,
@@ -645,7 +645,7 @@ impl ExecutionView {
                 })
             }
             JupyterMessageContent::ExecuteReply(reply) => {
-                for payload in reply.payload.iter() {
+                for payload in &reply.payload {
                     if let runtimelib::Payload::Page { data, .. } = payload {
                         let output = Output::new(data, None, window, cx);
                         self.outputs.push(output);

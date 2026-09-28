@@ -66,7 +66,7 @@ impl AppCommitSha {
 
     /// Returns the full commit SHA.
     pub fn full(&self) -> String {
-        self.0.to_string()
+        self.0.clone()
     }
 
     /// Returns the short (7 character) commit SHA.

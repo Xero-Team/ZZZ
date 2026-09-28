@@ -82,7 +82,7 @@ pub fn new_journal_entry(workspace: &Workspace, window: &mut Window, cx: &mut Ap
 
     let worktrees = workspace.visible_worktrees(cx).collect::<Vec<_>>();
     let mut open_new_workspace = true;
-    'outer: for worktree in worktrees.iter() {
+    'outer: for worktree in &worktrees {
         let worktree_root = worktree.read(cx).abs_path();
         if *worktree_root == journal_dir_clone {
             open_new_workspace = false;

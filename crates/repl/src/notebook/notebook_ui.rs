@@ -435,8 +435,9 @@ impl NotebookEditor {
             .project
             .read(cx)
             .worktree_for_id(self.worktree_id, cx)
-            .map(|worktree| worktree.read(cx).abs_path().to_path_buf())
-            .unwrap_or_else(std::env::temp_dir);
+            .map_or_else(std::env::temp_dir, |worktree| {
+                worktree.read(cx).abs_path().to_path_buf()
+            });
         let fs = self.project.read(cx).fs().clone();
         let view = cx.entity();
 
@@ -1298,17 +1299,17 @@ impl NotebookEditor {
                             KernelStatus::Shutdown => (IconName::ReplNeutral, Color::Disabled),
                             KernelStatus::Restarting => (IconName::ReplNeutral, Color::Warning),
                         };
-                        let kernel_name: SharedString = self
-                            .kernel_specification
-                            .as_ref()
-                            .map(|spec| SharedString::from(spec.name().to_string()))
-                            .unwrap_or_else(|| {
-                                SharedString::from(tr(
-                                    cx,
-                                    "repl.notebook.select_kernel",
-                                    "Select Kernel",
-                                ))
-                            });
+                        let kernel_name: SharedString =
+                            self.kernel_specification.as_ref().map_or_else(
+                                || {
+                                    SharedString::from(tr(
+                                        cx,
+                                        "repl.notebook.select_kernel",
+                                        "Select Kernel",
+                                    ))
+                                },
+                                |spec| SharedString::from(spec.name().to_string()),
+                            );
                         IconButton::new("repl", icon)
                             .icon_color(icon_color)
                             .tooltip(move |window, cx| {
@@ -1339,13 +1340,10 @@ impl NotebookEditor {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let kernel_status = self.kernel.status();
-        let kernel_name: SharedString = self
-            .kernel_specification
-            .as_ref()
-            .map(|spec| SharedString::from(spec.name().to_string()))
-            .unwrap_or_else(|| {
-                SharedString::from(tr(cx, "repl.notebook.select_kernel", "Select Kernel"))
-            });
+        let kernel_name: SharedString = self.kernel_specification.as_ref().map_or_else(
+            || SharedString::from(tr(cx, "repl.notebook.select_kernel", "Select Kernel")),
+            |spec| SharedString::from(spec.name().to_string()),
+        );
 
         let (status_icon, status_color) = match &kernel_status {
             KernelStatus::Idle => (IconName::Circle, Color::Success),
@@ -1788,24 +1786,21 @@ impl project::ProjectItem for NotebookItem {
                         metadata: serde_json::from_str("{}").unwrap(),
                     }
                 } else {
-                    let notebook = match nbformat::parse_notebook(&file_content) {
-                        Ok(nb) => nb,
-                        Err(_) => {
-                            // Pre-process to ensure IDs exist
-                            let mut json: serde_json::Value = serde_json::from_str(&file_content)?;
-                            if let Some(cells) =
-                                json.get_mut("cells").and_then(|c| c.as_array_mut())
-                            {
-                                for cell in cells {
-                                    if cell.get("id").is_none() {
-                                        cell["id"] =
-                                            serde_json::Value::String(Uuid::new_v4().to_string());
-                                    }
+                    let notebook = if let Ok(nb) = nbformat::parse_notebook(&file_content) {
+                        nb
+                    } else {
+                        // Pre-process to ensure IDs exist
+                        let mut json: serde_json::Value = serde_json::from_str(&file_content)?;
+                        if let Some(cells) = json.get_mut("cells").and_then(|c| c.as_array_mut()) {
+                            for cell in cells {
+                                if cell.get("id").is_none() {
+                                    cell["id"] =
+                                        serde_json::Value::String(Uuid::new_v4().to_string());
                                 }
                             }
-                            let file_content = serde_json::to_string(&json)?;
-                            nbformat::parse_notebook(&file_content)?
                         }
+                        let file_content = serde_json::to_string(&json)?;
+                        nbformat::parse_notebook(&file_content)?
                     };
 
                     match notebook {
@@ -2086,7 +2081,7 @@ impl Item for NotebookEditor {
                 let mut cell_order = vec![];
                 let mut cell_map = HashMap::default();
 
-                for cell in notebook.cells.iter() {
+                for cell in &notebook.cells {
                     let cell_id = cell.id();
                     cell_order.push(cell_id.clone());
                     let cell_entity =

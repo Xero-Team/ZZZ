@@ -20,8 +20,7 @@ impl CopyButtonState {
 
     fn is_copied(&self) -> bool {
         self.copied_at
-            .map(|t| t.elapsed() < COPIED_STATE_DURATION)
-            .unwrap_or(false)
+            .is_some_and(|t| t.elapsed() < COPIED_STATE_DURATION)
     }
 
     fn mark_copied(&mut self) {

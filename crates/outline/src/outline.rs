@@ -337,8 +337,7 @@ impl PickerDelegate for OutlineViewDelegate {
                             range.contains(&cursor_offset).then_some((ix, item.depth))
                         })
                         .max_by_key(|(ix, depth)| (*depth, cmp::Reverse(*ix)))
-                        .map(|(ix, _)| ix)
-                        .unwrap_or(0)
+                        .map_or(0, |(ix, _)| ix)
                 } else {
                     this.delegate
                         .matches
@@ -349,8 +348,7 @@ impl PickerDelegate for OutlineViewDelegate {
                                 .cmp(&OrderedFloat(b.score))
                                 .then(ix_b.cmp(ix_a))
                         })
-                        .map(|(ix, _)| ix)
-                        .unwrap_or(0)
+                        .map_or(0, |(ix, _)| ix)
                 };
 
                 this.delegate

@@ -82,7 +82,7 @@ fn files_not_created_on_launch(errors: HashMap<io::ErrorKind, Vec<&Path>>) {
     let message = "ZZZ failed to launch";
     let error_details = errors
         .into_iter()
-        .flat_map(|(kind, paths)| {
+        .filter_map(|(kind, paths)| {
             #[allow(unused_mut)] // for non-unix platforms
             let mut error_kind_details = match paths.len() {
                 0 => return None,
@@ -379,7 +379,9 @@ fn main() {
     );
 
     let (shell_env_loaded_tx, shell_env_loaded_rx) = oneshot::channel();
-    if !stdout_is_a_pty() {
+    if stdout_is_a_pty() {
+        drop(shell_env_loaded_tx)
+    } else {
         app.background_executor()
             .spawn(async {
                 #[cfg(unix)]
@@ -387,8 +389,6 @@ fn main() {
                 shell_env_loaded_tx.send(()).ok();
             })
             .detach()
-    } else {
-        drop(shell_env_loaded_tx)
     }
 
     app.on_open_urls({
@@ -660,7 +660,7 @@ fn main() {
             move |cx| {
                 let locale_changed = app_i18n::reload(cx);
 
-                for &mut window in cx.windows().iter_mut() {
+                for &mut window in &mut cx.windows() {
                     let background_appearance = cx.theme().window_background_appearance();
                     window
                         .update(cx, |_, window, _| {

@@ -133,15 +133,15 @@ impl ManifestTree {
 
         if current_presence == LabelPresence::KnownAbsent {
             // Some part of the path is unexplored.
-            let depth = marked_path
-                .as_ref()
-                .map(|root_path| {
+            let depth = marked_path.as_ref().map_or_else(
+                || path.components().count() + 1,
+                |root_path| {
                     path.strip_prefix(&root_path.path)
                         .unwrap()
                         .components()
                         .count()
-                })
-                .unwrap_or_else(|| path.components().count() + 1);
+                },
+            );
 
             if depth > 0
                 && let Some(provider) =

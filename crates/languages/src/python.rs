@@ -937,8 +937,7 @@ impl ContextProvider for PythonContextProvider {
                 let file_path = location_file
                     .as_ref()
                     .and_then(|f| f.path().parent())
-                    .map(Arc::from)
-                    .unwrap_or_else(|| RelPath::empty_arc());
+                    .map_or_else(|| RelPath::empty_arc(), Arc::from);
 
                 toolchains
                     .active_toolchain(worktree_id, file_path, "Python".into(), cx)
@@ -1410,9 +1409,9 @@ impl ToolchainLister for PythonToolchainProvider {
             // Compare conda prefixes
             let conda_ordering = || {
                 if lhs.kind == Some(PythonEnvironmentKind::Conda) {
-                    environment
-                        .get_env_var("CONDA_PREFIX".to_owned())
-                        .map(|conda_prefix| {
+                    environment.get_env_var("CONDA_PREFIX".to_owned()).map_or(
+                        Ordering::Equal,
+                        |conda_prefix| {
                             let is_match = |exe: &Option<PathBuf>| {
                                 exe.as_ref().is_some_and(|e| e.starts_with(&conda_prefix))
                             };
@@ -1421,8 +1420,8 @@ impl ToolchainLister for PythonToolchainProvider {
                                 (false, true) => Ordering::Greater,
                                 _ => Ordering::Equal,
                             }
-                        })
-                        .unwrap_or(Ordering::Equal)
+                        },
+                    )
                 } else {
                     Ordering::Equal
                 }
@@ -1493,8 +1492,7 @@ impl ToolchainLister for PythonToolchainProvider {
         let conda_manager = settings
             .detect_venv
             .as_option()
-            .map(|venv| venv.conda_manager)
-            .unwrap_or(settings::CondaManager::Auto);
+            .map_or(settings::CondaManager::Auto, |venv| venv.conda_manager);
 
         let toolchain_clone = toolchain.clone();
         Box::pin(async move {

@@ -512,8 +512,8 @@ pub async fn handle_import_vscode_settings(
 
     let result = result_channel.await;
     workspace
-        .update_in(cx, |workspace, _, cx| match result {
-            Ok(_) => {
+        .update_in(cx, |workspace, _, cx| {
+            if result.is_ok() {
                 let confirmation_toast = StatusToast::new(
                     tr(
                         cx,
@@ -540,8 +540,7 @@ pub async fn handle_import_vscode_settings(
                     }
                 });
                 workspace.toggle_status_toast(confirmation_toast, cx);
-            }
-            Err(_) => {
+            } else {
                 let open_log_label = tr(cx, "onboarding.settings_import.open_log", "Open Log");
                 let error_toast = StatusToast::new(
                     tr(

@@ -416,7 +416,15 @@ pub fn auth_server_metadata_urls(issuer: &Url) -> Vec<Url> {
     let base = format!("{}://{}", issuer.scheme(), issuer.authority());
     let path = issuer.path().trim_matches('/');
 
-    if !path.is_empty() {
+    if path.is_empty() {
+        // No path: standard well-known locations.
+        if let Ok(url) = Url::parse(&format!("{}/.well-known/oauth-authorization-server", base)) {
+            urls.push(url);
+        }
+        if let Ok(url) = Url::parse(&format!("{}/.well-known/openid-configuration", base)) {
+            urls.push(url);
+        }
+    } else {
         // Issuer with path: try path-inserted variants first.
         if let Ok(url) = Url::parse(&format!(
             "{}/.well-known/oauth-authorization-server/{}",
@@ -434,14 +442,6 @@ pub fn auth_server_metadata_urls(issuer: &Url) -> Vec<Url> {
             "{}/{}/.well-known/openid-configuration",
             base, path
         )) {
-            urls.push(url);
-        }
-    } else {
-        // No path: standard well-known locations.
-        if let Ok(url) = Url::parse(&format!("{}/.well-known/oauth-authorization-server", base)) {
-            urls.push(url);
-        }
-        if let Ok(url) = Url::parse(&format!("{}/.well-known/openid-configuration", base)) {
             urls.push(url);
         }
     }
@@ -1174,13 +1174,12 @@ pub async fn start_callback_server() -> Result<(
             }
 
             let timeout = remaining.min(Duration::from_millis(500));
-            let Some(request) = (match server.recv_timeout(timeout) {
-                Ok(req) => req,
-                Err(_) => {
-                    let _ = tx.send(Err(anyhow!("OAuth callback server I/O error")));
-                    return;
-                }
-            }) else {
+            let Ok(request) = server.recv_timeout(timeout) else {
+                let _ = tx.send(Err(anyhow!("OAuth callback server I/O error")));
+                return;
+            };
+
+            let Some(request) = request else {
                 // Timeout with no request — loop back and check cancellation.
                 continue;
             };

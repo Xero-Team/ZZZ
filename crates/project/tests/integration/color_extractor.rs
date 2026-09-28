@@ -45,7 +45,7 @@ pub const COLOR_TABLE: &[(&str, Option<u32>)] = &[
 
 #[test]
 fn can_extract_from_label() {
-    for (color_str, color_val) in COLOR_TABLE.iter() {
+    for (color_str, color_val) in COLOR_TABLE {
         let color = extract_color(&CompletionItem {
             kind: Some(CompletionItemKind::COLOR),
             label: color_str.to_string(),
@@ -60,7 +60,7 @@ fn can_extract_from_label() {
 
 #[test]
 fn only_whole_label_matches_are_allowed() {
-    for (color_str, _) in COLOR_TABLE.iter() {
+    for (color_str, _) in COLOR_TABLE {
         let color = extract_color(&CompletionItem {
             kind: Some(CompletionItemKind::COLOR),
             label: format!("{} foo", color_str).to_string(),
@@ -75,10 +75,10 @@ fn only_whole_label_matches_are_allowed() {
 
 #[test]
 fn can_extract_from_detail() {
-    for (color_str, color_val) in COLOR_TABLE.iter() {
+    for (color_str, color_val) in COLOR_TABLE {
         let color = extract_color(&CompletionItem {
             kind: Some(CompletionItemKind::COLOR),
-            label: "".to_string(),
+            label: String::new(),
             detail: Some(color_str.to_string()),
             documentation: None,
             ..Default::default()
@@ -90,10 +90,10 @@ fn can_extract_from_detail() {
 
 #[test]
 fn only_whole_detail_matches_are_allowed() {
-    for (color_str, _) in COLOR_TABLE.iter() {
+    for (color_str, _) in COLOR_TABLE {
         let color = extract_color(&CompletionItem {
             kind: Some(CompletionItemKind::COLOR),
-            label: "".to_string(),
+            label: String::new(),
             detail: Some(format!("{} foo", color_str).to_string()),
             documentation: None,
             ..Default::default()
@@ -105,10 +105,10 @@ fn only_whole_detail_matches_are_allowed() {
 
 #[test]
 fn can_extract_from_documentation_start() {
-    for (color_str, color_val) in COLOR_TABLE.iter() {
+    for (color_str, color_val) in COLOR_TABLE {
         let color = extract_color(&CompletionItem {
             kind: Some(CompletionItemKind::COLOR),
-            label: "".to_string(),
+            label: String::new(),
             detail: None,
             documentation: Some(Documentation::String(
                 format!("{} foo", color_str).to_string(),
@@ -122,10 +122,10 @@ fn can_extract_from_documentation_start() {
 
 #[test]
 fn can_extract_from_documentation_end() {
-    for (color_str, color_val) in COLOR_TABLE.iter() {
+    for (color_str, color_val) in COLOR_TABLE {
         let color = extract_color(&CompletionItem {
             kind: Some(CompletionItemKind::COLOR),
-            label: "".to_string(),
+            label: String::new(),
             detail: None,
             documentation: Some(Documentation::String(
                 format!("foo {}", color_str).to_string(),
@@ -139,10 +139,10 @@ fn can_extract_from_documentation_end() {
 
 #[test]
 fn cannot_extract_from_documentation_middle() {
-    for (color_str, _) in COLOR_TABLE.iter() {
+    for (color_str, _) in COLOR_TABLE {
         let color = extract_color(&CompletionItem {
             kind: Some(CompletionItemKind::COLOR),
-            label: "".to_string(),
+            label: String::new(),
             detail: None,
             documentation: Some(Documentation::String(
                 format!("foo {} foo", color_str).to_string(),

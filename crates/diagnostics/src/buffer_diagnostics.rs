@@ -419,7 +419,7 @@ impl BufferDiagnosticsEditor {
             // determine what range does the diagnostic block span.
             let mut excerpt_ranges: Vec<ExcerptRange<_>> = Vec::new();
 
-            for diagnostic_block in blocks.iter() {
+            for diagnostic_block in &blocks {
                 let excerpt_range = context_range_for_entry(
                     diagnostic_block.initial_range.clone(),
                     multibuffer_context,
@@ -658,9 +658,10 @@ impl BufferDiagnosticsEditor {
     }
 
     fn max_diagnostics_severity(include_warnings: bool) -> DiagnosticSeverity {
-        match include_warnings {
-            true => DiagnosticSeverity::Warning,
-            false => DiagnosticSeverity::Error,
+        if include_warnings {
+            DiagnosticSeverity::Warning
+        } else {
+            DiagnosticSeverity::Error
         }
     }
 
@@ -821,13 +822,10 @@ impl Item for BufferDiagnosticsEditor {
         let path_style = self.project.read(cx).path_style(cx);
         let error_count = self.summary.error_count;
         let warning_count = self.summary.warning_count;
-        let label = Label::new(
-            self.project_path
-                .path
-                .file_name()
-                .map(|s| s.to_owned())
-                .unwrap_or_else(|| self.project_path.path.display(path_style).to_string()),
-        );
+        let label = Label::new(self.project_path.path.file_name().map_or_else(
+            || self.project_path.path.display(path_style).to_string(),
+            |s| s.to_owned(),
+        ));
 
         h_flex()
             .gap_1()
@@ -885,9 +883,10 @@ impl Render for BufferDiagnosticsEditor {
         let path_style = self.project.read(cx).path_style(cx);
         let filename = self.project_path.path.display(path_style).to_string();
         let error_count = self.summary.error_count;
-        let warning_count = match self.include_warnings {
-            true => self.summary.warning_count,
-            false => 0,
+        let warning_count = if self.include_warnings {
+            self.summary.warning_count
+        } else {
+            0
         };
 
         let child = if error_count + warning_count == 0 {

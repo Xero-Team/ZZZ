@@ -914,9 +914,7 @@ fn sort_branch_entries(
             return (4, false);
         };
 
-        let priority = branch_selection_context
-            .map(|context| context.priority(branch))
-            .unwrap_or(0);
+        let priority = branch_selection_context.map_or(0, |context| context.priority(branch));
         (priority, branch.is_remote())
     });
 }
@@ -1140,10 +1138,10 @@ impl BranchListDelegate {
                         log::error!("Failed to delete branch: {error}");
                     }
 
-                    let force_delete_prompt = if !force {
-                        force_delete_prompt_for_branch_delete_error(&error)
-                    } else {
+                    let force_delete_prompt = if force {
                         false
+                    } else {
+                        force_delete_prompt_for_branch_delete_error(&error)
                     }
                     .then(|| {
                         cx.update(|_, cx| unmerged_branch_force_delete_prompt(entry.name(), cx))
@@ -1467,14 +1465,14 @@ impl PickerDelegate for BranchListDelegate {
                 .update(cx, |picker, _| {
                     if let PickerState::CreateRemote(url) = &picker.delegate.state {
                         let query = normalize_branch_name(&query);
-                        if !query.is_empty() {
+                        if query.is_empty() {
+                            picker.delegate.matches = Vec::new();
+                            picker.delegate.selected_index = 0;
+                        } else {
                             picker.delegate.matches = vec![Entry::NewRemoteName {
                                 name: query.clone(),
                                 url: url.clone(),
                             }];
-                            picker.delegate.selected_index = 0;
-                        } else {
-                            picker.delegate.matches = Vec::new();
                             picker.delegate.selected_index = 0;
                         }
                         picker.delegate.last_query = query;

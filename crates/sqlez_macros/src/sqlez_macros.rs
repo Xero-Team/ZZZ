@@ -131,7 +131,7 @@ fn open_delimiter(delimiter: Delimiter) -> String {
         Delimiter::Parenthesis => "( ".to_owned(),
         Delimiter::Brace => "{ ".to_owned(),
         Delimiter::Bracket => "[ ".to_owned(),
-        Delimiter::None => "".to_owned(),
+        Delimiter::None => String::new(),
     }
 }
 
@@ -140,7 +140,7 @@ fn close_delimiter(delimiter: Delimiter) -> String {
         Delimiter::Parenthesis => " ) ".to_owned(),
         Delimiter::Brace => " } ".to_owned(),
         Delimiter::Bracket => " ] ".to_owned(),
-        Delimiter::None => "".to_owned(),
+        Delimiter::None => String::new(),
     }
 }
 

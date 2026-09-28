@@ -930,9 +930,10 @@ impl X11Client {
                     let paths: SmallVec<[_; 2]> = file_list
                         .lines()
                         .filter_map(|path| Url::parse(path).log_err())
-                        .filter_map(|url| match url.to_file_path() {
-                            Ok(url) => Some(url),
-                            Err(()) => {
+                        .filter_map(|url| {
+                            if let Ok(url) = url.to_file_path() {
+                                Some(url)
+                            } else {
                                 log::error!("Failed turn {url:?} into a file path");
                                 None
                             }
@@ -1875,8 +1876,9 @@ impl LinuxClient for X11Client {
             .keyboard_focused_window
             .and_then(|focused_window| state.windows.get(&focused_window))
             .map(|window| window.window.x_window as u64)
-            .map(|x_window| std::future::ready(Some(WindowIdentifier::from_xid(x_window))))
-            .unwrap_or(std::future::ready(None))
+            .map_or(std::future::ready(None), |x_window| {
+                std::future::ready(Some(WindowIdentifier::from_xid(x_window)))
+            })
     }
 }
 
@@ -1912,8 +1914,7 @@ impl X11ClientState {
         let is_visible = window_ref.is_mapped
             && !matches!(window_ref.last_visibility, Visibility::FULLY_OBSCURED);
         match (is_visible, window_ref.refresh_state.take()) {
-            (false, refresh_state @ Some(RefreshState::Hidden { .. }))
-            | (false, refresh_state @ None)
+            (false, refresh_state @ (Some(RefreshState::Hidden { .. }) | None))
             | (true, refresh_state @ Some(RefreshState::PeriodicRefresh { .. })) => {
                 window_ref.refresh_state = refresh_state;
             }
@@ -1963,15 +1964,14 @@ impl X11ClientState {
                         .iter()
                         .find(|m| m.id == crtc_info.mode)
                 });
-                let refresh_rate = match mode_info {
-                    Some(mode_info) => mode_refresh_rate(mode_info),
-                    None => {
-                        log::error!(
-                            "Failed to get screen mode info from xrandr, \
-                            defaulting to 60hz refresh rate."
-                        );
-                        Duration::from_micros(1_000_000 / 60)
-                    }
+                let refresh_rate = if let Some(mode_info) = mode_info {
+                    mode_refresh_rate(mode_info)
+                } else {
+                    log::error!(
+                        "Failed to get screen mode info from xrandr, \
+                        defaulting to 60hz refresh rate."
+                    );
+                    Duration::from_micros(1_000_000 / 60)
                 };
 
                 let event_loop_token = self.start_refresh_loop(x_window, refresh_rate);
@@ -2227,8 +2227,7 @@ fn check_compositor_present(xcb_connection: &XCBConnection, root: xproto::Window
                 || format!("Failed to get {atom_name}"),
                 xcb_connection.get_property(false, root, atom, xproto::AtomEnum::WINDOW, 0, 1),
             )
-            .map(|reply| reply.value_len > 0)
-            .unwrap_or(false)
+            .is_ok_and(|reply| reply.value_len > 0)
         }
         _ => return false,
     };
@@ -2246,8 +2245,7 @@ fn check_compositor_present(xcb_connection: &XCBConnection, root: xproto::Window
                 || format!("Failed to get {atom_name}"),
                 xcb_connection.get_property(false, root, atom, xproto::AtomEnum::WINDOW, 0, 1),
             )
-            .map(|reply| reply.value_len > 0)
-            .unwrap_or(false)
+            .is_ok_and(|reply| reply.value_len > 0)
         }
         _ => return false,
     };
@@ -2541,7 +2539,7 @@ fn get_scale_factor(
 ) -> f32 {
     let env_dpi = std::env::var(GPUI_X11_SCALE_FACTOR_ENV)
         .ok()
-        .map(|var| {
+        .map_or(DpiMode::NotSet, |var| {
             if var.to_lowercase() == "randr" {
                 DpiMode::Randr
             } else if let Ok(scale) = var.parse::<f32>() {
@@ -2561,8 +2559,7 @@ fn get_scale_factor(
                     GPUI_X11_SCALE_FACTOR_ENV, var
                 );
             }
-        })
-        .unwrap_or(DpiMode::NotSet);
+        });
 
     match env_dpi {
         DpiMode::Scale(scale) => {

@@ -328,10 +328,10 @@ impl SelectionsCollection {
     }
 
     pub fn first_anchor(&self) -> Selection<Anchor> {
-        self.pending
-            .as_ref()
-            .map(|pending| pending.selection.clone())
-            .unwrap_or_else(|| self.disjoint.first().cloned().unwrap())
+        self.pending.as_ref().map_or_else(
+            || self.disjoint.first().cloned().unwrap(),
+            |pending| pending.selection.clone(),
+        )
     }
 
     pub fn first<D>(&self, snapshot: &DisplaySnapshot) -> Selection<D>
@@ -1215,12 +1215,12 @@ where
 {
     // Without collapsed content, coalescing in buffer point space is equivalent to coalescing in
     // display point space, so skip the per-selection display-coordinate round trip.
-    if !map.has_collapsed_content() {
+    if map.has_collapsed_content() {
+        Either::Right(resolve_selections_via_display_round_trip(selections, map))
+    } else {
         Either::Left(resolve_selections_without_display_round_trip(
             selections, map,
         ))
-    } else {
-        Either::Right(resolve_selections_via_display_round_trip(selections, map))
     }
 }
 

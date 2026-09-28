@@ -142,7 +142,7 @@ fn package_manager_from_dev_engine(value: &Value) -> Option<&'static str> {
 }
 
 fn package_manager_name(value: &str) -> Option<&'static str> {
-    let value = value.split_once('@').map(|(name, _)| name).unwrap_or(value);
+    let value = value.split_once('@').map_or(value, |(name, _)| name);
     match value {
         "pnpm" => Some("pnpm"),
         "yarn" => Some("yarn"),

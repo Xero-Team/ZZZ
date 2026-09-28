@@ -529,7 +529,7 @@ impl SearchQuery {
             return Default::default();
         }
 
-        let range_offset = subrange.as_ref().map(|r| r.start).unwrap_or(0);
+        let range_offset = subrange.as_ref().map_or(0, |r| r.start);
         let rope = if let Some(range) = subrange {
             buffer.as_rope().slice(range)
         } else {

@@ -112,7 +112,7 @@ impl PreprocessorError {
                 if alias == action_name.as_str() {
                     return PreprocessorError::DeprecatedActionUsed {
                         used: action_name,
-                        should_be: action.name.to_string(),
+                        should_be: action.name.clone(),
                     };
                 }
             }
@@ -340,7 +340,7 @@ fn find_binding_in_keymap(keymap: &KeymapFile, action: &str) -> Option<String> {
         keymap.sections().rev().find_map(|section| {
             section.bindings().rev().find_map(|(keystroke, a)| {
                 if predicate(&a.to_string()) {
-                    Some(keystroke.to_string())
+                    Some(keystroke.clone())
                 } else {
                     None
                 }
@@ -829,7 +829,7 @@ fn generate_big_table_of_actions() -> String {
         output.push_str("</code><br>\n");
         if !action.deprecated_aliases.is_empty() {
             output.push_str("Deprecated Alias(es): ");
-            for alias in action.deprecated_aliases.iter() {
+            for alias in &action.deprecated_aliases {
                 output.push_str("<code>");
                 output.push_str(alias);
                 output.push_str("</code>, ");

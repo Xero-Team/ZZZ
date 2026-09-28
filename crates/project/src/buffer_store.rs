@@ -893,10 +893,10 @@ impl BufferStore {
 
         cx.background_spawn(async move {
             task.await.map_err(|e| {
-                if e.error_code() != ErrorCode::Internal {
-                    anyhow!(e.error_code())
-                } else {
+                if e.error_code() == ErrorCode::Internal {
                     anyhow!("{e}")
+                } else {
+                    anyhow!(e.error_code())
                 }
             })
         })
@@ -1023,10 +1023,10 @@ impl BufferStore {
             let task = task.clone();
             (path, async move {
                 task.await.map_err(|e| {
-                    if e.error_code() != ErrorCode::Internal {
-                        anyhow!(e.error_code())
-                    } else {
+                    if e.error_code() == ErrorCode::Internal {
                         anyhow!("{e}")
+                    } else {
+                        anyhow!(e.error_code())
                     }
                 })
             })

@@ -1055,6 +1055,24 @@ empty_line_after_doc_comments = "deny"
 inefficient_to_string = "deny"
 unchecked_time_subtraction = "deny"
 
+# Idiom lints from the `pedantic` group, promoted once the whole workspace was
+# clean for them: they prefer the standard-library idiom (`map_or`/`is_some_and`,
+# `filter_map`, `&container` loops, `String::new`, ...) over a hand-rolled match,
+# loop, or conversion. Each count stayed small enough to fix in one reviewable
+# pass; see the promotion bar in the block above.
+map_unwrap_or = "deny"
+flat_map_option = "deny"
+unnested_or_patterns = "deny"
+explicit_deref_methods = "deny"
+match_bool = "deny"
+implicit_clone = "deny"
+manual_string_new = "deny"
+single_match_else = "deny"
+if_not_else = "deny"
+explicit_iter_loop = "deny"
+stable_sort_primitive = "deny"
+manual_instant_elapsed = "deny"
+
 # We currently do not restrict any style rules
 # as it slows down shipping code to ZZZ.
 #

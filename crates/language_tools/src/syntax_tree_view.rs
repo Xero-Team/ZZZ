@@ -283,25 +283,24 @@ impl SyntaxTreeView {
             buffer_state.active_layer = None;
         }
 
-        let layer = match &mut buffer_state.active_layer {
-            Some(layer) => layer,
-            None => {
-                let snapshot = buffer.read(cx).snapshot();
-                let layer = if let Some(prev_layer) = prev_layer {
-                    let prev_range = prev_layer.node().byte_range();
-                    snapshot
-                        .syntax_layers()
-                        .filter(|layer| layer.language == &prev_layer.language)
-                        .min_by_key(|layer| {
-                            let range = layer.node().byte_range();
-                            ((range.start as i64) - (prev_range.start as i64)).abs()
-                                + ((range.end as i64) - (prev_range.end as i64)).abs()
-                        })?
-                } else {
-                    snapshot.syntax_layers().next()?
-                };
-                buffer_state.active_layer.insert(layer.to_owned())
-            }
+        let layer = if let Some(layer) = &mut buffer_state.active_layer {
+            layer
+        } else {
+            let snapshot = buffer.read(cx).snapshot();
+            let layer = if let Some(prev_layer) = prev_layer {
+                let prev_range = prev_layer.node().byte_range();
+                snapshot
+                    .syntax_layers()
+                    .filter(|layer| layer.language == &prev_layer.language)
+                    .min_by_key(|layer| {
+                        let range = layer.node().byte_range();
+                        ((range.start as i64) - (prev_range.start as i64)).abs()
+                            + ((range.end as i64) - (prev_range.end as i64)).abs()
+                    })?
+            } else {
+                snapshot.syntax_layers().next()?
+            };
+            buffer_state.active_layer.insert(layer.to_owned())
         };
 
         // Within the active layer, find the syntax node under the cursor,

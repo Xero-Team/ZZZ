@@ -284,14 +284,14 @@ fn rename_context_key(
         .next()?
         .byte_range();
     let old_predicate = contents.get(context_predicate_range.clone())?.to_owned();
-    let mut new_predicate = old_predicate.to_string();
+    let mut new_predicate = old_predicate.clone();
     for (old_key, new_key) in CONTEXT_REPLACE.iter() {
         new_predicate = new_predicate.replace(old_key, new_key);
     }
-    if new_predicate != old_predicate {
-        Some((context_predicate_range, new_predicate))
-    } else {
+    if new_predicate == old_predicate {
         None
+    } else {
+        Some((context_predicate_range, new_predicate))
     }
 }
 

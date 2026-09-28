@@ -217,10 +217,9 @@ impl Toolbar {
         self.hidden = self
             .active_item
             .as_ref()
-            .map(|item| !item.show_toolbar(cx))
-            .unwrap_or(false);
+            .is_some_and(|item| !item.show_toolbar(cx));
 
-        for (toolbar_item, current_location) in self.items.iter_mut() {
+        for (toolbar_item, current_location) in &mut self.items {
             let new_location = toolbar_item.set_active_pane_item(item, window, cx);
             if new_location != *current_location {
                 *current_location = new_location;
@@ -230,7 +229,7 @@ impl Toolbar {
     }
 
     pub fn focus_changed(&mut self, focused: bool, window: &mut Window, cx: &mut Context<Self>) {
-        for (toolbar_item, _) in self.items.iter_mut() {
+        for (toolbar_item, _) in &mut self.items {
             toolbar_item.focus_changed(focused, window, cx);
         }
     }

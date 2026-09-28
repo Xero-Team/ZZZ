@@ -290,11 +290,10 @@ impl Item for FileDiffView {
 
     fn tab_tooltip_text(&self, cx: &App) -> Option<ui::SharedString> {
         let path = |buffer: &Entity<Buffer>| {
-            buffer
-                .read(cx)
-                .file()
-                .map(|file| file.full_path(cx).compact().to_string_lossy().into_owned())
-                .unwrap_or_else(|| "untitled".into())
+            buffer.read(cx).file().map_or_else(
+                || "untitled".into(),
+                |file| file.full_path(cx).compact().to_string_lossy().into_owned(),
+            )
         };
         let old_path = path(&self.old_buffer);
         let new_path = path(&self.new_buffer);

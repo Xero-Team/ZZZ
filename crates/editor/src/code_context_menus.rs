@@ -367,8 +367,8 @@ impl CompletionsMenu {
             .iter()
             .map(|choice| Completion {
                 replace_range: selection.clone(),
-                new_text: choice.to_string(),
-                label: CodeLabel::plain(choice.to_string(), None),
+                new_text: choice.clone(),
+                label: CodeLabel::plain(choice.clone(), None),
                 match_start: None,
                 snippet_deduplication_key: None,
                 icon_path: None,
@@ -891,7 +891,9 @@ impl CompletionsMenu {
                         let main_label = StyledText::new(main_text.to_string())
                             .with_default_highlights(&style.text, main_highlights);
 
-                        let suffix_label = if !suffix_text.is_empty() {
+                        let suffix_label = if suffix_text.is_empty() {
+                            None
+                        } else {
                             let suffix_text_style = gpui::TextStyle {
                                 color: cx.theme().colors().text_muted,
                                 ..style.text.clone()
@@ -900,8 +902,6 @@ impl CompletionsMenu {
                                 StyledText::new(suffix_text.to_string())
                                     .with_default_highlights(&suffix_text_style, suffix_highlights),
                             )
-                        } else {
-                            None
                         };
 
                         let left_aligned_suffix =
@@ -913,11 +913,13 @@ impl CompletionsMenu {
                         );
 
                         let documentation_label = match documentation {
-                            Some(CompletionDocumentation::SingleLine(text))
-                            | Some(CompletionDocumentation::SingleLineAndMultiLinePlainText {
-                                single_line: text,
-                                ..
-                            }) => {
+                            Some(
+                                CompletionDocumentation::SingleLine(text)
+                                | CompletionDocumentation::SingleLineAndMultiLinePlainText {
+                                    single_line: text,
+                                    ..
+                                },
+                            ) => {
                                 if text.trim().is_empty() {
                                     None
                                 } else {
@@ -1302,14 +1304,12 @@ impl CompletionsMenu {
             // Snippets do their own first-letter matching logic elsewhere.
             let is_snippet = completion.is_snippet_kind();
             let query_start_doesnt_match_split_words = !is_snippet
-                && query_start_lower
-                    .map(|query_char| {
-                        !split_words(&string_match.string).any(|word| {
-                            word.chars().next().and_then(|c| c.to_lowercase().next())
-                                == Some(query_char)
-                        })
+                && query_start_lower.is_some_and(|query_char| {
+                    !split_words(&string_match.string).any(|word| {
+                        word.chars().next().and_then(|c| c.to_lowercase().next())
+                            == Some(query_char)
                     })
-                    .unwrap_or(false);
+                });
 
             if query_start_doesnt_match_split_words {
                 MatchTier::OtherMatch { sort_score }
@@ -1768,7 +1768,7 @@ impl CodeActionsMenu {
 
     fn origin(&self) -> ContextMenuOrigin {
         match &self.deployed_from {
-            Some(CodeActionSource::Indicator(row)) | Some(CodeActionSource::RunMenu(row)) => {
+            Some(CodeActionSource::Indicator(row) | CodeActionSource::RunMenu(row)) => {
                 ContextMenuOrigin::GutterIndicator(*row)
             }
             Some(CodeActionSource::QuickActionBar) => ContextMenuOrigin::QuickActionBar,

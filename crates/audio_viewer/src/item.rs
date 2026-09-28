@@ -46,10 +46,12 @@ impl Item for AudioView {
             self.project
                 .read(cx)
                 .entry_for_path(&project_path, cx)
-                .map(|entry| {
-                    entry_git_aware_label_color(git_status, entry.is_ignored, params.selected)
-                })
-                .unwrap_or_else(|| params.text_color())
+                .map_or_else(
+                    || params.text_color(),
+                    |entry| {
+                        entry_git_aware_label_color(git_status, entry.is_ignored, params.selected)
+                    },
+                )
         } else {
             params.text_color()
         };

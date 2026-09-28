@@ -52,7 +52,7 @@ impl FeatureOptionDefinition {
     fn serialize_default(&self) -> Option<String> {
         self.default.as_ref().map(|some_value| match some_value {
             Value::Bool(b) => b.to_string(),
-            Value::String(s) => s.to_string(),
+            Value::String(s) => s.clone(),
             Value::Number(n) => n.to_string(),
             other => other.to_string(),
         })
@@ -116,7 +116,7 @@ RUN chmod -R 0755 {full_dest} \
     }
 
     pub(crate) fn generate_dockerfile_env(&self) -> String {
-        let mut layer = "".to_owned();
+        let mut layer = String::new();
         let env = self.container_env();
         let mut env: Vec<(&String, &String)> = env.iter().collect();
         env.sort();
@@ -165,7 +165,7 @@ RUN chmod -R 0755 {full_dest} \
 
         let env_file_content = env_vars
             .iter()
-            .fold("".to_owned(), |acc, (k, v)| format!("{acc}{}={}\n", k, v));
+            .fold(String::new(), |acc, (k, v)| format!("{acc}{}={}\n", k, v));
 
         fs.write(
             &self.file_path.join("devcontainer-features.env"),

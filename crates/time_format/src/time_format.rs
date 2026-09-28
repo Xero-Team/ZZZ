@@ -389,19 +389,20 @@ fn format_timestamp_naive_date(
     } else if reference_local_date.previous_day() == Some(timestamp_local_date) {
         "Yesterday".to_owned()
     } else {
-        match is_12_hour_time {
-            true => format!(
+        if is_12_hour_time {
+            format!(
                 "{:02}/{:02}/{}",
                 timestamp_local_date.month() as u32,
                 timestamp_local_date.day(),
                 timestamp_local_date.year()
-            ),
-            false => format!(
+            )
+        } else {
+            format!(
                 "{:02}/{:02}/{}",
                 timestamp_local_date.day(),
                 timestamp_local_date.month() as u32,
                 timestamp_local_date.year()
-            ),
+            )
         }
     }
 }
@@ -413,19 +414,20 @@ fn format_timestamp_naive_date_medium(
 ) -> String {
     let timestamp_local_date = timestamp_local.date();
 
-    match is_12_hour_time {
-        true => format!(
+    if is_12_hour_time {
+        format!(
             "{:02}/{:02}/{}",
             timestamp_local_date.month() as u32,
             timestamp_local_date.day(),
             timestamp_local_date.year()
-        ),
-        false => format!(
+        )
+    } else {
+        format!(
             "{:02}/{:02}/{}",
             timestamp_local_date.day(),
             timestamp_local_date.month() as u32,
             timestamp_local_date.year()
-        ),
+        )
     }
 }
 
@@ -443,19 +445,20 @@ pub fn format_timestamp_naive(
     } else if reference_local_date.previous_day() == Some(timestamp_local_date) {
         format!("Yesterday at {}", formatted_time)
     } else {
-        let formatted_date = match is_12_hour_time {
-            true => format!(
+        let formatted_date = if is_12_hour_time {
+            format!(
                 "{:02}/{:02}/{}",
                 timestamp_local_date.month() as u32,
                 timestamp_local_date.day(),
                 timestamp_local_date.year()
-            ),
-            false => format!(
+            )
+        } else {
+            format!(
                 "{:02}/{:02}/{}",
                 timestamp_local_date.day(),
                 timestamp_local_date.month() as u32,
                 timestamp_local_date.year()
-            ),
+            )
         };
         format!("{} {}", formatted_date, formatted_time)
     }

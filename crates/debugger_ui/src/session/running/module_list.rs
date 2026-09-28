@@ -230,19 +230,19 @@ impl ModuleList {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let ix = if !self.entries.is_empty() {
-            Some(0)
-        } else {
+        let ix = if self.entries.is_empty() {
             None
+        } else {
+            Some(0)
         };
         self.select_ix(ix, cx);
     }
 
     fn select_last(&mut self, _: &menu::SelectLast, _window: &mut Window, cx: &mut Context<Self>) {
-        let ix = if !self.entries.is_empty() {
-            Some(self.entries.len() - 1)
-        } else {
+        let ix = if self.entries.is_empty() {
             None
+        } else {
+            Some(self.entries.len() - 1)
         };
         self.select_ix(ix, cx);
     }

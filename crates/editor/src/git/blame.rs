@@ -1189,14 +1189,11 @@ mod tests {
     #[gpui::test(iterations = 100)]
     async fn test_blame_random(mut rng: StdRng, cx: &mut gpui::TestAppContext) {
         let operations = env::var("OPERATIONS")
-            .map(|i| i.parse().expect("invalid `OPERATIONS` variable"))
-            .unwrap_or(10);
-        let max_edits_per_operation = env::var("MAX_EDITS_PER_OPERATION")
-            .map(|i| {
-                i.parse()
-                    .expect("invalid `MAX_EDITS_PER_OPERATION` variable")
-            })
-            .unwrap_or(5);
+            .map_or(10, |i| i.parse().expect("invalid `OPERATIONS` variable"));
+        let max_edits_per_operation = env::var("MAX_EDITS_PER_OPERATION").map_or(5, |i| {
+            i.parse()
+                .expect("invalid `MAX_EDITS_PER_OPERATION` variable")
+        });
 
         init_test(cx);
 

@@ -129,7 +129,7 @@ impl Vim {
                                 };
                                 (text, Some(clipboard_selection.first_line_indent))
                             } else {
-                                ("".to_owned(), first_selection_indent_column)
+                                (String::new(), first_selection_indent_column)
                             }
                         } else {
                             (text.to_string(), first_selection_indent_column)

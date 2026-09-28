@@ -675,7 +675,7 @@ pub fn normalize_lexically(path: &Path) -> Result<PathBuf, NormalizeError> {
     // `components` splits it into two: (Prefix, RootDir).
     let root = match iter.peek() {
         Some(Component::ParentDir) => return Err(NormalizeError),
-        Some(p @ Component::RootDir) | Some(p @ Component::CurDir) => {
+        Some(p @ (Component::RootDir | Component::CurDir)) => {
             lexical.push(p);
             iter.next();
             lexical.as_os_str().len()
@@ -901,61 +901,58 @@ impl PathWithPosition {
         // in the future seems unlikely.
         static SUFFIX_RE: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(ROW_COL_CAPTURE_REGEX).unwrap());
-        match SUFFIX_RE
+        if let Some((_, [file_name, maybe_row, maybe_column])) = SUFFIX_RE
             .captures(maybe_file_name_with_row_col)
             .map(|caps| caps.extract())
         {
-            Some((_, [file_name, maybe_row, maybe_column])) => {
-                let row = maybe_row.parse::<u32>().ok();
-                let column = maybe_column.parse::<u32>().ok();
+            let row = maybe_row.parse::<u32>().ok();
+            let column = maybe_column.parse::<u32>().ok();
 
-                let (_, suffix) = trimmed.split_once(file_name).unwrap();
-                let path_without_suffix = &trimmed[..trimmed.len() - suffix.len()];
+            let (_, suffix) = trimmed.split_once(file_name).unwrap();
+            let path_without_suffix = &trimmed[..trimmed.len() - suffix.len()];
 
-                Self {
-                    path: Path::new(path_without_suffix).to_path_buf(),
-                    row,
-                    column,
+            Self {
+                path: Path::new(path_without_suffix).to_path_buf(),
+                row,
+                column,
+            }
+        } else {
+            // The `ROW_COL_CAPTURE_REGEX` deals with separated digits only,
+            // but in reality there could be `foo/bar.py:22:in` inputs which we want to match too.
+            // The regex mentioned is not very extendable with "digit or random string" checks, so do this here instead.
+            let delimiter = ':';
+            let mut path_parts = s
+                .rsplitn(3, delimiter)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .fuse();
+            let mut path_string = path_parts.next().expect("rsplitn should have the rest of the string as its last parameter that we reversed").to_owned();
+            let mut row = None;
+            let mut column = None;
+            if let Some(maybe_row) = path_parts.next() {
+                if let Ok(parsed_row) = maybe_row.parse::<u32>() {
+                    row = Some(parsed_row);
+                    if let Some(parsed_column) = path_parts
+                        .next()
+                        .and_then(|maybe_col| maybe_col.parse::<u32>().ok())
+                    {
+                        column = Some(parsed_column);
+                    }
+                } else {
+                    path_string.push(delimiter);
+                    path_string.push_str(maybe_row);
                 }
             }
-            None => {
-                // The `ROW_COL_CAPTURE_REGEX` deals with separated digits only,
-                // but in reality there could be `foo/bar.py:22:in` inputs which we want to match too.
-                // The regex mentioned is not very extendable with "digit or random string" checks, so do this here instead.
-                let delimiter = ':';
-                let mut path_parts = s
-                    .rsplitn(3, delimiter)
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .rev()
-                    .fuse();
-                let mut path_string = path_parts.next().expect("rsplitn should have the rest of the string as its last parameter that we reversed").to_owned();
-                let mut row = None;
-                let mut column = None;
-                if let Some(maybe_row) = path_parts.next() {
-                    if let Ok(parsed_row) = maybe_row.parse::<u32>() {
-                        row = Some(parsed_row);
-                        if let Some(parsed_column) = path_parts
-                            .next()
-                            .and_then(|maybe_col| maybe_col.parse::<u32>().ok())
-                        {
-                            column = Some(parsed_column);
-                        }
-                    } else {
-                        path_string.push(delimiter);
-                        path_string.push_str(maybe_row);
-                    }
-                }
-                for split in path_parts {
-                    path_string.push(delimiter);
-                    path_string.push_str(split);
-                }
+            for split in path_parts {
+                path_string.push(delimiter);
+                path_string.push_str(split);
+            }
 
-                Self {
-                    path: PathBuf::from(path_string),
-                    row,
-                    column,
-                }
+            Self {
+                path: PathBuf::from(path_string),
+                row,
+                column,
             }
         }
     }
@@ -1459,15 +1456,12 @@ pub fn compare_rel_paths_by(
 
                         name_cmp.then_with(|| {
                             if a_leaf_file && b_leaf_file {
-                                match order {
-                                    SortOrder::Unicode => {
-                                        a_ext.unwrap_or_default().cmp(b_ext.unwrap_or_default())
-                                    }
-                                    _ => {
-                                        let a_ext_str = a_ext.unwrap_or_default().to_lowercase();
-                                        let b_ext_str = b_ext.unwrap_or_default().to_lowercase();
-                                        a_ext_str.cmp(&b_ext_str)
-                                    }
+                                if order == SortOrder::Unicode {
+                                    a_ext.unwrap_or_default().cmp(b_ext.unwrap_or_default())
+                                } else {
+                                    let a_ext_str = a_ext.unwrap_or_default().to_lowercase();
+                                    let b_ext_str = b_ext.unwrap_or_default().to_lowercase();
+                                    a_ext_str.cmp(&b_ext_str)
                                 }
                             } else {
                                 Ordering::Equal

@@ -209,7 +209,7 @@ impl DapLocator for GoLocator {
                         }
                         build_flags.push(arg.clone())
                     } else {
-                        program = arg.to_string();
+                        program = arg.clone();
                         seen_pkg = true;
                     }
                 }

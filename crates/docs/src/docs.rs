@@ -321,7 +321,7 @@ fn open_doc_url(
     }
 
     // Relative link: resolve it against the current document.
-    let url = url.split_once('#').map(|(path, _)| path).unwrap_or(&url);
+    let url = url.split_once('#').map_or(url.as_ref(), |(path, _)| path);
     if url.is_empty() {
         return;
     }
@@ -405,9 +405,8 @@ struct DocEntry {
 impl DocEntry {
     fn new(path: SharedString) -> Self {
         let content = lookup_docs_text(&path).unwrap_or_default();
-        let title = first_heading(&content)
-            .map(SharedString::from)
-            .unwrap_or_else(|| humanize_path(&path).into());
+        let title =
+            first_heading(&content).map_or_else(|| humanize_path(&path).into(), SharedString::from);
         let search_text = format!("{} {}", path, content).to_lowercase();
         Self {
             path,

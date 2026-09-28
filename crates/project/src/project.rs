@@ -731,8 +731,7 @@ impl LspAction {
             Self::CodeLens(lens) => lens
                 .command
                 .as_ref()
-                .map(|command| command.title.as_str())
-                .unwrap_or("Unknown command"),
+                .map_or("Unknown command", |command| command.title.as_str()),
         }
     }
 
@@ -965,18 +964,20 @@ impl DirectoryLister {
             .next()
             .map(|worktree| worktree.read(cx).abs_path().to_string_lossy().into_owned())
             .or_else(|| std::env::home_dir().map(|dir| dir.to_string_lossy().into_owned()))
-            .map(|mut s| {
-                s.push_str(path_style.primary_separator());
-                s
-            })
-            .unwrap_or_else(|| {
-                if path_style.is_windows() {
-                    "C:\\"
-                } else {
-                    "~/"
-                }
-                .to_owned()
-            })
+            .map_or_else(
+                || {
+                    if path_style.is_windows() {
+                        "C:\\"
+                    } else {
+                        "~/"
+                    }
+                    .to_owned()
+                },
+                |mut s| {
+                    s.push_str(path_style.primary_separator());
+                    s
+                },
+            )
     }
 
     pub fn list_directory(&self, path: String, cx: &mut App) -> Task<Result<Vec<DirectoryItem>>> {
@@ -2079,13 +2080,12 @@ impl Project {
     #[inline]
     pub fn entry_is_worktree_root(&self, entry_id: ProjectEntryId, cx: &App) -> bool {
         self.worktree_for_entry(entry_id, cx)
-            .map(|worktree| {
+            .is_some_and(|worktree| {
                 worktree
                     .read(cx)
                     .root_entry()
                     .is_some_and(|e| e.id == entry_id)
             })
-            .unwrap_or(false)
     }
 
     #[inline]
@@ -2370,8 +2370,7 @@ impl Project {
     fn remote_client_is_disconnected(&self, cx: &App) -> bool {
         self.remote_client
             .as_ref()
-            .map(|remote| remote.read(cx).is_disconnected())
-            .unwrap_or(false)
+            .is_some_and(|remote| remote.read(cx).is_disconnected())
     }
 
     #[inline]
@@ -4163,7 +4162,7 @@ impl Project {
                     .iter()
                     .find(|(_, id)| *id == buffer_worktree_id)
             {
-                for candidate in candidates.iter() {
+                for candidate in &candidates {
                     if let Some(path) = Self::resolve_path_in_worktree(worktree, candidate, cx) {
                         return Some(path);
                     }
@@ -4173,7 +4172,7 @@ impl Project {
                 if Some(id) == buffer_worktree_id {
                     continue;
                 }
-                for candidate in candidates.iter() {
+                for candidate in &candidates {
                     if let Some(path) = Self::resolve_path_in_worktree(&worktree, candidate, cx) {
                         return Some(path);
                     }

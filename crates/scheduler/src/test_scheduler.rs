@@ -50,12 +50,9 @@ impl TestScheduler {
         mut f: impl AsyncFnMut(Arc<TestScheduler>) -> R,
     ) -> Vec<R> {
         let num_iterations = std::env::var("ITERATIONS")
-            .map(|iterations| iterations.parse().unwrap())
-            .unwrap_or(default_iterations);
+            .map_or(default_iterations, |iterations| iterations.parse().unwrap());
 
-        let seed = std::env::var("SEED")
-            .map(|seed| seed.parse().unwrap())
-            .unwrap_or(0);
+        let seed = std::env::var("SEED").map_or(0, |seed| seed.parse().unwrap());
 
         let interactive = std::env::var("SCHEDULER_NONINTERACTIVE").is_err();
 
@@ -485,9 +482,7 @@ impl TestScheduler {
             let hard_deadline = start + Duration::from_secs(15);
 
             // Use the earlier of the provided deadline or the hard timeout deadline
-            let effective_deadline = deadline
-                .map(|d| d.min(hard_deadline))
-                .unwrap_or(hard_deadline);
+            let effective_deadline = deadline.map_or(hard_deadline, |d| d.min(hard_deadline));
 
             // Park in small intervals to allow checking both deadlines
             const PARK_INTERVAL: Duration = Duration::from_millis(100);

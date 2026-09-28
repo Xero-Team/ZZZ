@@ -238,10 +238,10 @@ impl PickerDelegate for KernelPickerDelegate {
             Some(KernelPickerEntry::SectionHeader(_))
         ) {
             let forward = self.next_selectable_index(ix, 1);
-            if forward != ix {
-                self.selected_index = forward;
-            } else {
+            if forward == ix {
                 self.selected_index = self.next_selectable_index(ix, -1);
+            } else {
+                self.selected_index = forward;
             }
         } else {
             self.selected_index = ix;

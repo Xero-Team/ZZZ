@@ -138,8 +138,7 @@ impl Vim {
                         let end_at_newline = map
                             .buffer_chars_at(range.end)
                             .next()
-                            .map(|(c, _)| c == '\n')
-                            .unwrap_or(false);
+                            .is_some_and(|(c, _)| c == '\n');
 
                         // If expanded range contains only newlines and
                         // the object is around or sentence, expand to include a newline

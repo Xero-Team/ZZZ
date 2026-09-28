@@ -477,13 +477,12 @@ impl Worktree {
         let (root_repo_common_dir, root_repo_is_linked_worktree) = if visible {
             discover_root_repo_metadata(&abs_path, fs.as_ref())
                 .await
-                .map(|(common_dir, is_linked_worktree)| {
+                .map_or((None, false), |(common_dir, is_linked_worktree)| {
                     (
                         Some(SanitizedPath::from_arc(common_dir)),
                         is_linked_worktree,
                     )
                 })
-                .unwrap_or((None, false))
         } else {
             (None, false)
         };
@@ -937,22 +936,20 @@ impl Worktree {
                 });
                 cx.spawn(async move |this, cx| {
                     let response = request.await?;
-                    match response.entry {
-                        Some(entry) => this
-                            .update(cx, |worktree, cx| {
-                                worktree.as_remote_mut().unwrap().insert_entry(
-                                    entry,
-                                    response.worktree_scan_id as usize,
-                                    cx,
-                                )
-                            })?
-                            .await
-                            .map(CreatedEntry::Included),
-                        None => {
-                            let abs_path =
-                                this.read_with(cx, |worktree, _| worktree.absolutize(&path))?;
-                            Ok(CreatedEntry::Excluded { abs_path })
-                        }
+                    if let Some(entry) = response.entry {
+                        this.update(cx, |worktree, cx| {
+                            worktree.as_remote_mut().unwrap().insert_entry(
+                                entry,
+                                response.worktree_scan_id as usize,
+                                cx,
+                            )
+                        })?
+                        .await
+                        .map(CreatedEntry::Included)
+                    } else {
+                        let abs_path =
+                            this.read_with(cx, |worktree, _| worktree.absolutize(&path))?;
+                        Ok(CreatedEntry::Excluded { abs_path })
                     }
                 })
             }
@@ -1567,30 +1564,27 @@ impl LocalWorktree {
             let content = fs.load_bytes(&abs_path).await?;
 
             let worktree = worktree.upgrade().context("worktree was dropped")?;
-            let file = match entry.await? {
-                Some(entry) => File::for_entry(entry, worktree),
-                None => {
-                    let metadata = fs
-                        .metadata(&abs_path)
-                        .await
-                        .with_context(|| {
-                            format!("Loading metadata for excluded file {abs_path:?}")
-                        })?
-                        .with_context(|| {
-                            format!("Excluded file {abs_path:?} got removed during loading")
-                        })?;
-                    Arc::new(File {
-                        entry_id: None,
-                        worktree,
-                        path,
-                        disk_state: DiskState::Present {
-                            mtime: metadata.mtime,
-                            size: metadata.len,
-                        },
-                        is_local: true,
-                        is_private,
-                    })
-                }
+            let file = if let Some(entry) = entry.await? {
+                File::for_entry(entry, worktree)
+            } else {
+                let metadata = fs
+                    .metadata(&abs_path)
+                    .await
+                    .with_context(|| format!("Loading metadata for excluded file {abs_path:?}"))?
+                    .with_context(|| {
+                        format!("Excluded file {abs_path:?} got removed during loading")
+                    })?;
+                Arc::new(File {
+                    entry_id: None,
+                    worktree,
+                    path,
+                    disk_state: DiskState::Present {
+                        mtime: metadata.mtime,
+                        size: metadata.len,
+                    },
+                    is_local: true,
+                    is_private,
+                })
             };
 
             Ok(LoadedBinaryFile { file, content })
@@ -1629,30 +1623,27 @@ impl LocalWorktree {
             let is_writable = metadata.is_some_and(|metadata| metadata.is_writable);
 
             let worktree = this.upgrade().context("worktree was dropped")?;
-            let file = match entry.await? {
-                Some(entry) => File::for_entry(entry, worktree),
-                None => {
-                    let metadata = fs
-                        .metadata(&abs_path)
-                        .await
-                        .with_context(|| {
-                            format!("Loading metadata for excluded file {abs_path:?}")
-                        })?
-                        .with_context(|| {
-                            format!("Excluded file {abs_path:?} got removed during loading")
-                        })?;
-                    Arc::new(File {
-                        entry_id: None,
-                        worktree,
-                        path,
-                        disk_state: DiskState::Present {
-                            mtime: metadata.mtime,
-                            size: metadata.len,
-                        },
-                        is_local: true,
-                        is_private,
-                    })
-                }
+            let file = if let Some(entry) = entry.await? {
+                File::for_entry(entry, worktree)
+            } else {
+                let metadata = fs
+                    .metadata(&abs_path)
+                    .await
+                    .with_context(|| format!("Loading metadata for excluded file {abs_path:?}"))?
+                    .with_context(|| {
+                        format!("Excluded file {abs_path:?} got removed during loading")
+                    })?;
+                Arc::new(File {
+                    entry_id: None,
+                    worktree,
+                    path,
+                    disk_state: DiskState::Present {
+                        mtime: metadata.mtime,
+                        size: metadata.len,
+                    },
+                    is_local: true,
+                    is_private,
+                })
             };
 
             Ok(LoadedFile {
@@ -1732,10 +1723,10 @@ impl LocalWorktree {
                 refresh.await.log_err();
             }
 
-            Ok(result
-                .await?
-                .map(CreatedEntry::Included)
-                .unwrap_or_else(|| CreatedEntry::Excluded { abs_path }))
+            Ok(result.await?.map_or_else(
+                || CreatedEntry::Excluded { abs_path },
+                CreatedEntry::Included,
+            ))
         })
     }
 
@@ -1806,12 +1797,12 @@ impl LocalWorktree {
                         vec![]
                     };
                     let (cow, _, _) = encoding.encode(&normalized_text);
-                    if !bom_bytes.is_empty() {
+                    if bom_bytes.is_empty() {
+                        cow
+                    } else {
                         let mut bytes = bom_bytes;
                         bytes.extend_from_slice(&cow);
                         bytes.into()
-                    } else {
-                        cow
                     }
                 };
 
@@ -1958,10 +1949,10 @@ impl LocalWorktree {
                 target.push(file_name);
 
                 // Do not allow copying the same file to itself.
-                if source.as_ref() != target.as_path() {
-                    Some((source, target))
-                } else {
+                if source.as_ref() == target.as_path() {
                     None
+                } else {
+                    Some((source, target))
                 }
             })
             .collect::<Vec<_>>();
@@ -2850,7 +2841,7 @@ impl Snapshot {
             if let Some(remaining_path) = path_str.strip_prefix("~/") {
                 return home_dir().join(remaining_path);
             } else if path_str == "~" {
-                return home_dir().to_path_buf();
+                return home_dir().clone();
             }
         }
 
@@ -3388,8 +3379,10 @@ impl BackgroundScannerState {
                 let watch_path = self
                     .watched_dir_abs_paths_by_entry_id
                     .remove(&entry.id)
-                    .map(|path| path.as_ref().to_path_buf())
-                    .unwrap_or_else(|| self.snapshot.absolutize(&entry.path));
+                    .map_or_else(
+                        || self.snapshot.absolutize(&entry.path),
+                        |path| path.as_ref().to_path_buf(),
+                    );
                 removed_dir_abs_paths.push(watch_path);
             }
 
@@ -3440,29 +3433,26 @@ impl BackgroundScannerState {
         fs: &dyn Fs,
         watcher: &dyn Watcher,
     ) {
-        let work_dir_path: Arc<RelPath> = match dot_git_path.parent() {
-            Some(parent_dir) => {
-                // Guard against repositories inside the repository metadata
-                if parent_dir
-                    .components()
-                    .any(|component| component == DOT_GIT)
-                {
-                    log::debug!(
-                        "not building git repository for nested `.git` directory, `.git` path in the worktree: {dot_git_path:?}"
-                    );
-                    return;
-                };
-
-                parent_dir.into()
-            }
-            None => {
-                // `dot_git_path.parent().is_none()` means `.git` directory is the opened worktree itself,
-                // no files inside that directory are tracked by git, so no need to build the repo around it
+        let work_dir_path: Arc<RelPath> = if let Some(parent_dir) = dot_git_path.parent() {
+            // Guard against repositories inside the repository metadata
+            if parent_dir
+                .components()
+                .any(|component| component == DOT_GIT)
+            {
                 log::debug!(
-                    "not building git repository for the worktree itself, `.git` path in the worktree: {dot_git_path:?}"
+                    "not building git repository for nested `.git` directory, `.git` path in the worktree: {dot_git_path:?}"
                 );
                 return;
-            }
+            };
+
+            parent_dir.into()
+        } else {
+            // `dot_git_path.parent().is_none()` means `.git` directory is the opened worktree itself,
+            // no files inside that directory are tracked by git, so no need to build the repo around it
+            log::debug!(
+                "not building git repository for the worktree itself, `.git` path in the worktree: {dot_git_path:?}"
+            );
+            return;
         };
 
         let dot_git_abs_path = Arc::from(self.snapshot.absolutize(&dot_git_path).as_ref());
@@ -4269,15 +4259,15 @@ impl BackgroundScanner {
             let mut state = self.state.lock().await;
             state.snapshot.ignores_by_parent_abs_path.extend(ignores);
             if let Some(exclude) = exclude {
-                let work_directory_abs_path: Arc<Path> = repo
-                    .as_ref()
-                    .map(|(_, work_directory)| {
+                let work_directory_abs_path: Arc<Path> = repo.as_ref().map_or_else(
+                    || root_abs_path.as_path().into(),
+                    |(_, work_directory)| {
                         state
                             .snapshot
                             .work_directory_abs_path(work_directory)
                             .into()
-                    })
-                    .unwrap_or_else(|| root_abs_path.as_path().into());
+                    },
+                );
                 state
                     .snapshot
                     .repo_exclude_by_work_dir_abs_path
@@ -5014,10 +5004,10 @@ impl BackgroundScanner {
         )
         .await;
 
-        let affected_repo_roots = if !dot_git_abs_paths.is_empty() {
-            self.update_git_repositories(dot_git_abs_paths).await
-        } else {
+        let affected_repo_roots = if dot_git_abs_paths.is_empty() {
             Vec::new()
+        } else {
+            self.update_git_repositories(dot_git_abs_paths).await
         };
 
         {
@@ -5079,11 +5069,10 @@ impl BackgroundScanner {
                         && entry.kind == EntryKind::UnloadedDir
                     {
                         let abs_path = if entry.is_external {
-                            entry
-                                .canonical_path
-                                .as_ref()
-                                .map(|path| path.as_ref().to_path_buf())
-                                .unwrap_or_else(|| root_path.join(ancestor.as_std_path()))
+                            entry.canonical_path.as_ref().map_or_else(
+                                || root_path.join(ancestor.as_std_path()),
+                                |path| path.as_ref().to_path_buf(),
+                            )
                         } else {
                             root_path.join(ancestor.as_std_path())
                         };
@@ -5708,7 +5697,7 @@ impl BackgroundScanner {
             let mut repo_exclude_keys_to_remove: Vec<Arc<Path>> = Vec::new();
 
             for (work_dir_abs_path, (_, needs_update)) in
-                snapshot.repo_exclude_by_work_dir_abs_path.iter_mut()
+                &mut snapshot.repo_exclude_by_work_dir_abs_path
             {
                 let repository = snapshot
                     .git_repositories

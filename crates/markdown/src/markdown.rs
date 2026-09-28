@@ -1273,11 +1273,7 @@ impl Selection {
             }
             SelectMode::All => {
                 self.start = 0;
-                self.end = rendered_text
-                    .lines
-                    .last()
-                    .map(|line| line.source_end)
-                    .unwrap_or(0);
+                self.end = rendered_text.lines.last().map_or(0, |line| line.source_end);
                 self.reversed = false;
             }
         }
@@ -1853,7 +1849,7 @@ impl MarkdownElement {
         } else {
             let mut metadata_block = div().w_full().rounded_md();
             metadata_block.style().refine(&self.style.code_block);
-            builder.push_text_style(self.style.code_block.text.to_owned());
+            builder.push_text_style(self.style.code_block.text.clone());
             builder.push_code_block(None);
             builder.push_div(metadata_block, content_range, markdown_end);
             builder.push_text(&source[content_range.clone()], content_range.clone());
@@ -2112,8 +2108,7 @@ impl MarkdownElement {
                                     let range = 0..rendered_text
                                         .lines
                                         .last()
-                                        .map(|line| line.source_end)
-                                        .unwrap_or(0);
+                                        .map_or(0, |line| line.source_end);
                                     (range, SelectMode::All, false)
                                 }
                             };
@@ -2537,7 +2532,7 @@ impl Element for MarkdownElement {
                                             }
                                         });
 
-                                    builder.push_text_style(self.style.code_block.text.to_owned());
+                                    builder.push_text_style(self.style.code_block.text.clone());
                                     builder.push_code_block(language);
                                     builder.push_div(code_block, range, markdown_end);
                                 }
@@ -3882,23 +3877,20 @@ impl RenderedLine {
             let segment_start_x = if wrapped_row_ix == 0 {
                 px(0.)
             } else {
-                boundaries
-                    .get(wrapped_row_ix - 1)
-                    .map(|b| {
-                        wrapped_line.unwrapped_layout.runs[b.run_ix].glyphs[b.glyph_ix]
-                            .position
-                            .x
-                    })
-                    .unwrap_or(px(0.))
-            };
-            let segment_end_x = boundaries
-                .get(wrapped_row_ix)
-                .map(|b| {
+                boundaries.get(wrapped_row_ix - 1).map_or(px(0.), |b| {
                     wrapped_line.unwrapped_layout.runs[b.run_ix].glyphs[b.glyph_ix]
                         .position
                         .x
                 })
-                .unwrap_or(wrapped_line.unwrapped_layout.width);
+            };
+            let segment_end_x =
+                boundaries
+                    .get(wrapped_row_ix)
+                    .map_or(wrapped_line.unwrapped_layout.width, |b| {
+                        wrapped_line.unwrapped_layout.runs[b.run_ix].glyphs[b.glyph_ix]
+                            .position
+                            .x
+                    });
 
             let alignment_offset = self.alignment_offset_for_segment(
                 bounds.size.width,
@@ -5355,11 +5347,7 @@ mod tests {
     fn test_all_selection(cx: &mut TestAppContext) {
         let rendered = render_markdown("Hello world\n\nThis is a test\n\nwith multiple lines", cx);
 
-        let total_length = rendered
-            .lines
-            .last()
-            .map(|line| line.source_end)
-            .unwrap_or(0);
+        let total_length = rendered.lines.last().map_or(0, |line| line.source_end);
 
         let mut selection = Selection {
             start: 0,

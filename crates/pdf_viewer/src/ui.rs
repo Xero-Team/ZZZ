@@ -329,18 +329,13 @@ impl PdfView {
             return None;
         }
         let state = self.loaded();
-        let (match_count, active) = state
-            .map(|state| (state.search.matches.len(), state.search.active_match))
-            .unwrap_or((0, None));
+        let (match_count, active) = state.map_or((0, None), |state| {
+            (state.search.matches.len(), state.search.active_match)
+        });
         let status: SharedString = if match_count == 0 {
             tr(cx, "pdf_viewer.search.no_results", "No results").into()
         } else {
-            format!(
-                "{}/{}",
-                active.map(|index| index + 1).unwrap_or(0),
-                match_count
-            )
-            .into()
+            format!("{}/{}", active.map_or(0, |index| index + 1), match_count).into()
         };
 
         Some(

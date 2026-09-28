@@ -44,18 +44,15 @@ impl Bind for SerializedEditor {
         let start_index = statement.bind(&self.contents, start_index)?;
         let start_index = statement.bind(&self.language, start_index)?;
 
-        let start_index = match self
+        let start_index = if let Some((seconds, nanos)) = self
             .mtime
             .and_then(|mtime| mtime.to_seconds_and_nanos_for_persistence())
         {
-            Some((seconds, nanos)) => {
-                let start_index = statement.bind(&(seconds as i64), start_index)?;
-                statement.bind(&(nanos as i32), start_index)?
-            }
-            None => {
-                let start_index = statement.bind::<Option<i64>>(&None, start_index)?;
-                statement.bind::<Option<i32>>(&None, start_index)?
-            }
+            let start_index = statement.bind(&(seconds as i64), start_index)?;
+            statement.bind(&(nanos as i32), start_index)?
+        } else {
+            let start_index = statement.bind::<Option<i64>>(&None, start_index)?;
+            statement.bind::<Option<i32>>(&None, start_index)?
         };
         Ok(start_index)
     }

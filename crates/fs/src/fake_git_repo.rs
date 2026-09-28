@@ -267,17 +267,16 @@ impl GitRepository for FakeGitRepository {
 
     fn show(&self, commit: String) -> BoxFuture<'_, Result<CommitDetails>> {
         self.with_state_async(false, move |state| {
-            let sha = match state.refs.get(&commit) {
-                Some(sha) => sha.clone(),
+            let sha = if let Some(sha) = state.refs.get(&commit) {
+                sha.clone()
+            } else {
                 // Real git fails to show an unresolvable revision (e.g. HEAD on an
                 // unborn branch), so only fall back to treating the input as a sha.
-                None => {
-                    anyhow::ensure!(
-                        commit.parse::<Oid>().is_ok(),
-                        "unable to resolve revision: {commit}"
-                    );
-                    commit
-                }
+                anyhow::ensure!(
+                    commit.parse::<Oid>().is_ok(),
+                    "unable to resolve revision: {commit}"
+                );
+                commit
             };
             Ok(CommitDetails {
                 sha: sha.into(),
@@ -537,18 +536,16 @@ impl GitRepository for FakeGitRepository {
             let (main_worktree, refs) = fs.with_git_state(&common_dir_path, false, |state| {
                 let work_dir = common_dir_path
                     .parent()
-                    .map(PathBuf::from)
-                    .unwrap_or_else(|| common_dir_path.clone());
+                    .map_or_else(|| common_dir_path.clone(), PathBuf::from);
                 let head_sha = state
                     .refs
                     .get("HEAD")
                     .cloned()
                     .unwrap_or_else(|| "0000000".to_owned());
-                let branch_ref = state
-                    .current_branch_name
-                    .as_ref()
-                    .map(|name| format!("refs/heads/{name}"))
-                    .unwrap_or_else(|| "refs/heads/main".to_owned());
+                let branch_ref = state.current_branch_name.as_ref().map_or_else(
+                    || "refs/heads/main".to_owned(),
+                    |name| format!("refs/heads/{name}"),
+                );
                 let main_wt = Worktree {
                     path: work_dir,
                     ref_name: Some(branch_ref.into()),
@@ -918,7 +915,7 @@ impl GitRepository for FakeGitRepository {
             if let Some((remote, _)) = name.split_once('/')
                 && !state.remotes.contains_key(remote)
             {
-                state.remotes.insert(remote.to_owned(), "".to_owned());
+                state.remotes.insert(remote.to_owned(), String::new());
             }
             state.branches.insert(name);
             Ok(())

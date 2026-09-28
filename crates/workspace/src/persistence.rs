@@ -63,8 +63,7 @@ const MAX_QUERY_PLACEHOLDERS: usize = 32000;
 
 fn parse_timestamp(text: &str) -> DateTime<Utc> {
     NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S")
-        .map(|naive| naive.and_utc())
-        .unwrap_or_else(|_| Utc::now())
+        .map_or_else(|_| Utc::now(), |naive| naive.and_utc())
 }
 
 fn contains_wsl_path(paths: &PathList) -> bool {
@@ -1422,7 +1421,7 @@ impl WorkspaceDb {
                     });
                 }
 
-                for (path, bps) in map.iter() {
+                for (path, bps) in &map {
                     log::info!(
                         "Got {} breakpoints from database at path: {}",
                         bps.len(),
@@ -3810,7 +3809,7 @@ mod tests {
         })
         .collect::<Vec<_>>();
 
-        for workspace in workspaces.iter() {
+        for workspace in &workspaces {
             db.save_workspace(workspace.clone()).await;
         }
 
@@ -4194,7 +4193,7 @@ mod tests {
         })
         .collect::<Vec<_>>();
 
-        for workspace in workspaces.iter() {
+        for workspace in &workspaces {
             db.save_workspace(workspace.clone()).await;
         }
 
@@ -4341,7 +4340,7 @@ mod tests {
         ];
 
         let mut ids = Vec::new();
-        for (host, port, user) in connections.iter() {
+        for (host, port, user) in &connections {
             ids.push(
                 db.get_or_create_remote_connection(RemoteConnectionOptions::Ssh(
                     SshConnectionOptions {

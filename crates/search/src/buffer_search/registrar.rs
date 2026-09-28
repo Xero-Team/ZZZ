@@ -41,13 +41,11 @@ impl<T: 'static> SearchActionsRegistrar for DivRegistrar<'_, '_, T> {
         let getter = self.search_getter;
         self.div = self.div.take().map(|div| {
             div.on_action(self.cx.listener(move |this, action, window, cx| {
-                let should_notify = (getter)(this, window, cx)
-                    .map(|search_bar| {
-                        search_bar.update(cx, |search_bar, cx| {
-                            callback.execute(search_bar, action, window, cx)
-                        })
+                let should_notify = (getter)(this, window, cx).is_some_and(|search_bar| {
+                    search_bar.update(cx, |search_bar, cx| {
+                        callback.execute(search_bar, action, window, cx)
                     })
-                    .unwrap_or(false);
+                });
                 if should_notify {
                     cx.notify();
                 } else {
@@ -86,13 +84,11 @@ impl SearchActionsRegistrar for PaneDivRegistrar {
                     .toolbar()
                     .read(cx)
                     .item_of_type::<BufferSearchBar>();
-                let should_notify = search_bar
-                    .map(|search_bar| {
-                        search_bar.update(cx, |search_bar, cx| {
-                            callback.execute(search_bar, action, window, cx)
-                        })
+                let should_notify = search_bar.is_some_and(|search_bar| {
+                    search_bar.update(cx, |search_bar, cx| {
+                        callback.execute(search_bar, action, window, cx)
                     })
-                    .unwrap_or(false);
+                });
                 if should_notify {
                     pane.update(cx, |_, cx| cx.notify());
                 } else {

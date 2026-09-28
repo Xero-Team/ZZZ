@@ -184,26 +184,23 @@ impl Peer {
                 loop {
                     tracing::trace!(%connection_id, "inner loop iteration start");
                     futures::select_biased! {
-                        outgoing = outgoing_rx.next().fuse() => match outgoing {
-                            Some(outgoing) => {
-                                tracing::trace!(%connection_id, "outgoing rpc message: writing");
-                                futures::select_biased! {
-                                    result = writer.write(outgoing).fuse() => {
-                                        tracing::trace!(%connection_id, "outgoing rpc message: done writing");
-                                        result.context("failed to write RPC message")?;
-                                        tracing::trace!(%connection_id, "keepalive interval: resetting after sending message");
-                                        keepalive_timer.set(create_timer(KEEPALIVE_INTERVAL).fuse());
-                                    }
-                                    _ = create_timer(WRITE_TIMEOUT).fuse() => {
-                                        tracing::trace!(%connection_id, "outgoing rpc message: writing timed out");
-                                        anyhow::bail!("timed out writing message");
-                                    }
+                        outgoing = outgoing_rx.next().fuse() => if let Some(outgoing) = outgoing {
+                            tracing::trace!(%connection_id, "outgoing rpc message: writing");
+                            futures::select_biased! {
+                                result = writer.write(outgoing).fuse() => {
+                                    tracing::trace!(%connection_id, "outgoing rpc message: done writing");
+                                    result.context("failed to write RPC message")?;
+                                    tracing::trace!(%connection_id, "keepalive interval: resetting after sending message");
+                                    keepalive_timer.set(create_timer(KEEPALIVE_INTERVAL).fuse());
+                                }
+                                _ = create_timer(WRITE_TIMEOUT).fuse() => {
+                                    tracing::trace!(%connection_id, "outgoing rpc message: writing timed out");
+                                    anyhow::bail!("timed out writing message");
                                 }
                             }
-                            None => {
-                                tracing::trace!(%connection_id, "outgoing rpc message: channel closed");
-                                return Ok(())
-                            },
+                        } else {
+                            tracing::trace!(%connection_id, "outgoing rpc message: channel closed");
+                            return Ok(())
                         },
                         _ = keepalive_timer => {
                             tracing::trace!(%connection_id, "keepalive interval: pinging");
@@ -228,14 +225,11 @@ impl Peer {
                             if let (Message::Envelope(incoming), received_at) = incoming {
                                 tracing::trace!(%connection_id, "incoming rpc message: processing");
                                 futures::select_biased! {
-                                    result = incoming_tx.send((incoming, received_at)).fuse() => match result {
-                                        Ok(_) => {
-                                            tracing::trace!(%connection_id, "incoming rpc message: processed");
-                                        }
-                                        Err(_) => {
-                                            tracing::trace!(%connection_id, "incoming rpc message: channel closed");
-                                            return Ok(())
-                                        }
+                                    result = incoming_tx.send((incoming, received_at)).fuse() => if result.is_ok() {
+                                        tracing::trace!(%connection_id, "incoming rpc message: processed");
+                                    } else {
+                                        tracing::trace!(%connection_id, "incoming rpc message: channel closed");
+                                        return Ok(())
                                     },
                                     _ = create_timer(WRITE_TIMEOUT).fuse() => {
                                         tracing::trace!(%connection_id, "incoming rpc message: processing timed out");

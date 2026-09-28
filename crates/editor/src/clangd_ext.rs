@@ -39,11 +39,10 @@ pub fn switch_source_header(
     let upstream_client = project.read(cx).lsp_store().read(cx).upstream_client();
     cx.spawn_in(window, async move |_editor, cx| {
         let source_file = buffer.read_with(cx, |buffer, _| {
-            buffer
-                .file()
-                .map(|file| file.path())
-                .map(|path| path.display(PathStyle::local()).to_string())
-                .unwrap_or_else(|| "Unknown".to_owned())
+            buffer.file().map(|file| file.path()).map_or_else(
+                || "Unknown".to_owned(),
+                |path| path.display(PathStyle::local()).to_string(),
+            )
         });
 
         let switch_source_header = if let Some((client, project_id)) = upstream_client {

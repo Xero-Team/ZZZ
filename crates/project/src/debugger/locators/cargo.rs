@@ -195,8 +195,7 @@ impl DapLocator for CargoLocator {
         let executable = {
             if let Some(name) = test_name.as_ref().and_then(|name| {
                 name.strip_prefix('$')
-                    .map(|name| build_config.env.get(name))
-                    .unwrap_or(Some(name))
+                    .map_or(Some(name), |name| build_config.env.get(name))
             }) {
                 find_best_executable(&executables, name, executor).await
             } else {

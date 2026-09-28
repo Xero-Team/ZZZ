@@ -463,12 +463,9 @@ impl Prettier {
                         let plugins = located_plugins
                             .into_iter()
                             .filter_map(|(plugin_name, located_plugin_path)| {
-                                match located_plugin_path {
-                                    Some(path) => Some(path),
-                                    None => {
-                                        log::error!("Have not found plugin path for {plugin_name:?} inside {prettier_node_modules:?}");
-                                        None
-                                    }
+                                if let Some(path) = located_plugin_path { Some(path) } else {
+                                    log::error!("Have not found plugin path for {plugin_name:?} inside {prettier_node_modules:?}");
+                                    None
                                 }
                             })
                             .collect();
@@ -536,8 +533,7 @@ impl Prettier {
                                 let start_byte = buffer.offset_utf16_to_offset(range.start);
                                 let insert_at = text[start_byte..]
                                     .find('\n')
-                                    .map(|pos| start_byte + pos)
-                                    .unwrap_or(text.len());
+                                    .map_or(text.len(), |pos| start_byte + pos);
                                 let mut suffix = RANGE_FORMAT_SUFFIX.to_owned();
                                 if let Some(parser) = &parser {
                                     suffix = format!("{suffix}\n{parser}");

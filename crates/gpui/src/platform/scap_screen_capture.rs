@@ -185,8 +185,10 @@ impl ScreenCaptureSource for ScapDefaultTargetCaptureSource {
         let (tx, rx) = oneshot::channel();
         match self.stream_call_tx.try_send((tx, frame_callback)) {
             Ok(()) => {}
-            Err(std::sync::mpsc::TrySendError::Full((tx, _)))
-            | Err(std::sync::mpsc::TrySendError::Disconnected((tx, _))) => {
+            Err(
+                std::sync::mpsc::TrySendError::Full((tx, _))
+                | std::sync::mpsc::TrySendError::Disconnected((tx, _)),
+            ) => {
                 // Note: support could be added for being called again after end of prior stream.
                 tx.send(Err(anyhow!(
                     "Can't call ScapDefaultTargetCaptureSource::stream multiple times."

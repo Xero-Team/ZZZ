@@ -623,16 +623,13 @@ fn same_info_hover(editor: &Editor, snapshot: &EditorSnapshot, anchor: Anchor) -
         .info_popovers
         .iter()
         .any(|InfoPopover { symbol_range, .. }| {
-            symbol_range
-                .as_text_range()
-                .map(|range| {
-                    let hover_range = range.to_offset(&snapshot.buffer_snapshot());
-                    let offset = anchor.to_offset(&snapshot.buffer_snapshot());
-                    // LSP returns a hover result for the end index of ranges that should be hovered, so we need to
-                    // use an inclusive range here to check if we should dismiss the popover
-                    (hover_range.start..=hover_range.end).contains(&offset)
-                })
-                .unwrap_or(false)
+            symbol_range.as_text_range().is_some_and(|range| {
+                let hover_range = range.to_offset(&snapshot.buffer_snapshot());
+                let offset = anchor.to_offset(&snapshot.buffer_snapshot());
+                // LSP returns a hover result for the end index of ranges that should be hovered, so we need to
+                // use an inclusive range here to check if we should dismiss the popover
+                (hover_range.start..=hover_range.end).contains(&offset)
+            })
         })
 }
 
@@ -641,7 +638,7 @@ fn same_diagnostic_hover(editor: &Editor, snapshot: &EditorSnapshot, anchor: Anc
         .hover_state
         .diagnostic_popover
         .as_ref()
-        .map(|diagnostic| {
+        .is_some_and(|diagnostic| {
             let hover_range = diagnostic
                 .local_diagnostic
                 .range
@@ -651,7 +648,6 @@ fn same_diagnostic_hover(editor: &Editor, snapshot: &EditorSnapshot, anchor: Anc
             // Here we do basically the same as in `same_info_hover`, see comment there for an explanation
             (hover_range.start..=hover_range.end).contains(&offset)
         })
-        .unwrap_or(false)
 }
 
 fn parse_blocks(
@@ -818,8 +814,7 @@ fn parse_file_link(link: &str) -> Option<(PathBuf, Option<String>)> {
 
         urlencoding::decode(encoded)
             .map(Cow::into_owned)
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from(encoded))
+            .map_or_else(|_| PathBuf::from(encoded), PathBuf::from)
     });
 
     Some((path, fragment))
@@ -1757,10 +1752,10 @@ mod tests {
             Ok(Some(lsp::Hover {
                 contents: lsp::HoverContents::Array(vec![
                     lsp::MarkedString::String("regular text for hover to show".to_string()),
-                    lsp::MarkedString::String("".to_string()),
+                    lsp::MarkedString::String(String::new()),
                     lsp::MarkedString::LanguageString(lsp::LanguageString {
                         language: "Rust".to_string(),
-                        value: "".to_string(),
+                        value: String::new(),
                     }),
                 ]),
                 range: Some(symbol_range),

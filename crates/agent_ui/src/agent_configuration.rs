@@ -305,8 +305,9 @@ impl AgentConfiguration {
         });
 
         let display_name = if provided_by_extension {
-            resolve_extension_for_context_server(&context_server_id, cx)
-                .map(|(_, manifest)| {
+            resolve_extension_for_context_server(&context_server_id, cx).map_or_else(
+                || item_id.clone(),
+                |(_, manifest)| {
                     let name = manifest.name.as_str();
                     let stripped = name
                         .strip_suffix(" MCP Server")
@@ -314,8 +315,8 @@ impl AgentConfiguration {
                         .or_else(|| name.strip_suffix(" Context Server"))
                         .unwrap_or(name);
                     SharedString::from(stripped.to_owned())
-                })
-                .unwrap_or_else(|| item_id.clone())
+                },
+            )
         } else {
             item_id.clone()
         };
@@ -359,10 +360,9 @@ impl AgentConfiguration {
             ContextServerStatus::Authenticating => AiSettingItemStatus::Authenticating,
         };
 
-        let is_remote = server_configuration
-            .as_ref()
-            .map(|config| matches!(config.as_ref(), ContextServerConfiguration::Http { .. }))
-            .unwrap_or(false);
+        let is_remote = server_configuration.as_ref().is_some_and(|config| {
+            matches!(config.as_ref(), ContextServerConfiguration::Http { .. })
+        });
 
         let should_show_logout_button = server_configuration.as_ref().is_some_and(|config| {
             matches!(config.as_ref(), ContextServerConfiguration::Http { .. })

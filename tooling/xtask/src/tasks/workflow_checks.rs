@@ -24,7 +24,7 @@ pub struct WorkflowValidationArgs {}
 pub fn validate(_: WorkflowValidationArgs) -> Result<()> {
     let (parsing_errors, file_errors): (Vec<_>, Vec<_>) = get_all_workflow_files()
         .map(check_workflow)
-        .flat_map(Result::err)
+        .filter_map(Result::err)
         .partition_map(|error| match error {
             WorkflowError::ParseError(error) => Either::Left(error),
             WorkflowError::ValidationError(error) => Either::Right(error),
@@ -62,7 +62,7 @@ fn get_all_workflow_files() -> impl Iterator<Item = PathBuf> {
         .flat_map(|folder_path| {
             fs::read_dir(folder_path).into_iter().flat_map(|entries| {
                 entries
-                    .flat_map(Result::ok)
+                    .filter_map(Result::ok)
                     .map(|entry| entry.path())
                     .filter(|path| {
                         path.extension()
@@ -76,7 +76,7 @@ fn check_workflow(workflow_file_path: PathBuf) -> Result<(), WorkflowError> {
     fn collect_errors(
         iter: impl Iterator<Item = Result<(), Vec<RunValidationError>>>,
     ) -> Result<(), Vec<RunValidationError>> {
-        Some(iter.flat_map(Result::err).flatten().collect::<Vec<_>>())
+        Some(iter.filter_map(Result::err).flatten().collect::<Vec<_>>())
             .filter(|errors| !errors.is_empty())
             .map_or(Ok(()), Err)
     }

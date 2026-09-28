@@ -52,12 +52,12 @@ impl SemanticTokenConfig {
     }
 
     pub(super) fn update_rules(&mut self, new_rules: SemanticTokenRules) -> bool {
-        if new_rules != self.rules {
+        if new_rules == self.rules {
+            false
+        } else {
             self.rules = new_rules;
             self.stylizers.clear();
             true
-        } else {
-            false
         }
     }
 
@@ -71,11 +71,11 @@ impl SemanticTokenConfig {
     }
 
     pub(super) fn update_global_mode(&mut self, new_mode: settings::SemanticTokens) -> bool {
-        if new_mode != self.global_mode {
+        if new_mode == self.global_mode {
+            false
+        } else {
             self.global_mode = new_mode;
             true
-        } else {
-            false
         }
     }
 }
@@ -294,48 +294,47 @@ impl LspStore {
                         server_capabilities: self.lsp_server_capabilities.get(&server_id)?.clone(),
                         code_action_kinds: None,
                     };
-                    let request_task = match self.semantic_tokens_result_id(server_id, buffer, cx) {
-                        Some(result_id) => {
-                            let delta_request = SemanticTokensDelta {
-                                previous_result_id: result_id,
-                            };
-                            if !delta_request.check_capabilities(capabilities.clone()) {
-                                let full_request = SemanticTokensFull {
-                                    for_server: Some(server_id),
-                                };
-                                if !full_request.check_capabilities(capabilities) {
-                                    return None;
-                                }
-
-                                self.request_lsp(
-                                    buffer.clone(),
-                                    LanguageServerToQuery::Other(server_id),
-                                    full_request,
-                                    cx,
-                                )
-                            } else {
-                                self.request_lsp(
-                                    buffer.clone(),
-                                    LanguageServerToQuery::Other(server_id),
-                                    delta_request,
-                                    cx,
-                                )
-                            }
-                        }
-                        None => {
-                            let request = SemanticTokensFull {
-                                for_server: Some(server_id),
-                            };
-                            if !request.check_capabilities(capabilities) {
-                                return None;
-                            }
+                    let request_task = if let Some(result_id) =
+                        self.semantic_tokens_result_id(server_id, buffer, cx)
+                    {
+                        let delta_request = SemanticTokensDelta {
+                            previous_result_id: result_id,
+                        };
+                        if delta_request.check_capabilities(capabilities.clone()) {
                             self.request_lsp(
                                 buffer.clone(),
                                 LanguageServerToQuery::Other(server_id),
-                                request,
+                                delta_request,
+                                cx,
+                            )
+                        } else {
+                            let full_request = SemanticTokensFull {
+                                for_server: Some(server_id),
+                            };
+                            if !full_request.check_capabilities(capabilities) {
+                                return None;
+                            }
+
+                            self.request_lsp(
+                                buffer.clone(),
+                                LanguageServerToQuery::Other(server_id),
+                                full_request,
                                 cx,
                             )
                         }
+                    } else {
+                        let request = SemanticTokensFull {
+                            for_server: Some(server_id),
+                        };
+                        if !request.check_capabilities(capabilities) {
+                            return None;
+                        }
+                        self.request_lsp(
+                            buffer.clone(),
+                            LanguageServerToQuery::Other(server_id),
+                            request,
+                            cx,
+                        )
                     };
                     Some(async move { (server_id, request_task.await) })
                 })
@@ -349,7 +348,7 @@ impl LspStore {
                     join_all(token_tasks)
                         .await
                         .into_iter()
-                        .flat_map(|(server_id, response)| {
+                        .filter_map(|(server_id, response)| {
                             match response {
                                 Ok(tokens) => Some((server_id, tokens)),
                                 Err(e) => {

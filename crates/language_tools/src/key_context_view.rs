@@ -80,7 +80,7 @@ impl KeyContextView {
                     let predicate = if let Some(predicate) = binding.predicate() {
                         format!("{}", predicate)
                     } else {
-                        "".to_owned()
+                        String::new()
                     };
                     let mut name = binding.action().name();
                     if name == "zzz::NoAction" {

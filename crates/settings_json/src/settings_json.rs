@@ -17,7 +17,7 @@ pub fn update_value_in_json_text<'a>(
     // preserving the comments and formatting of the unchanged parts. Otherwise,
     // replace the old value with the new value.
     if let (Value::Object(old_object), Value::Object(new_object)) = (old_value, new_value) {
-        for (key, old_sub_value) in old_object.iter() {
+        for (key, old_sub_value) in old_object {
             key_path.push(key);
             if let Some(new_sub_value) = new_object.get(key) {
                 // Key exists in both old and new, recursively update
@@ -38,7 +38,7 @@ pub fn update_value_in_json_text<'a>(
             }
             key_path.pop();
         }
-        for (key, new_sub_value) in new_object.iter() {
+        for (key, new_sub_value) in new_object {
             key_path.push(key);
             if !old_object.contains_key(key) {
                 update_value_in_json_text(

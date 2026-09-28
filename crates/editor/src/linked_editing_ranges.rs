@@ -141,7 +141,7 @@ pub(super) fn refresh_linked_ranges(
                         .or_default()
                         .extend(ranges);
                 }
-                for (buffer_id, values) in this.linked_edit_ranges.0.iter_mut() {
+                for (buffer_id, values) in &mut this.linked_edit_ranges.0 {
                     let Some(snapshot) = this
                         .buffer
                         .read(cx)

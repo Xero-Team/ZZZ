@@ -2,7 +2,6 @@ use super::register_zzz_scheme;
 use anyhow::Result;
 use gpui::{AppContext as _, AsyncApp, Context, PromptLevel, Window, actions};
 use release_channel::ReleaseChannel;
-use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use util::ResultExt;
 use workspace::notifications::simple_message_notification::MessageNotification;
@@ -113,7 +112,7 @@ pub fn install_cli_binary(window: &mut Window, cx: &mut Context<Workspace>) {
             cx.background_spawn(prompt).detach();
             return Ok(());
         }
-        let path = match install_script(cx.deref()).await {
+        let path = match install_script(&*cx).await {
             Ok(Some(path)) => path,
             // The user dismissed the administrator prompt; nothing to do.
             Ok(None) => return Ok(()),

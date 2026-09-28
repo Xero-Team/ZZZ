@@ -62,10 +62,10 @@ pub(super) struct NewProcessModal {
 fn suggested_label(request: &DebugRequest, debugger: &str) -> SharedString {
     match request {
         DebugRequest::Launch(config) => {
-            let last_path_component = Path::new(&config.program)
-                .file_name()
-                .map(|name| name.to_string_lossy())
-                .unwrap_or_else(|| Cow::Borrowed(&config.program));
+            let last_path_component = Path::new(&config.program).file_name().map_or_else(
+                || Cow::Borrowed(config.program.as_str()),
+                |name| name.to_string_lossy(),
+            );
 
             format!("{} ({debugger})", last_path_component).into()
         }
@@ -167,7 +167,7 @@ impl NewProcessModal {
                                     let prefer_lsp = workspace
                                         .active_item(cx)
                                         .and_then(|item| item.downcast::<Editor>())
-                                        .map(|editor| {
+                                        .is_some_and(|editor| {
                                             editor
                                                 .read(cx)
                                                 .buffer()
@@ -175,8 +175,7 @@ impl NewProcessModal {
                                                 .language_settings(cx)
                                                 .tasks
                                                 .prefer_lsp
-                                        })
-                                        .unwrap_or(false);
+                                        });
                                     (lsp_tasks, prefer_lsp)
                                 })?;
 
@@ -500,18 +499,17 @@ impl NewProcessModal {
             }
         }
 
-        let label = self
-            .debugger
-            .as_ref()
-            .map(|d| d.0.clone())
-            .unwrap_or_else(|| {
+        let label = self.debugger.as_ref().map_or_else(
+            || {
                 tr(
                     cx,
                     "debugger_ui.new_process_modal.select_debugger",
                     "Select Debugger",
                 )
                 .into()
-            });
+            },
+            |d| d.0.clone(),
+        );
 
         DropdownMenu::new(
             "dap-adapter-picker",
@@ -1768,9 +1766,10 @@ impl NewProcessModal {
                 editor.set_text(cwd.as_ref(), window, cx);
             });
 
-            configure.stop_on_entry = match stop_on_entry {
-                true => ToggleState::Selected,
-                _ => ToggleState::Unselected,
+            configure.stop_on_entry = if stop_on_entry {
+                ToggleState::Selected
+            } else {
+                ToggleState::Unselected
             }
         })
     }

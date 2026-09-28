@@ -1539,7 +1539,7 @@ impl Workspace {
                 }
 
                 project::Event::DeletedEntry(_, entry_id) => {
-                    for pane in this.panes.iter() {
+                    for pane in &this.panes {
                         pane.update(cx, |pane, cx| {
                             pane.handle_deleted_project_item(*entry_id, window, cx)
                         });
@@ -1927,8 +1927,7 @@ impl Workspace {
                 if let Some(window) = window_to_replace {
                     let centered_layout = serialized_workspace
                         .as_ref()
-                        .map(|w| w.centered_layout)
-                        .unwrap_or(false);
+                        .is_some_and(|w| w.centered_layout);
 
                     let workspace = window.update(cx, |multi_workspace, window, cx| {
                         let workspace = cx.new(|cx| {
@@ -1989,8 +1988,7 @@ impl Workspace {
                     options.window_bounds = window_bounds;
                     let centered_layout = serialized_workspace
                         .as_ref()
-                        .map(|w| w.centered_layout)
-                        .unwrap_or(false);
+                        .is_some_and(|w| w.centered_layout);
                     let window = cx.open_window(options, {
                         let app_state = app_state.clone();
                         let project_handle = project_handle.clone();
@@ -2029,8 +2027,7 @@ impl Workspace {
             // Check if serialized workspace has paths before it's moved
             let serialized_workspace_has_paths = serialized_workspace
                 .as_ref()
-                .map(|ws| !ws.paths.is_empty())
-                .unwrap_or(false);
+                .is_some_and(|ws| !ws.paths.is_empty());
 
             let opened_items = window
                 .update(cx, |_, window, cx| {
@@ -3352,7 +3349,7 @@ impl Workspace {
         let keystrokes: Vec<Keystroke> = action
             .0
             .split(' ')
-            .flat_map(|k| Keystroke::parse(k).log_err())
+            .filter_map(|k| Keystroke::parse(k).log_err())
             .map(|k| {
                 cx.keyboard_mapper()
                     .map_key_equivalent(k, false)
@@ -4376,7 +4373,7 @@ impl Workspace {
     }
 
     pub fn close_panel<T: Panel>(&self, window: &mut Window, cx: &mut Context<Self>) {
-        for dock in self.all_docks().iter() {
+        for dock in &self.all_docks() {
             dock.update(cx, |dock, cx| {
                 if dock.panel::<T>().is_some() {
                     dock.set_open(false, window, cx)
@@ -4924,20 +4921,19 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let panes = self.center.panes();
-        let destination = match panes.get(action.destination) {
-            Some(&destination) => destination.clone(),
-            None => {
-                if !action.clone && self.active_pane.read(cx).items_len() < 2 {
-                    return;
-                }
-                let direction = SplitDirection::Right;
-                let split_off_pane = self
-                    .find_pane_in_direction(direction, cx)
-                    .unwrap_or_else(|| self.active_pane.clone());
-                let new_pane = self.add_pane(window, cx);
-                self.center.split(&split_off_pane, &new_pane, direction, cx);
-                new_pane
+        let destination = if let Some(&destination) = panes.get(action.destination) {
+            destination.clone()
+        } else {
+            if !action.clone && self.active_pane.read(cx).items_len() < 2 {
+                return;
             }
+            let direction = SplitDirection::Right;
+            let split_off_pane = self
+                .find_pane_in_direction(direction, cx)
+                .unwrap_or_else(|| self.active_pane.clone());
+            let new_pane = self.add_pane(window, cx);
+            self.center.split(&split_off_pane, &new_pane, direction, cx);
+            new_pane
         };
 
         if action.clone {
@@ -5124,8 +5120,9 @@ impl Workspace {
                 }
             }
 
-            (Origin::LeftDock, SplitDirection::Down)
-            | (Origin::RightDock, SplitDirection::Down) => try_dock(&self.bottom_dock),
+            (Origin::LeftDock | Origin::RightDock, SplitDirection::Down) => {
+                try_dock(&self.bottom_dock)
+            }
 
             (Origin::BottomDock, SplitDirection::Up) => get_last_active_pane().map(Target::Pane),
             (Origin::BottomDock, SplitDirection::Left) => {
@@ -5199,9 +5196,10 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let destination = match self.find_pane_in_direction(action.direction, cx) {
-            Some(destination) => destination,
-            None => {
+        let destination =
+            if let Some(destination) = self.find_pane_in_direction(action.direction, cx) {
+                destination
+            } else {
                 if !action.clone && self.active_pane.read(cx).items_len() < 2 {
                     return;
                 }
@@ -5209,8 +5207,7 @@ impl Workspace {
                 self.center
                     .split(&self.active_pane, &new_pane, action.direction, cx);
                 new_pane
-            }
-        };
+            };
 
         if action.clone {
             if self
@@ -6208,7 +6205,7 @@ impl Workspace {
     fn remove_panes(&mut self, member: Member, window: &mut Window, cx: &mut Context<Workspace>) {
         match member {
             Member::Axis(PaneAxis { members, .. }) => {
-                for child in members.iter() {
+                for child in &members {
                     self.remove_panes(child.clone(), window, cx)
                 }
             }
@@ -6543,13 +6540,11 @@ impl Workspace {
 
                 let docks = serialized_workspace.docks;
 
-                for (dock, serialized_dock) in [
+                for (dock, serialized_dock) in &mut [
                     (&mut workspace.right_dock, docks.right),
                     (&mut workspace.left_dock, docks.left),
                     (&mut workspace.bottom_dock, docks.bottom),
-                ]
-                .iter_mut()
-                {
+                ] {
                     dock.update(cx, |dock, cx| {
                         dock.serialized_dock = Some(serialized_dock.clone());
                         dock.restore_state(window, cx);
@@ -7142,7 +7137,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
-        for action in self.workspace_actions.iter() {
+        for action in &self.workspace_actions {
             div = (action)(div, self, window, cx)
         }
         div
@@ -7516,13 +7511,12 @@ impl Workspace {
                 });
             }
         } else {
-            let has_restricted_worktrees = TrustedWorktrees::try_get_global(cx)
-                .map(|trusted_worktrees| {
+            let has_restricted_worktrees =
+                TrustedWorktrees::try_get_global(cx).is_some_and(|trusted_worktrees| {
                     trusted_worktrees
                         .read(cx)
                         .has_restricted_worktrees(&self.project().read(cx).worktree_store(), cx)
-                })
-                .unwrap_or(false);
+                });
             if has_restricted_worktrees {
                 let project = self.project().read(cx);
                 let remote_host = project
@@ -7614,7 +7608,7 @@ fn open_items(
                 opened_items.push(restored_item.map(Ok));
             }
 
-            for (_, project_path) in project_paths_to_open.iter_mut() {
+            for (_, project_path) in &mut project_paths_to_open {
                 if let Some(project_path_to_open) = project_path
                     && restored_project_paths.contains(project_path_to_open)
                 {
@@ -8461,7 +8455,7 @@ pub async fn apply_restored_multiworkspace_state(
                     let main_path = project::repo_identity_path(&common_dir);
                     resolved_paths.push(main_path.to_path_buf());
                 } else {
-                    resolved_paths.push(path.to_path_buf());
+                    resolved_paths.push(path.clone());
                 }
             }
             let resolved = ProjectGroupKey::new(key.host(), PathList::new(&resolved_paths));
@@ -9167,7 +9161,7 @@ pub fn create_and_open_local_file(
                         let mut items = workspace
                             .update_in(cx, |workspace, window, cx| {
                                 workspace.open_paths(
-                                    vec![path.to_path_buf()],
+                                    vec![path.clone()],
                                     OpenOptions {
                                         visible: Some(OpenVisible::None),
                                         ..Default::default()
@@ -9971,8 +9965,7 @@ pub fn remote_workspace_position_from_db(
 
         let centered_layout = serialized_workspace
             .as_ref()
-            .map(|w| w.centered_layout)
-            .unwrap_or(false);
+            .is_some_and(|w| w.centered_layout);
 
         Ok(WorkspacePosition {
             window_bounds,
@@ -9986,30 +9979,27 @@ pub fn with_active_or_new_workspace(
     cx: &mut App,
     f: impl FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send + 'static,
 ) {
-    match cx
+    if let Some(multi_workspace) = cx
         .active_window()
         .and_then(|w| w.downcast::<MultiWorkspace>())
     {
-        Some(multi_workspace) => {
-            cx.defer(move |cx| {
-                multi_workspace
-                    .update(cx, |multi_workspace, window, cx| {
-                        let workspace = multi_workspace.workspace().clone();
-                        workspace.update(cx, |workspace, cx| f(workspace, window, cx));
-                    })
-                    .log_err();
-            });
-        }
-        None => {
-            let app_state = AppState::global(cx);
-            open_new(
-                OpenOptions::default(),
-                app_state,
-                cx,
-                move |workspace, window, cx| f(workspace, window, cx),
-            )
-            .detach_and_log_err(cx);
-        }
+        cx.defer(move |cx| {
+            multi_workspace
+                .update(cx, |multi_workspace, window, cx| {
+                    let workspace = multi_workspace.workspace().clone();
+                    workspace.update(cx, |workspace, cx| f(workspace, window, cx));
+                })
+                .log_err();
+        });
+    } else {
+        let app_state = AppState::global(cx);
+        open_new(
+            OpenOptions::default(),
+            app_state,
+            cx,
+            move |workspace, window, cx| f(workspace, window, cx),
+        )
+        .detach_and_log_err(cx);
     }
 }
 
