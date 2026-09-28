@@ -4,6 +4,10 @@
 #![allow(clippy::collapsible_else_if)] // False positives in platform specific code
 #![allow(unused_mut)] // False positives in platform specific code
 
+#[allow(
+    unused_extern_crates,
+    reason = "`gpui_macros` expansions resolve paths through `gpui::`; unused when no such macro is expanded in this build"
+)]
 extern crate self as gpui;
 #[doc(hidden)]
 pub static GPUI_MANIFEST_DIR: &'static str = env!("CARGO_MANIFEST_DIR");
