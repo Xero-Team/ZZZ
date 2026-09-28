@@ -5670,7 +5670,6 @@ mod tests {
             project_panel::init(cx);
             outline_panel::init(cx);
             terminal_view::init(cx);
-            notifications::init(app_state.client.clone(), app_state.user_store.clone(), cx);
             title_bar::init(cx);
             image_viewer::init(cx);
             pdf_viewer::init(cx);

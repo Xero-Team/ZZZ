@@ -11,7 +11,6 @@ import "download.proto";
 import "git.proto";
 import "image.proto";
 import "lsp.proto";
-import "notification.proto";
 import "task.proto";
 import "toolchain.proto";
 import "worktree.proto";
@@ -111,11 +110,6 @@ message Envelope {
     ResolveInlayHintResponse resolve_inlay_hint_response = 111;
     RefreshInlayHints refresh_inlay_hints = 112;
 
-    AddNotification add_notification = 149;
-    GetNotifications get_notifications = 150;
-    GetNotificationsResponse get_notifications_response = 151;
-    DeleteNotification delete_notification = 152;
-    MarkNotificationRead mark_notification_read = 153;
     LspExtExpandMacro lsp_ext_expand_macro = 154;
     LspExtExpandMacroResponse lsp_ext_expand_macro_response = 155;
 
@@ -124,8 +118,6 @@ message Envelope {
 
     BlameBuffer blame_buffer = 172;
     BlameBufferResponse blame_buffer_response = 173;
-
-    UpdateNotification update_notification = 174;
 
     RestartLanguageServers restart_language_servers = 208;
 
