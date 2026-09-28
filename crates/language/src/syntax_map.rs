@@ -950,29 +950,32 @@ impl SyntaxSnapshot {
             match Ord::cmp(&layer.depth, &max_depth) {
                 Ordering::Less => out_of_order("depth decreased"),
                 Ordering::Equal => {
-                    if let Some((prev_range, prev_language_id)) = prev_layer {
+                    // Layers at the same depth are ordered by ascending start,
+                    // then by descending end (widest first), then by ascending
+                    // language id. This matches both the parse queue
+                    // (`ParseStep`) and the seek target (`SyntaxLayerPosition`)
+                    // used to update the layer tree.
+                    if let Some((prev_range, prev_language_id)) = &prev_layer {
                         match layer.range.start.cmp(&prev_range.start, text) {
                             Ordering::Less => out_of_order("start decreased"),
                             Ordering::Equal => match layer.range.end.cmp(&prev_range.end, text) {
-                                Ordering::Less => out_of_order("end decreased at equal start"),
+                                Ordering::Greater => out_of_order("end increased at equal start"),
                                 Ordering::Equal => {
-                                    if layer.content.language_id() < prev_language_id {
+                                    if layer.content.language_id() < *prev_language_id {
                                         out_of_order("language id decreased at equal range")
                                     }
                                 }
-                                Ordering::Greater => {}
+                                Ordering::Less => {}
                             },
                             Ordering::Greater => {}
                         }
                     }
-                    prev_layer = Some((layer.range.clone(), layer.content.language_id()));
                 }
-                Ordering::Greater => {
-                    prev_layer = None;
-                }
+                Ordering::Greater => {}
             }
 
             max_depth = layer.depth;
+            prev_layer = Some((layer.range.clone(), layer.content.language_id()));
         }
     }
 

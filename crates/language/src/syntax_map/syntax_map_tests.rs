@@ -996,6 +996,53 @@ fn test_combined_injection_with_leading_content_layer_ordering(cx: &mut App) {
 }
 
 #[gpui::test]
+fn test_combined_injection_sibling_of_single_injection_layer_ordering(cx: &mut App) {
+    // Regression test for "layers out of order: end decreased at equal start".
+    //
+    // In Markdown inline content, an HTML tag is injected as a `combined`
+    // layer, so its layer range spans the *entire* parent inline layer. When the
+    // inline content begins with another injection (here a LaTeX `$...$` block)
+    // that starts at the same offset as the parent, the combined HTML layer and
+    // the narrower single layer share a start offset. The parse queue emits
+    // wider layers first, which is the intended order; the invariant checker
+    // must not require the opposite.
+    let registry = Arc::new(LanguageRegistry::test(cx.background_executor().clone()));
+    registry.add(markdown_lang());
+    registry.add(Arc::new(
+        Language::new(
+            LanguageConfig {
+                name: "Markdown-Inline".into(),
+                hidden: true,
+                ..LanguageConfig::default()
+            },
+            Some(tree_sitter_md::INLINE_LANGUAGE.into()),
+        )
+        .with_injection_query(include_str!(
+            "../../../grammars/src/markdown-inline/injections.scm"
+        ))
+        .unwrap(),
+    ));
+    registry.add(Arc::new(html_lang()));
+
+    let buffer = Buffer::new(
+        ReplicaId::LOCAL,
+        BufferId::new(1).unwrap(),
+        "$a$ b\n\n$x$ <span>y</span>\n",
+    );
+
+    let language = registry
+        .language_for_name("Markdown")
+        .now_or_never()
+        .unwrap()
+        .unwrap();
+    let mut syntax_map = SyntaxMap::new(&buffer);
+    syntax_map.set_language_registry(registry);
+    // In debug builds, `reparse` runs `check_invariants`, which panics with
+    // "layers out of order" if the produced layers are not correctly sorted.
+    syntax_map.reparse(language, &buffer);
+}
+
+#[gpui::test]
 fn test_comment_triggered_injection_toggle(cx: &mut App) {
     let registry = Arc::new(LanguageRegistry::test(cx.background_executor().clone()));
 
