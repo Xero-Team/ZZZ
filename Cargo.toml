@@ -13,7 +13,6 @@ members = [
     "crates/assets",
     "crates/audio",
     "crates/audio_viewer",
-    "crates/aws_http_client",
     "crates/breadcrumbs",
     "crates/buffer_diff",
     "crates/cli",
@@ -158,7 +157,6 @@ members = [
     "crates/snippets_ui",
     "crates/sqlez",
     "crates/sqlez_macros",
-    "crates/streaming_diff",
     "crates/sum_tree",
     "crates/svg_preview",
     "crates/system_specs",
@@ -255,7 +253,6 @@ agent_servers = { path = "crates/agent_servers" }
 askpass = { path = "crates/askpass" }
 assets = { path = "crates/assets" }
 audio = { path = "crates/audio" }
-aws_http_client = { path = "crates/aws_http_client" }
 breadcrumbs = { path = "crates/breadcrumbs" }
 buffer_diff = { path = "crates/buffer_diff" }
 cli = { path = "crates/cli" }
@@ -402,7 +399,6 @@ snippet_provider = { path = "crates/snippet_provider" }
 snippets_ui = { path = "crates/snippets_ui" }
 sqlez = { path = "crates/sqlez" }
 sqlez_macros = { path = "crates/sqlez_macros" }
-streaming_diff = { path = "crates/streaming_diff" }
 sum_tree = { path = "crates/sum_tree" }
 system_specs = { path = "crates/system_specs" }
 syntax_theme = { path = "crates/syntax_theme" }
@@ -475,15 +471,6 @@ async-trait = "0.1"
 async-tungstenite = "0.35.0"
 async-process = "2.5.0"
 async_zip = { version = "0.0.19", features = ["deflate", "deflate64"] }
-aws-config = { version = "1.12.0", features = ["behavior-version-latest"] }
-aws-credential-types = { version = "1.3.0", features = [
-    "hardcoded-credentials",
-] }
-aws-sdk-bedrockruntime = { version = "1.145.0", features = [
-    "behavior-version-latest",
-] }
-aws-smithy-runtime-api = { version = "1.17.0", features = ["http-1x", "client"] }
-aws-smithy-types = { version = "1.8.0", features = ["http-body-1-x"] }
 backtrace = "0.3"
 base64 = "0.23"
 betlang = "0.1.1"
