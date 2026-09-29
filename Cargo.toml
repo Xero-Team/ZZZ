@@ -814,7 +814,7 @@ js-sys = "0.3"
 console_error_panic_hook = "0.1.7"
 web-time = "1.1.0"
 wgpu = { git = "https://github.com/zed-industries/wgpu.git", rev = "357a0c56e0070480ad9daea5d2eaa83150b79e88" }
-windows-core = "0.100"
+windows-core = "0.62"
 yaml-rust2 = "0.13"
 zeroize = "1.9"
 zstd = "0.14"
