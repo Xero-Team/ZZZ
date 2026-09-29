@@ -869,10 +869,8 @@ impl VimGlobals {
             {
                 self.last_yank.replace(content.text.clone());
                 cx.write_to_clipboard(content.clone().into());
-            } else {
-                if let Some(text) = cx.read_from_clipboard().and_then(|i| i.text()) {
-                    self.last_yank.replace(text.into());
-                }
+            } else if let Some(text) = cx.read_from_clipboard().and_then(|i| i.text()) {
+                self.last_yank.replace(text.into());
             }
             self.registers.insert('"', content.clone());
             if is_yank {

@@ -388,22 +388,20 @@ fn format_timestamp_naive_date(
         "Today".to_owned()
     } else if reference_local_date.previous_day() == Some(timestamp_local_date) {
         "Yesterday".to_owned()
+    } else if is_12_hour_time {
+        format!(
+            "{:02}/{:02}/{}",
+            timestamp_local_date.month() as u32,
+            timestamp_local_date.day(),
+            timestamp_local_date.year()
+        )
     } else {
-        if is_12_hour_time {
-            format!(
-                "{:02}/{:02}/{}",
-                timestamp_local_date.month() as u32,
-                timestamp_local_date.day(),
-                timestamp_local_date.year()
-            )
-        } else {
-            format!(
-                "{:02}/{:02}/{}",
-                timestamp_local_date.day(),
-                timestamp_local_date.month() as u32,
-                timestamp_local_date.year()
-            )
-        }
+        format!(
+            "{:02}/{:02}/{}",
+            timestamp_local_date.day(),
+            timestamp_local_date.month() as u32,
+            timestamp_local_date.year()
+        )
     }
 }
 

@@ -215,10 +215,8 @@ fn find_visuals(xcb: &XCBConnection, screen_index: usize) -> VisualSet {
                 if set.opaque.is_none() {
                     set.opaque = Some(visual);
                 }
-            } else {
-                if set.transparent.is_none() {
-                    set.transparent = Some(visual);
-                }
+            } else if set.transparent.is_none() {
+                set.transparent = Some(visual);
             }
         }
     }

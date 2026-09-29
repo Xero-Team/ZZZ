@@ -686,10 +686,8 @@ impl MultiWorkspace {
                     group.key = new_key.clone();
                 }
             }
-        } else {
-            if let Some(group) = self.project_groups.iter_mut().find(|g| g.key == *old_key) {
-                group.key = new_key.clone();
-            }
+        } else if let Some(group) = self.project_groups.iter_mut().find(|g| g.key == *old_key) {
+            group.key = new_key.clone();
         }
 
         // If another retained workspace still has the old key (e.g. a

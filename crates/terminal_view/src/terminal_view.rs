@@ -2082,42 +2082,40 @@ impl SearchableItem for TerminalView {
 
         if matches.is_empty() {
             None
-        } else {
-            if let Some(selection_head) = self.terminal().read(cx).selection_head {
-                // If selection head is contained in a match. Return that match
-                match direction {
-                    Direction::Prev => {
-                        // If no selection before selection head, return the first match
-                        Some(
-                            matches
-                                .iter()
-                                .enumerate()
-                                .rev()
-                                .find(|(_, search_match)| {
-                                    search_match.contains(&selection_head)
-                                        || search_match.start() < &selection_head
-                                })
-                                .map_or(0, |(ix, _)| ix),
-                        )
-                    }
-                    Direction::Next => {
-                        // If no selection after selection head, return the last match
-                        Some(
-                            matches
-                                .iter()
-                                .enumerate()
-                                .find(|(_, search_match)| {
-                                    search_match.contains(&selection_head)
-                                        || search_match.start() > &selection_head
-                                })
-                                .map_or(matches.len().saturating_sub(1), |(ix, _)| ix),
-                        )
-                    }
+        } else if let Some(selection_head) = self.terminal().read(cx).selection_head {
+            // If selection head is contained in a match. Return that match
+            match direction {
+                Direction::Prev => {
+                    // If no selection before selection head, return the first match
+                    Some(
+                        matches
+                            .iter()
+                            .enumerate()
+                            .rev()
+                            .find(|(_, search_match)| {
+                                search_match.contains(&selection_head)
+                                    || search_match.start() < &selection_head
+                            })
+                            .map_or(0, |(ix, _)| ix),
+                    )
                 }
-            } else {
-                // Matches found but no active selection, return the first last one (closest to cursor)
-                Some(matches.len().saturating_sub(1))
+                Direction::Next => {
+                    // If no selection after selection head, return the last match
+                    Some(
+                        matches
+                            .iter()
+                            .enumerate()
+                            .find(|(_, search_match)| {
+                                search_match.contains(&selection_head)
+                                    || search_match.start() > &selection_head
+                            })
+                            .map_or(matches.len().saturating_sub(1), |(ix, _)| ix),
+                    )
+                }
             }
+        } else {
+            // Matches found but no active selection, return the first last one (closest to cursor)
+            Some(matches.len().saturating_sub(1))
         }
     }
     fn replace(

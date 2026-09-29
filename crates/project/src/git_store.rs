@@ -1804,12 +1804,10 @@ impl GitStore {
                             existing.schedule_scan(updates_tx.clone(), cx);
                         });
                     }
-                } else {
-                    if let Some(worktree_ids) = self.worktree_ids.get_mut(&repo_id) {
-                        worktree_ids.remove(&worktree_id);
-                        if worktree_ids.is_empty() {
-                            removed_ids.push(repo_id);
-                        }
+                } else if let Some(worktree_ids) = self.worktree_ids.get_mut(&repo_id) {
+                    worktree_ids.remove(&worktree_id);
+                    if worktree_ids.is_empty() {
+                        removed_ids.push(repo_id);
                     }
                 }
             } else if let UpdatedGitRepository {

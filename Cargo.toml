@@ -1213,6 +1213,10 @@ while_float = "deny"
 suspicious_operation_groupings = "deny"
 case_sensitive_file_extension_comparisons = "deny"
 
+# The tenth batch flattens `else { if ... }` chains into `else if` so the
+# control flow reads at a single indentation level.
+collapsible_else_if = "deny"
+
 # We currently do not restrict any style rules
 # as it slows down shipping code to ZZZ.
 #
@@ -1246,7 +1250,7 @@ style = { level = "allow", priority = -1 }
 #   for the unsized types here without tripping `ref_as_ptr`/`ptr_as_ptr`).
 # - Behavioral or API-shape changes: `zero_sized_map_values` (11),
 #   `float_cmp` (25), `option_option` (8), `implicit_hasher` (10),
-#   `branches_sharing_code` (22), `collapsible_else_if` (16),
+#   `branches_sharing_code` (22),
 #   `fn_params_excessive_bools` (11), `single_option_map` (4).
 # - rustc opt-in lints, similarly deferred: `unused_lifetimes` (15),
 #   `trivial_numeric_casts` (34), `trivial_casts` (167),

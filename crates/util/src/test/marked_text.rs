@@ -213,13 +213,11 @@ pub fn generate_marked_text(
                     marked_text.insert_str(range.end, "«ˇ");
                 }
             }
+        } else if range.start.cmp(&range.end) == Ordering::Equal {
+            marked_text.insert(range.start, 'ˇ');
         } else {
-            if range.start.cmp(&range.end) == Ordering::Equal {
-                marked_text.insert(range.start, 'ˇ');
-            } else {
-                marked_text.insert(range.end, '»');
-                marked_text.insert(range.start, '«');
-            }
+            marked_text.insert(range.end, '»');
+            marked_text.insert(range.start, '«');
         }
     }
     marked_text

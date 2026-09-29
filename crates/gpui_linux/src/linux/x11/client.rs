@@ -847,13 +847,11 @@ impl X11Client {
                             &state.atoms,
                             state.xdnd_state.other_window,
                         );
-                    } else {
-                        if let Some(atom) = [arg2, arg3, arg4]
-                            .into_iter()
-                            .find(|atom| xdnd_is_atom_supported(*atom, &state.atoms))
-                        {
-                            state.xdnd_state.drag_type = atom;
-                        }
+                    } else if let Some(atom) = [arg2, arg3, arg4]
+                        .into_iter()
+                        .find(|atom| xdnd_is_atom_supported(*atom, &state.atoms))
+                    {
+                        state.xdnd_state.drag_type = atom;
                     }
                 } else if event.type_ == state.atoms.XdndLeave {
                     let position = state.xdnd_state.position;

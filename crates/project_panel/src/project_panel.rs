@@ -7675,12 +7675,12 @@ impl Render for ProjectPanel {
                                         };
                                         if event.bounds.contains(&event.event.position) {
                                             this.drag_target_entry = Some(DragTarget::Background);
-                                        } else {
-                                            if this.drag_target_entry.as_ref().is_some_and(|e| {
-                                                matches!(e, DragTarget::Background)
-                                            }) {
-                                                this.drag_target_entry = None;
-                                            }
+                                        } else if this
+                                            .drag_target_entry
+                                            .as_ref()
+                                            .is_some_and(|e| matches!(e, DragTarget::Background))
+                                        {
+                                            this.drag_target_entry = None;
                                         }
                                     },
                                 ))
@@ -7700,12 +7700,12 @@ impl Render for ProjectPanel {
                                                 this.drag_target_entry =
                                                     Some(DragTarget::Background);
                                             }
-                                        } else {
-                                            if this.drag_target_entry.as_ref().is_some_and(|e| {
-                                                matches!(e, DragTarget::Background)
-                                            }) {
-                                                this.drag_target_entry = None;
-                                            }
+                                        } else if this
+                                            .drag_target_entry
+                                            .as_ref()
+                                            .is_some_and(|e| matches!(e, DragTarget::Background))
+                                        {
+                                            this.drag_target_entry = None;
                                         }
                                     },
                                 ))

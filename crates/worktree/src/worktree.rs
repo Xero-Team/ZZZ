@@ -537,14 +537,12 @@ impl Worktree {
                     if !scanning_enabled {
                         entry.kind = EntryKind::UnloadedDir;
                     }
-                } else {
-                    if let Some(file_name) = abs_path.file_name()
-                        && let Some(file_name) = file_name.to_str()
-                        && let Ok(path) = RelPath::unix(file_name)
-                    {
-                        entry.is_private = !share_private_files && settings.is_path_private(path);
-                        entry.is_hidden = settings.is_path_hidden(path);
-                    }
+                } else if let Some(file_name) = abs_path.file_name()
+                    && let Some(file_name) = file_name.to_str()
+                    && let Ok(path) = RelPath::unix(file_name)
+                {
+                    entry.is_private = !share_private_files && settings.is_path_private(path);
+                    entry.is_hidden = settings.is_path_hidden(path);
                 }
                 cx.foreground_executor()
                     .block_on(snapshot.insert_entry(entry, fs.as_ref()));

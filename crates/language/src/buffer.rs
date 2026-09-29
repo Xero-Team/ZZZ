@@ -4564,12 +4564,10 @@ impl BufferSnapshot {
                 || (Some(capture.index) == config.extra_context_capture_ix && include_extra_context)
             {
                 add_to_buffer_ranges(capture.node, false);
-            } else {
-                if Some(capture.index) == config.open_capture_ix {
-                    open_point = Some(Point::from_ts_point(capture.node.end_position()));
-                } else if Some(capture.index) == config.close_capture_ix {
-                    close_point = Some(Point::from_ts_point(capture.node.start_position()));
-                }
+            } else if Some(capture.index) == config.open_capture_ix {
+                open_point = Some(Point::from_ts_point(capture.node.end_position()));
+            } else if Some(capture.index) == config.close_capture_ix {
+                close_point = Some(Point::from_ts_point(capture.node.start_position()));
             }
         }
 

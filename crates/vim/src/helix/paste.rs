@@ -93,15 +93,13 @@ impl Vim {
                     let display_point = if line_mode {
                         if action.before {
                             movement::line_beginning(&display_map, sel.start)
+                        } else if sel.start == sel.end {
+                            movement::right(
+                                &display_map,
+                                movement::line_end(&display_map, sel.end, false),
+                            )
                         } else {
-                            if sel.start == sel.end {
-                                movement::right(
-                                    &display_map,
-                                    movement::line_end(&display_map, sel.end, false),
-                                )
-                            } else {
-                                sel.end
-                            }
+                            sel.end
                         }
                     } else if action.before {
                         sel.start

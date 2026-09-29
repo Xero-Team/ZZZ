@@ -794,24 +794,21 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
                         .map(|buffer| buffer.read(cx).text())
                         .unwrap_or_default(),
                 );
+            } else if let Some(project) = editor.project().cloned() {
+                project.update(cx, |project, cx| {
+                    let Some(worktree) = project.visible_worktrees(cx).next() else {
+                        return;
+                    };
+                    let path_style = worktree.read(cx).path_style();
+                    let Some(path) =
+                        RelPath::new(Path::new(&action.filename), path_style).log_err()
+                    else {
+                        return;
+                    };
+                    task = Some(worktree.update(cx, |worktree, cx| worktree.load_file(&path, cx)));
+                });
             } else {
-                if let Some(project) = editor.project().cloned() {
-                    project.update(cx, |project, cx| {
-                        let Some(worktree) = project.visible_worktrees(cx).next() else {
-                            return;
-                        };
-                        let path_style = worktree.read(cx).path_style();
-                        let Some(path) =
-                            RelPath::new(Path::new(&action.filename), path_style).log_err()
-                        else {
-                            return;
-                        };
-                        task =
-                            Some(worktree.update(cx, |worktree, cx| worktree.load_file(&path, cx)));
-                    });
-                } else {
-                    return;
-                }
+                return;
             };
 
             cx.spawn_in(window, async move |editor, cx| {
