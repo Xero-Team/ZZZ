@@ -1883,7 +1883,7 @@ impl Pane {
         index_list
             .iter()
             .rev()
-            .for_each(|&index| self._remove_item(index, false, false, None, window, cx));
+            .for_each(|&index| self.remove_item_at_index(index, false, false, None, window, cx));
     }
 
     // Usually when you close an item that has unsaved changes, we prompt you to
@@ -2119,7 +2119,7 @@ impl Pane {
         let Some(item_index) = self.index_for_item_id(item_id) else {
             return;
         };
-        self._remove_item(
+        self.remove_item_at_index(
             item_index,
             activate_pane,
             close_pane_if_empty,
@@ -2137,7 +2137,7 @@ impl Pane {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self._remove_item(
+        self.remove_item_at_index(
             item_index,
             activate_pane,
             true,
@@ -2147,7 +2147,7 @@ impl Pane {
         )
     }
 
-    fn _remove_item(
+    fn remove_item_at_index(
         &mut self,
         item_index: usize,
         activate_pane: bool,
@@ -9147,11 +9147,18 @@ mod tests {
         label: &str,
         is_dirty: bool,
         cx: &mut VisualTestContext,
-    ) -> Box<Entity<TestItem>> {
+    ) -> Entity<TestItem> {
         pane.update_in(cx, |pane, window, cx| {
             let labeled_item =
-                Box::new(cx.new(|cx| TestItem::new(cx).with_label(label).with_dirty(is_dirty)));
-            pane.add_item(labeled_item.clone(), false, false, None, window, cx);
+                cx.new(|cx| TestItem::new(cx).with_label(label).with_dirty(is_dirty));
+            pane.add_item(
+                Box::new(labeled_item.clone()),
+                false,
+                false,
+                None,
+                window,
+                cx,
+            );
             labeled_item
         })
     }

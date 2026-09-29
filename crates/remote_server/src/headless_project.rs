@@ -68,6 +68,10 @@ pub struct HeadlessProject {
     pub profiling_collector: gpui::ProfilingCollector,
     // Used mostly to keep alive the toolchain store for RPC handlers.
     // Local variant is used within LSP store, but that's a separate entity.
+    #[allow(
+        clippy::pub_underscore_fields,
+        reason = "kept alive for RPC handlers; public for struct-literal construction"
+    )]
     pub _toolchain_store: Entity<ToolchainStore>,
     pub kernels: HashMap<String, Child>,
 }

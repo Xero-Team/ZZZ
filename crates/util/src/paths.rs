@@ -994,7 +994,7 @@ impl std::fmt::Debug for PathMatcher {
         f.debug_struct("PathMatcher")
             .field("sources", &self.sources)
             .field("path_style", &self.path_style)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

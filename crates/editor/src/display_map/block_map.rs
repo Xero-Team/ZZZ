@@ -295,7 +295,7 @@ impl<P: Debug> Debug for BlockProperties<P> {
             .field("placement", &self.placement)
             .field("height", &self.height)
             .field("style", &self.style)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

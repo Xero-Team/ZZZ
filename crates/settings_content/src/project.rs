@@ -565,7 +565,7 @@ impl std::fmt::Debug for ContextServerCommand {
             .field("path", &self.path)
             .field("args", &self.args)
             .field("env", &filtered_env)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

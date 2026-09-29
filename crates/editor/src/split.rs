@@ -3955,7 +3955,7 @@ mod tests {
     }
 
     #[gpui::test]
-    #[ignore]
+    #[ignore = "known failure in the side-by-side diff UI"]
     async fn test_joining_added_line_with_unmodified_line(cx: &mut gpui::TestAppContext) {
         use rope::Point;
         use unindent::Unindent as _;

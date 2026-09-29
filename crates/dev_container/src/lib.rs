@@ -203,7 +203,7 @@ impl Debug for TemplateEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TemplateEntry")
             .field("template", &self.template)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -218,7 +218,7 @@ impl Debug for FeatureEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FeatureEntry")
             .field("feature", &self.feature)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

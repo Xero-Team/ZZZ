@@ -211,7 +211,10 @@ impl GitHostingProvider for Gitlab {
             .base_url()
             .join(&format!("{owner}/{repo}/-/blob/{sha}/{path}"))
             .unwrap();
-        if path.ends_with(".md") {
+        if std::path::Path::new(&path)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+        {
             permalink.set_query(Some("plain=1"));
         }
         permalink.set_fragment(

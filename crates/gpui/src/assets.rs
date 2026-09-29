@@ -110,7 +110,7 @@ impl fmt::Debug for RenderImage {
         f.debug_struct("ImageData")
             .field("id", &self.id)
             .field("size", &self.data.first().map(|f| f.buffer().dimensions()))
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

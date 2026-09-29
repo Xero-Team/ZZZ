@@ -507,7 +507,10 @@ impl LspInstaller for NodeVersionAdapter {
                     .get(&version.url, Default::default(), true)
                     .await
                     .context("downloading release")?;
-                if version.url.ends_with(".zip") {
+                if std::path::Path::new(&version.url)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("zip"))
+                {
                     extract_zip(&destination_container_path, response.body_mut()).await?;
                 } else if version.url.ends_with(".tar.gz") {
                     let decompressed_bytes = GzipDecoder::new(BufReader::new(response.body_mut()));

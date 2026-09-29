@@ -322,7 +322,10 @@ pub(crate) fn install_linux_dependencies(job: Job) -> Job {
 }
 
 pub fn script(name: &str) -> Step<Run> {
-    if name.ends_with(".ps1") {
+    if std::path::Path::new(name)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("ps1"))
+    {
         Step::new(name).run(name).shell(PWSH_SHELL)
     } else {
         Step::new(name).run(name)

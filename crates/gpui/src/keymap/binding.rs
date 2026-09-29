@@ -132,7 +132,7 @@ impl std::fmt::Debug for KeyBinding {
             .field("keystrokes", &self.keystrokes)
             .field("context_predicate", &self.context_predicate)
             .field("action", &self.action.name())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

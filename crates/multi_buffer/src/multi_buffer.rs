@@ -686,7 +686,7 @@ impl fmt::Debug for BufferStateSnapshot {
         f.debug_struct("BufferStateSnapshot")
             .field("path_key", &self.path_key)
             .field("buffer_id", &self.buffer_snapshot.remote_id())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -777,7 +777,7 @@ impl std::fmt::Debug for ExcerptBoundaryInfo {
         f.debug_struct(type_name::<Self>())
             .field("buffer_id", &self.buffer_id())
             .field("range", &self.range)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -3417,6 +3417,10 @@ impl MultiBufferSnapshot {
         self.diff_hunks_in_range(Anchor::Min..Anchor::Max)
     }
 
+    #[allow(
+        clippy::suspicious_operation_groupings,
+        reason = "false positive: the operands are distinct fields, not a typo"
+    )]
     pub fn diff_hunks_in_range<T: ToPoint>(
         &self,
         range: Range<T>,

@@ -55,7 +55,7 @@ impl Debug for WslRunningKernel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WslRunningKernel")
             .field("process", &self.process)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

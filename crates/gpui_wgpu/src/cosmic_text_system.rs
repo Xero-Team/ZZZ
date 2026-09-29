@@ -1089,6 +1089,10 @@ mod tests {
     /// wrap boundary, the row before it extends past the line's width, and hit
     /// testing in that sliver used to panic (ZED-BW8, ZED-75K, ZED-81Z).
     #[test]
+    #[allow(
+        clippy::while_float,
+        reason = "the loop advances by one ULP per iteration and is bounded by the line width"
+    )]
     fn index_for_position_past_line_width() -> Result<()> {
         let text_system = Arc::new(gpui::TextSystem::new(Arc::new(text_system()?)));
         let window_text_system = gpui::WindowTextSystem::new(text_system);

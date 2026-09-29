@@ -661,7 +661,7 @@ mod test {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "project settings merging is not implemented yet"]
     fn test_project_settings() {
         let project_content =
             json!({"terminal": {"shell": {"program": "/bin/project"}}, "option_as_meta": true});

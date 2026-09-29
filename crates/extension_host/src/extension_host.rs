@@ -1886,7 +1886,10 @@ fn load_plugin_queries(root_path: &Path) -> LanguageQueries {
             };
             let path = entry.path();
             if let Some(remainder) = path.strip_prefix(root_path).ok().and_then(|p| p.to_str()) {
-                if !remainder.ends_with(".scm") {
+                if !std::path::Path::new(remainder)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("scm"))
+                {
                     continue;
                 }
                 for (name, query) in QUERY_FILENAME_PREFIXES {

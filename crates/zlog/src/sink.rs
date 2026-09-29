@@ -114,7 +114,11 @@ static LEVEL_ANSI_COLORS: [&str; 6] = [
 
 // PERF: batching
 pub fn submit(mut record: Record) {
-    if record.module_path.is_none_or(|p| !p.ends_with(".rs")) {
+    if record.module_path.is_none_or(|p| {
+        !std::path::Path::new(p)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+    }) {
         // Only render line numbers for actual rust files emitted by `log_err` and friends
         record.line.take();
     }

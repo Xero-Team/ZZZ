@@ -272,6 +272,10 @@ impl PathBuilder {
         Ok(Self::build_path(buf))
     }
 
+    #[allow(
+        clippy::while_float,
+        reason = "pos is clamped to total_length each iteration, so the loop terminates"
+    )]
     fn tessellate_stroke(
         dash_array: Option<Vec<Pixels>>,
         path: &lyon::path::Path,

@@ -70,6 +70,10 @@ pub struct SearchResultsHandle {
 }
 
 pub struct SearchResults<T> {
+    #[allow(
+        clippy::pub_underscore_fields,
+        reason = "kept alive so the search task is not cancelled"
+    )]
     pub _task_handle: Task<()>,
     pub rx: Receiver<T>,
 }

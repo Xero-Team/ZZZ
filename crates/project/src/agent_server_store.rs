@@ -827,6 +827,10 @@ enum RegistryArchiveKind {
     },
 }
 
+#[allow(
+    clippy::case_sensitive_file_extension_comparisons,
+    reason = "the path is lowercased before the suffix checks"
+)]
 fn registry_archive_kind_for_url(archive_url: &str) -> Result<RegistryArchiveKind> {
     const UNSUPPORTED_SUFFIXES: &[&str] = &[
         // Installer formats explicitly rejected by the registry schema.

@@ -656,7 +656,7 @@ impl std::fmt::Debug for Completion {
             .field("label", &self.label)
             .field("documentation", &self.documentation)
             .field("source", &self.source)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

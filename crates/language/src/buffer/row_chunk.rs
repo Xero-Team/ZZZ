@@ -26,7 +26,7 @@ impl std::fmt::Debug for RowChunks {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RowChunks")
             .field("chunks", &self.chunks)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

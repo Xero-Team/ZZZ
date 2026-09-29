@@ -43,7 +43,7 @@ impl std::fmt::Debug for MouseContextMenu {
         f.debug_struct("MouseContextMenu")
             .field("position", &self.position)
             .field("context_menu", &self.context_menu)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

@@ -1948,6 +1948,10 @@ fn previous_word_end(
 
 /// Checks if there's a subword boundary start between `left` and `right` characters.
 /// This detects transitions like `_b` (separator to non-separator) or `aB` (lowercase to uppercase).
+#[allow(
+    clippy::suspicious_operation_groupings,
+    reason = "false positive: the operands are distinct fields, not a typo"
+)]
 pub(crate) fn is_subword_start(left: char, right: char, separators: &str) -> bool {
     let is_separator = |c: char| separators.contains(c);
     (is_separator(left) && !is_separator(right)) || (left.is_lowercase() && right.is_uppercase())
@@ -1955,6 +1959,10 @@ pub(crate) fn is_subword_start(left: char, right: char, separators: &str) -> boo
 
 /// Checks if there's a subword boundary end between `left` and `right` characters.
 /// This detects transitions like `a_` (non-separator to separator) or `aB` (lowercase to uppercase).
+#[allow(
+    clippy::suspicious_operation_groupings,
+    reason = "false positive: the operands are distinct fields, not a typo"
+)]
 pub(crate) fn is_subword_end(left: char, right: char, separators: &str) -> bool {
     let is_separator = |c: char| separators.contains(c);
     (!is_separator(left) && is_separator(right)) || (left.is_lowercase() && right.is_uppercase())

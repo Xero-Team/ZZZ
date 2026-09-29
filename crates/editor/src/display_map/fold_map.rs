@@ -88,7 +88,7 @@ impl fmt::Debug for FoldPlaceholder {
         f.debug_struct("FoldPlaceholder")
             .field("constrain_width", &self.constrain_width)
             .field("collapsed_text", &self.collapsed_text)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -1458,7 +1458,7 @@ impl fmt::Debug for ChunkRenderer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("ChunkRenderer")
             .field("constrain_width", &self.constrain_width)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

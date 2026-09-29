@@ -3143,6 +3143,10 @@ impl LocalSnapshot {
 }
 
 impl BackgroundScannerState {
+    #[allow(
+        clippy::suspicious_operation_groupings,
+        reason = "false positive: the operands are distinct fields, not a typo"
+    )]
     fn should_scan_directory(&self, entry: &Entry) -> bool {
         (self.scanning_enabled && !entry.is_external && (!entry.is_ignored || entry.is_always_included))
             || entry.path.file_name() == Some(DOT_GIT)
@@ -3685,7 +3689,7 @@ impl fmt::Debug for Snapshot {
             .field("root_name", &self.root_name)
             .field("entries_by_path", &EntriesByPath(&self.entries_by_path))
             .field("entries_by_id", &EntriesById(&self.entries_by_id))
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

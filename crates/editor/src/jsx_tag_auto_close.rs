@@ -92,6 +92,10 @@ pub(crate) fn should_auto_close(
     }
 }
 
+#[allow(
+    clippy::suspicious_operation_groupings,
+    reason = "false positive: the operands are distinct fields, not a typo"
+)]
 pub(crate) fn generate_auto_close_edits(
     buffer: &BufferSnapshot,
     ranges: &[Range<Anchor>],

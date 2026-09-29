@@ -242,7 +242,7 @@ impl Debug for RemoteRunningKernel {
             .field("request_tx", &self.request_tx)
             .field("execution_state", &self.execution_state)
             .field("kernel_info", &self.kernel_info)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

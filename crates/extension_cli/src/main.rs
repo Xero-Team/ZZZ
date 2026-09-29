@@ -477,7 +477,10 @@ fn test_languages(
                                 )
                             })?;
                 }
-                _ if file_name.ends_with(".scm") => {
+                _ if std::path::Path::new(file_name)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("scm")) =>
+                {
                     let grammar = grammar.with_context(|| {
                         format!(
                             "language {} provides query {} but no grammar",

@@ -290,7 +290,7 @@ impl WrappedLineLayout {
         position: Point<Pixels>,
         line_height: Pixels,
     ) -> Result<usize, usize> {
-        self._index_for_position(position, line_height, false)
+        self.index_for_position_with_closest(position, line_height, false)
     }
 
     /// The closest index to a given position in this layout for the given line height.
@@ -303,10 +303,10 @@ impl WrappedLineLayout {
         position: Point<Pixels>,
         line_height: Pixels,
     ) -> Result<usize, usize> {
-        self._index_for_position(position, line_height, true)
+        self.index_for_position_with_closest(position, line_height, true)
     }
 
-    fn _index_for_position(
+    fn index_for_position_with_closest(
         &self,
         mut position: Point<Pixels>,
         line_height: Pixels,

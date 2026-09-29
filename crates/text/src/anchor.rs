@@ -41,7 +41,7 @@ impl Debug for Anchor {
             .field("offset", &self.offset)
             .field("bias", &self.bias)
             .field("buffer_id", &self.buffer_id)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

@@ -127,7 +127,10 @@ pub fn load_queries_from_prefixes(prefixes: &[&str]) -> LanguageQueries {
 fn append_queries_from_prefix(result: &mut LanguageQueries, prefix: &str) {
     for path in GrammarDir::iter() {
         if let Some(remainder) = path.strip_prefix(prefix).and_then(|p| p.strip_prefix('/')) {
-            if !remainder.ends_with(".scm") {
+            if !std::path::Path::new(remainder)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("scm"))
+            {
                 continue;
             }
             for (query_prefix, query) in QUERY_FILENAME_PREFIXES {

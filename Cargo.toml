@@ -1190,6 +1190,29 @@ redundant_as_str = "deny"
 unnecessary_map_or = "deny"
 deref_by_slicing = "deny"
 
+# Clarity and error-handling lints promoted in the eighth batch. Each replaces a
+# misleading or hand-rolled pattern with the intent-revealing one: a used item
+# no longer carries a leading underscore (`used_underscore_items`,
+# `pub_underscore_fields`), a `Debug` impl that intentionally omits fields now
+# says so with `finish_non_exhaustive` (`missing_fields_in_debug`), a boxed
+# return the caller could box itself is unboxed (`unnecessary_box_returns`), and
+# a disabled test states why (`ignore_without_reason`).
+used_underscore_items = "deny"
+pub_underscore_fields = "deny"
+missing_fields_in_debug = "deny"
+unnecessary_box_returns = "deny"
+ignore_without_reason = "deny"
+
+# The ninth batch promotes lints that catch likely bugs: a `while` loop whose
+# condition compares floats (`while_float`) and a sequence of operators that
+# looks like a copy-paste error (`suspicious_operation_groupings`) are denied;
+# the remaining sites that are intentionally not bugs carry a documented
+# `#[allow(..., reason = ...)]`. `case_sensitive_file_extension_comparisons`
+# prefers a case-insensitive `Path::extension` over `str::ends_with(".ext")`.
+while_float = "deny"
+suspicious_operation_groupings = "deny"
+case_sensitive_file_extension_comparisons = "deny"
+
 # We currently do not restrict any style rules
 # as it slows down shipping code to ZZZ.
 #
@@ -1221,14 +1244,10 @@ style = { level = "allow", priority = -1 }
 #   `literal_string_with_formatting_args` (34), `format_collect` (13),
 #   `transmute_ptr_to_ptr` (3, its replacement pointer cast is not expressible
 #   for the unsized types here without tripping `ref_as_ptr`/`ptr_as_ptr`).
-# - Behavioral or API-shape changes: `case_sensitive_file_extension_comparisons`
-#   (12), `zero_sized_map_values` (11), `suspicious_operation_groupings` (12),
+# - Behavioral or API-shape changes: `zero_sized_map_values` (11),
 #   `float_cmp` (25), `option_option` (8), `implicit_hasher` (10),
-#   `unnecessary_box_returns` (8), `missing_fields_in_debug` (25),
 #   `branches_sharing_code` (22), `collapsible_else_if` (16),
-#   `fn_params_excessive_bools` (11), `ignore_without_reason` (7),
-#   `pub_underscore_fields` (2), `used_underscore_items` (5), `while_float` (5),
-#   `single_option_map` (4).
+#   `fn_params_excessive_bools` (11), `single_option_map` (4).
 # - rustc opt-in lints, similarly deferred: `unused_lifetimes` (15),
 #   `trivial_numeric_casts` (34), `trivial_casts` (167),
 #   `single_use_lifetimes` (45), `let_underscore_drop` (321),

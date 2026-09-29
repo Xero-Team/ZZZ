@@ -239,7 +239,7 @@ async fn test_open_path_prompt_completion(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-#[cfg_attr(not(target_os = "windows"), ignore)]
+#[cfg_attr(not(target_os = "windows"), ignore = "Windows-only test")]
 async fn test_open_path_prompt_on_windows(cx: &mut TestAppContext) {
     let app_state = init_test(cx);
     app_state

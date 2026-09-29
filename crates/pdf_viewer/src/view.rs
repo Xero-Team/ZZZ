@@ -865,6 +865,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::while_float,
+        reason = "the test advances by a fixed step, so the loop terminates"
+    )]
     fn focus_advances_monotonically_while_scrolling_down() {
         let spans = page_spans(std::iter::repeat(300.0).take(50), 1.0);
         let viewport = 350.0;
@@ -1009,6 +1013,10 @@ mod tests {
     /// checked into git, so the test no-ops when it is missing rather than
     /// failing on a clean checkout.
     #[test]
+    #[allow(
+        clippy::while_float,
+        reason = "the test advances by a fixed step, so the loop terminates"
+    )]
     fn focus_tracking_over_real_long_document() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests")

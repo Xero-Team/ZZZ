@@ -14084,6 +14084,10 @@ mod tests {
     }
 
     #[gpui::test]
+    #[allow(
+        clippy::while_float,
+        reason = "the test advances by a fixed step, so the loop terminates"
+    )]
     fn test_wrapped_invisibles_drawing(cx: &mut TestAppContext) {
         let tab_size = 4;
         let input_text = "a\tbcd     ".repeat(9);

@@ -566,6 +566,10 @@ pub struct ThreadView {
     pub resumed_without_history: bool,
     pub(crate) permission_selections: HashMap<acp::ToolCallId, PermissionSelection>,
     elicitation_form_states: HashMap<ElicitationEntryId, ElicitationFormState>,
+    #[allow(
+        clippy::pub_underscore_fields,
+        reason = "kept alive so the cancellation task is not dropped"
+    )]
     pub _cancel_task: Option<Task<()>>,
     _save_task: Option<Task<()>>,
     _draft_resolve_task: Option<Task<()>>,
@@ -574,6 +578,10 @@ pub struct ThreadView {
     pub can_fast_track_queue: bool,
     pub hovered_edited_file_buttons: Option<usize>,
     pub in_flight_prompt: Option<Vec<acp::ContentBlock>>,
+    #[allow(
+        clippy::pub_underscore_fields,
+        reason = "kept alive for the lifetime of the view"
+    )]
     pub _subscriptions: Vec<Subscription>,
     pub message_editor: Entity<MessageEditor>,
     pub add_context_menu_handle: PopoverMenuHandle<ContextMenu>,
@@ -608,6 +616,10 @@ impl ThreadView {
 
 #[derive(Default)]
 pub struct TurnFields {
+    #[allow(
+        clippy::pub_underscore_fields,
+        reason = "kept alive so the turn timer task is not dropped"
+    )]
     pub _turn_timer_task: Option<Task<()>>,
     pub last_turn_duration: Option<Duration>,
     pub last_turn_tokens: Option<u64>,

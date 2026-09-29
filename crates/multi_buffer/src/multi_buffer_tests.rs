@@ -3073,6 +3073,10 @@ impl ReferenceMultibuffer {
         self.update_expanded_diff_hunks_for_buffer(buffer_snapshot.remote_id(), cx);
     }
 
+    #[allow(
+        clippy::suspicious_operation_groupings,
+        reason = "false positive: the operands are distinct fields, not a typo"
+    )]
     fn expand_diff_hunks(&mut self, path_key: PathKey, range: Range<text::Anchor>, cx: &App) {
         let excerpt = self
             .excerpts
@@ -3130,6 +3134,10 @@ impl ReferenceMultibuffer {
         }
     }
 
+    #[allow(
+        clippy::suspicious_operation_groupings,
+        reason = "false positive: the operands are distinct fields, not a typo"
+    )]
     fn expected_content(
         &self,
         cx: &App,
@@ -3454,6 +3462,10 @@ impl ReferenceMultibuffer {
             .insert(base_text_buffer_id, (diff, main_buffer));
     }
 
+    #[allow(
+        clippy::suspicious_operation_groupings,
+        reason = "false positive: the operands are distinct fields, not a typo"
+    )]
     fn update_expanded_diff_hunks_for_buffer(&mut self, buffer_id: BufferId, cx: &mut App) {
         let excerpts = self
             .excerpts

@@ -302,7 +302,7 @@ impl std::fmt::Debug for CompiledRegex {
         f.debug_struct("CompiledRegex")
             .field("pattern", &self.pattern)
             .field("case_sensitive", &self.case_sensitive)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

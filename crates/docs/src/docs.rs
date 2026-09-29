@@ -401,7 +401,10 @@ fn resolve_relative_path(current_path: &str, path: &str) -> Option<String> {
     }
 
     let mut resolved = components.join("/");
-    if !resolved.ends_with(".md") {
+    if !std::path::Path::new(&resolved)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+    {
         resolved.push_str(".md");
     }
     Some(resolved)

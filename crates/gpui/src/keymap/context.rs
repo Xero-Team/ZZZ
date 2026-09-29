@@ -807,6 +807,10 @@ mod tests {
     // MARK: - Display
 
     #[test]
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "the predicate tree stores boxed children, so the helpers return them boxed"
+    )]
     fn test_context_display() {
         fn ident(s: &str) -> Box<KeyBindingContextPredicate> {
             Box::new(Identifier(SharedString::new(s)))

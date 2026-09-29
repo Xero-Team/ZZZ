@@ -1628,7 +1628,7 @@ impl std::fmt::Debug for SelectNextState {
         f.debug_struct(std::any::type_name::<Self>())
             .field("wordwise", &self.wordwise)
             .field("done", &self.done)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -3272,6 +3272,10 @@ impl Editor {
     /// directly would place the rename one character past the symbol, for
     /// example, trailing whitespace, so for a non-empty forward selection we
     /// shift one point left to land back on the symbol under the cursor.
+    #[allow(
+        clippy::suspicious_operation_groupings,
+        reason = "false positive: the operands are distinct fields, not a typo"
+    )]
     fn rename_target_anchor(&self, selection: &Selection<Anchor>, cx: &mut App) -> Anchor {
         let head = selection.head();
 
@@ -8111,6 +8115,10 @@ impl Editor {
         cx.propagate();
     }
 
+    #[allow(
+        clippy::suspicious_operation_groupings,
+        reason = "false positive: the operands are distinct fields, not a typo"
+    )]
     pub fn tab(&mut self, _: &Tab, window: &mut Window, cx: &mut Context<Self>) {
         if self.mode.is_single_line() {
             cx.propagate();
