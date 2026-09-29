@@ -25,3 +25,77 @@ if [[ -n "${result}" ]]; then
   echo "Error: Found 'super-', 'win-', or 'fn-' in keymap files. Currently these aren't used."
   exit 1
 fi
+
+# Detect the same key bound twice inside one bindings object. JSON parsers
+# silently keep the last duplicate, so this is the only way to catch it. The
+# keymaps are JSONC, so strip comments before parsing.
+if command -v python3 >/dev/null 2>&1; then
+  python3 - <<'PY'
+import json
+import re
+import subprocess
+import sys
+
+
+def strip_jsonc(text):
+    out = []
+    index = 0
+    length = len(text)
+    in_string = False
+    escaped = False
+    while index < length:
+        char = text[index]
+        if in_string:
+            out.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+        elif char == '"':
+            in_string = True
+            out.append(char)
+            index += 1
+        elif char == "/" and index + 1 < length and text[index + 1] == "/":
+            while index < length and text[index] != "\n":
+                index += 1
+        elif char == "/" and index + 1 < length and text[index + 1] == "*":
+            index += 2
+            while index + 1 < length and not (
+                text[index] == "*" and text[index + 1] == "/"
+            ):
+                index += 1
+            index += 2
+        else:
+            out.append(char)
+            index += 1
+    return re.sub(r",(\s*[}\]])", r"\1", "".join(out))
+
+
+def reject_duplicates(pairs):
+    seen = set()
+    for key, _ in pairs:
+        if key in seen:
+            raise ValueError(f"duplicate binding {key!r}")
+        seen.add(key)
+    return dict(pairs)
+
+
+files = subprocess.check_output(
+    ["git", "ls-files", "assets/keymaps/*.json"], text=True
+).split()
+failed = False
+for path in files:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            json.loads(strip_jsonc(handle.read()), object_pairs_hook=reject_duplicates)
+    except ValueError as error:
+        print(f"{path}: {error}")
+        failed = True
+
+if failed:
+    sys.exit("Error: duplicate keybindings found in the same context.")
+PY
+fi
