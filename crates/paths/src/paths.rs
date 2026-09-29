@@ -282,6 +282,23 @@ pub fn database_dir() -> &'static PathBuf {
     DATABASE_DIR.get_or_init(|| data_dir().join("db"))
 }
 
+/// Returns the persistent Telegram directory. It holds the encrypted session,
+/// which must survive cache cleanup.
+pub fn telegram_dir() -> &'static PathBuf {
+    static TELEGRAM_DIR: OnceLock<PathBuf> = OnceLock::new();
+    TELEGRAM_DIR.get_or_init(|| data_dir().join("telegram"))
+}
+
+/// Returns the regenerable Telegram media cache directory.
+///
+/// This is the platform cache directory ([`temp_dir`]) despite its name, so the
+/// OS and the user may delete it at any time. Downloaded media lives here and is
+/// re-downloaded on demand; the session never does.
+pub fn telegram_cache_dir() -> &'static PathBuf {
+    static TELEGRAM_CACHE_DIR: OnceLock<PathBuf> = OnceLock::new();
+    TELEGRAM_CACHE_DIR.get_or_init(|| temp_dir().join("telegram"))
+}
+
 /// Returns the path to the `settings.json` file.
 pub fn settings_file() -> &'static PathBuf {
     static SETTINGS_FILE: OnceLock<PathBuf> = OnceLock::new();
@@ -694,6 +711,12 @@ mod tests {
             local_vscode_launch_file_relative_path().as_unix_str(),
             ".vscode/launch.json"
         );
+    }
+
+    #[test]
+    fn telegram_paths_are_rooted_in_data_and_cache_dirs() {
+        assert_eq!(telegram_dir(), &data_dir().join("telegram"));
+        assert_eq!(telegram_cache_dir(), &temp_dir().join("telegram"));
     }
 
     #[test]

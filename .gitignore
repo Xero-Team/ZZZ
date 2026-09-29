@@ -48,6 +48,9 @@ crates/docs_preprocessor/actions.json
 .env
 .env.secret.toml
 
+# Telegram application credentials for local builds.
+crates/telegram/credentials.toml
+
 # `nix build` output
 /result
 

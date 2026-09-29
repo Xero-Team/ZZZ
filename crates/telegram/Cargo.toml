@@ -1,0 +1,41 @@
+[package]
+name = "telegram"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "AGPL-3.0-or-later"
+
+[lib]
+name = "telegram"
+path = "src/telegram.rs"
+
+[lints]
+workspace = true
+
+[features]
+test-support = []
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+chacha20poly1305.workspace = true
+# Pinned: glass_pumpkin 2.0.0-rc1 moved to num-bigint 0.5, which is
+# semver-incompatible with grammers-crypto 0.10's num-bigint 0.4 usage.
+glass_pumpkin = "=2.0.0-rc0"
+grammers-client.workspace = true
+grammers-session.workspace = true
+grammers-tl-types.workspace = true
+log.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[build-dependencies]
+dotenvy.workspace = true
+toml.workspace = true
+
+[package.metadata.cargo-machete]
+# Pinned only to keep grammers-crypto on a num-bigint 0.4-compatible
+# glass_pumpkin; it is not referenced from our source.
+ignored = ["glass_pumpkin"]

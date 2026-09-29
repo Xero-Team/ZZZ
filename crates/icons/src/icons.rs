@@ -247,6 +247,7 @@ pub enum IconName {
     StarFilled,
     Stop,
     Tab,
+    Telegram,
     Terminal,
     TerminalAlt,
     TextSnippet,
