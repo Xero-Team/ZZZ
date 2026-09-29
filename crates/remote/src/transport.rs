@@ -417,6 +417,10 @@ async fn build_remote_server_from_source(
                 cx,
             );
             log::info!("building remote binary from source for {triple} with Zig");
+            // rustc passes `-O1` to the linker on optimized builds; Zig's cc wrapper
+            // reports it as a deprecated setting (rust-lang/rust#158192), so allow
+            // the resulting false-positive linker message.
+            rust_flags.push_str(" -A linker_messages");
         }
         RemoteServerBuildMode::Xwin => {
             if which("clang", cx).await?.is_none() {

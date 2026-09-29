@@ -129,7 +129,9 @@ if [[ "$target_dir" != "debug" || "${ZZZ_EMBED_REMOTE_SERVERS:-}" == "1" ]]; the
     saved_rustflags="${RUSTFLAGS:-}"
     unset CXXFLAGS
     unset SDKROOT
-    export RUSTFLAGS="${saved_rustflags} -C target-feature=+crt-static"
+    # `-A linker_messages`: rustc passes `-O1` to the Zig linker on optimized
+    # builds, which Zig reports as a deprecated setting (rust-lang/rust#158192).
+    export RUSTFLAGS="${saved_rustflags} -C target-feature=+crt-static -A linker_messages"
     build_linux_remote_server x86_64-unknown-linux-musl x86_64
     build_linux_remote_server aarch64-unknown-linux-musl aarch64
     if [[ -n "${saved_cxxflags}" ]]; then

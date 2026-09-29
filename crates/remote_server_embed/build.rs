@@ -196,6 +196,12 @@ fn build_target(workspace: &Path, target: &RemoteTarget, host: &str) -> Result<P
     } else {
         "build"
     };
+    if subcommand == "zigbuild" {
+        // rustc passes `-O1` to the linker on optimized builds; Zig's cc wrapper
+        // reports it as a deprecated setting (rust-lang/rust#158192), so allow
+        // the resulting false-positive linker message.
+        rustflags.push_str(" -A linker_messages");
+    }
     let mut command = cargo_command(workspace, subcommand, target, &target_dir, rustflags.trim());
     if subcommand == "zigbuild" {
         apply_tmpfs_zig_cache(&mut command);

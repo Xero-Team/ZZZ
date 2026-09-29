@@ -248,7 +248,10 @@ if [[ "$remote_server_triple" != "aarch64-unknown-linux-musl" ]] \
     rm -rf "${target_dir}/aarch64-unknown-linux-musl/release/build"/aws-lc-sys-*
     rm -rf "${target_dir}/aarch64-unknown-linux-musl/release/.fingerprint"/aws-lc-sys-*
     rm -f "${target_dir}/aarch64-unknown-linux-musl/release/deps"/libaws_lc*
-    if cargo zigbuild --release --target aarch64-unknown-linux-musl --package remote_server; then
+    # rustc passes `-O1` to the linker on optimized builds; Zig's cc wrapper
+    # reports it as a deprecated setting (rust-lang/rust#158192), so allow the
+    # resulting false-positive linker message.
+    if RUSTFLAGS="${RUSTFLAGS} -A linker_messages" cargo zigbuild --release --target aarch64-unknown-linux-musl --package remote_server; then
         gzip -f --stdout --best "${target_dir}/aarch64-unknown-linux-musl/release/remote_server" \
             > "${target_dir}/zzz-remote-server-linux-aarch64.gz"
     else
