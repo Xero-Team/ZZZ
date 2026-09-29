@@ -38,3 +38,19 @@ hosted ZZZ service, send telemetry, or upload crash data.
 Set a remote `server_url` manually to enable cloud compatibility. OpenCode is
 available only when configured by the user. Sentry symbol uploads additionally
 require `ZZZ_ENABLE_SENTRY_UPLOAD=1` and a valid `SENTRY_AUTH_TOKEN`.
+
+The Telegram panel is opt-in. Nothing connects to Telegram until you open the
+panel and sign in. After that, ZZZ connects to Telegram, which is a
+third-party service, to deliver and receive messages. Telegram chats are not
+end-to-end encrypted by default, and your session is stored encrypted on disk
+under the ZZZ data directory. There is no auto-connect and no telemetry: the
+panel connects only when you open it or press Sign in. `api_id` and `api_hash`
+are application credentials embedded at build time, not user secrets; your real
+credential is the encrypted session file.
+
+Downloaded Telegram media is a regenerable cache under the platform cache
+directory, not the data directory. It may be deleted at any time and contains
+no credentials; only the encrypted session is persistent.
+
+The absence of Zed collab "channel chat" in ZZZ is unrelated to Telegram
+channels. They are separate features and neither replaces the other.

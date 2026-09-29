@@ -5452,6 +5452,47 @@ See the [debugger page](../debugger.md) for more information about debugging sup
 - `commit_title_max_length`: Maximum length of the commit message title before a warning is shown. Set to `0` to disable
 - `entry_primary_click_action`: Default action when clicking a changed file in the git panel. Can be `project_diff`, `file_diff`, or `view_file`
 
+## Telegram
+
+- Description: Settings for the opt-in Telegram panel and its connection.
+- Settings: `telegram_panel`, `telegram`
+- Default:
+
+```json [settings]
+{
+  "telegram_panel": {
+    "button": true,
+    "dock": "bottom",
+    "default_width": 360,
+    "default_height": 320,
+    "flexible": false,
+    "starts_open": false,
+    "show_unread_badge": true,
+    "limit_content_width": true,
+    "max_content_width": 760
+  },
+  "telegram": {
+    "proxy": null
+  }
+}
+```
+
+### `telegram_panel`
+
+- `button`: Whether to show the Telegram panel button in the status bar
+- `dock`: Where to dock the Telegram panel. Can be `left`, `bottom`, or `right`
+- `default_width`: Default width of the Telegram panel, used by the left and right docks
+- `default_height`: Default height of the Telegram panel, used by the bottom dock
+- `flexible`: Whether the Telegram panel can stretch to fill its dock
+- `starts_open`: Whether the Telegram panel should open on startup
+- `show_unread_badge`: Whether to show a badge with the number of unread chats on the Telegram panel icon. Muted chats do not count
+- `limit_content_width`: Whether to limit the width of messages, the chat header, and the composer. Content is centered when the panel is wider than `max_content_width`
+- `max_content_width`: Maximum content width in pixels
+
+### `telegram`
+
+- `proxy`: A dedicated SOCKS5 proxy for Telegram, for example `socks5://127.0.0.1:1080`. Telegram cannot use HTTP or HTTPS proxies. When unset, ZZZ's global proxy is reused if it is a SOCKS5 proxy
+
 ## Git Worktree Directory
 
 - Description: Directory where git worktrees are created, relative to the repository working directory.
