@@ -56,6 +56,26 @@ jobs:
       - name: Check upstream rejection ledger
         run: ./script/check-upstream-ledger
 
+  clippy:
+    name: Clippy
+    if: github.ref_type == 'branch' && !inputs.skip_rust_build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: ./script/linux
+
+      - name: Configure CI cargo settings
+        run: cp .cargo/ci-config.toml .cargo/config.toml
+
+      - name: Run clippy gate
+        run: ./script/clippy
+
   test:
     name: Test
     if: github.ref_type == 'branch' && !inputs.skip_rust_build

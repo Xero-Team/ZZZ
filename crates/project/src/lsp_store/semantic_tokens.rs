@@ -140,11 +140,10 @@ impl LspStore {
             .spawn(async move |lsp_store, cx| {
                 let buffer = task_buffer;
                 let version_queried_for = task_version_queried_for;
-                let new_tokens = match super::race_superseded(new_tokens, cancel_rx).await {
-                    Some(new_tokens) => new_tokens,
+                let Some(new_tokens) = super::race_superseded(new_tokens, cancel_rx).await else {
                     // Superseded by a newer request for this buffer; the fetch
                     // future being dropped has already cancelled the LSP request.
-                    None => return Ok(BufferSemanticTokens::default()),
+                    return Ok(BufferSemanticTokens::default());
                 };
                 let res = if let Some(new_tokens) = new_tokens {
                     let (raw_tokens, buffer_snapshot) = lsp_store
@@ -852,7 +851,7 @@ mod tests {
     /// Token encoding (5 values per token):
     ///   [deltaLine, deltaStart, length, tokenType, tokenModifiers]
     #[test]
-    #[ignore] // Run with: cargo test -p project debug_parse_tokens -- --nocapture --ignored
+    #[ignore = "manual debugging helper; run with: cargo test -p project debug_parse_tokens -- --nocapture --ignored"]
     fn debug_parse_tokens() {
         // ============================================================
         // PASTE YOUR JSON HERE (one message per line for sequences)
