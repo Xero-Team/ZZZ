@@ -1481,7 +1481,7 @@ async fn fetch_url_content(http_client: Arc<HttpClientWithUrl>, url: String) -> 
             } else {
                 handlers.push(Rc::new(RefCell::new(markdown::CodeHandler)));
             }
-            convert_html_to_markdown(&body[..], &mut handlers)
+            convert_html_to_markdown(&*body, &mut handlers)
         }
         ContentType::Plaintext => Ok(std::str::from_utf8(&body)?.to_owned()),
         ContentType::Json => {

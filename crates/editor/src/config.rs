@@ -266,7 +266,7 @@ impl Editor {
         if self.is_empty(cx) {
             self.placeholder_display_map
                 .as_ref()
-                .map_or(false, |display_map| {
+                .is_some_and(|display_map| {
                     display_map.update(cx, |map, cx| map.set_wrap_width(width, cx))
                 })
         } else {

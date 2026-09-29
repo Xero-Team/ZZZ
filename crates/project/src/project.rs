@@ -5400,9 +5400,7 @@ impl Project {
         cx: &App,
     ) -> bool {
         self.worktree_for_id(worktree_id, cx)
-            .map_or(false, |worktree| {
-                worktree.read(cx).entry_for_path(rel_path).is_some()
-            })
+            .is_some_and(|worktree| worktree.read(cx).entry_for_path(rel_path).is_some())
     }
 
     pub fn worktree_paths(&self, cx: &App) -> WorktreePaths {

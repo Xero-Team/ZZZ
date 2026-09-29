@@ -3051,8 +3051,7 @@ impl OutlinePanel {
 
                                             if !children.may_be_fold_part()
                                                 || (children.dirs == 0
-                                                    && visited_dirs.last().map_or(
-                                                        true,
+                                                    && visited_dirs.last().is_none_or(
                                                         |(parent_dir_id, _)| {
                                                             new_unfolded_dirs
                                                                 .get(&directory.worktree_id)
@@ -3362,7 +3361,7 @@ impl OutlinePanel {
             .into_iter()
             .filter_map(|i| Some((i, excerpt_outlines.get(i)?)))
             .filter(|(i, _)| {
-                children.get(i).map_or(true, |children| {
+                children.get(i).is_none_or(|children| {
                     children.iter().all(|child_index| {
                         excerpt_outlines
                             .get(*child_index)

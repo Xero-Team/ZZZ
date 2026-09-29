@@ -4493,7 +4493,7 @@ fn render_toggle_button<B: Into<bool> + From<bool> + Copy>(
 ) -> AnyElement {
     let (_, value) = SettingsStore::global(cx).get_value_from_file(file.to_settings(), field.pick);
 
-    let toggle_state = if value.copied().map_or(false, Into::into) {
+    let toggle_state = if value.copied().is_some_and(Into::into) {
         ToggleState::Selected
     } else {
         ToggleState::Unselected

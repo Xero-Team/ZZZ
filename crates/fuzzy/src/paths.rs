@@ -97,7 +97,7 @@ pub fn match_fixed_path_set(
 ) -> Vec<PathMatch> {
     let lowercase_query = query.chars().map(simple_lowercase).collect::<Vec<_>>();
     let query = query.chars().collect::<Vec<_>>();
-    let query_char_bag = CharBag::from(&lowercase_query[..]);
+    let query_char_bag = CharBag::from(&*lowercase_query);
 
     let mut matcher = Matcher::new(&query, &lowercase_query, query_char_bag, smart_case, true);
 

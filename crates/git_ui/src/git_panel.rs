@@ -7632,9 +7632,9 @@ impl RenderOnce for PanelRepoFooter {
             })
             .unzip();
 
-        let single_repo = project.as_ref().map_or(true, |project| {
-            project.read(cx).git_store().read(cx).repositories().len() == 1
-        });
+        let single_repo = project
+            .as_ref()
+            .is_none_or(|project| project.read(cx).git_store().read(cx).repositories().len() == 1);
 
         const MAX_SHORT_SHA_LEN: usize = 8;
         let branch_name = self

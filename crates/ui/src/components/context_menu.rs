@@ -1920,11 +1920,10 @@ impl ContextMenu {
                                             ) {
                                                 // Only close if mouse is to the left of the safety threshold
                                                 // (prevents accidental close when moving diagonally toward submenu)
-                                                let should_close = parent
-                                                    .submenu_safety_threshold_x
-                                                    .map_or(true, |threshold_x| {
-                                                        mouse_pos.x < threshold_x
-                                                    });
+                                                let should_close =
+                                                    parent.submenu_safety_threshold_x.is_none_or(
+                                                        |threshold_x| mouse_pos.x < threshold_x,
+                                                    );
 
                                                 if should_close {
                                                     parent.close_submenu(true, cx);

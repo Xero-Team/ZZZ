@@ -16,7 +16,7 @@ fn remove_formatters_on_save_inner(value: &mut Value, path: &[&str]) -> Result<(
     };
     let is_format_on_save_set_to_formatter = format_on_save
         .as_str()
-        .map_or(true, |s| s != "on" && s != "off");
+        .is_none_or(|s| s != "on" && s != "off");
     if !is_format_on_save_set_to_formatter {
         return Ok(());
     }

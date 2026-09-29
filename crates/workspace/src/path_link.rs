@@ -418,9 +418,10 @@ fn possible_open_target_internal(
             if let Some(fs_path_to_check) = fs.canonicalize(&path_to_check.path).await.ok()
                 && let Some(metadata) = fs.metadata(&fs_path_to_check).await.ok().flatten()
             {
-                if open_target.as_ref().map_or(true, |open_target| {
-                    open_target.path().path != fs_path_to_check
-                }) {
+                if open_target
+                    .as_ref()
+                    .is_none_or(|open_target| open_target.path().path != fs_path_to_check)
+                {
                     path_to_check.path = fs_path_to_check;
                     return Some(OpenTarget::File(path_to_check, metadata));
                 }

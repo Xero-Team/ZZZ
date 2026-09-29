@@ -2047,18 +2047,15 @@ impl Terminal {
 
         // Throttle hyperlink searches to avoid excessive processing
         let now = Instant::now();
-        if self
-            .last_hyperlink_search_position
-            .map_or(true, |last_pos| {
-                // Only search if mouse moved significantly or enough time passed
-                let distance_moved = ((position.x - last_pos.x).abs()
-                    + (position.y - last_pos.y).abs())
-                    > FIND_HYPERLINK_THROTTLE_PX;
-                let time_elapsed =
-                    now.duration_since(self.last_mouse_move_time) > FIND_HYPERLINK_THROTTLE;
-                distance_moved || time_elapsed
-            })
-        {
+        if self.last_hyperlink_search_position.is_none_or(|last_pos| {
+            // Only search if mouse moved significantly or enough time passed
+            let distance_moved = ((position.x - last_pos.x).abs()
+                + (position.y - last_pos.y).abs())
+                > FIND_HYPERLINK_THROTTLE_PX;
+            let time_elapsed =
+                now.duration_since(self.last_mouse_move_time) > FIND_HYPERLINK_THROTTLE;
+            distance_moved || time_elapsed
+        }) {
             self.last_mouse_move_time = now;
             self.last_hyperlink_search_position = Some(position);
             self.events.push_back(InternalEvent::FindHyperlink(

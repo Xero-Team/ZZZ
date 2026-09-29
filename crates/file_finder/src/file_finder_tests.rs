@@ -2289,7 +2289,7 @@ async fn test_history_labels_include_worktree_root_name_when_hide_root_true_and_
                 if let Match::History { path, .. } = m {
                     path.project.path.file_name()
                         .map(|n| n.to_string())
-                        .map_or(false, |name| name == "first.rs")
+                        .is_some_and(|name| name == "first.rs")
                 } else {
                     false
                 }
@@ -2302,7 +2302,7 @@ async fn test_history_labels_include_worktree_root_name_when_hide_root_true_and_
                 if let Match::History { path, .. } = m {
                     path.project.path.file_name()
                         .map(|n| n.to_string())
-                        .map_or(false, |name| name == "third.rs")
+                        .is_some_and(|name| name == "third.rs")
                 } else {
                     false
                 }

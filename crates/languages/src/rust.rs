@@ -97,7 +97,7 @@ impl RustLspAdapter {
                     let parts_to_process = if parts.first() == Some(&"rust-analyzer") {
                         &parts[1..]
                     } else {
-                        &parts[..]
+                        &*parts
                     };
 
                     if parts_to_process.is_empty() {

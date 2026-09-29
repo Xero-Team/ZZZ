@@ -235,9 +235,7 @@ impl ProjectDiff {
                 .branch_diff
                 .read(cx)
                 .repo()
-                .map_or(true, |current| {
-                    current.read(cx).id != intended_repo.read(cx).id
-                });
+                .is_none_or(|current| current.read(cx).id != intended_repo.read(cx).id);
 
             if needs_switch {
                 existing.update(cx, |project_diff, cx| {
@@ -360,7 +358,7 @@ impl ProjectDiff {
                 .branch_diff
                 .read(cx)
                 .repo()
-                .map_or(true, |current| current.read(cx).id != intended.read(cx).id);
+                .is_none_or(|current| current.read(cx).id != intended.read(cx).id);
             if needs_switch {
                 project_diff.update(cx, |project_diff, cx| {
                     project_diff.branch_diff.update(cx, |branch_diff, cx| {

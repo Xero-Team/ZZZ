@@ -6622,7 +6622,7 @@ impl ThreadView {
         self.conversation
             .read(cx)
             .pending_tool_call(active_session_id, cx)
-            .map_or(false, |(pending_session_id, pending_tool_call_id, _)| {
+            .is_some_and(|(pending_session_id, pending_tool_call_id, _)| {
                 self.thread.read(cx).session_id() == &pending_session_id
                     && tool_call_id == &pending_tool_call_id
             })
@@ -8598,7 +8598,7 @@ impl ThreadView {
 
         let has_expandable_content = thread
             .as_ref()
-            .map_or(false, |thread| !thread.read(cx).entries().is_empty());
+            .is_some_and(|thread| !thread.read(cx).entries().is_empty());
 
         let tooltip_meta_description = if is_expanded {
             tr(

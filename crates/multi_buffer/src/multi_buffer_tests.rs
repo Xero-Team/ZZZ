@@ -5293,7 +5293,7 @@ fn assert_line_indents(snapshot: &MultiBufferSnapshot) {
             .reversed_line_indents(MultiBufferRow(max_row), |_| true)
             .map(|(row, indent, _)| (row.0, indent))
             .collect::<Vec<_>>(),
-        &line_indents[..],
+        &*line_indents,
         "reversed_line_indents({max_row})"
     );
 }

@@ -173,10 +173,10 @@ mod test {
 
         // Verify it got added to the migrations table
         assert_eq!(
-            &connection
+            &*connection
                 .select::<String>("SELECT (migration) FROM migrations")
                 .unwrap()()
-            .unwrap()[..],
+            .unwrap(),
             &[indoc! {"CREATE TABLE test1 (a TEXT, b TEXT)"}],
         );
 
@@ -202,10 +202,10 @@ mod test {
 
         // Verify it is also added to the migrations table
         assert_eq!(
-            &connection
+            &*connection
                 .select::<String>("SELECT (migration) FROM migrations")
                 .unwrap()()
-            .unwrap()[..],
+            .unwrap(),
             &[
                 indoc! {"CREATE TABLE test1 (a TEXT, b TEXT)"},
                 indoc! {"CREATE TABLE test2 (c TEXT, d TEXT)"},

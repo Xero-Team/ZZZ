@@ -388,13 +388,13 @@ impl MultiWorkspace {
     pub fn sidebar_has_notifications(&self, cx: &App) -> bool {
         self.sidebar
             .as_ref()
-            .map_or(false, |s| s.has_notifications(cx))
+            .is_some_and(|s| s.has_notifications(cx))
     }
 
     pub fn is_threads_list_view_active(&self, cx: &App) -> bool {
         self.sidebar
             .as_ref()
-            .map_or(false, |s| s.is_threads_list_view_active(cx))
+            .is_some_and(|s| s.is_threads_list_view_active(cx))
     }
 
     pub fn multi_workspace_enabled(&self, cx: &App) -> bool {

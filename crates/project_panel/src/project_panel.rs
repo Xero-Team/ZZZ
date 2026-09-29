@@ -118,9 +118,10 @@ struct State {
 impl State {
     fn is_unfolded(&self, entry_id: &ProjectEntryId) -> bool {
         self.unfolded_dir_ids.contains(entry_id)
-            || self.edit_state.as_ref().map_or(false, |edit_state| {
-                edit_state.temporarily_unfolded == Some(*entry_id)
-            })
+            || self
+                .edit_state
+                .as_ref()
+                .is_some_and(|edit_state| edit_state.temporarily_unfolded == Some(*entry_id))
     }
 
     fn derive(old: &Self) -> Self {

@@ -6067,9 +6067,7 @@ impl Editor {
                         && multi_buffer
                             .read(cx)
                             .as_singleton()
-                            .map_or(false, |singleton| {
-                                singleton.entity_id() == buffer.entity_id()
-                            })
+                            .is_some_and(|singleton| singleton.entity_id() == buffer.entity_id())
                 })
             })
         };
@@ -8647,7 +8645,7 @@ impl Editor {
                                     } else {
                                         trimmed.len()
                                     };
-                                    if longest_prefix_len.map_or(true, |len| candidate_len > len) {
+                                    if longest_prefix_len.is_none_or(|len| candidate_len > len) {
                                         longest_prefix_len = Some(candidate_len);
                                     }
                                 }
@@ -13108,7 +13106,7 @@ impl Editor {
                             .partition_point(|selection| selection.end <= offset_range.start);
                         let overlaps = selections
                             .get(idx)
-                            .map_or(false, |selection| selection.start < offset_range.end);
+                            .is_some_and(|selection| selection.start < offset_range.end);
 
                         if !overlaps {
                             next_selected_range = Some(offset_range);

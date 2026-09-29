@@ -94,7 +94,7 @@ impl EditorconfigStore {
                 let should_update = state
                     .internal_configs
                     .get(rel_path)
-                    .map_or(true, |entry| entry.0 != content);
+                    .is_none_or(|entry| entry.0 != content);
                 if should_update {
                     let parsed = match content.parse::<Editorconfig>() {
                         Ok(parsed) => Some(parsed),
@@ -121,7 +121,7 @@ impl EditorconfigStore {
                 let should_update = self
                     .external_configs
                     .get(abs_path)
-                    .map_or(true, |entry| entry.0 != content);
+                    .is_none_or(|entry| entry.0 != content);
                 if should_update {
                     let parsed = match content.parse::<Editorconfig>() {
                         Ok(parsed) => Some(parsed),

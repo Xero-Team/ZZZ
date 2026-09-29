@@ -564,9 +564,7 @@ impl CommitView {
         let clipboard_has_sha = cx
             .read_from_clipboard()
             .and_then(|entry| entry.text())
-            .map_or(false, |clipboard_text| {
-                clipboard_text.trim() == commit_sha.as_ref()
-            });
+            .is_some_and(|clipboard_text| clipboard_text.trim() == commit_sha.as_ref());
 
         let (copy_icon, copy_icon_color) = if clipboard_has_sha {
             (IconName::Check, Color::Success)

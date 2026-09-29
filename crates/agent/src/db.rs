@@ -428,7 +428,7 @@ impl ThreadsDatabase {
             if let Some((data_type, data)) = rows.into_iter().next() {
                 let json_data = match data_type {
                     DataType::Zstd => {
-                        let decompressed = zstd::decode_all(&data[..])?;
+                        let decompressed = zstd::decode_all(&*data)?;
                         String::from_utf8(decompressed)?
                     }
                     DataType::Json => String::from_utf8(data)?,

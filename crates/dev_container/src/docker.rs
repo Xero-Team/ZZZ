@@ -187,7 +187,7 @@ pub(crate) struct Docker {
 
 impl DockerInspect {
     pub(crate) fn is_running(&self) -> bool {
-        self.state.as_ref().map_or(false, |s| s.running)
+        self.state.as_ref().is_some_and(|s| s.running)
     }
 }
 
@@ -588,7 +588,7 @@ fn parse_compose_volume_string(s: &str) -> Option<MountDefinition> {
     let separator_start = if bytes.len() >= 2
         && bytes[0].is_ascii_alphabetic()
         && bytes[1] == b':'
-        && bytes.get(2).map_or(false, |&b| b == b'/' || b == b'\\')
+        && bytes.get(2).is_some_and(|&b| b == b'/' || b == b'\\')
     {
         // Skip past the drive letter prefix (e.g. "C:\")
         3

@@ -5090,9 +5090,7 @@ impl Workspace {
             .multi_workspace
             .as_ref()
             .and_then(|mw| mw.upgrade())
-            .map_or(false, |mw| {
-                mw.read(cx).sidebar_side(cx) == SidebarSide::Right
-            });
+            .is_some_and(|mw| mw.read(cx).sidebar_side(cx) == SidebarSide::Right);
 
         let away_from_sidebar = if sidebar_on_right {
             SplitDirection::Left

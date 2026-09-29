@@ -206,7 +206,7 @@ fn find_target(
     let mut first_char_is_num = snapshot
         .chars_at(start_offset)
         .next()
-        .map_or(false, |ch| ch.is_ascii_hexdigit());
+        .is_some_and(|ch| ch.is_ascii_hexdigit());
     let mut pre_char = String::new();
 
     let next_offset = start_offset

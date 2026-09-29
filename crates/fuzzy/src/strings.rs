@@ -147,7 +147,7 @@ where
 
     let lowercase_query = &lowercase_query;
     let query = &query;
-    let query_char_bag = CharBag::from(&lowercase_query[..]);
+    let query_char_bag = CharBag::from(&**lowercase_query);
 
     let num_cpus = executor.num_cpus().min(candidates.len());
     let segment_size = candidates.len().div_ceil(num_cpus);

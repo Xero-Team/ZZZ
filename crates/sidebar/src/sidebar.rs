@@ -685,7 +685,7 @@ impl Sidebar {
     fn is_active_workspace(&self, workspace: &Entity<Workspace>, cx: &App) -> bool {
         self.multi_workspace
             .upgrade()
-            .map_or(false, |mw| mw.read(cx).workspace() == workspace)
+            .is_some_and(|mw| mw.read(cx).workspace() == workspace)
     }
 
     fn subscribe_to_workspace(
@@ -3686,7 +3686,7 @@ impl Sidebar {
                         )
                     })
                     .filter(|plan| {
-                        thread_id.map_or(true, |tid| {
+                        thread_id.is_none_or(|tid| {
                             !store
                                 .read(cx)
                                 .path_is_referenced_by_other_unarchived_threads(

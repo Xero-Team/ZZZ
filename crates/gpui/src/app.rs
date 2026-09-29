@@ -500,7 +500,7 @@ impl SystemWindowTabController {
             .flat_map(|windows| windows.iter())
             .find(|tab| tab.id == id);
 
-        if tab.map_or(true, |t| t.title == title) {
+        if tab.is_none_or(|t| t.title == title) {
             return;
         }
 

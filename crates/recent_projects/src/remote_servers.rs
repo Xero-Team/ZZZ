@@ -3341,9 +3341,10 @@ impl RemoteServerProjects {
         });
 
         // We cannot currently connect a dev container from within a remote server due to the remote_server architecture
-        let is_local = self.workspace.upgrade().map_or(true, |workspace| {
-            workspace.read(cx).project().read(cx).is_local()
-        });
+        let is_local = self
+            .workspace
+            .upgrade()
+            .is_none_or(|workspace| workspace.read(cx).project().read(cx).is_local());
 
         let modal_section = v_flex()
             .track_focus(&self.focus_handle)

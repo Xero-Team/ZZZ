@@ -207,7 +207,7 @@ impl WslRunningKernel {
                 .collect();
 
             let executable = resolved_argv.first().map(String::as_str);
-            let needs_python_resolution = executable.map_or(false, |executable| {
+            let needs_python_resolution = executable.is_some_and(|executable| {
                 executable == "python" || executable == "python3" || !executable.starts_with('/')
             });
 

@@ -169,9 +169,7 @@ impl ReplStore {
         let is_wsl_remote = project
             .read(cx)
             .remote_connection_options(cx)
-            .map_or(false, |opts| {
-                matches!(opts, RemoteConnectionOptions::Wsl(_))
-            });
+            .is_some_and(|opts| matches!(opts, RemoteConnectionOptions::Wsl(_)));
         let kernel_specifications_task = python_env_kernel_specifications(project, worktree_id, cx);
         let active_toolchain = project.read(cx).active_toolchain(
             ProjectPath {

@@ -37,7 +37,7 @@ fn build_grouped_entries(
 
     for spec in store.kernel_specifications_for_worktree(worktree_id) {
         let is_recommended = store.is_recommended_kernel(worktree_id, spec);
-        let is_selected = selected_kernel.map_or(false, |s| s == spec);
+        let is_selected = selected_kernel == Some(spec);
 
         if is_selected {
             recommended_entry = Some(KernelPickerEntry::Kernel {

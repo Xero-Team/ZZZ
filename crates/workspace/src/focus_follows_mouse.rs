@@ -34,9 +34,7 @@ pub trait FocusFollowsMouse<E: Focusable>: StatefulInteractiveElement {
                     // a more specific child target (e.g., a Pane inside the Dock).
                     let should_replace = state
                         .and_then(|s| s.handles.as_ref())
-                        .map_or(true, |(_, existing)| {
-                            !focus_handle.contains(existing, window)
-                        });
+                        .is_none_or(|(_, existing)| !focus_handle.contains(existing, window));
 
                     if !should_replace {
                         return;

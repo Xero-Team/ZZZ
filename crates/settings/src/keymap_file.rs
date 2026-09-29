@@ -1445,17 +1445,14 @@ impl Action for ActionSequence {
     }
 
     fn partial_eq(&self, action: &dyn Action) -> bool {
-        action
-            .as_any()
-            .downcast_ref::<Self>()
-            .map_or(false, |other| {
-                self.0.len() == other.0.len()
-                    && self
-                        .0
-                        .iter()
-                        .zip(other.0.iter())
-                        .all(|(a, b)| a.partial_eq(b.as_ref()))
-            })
+        action.as_any().downcast_ref::<Self>().is_some_and(|other| {
+            self.0.len() == other.0.len()
+                && self
+                    .0
+                    .iter()
+                    .zip(other.0.iter())
+                    .all(|(a, b)| a.partial_eq(b.as_ref()))
+        })
     }
 
     fn boxed_clone(&self) -> Box<dyn Action> {

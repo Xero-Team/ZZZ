@@ -572,7 +572,7 @@ mod tests {
     ) -> Vec<(&'a str, Vec<usize>)> {
         let lowercase_query = query.chars().map(simple_lowercase).collect::<Vec<_>>();
         let query = query.chars().collect::<Vec<_>>();
-        let query_chars = CharBag::from(&lowercase_query[..]);
+        let query_chars = CharBag::from(lowercase_query.as_slice());
 
         let path_arcs: Vec<Arc<RelPath>> = paths
             .iter()

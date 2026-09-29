@@ -9201,7 +9201,7 @@ impl LineWithInvisibles {
                 if !line.is_empty() {
                     let segments = bg_segments_per_row
                         .get(row)
-                        .map_or(&[] as &[(Range<DisplayPoint>, Hsla)], |v| &v[..]);
+                        .map_or(&[] as &[(Range<DisplayPoint>, Hsla)], |v| &**v);
                     let text_runs: &[TextRun] = if segments.is_empty() {
                         &styles
                     } else {
@@ -9292,7 +9292,7 @@ impl LineWithInvisibles {
                     if ix > 0 {
                         let segments = bg_segments_per_row
                             .get(row)
-                            .map_or(&[] as &[(Range<DisplayPoint>, Hsla)], |v| &v[..]);
+                            .map_or(&[] as &[(Range<DisplayPoint>, Hsla)], |v| &**v);
                         let text_runs = if segments.is_empty() {
                             &styles
                         } else {

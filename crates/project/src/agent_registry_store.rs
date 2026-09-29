@@ -261,7 +261,7 @@ impl AgentRegistryStore {
     pub fn refresh_if_stale(&mut self, cx: &mut Context<Self>) {
         let should_refresh = self
             .last_refresh
-            .map_or(true, |last| last.elapsed() >= REFRESH_THROTTLE_DURATION);
+            .is_none_or(|last| last.elapsed() >= REFRESH_THROTTLE_DURATION);
 
         if should_refresh {
             self.refresh(cx);

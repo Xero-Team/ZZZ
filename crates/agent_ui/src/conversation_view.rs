@@ -535,9 +535,8 @@ pub struct ConversationView {
 
 impl ConversationView {
     pub fn has_auth_methods(&self) -> bool {
-        self.as_connected().map_or(false, |connected| {
-            !connected.connection.auth_methods().is_empty()
-        })
+        self.as_connected()
+            .is_some_and(|connected| !connected.connection.auth_methods().is_empty())
     }
 
     pub fn supports_logout(&self) -> bool {
@@ -684,7 +683,7 @@ impl ConnectedServerState {
 
     pub fn has_thread_error(&self, cx: &App) -> bool {
         self.active_view()
-            .map_or(false, |view| view.read(cx).thread_error.is_some())
+            .is_some_and(|view| view.read(cx).thread_error.is_some())
     }
 
     pub fn navigate_to_thread(&mut self, session_id: acp::SessionId) {
@@ -2536,7 +2535,7 @@ impl ConversationView {
                     .workspace()
                     .read(cx)
                     .panel::<AgentPanel>(cx)
-                    .map_or(false, |p| {
+                    .is_some_and(|p| {
                         p.read(cx).active_conversation_view().map(|c| c.entity_id())
                             == Some(cx.entity_id())
                     })

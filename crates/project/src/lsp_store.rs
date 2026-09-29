@@ -6219,7 +6219,7 @@ impl LspStore {
                         .filter(|(adapter, _)| {
                             scope
                                 .as_ref()
-                                .map_or(true, |scope| scope.language_allowed(&adapter.name))
+                                .is_none_or(|scope| scope.language_allowed(&adapter.name))
                         })
                         .map(|(_, server)| LanguageServerToQuery::Other(server.server_id()))
                         .next()
@@ -6867,7 +6867,7 @@ impl LspStore {
                     capabilities.completion_provider.is_some()
                         && scope
                             .as_ref()
-                            .map_or(true, |scope| scope.language_allowed(server_name))
+                            .is_none_or(|scope| scope.language_allowed(server_name))
                 },
                 cx,
             );
@@ -6951,7 +6951,7 @@ impl LspStore {
                     .filter(|(adapter, _)| {
                         scope
                             .as_ref()
-                            .map_or(true, |scope| scope.language_allowed(&adapter.name))
+                            .is_none_or(|scope| scope.language_allowed(&adapter.name))
                     })
                     .map(|(_, server)| server.server_id())
                     .collect()
@@ -9599,7 +9599,7 @@ impl LspStore {
                 .filter(|(adapter, _)| {
                     scope
                         .as_ref()
-                        .map_or(true, |scope| scope.language_allowed(&adapter.name))
+                        .is_none_or(|scope| scope.language_allowed(&adapter.name))
                 })
                 .map(|(_, server)| server.server_id())
                 .filter(|server_id| {

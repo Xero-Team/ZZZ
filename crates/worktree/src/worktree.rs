@@ -5788,7 +5788,7 @@ impl BackgroundScanner {
         while let Some(parent_abs_path) = ignores_to_update.next() {
             while ignores_to_update
                 .peek()
-                .map_or(false, |p| p.starts_with(&parent_abs_path))
+                .is_some_and(|p| p.starts_with(&parent_abs_path))
             {
                 ignores_to_update.next().unwrap();
             }

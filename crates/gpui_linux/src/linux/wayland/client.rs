@@ -733,7 +733,7 @@ impl WaylandClient {
         let mut wl_outputs: HashMap<ObjectId, wl_output::WlOutput> = HashMap::default();
         globals.contents().with_list(|list| {
             for global in list {
-                match &global.interface[..] {
+                match &*global.interface {
                     "wl_seat" => {
                         seat = Some(globals.registry().bind::<wl_seat::WlSeat, _, _>(
                             global.name,
@@ -1308,7 +1308,7 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for WaylandClientStat
                 name,
                 interface,
                 version,
-            } => match &interface[..] {
+            } => match &*interface {
                 "wl_seat" => {
                     if let Some(wl_pointer) = state.wl_pointer.take() {
                         wl_pointer.release();

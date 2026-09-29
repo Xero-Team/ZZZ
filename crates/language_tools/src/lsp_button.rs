@@ -88,7 +88,7 @@ impl ProcessMemoryCache {
     fn get_memory_usage(&mut self, process_id: u32) -> u64 {
         let cache_expired = self
             .last_refresh
-            .map_or(true, |last| last.elapsed() >= PROCESS_MEMORY_CACHE_DURATION);
+            .is_none_or(|last| last.elapsed() >= PROCESS_MEMORY_CACHE_DURATION);
 
         if cache_expired {
             let refresh_kind = RefreshKind::nothing()

@@ -278,7 +278,7 @@ impl Vim {
         if name == "`" {
             name = "'".to_owned();
         }
-        if matches!(&name[..], "-" | " ") {
+        if matches!(&*name, "-" | " ") {
             // Not allowed marks
             return;
         }
