@@ -1341,7 +1341,7 @@ impl Buffer {
             let mut is_included = false;
             while let Some(range) = ranges.peek() {
                 if range.end < edit.new.start {
-                    ranges.next().unwrap();
+                    ranges.next().expect("iterator should yield an item");
                 } else {
                     if range.start <= edit.new.end {
                         is_included = true;
@@ -1848,7 +1848,7 @@ impl Buffer {
         let mut syntax_snapshot = syntax_map.snapshot();
         drop(syntax_map);
 
-        self.parse_status.0.send(ParseStatus::Parsing).unwrap();
+        self.parse_status.0.send(ParseStatus::Parsing).expect("channel receiver should be alive");
         if may_block && let Some(sync_parse_timeout) = self.sync_parse_timeout {
             if matches!(
                 syntax_snapshot.reparse_with_timeout(
@@ -1911,7 +1911,7 @@ impl Buffer {
         self.syntax_map.lock().did_parse(syntax_snapshot);
         self.was_changed();
         self.request_autoindent(cx, block_budget);
-        self.parse_status.0.send(ParseStatus::Idle).unwrap();
+        self.parse_status.0.send(ParseStatus::Idle).expect("channel receiver should be alive");
         Self::invalidate_tree_sitter_data(&mut self.tree_sitter_data, &self.text.snapshot());
         cx.emit(BufferEvent::Reparsed);
         cx.notify();
@@ -2054,7 +2054,7 @@ impl Buffer {
                         .flatten();
                     for (old_row, suggestion) in old_edited_range.zip(suggestions) {
                         if let Some(suggestion) = suggestion {
-                            let new_row = *old_to_new_rows.get(&old_row).unwrap();
+                            let new_row = *old_to_new_rows.get(&old_row).expect("entry should be present");
 
                             // Find the indent size based on the language for this row.
                             while let Some((row, size)) = language_indent_sizes.peek() {
@@ -2510,7 +2510,7 @@ impl Buffer {
         assert!(self.transaction_depth > 0);
         self.transaction_depth -= 1;
         let was_dirty = if self.transaction_depth == 0 {
-            self.was_dirty_before_starting_transaction.take().unwrap()
+            self.was_dirty_before_starting_transaction.take().expect("entry should be present")
         } else {
             false
         };
@@ -2793,7 +2793,7 @@ impl Buffer {
             let entries: Vec<_> = edits
                 .into_iter()
                 .enumerate()
-                .zip(&edit_operation.as_edit().unwrap().new_text)
+                .zip(&edit_operation.as_edit().expect("as_edit should be present").new_text)
                 .filter(|((_, (range, _)), _)| {
                     let language = before_edit.language_at(range.start);
                     let language_id = language.map(|l| l.id());
@@ -3645,7 +3645,7 @@ impl BufferSnapshot {
                 }
                 while let Some(pos) = start_positions_iter.peek() {
                     if pos.start.row < row {
-                        let pos = start_positions_iter.next().unwrap().clone();
+                        let pos = start_positions_iter.next().expect("iterator should yield an item").clone();
                         last_seen_suffix
                             .entry(pos.suffix.to_string())
                             .or_default()
@@ -4342,7 +4342,7 @@ impl BufferSnapshot {
         let configs = matches
             .grammars()
             .iter()
-            .map(|g| g.outline_config.as_ref().unwrap())
+            .map(|g| g.outline_config.as_ref().expect("value should have the expected type"))
             .collect::<Vec<_>>();
 
         std::iter::from_fn(move || {
@@ -4439,7 +4439,7 @@ impl BufferSnapshot {
             let config = matches.grammars()[mat.grammar_index]
                 .outline_config
                 .as_ref()
-                .unwrap();
+                .expect("value should have the expected type");
             if let Some(item) =
                 self.next_outline_item(config, &mat, &range, include_extra_context, theme)
             {
@@ -4577,7 +4577,7 @@ impl BufferSnapshot {
             return None;
         }
         let source_range_for_text =
-            buffer_ranges.first().unwrap().0.start..buffer_ranges.last().unwrap().0.end;
+            buffer_ranges.first().expect("collection should not be empty").0.start..buffer_ranges.last().expect("collection should not be empty").0.end;
 
         let mut text = String::new();
         let mut highlight_ranges = Vec::new();
@@ -4708,7 +4708,7 @@ impl BufferSnapshot {
             let configs = matches
                 .grammars()
                 .iter()
-                .map(|grammar| grammar.brackets_config.as_ref().unwrap())
+                .map(|grammar| grammar.brackets_config.as_ref().expect("value should have the expected type"))
                 .collect::<Vec<_>>();
 
             // Group matches by open range so we can either trust grammar output
@@ -5779,7 +5779,7 @@ impl<'a> Iterator for BufferChunks<'a> {
 
             self.range.start = chunk_end;
             if self.range.start == self.chunks.offset() + chunk.len() {
-                self.chunks.next().unwrap();
+                self.chunks.next().expect("iterator should yield an item");
             }
 
             Some(Chunk {

@@ -5001,14 +5001,14 @@ mod tests {
 
         // Serialization uses snake_case
         assert_eq!(
-            serde_json::to_string(&Agent::Absent).unwrap(),
+            serde_json::to_string(&Agent::Absent).expect("serializing to JSON cannot fail"),
             r#""absent""#,
         );
         assert_eq!(
             serde_json::to_string(&Agent::Custom {
                 id: "my-agent".into()
             })
-            .unwrap(),
+            .expect("serializing to JSON cannot fail"),
             r#"{"custom":{"name":"my-agent"}}"#,
         );
     }

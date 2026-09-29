@@ -306,8 +306,8 @@ macro_rules! register_extension {
                     // Windows.
                     chdir(std::ptr::null());
 
-                    __wasilibc_cwd = std::ffi::CString::new(std::env::var("PWD").unwrap())
-                        .unwrap()
+                    __wasilibc_cwd = std::ffi::CString::new(std::env::var("PWD").expect("environment variable should be set"))
+                        .expect("environment variable should be set")
                         .into_raw()
                         .cast();
                 }
@@ -341,7 +341,7 @@ pub fn register_extension(build_extension: fn() -> Box<dyn Extension>) {
 fn extension() -> &'static mut dyn Extension {
     #[expect(static_mut_refs)]
     unsafe {
-        EXTENSION.as_deref_mut().unwrap()
+        EXTENSION.as_deref_mut().expect("as_deref_mut should be present")
     }
 }
 
@@ -459,7 +459,7 @@ impl wit::Guest for Component {
             let label = extension().label_for_completion(&language_server_id, completion);
             if let Some(label) = label {
                 labels.resize(ix + 1, None);
-                *labels.last_mut().unwrap() = Some(label);
+                *labels.last_mut().expect("collection should not be empty") = Some(label);
             }
         }
         Ok(labels)
@@ -475,7 +475,7 @@ impl wit::Guest for Component {
             let label = extension().label_for_symbol(&language_server_id, symbol);
             if let Some(label) = label {
                 labels.resize(ix + 1, None);
-                *labels.last_mut().unwrap() = Some(label);
+                *labels.last_mut().expect("collection should not be empty") = Some(label);
             }
         }
         Ok(labels)

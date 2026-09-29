@@ -13,7 +13,7 @@ pub struct ImageViewerSettings {
 impl Settings for ImageViewerSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         Self {
-            unit: content.image_viewer.clone().unwrap().unit.unwrap(),
+            unit: content.image_viewer.clone().expect("value should be present").unit.expect("unit should be present"),
         }
     }
 }

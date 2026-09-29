@@ -215,7 +215,7 @@ impl DirectXAtlasTextures {
                 .CreateTexture2D(&texture_desc, None, Some(&mut texture))
                 .ok()?;
         }
-        let texture = texture.unwrap();
+        let texture = texture.expect("value should be present");
 
         let texture_list = match kind {
             AtlasTextureKind::Monochrome => &mut self.monochrome_textures,
@@ -243,10 +243,10 @@ impl DirectXAtlasTextures {
         };
         if let Some(ix) = index {
             texture_list.textures[ix] = Some(atlas_texture);
-            texture_list.textures.get_mut(ix).unwrap().as_mut()
+            texture_list.textures.get_mut(ix).expect("entry should be present").as_mut()
         } else {
             texture_list.textures.push(Some(atlas_texture));
-            texture_list.textures.last_mut().unwrap().as_mut()
+            texture_list.textures.last_mut().expect("collection should not be empty").as_mut()
         }
     }
 

@@ -129,7 +129,7 @@ impl GitPicker {
             self._subscriptions.push(subscription);
             self.branch_list = Some(branch_list);
         }
-        self.branch_list.clone().unwrap()
+        self.branch_list.clone().expect("value should be present")
     }
 
     fn ensure_stash_list(
@@ -159,7 +159,7 @@ impl GitPicker {
             self._subscriptions.push(subscription);
             self.stash_list = Some(stash_list);
         }
-        self.stash_list.clone().unwrap()
+        self.stash_list.clone().expect("value should be present")
     }
 
     fn activate_next_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {

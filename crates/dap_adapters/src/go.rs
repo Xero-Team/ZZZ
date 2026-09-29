@@ -435,7 +435,7 @@ impl DebugAdapter for GoDebugAdapter {
             }
         };
 
-        let map = args.as_object_mut().unwrap();
+        let map = args.as_object_mut().expect("value should have the expected type");
 
         if let Some(stop_on_entry) = zzz_scenario.stop_on_entry {
             map.insert("stopOnEntry".into(), stop_on_entry.into());

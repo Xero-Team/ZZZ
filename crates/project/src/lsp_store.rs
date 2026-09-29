@@ -1514,7 +1514,7 @@ impl LocalLspStore {
         // Do not allow multiple concurrent code actions requests for the
         // same buffer.
         lsp_store.update(cx, |this, cx| {
-            let this = this.as_local_mut().unwrap();
+            let this = this.as_local_mut().expect("should be a local instance");
             buffers.retain(|buffer| {
                 this.buffers_being_formatted
                     .insert(buffer.read(cx).remote_id())
@@ -1526,7 +1526,7 @@ impl LocalLspStore {
             let buffers = &buffers;
             move || {
                 this.update(&mut cx, |this, cx| {
-                    let this = this.as_local_mut().unwrap();
+                    let this = this.as_local_mut().expect("should be a local instance");
                     for buffer in buffers {
                         this.buffers_being_formatted
                             .remove(&buffer.read(cx).remote_id());
@@ -1542,7 +1542,7 @@ impl LocalLspStore {
                 buffer.update(cx, |buffer, cx| {
                     lsp_store
                         .as_local()
-                        .unwrap()
+                        .expect("should be a local instance")
                         .language_servers_for_buffer(buffer, cx)
                         .map(|(adapter, lsp)| (adapter.clone(), lsp.clone()))
                         .collect::<Vec<_>>()
@@ -1582,7 +1582,7 @@ impl LocalLspStore {
         // Do not allow multiple concurrent formatting requests for the
         // same buffer.
         lsp_store.update(cx, |this, cx| {
-            let this = this.as_local_mut().unwrap();
+            let this = this.as_local_mut().expect("should be a local instance");
             buffers.retain(|buffer| {
                 this.buffers_being_formatted
                     .insert(buffer.handle.read(cx).remote_id())
@@ -1595,7 +1595,7 @@ impl LocalLspStore {
             let buffers = &buffers;
             move || {
                 this.update(&mut cx, |this, cx| {
-                    let this = this.as_local_mut().unwrap();
+                    let this = this.as_local_mut().expect("should be a local instance");
                     for buffer in buffers {
                         this.buffers_being_formatted
                             .remove(&buffer.handle.read(cx).remote_id());
@@ -1685,7 +1685,7 @@ impl LocalLspStore {
                 buffer.handle.update(cx, |buffer, cx| {
                     let adapters_and_servers = lsp_store
                         .as_local()
-                        .unwrap()
+                        .expect("should be a local instance")
                         .language_servers_for_buffer(buffer, cx)
                         .map(|(adapter, lsp)| (adapter.clone(), lsp.clone()))
                         .collect::<Vec<_>>();
@@ -1906,7 +1906,7 @@ impl LocalLspStore {
                 };
 
                 let prettier = lsp_store.read_with(cx, |lsp_store, _cx| {
-                    lsp_store.prettier_store().unwrap().downgrade()
+                    lsp_store.prettier_store().expect("prettier_store should be present").downgrade()
                 })?;
                 let diff = prettier_store::format_with_prettier(
                     &prettier,
@@ -2248,7 +2248,7 @@ impl LocalLspStore {
                             }
                             let edits_result = lsp_store
                                 .update(cx, |lsp_store, cx| {
-                                    lsp_store.as_local_mut().unwrap().edits_from_lsp(
+                                    lsp_store.as_local_mut().expect("should be a local instance").edits_from_lsp(
                                         &buffer.handle,
                                         lsp_edits,
                                         server.server_id(),
@@ -2321,7 +2321,7 @@ impl LocalLspStore {
 
                     lsp_store.update(cx, |this, _| {
                         this.as_local_mut()
-                            .unwrap()
+                            .expect("should be a local instance")
                             .last_workspace_edits_by_language_server
                             .remove(&server.server_id());
                     })?;
@@ -2350,7 +2350,7 @@ impl LocalLspStore {
 
                     let mut project_transaction_command = lsp_store.update(cx, |this, _| {
                         this.as_local_mut()
-                            .unwrap()
+                            .expect("should be a local instance")
                             .last_workspace_edits_by_language_server
                             .remove(&server.server_id())
                             .unwrap_or_default()
@@ -2537,7 +2537,7 @@ impl LocalLspStore {
 
         if let Some(lsp_edits) = lsp_edits {
             this.update(cx, |this, cx| {
-                this.as_local_mut().unwrap().edits_from_lsp(
+                this.as_local_mut().expect("should be a local instance").edits_from_lsp(
                     buffer_handle,
                     lsp_edits,
                     language_server.server_id(),
@@ -2618,7 +2618,7 @@ impl LocalLspStore {
 
         if let Some(lsp_edits) = lsp_edits {
             this.update(cx, |this, cx| {
-                this.as_local_mut().unwrap().edits_from_lsp(
+                this.as_local_mut().expect("should be a local instance").edits_from_lsp(
                     buffer,
                     lsp_edits,
                     language_server.server_id(),
@@ -3438,7 +3438,7 @@ impl LocalLspStore {
     ) -> Result<Option<Transaction>> {
         let edits = this
             .update(cx, |this, cx| {
-                this.as_local_mut().unwrap().edits_from_lsp(
+                this.as_local_mut().expect("should be a local instance").edits_from_lsp(
                     &buffer_to_edit,
                     edits,
                     language_server.server_id(),
@@ -3456,7 +3456,7 @@ impl LocalLspStore {
             }
 
             if buffer.end_transaction(cx).is_some() {
-                let transaction = buffer.finalize_last_transaction().unwrap().clone();
+                let transaction = buffer.finalize_last_transaction().expect("finalize_last_transaction should be present").clone();
                 if !push_to_history {
                     buffer.forget_transaction(transaction.id);
                 }
@@ -3560,7 +3560,7 @@ impl LocalLspStore {
         language_server: Arc<LanguageServer>,
         cx: &mut AsyncApp,
     ) -> Result<ProjectTransaction> {
-        let fs = this.read_with(cx, |this, _| this.as_local().unwrap().fs.clone());
+        let fs = this.read_with(cx, |this, _| this.as_local().expect("should be a local instance").fs.clone());
 
         let mut operations = Vec::new();
         if let Some(document_changes) = edit.document_changes {
@@ -3726,7 +3726,7 @@ impl LocalLspStore {
                                     .entry_for_path(&project_path, cx)
                                     .is_some_and(|entry| Some(entry.id) == active_entry)
                             });
-                            let local = this.as_local_mut().unwrap();
+                            let local = this.as_local_mut().expect("should be a local instance");
 
                             let (mut edits, mut snippet_edits) = (vec![], vec![]);
                             for edit in op.edits {
@@ -3852,7 +3852,7 @@ impl LocalLspStore {
                 cx.emit(LspStoreEvent::WorkspaceEditApplied(transaction.clone()));
 
                 this.as_local_mut()
-                    .unwrap()
+                    .expect("should be a local instance")
                     .last_workspace_edits_by_language_server
                     .insert(server_id, transaction);
             }
@@ -4620,7 +4620,7 @@ impl LspStore {
                 diagnostics: Default::default(),
                 _subscription: cx.on_app_quit(|this, _| {
                     this.as_local_mut()
-                        .unwrap()
+                        .expect("should be a local instance")
                         .shutdown_language_servers_on_quit()
                 }),
                 lsp_tree: LanguageServerTree::new(
@@ -4983,7 +4983,7 @@ impl LspStore {
             if !ignore_refcounts {
                 cx.observe_release(&handle.0, move |lsp_store, buffer, cx| {
                     let refcount = {
-                        let local = lsp_store.as_local_mut().unwrap();
+                        let local = lsp_store.as_local_mut().expect("should be a local instance");
                         let Some(refcount) = local.registered_buffers.get_mut(&buffer_id) else {
                             debug_panic!("bad refcounting");
                             return;
@@ -4995,7 +4995,7 @@ impl LspStore {
                     if refcount == 0 {
                         lsp_store.lsp_data.remove(&buffer_id);
                         lsp_store.buffer_reload_tasks.remove(&buffer_id);
-                        let local = lsp_store.as_local_mut().unwrap();
+                        let local = lsp_store.as_local_mut().expect("should be a local instance");
                         local.registered_buffers.remove(&buffer_id);
 
                         local.buffers_opened_in_servers.remove(&buffer_id);
@@ -6010,7 +6010,7 @@ impl LspStore {
 
                 this.update(cx, |this, _| {
                     this.as_local_mut()
-                        .unwrap()
+                        .expect("should be a local instance")
                         .last_workspace_edits_by_language_server
                         .remove(&lang_server.server_id());
                 })?;
@@ -6030,7 +6030,7 @@ impl LspStore {
 
                 return this.update(cx, |this, _| {
                     this.as_local_mut()
-                        .unwrap()
+                        .expect("should be a local instance")
                         .last_workspace_edits_by_language_server
                         .remove(&lang_server.server_id())
                         .unwrap_or_default()
@@ -7357,7 +7357,7 @@ impl LspStore {
                     if *resolved {
                         return Ok(());
                     }
-                    serde_json::to_string(lsp_completion).unwrap().into_bytes()
+                    serde_json::to_string(lsp_completion).expect("serializing to JSON cannot fail").into_bytes()
                 }
                 CompletionSource::Custom
                 | CompletionSource::Dap { .. }
@@ -7517,7 +7517,7 @@ impl LspStore {
                 if let Some(edits) = additional_text_edits {
                     let edits = this
                         .update(cx, |this, cx| {
-                            this.as_local_mut().unwrap().edits_from_lsp(
+                            this.as_local_mut().expect("should be a local instance").edits_from_lsp(
                                 &buffer_handle,
                                 edits,
                                 server.server_id(),
@@ -7565,7 +7565,7 @@ impl LspStore {
                         }
 
                         let transaction = if buffer.end_transaction(cx).is_some() {
-                            let transaction = buffer.finalize_last_transaction().unwrap().clone();
+                            let transaction = buffer.finalize_last_transaction().expect("finalize_last_transaction should be present").clone();
                             if !push_to_history {
                                 buffer.forget_transaction(transaction.id);
                             }
@@ -11237,7 +11237,7 @@ impl LspStore {
         let mut hasher = Sha256::new();
         hasher.update(abs_path.to_string_lossy().as_bytes());
         hasher.update(self.nonce.to_be_bytes());
-        hasher.finalize().as_slice().try_into().unwrap()
+        hasher.finalize().as_slice().try_into().expect("conversion should succeed")
     }
 
     pub async fn handle_get_project_symbols(
@@ -11768,7 +11768,7 @@ impl LspStore {
             });
         }
 
-        let local = self.as_local_mut().unwrap();
+        let local = self.as_local_mut().expect("should be a local instance");
         for diagnostics in local.diagnostics.values_mut() {
             diagnostics.retain(|_, diagnostics_by_server_id| {
                 if let Ok(ix) = diagnostics_by_server_id.binary_search_by_key(&server_id, |e| e.0) {
@@ -12197,7 +12197,7 @@ impl LspStore {
                     (diagnostic.severity, is_unnecessary),
                 );
             } else {
-                let group_id = post_inc(&mut self.as_local_mut().unwrap().next_diagnostic_group_id);
+                let group_id = post_inc(&mut self.as_local_mut().expect("should be a local instance").next_diagnostic_group_id);
                 let is_disk_based =
                     source.is_some_and(|source| disk_based_sources.contains(source));
 
@@ -12266,7 +12266,7 @@ impl LspStore {
         for entry in &mut diagnostics {
             let diagnostic = &mut entry.diagnostic;
             if !diagnostic.is_primary {
-                let source = *sources_by_group_id.get(&diagnostic.group_id).unwrap();
+                let source = *sources_by_group_id.get(&diagnostic.group_id).expect("entry should be present");
                 if let Some(&(severity, is_unnecessary)) = supporting_diagnostics.get(&(
                     source,
                     diagnostic.code.clone(),
@@ -12451,7 +12451,7 @@ impl LspStore {
                     continue;
                 };
 
-                let local = self.as_local_mut().unwrap();
+                let local = self.as_local_mut().expect("should be a local instance");
 
                 let buffer_id = buffer.remote_id();
                 if local.registered_buffers.contains_key(&buffer_id) {
@@ -12479,7 +12479,7 @@ impl LspStore {
                             }]
                         });
 
-                    let snapshot = versions.last().unwrap();
+                    let snapshot = versions.last().expect("collection should not be empty");
                     let version = snapshot.version;
                     let initial_snapshot = &snapshot.snapshot;
                     language_server.register_buffer(
@@ -12859,10 +12859,10 @@ impl LspStore {
                 serialized_completion.old_insert_end = old_insert_end;
                 serialized_completion.source = proto::completion::Source::Lsp as i32;
                 serialized_completion.server_id = server_id.0 as u64;
-                serialized_completion.lsp_completion = serde_json::to_vec(lsp_completion).unwrap();
+                serialized_completion.lsp_completion = serde_json::to_vec(lsp_completion).expect("serializing to JSON cannot fail");
                 serialized_completion.lsp_defaults = lsp_defaults
                     .as_deref()
-                    .map(|lsp_defaults| serde_json::to_vec(lsp_defaults).unwrap());
+                    .map(|lsp_defaults| serde_json::to_vec(lsp_defaults).expect("serializing to JSON cannot fail"));
                 serialized_completion.resolved = *resolved;
             }
             CompletionSource::BufferWord {
@@ -12950,15 +12950,15 @@ impl LspStore {
         let (kind, lsp_action) = match &action.lsp_action {
             LspAction::Action(code_action) => (
                 proto::code_action::Kind::Action as i32,
-                serde_json::to_vec(code_action).unwrap(),
+                serde_json::to_vec(code_action).expect("serializing to JSON cannot fail"),
             ),
             LspAction::Command(command) => (
                 proto::code_action::Kind::Command as i32,
-                serde_json::to_vec(command).unwrap(),
+                serde_json::to_vec(command).expect("serializing to JSON cannot fail"),
             ),
             LspAction::CodeLens(code_lens) => (
                 proto::code_action::Kind::CodeLens as i32,
-                serde_json::to_vec(code_lens).unwrap(),
+                serde_json::to_vec(code_lens).expect("serializing to JSON cannot fail"),
             ),
         };
 

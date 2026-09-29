@@ -919,7 +919,7 @@ mod tests {
                             serde_json::to_value(lsp::CodeLensOptions {
                                 resolve_provider: None,
                             })
-                            .unwrap(),
+                            .expect("converting to a JSON value cannot fail"),
                         ),
                     }],
                 },

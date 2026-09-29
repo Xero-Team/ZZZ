@@ -2644,7 +2644,7 @@ impl GitPanel {
             .buffer()
             .read(cx)
             .as_singleton()
-            .unwrap()
+            .expect("as_singleton should be present")
     }
 
     fn toggle_staged_for_selected(
@@ -3198,7 +3198,7 @@ impl GitPanel {
             .collect::<Vec<_>>();
 
         let worktree = if worktrees.len() == 1 {
-            Task::ready(Some(worktrees.first().unwrap().clone()))
+            Task::ready(Some(worktrees.first().expect("collection should not be empty").clone()))
         } else if worktrees.is_empty() {
             let title = tr(
                 cx,
@@ -8205,6 +8205,11 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            cx.update_global::<SettingsStore, _>(|store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.workspace.display_language = Some(settings::DisplayLanguage::En);
+                });
+            });
             i18n::init(cx);
             theme_settings::init(LoadThemes::JustBase, cx);
             editor::init(cx);

@@ -40,7 +40,7 @@ impl Gitea {
     }
 
     pub fn public_instance() -> Self {
-        Self::new("Gitea", Url::parse("https://gitea.com").unwrap())
+        Self::new("Gitea", Url::parse("https://gitea.com").expect("URL literal should be valid"))
     }
 
     pub fn from_remote_url(remote_url: &str) -> Result<Self> {
@@ -154,7 +154,7 @@ impl GitHostingProvider for Gitea {
 
         self.base_url()
             .join(&format!("{owner}/{repo}/commit/{sha}"))
-            .unwrap()
+            .expect("value should be present")
     }
 
     fn build_permalink(&self, remote: ParsedGitRemote, params: BuildPermalinkParams) -> Url {
@@ -168,7 +168,7 @@ impl GitHostingProvider for Gitea {
         let mut permalink = self
             .base_url()
             .join(&format!("{owner}/{repo}/src/commit/{sha}/{path}"))
-            .unwrap();
+            .expect("value should be present");
         permalink.set_fragment(
             selection
                 .map(|selection| self.line_fragment(&selection))
@@ -229,7 +229,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -244,7 +244,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -262,7 +262,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -279,7 +279,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -289,7 +289,7 @@ mod tests {
         let permalink = Gitea::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "faa6f979be417239b2e070dbbf6392b909224e0b",
@@ -307,7 +307,7 @@ mod tests {
         let permalink = Gitea::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "faa6f979be417239b2e070dbbf6392b909224e0b",
@@ -325,7 +325,7 @@ mod tests {
         let permalink = Gitea::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "faa6f979be417239b2e070dbbf6392b909224e0b",
@@ -345,7 +345,7 @@ mod tests {
         let permalink = gitea.build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "e6ebe7974deb6bb6cc0e2595c8ec31f0c71084b7",
@@ -366,11 +366,11 @@ mod tests {
         let permalink = gitea.build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "b2efec9824c45fcc90c9a7eb107a50d1772a60aa",
-                &repo_path("crates/zzz/src/main.rs"),
+                &repo_path("crates/zed/src/main.rs"),
                 None,
             ),
         );

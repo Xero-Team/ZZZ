@@ -91,8 +91,8 @@ impl Vim {
                         .iter()
                         .map(|selection| cmp::min(selection.start.column(), selection.end.column()))
                         .min()
-                        .unwrap();
-                    let mut row = current_selections.last().unwrap().end.row().next_row();
+                        .expect("min should be present");
+                    let mut row = current_selections.last().expect("collection should not be empty").end.row().next_row();
                     while i < clipboard_selections.len() {
                         let cursor =
                             display_map.clip_point(DisplayPoint::new(row, left), Bias::Left);

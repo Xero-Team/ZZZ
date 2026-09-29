@@ -191,7 +191,7 @@ impl Rope {
                 split_ix -= 1;
             }
             let (chunk, remainder) = text.split_at(split_ix);
-            new_chunks.push(chunk).unwrap();
+            new_chunks.push(chunk).expect("push should be present");
             text = remainder;
         }
         self.chunks

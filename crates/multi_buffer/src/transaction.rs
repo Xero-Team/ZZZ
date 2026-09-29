@@ -73,7 +73,7 @@ impl History {
                 false
             } else {
                 self.redo_stack.clear();
-                let transaction = self.undo_stack.last_mut().unwrap();
+                let transaction = self.undo_stack.last_mut().expect("collection should not be empty");
                 transaction.last_edit_at = now;
                 for (buffer_id, transaction_id) in buffer_transactions {
                     transaction
@@ -304,7 +304,7 @@ impl MultiBuffer {
         }
 
         if self.history.end_transaction(now, buffer_transactions) {
-            let transaction_id = self.history.group().unwrap();
+            let transaction_id = self.history.group().expect("group should be present");
             Some(transaction_id)
         } else {
             None

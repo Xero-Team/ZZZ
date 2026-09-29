@@ -382,7 +382,7 @@ impl TitleBar {
 
         let mut subscriptions = Vec::new();
         subscriptions.push(
-            cx.observe(&workspace.weak_handle().upgrade().unwrap(), |_, _, cx| {
+            cx.observe(&workspace.weak_handle().upgrade().expect("entity should be alive"), |_, _, cx| {
                 cx.notify()
             }),
         );

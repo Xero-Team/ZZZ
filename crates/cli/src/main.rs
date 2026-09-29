@@ -824,7 +824,7 @@ fn run() -> Result<()> {
         .stack_size(10 * 1024 * 1024)
         .thread_name(|ix| format!("RayonWorker{}", ix))
         .build_global()
-        .unwrap();
+        .expect("build_global should be present");
 
     let sender: JoinHandle<anyhow::Result<()>> = thread::Builder::new()
         .name("CliReceiver".to_owned())
@@ -871,7 +871,7 @@ fn run() -> Result<()> {
                 Ok(())
             }
         })
-        .unwrap();
+        .expect("value should be present");
 
     let stdin_pipe_handle: Option<JoinHandle<anyhow::Result<()>>> =
         stdin_tmp_file.map(|mut tmp_file| {
@@ -884,7 +884,7 @@ fn run() -> Result<()> {
                     }
                     Ok(())
                 })
-                .unwrap()
+                .expect("value should be present")
         });
 
     let anonymous_fd_pipe_handles: Vec<_> = anonymous_fd_tmp_files
@@ -893,7 +893,7 @@ fn run() -> Result<()> {
             thread::Builder::new()
                 .name("CliAnonymousFd".to_owned())
                 .spawn(move || io::copy(&mut file, &mut tmp_file))
-                .unwrap()
+                .expect("value should be present")
         })
         .collect();
 
@@ -901,12 +901,12 @@ fn run() -> Result<()> {
         app.run_foreground(url, user_data_dir.as_deref())?;
     } else {
         app.launch(url, user_data_dir.as_deref())?;
-        sender.join().unwrap()?;
+        sender.join().expect("join should be present")?;
         if let Some(handle) = stdin_pipe_handle {
-            handle.join().unwrap()?;
+            handle.join().expect("join should be present")?;
         }
         for handle in anonymous_fd_pipe_handles {
-            handle.join().unwrap()?;
+            handle.join().expect("join should be present")?;
         }
     }
 
@@ -1144,7 +1144,7 @@ mod flatpak {
             paths.push(extra_path.into());
         }
 
-        unsafe { env::set_var("LD_LIBRARY_PATH", env::join_paths(paths).unwrap()) };
+        unsafe { env::set_var("LD_LIBRARY_PATH", env::join_paths(paths).expect("environment variable should be set")) };
     }
 
     /// Restarts outside of the sandbox if currently running within it
@@ -1156,7 +1156,7 @@ mod flatpak {
             args.push(
                 format!(
                     "--env={EXTRA_LIB_ENV_NAME}={}",
-                    flatpak_dir.join("lib").to_str().unwrap()
+                    flatpak_dir.join("lib").to_str().expect("path should be valid UTF-8")
                 )
                 .into(),
             );
@@ -1199,8 +1199,8 @@ mod flatpak {
                 .arg("--show-location")
                 .arg(flatpak_id)
                 .output()
-                .unwrap();
-            let install_dir = PathBuf::from(String::from_utf8(install_dir.stdout).unwrap().trim());
+                .expect("output should be present");
+            let install_dir = PathBuf::from(String::from_utf8(install_dir.stdout).expect("from_utf8 should be present").trim());
             Some(install_dir.join("files"))
         } else {
             None

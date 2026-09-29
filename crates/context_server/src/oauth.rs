@@ -1418,49 +1418,49 @@ mod tests {
 
     #[test]
     fn test_require_https_or_loopback_accepts_https() {
-        let url = Url::parse("https://auth.example.com/token").unwrap();
+        let url = Url::parse("https://auth.example.com/token").expect("URL literal should be valid");
         assert!(require_https_or_loopback(&url).is_ok());
     }
 
     #[test]
     fn test_require_https_or_loopback_rejects_http_remote() {
-        let url = Url::parse("http://auth.example.com/token").unwrap();
+        let url = Url::parse("http://auth.example.com/token").expect("URL literal should be valid");
         assert!(require_https_or_loopback(&url).is_err());
     }
 
     #[test]
     fn test_require_https_or_loopback_accepts_http_127_0_0_1() {
-        let url = Url::parse("http://127.0.0.1:8080/callback").unwrap();
+        let url = Url::parse("http://127.0.0.1:8080/callback").expect("URL literal should be valid");
         assert!(require_https_or_loopback(&url).is_ok());
     }
 
     #[test]
     fn test_require_https_or_loopback_accepts_http_ipv6_loopback() {
-        let url = Url::parse("http://[::1]:8080/callback").unwrap();
+        let url = Url::parse("http://[::1]:8080/callback").expect("URL literal should be valid");
         assert!(require_https_or_loopback(&url).is_ok());
     }
 
     #[test]
     fn test_require_https_or_loopback_accepts_http_localhost() {
-        let url = Url::parse("http://localhost:8080/callback").unwrap();
+        let url = Url::parse("http://localhost:8080/callback").expect("URL literal should be valid");
         assert!(require_https_or_loopback(&url).is_ok());
     }
 
     #[test]
     fn test_require_https_or_loopback_accepts_http_localhost_case_insensitive() {
-        let url = Url::parse("http://LOCALHOST:8080/callback").unwrap();
+        let url = Url::parse("http://LOCALHOST:8080/callback").expect("URL literal should be valid");
         assert!(require_https_or_loopback(&url).is_ok());
     }
 
     #[test]
     fn test_require_https_or_loopback_rejects_http_non_loopback_ip() {
-        let url = Url::parse("http://192.168.1.1:8080/token").unwrap();
+        let url = Url::parse("http://192.168.1.1:8080/token").expect("URL literal should be valid");
         assert!(require_https_or_loopback(&url).is_err());
     }
 
     #[test]
     fn test_require_https_or_loopback_rejects_ftp() {
-        let url = Url::parse("ftp://auth.example.com/token").unwrap();
+        let url = Url::parse("ftp://auth.example.com/token").expect("URL literal should be valid");
         assert!(require_https_or_loopback(&url).is_err());
     }
 
@@ -1468,68 +1468,68 @@ mod tests {
 
     #[test]
     fn test_validate_oauth_url_accepts_https_public() {
-        let url = Url::parse("https://auth.example.com/token").unwrap();
+        let url = Url::parse("https://auth.example.com/token").expect("URL literal should be valid");
         assert!(validate_oauth_url(&url).is_ok());
     }
 
     #[test]
     fn test_validate_oauth_url_rejects_private_ipv4_10() {
-        let url = Url::parse("https://10.0.0.1/token").unwrap();
+        let url = Url::parse("https://10.0.0.1/token").expect("URL literal should be valid");
         assert!(validate_oauth_url(&url).is_err());
     }
 
     #[test]
     fn test_validate_oauth_url_rejects_private_ipv4_172() {
-        let url = Url::parse("https://172.16.0.1/token").unwrap();
+        let url = Url::parse("https://172.16.0.1/token").expect("URL literal should be valid");
         assert!(validate_oauth_url(&url).is_err());
     }
 
     #[test]
     fn test_validate_oauth_url_rejects_private_ipv4_192() {
-        let url = Url::parse("https://192.168.1.1/token").unwrap();
+        let url = Url::parse("https://192.168.1.1/token").expect("URL literal should be valid");
         assert!(validate_oauth_url(&url).is_err());
     }
 
     #[test]
     fn test_validate_oauth_url_rejects_link_local() {
-        let url = Url::parse("https://169.254.169.254/latest/meta-data/").unwrap();
+        let url = Url::parse("https://169.254.169.254/latest/meta-data/").expect("URL literal should be valid");
         assert!(validate_oauth_url(&url).is_err());
     }
 
     #[test]
     fn test_validate_oauth_url_rejects_ipv6_ula() {
-        let url = Url::parse("https://[fd12:3456:789a::1]/token").unwrap();
+        let url = Url::parse("https://[fd12:3456:789a::1]/token").expect("URL literal should be valid");
         assert!(validate_oauth_url(&url).is_err());
     }
 
     #[test]
     fn test_validate_oauth_url_rejects_ipv6_unspecified() {
-        let url = Url::parse("https://[::]/token").unwrap();
+        let url = Url::parse("https://[::]/token").expect("URL literal should be valid");
         assert!(validate_oauth_url(&url).is_err());
     }
 
     #[test]
     fn test_validate_oauth_url_rejects_ipv4_mapped_ipv6_private() {
-        let url = Url::parse("https://[::ffff:10.0.0.1]/token").unwrap();
+        let url = Url::parse("https://[::ffff:10.0.0.1]/token").expect("URL literal should be valid");
         assert!(validate_oauth_url(&url).is_err());
     }
 
     #[test]
     fn test_validate_oauth_url_rejects_ipv4_mapped_ipv6_link_local() {
-        let url = Url::parse("https://[::ffff:169.254.169.254]/token").unwrap();
+        let url = Url::parse("https://[::ffff:169.254.169.254]/token").expect("URL literal should be valid");
         assert!(validate_oauth_url(&url).is_err());
     }
 
     #[test]
     fn test_validate_oauth_url_allows_http_loopback() {
         // Loopback is permitted (it's our callback server).
-        let url = Url::parse("http://127.0.0.1:8080/callback").unwrap();
+        let url = Url::parse("http://127.0.0.1:8080/callback").expect("URL literal should be valid");
         assert!(validate_oauth_url(&url).is_ok());
     }
 
     #[test]
     fn test_validate_oauth_url_allows_https_public_ip() {
-        let url = Url::parse("https://93.184.216.34/token").unwrap();
+        let url = Url::parse("https://93.184.216.34/token").expect("URL literal should be valid");
         assert!(validate_oauth_url(&url).is_ok());
     }
 
@@ -1634,7 +1634,7 @@ mod tests {
 
     #[test]
     fn test_protected_resource_metadata_urls_with_path() {
-        let server_url = Url::parse("https://api.example.com/v1/mcp").unwrap();
+        let server_url = Url::parse("https://api.example.com/v1/mcp").expect("URL literal should be valid");
         let urls = protected_resource_metadata_urls(&server_url);
 
         assert_eq!(urls.len(), 2);
@@ -1650,7 +1650,7 @@ mod tests {
 
     #[test]
     fn test_protected_resource_metadata_urls_without_path() {
-        let server_url = Url::parse("https://mcp.example.com").unwrap();
+        let server_url = Url::parse("https://mcp.example.com").expect("URL literal should be valid");
         let urls = protected_resource_metadata_urls(&server_url);
 
         assert_eq!(urls.len(), 1);
@@ -1662,7 +1662,7 @@ mod tests {
 
     #[test]
     fn test_auth_server_metadata_urls_with_path() {
-        let issuer = Url::parse("https://auth.example.com/tenant1").unwrap();
+        let issuer = Url::parse("https://auth.example.com/tenant1").expect("URL literal should be valid");
         let urls = auth_server_metadata_urls(&issuer);
 
         assert_eq!(urls.len(), 3);
@@ -1682,7 +1682,7 @@ mod tests {
 
     #[test]
     fn test_auth_server_metadata_urls_without_path() {
-        let issuer = Url::parse("https://auth.example.com").unwrap();
+        let issuer = Url::parse("https://auth.example.com").expect("URL literal should be valid");
         let urls = auth_server_metadata_urls(&issuer);
 
         assert_eq!(urls.len(), 2);
@@ -1700,31 +1700,31 @@ mod tests {
 
     #[test]
     fn test_canonical_server_uri_simple() {
-        let url = Url::parse("https://mcp.example.com").unwrap();
+        let url = Url::parse("https://mcp.example.com").expect("URL literal should be valid");
         assert_eq!(canonical_server_uri(&url), "https://mcp.example.com");
     }
 
     #[test]
     fn test_canonical_server_uri_with_path() {
-        let url = Url::parse("https://mcp.example.com/v1/mcp").unwrap();
+        let url = Url::parse("https://mcp.example.com/v1/mcp").expect("URL literal should be valid");
         assert_eq!(canonical_server_uri(&url), "https://mcp.example.com/v1/mcp");
     }
 
     #[test]
     fn test_canonical_server_uri_strips_trailing_slash() {
-        let url = Url::parse("https://mcp.example.com/").unwrap();
+        let url = Url::parse("https://mcp.example.com/").expect("URL literal should be valid");
         assert_eq!(canonical_server_uri(&url), "https://mcp.example.com");
     }
 
     #[test]
     fn test_canonical_server_uri_preserves_port() {
-        let url = Url::parse("https://mcp.example.com:8443").unwrap();
+        let url = Url::parse("https://mcp.example.com:8443").expect("URL literal should be valid");
         assert_eq!(canonical_server_uri(&url), "https://mcp.example.com:8443");
     }
 
     #[test]
     fn test_canonical_server_uri_lowercases() {
-        let url = Url::parse("HTTPS://MCP.Example.COM/Server/MCP").unwrap();
+        let url = Url::parse("HTTPS://MCP.Example.COM/Server/MCP").expect("URL literal should be valid");
         assert_eq!(
             canonical_server_uri(&url),
             "https://mcp.example.com/Server/MCP"
@@ -1742,7 +1742,7 @@ mod tests {
             error_description: None,
         };
         let resource_meta = ProtectedResourceMetadata {
-            resource: Url::parse("https://example.com").unwrap(),
+            resource: Url::parse("https://example.com").expect("URL literal should be valid"),
             authorization_servers: vec![],
             scopes_supported: Some(vec!["files:read".into(), "files:write".into()]),
         };
@@ -1758,7 +1758,7 @@ mod tests {
             error_description: None,
         };
         let resource_meta = ProtectedResourceMetadata {
-            resource: Url::parse("https://example.com").unwrap(),
+            resource: Url::parse("https://example.com").expect("URL literal should be valid"),
             authorization_servers: vec![],
             scopes_supported: Some(vec!["admin".into()]),
         };
@@ -1774,7 +1774,7 @@ mod tests {
             error_description: None,
         };
         let resource_meta = ProtectedResourceMetadata {
-            resource: Url::parse("https://example.com").unwrap(),
+            resource: Url::parse("https://example.com").expect("URL literal should be valid"),
             authorization_servers: vec![],
             scopes_supported: None,
         };
@@ -1786,10 +1786,10 @@ mod tests {
     #[test]
     fn test_registration_strategy_prefers_cimd() {
         let metadata = AuthServerMetadata {
-            issuer: Url::parse("https://auth.example.com").unwrap(),
-            authorization_endpoint: Url::parse("https://auth.example.com/authorize").unwrap(),
-            token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
-            registration_endpoint: Some(Url::parse("https://auth.example.com/register").unwrap()),
+            issuer: Url::parse("https://auth.example.com").expect("URL literal should be valid"),
+            authorization_endpoint: Url::parse("https://auth.example.com/authorize").expect("URL literal should be valid"),
+            token_endpoint: Url::parse("https://auth.example.com/token").expect("URL literal should be valid"),
+            registration_endpoint: Some(Url::parse("https://auth.example.com/register").expect("URL literal should be valid")),
             scopes_supported: None,
             grant_types_supported: None,
             code_challenge_methods_supported: Some(vec!["S256".into()]),
@@ -1805,11 +1805,11 @@ mod tests {
 
     #[test]
     fn test_registration_strategy_falls_back_to_dcr() {
-        let reg_endpoint = Url::parse("https://auth.example.com/register").unwrap();
+        let reg_endpoint = Url::parse("https://auth.example.com/register").expect("URL literal should be valid");
         let metadata = AuthServerMetadata {
-            issuer: Url::parse("https://auth.example.com").unwrap(),
-            authorization_endpoint: Url::parse("https://auth.example.com/authorize").unwrap(),
-            token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
+            issuer: Url::parse("https://auth.example.com").expect("URL literal should be valid"),
+            authorization_endpoint: Url::parse("https://auth.example.com/authorize").expect("URL literal should be valid"),
+            token_endpoint: Url::parse("https://auth.example.com/token").expect("URL literal should be valid"),
             registration_endpoint: Some(reg_endpoint.clone()),
             scopes_supported: None,
             grant_types_supported: None,
@@ -1827,9 +1827,9 @@ mod tests {
     #[test]
     fn test_registration_strategy_unavailable() {
         let metadata = AuthServerMetadata {
-            issuer: Url::parse("https://auth.example.com").unwrap(),
-            authorization_endpoint: Url::parse("https://auth.example.com/authorize").unwrap(),
-            token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
+            issuer: Url::parse("https://auth.example.com").expect("URL literal should be valid"),
+            authorization_endpoint: Url::parse("https://auth.example.com/authorize").expect("URL literal should be valid"),
+            token_endpoint: Url::parse("https://auth.example.com/token").expect("URL literal should be valid"),
             registration_endpoint: None,
             scopes_supported: None,
             grant_types_supported: None,
@@ -1884,9 +1884,9 @@ mod tests {
     #[test]
     fn test_build_authorization_url() {
         let metadata = AuthServerMetadata {
-            issuer: Url::parse("https://auth.example.com").unwrap(),
-            authorization_endpoint: Url::parse("https://auth.example.com/authorize").unwrap(),
-            token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
+            issuer: Url::parse("https://auth.example.com").expect("URL literal should be valid"),
+            authorization_endpoint: Url::parse("https://auth.example.com/authorize").expect("URL literal should be valid"),
+            token_endpoint: Url::parse("https://auth.example.com/token").expect("URL literal should be valid"),
             registration_endpoint: None,
             scopes_supported: None,
             grant_types_supported: None,
@@ -1924,9 +1924,9 @@ mod tests {
     #[test]
     fn test_build_authorization_url_omits_empty_scope() {
         let metadata = AuthServerMetadata {
-            issuer: Url::parse("https://auth.example.com").unwrap(),
-            authorization_endpoint: Url::parse("https://auth.example.com/authorize").unwrap(),
-            token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
+            issuer: Url::parse("https://auth.example.com").expect("URL literal should be valid"),
+            authorization_endpoint: Url::parse("https://auth.example.com/authorize").expect("URL literal should be valid"),
+            token_endpoint: Url::parse("https://auth.example.com/token").expect("URL literal should be valid"),
             registration_endpoint: None,
             scopes_supported: None,
             grant_types_supported: None,
@@ -1998,7 +1998,7 @@ mod tests {
         let response: TokenResponse = serde_json::from_str(
             r#"{"access_token": "at_123", "refresh_token": "rt_456", "expires_in": 3600, "token_type": "Bearer"}"#,
         )
-        .unwrap();
+        .expect("parsing a JSON literal cannot fail");
 
         let tokens = response.into_tokens();
         assert_eq!(tokens.access_token, "at_123");
@@ -2009,7 +2009,7 @@ mod tests {
     #[test]
     fn test_token_response_into_tokens_minimal() {
         let response: TokenResponse =
-            serde_json::from_str(r#"{"access_token": "at_789"}"#).unwrap();
+            serde_json::from_str(r#"{"access_token": "at_789"}"#).expect("parsing a JSON literal cannot fail");
 
         let tokens = response.into_tokens();
         assert_eq!(tokens.access_token, "at_789");
@@ -2102,7 +2102,7 @@ mod tests {
                 })
             });
 
-            let server_url = Url::parse("https://mcp.example.com").unwrap();
+            let server_url = Url::parse("https://mcp.example.com").expect("URL literal should be valid");
             let www_auth = WwwAuthenticate {
                 resource_metadata: None,
                 scope: None,
@@ -2147,10 +2147,10 @@ mod tests {
                 })
             });
 
-            let server_url = Url::parse("https://mcp.example.com").unwrap();
+            let server_url = Url::parse("https://mcp.example.com").expect("URL literal should be valid");
             let www_auth = WwwAuthenticate {
                 resource_metadata: Some(
-                    Url::parse("https://mcp.example.com/custom-resource-metadata").unwrap(),
+                    Url::parse("https://mcp.example.com/custom-resource-metadata").expect("URL literal should be valid"),
                 ),
                 scope: None,
                 error: None,
@@ -2189,10 +2189,10 @@ mod tests {
                 })
             });
 
-            let server_url = Url::parse("https://mcp.example.com").unwrap();
+            let server_url = Url::parse("https://mcp.example.com").expect("URL literal should be valid");
             let www_auth = WwwAuthenticate {
                 resource_metadata: Some(
-                    Url::parse("https://attacker.example.com/fake-metadata").unwrap(),
+                    Url::parse("https://attacker.example.com/fake-metadata").expect("URL literal should be valid"),
                 ),
                 scope: None,
                 error: None,
@@ -2232,7 +2232,7 @@ mod tests {
                 })
             });
 
-            let issuer = Url::parse("https://auth.example.com").unwrap();
+            let issuer = Url::parse("https://auth.example.com").expect("URL literal should be valid");
             let metadata = fetch_auth_server_metadata(&client, &issuer).await.unwrap();
 
             assert_eq!(metadata.issuer.as_str(), "https://auth.example.com/");
@@ -2275,7 +2275,7 @@ mod tests {
                 })
             });
 
-            let issuer = Url::parse("https://auth.example.com").unwrap();
+            let issuer = Url::parse("https://auth.example.com").expect("URL literal should be valid");
             let metadata = fetch_auth_server_metadata(&client, &issuer).await.unwrap();
 
             assert_eq!(
@@ -2309,7 +2309,7 @@ mod tests {
                 })
             });
 
-            let issuer = Url::parse("https://auth.example.com").unwrap();
+            let issuer = Url::parse("https://auth.example.com").expect("URL literal should be valid");
             let result = fetch_auth_server_metadata(&client, &issuer).await;
 
             assert!(result.is_err());
@@ -2356,7 +2356,7 @@ mod tests {
                 })
             });
 
-            let server_url = Url::parse("https://mcp.example.com").unwrap();
+            let server_url = Url::parse("https://mcp.example.com").expect("URL literal should be valid");
             let www_auth = WwwAuthenticate {
                 resource_metadata: None,
                 scope: None,
@@ -2416,7 +2416,7 @@ mod tests {
                 })
             });
 
-            let server_url = Url::parse("https://mcp.example.com").unwrap();
+            let server_url = Url::parse("https://mcp.example.com").expect("URL literal should be valid");
             let www_auth = WwwAuthenticate {
                 resource_metadata: None,
                 scope: Some(vec!["files:read".into()]),
@@ -2468,7 +2468,7 @@ mod tests {
                 })
             });
 
-            let server_url = Url::parse("https://mcp.example.com").unwrap();
+            let server_url = Url::parse("https://mcp.example.com").expect("URL literal should be valid");
             let www_auth = WwwAuthenticate {
                 resource_metadata: None,
                 scope: None,
@@ -2512,9 +2512,9 @@ mod tests {
             });
 
             let metadata = AuthServerMetadata {
-                issuer: Url::parse("https://auth.example.com").unwrap(),
-                authorization_endpoint: Url::parse("https://auth.example.com/authorize").unwrap(),
-                token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
+                issuer: Url::parse("https://auth.example.com").expect("URL literal should be valid"),
+                authorization_endpoint: Url::parse("https://auth.example.com/authorize").expect("URL literal should be valid"),
+                token_endpoint: Url::parse("https://auth.example.com/token").expect("URL literal should be valid"),
                 registration_endpoint: None,
                 scopes_supported: None,
                 grant_types_supported: None,
@@ -2562,7 +2562,7 @@ mod tests {
                 })
             });
 
-            let token_endpoint = Url::parse("https://auth.example.com/token").unwrap();
+            let token_endpoint = Url::parse("https://auth.example.com/token").expect("URL literal should be valid");
 
             let tokens = refresh_tokens(
                 &client,
@@ -2589,9 +2589,9 @@ mod tests {
             });
 
             let metadata = AuthServerMetadata {
-                issuer: Url::parse("https://auth.example.com").unwrap(),
-                authorization_endpoint: Url::parse("https://auth.example.com/authorize").unwrap(),
-                token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
+                issuer: Url::parse("https://auth.example.com").expect("URL literal should be valid"),
+                authorization_endpoint: Url::parse("https://auth.example.com/authorize").expect("URL literal should be valid"),
+                token_endpoint: Url::parse("https://auth.example.com/token").expect("URL literal should be valid"),
                 registration_endpoint: None,
                 scopes_supported: None,
                 grant_types_supported: None,
@@ -2642,7 +2642,7 @@ mod tests {
                 })
             });
 
-            let endpoint = Url::parse("https://auth.example.com/register").unwrap();
+            let endpoint = Url::parse("https://auth.example.com/register").expect("URL literal should be valid");
             let registration = perform_dcr(
                 &client,
                 &endpoint,
@@ -2670,7 +2670,7 @@ mod tests {
                 )
             });
 
-            let endpoint = Url::parse("https://auth.example.com/register").unwrap();
+            let endpoint = Url::parse("https://auth.example.com/register").expect("URL literal should be valid");
             let result = perform_dcr(
                 &client,
                 &endpoint,
@@ -2787,8 +2787,8 @@ mod tests {
         expires_at: Option<SystemTime>,
     ) -> OAuthSession {
         OAuthSession {
-            token_endpoint: Url::parse("https://auth.example.com/token").unwrap(),
-            resource: Url::parse("https://mcp.example.com").unwrap(),
+            token_endpoint: Url::parse("https://auth.example.com/token").expect("URL literal should be valid"),
+            resource: Url::parse("https://mcp.example.com").expect("URL literal should be valid"),
             client_registration: OAuthClientRegistration {
                 client_id: "test-client".into(),
                 client_secret: None,

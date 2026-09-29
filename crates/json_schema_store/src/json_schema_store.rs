@@ -506,7 +506,7 @@ pub fn all_schema_file_associations(
     {
         file_associations
             .as_array_mut()
-            .unwrap()
+            .expect("as_array_mut should be present")
             .push(serde_json::json!({
                 "fileMatch": [
                     "zzz-inspector-style.json"
@@ -517,7 +517,7 @@ pub fn all_schema_file_associations(
 
     file_associations
         .as_array_mut()
-        .unwrap()
+        .expect("as_array_mut should be present")
         .extend(cx.all_action_names().into_iter().map(|&name| {
             let normalized_name = normalize_action_name(name);
             let file_name = normalized_action_name_to_file_name(normalized_name.clone());
@@ -562,7 +562,7 @@ fn generate_jsonc_schema() -> serde_json::Value {
         "allowTrailingCommas": true,
         "$defs": defs,
     });
-    serde_json::to_value(schema).unwrap()
+    serde_json::to_value(schema).expect("converting to a JSON value cannot fail")
 }
 
 #[cfg(debug_assertions)]
@@ -572,7 +572,7 @@ fn generate_inspector_style_schema() -> serde_json::Value {
         .into_generator()
         .root_schema_for::<gpui::StyleRefinement>();
 
-    serde_json::to_value(schema).unwrap()
+    serde_json::to_value(schema).expect("converting to a JSON value cannot fail")
 }
 
 pub fn normalize_action_name(action_name: &str) -> String {
@@ -619,8 +619,8 @@ fn root_schema_from_action_schema(
 
 #[inline]
 fn schema_file_match(path: &std::path::Path) -> String {
-    path.strip_prefix(path.parent().unwrap().parent().unwrap())
-        .unwrap()
+    path.strip_prefix(path.parent().expect("path should have the expected component").parent().expect("path should have the expected component"))
+        .expect("value should be present")
         .display()
         .to_string()
         .replace('\\', "/")

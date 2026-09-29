@@ -3697,7 +3697,7 @@ impl Editor {
                             let is_closing_quote = if bracket_pair.end == bracket_pair.start
                                 && bracket_pair.start.len() == 1
                             {
-                                let target = bracket_pair.start.chars().next().unwrap();
+                                let target = bracket_pair.start.chars().next().expect("iterator should yield an item");
                                 let mut byte_offset = 0u32;
                                 let current_line_count = snapshot
                                     .reversed_chars_at(selection.start)
@@ -6997,7 +6997,7 @@ impl Editor {
         if self.read_only(cx) {
             cx.theme().players().read_only()
         } else {
-            self.style.as_ref().unwrap().local_player
+            self.style.as_ref().expect("value should have the expected type").local_player
         }
     }
 
@@ -8018,7 +8018,7 @@ impl Editor {
                             IndentKind::Space => {
                                 buffer.settings_at(line_buffer_range.start, cx).tab_size
                             }
-                            IndentKind::Tab => NonZeroU32::new(1).unwrap(),
+                            IndentKind::Tab => NonZeroU32::MIN,
                         };
                         if old_head.column <= indent_size.len && old_head.column > 0 {
                             let indent_len = indent_len.get();
@@ -8469,7 +8469,7 @@ impl Editor {
                 let next_rows = next_selection.spanned_rows(false, &display_map);
                 if next_rows.start <= rows.end {
                     rows.end = next_rows.end;
-                    selections.next().unwrap();
+                    selections.next().expect("iterator should yield an item");
                 } else {
                     break;
                 }
@@ -10167,7 +10167,7 @@ impl Editor {
                 .map(|c| {
                     let code_point = c as u32;
                     if (33..=126).contains(&code_point) {
-                        return char::from_u32(33 + ((code_point + 14) % 94)).unwrap();
+                        return char::from_u32(33 + ((code_point + 14) % 94)).expect("value should be present");
                     }
                     c
                 })
@@ -10326,7 +10326,7 @@ impl Editor {
                     let next_rows = next_selection.spanned_rows(false, &display_map);
                     if next_rows.start < rows.end {
                         rows.end = next_rows.end;
-                        selections_iter.next().unwrap();
+                        selections_iter.next().expect("iterator should yield an item");
                     } else {
                         break;
                     }
@@ -10394,7 +10394,7 @@ impl Editor {
                             let next_rows = next_selection.spanned_rows(false, &display_map);
                             if next_rows.start < rows.end {
                                 rows.end = next_rows.end;
-                                group_selections.push(selections_iter.next().unwrap());
+                                group_selections.push(selections_iter.next().expect("iterator should yield an item"));
                             } else {
                                 break;
                             }
@@ -13076,8 +13076,8 @@ impl Editor {
         if let Some(mut select_next_state) = self.select_next_state.take() {
             let query = &select_next_state.query;
             if !select_next_state.done {
-                let first_selection = selections.iter().min_by_key(|s| s.id).unwrap();
-                let last_selection = selections.iter().max_by_key(|s| s.id).unwrap();
+                let first_selection = selections.iter().min_by_key(|s| s.id).expect("min_by_key should be present");
+                let last_selection = selections.iter().max_by_key(|s| s.id).expect("max_by_key should be present");
                 let mut next_selected_range = None;
 
                 let bytes_after_last_selection =
@@ -13094,7 +13094,13 @@ impl Editor {
                     );
 
                 for (start_offset, query_match) in query_matches {
-                    let query_match = query_match.unwrap(); // can only fail due to I/O
+                    let query_match = match query_match {
+                        Ok(query_match) => query_match,
+                        Err(error) => {
+                            log::error!("error searching buffer while expanding selection: {error}");
+                            continue;
+                        }
+                    };
                     let offset_range =
                         start_offset + query_match.start()..start_offset + query_match.end();
 
@@ -13307,8 +13313,8 @@ impl Editor {
         if let Some(mut select_prev_state) = self.select_prev_state.take() {
             let query = &select_prev_state.query;
             if !select_prev_state.done {
-                let first_selection = selections.iter().min_by_key(|s| s.id).unwrap();
-                let last_selection = selections.iter().max_by_key(|s| s.id).unwrap();
+                let first_selection = selections.iter().min_by_key(|s| s.id).expect("min_by_key should be present");
+                let last_selection = selections.iter().max_by_key(|s| s.id).expect("max_by_key should be present");
                 let mut next_selected_range = None;
                 // When we're iterating matches backwards, the oldest match will actually be the furthest one in the buffer.
                 let bytes_before_last_selection =
@@ -13324,7 +13330,13 @@ impl Editor {
                             .map(|result| (buffer.len(), result)),
                     );
                 for (end_offset, query_match) in query_matches {
-                    let query_match = query_match.unwrap(); // can only fail due to I/O
+                    let query_match = match query_match {
+                        Ok(query_match) => query_match,
+                        Err(error) => {
+                            log::error!("error searching buffer while contracting selection: {error}");
+                            continue;
+                        }
+                    };
                     let offset_range =
                         end_offset - query_match.end()..end_offset - query_match.start();
 
@@ -15610,7 +15622,7 @@ impl Editor {
                     None => Ok(Navigated::No),
                 }
             } else {
-                let (target_buffer, target_ranges) = locations.into_iter().next().unwrap();
+                let (target_buffer, target_ranges) = locations.into_iter().next().expect("iterator should yield an item");
 
                 editor.update_in(cx, |editor, window, cx| {
                     let target_ranges = target_ranges
@@ -16126,8 +16138,8 @@ impl Editor {
             }
 
             if num_locations == 1 && !always_open_multibuffer {
-                let (target_buffer, target_ranges) = locations.into_iter().next().unwrap();
-                let target_range = target_ranges.first().unwrap().clone();
+                let (target_buffer, target_ranges) = locations.into_iter().next().expect("iterator should yield an item");
+                let target_range = target_ranges.first().expect("collection should not be empty").clone();
 
                 return editor.update_in(cx, |editor, window, cx| {
                     let range = target_range.to_point(target_buffer.read(cx));
@@ -16743,7 +16755,7 @@ impl Editor {
                         let buffer_id = buffer_snapshot.remote_id();
                         let start = buffer_snapshot.anchor_before(buffer_range.start);
                         let end = buffer_snapshot.anchor_after(buffer_range.end);
-                        buffers.insert(multi_buffer.buffer(buffer_id).unwrap());
+                        buffers.insert(multi_buffer.buffer(buffer_id).expect("buffer should be present"));
                         buffer_id_to_ranges
                             .entry(buffer_id)
                             .and_modify(|buffer_ranges| buffer_ranges.push(start..end))
@@ -19216,7 +19228,7 @@ impl Editor {
             }?;
 
             let buffer_range = range.to_point(buffer_snapshot);
-            let buffer = multi_buffer.buffer(buffer_snapshot.remote_id()).unwrap();
+            let buffer = multi_buffer.buffer(buffer_snapshot.remote_id()).expect("value should be present");
 
             let Some(buffer_diff) = multi_buffer.diff_for(buffer_snapshot.remote_id()) else {
                 return Some((buffer, buffer_range.start.row..buffer_range.end.row));
@@ -20928,7 +20940,7 @@ impl Editor {
                                             ..buffer_snapshot.anchor_after(range.end);
                                         multibuffer_snapshot
                                             .buffer_anchor_range_to_anchor_range(range)
-                                            .unwrap()
+                                            .expect("buffer_anchor_range_to_anchor_range should be present")
                                     }));
                                 },
                             );
@@ -20964,7 +20976,7 @@ impl Editor {
         let newest_selection = selections
             .iter()
             .max_by_key(|selection| selection.id)
-            .unwrap();
+            .expect("max_by_key should be present");
         let start_delta = range.start.0.0 as isize - newest_selection.start.0.0 as isize;
         let end_delta = range.end.0.0 as isize - newest_selection.end.0.0 as isize;
         let snapshot = self.buffer.read(cx).read(cx);
@@ -21082,10 +21094,10 @@ impl Editor {
                 }
 
                 if chunk_lines.peek().is_some() {
-                    if line.len() > 1 && line.front().unwrap().text.is_empty() {
+                    if line.len() > 1 && line.front().expect("collection should not be empty").text.is_empty() {
                         line.pop_front();
                     }
-                    if line.len() > 1 && line.back().unwrap().text.is_empty() {
+                    if line.len() > 1 && line.back().expect("collection should not be empty").text.is_empty() {
                         line.pop_back();
                     }
 
@@ -21363,7 +21375,7 @@ impl Editor {
         self.register_action_erased(
             TypeId::of::<A>(),
             Arc::new(move |action, window, cx| {
-                listener(action.downcast_ref().unwrap(), window, cx)
+                listener(action.downcast_ref().expect("downcast should succeed"), window, cx)
             }),
         )
     }
@@ -21497,8 +21509,8 @@ impl Editor {
         let font_id = window.text_system().resolve_font(&style.text.font());
         let font_size = style.text.font_size.to_pixels(window.rem_size());
         let line_height = style.text.line_height_in_pixels(window.rem_size());
-        let em_width = window.text_system().em_width(font_id, font_size).unwrap();
-        let em_advance = window.text_system().em_advance(font_id, font_size).unwrap();
+        let em_width = window.text_system().em_width(font_id, font_size).expect("em_width should be present");
+        let em_advance = window.text_system().em_advance(font_id, font_size).expect("em_advance should be present");
 
         CharacterDimensions {
             em_width,
@@ -23068,7 +23080,7 @@ fn snippet_completions(
                         server_id: LanguageServerId(usize::MAX),
                         resolved: true,
                         lsp_completion: Box::new(lsp::CompletionItem {
-                            label: snippet.prefix.first().unwrap().clone(),
+                            label: snippet.prefix.first().expect("collection should not be empty").clone(),
                             kind: Some(CompletionItemKind::SNIPPET),
                             label_details: snippet.description.as_ref().map(|description| {
                                 lsp::CompletionItemLabelDetails {
@@ -23399,7 +23411,7 @@ fn consume_contiguous_rows(
     while let Some(next_selection) = selections.peek() {
         if next_selection.start.row <= end_row.0 {
             end_row = ending_row(next_selection, display_map);
-            contiguous_row_selections.push(selections.next().unwrap().clone());
+            contiguous_row_selections.push(selections.next().expect("iterator should yield an item").clone());
         } else {
             break;
         }

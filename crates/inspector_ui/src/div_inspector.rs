@@ -261,7 +261,7 @@ impl DivInspector {
             let json_style_buffer = json_style_buffer.clone();
             let rust_style_buffer = rust_style_buffer.clone();
             move |this, _editor, event: &EditorEvent, cx| {
-                if let EditorEvent::BufferEdited = event {
+                if matches!(event, EditorEvent::BufferEdited) {
                     this.update_json_style_from_rust(&json_style_buffer, &rust_style_buffer, cx);
                 }
             }
@@ -641,7 +641,9 @@ fn render_layout_state(inspector_state: &DivInspectorState, cx: &App) -> Div {
                     "Size of the element's children",
                 )))
                 .child(
-                    if inspector_state.content_size != inspector_state.bounds.size {
+                    if inspector_state.content_size == inspector_state.bounds.size {
+                        String::new()
+                    } else {
                         tr(
                             cx,
                             "inspector_ui.div_inspector.content_size",
@@ -652,8 +654,6 @@ fn render_layout_state(inspector_state: &DivInspectorState, cx: &App) -> Div {
                             &inspector_state.content_size.to_string(),
                             1,
                         )
-                    } else {
-                        "".to_string()
                     },
                 ),
         )
@@ -784,8 +784,7 @@ fn completion_replace_range(snapshot: &BufferSnapshot, anchor: &Anchor) -> Optio
 
     let start_in_line = &line[..offset - line_start]
         .rfind(|c| is_not_identifier_char(c) && c != '.')
-        .map(|ix| ix + 1)
-        .unwrap_or(0);
+        .map_or(0, |ix| ix + 1);
     let end_in_line = &line[offset - line_start..]
         .rfind(|c| is_not_identifier_char(c) && c != '(' && c != ')')
         .unwrap_or(line_end - line_start);

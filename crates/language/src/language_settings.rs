@@ -560,95 +560,95 @@ impl settings::Settings for AllLanguageSettings {
         let all_languages = &content.project.all_languages;
 
         fn load_from_content(settings: LanguageSettingsContent) -> LanguageSettings {
-            let inlay_hints = settings.inlay_hints.unwrap();
-            let completions = settings.completions.unwrap();
-            let prettier = settings.prettier.unwrap();
-            let indent_guides = settings.indent_guides.unwrap();
-            let tasks = settings.tasks.unwrap();
-            let whitespace_map = settings.whitespace_map.unwrap();
+            let inlay_hints = settings.inlay_hints.expect("inlay_hints should be present");
+            let completions = settings.completions.expect("completions should be present");
+            let prettier = settings.prettier.expect("prettier should be present");
+            let indent_guides = settings.indent_guides.expect("indent_guides should be present");
+            let tasks = settings.tasks.expect("tasks should be present");
+            let whitespace_map = settings.whitespace_map.expect("whitespace_map should be present");
 
             LanguageSettings {
-                tab_size: settings.tab_size.unwrap(),
-                hard_tabs: settings.hard_tabs.unwrap(),
-                soft_wrap: settings.soft_wrap.unwrap(),
-                preferred_line_length: settings.preferred_line_length.unwrap(),
-                show_wrap_guides: settings.show_wrap_guides.unwrap(),
-                wrap_guides: settings.wrap_guides.unwrap(),
+                tab_size: settings.tab_size.expect("tab_size should be present"),
+                hard_tabs: settings.hard_tabs.expect("hard_tabs should be present"),
+                soft_wrap: settings.soft_wrap.expect("soft_wrap should be present"),
+                preferred_line_length: settings.preferred_line_length.expect("preferred_line_length should be present"),
+                show_wrap_guides: settings.show_wrap_guides.expect("show_wrap_guides should be present"),
+                wrap_guides: settings.wrap_guides.expect("wrap_guides should be present"),
                 indent_guides: IndentGuideSettings {
-                    enabled: indent_guides.enabled.unwrap(),
-                    line_width: indent_guides.line_width.unwrap(),
-                    active_line_width: indent_guides.active_line_width.unwrap(),
-                    coloring: indent_guides.coloring.unwrap(),
-                    background_coloring: indent_guides.background_coloring.unwrap(),
+                    enabled: indent_guides.enabled.expect("enabled should be present"),
+                    line_width: indent_guides.line_width.expect("line_width should be present"),
+                    active_line_width: indent_guides.active_line_width.expect("active_line_width should be present"),
+                    coloring: indent_guides.coloring.expect("coloring should be present"),
+                    background_coloring: indent_guides.background_coloring.expect("background_coloring should be present"),
                 },
-                format_on_save: settings.format_on_save.unwrap(),
+                format_on_save: settings.format_on_save.expect("format_on_save should be present"),
                 remove_trailing_whitespace_on_save: settings
                     .remove_trailing_whitespace_on_save
-                    .unwrap(),
-                ensure_final_newline_on_save: settings.ensure_final_newline_on_save.unwrap(),
-                line_ending: settings.line_ending.unwrap(),
-                formatter: settings.formatter.unwrap(),
+                    .expect("remove_trailing_whitespace_on_save should be present"),
+                ensure_final_newline_on_save: settings.ensure_final_newline_on_save.expect("ensure_final_newline_on_save should be present"),
+                line_ending: settings.line_ending.expect("line_ending should be present"),
+                formatter: settings.formatter.expect("formatter should be present"),
                 prettier: PrettierSettings {
-                    allowed: prettier.allowed.unwrap(),
+                    allowed: prettier.allowed.expect("allowed should be present"),
                     parser: prettier.parser.filter(|parser| !parser.is_empty()),
                     plugins: prettier.plugins.unwrap_or_default(),
                     options: prettier.options.unwrap_or_default(),
                 },
-                jsx_tag_auto_close: settings.jsx_tag_auto_close.unwrap().enabled.unwrap(),
-                enable_language_server: settings.enable_language_server.unwrap(),
-                language_servers: settings.language_servers.unwrap(),
-                semantic_tokens: settings.semantic_tokens.unwrap(),
-                document_folding_ranges: settings.document_folding_ranges.unwrap(),
-                document_symbols: settings.document_symbols.unwrap(),
-                allow_rewrap: settings.allow_rewrap.unwrap(),
-                show_whitespaces: settings.show_whitespaces.unwrap(),
+                jsx_tag_auto_close: settings.jsx_tag_auto_close.expect("jsx_tag_auto_close should be present").enabled.expect("enabled should be present"),
+                enable_language_server: settings.enable_language_server.expect("enable_language_server should be present"),
+                language_servers: settings.language_servers.expect("language_servers should be present"),
+                semantic_tokens: settings.semantic_tokens.expect("semantic_tokens should be present"),
+                document_folding_ranges: settings.document_folding_ranges.expect("document_folding_ranges should be present"),
+                document_symbols: settings.document_symbols.expect("document_symbols should be present"),
+                allow_rewrap: settings.allow_rewrap.expect("allow_rewrap should be present"),
+                show_whitespaces: settings.show_whitespaces.expect("show_whitespaces should be present"),
                 whitespace_map: WhitespaceMap {
-                    space: SharedString::new(whitespace_map.space.unwrap().to_string()),
-                    tab: SharedString::new(whitespace_map.tab.unwrap().to_string()),
+                    space: SharedString::new(whitespace_map.space.expect("space should be present").to_string()),
+                    tab: SharedString::new(whitespace_map.tab.expect("tab should be present").to_string()),
                 },
-                extend_comment_on_newline: settings.extend_comment_on_newline.unwrap(),
-                extend_list_on_newline: settings.extend_list_on_newline.unwrap(),
-                indent_list_on_tab: settings.indent_list_on_tab.unwrap(),
+                extend_comment_on_newline: settings.extend_comment_on_newline.expect("extend_comment_on_newline should be present"),
+                extend_list_on_newline: settings.extend_list_on_newline.expect("extend_list_on_newline should be present"),
+                indent_list_on_tab: settings.indent_list_on_tab.expect("indent_list_on_tab should be present"),
                 inlay_hints: InlayHintSettings {
-                    enabled: inlay_hints.enabled.unwrap(),
-                    show_value_hints: inlay_hints.show_value_hints.unwrap(),
-                    show_type_hints: inlay_hints.show_type_hints.unwrap(),
-                    show_parameter_hints: inlay_hints.show_parameter_hints.unwrap(),
-                    show_other_hints: inlay_hints.show_other_hints.unwrap(),
-                    show_background: inlay_hints.show_background.unwrap(),
-                    edit_debounce_ms: inlay_hints.edit_debounce_ms.unwrap(),
-                    scroll_debounce_ms: inlay_hints.scroll_debounce_ms.unwrap(),
+                    enabled: inlay_hints.enabled.expect("enabled should be present"),
+                    show_value_hints: inlay_hints.show_value_hints.expect("show_value_hints should be present"),
+                    show_type_hints: inlay_hints.show_type_hints.expect("show_type_hints should be present"),
+                    show_parameter_hints: inlay_hints.show_parameter_hints.expect("show_parameter_hints should be present"),
+                    show_other_hints: inlay_hints.show_other_hints.expect("show_other_hints should be present"),
+                    show_background: inlay_hints.show_background.expect("show_background should be present"),
+                    edit_debounce_ms: inlay_hints.edit_debounce_ms.expect("edit_debounce_ms should be present"),
+                    scroll_debounce_ms: inlay_hints.scroll_debounce_ms.expect("scroll_debounce_ms should be present"),
                     toggle_on_modifiers_press: inlay_hints
                         .toggle_on_modifiers_press
                         .map(|m| m.into_gpui()),
                 },
-                use_autoclose: settings.use_autoclose.unwrap(),
-                use_auto_surround: settings.use_auto_surround.unwrap(),
-                use_on_type_format: settings.use_on_type_format.unwrap(),
-                auto_indent: settings.auto_indent.unwrap(),
-                auto_indent_on_paste: settings.auto_indent_on_paste.unwrap(),
+                use_autoclose: settings.use_autoclose.expect("use_autoclose should be present"),
+                use_auto_surround: settings.use_auto_surround.expect("use_auto_surround should be present"),
+                use_on_type_format: settings.use_on_type_format.expect("use_on_type_format should be present"),
+                auto_indent: settings.auto_indent.expect("auto_indent should be present"),
+                auto_indent_on_paste: settings.auto_indent_on_paste.expect("auto_indent_on_paste should be present"),
                 always_treat_brackets_as_autoclosed: settings
                     .always_treat_brackets_as_autoclosed
-                    .unwrap(),
-                code_actions_on_format: settings.code_actions_on_format.unwrap(),
-                linked_edits: settings.linked_edits.unwrap(),
+                    .expect("always_treat_brackets_as_autoclosed should be present"),
+                code_actions_on_format: settings.code_actions_on_format.expect("code_actions_on_format should be present"),
+                linked_edits: settings.linked_edits.expect("linked_edits should be present"),
                 tasks: LanguageTaskSettings {
                     variables: tasks.variables.unwrap_or_default(),
-                    enabled: tasks.enabled.unwrap(),
-                    prefer_lsp: tasks.prefer_lsp.unwrap(),
+                    enabled: tasks.enabled.expect("enabled should be present"),
+                    prefer_lsp: tasks.prefer_lsp.expect("prefer_lsp should be present"),
                 },
-                show_completions_on_input: settings.show_completions_on_input.unwrap(),
-                show_completion_documentation: settings.show_completion_documentation.unwrap(),
-                colorize_brackets: settings.colorize_brackets.unwrap(),
+                show_completions_on_input: settings.show_completions_on_input.expect("show_completions_on_input should be present"),
+                show_completion_documentation: settings.show_completion_documentation.expect("show_completion_documentation should be present"),
+                colorize_brackets: settings.colorize_brackets.expect("colorize_brackets should be present"),
                 completions: CompletionSettings {
-                    words: completions.words.unwrap(),
-                    words_min_length: completions.words_min_length.unwrap() as usize,
-                    lsp: completions.lsp.unwrap(),
-                    lsp_fetch_timeout_ms: completions.lsp_fetch_timeout_ms.unwrap(),
-                    lsp_insert_mode: completions.lsp_insert_mode.unwrap(),
+                    words: completions.words.expect("words should be present"),
+                    words_min_length: completions.words_min_length.expect("words_min_length should be present") as usize,
+                    lsp: completions.lsp.expect("lsp should be present"),
+                    lsp_fetch_timeout_ms: completions.lsp_fetch_timeout_ms.expect("lsp_fetch_timeout_ms should be present"),
+                    lsp_insert_mode: completions.lsp_insert_mode.expect("lsp_insert_mode should be present"),
                 },
-                debuggers: settings.debuggers.unwrap(),
-                word_diff_enabled: settings.word_diff_enabled.unwrap(),
+                debuggers: settings.debuggers.expect("debuggers should be present"),
+                word_diff_enabled: settings.word_diff_enabled.expect("word_diff_enabled should be present"),
             }
         }
 

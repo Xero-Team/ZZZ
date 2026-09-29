@@ -20,7 +20,7 @@ impl Tangled {
     }
 
     pub fn public_instance() -> Self {
-        Self::new("Tangled", Url::parse("https://tangled.org").unwrap())
+        Self::new("Tangled", Url::parse("https://tangled.org").expect("URL literal should be valid"))
     }
 
     /// Joins the given path to the base URL.
@@ -30,7 +30,7 @@ impl Tangled {
     /// `did:` to `Url::join` would otherwise be interpreted as an absolute URL
     /// with a `did:` scheme.
     fn join_path(&self, path: &str) -> Url {
-        self.base_url().join(&format!("/{path}")).unwrap()
+        self.base_url().join(&format!("/{path}")).expect("value should be present")
     }
 }
 
@@ -122,7 +122,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -152,7 +152,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -167,7 +167,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -192,7 +192,7 @@ mod tests {
         let permalink = Tangled::public_instance().build_commit_permalink(
             &ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildCommitPermalinkParams {
                 sha: "faa6f979be417239b2e070dbbf6392b909224e0b",
@@ -209,7 +209,7 @@ mod tests {
         let permalink = Tangled::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "faa6f979be417239b2e070dbbf6392b909224e0b",
@@ -245,7 +245,7 @@ mod tests {
         let permalink = Tangled::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "faa6f979be417239b2e070dbbf6392b909224e0b",
@@ -263,7 +263,7 @@ mod tests {
         let permalink = Tangled::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "user.tngl.sh".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "faa6f979be417239b2e070dbbf6392b909224e0b",

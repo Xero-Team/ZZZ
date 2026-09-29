@@ -21,7 +21,7 @@ const URL_REGEX: &str = r#"(ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|http
 
 const WIDE_CHAR_SPACERS: Flags =
     Flags::from_bits(Flags::LEADING_WIDE_CHAR_SPACER.bits() | Flags::WIDE_CHAR_SPACER.bits())
-        .unwrap();
+        .expect("value should be present");
 
 pub(super) struct RegexSearches {
     url_regex: RegexSearch,
@@ -32,7 +32,7 @@ pub(super) struct RegexSearches {
 impl Default for RegexSearches {
     fn default() -> Self {
         Self {
-            url_regex: RegexSearch::new(URL_REGEX).unwrap(),
+            url_regex: RegexSearch::new(URL_REGEX).expect("value should be present"),
             path_hyperlink_regexes: Vec::default(),
             path_hyperlink_timeout: Duration::ZERO,
         }
@@ -44,7 +44,7 @@ impl RegexSearches {
         path_hyperlink_timeout: Duration,
     ) -> Self {
         Self {
-            url_regex: RegexSearch::new(URL_REGEX).unwrap(),
+            url_regex: RegexSearch::new(URL_REGEX).expect("value should be present"),
             path_hyperlink_regexes: path_hyperlink_regexes
                 .into_iter()
                 .filter_map(|regex| {
@@ -361,7 +361,7 @@ fn path_match<T>(
             .map(|captures| (0usize, captures))
         {
             path_found = true;
-            let match_range = captures.get(0).unwrap().range();
+            let match_range = captures.get(0).expect("entry should be present").range();
             let (mut path_range, line_column) = if let Some(path) = captures.name("path") {
                 let parse = |name: &str| {
                     captures

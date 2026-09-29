@@ -157,7 +157,7 @@ impl<E: IntoElement + 'static> Element for AnimationElement<E> {
         window: &mut Window,
         cx: &mut App,
     ) -> (crate::LayoutId, Self::RequestLayoutState) {
-        window.with_element_state(global_id.unwrap(), |state, window| {
+        window.with_element_state(global_id.expect("value should be present"), |state, window| {
             let mut state = state.unwrap_or_else(|| AnimationState {
                 start: Instant::now(),
                 animation_ix: 0,

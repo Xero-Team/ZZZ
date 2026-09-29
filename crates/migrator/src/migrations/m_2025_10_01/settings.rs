@@ -59,7 +59,7 @@ pub fn flatten_code_actions_formatters(value: &mut Value) -> Result<()> {
                         }));
                     }
                     if new_arr.len() == 1 {
-                        new_arr.pop().unwrap()
+                        new_arr.pop().expect("collection should not be empty")
                     } else {
                         Value::Array(new_arr)
                     }

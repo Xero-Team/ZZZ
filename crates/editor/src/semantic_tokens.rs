@@ -649,7 +649,7 @@ mod tests {
                                     id: None,
                                 },
                             })
-                            .unwrap(),
+                            .expect("converting to a JSON value cannot fail"),
                         ),
                     }],
                 },

@@ -81,5 +81,5 @@ fn editor_property_test(
                 editor.apply_test_action(&action, window, cx);
             }
         })
-        .unwrap();
+        .expect("value should be present");
 }

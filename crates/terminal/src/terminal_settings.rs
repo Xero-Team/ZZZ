@@ -83,13 +83,13 @@ fn settings_shell_to_task_shell(shell: settings::Shell) -> Shell {
 
 impl settings::Settings for TerminalSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let user_content = content.terminal.clone().unwrap();
+        let user_content = content.terminal.clone().expect("value should be present");
         // Note: we allow a subset of "terminal" settings in the project files.
         let mut project_content = user_content.project.clone();
         project_content.merge_from_option(content.project.terminal.as_ref());
         TerminalSettings {
-            shell: settings_shell_to_task_shell(project_content.shell.unwrap()),
-            working_directory: project_content.working_directory.unwrap(),
+            shell: settings_shell_to_task_shell(project_content.shell.expect("shell should be present")),
+            working_directory: project_content.working_directory.expect("working_directory should be present"),
             font_size: user_content.font_size.map(|s| s.into_gpui()),
             font_family: user_content.font_family,
             font_fallbacks: user_content.font_fallbacks.map(|fallbacks| {
@@ -102,34 +102,34 @@ impl settings::Settings for TerminalSettings {
             }),
             font_features: user_content.font_features.map(|f| f.into_gpui()),
             font_weight: user_content.font_weight.map(|w| w.into_gpui()),
-            line_height: user_content.line_height.unwrap(),
-            env: project_content.env.unwrap(),
-            cursor_shape: user_content.cursor_shape.unwrap().into(),
-            blinking: user_content.blinking.unwrap(),
-            alternate_scroll: user_content.alternate_scroll.unwrap(),
-            option_as_meta: user_content.option_as_meta.unwrap(),
-            copy_on_select: user_content.copy_on_select.unwrap(),
-            keep_selection_on_copy: user_content.keep_selection_on_copy.unwrap(),
-            open_links_in_mouse_mode: user_content.open_links_in_mouse_mode.unwrap(),
-            button: user_content.button.unwrap(),
-            dock: user_content.dock.unwrap(),
-            starts_open: user_content.starts_open.unwrap(),
-            default_width: px(user_content.default_width.unwrap()),
-            default_height: px(user_content.default_height.unwrap()),
-            flexible: user_content.flexible.unwrap(),
-            detect_venv: project_content.detect_venv.unwrap(),
-            scroll_multiplier: user_content.scroll_multiplier.unwrap(),
+            line_height: user_content.line_height.expect("line_height should be present"),
+            env: project_content.env.expect("env should be present"),
+            cursor_shape: user_content.cursor_shape.expect("cursor_shape should be present").into(),
+            blinking: user_content.blinking.expect("blinking should be present"),
+            alternate_scroll: user_content.alternate_scroll.expect("alternate_scroll should be present"),
+            option_as_meta: user_content.option_as_meta.expect("option_as_meta should be present"),
+            copy_on_select: user_content.copy_on_select.expect("copy_on_select should be present"),
+            keep_selection_on_copy: user_content.keep_selection_on_copy.expect("keep_selection_on_copy should be present"),
+            open_links_in_mouse_mode: user_content.open_links_in_mouse_mode.expect("open_links_in_mouse_mode should be present"),
+            button: user_content.button.expect("button should be present"),
+            dock: user_content.dock.expect("dock should be present"),
+            starts_open: user_content.starts_open.expect("starts_open should be present"),
+            default_width: px(user_content.default_width.expect("default_width should be present")),
+            default_height: px(user_content.default_height.expect("default_height should be present")),
+            flexible: user_content.flexible.expect("flexible should be present"),
+            detect_venv: project_content.detect_venv.expect("detect_venv should be present"),
+            scroll_multiplier: user_content.scroll_multiplier.expect("scroll_multiplier should be present"),
             max_scroll_history_lines: user_content.max_scroll_history_lines,
             toolbar: Toolbar {
-                breadcrumbs: user_content.toolbar.unwrap().breadcrumbs.unwrap(),
+                breadcrumbs: user_content.toolbar.expect("toolbar should be present").breadcrumbs.expect("breadcrumbs should be present"),
             },
             scrollbar: ScrollbarSettings {
-                show: user_content.scrollbar.unwrap().show,
+                show: user_content.scrollbar.expect("scrollbar should be present").show,
             },
-            minimum_contrast: user_content.minimum_contrast.unwrap(),
+            minimum_contrast: user_content.minimum_contrast.expect("minimum_contrast should be present"),
             path_hyperlink_regexes: project_content
                 .path_hyperlink_regexes
-                .unwrap()
+                .expect("path_hyperlink_regexes should be present")
                 .0
                 .into_iter()
                 .map(|regex| match regex {
@@ -137,9 +137,9 @@ impl settings::Settings for TerminalSettings {
                     PathHyperlinkRegex::MultiLine(regex) => regex.join("\n"),
                 })
                 .collect(),
-            path_hyperlink_timeout_ms: project_content.path_hyperlink_timeout_ms.unwrap(),
-            show_count_badge: user_content.show_count_badge.unwrap(),
-            bell: user_content.bell.unwrap(),
+            path_hyperlink_timeout_ms: project_content.path_hyperlink_timeout_ms.expect("path_hyperlink_timeout_ms should be present"),
+            show_count_badge: user_content.show_count_badge.expect("show_count_badge should be present"),
+            bell: user_content.bell.expect("bell should be present"),
         }
     }
 }

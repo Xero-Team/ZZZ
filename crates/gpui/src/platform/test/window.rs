@@ -247,7 +247,7 @@ impl PlatformWindow for TestWindow {
             .lock()
             .platform
             .upgrade()
-            .unwrap()
+            .expect("entity should be alive")
             .set_active_window(Some(self.clone()))
     }
 

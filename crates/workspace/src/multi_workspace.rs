@@ -1840,8 +1840,8 @@ impl MultiWorkspace {
         let weak_workspace = new_workspace.downgrade();
         let db = crate::persistence::WorkspaceDb::global(cx);
         cx.spawn_in(window, async move |this, cx| {
-            let workspace_id = db.next_id().await.unwrap();
-            let workspace = weak_workspace.upgrade().unwrap();
+            let workspace_id = db.next_id().await.expect("value should be present");
+            let workspace = weak_workspace.upgrade().expect("entity should be alive");
             let task: Task<()> = this
                 .update_in(cx, |this, window, cx| {
                     let session_id = workspace.read(cx).session_id();
@@ -1857,7 +1857,7 @@ impl MultiWorkspace {
                             .log_err();
                     })
                 })
-                .unwrap();
+                .expect("value should be present");
             task.await
         })
     }

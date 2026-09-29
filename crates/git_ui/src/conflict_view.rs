@@ -118,7 +118,7 @@ pub(crate) fn buffer_ranges_updated(
 
     let buffer_conflicts = editor
         .addon_mut::<ConflictAddon>()
-        .unwrap()
+        .expect("value should be present")
         .buffers
         .entry(buffer_id)
         .or_insert_with(|| {
@@ -153,7 +153,7 @@ pub(crate) fn buffers_removed(
     let mut removed_block_ids = HashSet::default();
     editor
         .addon_mut::<ConflictAddon>()
-        .unwrap()
+        .expect("value should be present")
         .buffers
         .retain(|buffer_id, buffer| {
             if removed_buffer_ids.contains(buffer_id) {
@@ -178,7 +178,7 @@ fn conflicts_updated(
     let multibuffer = editor.buffer().read(cx);
     let snapshot = multibuffer.snapshot(cx);
     let old_range = maybe!({
-        let conflict_addon = editor.addon_mut::<ConflictAddon>().unwrap();
+        let conflict_addon = editor.addon_mut::<ConflictAddon>().expect("value should be present");
         let buffer_conflicts = conflict_addon.buffers.get(&buffer_id)?;
         if buffer_conflicts
             .block_ids
@@ -204,7 +204,7 @@ fn conflicts_updated(
     });
 
     // Remove obsolete highlights and blocks
-    let conflict_addon = editor.addon_mut::<ConflictAddon>().unwrap();
+    let conflict_addon = editor.addon_mut::<ConflictAddon>().expect("value should be present");
     if let Some((buffer_conflicts, old_range)) = conflict_addon
         .buffers
         .get_mut(&buffer_id)
@@ -274,7 +274,7 @@ fn conflicts_updated(
     }
     let new_block_ids = editor.insert_blocks(blocks, None, cx);
 
-    let conflict_addon = editor.addon_mut::<ConflictAddon>().unwrap();
+    let conflict_addon = editor.addon_mut::<ConflictAddon>().expect("value should be present");
     if let Some((buffer_conflicts, old_range)) =
         conflict_addon.buffers.get_mut(&buffer_id).zip(old_range)
     {
@@ -516,7 +516,7 @@ pub(crate) fn resolve_conflict(
                 let buffer_id = resolved_conflict.ours.end.buffer_id;
                 let buffer = multibuffer.read(cx).buffer(buffer_id)?;
                 resolved_conflict.resolve(buffer.clone(), &ranges, cx);
-                let conflict_addon = editor.addon_mut::<ConflictAddon>().unwrap();
+                let conflict_addon = editor.addon_mut::<ConflictAddon>().expect("value should be present");
                 let snapshot = multibuffer.read(cx).snapshot(cx);
                 let buffer_snapshot = buffer.read(cx).snapshot();
                 let state = conflict_addon

@@ -15,7 +15,7 @@ fn empty_line_regex() -> &'static Regex {
 }
 
 fn more_than_three_newlines_regex() -> &'static Regex {
-    static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n{3,}").unwrap());
+    static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n{3,}").expect("valid regex literal"));
     &REGEX
 }
 

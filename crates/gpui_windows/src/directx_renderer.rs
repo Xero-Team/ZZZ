@@ -172,7 +172,7 @@ impl DirectXRenderer {
         let direct_composition = if disable_direct_composition {
             None
         } else {
-            let composition = DirectComposition::new(devices.dxgi_device.as_ref().unwrap(), hwnd)
+            let composition = DirectComposition::new(devices.dxgi_device.as_ref().expect("value should have the expected type"), hwnd)
                 .context("Creating DirectComposition")?;
             composition
                 .set_swap_chain(&resources.swap_chain)
@@ -208,7 +208,7 @@ impl DirectXRenderer {
             .device_context;
         update_buffer(
             device_context,
-            self.globals.global_params_buffer.as_ref().unwrap(),
+            self.globals.global_params_buffer.as_ref().expect("value should have the expected type"),
             &[GlobalParams {
                 gamma_ratios: self.font_info.gamma_ratios,
                 viewport_size: [resources.viewport.Width, resources.viewport.Height],
@@ -297,7 +297,7 @@ impl DirectXRenderer {
             None
         } else {
             let composition =
-                DirectComposition::new(devices.dxgi_device.as_ref().unwrap(), self.hwnd)?;
+                DirectComposition::new(devices.dxgi_device.as_ref().expect("value should have the expected type"), self.hwnd)?;
             composition.set_swap_chain(&resources.swap_chain)?;
             Some(composition)
         };
@@ -626,7 +626,7 @@ impl DirectXRenderer {
         // Clear intermediate MSAA texture
         unsafe {
             devices.device_context.ClearRenderTargetView(
-                resources.path_intermediate_msaa_view.as_ref().unwrap(),
+                resources.path_intermediate_msaa_view.as_ref().expect("value should have the expected type"),
                 &[0.0; 4],
             );
             // Set intermediate MSAA texture as render target
@@ -693,7 +693,7 @@ impl DirectXRenderer {
         // disjoint, so we can copy each path's bounds individually. If this
         // batch combines different draw orders, we perform a single copy
         // for a minimal spanning rect.
-        let sprites = if paths.last().unwrap().order == first_path.order {
+        let sprites = if paths.last().expect("collection should not be empty").order == first_path.order {
             paths
                 .iter()
                 .map(|path| PathSprite {
@@ -862,9 +862,9 @@ impl DirectXRenderer {
     pub(crate) fn get_font_info() -> &'static FontInfo {
         static CACHED_FONT_INFO: OnceLock<FontInfo> = OnceLock::new();
         CACHED_FONT_INFO.get_or_init(|| unsafe {
-            let factory: IDWriteFactory5 = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED).unwrap();
+            let factory: IDWriteFactory5 = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED).expect("DWriteCreateFactory should be present");
             let render_params: IDWriteRenderingParams1 =
-                factory.CreateRenderingParams().unwrap().cast().unwrap();
+                factory.CreateRenderingParams().expect("CreateRenderingParams should be present").cast().expect("cast should be present");
             FontInfo {
                 gamma_ratios: gpui::get_gamma_correction_ratios(render_params.GetGamma()),
                 grayscale_enhanced_contrast: render_params.GetGrayscaleEnhancedContrast(),
@@ -1426,13 +1426,13 @@ fn create_path_intermediate_texture(
             MiscFlags: 0,
         };
         device.CreateTexture2D(&desc, None, Some(&mut output))?;
-        output.unwrap()
+        output.expect("value should be present")
     };
 
     let mut shader_resource_view = None;
     unsafe { device.CreateShaderResourceView(&texture, None, Some(&mut shader_resource_view))? };
 
-    Ok((texture, Some(shader_resource_view.unwrap())))
+    Ok((texture, Some(shader_resource_view.expect("value should be present"))))
 }
 
 #[inline]
@@ -1459,11 +1459,11 @@ fn create_path_intermediate_msaa_texture_and_view(
             MiscFlags: 0,
         };
         device.CreateTexture2D(&desc, None, Some(&mut output))?;
-        output.unwrap()
+        output.expect("value should be present")
     };
     let mut msaa_view = None;
     unsafe { device.CreateRenderTargetView(&msaa_texture, None, Some(&mut msaa_view))? };
-    Ok((msaa_texture, Some(msaa_view.unwrap())))
+    Ok((msaa_texture, Some(msaa_view.expect("value should be present"))))
 }
 
 #[inline]
@@ -1497,7 +1497,7 @@ fn set_rasterizer_state(device: &ID3D11Device, device_context: &ID3D11DeviceCont
     let rasterizer_state = unsafe {
         let mut state = None;
         device.CreateRasterizerState(&desc, Some(&mut state))?;
-        state.unwrap()
+        state.expect("value should be present")
     };
     unsafe { device_context.RSSetState(&rasterizer_state) };
     Ok(())
@@ -1518,7 +1518,7 @@ fn create_blend_state(device: &ID3D11Device) -> Result<ID3D11BlendState> {
     unsafe {
         let mut state = None;
         device.CreateBlendState(&desc, Some(&mut state))?;
-        Ok(state.unwrap())
+        Ok(state.expect("value should be present"))
     }
 }
 
@@ -1539,7 +1539,7 @@ fn create_blend_state_for_subpixel_rendering(device: &ID3D11Device) -> Result<ID
     unsafe {
         let mut state = None;
         device.CreateBlendState(&desc, Some(&mut state))?;
-        Ok(state.unwrap())
+        Ok(state.expect("value should be present"))
     }
 }
 
@@ -1559,7 +1559,7 @@ fn create_blend_state_for_path_rasterization(device: &ID3D11Device) -> Result<ID
     unsafe {
         let mut state = None;
         device.CreateBlendState(&desc, Some(&mut state))?;
-        Ok(state.unwrap())
+        Ok(state.expect("value should be present"))
     }
 }
 
@@ -1579,7 +1579,7 @@ fn create_blend_state_for_path_sprite(device: &ID3D11Device) -> Result<ID3D11Ble
     unsafe {
         let mut state = None;
         device.CreateBlendState(&desc, Some(&mut state))?;
-        Ok(state.unwrap())
+        Ok(state.expect("value should be present"))
     }
 }
 
@@ -1588,7 +1588,7 @@ fn create_vertex_shader(device: &ID3D11Device, bytes: &[u8]) -> Result<ID3D11Ver
     unsafe {
         let mut shader = None;
         device.CreateVertexShader(bytes, None, Some(&mut shader))?;
-        Ok(shader.unwrap())
+        Ok(shader.expect("value should be present"))
     }
 }
 
@@ -1597,7 +1597,7 @@ fn create_fragment_shader(device: &ID3D11Device, bytes: &[u8]) -> Result<ID3D11P
     unsafe {
         let mut shader = None;
         device.CreatePixelShader(bytes, None, Some(&mut shader))?;
-        Ok(shader.unwrap())
+        Ok(shader.expect("value should be present"))
     }
 }
 
@@ -1617,7 +1617,7 @@ fn create_buffer(
     };
     let mut buffer = None;
     unsafe { device.CreateBuffer(&desc, None, Some(&mut buffer)) }?;
-    Ok(buffer.unwrap())
+    Ok(buffer.expect("value should be present"))
 }
 
 #[inline]
@@ -1852,7 +1852,7 @@ pub(crate) mod shader_resources {
             );
 
             let ret = D3DCompileFromFile(
-                &HSTRING::from(shader_path.to_str().unwrap()),
+                &HSTRING::from(shader_path.to_str().expect("path should be valid UTF-8")),
                 None,
                 include_handler,
                 entry_point,
@@ -1873,7 +1873,7 @@ pub(crate) mod shader_resources {
                 log::error!("Shader compile error: {}", error_string);
                 return Err(anyhow::anyhow!("Compile error: {}", error_string));
             }
-            Ok(compile_blob.unwrap())
+            Ok(compile_blob.expect("value should be present"))
         }
     }
 

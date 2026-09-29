@@ -56,7 +56,7 @@ fn monitor_hangs(cx: &App) {
                                 save_hang_trace(
                                     main_thread_id,
                                     &background_executor,
-                                    hang_time.unwrap(),
+                                    hang_time.expect("value should be present"),
                                 );
                             }
                         }
@@ -101,7 +101,7 @@ fn save_hang_trace(
                 timings.thread_name = Some("main".to_owned());
             }
 
-            SerializedThreadTaskTimings::convert(*STARTUP_TIME.get().unwrap(), timings)
+            SerializedThreadTaskTimings::convert(*STARTUP_TIME.get().expect("entry should be present"), timings)
         })
         .collect::<Vec<_>>();
 

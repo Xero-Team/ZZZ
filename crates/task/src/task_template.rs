@@ -150,7 +150,7 @@ impl TaskTemplates {
             .into_generator()
             .root_schema_for::<Self>();
 
-        serde_json::to_value(schema).unwrap()
+        serde_json::to_value(schema).expect("converting to a JSON value cannot fail")
     }
 }
 

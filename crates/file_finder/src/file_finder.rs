@@ -1789,7 +1789,7 @@ impl PickerDelegate for FileFinderDelegate {
                     .all(|worktree| {
                         worktree
                             .read(cx)
-                            .entry_for_path(RelPath::unix(prefix.split_at(1).0).unwrap())
+                            .entry_for_path(RelPath::unix(prefix.split_at(1).0).expect("value should be present"))
                             .is_none_or(|entry| !entry.is_dir())
                     })
                 {

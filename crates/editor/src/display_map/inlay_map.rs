@@ -276,9 +276,9 @@ impl<'a> Iterator for InlayChunks<'a> {
             Transform::Isomorphic(_) => {
                 let chunk = self
                     .buffer_chunk
-                    .get_or_insert_with(|| self.buffer_chunks.next().unwrap());
+                    .get_or_insert_with(|| self.buffer_chunks.next().expect("iterator should yield an item"));
                 if chunk.text.is_empty() {
-                    *chunk = self.buffer_chunks.next().unwrap();
+                    *chunk = self.buffer_chunks.next().expect("iterator should yield an item");
                 }
 
                 let desired_bytes = self.transforms.end().0.0 - self.output_offset.0;
@@ -428,7 +428,7 @@ impl<'a> Iterator for InlayChunks<'a> {
                     newlines,
                 } = self
                     .inlay_chunk
-                    .get_or_insert_with(|| inlay_chunks.next().unwrap());
+                    .get_or_insert_with(|| inlay_chunks.next().expect("iterator should yield an item"));
 
                 // Determine split index handling edge cases
                 let split_index = if next_inlay_highlight_endpoint >= inlay_chunk.len() {
@@ -511,11 +511,11 @@ impl Iterator for InlayBufferRows<'_> {
     #[ztracing::instrument(skip_all)]
     fn next(&mut self) -> Option<Self::Item> {
         let buffer_row = if self.inlay_row == 0 {
-            self.buffer_rows.next().unwrap()
+            self.buffer_rows.next().expect("iterator should yield an item")
         } else {
             match self.transforms.item()? {
                 Transform::Inlay(_) => Default::default(),
-                Transform::Isomorphic(_) => self.buffer_rows.next().unwrap(),
+                Transform::Isomorphic(_) => self.buffer_rows.next().expect("iterator should yield an item"),
             }
         };
 
@@ -829,7 +829,7 @@ impl InlayMap {
                         .iter()
                         .choose(rng)
                         .map(|inlay| inlay.id)
-                        .unwrap(),
+                        .expect("map should be present"),
                 );
             }
         }
@@ -1423,7 +1423,7 @@ fn push_isomorphic(sum_tree: &mut SumTree<Transform>, summary: MBTextSummary) {
     sum_tree.update_last(
         |transform| {
             if let Transform::Isomorphic(transform) = transform {
-                *transform += summary.take().unwrap();
+                *transform += summary.take().expect("entry should be present");
             }
         },
         (),

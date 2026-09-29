@@ -1574,7 +1574,7 @@ impl FakeFsState {
                     Component::Normal(name) => {
                         let current_entry = *entry_stack.last()?;
                         if let FakeFsEntry::Dir { entries, .. } = current_entry {
-                            let name_str = name.to_str().unwrap();
+                            let name_str = name.to_str().expect("path should be valid UTF-8");
                             let (canonical_name, entry) = if let Some(entry) = entries.get(name_str)
                             {
                                 (name_str, entry)
@@ -1635,7 +1635,7 @@ impl FakeFsState {
             match component {
                 Component::Normal(name) => {
                     if let FakeFsEntry::Dir { entries, .. } = entry {
-                        entry = entries.get_mut(name.to_str().unwrap())?;
+                        entry = entries.get_mut(name.to_str().expect("path should be valid UTF-8"))?;
                     } else {
                         return None;
                     }
@@ -1670,12 +1670,12 @@ impl FakeFsState {
     {
         let path = normalize_path(path);
         let filename = path.file_name().context("cannot overwrite the root")?;
-        let parent_path = path.parent().unwrap();
+        let parent_path = path.parent().expect("path should have the expected component");
 
         let parent = self.entry(parent_path)?;
         let new_entry = parent
             .dir_entries(parent_path)?
-            .entry(filename.to_str().unwrap().into());
+            .entry(filename.to_str().expect("path should be valid UTF-8").into());
         callback(new_entry)
     }
 
@@ -1802,12 +1802,12 @@ impl FakeFs {
                 }
                 Ok(())
             })
-            .unwrap();
+            .expect("value should be present");
         state.emit_event([(path.to_path_buf(), Some(PathEventKind::Changed))]);
     }
 
     pub async fn insert_file(&self, path: impl AsRef<Path>, content: Vec<u8>) {
-        self.write_file_internal(path, content, true).unwrap()
+        self.write_file_internal(path, content, true).expect("write_file_internal should be present")
     }
 
     pub async fn insert_symlink(&self, path: impl AsRef<Path>, target: PathBuf) {
@@ -1825,7 +1825,7 @@ impl FakeFs {
                     Ok(())
                 }
             })
-            .unwrap();
+            .expect("value should be present");
         state.emit_event([(path, Some(PathEventKind::Created))]);
     }
 
@@ -1988,7 +1988,7 @@ impl FakeFs {
             async move {
                 match tree {
                     Object(map) => {
-                        this.create_dir(&path).await.unwrap();
+                        this.create_dir(&path).await.expect("value should be present");
                         for (name, contents) in map {
                             let mut path = PathBuf::from(path.as_ref());
                             path.push(name);
@@ -1996,7 +1996,7 @@ impl FakeFs {
                         }
                     }
                     Null => {
-                        this.create_dir(&path).await.unwrap();
+                        this.create_dir(&path).await.expect("value should be present");
                     }
                     String(contents) => {
                         this.insert_file(&path, contents.into_bytes()).await;
@@ -2020,13 +2020,13 @@ impl FakeFs {
 
         async move {
             let path = path.as_ref();
-            if std::fs::metadata(&src_path).unwrap().is_file() {
-                let contents = std::fs::read(src_path).unwrap();
+            if std::fs::metadata(&src_path).expect("metadata should be present").is_file() {
+                let contents = std::fs::read(src_path).expect("read should be present");
                 self.insert_file(path, contents).await;
             } else {
-                self.create_dir(path).await.unwrap();
-                for entry in std::fs::read_dir(&src_path).unwrap() {
-                    let entry = entry.unwrap();
+                self.create_dir(path).await.expect("value should be present");
+                for entry in std::fs::read_dir(&src_path).expect("I/O should succeed") {
+                    let entry = entry.expect("value should be present");
                     self.insert_tree_from_real_fs(path.join(entry.file_name()), entry.path())
                         .await;
                 }
@@ -2080,7 +2080,7 @@ impl FakeFs {
                     .and_then(|content| content.strip_prefix("gitdir:"))
                     .context("not a valid gitfile")?
                     .trim();
-                git_dir_path.insert(normalize_path(&dot_git.parent().unwrap().join(path)))
+                git_dir_path.insert(normalize_path(&dot_git.parent().expect("path should have the expected component").join(path)))
             }
             .clone();
             let Some((git_dir_entry, canonical_path)) = state.try_entry(&path, true) else {
@@ -2141,7 +2141,7 @@ impl FakeFs {
             state.branches.extend(branch.clone());
             state.current_branch_name = branch
         })
-        .unwrap();
+        .expect("value should be present");
     }
 
     pub fn set_remote_for_repo(
@@ -2153,7 +2153,7 @@ impl FakeFs {
         self.with_git_state(dot_git, true, |state| {
             state.remotes.insert(name.into(), url.into());
         })
-        .unwrap();
+        .expect("value should be present");
     }
 
     pub fn insert_branches(&self, dot_git: &Path, branches: &[&str]) {
@@ -2167,7 +2167,7 @@ impl FakeFs {
                 .branches
                 .extend(branches.iter().map(ToString::to_string));
         })
-        .unwrap();
+        .expect("value should be present");
     }
 
     pub async fn add_linked_worktree_for_repo(
@@ -2190,25 +2190,25 @@ impl FakeFs {
                 .refs
                 .insert(ref_name.to_string(), worktree.sha.to_string());
         })
-        .unwrap();
+        .expect("value should be present");
 
         // Create .git/worktrees/<name>/ directory with HEAD, commondir, and gitdir.
         let worktrees_entry_dir = dot_git.join("worktrees").join(branch_name);
-        self.create_dir(&worktrees_entry_dir).await.unwrap();
+        self.create_dir(&worktrees_entry_dir).await.expect("value should be present");
 
         self.write_file_internal(
             worktrees_entry_dir.join("HEAD"),
             format!("ref: {ref_name}").into_bytes(),
             false,
         )
-        .unwrap();
+        .expect("value should be present");
 
         self.write_file_internal(
             worktrees_entry_dir.join("commondir"),
             dot_git.to_string_lossy().into_owned().into_bytes(),
             false,
         )
-        .unwrap();
+        .expect("value should be present");
 
         let worktree_dot_git = worktree.path.join(".git");
         self.write_file_internal(
@@ -2216,20 +2216,20 @@ impl FakeFs {
             worktree_dot_git.to_string_lossy().into_owned().into_bytes(),
             false,
         )
-        .unwrap();
+        .expect("value should be present");
 
         // Create the worktree checkout directory with a .git file pointing back.
-        self.create_dir(&worktree.path).await.unwrap();
+        self.create_dir(&worktree.path).await.expect("value should be present");
 
         self.write_file_internal(
             &worktree_dot_git,
             format!("gitdir: {}", worktrees_entry_dir.display()).into_bytes(),
             false,
         )
-        .unwrap();
+        .expect("value should be present");
 
         if emit_git_event {
-            self.with_git_state(dot_git, true, |_| {}).unwrap();
+            self.with_git_state(dot_git, true, |_| {}).expect("with_git_state should be present");
         }
     }
 
@@ -2246,8 +2246,8 @@ impl FakeFs {
         let gitdir_content = self
             .load_internal(worktrees_entry_dir.join("gitdir"))
             .await
-            .unwrap();
-        let gitdir_str = String::from_utf8(gitdir_content).unwrap();
+            .expect("value should be present");
+        let gitdir_str = String::from_utf8(gitdir_content).expect("from_utf8 should be present");
         let worktree_path = PathBuf::from(gitdir_str.trim())
             .parent()
             .map(PathBuf::from)
@@ -2262,7 +2262,7 @@ impl FakeFs {
             },
         )
         .await
-        .unwrap();
+        .expect("value should be present");
 
         // Remove the .git/worktrees/<name>/ directory.
         self.remove_dir(
@@ -2273,10 +2273,10 @@ impl FakeFs {
             },
         )
         .await
-        .unwrap();
+        .expect("value should be present");
 
         if emit_git_event {
-            self.with_git_state(dot_git, true, |_| {}).unwrap();
+            self.with_git_state(dot_git, true, |_| {}).expect("with_git_state should be present");
         }
     }
 
@@ -2293,7 +2293,7 @@ impl FakeFs {
                     .map(|(path, content)| (path.clone(), *content)),
             );
         })
-        .unwrap();
+        .expect("value should be present");
     }
 
     pub fn set_index_for_repo(&self, dot_git: &Path, index_state: &[(&str, String)]) {
@@ -2305,7 +2305,7 @@ impl FakeFs {
                     .map(|(path, content)| (repo_path(path), content.clone())),
             );
         })
-        .unwrap();
+        .expect("value should be present");
     }
 
     pub fn set_head_for_repo(
@@ -2323,7 +2323,7 @@ impl FakeFs {
             );
             state.refs.insert("HEAD".into(), sha.into());
         })
-        .unwrap();
+        .expect("value should be present");
     }
 
     pub fn set_head_and_index_for_repo(&self, dot_git: &Path, contents_by_path: &[(&str, String)]) {
@@ -2336,7 +2336,7 @@ impl FakeFs {
             );
             state.index_contents = state.head_contents.clone();
         })
-        .unwrap();
+        .expect("value should be present");
     }
 
     pub fn set_merge_base_content_for_repo(
@@ -2350,13 +2350,13 @@ impl FakeFs {
             state.merge_base_contents.clear();
             let oids = (1..)
                 .map(|n| n.to_string())
-                .map(|n| Oid::from_bytes(n.repeat(20).as_bytes()).unwrap());
+                .map(|n| Oid::from_bytes(n.repeat(20).as_bytes()).expect("value should be present"));
             for ((path, content), oid) in contents_by_path.iter().zip(oids) {
                 state.merge_base_contents.insert(repo_path(path), oid);
                 state.oids.insert(oid, content.clone());
             }
         })
-        .unwrap();
+        .expect("value should be present");
     }
 
     pub fn set_blame_for_repo(&self, dot_git: &Path, blames: Vec<(RepoPath, git::blame::Blame)>) {
@@ -2364,21 +2364,21 @@ impl FakeFs {
             state.blames.clear();
             state.blames.extend(blames);
         })
-        .unwrap();
+        .expect("value should be present");
     }
 
     pub fn set_graph_commits(&self, dot_git: &Path, commits: Vec<Arc<InitialGraphCommitData>>) {
         self.with_git_state(dot_git, true, |state| {
             state.graph_commits = commits;
         })
-        .unwrap();
+        .expect("with_git_state should be present");
     }
 
     pub fn set_graph_error(&self, dot_git: &Path, error: Option<String>) {
         self.with_git_state(dot_git, true, |state| {
             state.simulated_graph_error = error;
         })
-        .unwrap();
+        .expect("with_git_state should be present");
     }
 
     pub fn set_commit_data(
@@ -2401,13 +2401,13 @@ impl FakeFs {
                 })
                 .collect();
         })
-        .unwrap();
+        .expect("value should be present");
     }
 
     /// Put the given git repository into a state with the given status,
     /// by mutating the head, index, and unmerged state.
     pub fn set_status_for_repo(&self, dot_git: &Path, statuses: &[(&str, FileStatus)]) {
-        let workdir_path = dot_git.parent().unwrap();
+        let workdir_path = dot_git.parent().expect("path should have the expected component");
         let workdir_contents = self.files_with_contents(workdir_path);
         self.with_git_state(dot_git, true, |state| {
             state.index_contents.clear();
@@ -2416,7 +2416,7 @@ impl FakeFs {
             for (path, content) in workdir_contents {
                 use util::{paths::PathStyle, rel_path::RelPath};
 
-                let repo_path = RelPath::new(path.strip_prefix(&workdir_path).unwrap(), PathStyle::local()).unwrap();
+                let repo_path = RelPath::new(path.strip_prefix(&workdir_path).expect("strip_prefix should be present"), PathStyle::local()).expect("value should be present");
                 let repo_path = RepoPath::from_rel_path(&repo_path);
                 let status = statuses
                     .iter()
@@ -2486,21 +2486,21 @@ impl FakeFs {
                     state.head_contents.insert(repo_path.clone(), content);
                 }
             }
-        }).unwrap();
+        }).expect("value should be present");
     }
 
     pub fn set_error_message_for_index_write(&self, dot_git: &Path, message: Option<String>) {
         self.with_git_state(dot_git, true, |state| {
             state.simulated_index_write_error_message = message;
         })
-        .unwrap();
+        .expect("with_git_state should be present");
     }
 
     pub fn set_create_worktree_error(&self, dot_git: &Path, message: Option<String>) {
         self.with_git_state(dot_git, true, |state| {
             state.simulated_create_worktree_error = message;
         })
-        .unwrap();
+        .expect("with_git_state should be present");
     }
 
     /// Makes subsequent `remove_dir` calls for `path` fail with `message`.
@@ -2678,7 +2678,7 @@ impl FakeFs {
         let parent_entry = state.entry(parent_path)?;
         let entry = parent_entry
             .dir_entries(parent_path)?
-            .entry(base_name.to_str().unwrap().into());
+            .entry(base_name.to_str().expect("path should be valid UTF-8").into());
 
         let removed = match entry {
             btree_map::Entry::Vacant(_) => {
@@ -2713,12 +2713,12 @@ impl FakeFs {
 
         let path = normalize_path(path);
         let parent_path = path.parent().context("cannot remove the root")?;
-        let base_name = path.file_name().unwrap();
+        let base_name = path.file_name().expect("path should have the expected component");
         let mut state = self.state.lock();
         let parent_entry = state.entry(parent_path)?;
         let entry = parent_entry
             .dir_entries(parent_path)?
-            .entry(base_name.to_str().unwrap().into());
+            .entry(base_name.to_str().expect("path should be valid UTF-8").into());
         let removed = match entry {
             btree_map::Entry::Vacant(_) => {
                 if !options.ignore_if_not_exists {
@@ -2783,7 +2783,7 @@ impl Watcher for FakeWatcher {
         let path = normalize_path(path);
         self.fs_state
             .try_lock()
-            .unwrap()
+            .expect("lock should not be poisoned")
             .create_file_before_watch_add(&path)?;
 
         let mut prefixes = self.prefixes.lock();
@@ -2793,7 +2793,7 @@ impl Watcher for FakeWatcher {
 
         self.fs_state
             .try_lock()
-            .unwrap()
+            .expect("lock should not be poisoned")
             .event_txs
             .push((path.clone(), self.tx.clone()));
         prefixes.push(path);
@@ -2805,7 +2805,7 @@ impl Watcher for FakeWatcher {
         self.prefixes.lock().retain(|prefix| prefix != &path);
         self.fs_state
             .try_lock()
-            .unwrap()
+            .expect("lock should not be poisoned")
             .event_txs
             .retain(|(watched_path, _)| watched_path != &path);
         Ok(())
@@ -2928,7 +2928,7 @@ impl Fs for FakeFs {
                     Ok(())
                 }
             })
-            .unwrap();
+            .expect("value should be present");
         state.emit_event([(path, Some(PathEventKind::Created))]);
 
         Ok(())
@@ -2957,7 +2957,7 @@ impl Fs for FakeFs {
                 let path = path.join(entry.path()?.as_ref());
                 let mut bytes = Vec::new();
                 entry.read_to_end(&mut bytes).await?;
-                self.create_dir(path.parent().unwrap()).await?;
+                self.create_dir(path.parent().expect("path should have the expected component")).await?;
                 self.write_file_internal(&path, bytes, true)?;
             }
         }
@@ -3027,7 +3027,7 @@ impl Fs for FakeFs {
                     unreachable!()
                 }
             })
-            .unwrap();
+            .expect("value should be present");
 
         state.emit_event([
             (old_path, Some(PathEventKind::Removed)),
@@ -3089,7 +3089,7 @@ impl Fs for FakeFs {
     async fn trash(&self, path: &Path, options: RemoveOptions) -> Result<TrashedEntry> {
         let normalized_path = normalize_path(path);
         let parent_path = normalized_path.parent().context("cannot remove the root")?;
-        let base_name = normalized_path.file_name().unwrap();
+        let base_name = normalized_path.file_name().expect("path should have the expected component");
         let result = if self.is_dir(path).await {
             self.remove_dir_inner(path, options).await?
         } else {
@@ -3099,8 +3099,8 @@ impl Fs for FakeFs {
         match result {
             Some(fake_entry) => {
                 let trashed_entry = TrashedEntry {
-                    id: base_name.to_str().unwrap().into(),
-                    name: base_name.to_str().unwrap().into(),
+                    id: base_name.to_str().expect("path should be valid UTF-8").into(),
+                    name: base_name.to_str().expect("path should be valid UTF-8").into(),
                     original_parent: parent_path.to_path_buf(),
                 };
 
@@ -3327,7 +3327,7 @@ impl Fs for FakeFs {
             false,
             |_, repository_dir_path, common_dir_path| {
                 Arc::new(fake_git_repo::FakeGitRepository {
-                    fs: self.this.upgrade().unwrap(),
+                    fs: self.this.upgrade().expect("entity should be alive"),
                     executor: self.executor.clone(),
                     dot_git_path: abs_dot_git.to_path_buf(),
                     repository_dir_path: repository_dir_path.to_owned(),
@@ -3414,7 +3414,7 @@ impl Fs for FakeFs {
 
     #[cfg(feature = "test-support")]
     fn as_fake(&self) -> Arc<FakeFs> {
-        self.this.upgrade().unwrap()
+        self.this.upgrade().expect("entity should be alive")
     }
 }
 

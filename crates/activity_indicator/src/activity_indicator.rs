@@ -396,7 +396,7 @@ impl ActivityIndicator {
                 let mut message = progress.title.clone().unwrap_or(progress_token.to_string());
 
                 if let Some(percentage) = progress.percentage {
-                    write!(&mut message, " ({}%)", percentage).unwrap();
+                    write!(&mut message, " ({}%)", percentage).expect("value should be present");
                 }
 
                 if let Some(progress_message) = progress.message.as_ref() {

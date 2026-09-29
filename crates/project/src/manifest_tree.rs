@@ -137,7 +137,7 @@ impl ManifestTree {
                 || path.components().count() + 1,
                 |root_path| {
                     path.strip_prefix(&root_path.path)
-                        .unwrap()
+                        .expect("strip_prefix should be present")
                         .components()
                         .count()
                 },

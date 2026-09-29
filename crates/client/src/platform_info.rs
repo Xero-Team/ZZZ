@@ -3,7 +3,7 @@ use regex::Regex;
 
 #[cfg(target_os = "macos")]
 static MACOS_VERSION_REGEX: std::sync::LazyLock<Regex> =
-    std::sync::LazyLock::new(|| Regex::new(r"(\s*\(Build [^)]*[0-9]\))").unwrap());
+    std::sync::LazyLock::new(|| Regex::new(r"(\s*\(Build [^)]*[0-9]\))").expect("valid regex literal"));
 
 pub fn os_name() -> String {
     #[cfg(target_os = "macos")]

@@ -182,7 +182,7 @@ impl WslRemoteConnection {
             paths::remote_server_binary_name(release_channel.dev_name(), &version_str, false);
 
         let dst_path =
-            paths::remote_server_dir_relative().join(RelPath::unix(&binary_name).unwrap());
+            paths::remote_server_dir_relative().join(RelPath::unix(&binary_name).expect("path should be a valid relative path"));
 
         if let Some(parent) = dst_path.parent() {
             let parent = parent.display(PathStyle::Posix);
@@ -210,9 +210,9 @@ impl WslRemoteConnection {
                 &RelPath::unix(&format!(
                     "download-{}-{}",
                     std::process::id(),
-                    remote_server_path.file_name().unwrap().to_string_lossy()
+                    remote_server_path.file_name().expect("path should have the expected component").to_string_lossy()
                 ))
-                .unwrap(),
+                .expect("value should be present"),
             );
             self.upload_file(&remote_server_path, &tmp_path, delegate, cx)
                 .await?;
@@ -231,7 +231,7 @@ impl WslRemoteConnection {
                 dst_path.display(PathStyle::Posix),
                 std::process::id()
             );
-            let tmp_path = RelPath::unix(&tmp_path).unwrap();
+            let tmp_path = RelPath::unix(&tmp_path).expect("path should be a valid relative path");
             self.upload_file(embedded.path(), &tmp_path, delegate, cx)
                 .await?;
             self.extract_and_install(&tmp_path, &dst_path, delegate, cx)

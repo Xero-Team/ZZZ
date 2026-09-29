@@ -521,7 +521,7 @@ pub async fn wsl_kernel_specifications(
         return Ok(Vec::new());
     }
 
-    let output = output.unwrap();
+    let output = output.expect("value should be present");
     if !output.status.success() {
         return Ok(Vec::new());
     }

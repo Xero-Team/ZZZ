@@ -438,7 +438,7 @@ impl Member {
 
     fn last_pane(&self) -> Entity<Pane> {
         match self {
-            Member::Axis(axis) => axis.members.last().unwrap().last_pane(),
+            Member::Axis(axis) => axis.members.last().expect("collection should not be empty").last_pane(),
             Member::Pane(pane) => pane.clone(),
         }
     }
@@ -1283,7 +1283,7 @@ mod element {
             cx: &mut App,
         ) -> PaneAxisLayout {
             let dragged_handle = window.with_element_state::<Rc<RefCell<Option<usize>>>, _>(
-                global_id.unwrap(),
+                global_id.expect("value should be present"),
                 |state, _cx| {
                     let state = state.unwrap_or_else(|| Rc::new(RefCell::new(None)));
                     (state.clone(), state)

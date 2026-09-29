@@ -4535,7 +4535,7 @@ impl RepositorySnapshot {
         PathBuf::from(
             self.path_style
                 .join(&self.work_directory_abs_path, repo_path.as_ref())
-                .unwrap(),
+                .expect("value should be present"),
         )
     }
 
@@ -8767,7 +8767,7 @@ fn get_permalink_in_rust_registry_src(
     let manifest = toml::from_str::<CargoToml>(&cargo_toml)?;
     let (provider, remote) = parse_git_remote_url(provider_registry, &manifest.package.repository)
         .context("parsing package.repository field of manifest")?;
-    let path = PathBuf::from(cargo_vcs_info.path_in_vcs).join(path.strip_prefix(dir).unwrap());
+    let path = PathBuf::from(cargo_vcs_info.path_in_vcs).join(path.strip_prefix(dir).expect("strip_prefix should be present"));
     let permalink = provider.build_permalink(
         remote,
         BuildPermalinkParams::new(
@@ -9772,7 +9772,7 @@ async fn compute_snapshot(
         async move {
             backend
                 .status(&[RepoPath::from_rel_path(
-                    &RelPath::new(".".as_ref(), PathStyle::local()).unwrap(),
+                    &RelPath::new(".".as_ref(), PathStyle::local()).expect("value should be present"),
                 )])
                 .await
                 .log_err()

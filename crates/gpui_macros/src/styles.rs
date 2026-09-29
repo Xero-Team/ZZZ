@@ -721,7 +721,7 @@ fn generate_custom_value_setter(
     let method_name = format_ident!("{}", prefix);
 
     let mut iter = fields.iter();
-    let last = iter.next_back().unwrap();
+    let last = iter.next_back().expect("iterator should yield an item");
     let field_assignments = iter
         .map(|field_tokens| {
             quote! {

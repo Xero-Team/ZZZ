@@ -279,7 +279,7 @@ impl KeymapFile {
                     "\n\n - Unrecognized fields: {}",
                     MarkdownInlineCode(&format!("{:?}", unrecognized_fields.keys()))
                 )
-                .unwrap();
+                .expect("value should be present");
             }
 
             if let Some(unbind) = unbind {
@@ -297,7 +297,7 @@ impl KeymapFile {
                         }
                         Err(err) => {
                             let mut lines = err.lines();
-                            let mut indented_err = lines.next().unwrap().to_owned();
+                            let mut indented_err = lines.next().expect("iterator should yield an item").to_owned();
                             for line in lines {
                                 indented_err.push_str("  ");
                                 indented_err.push_str(line);
@@ -308,7 +308,7 @@ impl KeymapFile {
                                 "\n\n- In unbind {}, {indented_err}",
                                 MarkdownInlineCode(&format!("\"{}\"", keystrokes))
                             )
-                            .unwrap();
+                            .expect("value should be present");
                         }
                     }
                 }
@@ -329,7 +329,7 @@ impl KeymapFile {
                         }
                         Err(err) => {
                             let mut lines = err.lines();
-                            let mut indented_err = lines.next().unwrap().to_owned();
+                            let mut indented_err = lines.next().expect("iterator should yield an item").to_owned();
                             for line in lines {
                                 indented_err.push_str("  ");
                                 indented_err.push_str(line);
@@ -340,7 +340,7 @@ impl KeymapFile {
                                 "\n\n- In binding {}, {indented_err}",
                                 MarkdownInlineCode(&format!("\"{}\"", keystrokes))
                             )
-                            .unwrap();
+                            .expect("value should be present");
                         }
                     }
                 }

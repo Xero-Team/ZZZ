@@ -740,7 +740,7 @@ fn display_key(key: &str, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[cfg(target_os = "macos")]
         "platform" => '⌘',
 
-        key if key.len() == 1 => key.chars().next().unwrap().to_ascii_uppercase(),
+        key if key.len() == 1 => key.chars().next().expect("iterator should yield an item").to_ascii_uppercase(),
         key => return f.write_str(key),
     };
     f.write_char(key)

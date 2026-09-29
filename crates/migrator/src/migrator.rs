@@ -85,7 +85,7 @@ fn run_migrations(text: &str, migrations: &[MigrationType]) -> Result<Option<Str
                 }
                 let old_content: serde_json_lenient::Value =
                     parse_json_with_comments(&current_text)?;
-                let old_value = serde_json::to_value(&old_content).unwrap();
+                let old_value = serde_json::to_value(&old_content).expect("converting to a JSON value cannot fail");
                 let mut new_value = old_value.clone();
                 callback(&mut new_value)?;
                 if new_value == old_value {
@@ -291,7 +291,7 @@ macro_rules! define_query {
                     .map(|pattern| pattern.0)
                     .collect::<String>(),
             )
-            .unwrap()
+            .expect("value should be present")
         });
     };
 }
@@ -414,7 +414,7 @@ static EDIT_PREDICTION_SETTINGS_MIGRATION_QUERY: LazyLock<Query> = LazyLock::new
         &tree_sitter_json::LANGUAGE.into(),
         SETTINGS_NESTED_KEY_VALUE_PATTERN,
     )
-    .unwrap()
+    .expect("value should be present")
 });
 
 #[cfg(test)]

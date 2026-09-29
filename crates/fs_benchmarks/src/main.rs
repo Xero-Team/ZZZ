@@ -17,7 +17,7 @@ fn main() {
             if let Err(e) = result {
                 println!("Failed `load_bytes` after {elapsed:?} with error `{e}`");
             } else {
-                println!("Took {elapsed:?} to read {} bytes", result.unwrap().len());
+                println!("Took {elapsed:?} to read {} bytes", result.expect("value should be present").len());
             };
             let timer = std::time::Instant::now();
             let result = fs.metadata(path_to_read.as_ref()).await;

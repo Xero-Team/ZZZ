@@ -163,7 +163,7 @@ impl TestApp {
                 },
                 |window, cx| cx.new(|cx| build_view(window, cx)),
             )
-            .unwrap()
+            .expect("value should be present")
         });
 
         TestAppWindow {
@@ -182,7 +182,7 @@ impl TestApp {
     ) -> TestAppWindow<V> {
         let handle = self.update(|cx| {
             cx.open_window(options, |window, cx| cx.new(|cx| build_view(window, cx)))
-                .unwrap()
+                .expect("value should be present")
         });
 
         TestAppWindow {
@@ -377,19 +377,19 @@ impl<V: 'static + Render> TestAppWindow<V> {
             // TODO: expose title through Window API
             None
         })
-        .unwrap()
+        .expect("read_window should be present")
     }
 
     /// Simulate a keystroke.
     pub fn simulate_keystroke(&mut self, keystroke: &str) {
-        let keystroke = Keystroke::parse(keystroke).unwrap();
+        let keystroke = Keystroke::parse(keystroke).expect("parse should be present");
         {
             let mut app = self.app.borrow_mut();
             let any_handle: AnyWindowHandle = self.handle.into();
             app.update_window(any_handle, |_, window, cx| {
                 window.dispatch_keystroke(keystroke, cx);
             })
-            .unwrap();
+            .expect("value should be present");
         }
         self.background_executor.run_until_parked();
     }
@@ -463,7 +463,7 @@ impl<V: 'static + Render> TestAppWindow<V> {
             app.update_window(any_handle, |_, window, cx| {
                 window.dispatch_event(platform_input, cx);
             })
-            .unwrap();
+            .expect("value should be present");
         }
         self.background_executor.run_until_parked();
     }
@@ -506,7 +506,7 @@ impl<V: 'static + Render> TestAppWindow<V> {
         app.update_window(any_handle, |_, window, cx| {
             window.draw(cx).clear();
         })
-        .unwrap();
+        .expect("value should be present");
     }
 }
 

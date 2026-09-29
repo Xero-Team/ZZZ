@@ -269,7 +269,7 @@ pub struct SettingsJsonSchemaParams<'a> {
 impl SettingsStore {
     pub fn new(cx: &mut App, default_settings: &str) -> Self {
         let (setting_file_updates_tx, mut setting_file_updates_rx) = mpsc::unbounded();
-        let default_settings = Self::parse_default_settings(default_settings).unwrap();
+        let default_settings = Self::parse_default_settings(default_settings).expect("parse_default_settings should be present");
         if !cx.has_global::<DefaultSemanticTokenRules>() {
             cx.set_global::<DefaultSemanticTokenRules>(
                 crate::parse_json_with_comments::<SemanticTokenRules>(
@@ -344,11 +344,11 @@ impl SettingsStore {
         let global_content = cx
             .foreground_executor()
             .block_on(global_settings_file_rx.next())
-            .unwrap();
+            .expect("value should be present");
         let user_content = cx
             .foreground_executor()
             .block_on(user_settings_file_rx.next())
-            .unwrap();
+            .expect("value should be present");
 
         let result = self.set_user_settings(&user_content, cx);
         settings_changed(SettingsFile::User, result, cx);
@@ -506,7 +506,7 @@ impl SettingsStore {
                 content,
                 ..Default::default()
             })
-            .unwrap();
+            .expect("serializing to JSON cannot fail");
             _ = this.set_user_settings(&new_text, cx);
         }
         trail(self, content, cx);
@@ -868,8 +868,8 @@ impl SettingsStore {
         let mut new_content = old_content.clone();
         update(&mut new_content.content);
 
-        let old_value = serde_json::to_value(&old_content).unwrap();
-        let new_value = serde_json::to_value(new_content).unwrap();
+        let old_value = serde_json::to_value(&old_content).expect("converting to a JSON value cannot fail");
+        let new_value = serde_json::to_value(new_content).expect("converting to a JSON value cannot fail");
 
         let mut key_path = Vec::new();
         let mut edits = Vec::new();
@@ -1049,7 +1049,7 @@ impl SettingsStore {
                 return Err(InvalidSettingsError::Tasks {
                     message: "Attempted to submit tasks into the settings store".to_owned(),
                     path: directory_path
-                        .join(RelPath::unix(task_file_name()).unwrap())
+                        .join(RelPath::unix(task_file_name()).expect("value should be present"))
                         .as_std_path()
                         .to_path_buf(),
                 });
@@ -1059,7 +1059,7 @@ impl SettingsStore {
                     message: "Attempted to submit debugger config into the settings store"
                         .to_owned(),
                     path: directory_path
-                        .join(RelPath::unix(task_file_name()).unwrap())
+                        .join(RelPath::unix(task_file_name()).expect("value should be present"))
                         .as_std_path()
                         .to_path_buf(),
                 });
@@ -1436,7 +1436,7 @@ impl SettingsStore {
             }
 
             for setting_value in self.setting_values.values_mut() {
-                let value = setting_value.from_settings(&project_settings_stack.last().unwrap());
+                let value = setting_value.from_settings(&project_settings_stack.last().expect("collection should not be empty"));
                 setting_value.set_local_value(*root_id, directory_path.clone(), value);
             }
         }
@@ -1473,7 +1473,7 @@ impl Default for SettingsParseResult {
 
 impl SettingsParseResult {
     pub fn unwrap(self) -> bool {
-        self.result().unwrap()
+        self.result().expect("result should be present")
     }
 
     pub fn expect(self, message: &str) -> bool {
@@ -1618,11 +1618,11 @@ impl<T: Settings> AnySettingValue for SettingValue<T> {
     }
 
     fn set_global_value(&mut self, value: Box<dyn Any>) {
-        self.global_value = Some(*value.downcast().unwrap());
+        self.global_value = Some(*value.downcast().expect("downcast should succeed"));
     }
 
     fn set_local_value(&mut self, root_id: WorktreeId, path: Arc<RelPath>, value: Box<dyn Any>) {
-        let value = *value.downcast().unwrap();
+        let value = *value.downcast().expect("downcast should succeed");
         match self
             .local_values
             .binary_search_by_key(&(root_id, &path), |e| (e.0, &e.1))
@@ -1811,7 +1811,7 @@ mod tests {
             .expect("default settings must be a JSON object");
         root.insert("dev".into(), serde_json::json!({ "auto_update": false }));
         root.insert("stable".into(), serde_json::json!({ "auto_update": true }));
-        let defaults_with_overrides = serde_json::to_string(&defaults).unwrap();
+        let defaults_with_overrides = serde_json::to_string(&defaults).expect("serializing to JSON cannot fail");
 
         let mut store = SettingsStore::new(cx, &defaults_with_overrides);
         store.register_setting::<AutoUpdateSetting>();
@@ -3074,8 +3074,8 @@ mod tests {
 
         assert_ne!(user_schema, project_schema);
 
-        let user_schema_str = serde_json::to_string(&user_schema).unwrap();
-        let project_schema_str = serde_json::to_string(&project_schema).unwrap();
+        let user_schema_str = serde_json::to_string(&user_schema).expect("serializing to JSON cannot fail");
+        let project_schema_str = serde_json::to_string(&project_schema).expect("serializing to JSON cannot fail");
 
         assert!(user_schema_str.contains("\"auto_update\""));
         assert!(!project_schema_str.contains("\"auto_update\""));

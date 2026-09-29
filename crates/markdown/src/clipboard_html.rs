@@ -437,7 +437,7 @@ impl ClipboardHtmlSerializer<'_> {
     ) -> Result<(), ClipboardHtmlError> {
         match &leaf.event {
             ClipboardLeafEvent::Text => {
-                let intersection = intersection(&leaf.range, &self.selection).unwrap();
+                let intersection = intersection(&leaf.range, &self.selection).expect("intersection should be present");
                 push_escaped_html(html, &self.parsed.source[intersection]);
             }
             ClipboardLeafEvent::SubstitutedText(text) => {
@@ -447,7 +447,7 @@ impl ClipboardHtmlSerializer<'_> {
                 push_escaped_html(html, text);
             }
             ClipboardLeafEvent::Code => {
-                let intersection = intersection(&leaf.range, &self.selection).unwrap();
+                let intersection = intersection(&leaf.range, &self.selection).expect("intersection should be present");
                 html.push_str("<code>");
                 push_escaped_html(html, &self.parsed.source[intersection]);
                 html.push_str("</code>");
@@ -504,7 +504,7 @@ impl ClipboardHtmlSerializer<'_> {
             }
             ClipboardNode::Leaf(leaf) => match &leaf.event {
                 ClipboardLeafEvent::Text | ClipboardLeafEvent::Code => {
-                    let intersection = intersection(&leaf.range, &self.selection).unwrap();
+                    let intersection = intersection(&leaf.range, &self.selection).expect("intersection should be present");
                     plain_text.push_str(&self.parsed.source[intersection]);
                 }
                 ClipboardLeafEvent::SubstitutedText(text) => {

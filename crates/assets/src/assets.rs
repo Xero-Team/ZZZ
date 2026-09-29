@@ -58,9 +58,9 @@ impl Assets {
     pub fn load_test_fonts(&self, cx: &App) {
         cx.text_system()
             .add_fonts(vec![
-                self.load("fonts/lilex/Lilex-Regular.ttf").unwrap().unwrap(),
+                self.load("fonts/lilex/Lilex-Regular.ttf").expect("load should be present").expect("expect should be present"),
             ])
-            .unwrap()
+            .expect("value should be present")
     }
 }
 

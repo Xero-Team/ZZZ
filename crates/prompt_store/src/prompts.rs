@@ -146,7 +146,7 @@ impl PromptBuilder {
             cx,
         }))
         .log_err()
-        .map_or_else(|| Arc::new(Self::new(None).unwrap()), Arc::new)
+        .map_or_else(|| Arc::new(Self::new(None).expect("value should be present")), Arc::new)
     }
 
     pub fn new(loading_params: Option<PromptLoadingParams>) -> Result<Self> {
@@ -240,7 +240,7 @@ impl PromptBuilder {
                     while let Some(Ok(file_path)) = entries.next().await {
                         if file_path.to_string_lossy().ends_with(".hbs")
                             && let Ok(content) = params.fs.load(&file_path).await {
-                                let file_name = file_path.file_stem().unwrap().to_string_lossy();
+                                let file_name = file_path.file_stem().expect("path should have the expected component").to_string_lossy();
                                 log::debug!("Registering prompt template override: {}", file_name);
                                 handlebars.lock().register_template_string(&file_name, content).log_err();
                             }
@@ -266,7 +266,7 @@ impl PromptBuilder {
                         if event.path.starts_with(&templates_dir) && event.path.extension().is_some_and(|ext| ext == "hbs") {
                             log::info!("Reloading prompt template override: {}", event.path.display());
                             if let Some(content) = params.fs.load(&event.path).await.log_err() {
-                                let file_name = event.path.file_stem().unwrap().to_string_lossy();
+                                let file_name = event.path.file_stem().expect("path should have the expected component").to_string_lossy();
                                 handlebars.lock().register_template_string(&file_name, content).log_err();
                             }
                         }

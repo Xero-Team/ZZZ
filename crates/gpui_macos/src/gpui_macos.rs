@@ -75,7 +75,7 @@ impl NSStringExt for id {
             if cstr.is_null() {
                 ""
             } else {
-                CStr::from_ptr(cstr.cast()).to_str().unwrap()
+                CStr::from_ptr(cstr.cast()).to_str().expect("path should be valid UTF-8")
             }
         }
     }

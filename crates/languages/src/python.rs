@@ -90,14 +90,14 @@ impl ManifestProvider for PyprojectTomlManifestProvider {
         let mut outermost_workspace_root = None;
 
         for path in path.ancestors().take(depth) {
-            let pyproject_path = path.join(RelPath::unix("pyproject.toml").unwrap());
+            let pyproject_path = path.join(RelPath::unix("pyproject.toml").expect("entry should be present"));
             if delegate.exists(&pyproject_path, Some(false)) {
                 if innermost_pyproject.is_none() {
                     innermost_pyproject = Some(Arc::from(path));
                 }
 
                 let has_lockfile = WORKSPACE_LOCKFILES.iter().any(|lockfile| {
-                    let lockfile_path = path.join(RelPath::unix(lockfile).unwrap());
+                    let lockfile_path = path.join(RelPath::unix(lockfile).expect("path should be a valid relative path"));
                     delegate.exists(&lockfile_path, Some(false))
                 });
                 if has_lockfile {
@@ -735,7 +735,7 @@ impl LspAdapter for PyrightLspAdapter {
                 if !user_settings.is_object() {
                     user_settings = Value::Object(serde_json::Map::default());
                 }
-                let object = user_settings.as_object_mut().unwrap();
+                let object = user_settings.as_object_mut().expect("value should have the expected type");
 
                 let interpreter_path = toolchain.path.to_string();
                 if let Some(venv_dir) = &env.environment.prefix {
@@ -769,7 +769,7 @@ impl LspAdapter for PyrightLspAdapter {
                         }
                     })
                     .or_insert(Value::Object(serde_json::Map::default()));
-                let python = python.as_object_mut().unwrap();
+                let python = python.as_object_mut().expect("value should have the expected type");
 
                 // Set both pythonPath and defaultInterpreterPath for compatibility
                 python.insert(
@@ -1902,7 +1902,7 @@ impl LspAdapter for PyLspAdapter {
                 if !user_settings.is_object() {
                     user_settings = Value::Object(serde_json::Map::default());
                 }
-                let object = user_settings.as_object_mut().unwrap();
+                let object = user_settings.as_object_mut().expect("value should have the expected type");
                 if let Some(python) = object
                     .entry("plugins")
                     .or_insert(Value::Object(serde_json::Map::default()))
@@ -2176,7 +2176,7 @@ impl LspAdapter for BasedPyrightLspAdapter {
                 if !user_settings.is_object() {
                     user_settings = Value::Object(serde_json::Map::default());
                 }
-                let object = user_settings.as_object_mut().unwrap();
+                let object = user_settings.as_object_mut().expect("value should have the expected type");
 
                 let interpreter_path = toolchain.path.to_string();
                 if let Some(venv_dir) = env.prefix {

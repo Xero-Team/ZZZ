@@ -53,7 +53,7 @@ where
                     .map_err(io::Error::from)?;
                 let buffer =
                     zstd::stream::encode_all(self.encoding_buffer.as_slice(), COMPRESSION_LEVEL)
-                        .unwrap();
+                        .expect("value should be present");
 
                 self.encoding_buffer.clear();
                 self.encoding_buffer.shrink_to(MAX_BUFFER_LEN);

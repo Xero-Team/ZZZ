@@ -449,9 +449,9 @@ impl LanguageServer {
             .spawn()
             .with_context(|| format!("failed to spawn command {command:?}",))?;
 
-        let stdin = server.stdin.take().unwrap();
-        let stdout = server.stdout.take().unwrap();
-        let stderr = server.stderr.take().unwrap();
+        let stdin = server.stdin.take().expect("entry should be present");
+        let stdout = server.stdout.take().expect("entry should be present");
+        let stderr = server.stderr.take().expect("entry should be present");
         let server = Self::new_internal(
             server_id,
             server_name,
@@ -470,7 +470,7 @@ impl LanguageServer {
                     "Language server with id {} sent unhandled notification {}:\n{}",
                     server_id,
                     notification.method,
-                    serde_json::to_string_pretty(&notification.params).unwrap(),
+                    serde_json::to_string_pretty(&notification.params).expect("serializing to JSON cannot fail"),
                 );
                 false
             },
@@ -754,7 +754,7 @@ impl LanguageServer {
             }
 
             content_len_buffer.clear();
-            write!(content_len_buffer, "{}", message.len()).unwrap();
+            write!(content_len_buffer, "{}", message.len()).expect("value should be present");
             stdin.write_all(CONTENT_LEN_HEADER.as_bytes()).await?;
             stdin.write_all(&content_len_buffer).await?;
             stdin.write_all(b"\r\n\r\n").await?;
@@ -1112,7 +1112,7 @@ impl LanguageServer {
         let outbound_tx = self.outbound_tx.clone();
         let executor = self.executor.clone();
         let notification_serializers = self.notification_tx.clone();
-        let mut output_done = self.output_done_rx.lock().take().unwrap();
+        let mut output_done = self.output_done_rx.lock().take().expect("entry should be present");
         let shutdown_request = Self::request_internal::<request::Shutdown>(
             &next_id,
             &response_handlers,
@@ -1627,7 +1627,7 @@ impl LanguageServer {
                 method: T::METHOD,
                 params,
             })
-            .unwrap()
+            .expect("serializing to JSON cannot fail")
         }));
 
         outbound_tx.send_blocking(serializer)?;
@@ -2436,7 +2436,7 @@ mod tests {
             result: None,
         };
         assert_eq!(
-            serde_json::to_string(&response).unwrap(),
+            serde_json::to_string(&response).expect("serializing to JSON cannot fail"),
             "{\"jsonrpc\":\"2.0\",\"id\":0,\"error\":{\"code\":-32601,\"message\":\"Unrecognized method\",\"data\":null}}"
         );
     }
@@ -2450,7 +2450,7 @@ mod tests {
             value: LspResult::Ok(None),
         };
         assert_eq!(
-            serde_json::to_string(&no_tag).unwrap(),
+            serde_json::to_string(&no_tag).expect("serializing to JSON cannot fail"),
             "{\"jsonrpc\":\"\",\"id\":0,\"result\":null}"
         );
         let no_tag = Response::<u32> {
@@ -2459,7 +2459,7 @@ mod tests {
             value: LspResult::Error(None),
         };
         assert_eq!(
-            serde_json::to_string(&no_tag).unwrap(),
+            serde_json::to_string(&no_tag).expect("serializing to JSON cannot fail"),
             "{\"jsonrpc\":\"\",\"id\":0,\"error\":null}"
         );
     }

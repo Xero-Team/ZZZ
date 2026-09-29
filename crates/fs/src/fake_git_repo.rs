@@ -358,7 +358,7 @@ impl GitRepository for FakeGitRepository {
     }
 
     fn status(&self, path_prefixes: &[RepoPath]) -> Task<Result<GitStatus>> {
-        let workdir_path = self.dot_git_path.parent().unwrap();
+        let workdir_path = self.dot_git_path.parent().expect("path should have the expected component");
 
         // Load gitignores
         let ignores = workdir_path
@@ -395,7 +395,7 @@ impl GitRepository for FakeGitRepository {
                     .fs
                     .read_file_sync(path)
                     .ok()
-                    .map(|content| String::from_utf8(content).unwrap())?;
+                    .map(|content| String::from_utf8(content).expect("from_utf8 should be present"))?;
                 let repo_path = RelPath::new(repo_path, PathStyle::local()).ok()?;
                 Some((RepoPath::from_rel_path(&repo_path), (content, is_ignored)))
             })
@@ -982,7 +982,7 @@ impl GitRepository for FakeGitRepository {
                     let abs_path = self
                         .dot_git_path
                         .parent()
-                        .unwrap()
+                        .expect("path should have the expected component")
                         .join(&path.as_std_path());
                     Box::pin(async move { (path.clone(), self.fs.load(&abs_path).await.ok()) })
                 })
@@ -1180,7 +1180,7 @@ impl GitRepository for FakeGitRepository {
 
         let path_prefixes = path_prefixes.to_vec();
 
-        let workdir_path = self.dot_git_path.parent().unwrap().to_path_buf();
+        let workdir_path = self.dot_git_path.parent().expect("path should have the expected component").to_path_buf();
         let worktree_files: HashMap<RepoPath, String> = self
             .fs
             .files()
@@ -1260,7 +1260,7 @@ impl GitRepository for FakeGitRepository {
         let executor = self.executor.clone();
         let fs = self.fs.clone();
         let checkpoints = self.checkpoints.clone();
-        let repository_dir_path = self.repository_dir_path.parent().unwrap().to_path_buf();
+        let repository_dir_path = self.repository_dir_path.parent().expect("path should have the expected component").to_path_buf();
         async move {
             executor.simulate_random_delay().await;
             let oid = git::Oid::random(&mut *executor.rng().lock());
@@ -1275,7 +1275,7 @@ impl GitRepository for FakeGitRepository {
         let executor = self.executor.clone();
         let fs = self.fs.clone();
         let checkpoints = self.checkpoints.clone();
-        let repository_dir_path = self.repository_dir_path.parent().unwrap().to_path_buf();
+        let repository_dir_path = self.repository_dir_path.parent().expect("path should have the expected component").to_path_buf();
         async move {
             executor.simulate_random_delay().await;
             let checkpoints = checkpoints.lock();
@@ -1292,7 +1292,7 @@ impl GitRepository for FakeGitRepository {
         let executor = self.executor.clone();
         let fs = self.fs.clone();
         let checkpoints = self.checkpoints.clone();
-        let repository_dir_path = self.repository_dir_path.parent().unwrap().to_path_buf();
+        let repository_dir_path = self.repository_dir_path.parent().expect("path should have the expected component").to_path_buf();
         async move {
             executor.simulate_random_delay().await;
             let staged_oid = git::Oid::random(&mut *executor.rng().lock());

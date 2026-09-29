@@ -121,7 +121,7 @@ impl Settings for RemoteSettings {
         Self {
             ssh_connections: remote.ssh_connections.clone().unwrap_or_default().into(),
             wsl_connections: remote.wsl_connections.clone().unwrap_or_default().into(),
-            read_ssh_config: remote.read_ssh_config.unwrap(),
+            read_ssh_config: remote.read_ssh_config.expect("read_ssh_config should be present"),
         }
     }
 }

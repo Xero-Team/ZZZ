@@ -459,7 +459,7 @@ impl DebugAdapter for FakeAdapter {
     }
 
     async fn config_from_zzz_format(&self, zzz_scenario: ZZZDebugConfig) -> Result<DebugScenario> {
-        let config = serde_json::to_value(zzz_scenario.request).unwrap();
+        let config = serde_json::to_value(zzz_scenario.request).expect("converting to a JSON value cannot fail");
 
         Ok(DebugScenario {
             adapter: zzz_scenario.adapter,

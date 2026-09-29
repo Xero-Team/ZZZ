@@ -147,7 +147,7 @@ impl Element for AnyView {
             }
 
             window.with_element_state::<AnyViewState, _>(
-                global_id.unwrap(),
+                global_id.expect("value should be present"),
                 |element_state, window| {
                     let content_mask = window.content_mask();
                     let text_style = window.text_style();
@@ -213,9 +213,9 @@ impl Element for AnyView {
             let caching_disabled = window.is_inspector_picking(cx);
             if self.cached_style.is_some() && !caching_disabled {
                 window.with_element_state::<AnyViewState, _>(
-                    global_id.unwrap(),
+                    global_id.expect("value should be present"),
                     |element_state, window| {
-                        let mut element_state = element_state.unwrap();
+                        let mut element_state = element_state.expect("value should be present");
 
                         let paint_start = window.paint_index();
 
@@ -234,7 +234,7 @@ impl Element for AnyView {
                     },
                 )
             } else {
-                element.as_mut().unwrap().paint(window, cx);
+                element.as_mut().expect("value should have the expected type").paint(window, cx);
             }
         });
     }
@@ -305,7 +305,7 @@ mod any_view {
         window: &mut Window,
         cx: &mut App,
     ) -> AnyElement {
-        let view = view.clone().downcast::<V>().unwrap();
+        let view = view.clone().downcast::<V>().expect("downcast should succeed");
         view.update(cx, |view, cx| view.render(window, cx).into_any_element())
     }
 }

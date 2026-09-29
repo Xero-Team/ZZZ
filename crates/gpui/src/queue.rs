@@ -284,7 +284,7 @@ impl<T> PriorityQueueReceiver<T> {
     ///
     /// If the sender was dropped
     pub fn pop(&mut self) -> Result<T, RecvError> {
-        self.pop_inner(true).map(|e| e.unwrap())
+        self.pop_inner(true).map(|e| e.expect("value should be present"))
     }
 
     /// Returns an iterator over the elements of the queue

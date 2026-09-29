@@ -24,7 +24,7 @@ static DEFAULT_DIGRAPHS_MAP: LazyLock<HashMap<String, Arc<str>>> = LazyLock::new
     let mut map = HashMap::default();
     for &(a, b, c) in default::DEFAULT_DIGRAPHS {
         let key = format!("{a}{b}");
-        let value = char::from_u32(c).unwrap().to_string().into();
+        let value = char::from_u32(c).expect("from_u32 should be present").to_string().into();
         map.insert(key, value);
     }
     map
@@ -136,7 +136,7 @@ impl Vim {
                 }
             }
             Some('x' | 'X' | 'u' | 'U') => {
-                let max_len = match first.unwrap() {
+                let max_len = match first.expect("value should be present") {
                     'x' => 3,
                     'X' => 3,
                     'u' => 5,

@@ -181,7 +181,7 @@ impl WrapRows<'_> {
         }
         self.soft_wrapped = self.transforms.item().is_some_and(|t| !t.is_isomorphic());
         self.input_buffer_rows.seek(input_row);
-        self.input_buffer_row = self.input_buffer_rows.next().unwrap();
+        self.input_buffer_row = self.input_buffer_rows.next().expect("iterator should yield an item");
         self.output_row = start_row;
     }
 }
@@ -497,7 +497,7 @@ impl WrapSnapshot {
 
             let mut tab_edits_iter = tab_edits.iter().peekable();
             new_transforms =
-                old_cursor.slice(&tab_edits_iter.peek().unwrap().old.start, Bias::Right);
+                old_cursor.slice(&tab_edits_iter.peek().expect("peek should be present").old.start, Bias::Right);
 
             while let Some(edit) = tab_edits_iter.next() {
                 if edit.new.start > TabPoint::from(new_transforms.summary().input.lines) {
@@ -598,7 +598,7 @@ impl WrapSnapshot {
             let mut old_cursor = self.transforms.cursor::<TabPoint>(());
 
             new_transforms = old_cursor.slice(
-                &TabPoint::new(row_edits.peek().unwrap().old_rows.start, 0),
+                &TabPoint::new(row_edits.peek().expect("peek should be present").old_rows.start, 0),
                 Bias::Right,
             );
 
@@ -912,7 +912,7 @@ impl WrapSnapshot {
         }
         let soft_wrapped = transforms.item().is_some_and(|t| !t.is_isomorphic());
         let mut input_buffer_rows = self.tab_snapshot.rows(input_row);
-        let input_buffer_row = input_buffer_rows.next().unwrap();
+        let input_buffer_row = input_buffer_rows.next().expect("iterator should yield an item");
         WrapRows {
             transforms,
             input_buffer_row,
@@ -1257,7 +1257,7 @@ impl Iterator for WrapRows<'_> {
         self.transforms
             .seek_forward(&WrapPoint::new(self.output_row, 0), Bias::Left);
         if self.transforms.item().is_some_and(|t| t.is_isomorphic()) {
-            self.input_buffer_row = self.input_buffer_rows.next().unwrap();
+            self.input_buffer_row = self.input_buffer_rows.next().expect("iterator should yield an item");
             self.soft_wrapped = false;
         } else {
             self.soft_wrapped = true;
@@ -1351,8 +1351,8 @@ impl SumTreeExt for SumTree<Transform> {
         let mut transform = Some(transform);
         self.update_last(
             |last_transform| {
-                if last_transform.is_isomorphic() && transform.as_ref().unwrap().is_isomorphic() {
-                    let transform = transform.take().unwrap();
+                if last_transform.is_isomorphic() && transform.as_ref().expect("value should have the expected type").is_isomorphic() {
+                    let transform = transform.take().expect("entry should be present");
                     last_transform.summary.input += &transform.summary.input;
                     last_transform.summary.output += &transform.summary.output;
                 }

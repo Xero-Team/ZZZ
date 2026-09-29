@@ -144,7 +144,7 @@ impl ProfileSelector {
             self.pending_refresh = false;
         }
 
-        self.picker.as_ref().unwrap().clone()
+        self.picker.as_ref().expect("value should have the expected type").clone()
     }
 }
 

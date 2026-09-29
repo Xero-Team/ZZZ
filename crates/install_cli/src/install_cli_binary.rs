@@ -25,7 +25,7 @@ const CANT_INSTALL_DOCS_URL: &str = "https://github.com/Xero-Team/ZZZ";
 async fn install_script(cx: &AsyncApp) -> Result<Option<PathBuf>> {
     let cli_path = cx.update(|cx| cx.path_for_auxiliary_executable("cli"))?;
     let link_path = Path::new("/usr/local/bin/zzz");
-    let bin_dir_path = link_path.parent().unwrap();
+    let bin_dir_path = link_path.parent().expect("path should have the expected component");
 
     // Don't re-create symlink if it points to the same CLI binary.
     if smol::fs::read_link(link_path).await.ok().as_ref() == Some(&cli_path) {

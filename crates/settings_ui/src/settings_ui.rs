@@ -333,7 +333,7 @@ impl SettingFieldRenderer {
                         .as_ref()
                         .as_any()
                         .downcast_ref::<SettingField<T>>()
-                        .unwrap();
+                        .expect("downcast should succeed");
                     renderer(
                         settings_window,
                         item,
@@ -2104,7 +2104,7 @@ impl SettingsWindow {
             }
         }
 
-        let search_index = self.search_index.as_ref().unwrap().clone();
+        let search_index = self.search_index.as_ref().expect("value should have the expected type").clone();
 
         self.search_task = Some(cx.spawn(async move |this, cx| {
             let exact_match_task = cx.background_spawn({

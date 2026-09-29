@@ -423,7 +423,7 @@ pub fn execute_run(
         .stack_size(10 * 1024 * 1024)
         .thread_name(|ix| format!("RayonWorker{}", ix))
         .build_global()
-        .unwrap();
+        .expect("entry should be present");
 
     #[cfg(unix)]
     let shell_env_loaded_rx = {
@@ -1054,7 +1054,7 @@ pub fn handle_settings_file_changes(
     let server_settings_content = cx
         .foreground_executor()
         .block_on(server_settings_file.next())
-        .unwrap();
+        .expect("value should be present");
     SettingsStore::update_global(cx, |store, cx| {
         store
             .set_server_settings(&server_settings_content, cx)

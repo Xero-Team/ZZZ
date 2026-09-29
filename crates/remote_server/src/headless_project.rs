@@ -661,8 +661,10 @@ impl HeadlessProject {
         let file = loaded_file.file;
 
         let proto_file = worktree.read_with(&cx, |_worktree, cx| file.to_proto(cx));
-        let image_id =
-            ImageId::from(NonZeroU64::new(NEXT_ID.fetch_add(1, Ordering::Relaxed)).unwrap());
+        let image_id = ImageId::from(
+            NonZeroU64::new(NEXT_ID.fetch_add(1, Ordering::Relaxed))
+                .expect("image id counter starts at one"),
+        );
 
         let format = image::guess_format(&content).map_or_else(
             |_| "unknown".to_owned(),

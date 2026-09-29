@@ -7,8 +7,10 @@ pub struct HighlightMap(Arc<[Option<HighlightId>]>);
 pub struct HighlightId(NonZeroU32);
 
 impl HighlightId {
-    pub const TABSTOP_INSERT_ID: HighlightId = HighlightId(NonZeroU32::new(u32::MAX - 1).unwrap());
-    pub const TABSTOP_REPLACE_ID: HighlightId = HighlightId(NonZeroU32::new(u32::MAX - 2).unwrap());
+    pub const TABSTOP_INSERT_ID: HighlightId =
+        HighlightId(NonZeroU32::new(u32::MAX - 1).expect("TABSTOP insert id is non-zero"));
+    pub const TABSTOP_REPLACE_ID: HighlightId =
+        HighlightId(NonZeroU32::new(u32::MAX - 2).expect("TABSTOP replace id is non-zero"));
 
     pub fn new(capture_id: u32) -> Self {
         Self(NonZeroU32::new(capture_id + 1).unwrap_or(NonZeroU32::MAX))

@@ -896,8 +896,8 @@ impl PlatformTextSystem for NoopTextSystem {
         let metrics = self.font_metrics(FontId(0));
         let em_width = font_size
             * self
-                .advance(FontId(0), self.glyph_for_char(FontId(0), 'm').unwrap())
-                .unwrap()
+                .advance(FontId(0), self.glyph_for_char(FontId(0), 'm').expect("value should be present"))
+                .expect("value should be present")
                 .width
             / metrics.units_per_em as f32;
         let mut glyphs = Vec::new();
@@ -2450,7 +2450,7 @@ impl ClipboardString {
     /// Return a new clipboard item with the metadata replaced by the given metadata,
     /// after serializing it as JSON.
     pub fn with_json_metadata<T: Serialize>(mut self, metadata: T) -> Self {
-        self.metadata = Some(serde_json::to_string(&metadata).unwrap());
+        self.metadata = Some(serde_json::to_string(&metadata).expect("serializing to JSON cannot fail"));
         self
     }
 

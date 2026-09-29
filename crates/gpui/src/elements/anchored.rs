@@ -137,7 +137,7 @@ impl Element for Anchored {
             .iter()
             .map(|id| window.layout_bounds(*id))
             .reduce(|acc, bounds| acc.union(&bounds))
-            .unwrap();
+            .expect("value should be present");
 
         let (origin, mut desired) = self.position_mode.get_position_and_bounds(
             self.anchor_position,

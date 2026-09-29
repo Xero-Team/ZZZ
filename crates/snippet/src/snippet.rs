@@ -182,7 +182,7 @@ fn parse_choices<'a>(
                     "Placeholder choice doesn't contain closing pipe-character '|'"
                 );
 
-                let (chunk, rest) = source.split_at(chunk_end.unwrap());
+                let (chunk, rest) = source.split_at(chunk_end.expect("value should be present"));
 
                 if !found_default_choice {
                     text.push_str(chunk);

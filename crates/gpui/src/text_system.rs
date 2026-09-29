@@ -867,13 +867,13 @@ pub struct LineWrapperHandle {
 impl Drop for LineWrapperHandle {
     fn drop(&mut self) {
         let mut state = self.text_system.wrapper_pool.lock();
-        let wrapper = self.wrapper.take().unwrap();
+        let wrapper = self.wrapper.take().expect("entry should be present");
         state
             .get_mut(&FontIdWithSize {
                 font_id: wrapper.font_id,
                 font_size: wrapper.font_size,
             })
-            .unwrap()
+            .expect("entry should be present")
             .push(wrapper);
     }
 }
@@ -882,13 +882,13 @@ impl Deref for LineWrapperHandle {
     type Target = LineWrapper;
 
     fn deref(&self) -> &Self::Target {
-        self.wrapper.as_ref().unwrap()
+        self.wrapper.as_ref().expect("value should have the expected type")
     }
 }
 
 impl DerefMut for LineWrapperHandle {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.wrapper.as_mut().unwrap()
+        self.wrapper.as_mut().expect("value should have the expected type")
     }
 }
 

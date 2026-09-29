@@ -493,6 +493,7 @@ mod tests {
             cx.update_global::<SettingsStore, _>(|store, cx| {
                 store.update_user_settings(cx, |settings| {
                     settings.editor.diff_view_style = Some(DiffViewStyle::Unified);
+                    settings.workspace.display_language = Some(settings::DisplayLanguage::En);
                 });
             });
             i18n::init(cx);

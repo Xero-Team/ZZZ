@@ -97,7 +97,7 @@ fn register_entry(
                     .map_or_else(
                         || {
                             RelPath::new(Path::new("untitled"), PathStyle::Posix)
-                                .unwrap()
+                                .expect("value should be present")
                                 .into_owned()
                                 .into()
                         },
@@ -108,7 +108,7 @@ fn register_entry(
                 RelPath::new(rel, PathStyle::local()).map_or_else(
                     |_| {
                         RelPath::new(Path::new("untitled"), PathStyle::Posix)
-                            .unwrap()
+                            .expect("value should be present")
                             .into_owned()
                             .into()
                     },

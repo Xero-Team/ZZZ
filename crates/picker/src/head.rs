@@ -20,7 +20,7 @@ impl Head {
         window: &mut Window,
         cx: &mut Context<V>,
     ) -> Self {
-        let editor = (ui_input::ERASED_EDITOR_FACTORY.get().unwrap())(window, cx);
+        let editor = (ui_input::ERASED_EDITOR_FACTORY.get().expect("entry should be present"))(window, cx);
 
         editor.set_placeholder_text(placeholder_text.as_ref(), window, cx);
         let this = cx.weak_entity();

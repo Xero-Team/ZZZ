@@ -114,7 +114,7 @@ pub fn ensure_only_instance() -> IsOnlyInstance {
                 _ = stream.write_all(instance_handshake().as_bytes());
             }
         })
-        .unwrap();
+        .expect("value should be present");
 
     IsOnlyInstance::Yes
 }
@@ -124,7 +124,7 @@ fn check_got_handshake() -> bool {
         Ok(mut stream) => {
             let mut buf = vec![0u8; instance_handshake().len()];
 
-            stream.set_read_timeout(Some(RECEIVE_TIMEOUT)).unwrap();
+            stream.set_read_timeout(Some(RECEIVE_TIMEOUT)).expect("value should be present");
             if let Err(err) = stream.read_exact(&mut buf) {
                 log::warn!("Connected to single instance port but failed to read: {err}");
                 return false;

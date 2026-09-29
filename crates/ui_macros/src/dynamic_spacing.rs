@@ -24,10 +24,10 @@ impl DynamicSpacingValue {
     fn variant_name(&self) -> syn::Ident {
         match self {
             DynamicSpacingValue::Single(n) => {
-                format_ident!("Base{:02}", n.base10_parse::<u32>().unwrap())
+                format_ident!("Base{:02}", n.base10_parse::<u32>().expect("value should be present"))
             }
             DynamicSpacingValue::Tuple(_, b, _) => {
-                format_ident!("Base{:02}", b.base10_parse::<u32>().unwrap())
+                format_ident!("Base{:02}", b.base10_parse::<u32>().expect("value should be present"))
             }
         }
     }
@@ -35,7 +35,7 @@ impl DynamicSpacingValue {
     fn doc_string(&self) -> String {
         match self {
             DynamicSpacingValue::Single(n) => {
-                let n = n.base10_parse::<f32>().unwrap();
+                let n = n.base10_parse::<f32>().expect("value should be present");
                 let compact = (n - 4.0).max(0.0);
                 let comfortable = n + 4.0;
                 format!(
@@ -44,9 +44,9 @@ impl DynamicSpacingValue {
                 )
             }
             DynamicSpacingValue::Tuple(a, b, c) => {
-                let a = a.base10_parse::<f32>().unwrap();
-                let b = b.base10_parse::<f32>().unwrap();
-                let c = c.base10_parse::<f32>().unwrap();
+                let a = a.base10_parse::<f32>().expect("value should be present");
+                let b = b.base10_parse::<f32>().expect("value should be present");
+                let c = c.base10_parse::<f32>().expect("value should be present");
                 format!(
                     "`{}px`|`{}px`|`{}px (@16px/rem)` - Scales with the user's rem size.",
                     a, b, c
@@ -92,7 +92,7 @@ pub fn derive_spacing(input: TokenStream) -> TokenStream {
             let variant = v.variant_name();
             match v {
                 DynamicSpacingValue::Single(n) => {
-                    let n = n.base10_parse::<f32>().unwrap();
+                    let n = n.base10_parse::<f32>().expect("value should be present");
                     quote! {
                         DynamicSpacing::#variant => match ::theme::theme_settings(cx).ui_density(cx) {
                             ::theme::UiDensity::Compact => (#n - 4.0).max(0.0) / BASE_REM_SIZE_IN_PX,
@@ -102,9 +102,9 @@ pub fn derive_spacing(input: TokenStream) -> TokenStream {
                     }
                 }
                 DynamicSpacingValue::Tuple(a, b, c) => {
-                    let a = a.base10_parse::<f32>().unwrap();
-                    let b = b.base10_parse::<f32>().unwrap();
-                    let c = c.base10_parse::<f32>().unwrap();
+                    let a = a.base10_parse::<f32>().expect("value should be present");
+                    let b = b.base10_parse::<f32>().expect("value should be present");
+                    let c = c.base10_parse::<f32>().expect("value should be present");
                     quote! {
                         DynamicSpacing::#variant => match ::theme::theme_settings(cx).ui_density(cx) {
                             ::theme::UiDensity::Compact => #a / BASE_REM_SIZE_IN_PX,

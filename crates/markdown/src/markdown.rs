@@ -1630,7 +1630,7 @@ impl MarkdownElement {
         let fallback_opens_image_url = enclosing_link_url.is_none();
         let markdown = self.markdown.clone();
         let on_url_click = self.on_url_click.clone();
-        builder.div_stack.last_mut().unwrap().line_break_mode = LineBreakMode::FlexWrap;
+        builder.div_stack.last_mut().expect("collection should not be empty").line_break_mode = LineBreakMode::FlexWrap;
         builder.modify_current_div(move |el| {
             let mut image_container = el.flex().flex_row().flex_wrap().items_start();
 
@@ -2279,7 +2279,7 @@ impl MarkdownElement {
                 let text_style = self.style.base_text_style.clone();
                 let font_id = window.text_system().resolve_font(&text_style.font());
                 let font_size = text_style.font_size.to_pixels(window.rem_size());
-                let em_width = window.text_system().em_width(font_id, font_size).unwrap();
+                let em_width = window.text_system().em_width(font_id, font_size).expect("em_width should be present");
                 window.request_autoscroll(Bounds::from_corners(
                     point(position.x - 3. * em_width, position.y - 3. * line_height),
                     point(position.x + 3. * em_width, position.y + 3. * line_height),
@@ -3632,7 +3632,7 @@ impl MarkdownElementBuilder {
     }
 
     fn append_child(&mut self, child: AnyElement) {
-        self.div_stack.last_mut().unwrap().div.extend([child]);
+        self.div_stack.last_mut().expect("collection should not be empty").div.extend([child]);
     }
 
     fn uses_flex_line_breaks(&self) -> bool {
@@ -3679,7 +3679,7 @@ impl MarkdownElementBuilder {
 
     fn pop_div(&mut self) {
         self.flush_text();
-        let div = self.div_stack.pop().unwrap().div.into_any_element();
+        let div = self.div_stack.pop().expect("collection should not be empty").div.into_any_element();
         self.append_child(div);
     }
 
@@ -3794,7 +3794,7 @@ impl MarkdownElementBuilder {
             self.pending_line
                 .text
                 .truncate(self.pending_line.text.len() - 1);
-            self.pending_line.runs.last_mut().unwrap().len -= 1;
+            self.pending_line.runs.last_mut().expect("collection should not be empty").len -= 1;
             self.current_source_index -= 1;
         }
     }
@@ -3908,7 +3908,7 @@ impl MarkdownElementBuilder {
         debug_assert_eq!(self.div_stack.len(), 1);
         self.flush_text();
         RenderedMarkdown {
-            element: self.div_stack.pop().unwrap().div.into_any_element(),
+            element: self.div_stack.pop().expect("collection should not be empty").div.into_any_element(),
             text: RenderedText {
                 lines: self.rendered_lines.into(),
                 links: self.rendered_links.into(),
@@ -4148,7 +4148,7 @@ impl RenderedText {
         let mut first_possible_range_ix = 0;
 
         for line in self.lines.iter() {
-            let line_source_start = line.source_mappings.first().unwrap().source_index;
+            let line_source_start = line.source_mappings.first().expect("collection should not be empty").source_index;
             while ranges
                 .get(first_possible_range_ix)
                 .is_some_and(|(_, range)| range.end <= line_source_start)
@@ -4324,7 +4324,7 @@ impl RenderedText {
 
     fn position_for_source_index(&self, source_index: usize) -> Option<(Point<Pixels>, Pixels)> {
         for line in self.lines.iter() {
-            let line_source_start = line.source_mappings.first().unwrap().source_index;
+            let line_source_start = line.source_mappings.first().expect("collection should not be empty").source_index;
             if source_index < line_source_start {
                 break;
             }
@@ -4345,7 +4345,7 @@ impl RenderedText {
                 continue;
             }
 
-            let line_rendered_start = line.source_mappings.first().unwrap().rendered_index;
+            let line_rendered_start = line.source_mappings.first().expect("collection should not be empty").rendered_index;
             let rendered_index_in_line =
                 line.rendered_index_for_source_index(source_index) - line_rendered_start;
             let text = line.layout.text();
@@ -4391,7 +4391,7 @@ impl RenderedText {
             if source_index > line.source_end {
                 continue;
             }
-            let line_source_start = line.source_mappings.first().unwrap().source_index;
+            let line_source_start = line.source_mappings.first().expect("collection should not be empty").source_index;
             return line_source_start..line.source_end;
         }
 
@@ -4405,7 +4405,7 @@ impl RenderedText {
             if range.start > line.source_end {
                 continue;
             }
-            let line_source_start = line.source_mappings.first().unwrap().source_index;
+            let line_source_start = line.source_mappings.first().expect("collection should not be empty").source_index;
             if range.end < line_source_start {
                 break;
             }

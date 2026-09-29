@@ -689,32 +689,32 @@ fn font_fallbacks_from_settings(
 impl settings::Settings for ThemeSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let content = &content.theme;
-        let theme_selection: ThemeSelection = content.theme.clone().unwrap().into();
-        let icon_theme_selection: IconThemeSelection = content.icon_theme.clone().unwrap().into();
+        let theme_selection: ThemeSelection = content.theme.clone().expect("value should be present").into();
+        let icon_theme_selection: IconThemeSelection = content.icon_theme.clone().expect("value should be present").into();
         Self {
-            ui_font_size: clamp_font_size(content.ui_font_size.unwrap().into_gpui()),
+            ui_font_size: clamp_font_size(content.ui_font_size.expect("ui_font_size should be present").into_gpui()),
             ui_font: Font {
-                family: content.ui_font_family.as_ref().unwrap().0.clone().into(),
-                features: content.ui_font_features.clone().unwrap().into_gpui(),
+                family: content.ui_font_family.as_ref().expect("value should have the expected type").0.clone().into(),
+                features: content.ui_font_features.clone().expect("value should be present").into_gpui(),
                 fallbacks: font_fallbacks_from_settings(content.ui_font_fallbacks.clone()),
-                weight: content.ui_font_weight.unwrap().into_gpui(),
+                weight: content.ui_font_weight.expect("ui_font_weight should be present").into_gpui(),
                 style: Default::default(),
             },
             buffer_font: Font {
                 family: content
                     .buffer_font_family
                     .as_ref()
-                    .unwrap()
+                    .expect("value should have the expected type")
                     .0
                     .clone()
                     .into(),
-                features: content.buffer_font_features.clone().unwrap().into_gpui(),
+                features: content.buffer_font_features.clone().expect("value should be present").into_gpui(),
                 fallbacks: font_fallbacks_from_settings(content.buffer_font_fallbacks.clone()),
-                weight: content.buffer_font_weight.unwrap().into_gpui(),
+                weight: content.buffer_font_weight.expect("buffer_font_weight should be present").into_gpui(),
                 style: FontStyle::default(),
             },
-            buffer_font_size: clamp_font_size(content.buffer_font_size.unwrap().into_gpui()),
-            buffer_line_height: content.buffer_line_height.unwrap().into(),
+            buffer_font_size: clamp_font_size(content.buffer_font_size.expect("buffer_font_size should be present").into_gpui()),
+            buffer_line_height: content.buffer_line_height.expect("buffer_line_height should be present").into(),
             agent_ui_font_family: content
                 .agent_ui_font_family
                 .as_ref()
@@ -744,7 +744,7 @@ impl settings::Settings for ThemeSettings {
             theme_overrides: content.theme_overrides.clone(),
             icon_theme: icon_theme_selection,
             ui_density: ui_density_from_settings(content.ui_density.unwrap_or_default()),
-            unnecessary_code_fade: content.unnecessary_code_fade.unwrap().0.clamp(0.0, 0.9),
+            unnecessary_code_fade: content.unnecessary_code_fade.expect("unnecessary_code_fade should be present").0.clamp(0.0, 0.9),
         }
     }
 }

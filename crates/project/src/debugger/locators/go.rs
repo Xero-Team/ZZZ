@@ -179,7 +179,7 @@ impl DapLocator for GoLocator {
                     cwd: build_config.cwd.clone(),
                     env: build_config.env.clone(),
                 })
-                .unwrap();
+                .expect("converting to a JSON value cannot fail");
 
                 Some(DebugScenario {
                     label: resolved_label.to_owned().into(),
@@ -223,7 +223,7 @@ impl DapLocator for GoLocator {
                     args,
                     build_flags,
                 })
-                .unwrap();
+                .expect("converting to a JSON value cannot fail");
 
                 Some(DebugScenario {
                     label: resolved_label.to_owned().into(),

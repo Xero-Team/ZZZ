@@ -193,7 +193,7 @@ impl DockerExecConnection {
         let binary_name =
             paths::remote_server_binary_name(release_channel.dev_name(), &version_str, false);
         let dst_path =
-            paths::remote_server_dir_relative().join(RelPath::unix(&binary_name).unwrap());
+            paths::remote_server_dir_relative().join(RelPath::unix(&binary_name).expect("path should be a valid relative path"));
 
         let binary_exists_on_server = self
             .run_docker_exec(
@@ -217,9 +217,9 @@ impl DockerExecConnection {
                 RelPath::unix(&format!(
                     "download-{}-{}",
                     std::process::id(),
-                    remote_server_path.file_name().unwrap().to_string_lossy()
+                    remote_server_path.file_name().expect("path should have the expected component").to_string_lossy()
                 ))
-                .unwrap(),
+                .expect("value should be present"),
             );
             self.upload_local_server_binary(
                 &remote_server_path,
@@ -245,7 +245,7 @@ impl DockerExecConnection {
                     binary_name,
                     std::process::id()
                 ))
-                .unwrap(),
+                .expect("value should be present"),
             );
             self.upload_local_server_binary(
                 embedded.path(),

@@ -442,8 +442,8 @@ impl AnyProtoClient {
                 TypeId::of::<M>(),
                 entity.into(),
                 Arc::new(move |entity, envelope, client, cx| {
-                    let entity = entity.downcast::<E>().unwrap();
-                    let envelope = envelope.into_any().downcast::<TypedEnvelope<M>>().unwrap();
+                    let entity = entity.downcast::<E>().expect("downcast should succeed");
+                    let envelope = envelope.into_any().downcast::<TypedEnvelope<M>>().expect("downcast should succeed");
                     let request_id = envelope.message_id();
                     handler(entity, *envelope, cx)
                         .then(move |result| async move {
@@ -475,7 +475,7 @@ impl AnyProtoClient {
         let entity_id_extractor = |envelope: &dyn AnyTypedEnvelope| {
             (envelope as &dyn Any)
                 .downcast_ref::<TypedEnvelope<M>>()
-                .unwrap()
+                .expect("downcast should succeed")
                 .payload
                 .remote_entity_id()
         };
@@ -488,8 +488,8 @@ impl AnyProtoClient {
                 entity_type_id,
                 entity_id_extractor,
                 Arc::new(move |entity, envelope, client, cx| {
-                    let entity = entity.downcast::<E>().unwrap();
-                    let envelope = envelope.into_any().downcast::<TypedEnvelope<M>>().unwrap();
+                    let entity = entity.downcast::<E>().expect("downcast should succeed");
+                    let envelope = envelope.into_any().downcast::<TypedEnvelope<M>>().expect("downcast should succeed");
                     let request_id = envelope.message_id();
                     handler(entity, *envelope, cx)
                         .then(move |result| async move {
@@ -522,7 +522,7 @@ impl AnyProtoClient {
         let entity_id_extractor = |envelope: &dyn AnyTypedEnvelope| {
             (envelope as &dyn Any)
                 .downcast_ref::<TypedEnvelope<M>>()
-                .unwrap()
+                .expect("downcast should succeed")
                 .payload
                 .remote_entity_id()
         };
@@ -535,8 +535,8 @@ impl AnyProtoClient {
                 entity_type_id,
                 entity_id_extractor,
                 Arc::new(move |entity, envelope, client, cx| {
-                    let entity = entity.downcast::<E>().unwrap();
-                    let envelope = envelope.into_any().downcast::<TypedEnvelope<M>>().unwrap();
+                    let entity = entity.downcast::<E>().expect("downcast should succeed");
+                    let envelope = envelope.into_any().downcast::<TypedEnvelope<M>>().expect("downcast should succeed");
                     let request_id = envelope.message_id();
                     handler(entity, *envelope, cx)
                         .then(move |result| async move {
@@ -582,7 +582,7 @@ impl AnyProtoClient {
         let entity_id_extractor = |envelope: &dyn AnyTypedEnvelope| {
             (envelope as &dyn Any)
                 .downcast_ref::<TypedEnvelope<M>>()
-                .unwrap()
+                .expect("downcast should succeed")
                 .payload
                 .remote_entity_id()
         };
@@ -595,8 +595,8 @@ impl AnyProtoClient {
                 entity_type_id,
                 entity_id_extractor,
                 Arc::new(move |entity, envelope, _, cx| {
-                    let entity = entity.downcast::<E>().unwrap();
-                    let envelope = envelope.into_any().downcast::<TypedEnvelope<M>>().unwrap();
+                    let entity = entity.downcast::<E>().expect("downcast should succeed");
+                    let envelope = envelope.into_any().downcast::<TypedEnvelope<M>>().expect("downcast should succeed");
                     handler(entity, *envelope, cx).boxed_local()
                 }),
             );

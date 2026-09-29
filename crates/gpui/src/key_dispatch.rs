@@ -218,14 +218,14 @@ impl DispatchTree {
     }
 
     pub fn set_focus_id(&mut self, focus_id: FocusId) {
-        let node_id = *self.node_stack.last().unwrap();
+        let node_id = *self.node_stack.last().expect("collection should not be empty");
         self.nodes[node_id.0].focus_id = Some(focus_id);
         self.focusable_node_ids.insert(focus_id, node_id);
     }
 
     pub fn set_view_id(&mut self, view_id: EntityId) {
         if self.view_stack.last().copied() != Some(view_id) {
-            let node_id = *self.node_stack.last().unwrap();
+            let node_id = *self.node_stack.last().expect("collection should not be empty");
             self.nodes[node_id.0].view_id = Some(view_id);
             self.view_node_ids.insert(view_id, node_id);
             self.view_stack.push(view_id);
@@ -233,7 +233,7 @@ impl DispatchTree {
     }
 
     pub fn pop_node(&mut self) {
-        let node = &self.nodes[self.active_node_id().unwrap().0];
+        let node = &self.nodes[self.active_node_id().expect("active_node_id should be present").0];
         if node.context.is_some() {
             self.context_stack.pop();
         }
@@ -544,7 +544,7 @@ impl DispatchTree {
             let (bindings, _, _) = self.bindings_for_input(&input[0..=last], dispatch_path);
             if !bindings.is_empty() {
                 to_replay.push(Replay {
-                    keystroke: input.drain(0..=last).next_back().unwrap(),
+                    keystroke: input.drain(0..=last).next_back().expect("iterator should yield an item"),
                     bindings,
                 });
                 break;
@@ -599,7 +599,7 @@ impl DispatchTree {
     }
 
     fn active_node(&mut self) -> &mut DispatchNode {
-        let active_node_id = self.active_node_id().unwrap();
+        let active_node_id = self.active_node_id().expect("active_node_id should be present");
         &mut self.nodes[active_node_id.0]
     }
 

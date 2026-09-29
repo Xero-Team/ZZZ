@@ -443,7 +443,7 @@ impl ActionLog {
                                 break;
                             }
 
-                            old_unreviewed_edits.next().unwrap();
+                            old_unreviewed_edits.next().expect("iterator should yield an item");
                         }
                     }
 
@@ -1090,7 +1090,7 @@ fn apply_non_conflicting_edits(
             } else if new_edit.old.start > old_edit.new.end
                 || (!old_edit.new.is_empty() && new_edit.old.start == old_edit.new.end)
             {
-                let old_edit = old_edits.next().unwrap();
+                let old_edit = old_edits.next().expect("iterator should yield an item");
                 rebased_delta += old_edit.new_len() as i32 - old_edit.old_len() as i32;
             } else {
                 conflict = true;
@@ -1098,9 +1098,9 @@ fn apply_non_conflicting_edits(
                     .peek()
                     .is_some_and(|next_edit| next_edit.old.overlaps(&old_edit.new))
                 {
-                    new_edit = new_edits.next().unwrap();
+                    new_edit = new_edits.next().expect("iterator should yield an item");
                 } else {
-                    let old_edit = old_edits.next().unwrap();
+                    let old_edit = old_edits.next().expect("iterator should yield an item");
                     rebased_delta += old_edit.new_len() as i32 - old_edit.old_len() as i32;
                 }
             }

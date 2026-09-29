@@ -209,7 +209,7 @@ impl super::LspAdapter for CLspAdapter {
 
         match completion.kind {
             Some(lsp::CompletionItemKind::FIELD) if completion.detail.is_some() => {
-                let detail = completion.detail.as_ref().unwrap();
+                let detail = completion.detail.as_ref().expect("value should have the expected type");
                 let text = format!("{} {}", detail, label);
                 let source = Rope::from(format!("struct S {{ {} }}", text).as_str());
                 let runs = language.highlight_text(&source, 11..11 + text.len());
@@ -226,7 +226,7 @@ impl super::LspAdapter for CLspAdapter {
             Some(lsp::CompletionItemKind::CONSTANT | lsp::CompletionItemKind::VARIABLE)
                 if completion.detail.is_some() =>
             {
-                let detail = completion.detail.as_ref().unwrap();
+                let detail = completion.detail.as_ref().expect("value should have the expected type");
                 let text = format!("{} {}", detail, label);
                 let runs = language.highlight_text(&Rope::from(text.as_str()), 0..text.len());
                 let filter_range = completion
@@ -242,7 +242,7 @@ impl super::LspAdapter for CLspAdapter {
             Some(lsp::CompletionItemKind::FUNCTION | lsp::CompletionItemKind::METHOD)
                 if completion.detail.is_some() =>
             {
-                let detail = completion.detail.as_ref().unwrap();
+                let detail = completion.detail.as_ref().expect("value should have the expected type");
                 let text = format!("{} {}", detail, label);
                 let runs = language.highlight_text(&Rope::from(text.as_str()), 0..text.len());
                 let filter_range = completion

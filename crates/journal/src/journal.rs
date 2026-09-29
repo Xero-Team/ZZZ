@@ -34,11 +34,11 @@ pub struct JournalSettings {
 
 impl settings::Settings for JournalSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let journal = content.journal.clone().unwrap();
+        let journal = content.journal.clone().expect("value should be present");
 
         Self {
-            path: journal.path.unwrap(),
-            hour_format: journal.hour_format.unwrap(),
+            path: journal.path.expect("path should be present"),
+            hour_format: journal.hour_format.expect("hour_format should be present"),
         }
     }
 }

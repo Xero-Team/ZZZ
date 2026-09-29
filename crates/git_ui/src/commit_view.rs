@@ -219,7 +219,7 @@ impl CommitView {
                                     .items()
                                     .filter_map(|item| item.downcast::<CommitView>())
                                     .find(|view| view.read(cx).commit.sha == commit_sha)
-                                    .unwrap();
+                                    .expect("downcast should succeed");
 
                                 pane.remove_item(existing.item_id(), false, false, window, cx);
                                 pane.add_item(
@@ -369,7 +369,7 @@ impl CommitView {
                 let snapshot = buffer.read_with(cx, |buffer, _| buffer.snapshot());
                 let path = PathKey::with_sort_prefix(
                     FILE_NAMESPACE_SORT_PREFIX,
-                    snapshot.file().unwrap().path().clone(),
+                    snapshot.file().expect("file should be present").path().clone(),
                 );
                 let excerpt_ranges = if is_binary {
                     vec![language::Point::zero()..snapshot.max_point()]
@@ -1033,13 +1033,13 @@ impl Item for CommitView {
 
     fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
         let short_sha = self.commit.sha.get(0..7).unwrap_or(&*self.commit.sha);
-        let subject = truncate_and_trailoff(self.commit.message.split('\n').next().unwrap(), 20);
+        let subject = truncate_and_trailoff(self.commit.message.split('\n').next().expect("iterator should yield an item"), 20);
         format!("{short_sha} — {subject}").into()
     }
 
     fn tab_tooltip_content(&self, _: &App) -> Option<TabTooltipContent> {
         let short_sha = self.commit.sha.get(0..16).unwrap_or(&*self.commit.sha);
-        let subject = self.commit.message.split('\n').next().unwrap();
+        let subject = self.commit.message.split('\n').next().expect("iterator should yield an item");
 
         Some(TabTooltipContent::Custom(Box::new(Tooltip::element({
             let subject = subject.to_owned();

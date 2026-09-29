@@ -655,46 +655,46 @@ pub struct LspPullDiagnosticsSettings {
 impl Settings for ProjectSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let project = &content.project.clone();
-        let diagnostics = content.diagnostics.as_ref().unwrap();
-        let lsp_pull_diagnostics = diagnostics.lsp_pull_diagnostics.as_ref().unwrap();
-        let inline_diagnostics = diagnostics.inline.as_ref().unwrap();
+        let diagnostics = content.diagnostics.as_ref().expect("value should have the expected type");
+        let lsp_pull_diagnostics = diagnostics.lsp_pull_diagnostics.as_ref().expect("value should have the expected type");
+        let inline_diagnostics = diagnostics.inline.as_ref().expect("value should have the expected type");
 
-        let git = content.git.as_ref().unwrap();
+        let git = content.git.as_ref().expect("value should have the expected type");
         let git_enabled = {
             GitEnabledSettings {
-                status: git.enabled.as_ref().unwrap().is_git_status_enabled(),
-                diff: git.enabled.as_ref().unwrap().is_git_diff_enabled(),
+                status: git.enabled.as_ref().expect("value should have the expected type").is_git_status_enabled(),
+                diff: git.enabled.as_ref().expect("value should have the expected type").is_git_diff_enabled(),
             }
         };
         let git_settings = GitSettings {
             enabled: git_enabled,
-            git_gutter: git.git_gutter.unwrap(),
+            git_gutter: git.git_gutter.expect("git_gutter should be present"),
             gutter_debounce: git.gutter_debounce.unwrap_or_default(),
             inline_blame: {
-                let inline = git.inline_blame.unwrap();
+                let inline = git.inline_blame.expect("inline_blame should be present");
                 InlineBlameSettings {
-                    enabled: inline.enabled.unwrap(),
-                    delay_ms: inline.delay_ms.unwrap(),
-                    padding: inline.padding.unwrap(),
-                    min_column: inline.min_column.unwrap(),
-                    show_commit_summary: inline.show_commit_summary.unwrap(),
+                    enabled: inline.enabled.expect("enabled should be present"),
+                    delay_ms: inline.delay_ms.expect("delay_ms should be present"),
+                    padding: inline.padding.expect("padding should be present"),
+                    min_column: inline.min_column.expect("min_column should be present"),
+                    show_commit_summary: inline.show_commit_summary.expect("show_commit_summary should be present"),
                 }
             },
-            show_avatar: git.show_avatar.unwrap(),
+            show_avatar: git.show_avatar.expect("show_avatar should be present"),
             blame: {
-                let blame = git.blame.unwrap();
+                let blame = git.blame.expect("blame should be present");
                 BlameSettings {
-                    show_avatar: blame.show_avatar.unwrap(),
+                    show_avatar: blame.show_avatar.expect("show_avatar should be present"),
                 }
             },
             branch_picker: {
-                let branch_picker = git.branch_picker.unwrap();
+                let branch_picker = git.branch_picker.expect("branch_picker should be present");
                 BranchPickerSettings {
-                    show_author_name: branch_picker.show_author_name.unwrap(),
+                    show_author_name: branch_picker.show_author_name.expect("show_author_name should be present"),
                 }
             },
-            hunk_style: git.hunk_style.unwrap(),
-            path_style: git.path_style.unwrap().into(),
+            hunk_style: git.hunk_style.expect("hunk_style should be present"),
+            path_style: git.path_style.expect("path_style should be present").into(),
             show_stage_restore_buttons: git.show_stage_restore_buttons.unwrap_or(true),
             git_path: git.git_path.clone(),
             worktree_directory: git
@@ -720,32 +720,32 @@ impl Settings for ProjectSettings {
                 button: content
                     .global_lsp_settings
                     .as_ref()
-                    .unwrap()
+                    .expect("value should have the expected type")
                     .button
-                    .unwrap(),
+                    .expect("button should be present"),
                 request_timeout: content
                     .global_lsp_settings
                     .as_ref()
-                    .unwrap()
+                    .expect("value should have the expected type")
                     .request_timeout
-                    .unwrap(),
+                    .expect("request_timeout should be present"),
                 notifications: LspNotificationSettings {
                     dismiss_timeout_ms: content
                         .global_lsp_settings
                         .as_ref()
-                        .unwrap()
+                        .expect("value should have the expected type")
                         .notifications
                         .as_ref()
-                        .unwrap()
+                        .expect("value should have the expected type")
                         .dismiss_timeout_ms,
                 },
                 semantic_token_rules: content
                     .global_lsp_settings
                     .as_ref()
-                    .unwrap()
+                    .expect("value should have the expected type")
                     .semantic_token_rules
                     .as_ref()
-                    .unwrap()
+                    .expect("value should have the expected type")
                     .clone(),
             },
             dap: project
@@ -755,26 +755,26 @@ impl Settings for ProjectSettings {
                 .map(|(key, value)| (DebugAdapterName(key.into()), DapSettings::from(value)))
                 .collect(),
             diagnostics: DiagnosticsSettings {
-                button: diagnostics.button.unwrap(),
-                include_warnings: diagnostics.include_warnings.unwrap(),
+                button: diagnostics.button.expect("button should be present"),
+                include_warnings: diagnostics.include_warnings.expect("include_warnings should be present"),
                 lsp_pull_diagnostics: LspPullDiagnosticsSettings {
-                    enabled: lsp_pull_diagnostics.enabled.unwrap(),
-                    debounce_ms: lsp_pull_diagnostics.debounce_ms.unwrap().0,
+                    enabled: lsp_pull_diagnostics.enabled.expect("enabled should be present"),
+                    debounce_ms: lsp_pull_diagnostics.debounce_ms.expect("debounce_ms should be present").0,
                 },
                 inline: InlineDiagnosticsSettings {
-                    enabled: inline_diagnostics.enabled.unwrap(),
-                    update_debounce_ms: inline_diagnostics.update_debounce_ms.unwrap().0,
-                    padding: inline_diagnostics.padding.unwrap(),
-                    min_column: inline_diagnostics.min_column.unwrap(),
+                    enabled: inline_diagnostics.enabled.expect("enabled should be present"),
+                    update_debounce_ms: inline_diagnostics.update_debounce_ms.expect("update_debounce_ms should be present").0,
+                    padding: inline_diagnostics.padding.expect("padding should be present"),
+                    min_column: inline_diagnostics.min_column.expect("min_column should be present"),
                     max_severity: inline_diagnostics.max_severity.map(Into::into),
                 },
             },
             git: git_settings,
-            node: content.node.clone().unwrap().into(),
-            load_direnv: project.load_direnv.clone().unwrap(),
+            node: content.node.clone().expect("value should be present").into(),
+            load_direnv: project.load_direnv.clone().expect("value should be present"),
             session: SessionSettings {
-                restore_unsaved_buffers: content.session.unwrap().restore_unsaved_buffers.unwrap(),
-                trust_all_worktrees: content.session.unwrap().trust_all_worktrees.unwrap(),
+                restore_unsaved_buffers: content.session.expect("session should be present").restore_unsaved_buffers.expect("restore_unsaved_buffers should be present"),
+                trust_all_worktrees: content.session.expect("session should be present").trust_all_worktrees.expect("trust_all_worktrees should be present"),
             },
         }
     }
@@ -1006,7 +1006,7 @@ impl SettingsObserver {
         for worktree in self.worktree_store.read(cx).worktrees() {
             let worktree_id = worktree.read(cx).id().to_proto();
             for (path, content) in store.local_settings(worktree.read(cx).id()) {
-                let content = serde_json::to_string(&content).unwrap();
+                let content = serde_json::to_string(&content).expect("serializing to JSON cannot fail");
                 downstream_client
                     .send(proto::UpdateWorktreeSettings {
                         project_id,
@@ -1138,7 +1138,7 @@ impl SettingsObserver {
                 let settings_dir = path
                     .ancestors()
                     .nth(local_settings_file_relative_path().components().count())
-                    .unwrap()
+                    .expect("value should be present")
                     .into();
                 (settings_dir, LocalSettingsKind::Settings)
             } else if path.ends_with(local_tasks_file_relative_path()) {
@@ -1150,7 +1150,7 @@ impl SettingsObserver {
                             .count()
                             .saturating_sub(1),
                     )
-                    .unwrap()
+                    .expect("value should be present")
                     .into();
                 (settings_dir, LocalSettingsKind::Tasks)
             } else if path.ends_with(local_vscode_tasks_file_relative_path()) {
@@ -1162,7 +1162,7 @@ impl SettingsObserver {
                             .count()
                             .saturating_sub(1),
                     )
-                    .unwrap()
+                    .expect("value should be present")
                     .into();
                 (settings_dir, LocalSettingsKind::Tasks)
             } else if path.ends_with(local_debug_file_relative_path()) {
@@ -1174,7 +1174,7 @@ impl SettingsObserver {
                             .count()
                             .saturating_sub(1),
                     )
-                    .unwrap()
+                    .expect("value should be present")
                     .into();
                 (settings_dir, LocalSettingsKind::Debug)
             } else if path.ends_with(local_vscode_launch_file_relative_path()) {
@@ -1186,10 +1186,10 @@ impl SettingsObserver {
                             .count()
                             .saturating_sub(1),
                     )
-                    .unwrap()
+                    .expect("value should be present")
                     .into();
                 (settings_dir, LocalSettingsKind::Debug)
-            } else if path.ends_with(RelPath::unix(EDITORCONFIG_NAME).unwrap()) {
+            } else if path.ends_with(RelPath::unix(EDITORCONFIG_NAME).expect("path should be a valid relative path")) {
                 let Some(settings_dir) = path.parent().map(Arc::from) else {
                     continue;
                 };

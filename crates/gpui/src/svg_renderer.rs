@@ -35,7 +35,7 @@ const EMOJI_FONT_FAMILIES: &[&str] = &[];
 
 fn is_emoji_presentation(c: char) -> bool {
     static EMOJI_PRESENTATION_REGEX: LazyLock<regex::Regex> =
-        LazyLock::new(|| regex::Regex::new("\\p{Emoji_Presentation}").unwrap());
+        LazyLock::new(|| regex::Regex::new("\\p{Emoji_Presentation}").expect("valid regex literal"));
     let mut buf = [0u8; 4];
     EMOJI_PRESENTATION_REGEX.is_match(c.encode_utf8(&mut buf))
 }
@@ -183,7 +183,7 @@ impl SvgRenderer {
         .map(|pixmap| {
             let mut buffer =
                 image::ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.take())
-                    .unwrap();
+                    .expect("entry should be present");
 
             for pixel in buffer.chunks_exact_mut(4) {
                 swap_rgba_pa_to_bgra(pixel);

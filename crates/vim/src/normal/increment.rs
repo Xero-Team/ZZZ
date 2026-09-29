@@ -279,7 +279,7 @@ fn find_target(
         if target == "0"
             && (ch == 'b' || ch == 'B')
             && chars.peek().is_some()
-            && chars.peek().unwrap().is_digit(2)
+            && chars.peek().expect("peek should be present").is_digit(2)
         {
             radix = 2;
             begin = None;
@@ -287,7 +287,7 @@ fn find_target(
         } else if target == "0"
             && (ch == 'x' || ch == 'X')
             && chars.peek().is_some()
-            && chars.peek().unwrap().is_ascii_hexdigit()
+            && chars.peek().expect("peek should be present").is_ascii_hexdigit()
         {
             radix = 16;
             begin = None;
@@ -316,7 +316,7 @@ fn find_target(
             || ((begin.is_none() || !is_num)
                 && ch == '-'
                 && chars.peek().is_some()
-                && chars.peek().unwrap().is_digit(radix))
+                && chars.peek().expect("peek should be present").is_digit(radix))
         {
             if !is_num {
                 is_num = true;

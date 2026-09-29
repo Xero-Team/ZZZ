@@ -162,7 +162,7 @@ impl<'a> Matcher<'a> {
                 let ch = prefix
                     .get(char_ix)
                     .or_else(|| path.get(char_ix - prefix.len()))
-                    .unwrap();
+                    .expect("entry should be present");
                 byte_ix += ch.len_utf8();
                 char_ix += 1;
             }
@@ -172,7 +172,7 @@ impl<'a> Matcher<'a> {
             let matched_ch = prefix
                 .get(match_char_ix)
                 .or_else(|| path.get(match_char_ix - prefix.len()))
-                .unwrap();
+                .expect("entry should be present");
             byte_ix += matched_ch.len_utf8();
 
             cur_start = match_char_ix + 1;

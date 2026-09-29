@@ -56,6 +56,9 @@ jobs:
       - name: Check upstream rejection ledger
         run: ./script/check-upstream-ledger
 
+      - name: Check for todo! and FIXME markers
+        run: ./script/check-todos
+
   test:
     name: Test
     if: github.ref_type == 'branch' && !inputs.skip_rust_build

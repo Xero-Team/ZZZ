@@ -487,10 +487,10 @@ impl SearchQuery {
                 ..
             } => {
                 static TEXT_REPLACEMENT_SPECIAL_CHARACTERS_REGEX: LazyLock<Regex> =
-                    LazyLock::new(|| Regex::new(r"\\\\|\\n|\\t").unwrap());
+                    LazyLock::new(|| Regex::new(r"\\\\|\\n|\\t").expect("valid regex literal"));
                 let replacement = TEXT_REPLACEMENT_SPECIAL_CHARACTERS_REGEX.replace_all(
                     replacement,
-                    |c: &Captures<'_, str>| match c.get(0).unwrap().as_str() {
+                    |c: &Captures<'_, str>| match c.get(0).expect("entry should be present").as_str() {
                         r"\\" => "\\",
                         r"\n" => "\n",
                         r"\t" => "\t",
@@ -549,7 +549,7 @@ impl SearchQuery {
                         yield_now().await;
                     }
 
-                    let mat = mat.unwrap();
+                    let mat = mat.expect("value should be present");
                     if *whole_word {
                         let classifier = buffer.char_classifier_at(range_offset + mat.start());
 
@@ -558,9 +558,9 @@ impl SearchQuery {
                             .next()
                             .map(|c| classifier.kind(c));
                         let start_kind =
-                            classifier.kind(rope.chars_at(mat.start()).next().unwrap());
+                            classifier.kind(rope.chars_at(mat.start()).next().expect("iterator should yield an item"));
                         let end_kind =
-                            classifier.kind(rope.reversed_chars_at(mat.end()).next().unwrap());
+                            classifier.kind(rope.reversed_chars_at(mat.end()).next().expect("iterator should yield an item"));
                         let next_kind = rope.chars_at(mat.end()).next().map(|c| classifier.kind(c));
                         if (Some(start_kind) == prev_kind && start_kind == CharKind::Word)
                             || (Some(end_kind) == next_kind && end_kind == CharKind::Word)

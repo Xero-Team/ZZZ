@@ -290,7 +290,7 @@ impl DapStore {
                     let env = this
                         .update(cx, |this, cx| {
                             this.as_local()
-                                .unwrap()
+                                .expect("should be a local instance")
                                 .environment
                                 .update(cx, |environment, cx| {
                                     environment.worktree_environment(worktree, cx)

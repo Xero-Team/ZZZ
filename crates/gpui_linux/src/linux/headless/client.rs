@@ -23,7 +23,7 @@ pub(crate) struct HeadlessClient(Rc<RefCell<HeadlessClientState>>);
 
 impl HeadlessClient {
     pub(crate) fn new() -> Self {
-        let event_loop = EventLoop::try_new().unwrap();
+        let event_loop = EventLoop::try_new().expect("try_new should be present");
 
         let (common, main_receiver) = LinuxCommon::new(event_loop.get_signal());
 

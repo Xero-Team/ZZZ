@@ -1047,7 +1047,7 @@ impl Component for Switch {
                             Switch::new("switch_with_keybinding", ToggleState::Selected)
                                 .key_binding(Some(KeyBinding::from_keystrokes(
                                     vec![KeybindingKeystroke::from_keystroke(
-                                        Keystroke::parse("cmd-s").unwrap(),
+                                        Keystroke::parse("cmd-s").expect("parse should be present"),
                                     )]
                                     .into(),
                                     false,

@@ -262,7 +262,7 @@ impl TrustedWorktreesStore {
     ) -> HashSet<WorktreeId> {
         self.restricted
             .get(&worktree_store.downgrade())
-            .unwrap()
+            .expect("entry should be present")
             .clone()
     }
 

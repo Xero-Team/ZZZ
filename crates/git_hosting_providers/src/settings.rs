@@ -70,7 +70,7 @@ impl Settings for GitHostingProviderSettings {
                 .project
                 .git_hosting_providers
                 .clone()
-                .unwrap()
+                .expect("value should be present")
                 .into(),
         }
     }

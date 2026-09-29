@@ -422,7 +422,7 @@ mod tests {
             }
         }"#;
 
-        let deserialized: DebugScenario = serde_json::from_str(json).unwrap();
+        let deserialized: DebugScenario = serde_json::from_str(json).expect("parsing a JSON literal cannot fail");
         assert!(deserialized.build.is_some());
         match deserialized.build.as_ref().unwrap() {
             crate::BuildTaskDefinition::Template { task_template, .. } => {
@@ -445,7 +445,7 @@ mod tests {
             "adapter": "CodeLLDB"
         }"#;
 
-        let deserialized: DebugScenario = serde_json::from_str(json).unwrap();
+        let deserialized: DebugScenario = serde_json::from_str(json).expect("parsing a JSON literal cannot fail");
 
         assert_eq!(json!({}), deserialized.config);
         assert_eq!("CodeLLDB", deserialized.adapter.as_ref());
@@ -462,7 +462,7 @@ mod tests {
             "args": ["--test"]
         }"#;
 
-        let deserialized: DebugScenario = serde_json::from_str(json).unwrap();
+        let deserialized: DebugScenario = serde_json::from_str(json).expect("parsing a JSON literal cannot fail");
 
         assert_eq!(
             json!({ "request": "launch", "program": "target/debug/myapp", "args": ["--test"] }),
@@ -481,7 +481,7 @@ mod tests {
             "request": "attach"
         }"#;
 
-        let deserialized: DebugScenario = serde_json::from_str(json).unwrap();
+        let deserialized: DebugScenario = serde_json::from_str(json).expect("parsing a JSON literal cannot fail");
 
         assert_eq!(
             json!({ "request": "attach", "process_id": 1234 }),
@@ -496,7 +496,7 @@ mod tests {
         use crate::BuildTaskDefinition;
 
         let json = r#""my_build_task""#;
-        let deserialized: BuildTaskDefinition = serde_json::from_str(json).unwrap();
+        let deserialized: BuildTaskDefinition = serde_json::from_str(json).expect("parsing a JSON literal cannot fail");
         match deserialized {
             BuildTaskDefinition::ByName(name) => assert_eq!("my_build_task", name.as_ref()),
             _ => panic!("Expected ByName variant"),
@@ -506,7 +506,7 @@ mod tests {
             "command": "cargo",
             "args": ["build", "--release"]
         }"#;
-        let deserialized: BuildTaskDefinition = serde_json::from_str(json).unwrap();
+        let deserialized: BuildTaskDefinition = serde_json::from_str(json).expect("parsing a JSON literal cannot fail");
         match deserialized {
             BuildTaskDefinition::Template { task_template, .. } => {
                 assert_eq!("debug-build", task_template.label);
@@ -521,7 +521,7 @@ mod tests {
             "command": "cargo",
             "args": ["build", "--release"]
         }"#;
-        let deserialized: BuildTaskDefinition = serde_json::from_str(json).unwrap();
+        let deserialized: BuildTaskDefinition = serde_json::from_str(json).expect("parsing a JSON literal cannot fail");
         match deserialized {
             BuildTaskDefinition::Template { task_template, .. } => {
                 assert_eq!("Build Release", task_template.label);

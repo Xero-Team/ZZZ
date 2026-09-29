@@ -3645,7 +3645,7 @@ impl ProjectPanel {
         let source_entry = source_worktree.read(cx).entry_for_id(source.entry_id)?;
 
         let clipboard_entry_file_name = source_entry.path.file_name()?.to_owned();
-        new_path.push(RelPath::unix(&clipboard_entry_file_name).unwrap());
+        new_path.push(RelPath::unix(&clipboard_entry_file_name).expect("path should be a valid relative path"));
 
         let (extension, file_name_without_extension) = if source_entry.is_file() {
             (
@@ -3681,7 +3681,7 @@ impl ProjectPanel {
                     new_file_name.push_str(extension);
                 }
 
-                new_path.push(RelPath::unix(&new_file_name).unwrap());
+                new_path.push(RelPath::unix(&new_file_name).expect("path should be a valid relative path"));
 
                 disambiguation_range = Some(0..(file_name_len + disambiguation_len));
                 ix += 1;
@@ -4555,7 +4555,7 @@ impl ProjectPanel {
             entry: Entry {
                 id: NEW_ENTRY_ID,
                 kind: new_entry_kind,
-                path: parent_entry.path.join(RelPath::unix("\0").unwrap()),
+                path: parent_entry.path.join(RelPath::unix("\0").expect("path should be a valid relative path")),
                 inode: 0,
                 mtime: parent_entry.mtime,
                 size: parent_entry.size,
@@ -4762,7 +4762,7 @@ impl ProjectPanel {
                                             |suffix| {
                                                 Some(
                                                     RelPath::unix(root_folded_entry.file_name()?)
-                                                        .unwrap()
+                                                        .expect("value should be present")
                                                         .join(suffix),
                                                 )
                                             },
@@ -4770,7 +4770,7 @@ impl ProjectPanel {
                                     })
                                     .or_else(|| {
                                         entry.path.file_name().map(|file_name| {
-                                            RelPath::unix(file_name).unwrap().into()
+                                            RelPath::unix(file_name).expect("path should be a valid relative path").into()
                                         })
                                     })
                                     .unwrap_or_else(|| entry.path.clone());
@@ -4948,7 +4948,7 @@ impl ProjectPanel {
             if let Some(name) = path.file_name()
                 && let Some(name) = name.to_str()
             {
-                let target_path = target_directory.join(RelPath::unix(name).unwrap());
+                let target_path = target_directory.join(RelPath::unix(name).expect("path should be a valid relative path"));
                 if worktree.read(cx).entry_for_path(&target_path).is_some() {
                     paths_to_replace.push((name.to_owned(), path.clone()));
                 }

@@ -64,14 +64,14 @@ impl EditorTestContext {
                 project.open_local_buffer(root.join("file"), cx)
             })
             .await
-            .unwrap();
+            .expect("value should be present");
 
         let language = project
             .read_with(cx, |project, _cx| {
                 project.languages().language_for_name("Plain Text")
             })
             .await
-            .unwrap();
+            .expect("value should be present");
         buffer.update(cx, |buffer, cx| {
             buffer.set_language(Some(language), cx);
         });
@@ -87,7 +87,7 @@ impl EditorTestContext {
             window.focus(&editor.focus_handle(cx), cx);
             editor
         });
-        let editor_view = editor.root(cx).unwrap();
+        let editor_view = editor.root(cx).expect("root should be present");
 
         cx.run_until_parked();
         Self {
@@ -119,7 +119,7 @@ impl EditorTestContext {
     }
 
     pub async fn for_editor(editor: WindowHandle<Editor>, cx: &mut gpui::TestAppContext) -> Self {
-        let editor_view = editor.root(cx).unwrap();
+        let editor_view = editor.root(cx).expect("root should be present");
         Self {
             cx: VisualTestContext::from_window(*editor, cx),
             window: editor.into(),
@@ -166,7 +166,7 @@ impl EditorTestContext {
             editor
         });
 
-        let editor_view = editor.root(cx).unwrap();
+        let editor_view = editor.root(cx).expect("root should be present");
         Self {
             cx: VisualTestContext::from_window(*editor, cx),
             window: editor.into(),
@@ -227,7 +227,7 @@ impl EditorTestContext {
         F: FnOnce(&Buffer, &App) -> T,
     {
         self.multibuffer(|multibuffer, cx| {
-            let buffer = multibuffer.as_singleton().unwrap().read(cx);
+            let buffer = multibuffer.as_singleton().expect("as_singleton should be present").read(cx);
             read(buffer, cx)
         })
     }
@@ -237,7 +237,7 @@ impl EditorTestContext {
             editor
                 .project
                 .as_ref()
-                .unwrap()
+                .expect("value should have the expected type")
                 .read(cx)
                 .languages()
                 .clone()
@@ -249,7 +249,7 @@ impl EditorTestContext {
         F: FnOnce(&mut Buffer, &mut Context<Buffer>) -> T,
     {
         self.update_multibuffer(|multibuffer, cx| {
-            let buffer = multibuffer.as_singleton().unwrap();
+            let buffer = multibuffer.as_singleton().expect("as_singleton should be present");
             buffer.update(cx, update)
         })
     }
@@ -269,7 +269,7 @@ impl EditorTestContext {
     // unlike cx.simulate_keystrokes(), this does not run_until_parked
     // so you can use it to test detailed timing
     pub fn simulate_keystroke(&mut self, keystroke_text: &str) {
-        let keystroke = Keystroke::parse(keystroke_text).unwrap();
+        let keystroke = Keystroke::parse(keystroke_text).expect("parse should be present");
         self.cx.dispatch_keystroke(self.window, keystroke);
     }
 
@@ -303,7 +303,7 @@ impl EditorTestContext {
                 .selections
                 .newest_display(&editor.display_snapshot(cx))
                 .head();
-            let pixel_position = editor.pixel_position_of_newest_cursor.unwrap();
+            let pixel_position = editor.pixel_position_of_newest_cursor.expect("pixel_position_of_newest_cursor should be present");
             let line_height = editor
                 .style(cx)
                 .text
@@ -336,8 +336,8 @@ impl EditorTestContext {
     pub fn set_head_text(&mut self, diff_base: &str) {
         self.cx.run_until_parked();
         let fs =
-            self.update_editor(|editor, _, cx| editor.project().unwrap().read(cx).fs().as_fake());
-        let path = self.update_buffer(|buffer, _| buffer.file().unwrap().path().clone());
+            self.update_editor(|editor, _, cx| editor.project().expect("project should be present").read(cx).fs().as_fake());
+        let path = self.update_buffer(|buffer, _| buffer.file().expect("file should be present").path().clone());
         fs.set_head_for_repo(
             &Self::root_path().join(".git"),
             &[(path.as_unix_str(), diff_base.to_owned())],
@@ -349,7 +349,7 @@ impl EditorTestContext {
     pub fn clear_index_text(&mut self) {
         self.cx.run_until_parked();
         let fs =
-            self.update_editor(|editor, _, cx| editor.project().unwrap().read(cx).fs().as_fake());
+            self.update_editor(|editor, _, cx| editor.project().expect("project should be present").read(cx).fs().as_fake());
         fs.set_index_for_repo(&Self::root_path().join(".git"), &[]);
         self.cx.run_until_parked();
     }
@@ -357,8 +357,8 @@ impl EditorTestContext {
     pub fn set_index_text(&mut self, diff_base: &str) {
         self.cx.run_until_parked();
         let fs =
-            self.update_editor(|editor, _, cx| editor.project().unwrap().read(cx).fs().as_fake());
-        let path = self.update_buffer(|buffer, _| buffer.file().unwrap().path().clone());
+            self.update_editor(|editor, _, cx| editor.project().expect("project should be present").read(cx).fs().as_fake());
+        let path = self.update_buffer(|buffer, _| buffer.file().expect("file should be present").path().clone());
         fs.set_index_for_repo(
             &Self::root_path().join(".git"),
             &[(path.as_unix_str(), diff_base.to_owned())],
@@ -369,8 +369,8 @@ impl EditorTestContext {
     #[track_caller]
     pub fn assert_index_text(&mut self, expected: Option<&str>) {
         let fs =
-            self.update_editor(|editor, _, cx| editor.project().unwrap().read(cx).fs().as_fake());
-        let path = self.update_buffer(|buffer, _| buffer.file().unwrap().path().clone());
+            self.update_editor(|editor, _, cx| editor.project().expect("project should be present").read(cx).fs().as_fake());
+        let path = self.update_buffer(|buffer, _| buffer.file().expect("file should be present").path().clone());
         let mut found = None;
         fs.with_git_state(&Self::root_path().join(".git"), false, |git_state| {
             found = git_state
@@ -378,7 +378,7 @@ impl EditorTestContext {
                 .get(&RepoPath::from_rel_path(&path))
                 .cloned();
         })
-        .unwrap();
+        .expect("value should be present");
         assert_eq!(expected, found.as_deref());
     }
 
@@ -461,7 +461,7 @@ impl EditorTestContext {
 
         let expected_excerpts = marked_text
             .strip_prefix("[EXCERPT]\n")
-            .unwrap()
+            .expect("strip_prefix should be present")
             .split("[EXCERPT]\n")
             .collect::<Vec<_>>();
 
@@ -476,13 +476,13 @@ impl EditorTestContext {
                         multibuffer_snapshot
                             .buffer_for_id(info.context.start.buffer_id)
                             .cloned()
-                            .unwrap(),
+                            .expect("cloned should be present"),
                         multibuffer_snapshot
                             .anchor_in_excerpt(info.context.start)
-                            .unwrap()
+                            .expect("anchor_in_excerpt should be present")
                             ..multibuffer_snapshot
                                 .anchor_in_excerpt(info.context.end)
-                                .unwrap(),
+                                .expect("anchor_in_excerpt should be present"),
                         info,
                     )
                 })
@@ -590,7 +590,7 @@ impl EditorTestContext {
                 .map(|info| {
                     let buffer_snapshot = multibuffer_snapshot
                         .buffer_for_id(info.context.start.buffer_id)
-                        .unwrap();
+                        .expect("buffer_for_id should be present");
                     let is_folded = editor.is_buffer_folded(buffer_snapshot.remote_id(), cx);
                     (buffer_snapshot.clone(), info, is_folded)
                 })
@@ -736,7 +736,7 @@ impl std::fmt::Display for FormatMultiBufferAsMarkedText {
 
             let multibuffer_range = multibuffer_snapshot
                 .buffer_anchor_range_to_anchor_range(range.context.clone())
-                .unwrap();
+                .expect("value should be present");
 
             let mut text = multibuffer_snapshot
                 .text_for_range(multibuffer_range.clone())

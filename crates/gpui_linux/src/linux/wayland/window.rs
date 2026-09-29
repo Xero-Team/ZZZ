@@ -67,14 +67,14 @@ unsafe impl Sync for RawWindow {}
 
 impl rwh::HasWindowHandle for RawWindow {
     fn window_handle(&self) -> Result<rwh::WindowHandle<'_>, rwh::HandleError> {
-        let window = NonNull::new(self.window).unwrap();
+        let window = NonNull::new(self.window).expect("value should be present");
         let handle = rwh::WaylandWindowHandle::new(window);
         Ok(unsafe { rwh::WindowHandle::borrow_raw(handle.into()) })
     }
 }
 impl rwh::HasDisplayHandle for RawWindow {
     fn display_handle(&self) -> Result<rwh::DisplayHandle<'_>, rwh::HandleError> {
-        let display = NonNull::new(self.display).unwrap();
+        let display = NonNull::new(self.display).expect("value should be present");
         let handle = rwh::WaylandDisplayHandle::new(display);
         Ok(unsafe { rwh::DisplayHandle::borrow_raw(handle.into()) })
     }
@@ -336,7 +336,7 @@ impl WaylandWindowState {
                 display: surface
                     .backend()
                     .upgrade()
-                    .unwrap()
+                    .expect("entity should be alive")
                     .display_ptr()
                     .cast::<c_void>(),
             };
@@ -1417,7 +1417,7 @@ impl PlatformWindow for WaylandWindow {
                     .surface
                     .backend()
                     .upgrade()
-                    .unwrap()
+                    .expect("entity should be alive")
                     .display_ptr()
                     .cast::<std::ffi::c_void>(),
             };
@@ -1621,7 +1621,7 @@ fn update_window(mut state: RefMut<WaylandWindowState>) {
                 let blur = blur_manager.create(&state.surface, &state.globals.qh, ());
                 state.blur = Some(blur);
             }
-            state.blur.as_ref().unwrap().commit();
+            state.blur.as_ref().expect("value should have the expected type").commit();
         } else {
             // It probably doesn't hurt to clear the blur for opaque windows
             blur_manager.unset(&state.surface);

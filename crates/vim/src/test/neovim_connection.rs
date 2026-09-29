@@ -117,7 +117,7 @@ impl NeovimConnection {
     // Sends a keystroke to the neovim process.
     #[cfg(feature = "neovim")]
     pub async fn send_keystroke(&mut self, keystroke_text: &str) {
-        let mut keystroke = Keystroke::parse(keystroke_text).unwrap();
+        let mut keystroke = Keystroke::parse(keystroke_text).expect("parse should be present");
 
         if keystroke.key == "<" {
             keystroke.key = "lt".to_string()
@@ -254,7 +254,7 @@ impl NeovimConnection {
         self.nvim
             .command_output(format!("set {}", value).as_str())
             .await
-            .unwrap();
+            .expect("value should be present");
 
         self.data.push_back(NeovimData::SetOption {
             value: value.to_string(),
@@ -277,7 +277,7 @@ impl NeovimConnection {
 
     #[cfg(feature = "neovim")]
     pub async fn exec(&mut self, value: &str) {
-        self.nvim.command_output(value).await.unwrap();
+        self.nvim.command_output(value).await.expect("value should be present");
 
         self.data.push_back(NeovimData::Exec {
             command: value.to_string(),
@@ -318,7 +318,7 @@ impl NeovimConnection {
             .nvim
             .command_output(format!("echo getreg('{}')", name).as_str())
             .await
-            .unwrap();
+            .expect("value should be present");
 
         self.data.push_back(NeovimData::ReadRegister {
             name,
@@ -333,9 +333,9 @@ impl NeovimConnection {
         self.nvim
             .command_output(cmd)
             .await
-            .unwrap()
+            .expect("value should be present")
             .parse::<u32>()
-            .unwrap()
+            .expect("value should parse")
     }
 
     #[cfg(feature = "neovim")]
@@ -366,7 +366,7 @@ impl NeovimConnection {
             .into_iter()
             .find_map(|(key, value)| {
                 if key.as_str() == Some("mode") {
-                    Some(value.as_str().unwrap().to_owned())
+                    Some(value.as_str().expect("value should have the expected type").to_owned())
                 } else {
                     None
                 }
@@ -393,8 +393,8 @@ impl NeovimConnection {
                 // this code emulates that.
                 // to deal with casees where the selection is not perfectly rectangular we extract
                 // the content of the selection via the "a register to get the shape correctly.
-                self.nvim.input("\"aygv").await.unwrap();
-                let content = self.nvim.command_output("echo getreg('a')").await.unwrap();
+                self.nvim.input("\"aygv").await.expect("value should be present");
+                let content = self.nvim.command_output("echo getreg('a')").await.expect("value should be present");
                 let lines = content.split('\n').collect::<Vec<_>>();
                 let top = cmp::min(selection_row, cursor_row);
                 let left = cmp::min(selection_col, cursor_col);
@@ -501,10 +501,10 @@ impl NeovimConnection {
         let path = Self::test_data_path(test_case_id);
         let mut json = Vec::new();
         for entry in data {
-            serde_json::to_writer(&mut json, entry).unwrap();
+            serde_json::to_writer(&mut json, entry).expect("to_writer should be present");
             json.push(b'\n');
         }
-        std::fs::create_dir_all(path.parent().unwrap())
+        std::fs::create_dir_all(path.parent().expect("path should have the expected component"))
             .expect("could not create test data directory");
         std::fs::write(path, json).expect("could not write out test data");
     }

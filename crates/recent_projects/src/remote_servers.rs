@@ -1691,7 +1691,7 @@ impl RemoteServerProjects {
             #[cfg(target_os = "windows")]
             Mode::AddWslDistro(state) => {
                 let delegate = &state.picker.read(cx).delegate;
-                let distro = delegate.selected_distro().unwrap();
+                let distro = delegate.selected_distro().expect("selected_distro should be present");
                 self.connect_wsl_distro(state.picker.clone(), distro, window, cx);
             }
         }
@@ -2737,7 +2737,7 @@ impl RemoteServerProjects {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let last_entry = options.entries().last().unwrap();
+        let last_entry = options.entries().last().expect("collection should not be empty");
 
         let mut view = Navigable::new(
             div()

@@ -33,7 +33,7 @@ fn main() {
             .await
             .expect("Worktree initialization to succeed");
             let did_finish_scan =
-                worktree.update(cx, |this, _| this.as_local().unwrap().scan_complete());
+                worktree.update(cx, |this, _| this.as_local().expect("should be a local instance").scan_complete());
             let start = std::time::Instant::now();
             did_finish_scan.await;
             let elapsed = start.elapsed();

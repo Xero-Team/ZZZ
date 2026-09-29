@@ -60,8 +60,8 @@ impl Drop for SyntaxSnapshot {
                 min_depth: Default::default(),
                 max_depth: Default::default(),
                 // Deliberately bogus anchors, doesn't matter in this context
-                range: Anchor::min_min_range_for_buffer(BufferId::new(1).unwrap()),
-                last_layer_range: Anchor::min_min_range_for_buffer(BufferId::new(1).unwrap()),
+                range: Anchor::min_min_range_for_buffer(BufferId::new(1).expect("value should be present")),
+                last_layer_range: Anchor::min_min_range_for_buffer(BufferId::new(1).expect("value should be present")),
                 last_layer_language: Default::default(),
                 contains_unknown_injections: Default::default(),
             }),
@@ -932,7 +932,7 @@ impl SyntaxSnapshot {
     fn check_invariants(&self, text: &BufferSnapshot) {
         let out_of_order = |reason: &str| -> ! {
             let mut dump = format!("layers out of order: {reason}\nlayers:\n");
-            for layer in self.layers.iter() {
+            for layer in &self.layers {
                 dump.push_str(&format!(
                     "  depth={} range={:?} language={} id={:?}\n",
                     layer.depth,
@@ -946,7 +946,7 @@ impl SyntaxSnapshot {
 
         let mut max_depth = 0;
         let mut prev_layer: Option<(Range<Anchor>, Option<LanguageId>)> = None;
-        for layer in self.layers.iter() {
+        for layer in &self.layers {
             match Ord::cmp(&layer.depth, &max_depth) {
                 Ordering::Less => out_of_order("depth decreased"),
                 Ordering::Equal => {
@@ -1502,13 +1502,13 @@ fn join_ranges(
         let range = match (a.peek(), b.peek()) {
             (Some(range_a), Some(range_b)) => {
                 if range_a.start < range_b.start {
-                    a.next().unwrap()
+                    a.next().expect("iterator should yield an item")
                 } else {
-                    b.next().unwrap()
+                    b.next().expect("iterator should yield an item")
                 }
             }
-            (None, Some(_)) => b.next().unwrap(),
-            (Some(_), None) => a.next().unwrap(),
+            (None, Some(_)) => b.next().expect("iterator should yield an item"),
+            (Some(_), None) => a.next().expect("iterator should yield an item"),
             (None, None) => break,
         };
 
@@ -1635,7 +1635,7 @@ fn get_injections(
             }
 
             let content_range =
-                content_ranges.first().unwrap().start_byte..content_ranges.last().unwrap().end_byte;
+                content_ranges.first().expect("collection should not be empty").start_byte..content_ranges.last().expect("collection should not be empty").end_byte;
 
             // Avoid duplicate matches if two changed ranges intersect the same injection.
             if let Some((prev_pattern_ix, prev_range)) = &prev_match
@@ -1777,10 +1777,10 @@ pub(crate) fn splice_included_ranges(
 
         let (remove, insert) = match (next_removed_range, next_new_range) {
             (None, None) => break,
-            (Some(_), None) => (removed_ranges.next().unwrap(), None),
+            (Some(_), None) => (removed_ranges.next().expect("iterator should yield an item"), None),
             (Some(next_removed_range), Some(next_new_range)) => {
                 if next_removed_range.end < next_new_range.start_byte {
-                    (removed_ranges.next().unwrap(), None)
+                    (removed_ranges.next().expect("iterator should yield an item"), None)
                 } else {
                     let mut start = next_new_range.start_byte;
                     let mut end = next_new_range.end_byte;
@@ -1789,17 +1789,17 @@ pub(crate) fn splice_included_ranges(
                         if next_removed_range.start > next_new_range.end_byte {
                             break;
                         }
-                        let next_removed_range = removed_ranges.next().unwrap();
+                        let next_removed_range = removed_ranges.next().expect("iterator should yield an item");
                         start = cmp::min(start, next_removed_range.start);
                         end = cmp::max(end, next_removed_range.end);
                     }
 
-                    (start..end, Some(new_ranges.next().unwrap()))
+                    (start..end, Some(new_ranges.next().expect("iterator should yield an item")))
                 }
             }
             (None, Some(next_new_range)) => (
                 next_new_range.start_byte..next_new_range.end_byte,
-                Some(new_ranges.next().unwrap()),
+                Some(new_ranges.next().expect("iterator should yield an item")),
             ),
         };
 
@@ -2202,19 +2202,19 @@ impl Deref for QueryCursorHandle {
     type Target = QueryCursor;
 
     fn deref(&self) -> &Self::Target {
-        self.0.as_ref().unwrap()
+        self.0.as_ref().expect("value should have the expected type")
     }
 }
 
 impl DerefMut for QueryCursorHandle {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.as_mut().unwrap()
+        self.0.as_mut().expect("value should have the expected type")
     }
 }
 
 impl Drop for QueryCursorHandle {
     fn drop(&mut self) {
-        let mut cursor = self.0.take().unwrap();
+        let mut cursor = self.0.take().expect("entry should be present");
         cursor.set_byte_range(0..usize::MAX);
         cursor.set_point_range(Point::zero().to_ts_point()..Point::MAX.to_ts_point());
         cursor.set_containing_byte_range(0..usize::MAX);

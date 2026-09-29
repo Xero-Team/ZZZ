@@ -208,7 +208,7 @@ impl DebugAdapter for GdbDebugAdapter {
                 bail!("Could not find gdb path or it's not installed");
             }
 
-            user_setting_path.unwrap_or_else(|| gdb_path_result.unwrap())
+            user_setting_path.unwrap_or_else(|| gdb_path_result.expect("value should be present"))
         };
 
         // Arguments: use gdb_args from config if present, else user_args, else default

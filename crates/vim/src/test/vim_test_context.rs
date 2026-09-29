@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use editor::test::editor_lsp_test_context::EditorLspTestContext;
-use gpui::{Context, Entity, UpdateGlobal};
+use gpui::{BorrowAppContext, Context, Entity, UpdateGlobal};
 use search::{BufferSearchBar, project_search::ProjectSearchBar};
 use semver::Version;
 
@@ -20,6 +20,12 @@ impl VimTestContext {
         cx.update(|cx| {
             let settings = SettingsStore::test(cx);
             cx.set_global(settings);
+            cx.update_global::<SettingsStore, _>(|store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.workspace.display_language = Some(settings::DisplayLanguage::En);
+                });
+            });
+            i18n::init(cx);
             release_channel::init(Version::new(0, 0, 0), cx);
             command_palette::init(cx);
             project_panel::init(cx);
@@ -103,7 +109,7 @@ impl VimTestContext {
             "keymaps/default-macos.json",
             cx,
         )
-        .unwrap();
+        .expect("load_asset_allow_partial_failure should be present");
         for key_binding in &mut default_key_bindings {
             key_binding.set_meta(settings::KeybindSource::Default.meta());
         }
@@ -111,7 +117,7 @@ impl VimTestContext {
         if enabled {
             let mut vim_key_bindings =
                 settings::KeymapFile::load_asset_allow_partial_failure("keymaps/vim.json", cx)
-                    .unwrap();
+                    .expect("load_asset_allow_partial_failure should be present");
             for key_binding in &mut vim_key_bindings {
                 key_binding.set_meta(settings::KeybindSource::Vim.meta());
             }
@@ -153,7 +159,7 @@ impl VimTestContext {
         self.update_window(window, move |_, window, cx| {
             entity.update(cx, |t, cx| update(t, window, cx))
         })
-        .unwrap()
+        .expect("value should be present")
     }
 
     pub fn workspace<F, T>(&mut self, update: F) -> T
@@ -188,7 +194,7 @@ impl VimTestContext {
     }
 
     pub fn mode(&mut self) -> Mode {
-        self.update_editor(|editor, _, cx| editor.addon::<VimAddon>().unwrap().entity.read(cx).mode)
+        self.update_editor(|editor, _, cx| editor.addon::<VimAddon>().expect("value should be present").entity.read(cx).mode)
     }
 
     pub fn forced_motion(&mut self) -> bool {
@@ -199,7 +205,7 @@ impl VimTestContext {
         self.update_editor(|editor, _, cx| {
             editor
                 .addon::<VimAddon>()
-                .unwrap()
+                .expect("value should be present")
                 .entity
                 .read(cx)
                 .operator_stack
@@ -211,7 +217,7 @@ impl VimTestContext {
     pub fn set_state(&mut self, text: &str, mode: Mode) {
         self.cx.set_state(text);
         let vim =
-            self.update_editor(|editor, _window, _cx| editor.addon::<VimAddon>().cloned().unwrap());
+            self.update_editor(|editor, _window, _cx| editor.addon::<VimAddon>().cloned().expect("cloned should be present"));
 
         self.update(|window, cx| {
             vim.entity.update(cx, |vim, cx| {
@@ -259,7 +265,7 @@ impl VimTestContext {
         VimClipboard {
             editor: self
                 .read_from_clipboard()
-                .map(|item| item.text().unwrap())
+                .map(|item| item.text().expect("text should be present"))
                 .unwrap_or_default(),
         }
     }

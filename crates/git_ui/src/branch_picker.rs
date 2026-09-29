@@ -1262,7 +1262,7 @@ impl PickerDelegate for BranchListDelegate {
         _window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Div> {
-        let editor = editor.as_any().downcast_ref::<Entity<Editor>>().unwrap();
+        let editor = editor.as_any().downcast_ref::<Entity<Editor>>().expect("downcast should succeed");
         let editor_start = matches!(self.editor_position(), PickerEditorPosition::Start);
         let editor_bottom = matches!(self.editor_position(), PickerEditorPosition::End);
 
@@ -2203,6 +2203,11 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            cx.update_global::<SettingsStore, _>(|store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.workspace.display_language = Some(settings::DisplayLanguage::En);
+                });
+            });
             i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);

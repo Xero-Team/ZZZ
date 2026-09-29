@@ -4173,8 +4173,8 @@ impl GetDocumentDiagnostics {
             .related_information
             .into_iter()
             .map(|info| {
-                let start = info.location_range_start.unwrap();
-                let end = info.location_range_end.unwrap();
+                let start = info.location_range_start.expect("location_range_start should be present");
+                let end = info.location_range_end.expect("location_range_end should be present");
 
                 lsp::DiagnosticRelatedInformation {
                     location: lsp::Location {
@@ -4182,7 +4182,7 @@ impl GetDocumentDiagnostics {
                             start: point_to_lsp(PointUtf16::new(start.row, start.column)),
                             end: point_to_lsp(PointUtf16::new(end.row, end.column)),
                         },
-                        uri: lsp::Uri::from_str(&info.location_url.unwrap()).unwrap(),
+                        uri: lsp::Uri::from_str(&info.location_url.expect("location_url should be present")).expect("value should parse"),
                     },
                     message: info.message,
                 }
@@ -4218,7 +4218,7 @@ impl GetDocumentDiagnostics {
             code_description: diagnostic
                 .code_description
                 .map(|code_description| CodeDescription {
-                    href: Some(lsp::Uri::from_str(&code_description).unwrap()),
+                    href: Some(lsp::Uri::from_str(&code_description).expect("value should parse")),
                 }),
             related_information: Some(related_information),
             tags: Some(tags),

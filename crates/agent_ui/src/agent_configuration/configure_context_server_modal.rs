@@ -261,9 +261,9 @@ fn context_server_input(
 ) -> String {
     let (name, command, args, env) = match existing {
         Some((id, cmd)) => {
-            let args = serde_json::to_string(&cmd.args).unwrap();
-            let env = serde_json::to_string(&cmd.env.unwrap_or_default()).unwrap();
-            let cmd_path = serde_json::to_string(&cmd.path).unwrap();
+            let args = serde_json::to_string(&cmd.args).expect("serializing to JSON cannot fail");
+            let env = serde_json::to_string(&cmd.env.unwrap_or_default()).expect("serializing to JSON cannot fail");
+            let cmd_path = serde_json::to_string(&cmd.path).expect("serializing to JSON cannot fail");
             (id.0.to_string(), cmd_path, args, env)
         }
         None => (
@@ -330,7 +330,7 @@ fn context_server_http_input(
             let headers = if headers.is_empty() {
                 r#"// "Authorization": "Bearer <token>"#.to_owned()
             } else {
-                let json = serde_json::to_string_pretty(&headers).unwrap();
+                let json = serde_json::to_string_pretty(&headers).expect("serializing to JSON cannot fail");
                 let mut lines = json.split("\n").collect::<Vec<_>>();
                 if lines.len() > 1 {
                     lines.remove(0);
@@ -371,12 +371,12 @@ fn context_server_http_input(
             let mut lines = vec![
                 String::from("\n    \"oauth\": {"),
 
-                format!("      \"client_id\": {},", serde_json::to_string(&oauth.client_id).unwrap()),
+                format!("      \"client_id\": {},", serde_json::to_string(&oauth.client_id).expect("serializing to JSON cannot fail")),
             ];
             if let Some(client_secret) = oauth.client_secret {
                 lines.push(format!(
                     "      \"client_secret\": {}",
-                    serde_json::to_string(&client_secret).unwrap()
+                    serde_json::to_string(&client_secret).expect("serializing to JSON cannot fail")
                 ));
             } else {
                 lines.push(format!(
@@ -452,7 +452,7 @@ fn parse_http_input(
         anyhow::bail!("Expected exactly one context server configuration");
     }
 
-    let (key, value) = value.into_iter().next().unwrap();
+    let (key, value) = value.into_iter().next().expect("iterator should yield an item");
 
     Ok((
         ContextServerId(key.into()),
@@ -964,7 +964,7 @@ fn parse_input(text: &str) -> Result<(ContextServerId, ContextServerCommand)> {
     let value: serde_json::Value = serde_json_lenient::from_str(text)?;
     let object = value.as_object().context("Expected object")?;
     anyhow::ensure!(object.len() == 1, "Expected exactly one key-value pair");
-    let (context_server_name, value) = object.into_iter().next().unwrap();
+    let (context_server_name, value) = object.into_iter().next().expect("iterator should yield an item");
     let command: ContextServerCommand = serde_json::from_value(value.clone())?;
     Ok((ContextServerId(context_server_name.clone().into()), command))
 }

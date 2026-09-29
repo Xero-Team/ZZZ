@@ -496,7 +496,7 @@ impl WorktreeStore {
                     copy.await?;
                     new_worktree
                         .update(cx, |this, cx| {
-                            this.as_local_mut().unwrap().refresh_entry(
+                            this.as_local_mut().expect("should be a local instance").refresh_entry(
                                 new_project_path.path,
                                 None,
                                 cx,
@@ -521,7 +521,7 @@ impl WorktreeStore {
                     match response.entry {
                         Some(entry) => new_worktree
                             .update(cx, |worktree, cx| {
-                                worktree.as_remote_mut().unwrap().insert_entry(
+                                worktree.as_remote_mut().expect("should be a remote instance").insert_entry(
                                     entry,
                                     response.worktree_scan_id as usize,
                                     cx,
@@ -573,7 +573,7 @@ impl WorktreeStore {
                 let case_sensitive = new_worktree
                     .read(cx)
                     .as_local()
-                    .unwrap()
+                    .expect("should be a local instance")
                     .fs_is_case_sensitive();
 
                 let do_rename =
@@ -630,7 +630,7 @@ impl WorktreeStore {
                     rename.await?;
                     Ok(new_worktree
                         .update(cx, |this, cx| {
-                            let local = this.as_local_mut().unwrap();
+                            let local = this.as_local_mut().expect("should be a local instance");
                             if is_root_entry {
                                 // We eagerly update `abs_path` and refresh this worktree.
                                 // Otherwise, the FS watcher would do it on the `RootUpdated` event,
@@ -678,7 +678,7 @@ impl WorktreeStore {
                     if let Some(entry) = response.entry {
                         new_worktree
                             .update(cx, |worktree, cx| {
-                                worktree.as_remote_mut().unwrap().insert_entry(
+                                worktree.as_remote_mut().expect("should be a remote instance").insert_entry(
                                     entry,
                                     response.worktree_scan_id as usize,
                                     cx,
@@ -725,7 +725,7 @@ impl WorktreeStore {
                 *self.initial_scan_complete.0.borrow_mut() = false;
             }
         }
-        let task = self.loading_worktrees.get(&abs_path).unwrap().clone();
+        let task = self.loading_worktrees.get(&abs_path).expect("entry should be present").clone();
         cx.spawn(async move |this, cx| {
             let result = task.await;
             this.update(cx, |this, cx| {

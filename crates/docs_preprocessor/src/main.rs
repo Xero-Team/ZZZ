@@ -204,7 +204,7 @@ fn handle_preprocessing() -> Result<()> {
 }
 
 fn handle_frontmatter(book: &mut Book, errors: &mut HashSet<PreprocessorError>) {
-    let frontmatter_regex = Regex::new(r"(?s)^\s*---(.*?)---").unwrap();
+    let frontmatter_regex = Regex::new(r"(?s)^\s*---(.*?)---").expect("valid regex literal");
     for_each_chapter_mut(book, |chapter| {
         let new_content = frontmatter_regex.replace(&chapter.content, |caps: &regex::Captures| {
             let frontmatter = caps[1].trim();
@@ -251,7 +251,7 @@ fn format_binding(binding: String) -> String {
 }
 
 fn template_and_validate_keybindings(book: &mut Book, errors: &mut HashSet<PreprocessorError>) {
-    let regex = Regex::new(r"\{#kb(?::(\w+))?\s+(.*?)\}").unwrap();
+    let regex = Regex::new(r"\{#kb(?::(\w+))?\s+(.*?)\}").expect("valid regex literal");
 
     for_each_chapter_mut(book, |chapter| {
         chapter.content = regex
@@ -299,7 +299,7 @@ fn template_and_validate_keybindings(book: &mut Book, errors: &mut HashSet<Prepr
 }
 
 fn template_and_validate_actions(book: &mut Book, errors: &mut HashSet<PreprocessorError>) {
-    let regex = Regex::new(r"\{#action (.*?)\}").unwrap();
+    let regex = Regex::new(r"\{#action (.*?)\}").expect("valid regex literal");
 
     for_each_chapter_mut(book, |chapter| {
         chapter.content = regex
@@ -720,7 +720,7 @@ fn handle_postprocessing() -> Result<()> {
     }
 
     zlog::info!(logger => "Processing {} `.html` files", files.len());
-    let meta_regex = Regex::new(&FRONT_MATTER_COMMENT.replace("{}", "(.*)")).unwrap();
+    let meta_regex = Regex::new(&FRONT_MATTER_COMMENT.replace("{}", "(.*)")).expect("valid regex literal");
     for file in files {
         let contents = std::fs::read_to_string(&file)?;
         let mut meta_description = None;
@@ -790,7 +790,7 @@ fn handle_postprocessing() -> Result<()> {
 
 fn title_regex() -> &'static Regex {
     static TITLE_REGEX: OnceLock<Regex> = OnceLock::new();
-    TITLE_REGEX.get_or_init(|| Regex::new(r"<title>\s*(.*?)\s*</title>").unwrap())
+    TITLE_REGEX.get_or_init(|| Regex::new(r"<title>\s*(.*?)\s*</title>").expect("valid regex literal"))
 }
 
 fn generate_big_table_of_actions() -> String {
@@ -913,9 +913,9 @@ mod tests {
 
         assert!(errors.is_empty());
         let chapter = book.chapters().next().unwrap();
-        let regex = Regex::new(&FRONT_MATTER_COMMENT.replace("{}", "(.*)")).unwrap();
+        let regex = Regex::new(&FRONT_MATTER_COMMENT.replace("{}", "(.*)")).expect("valid regex literal");
         let captures = regex.captures(&chapter.content).unwrap();
-        let metadata: HashMap<String, String> = serde_json::from_str(&captures[1]).unwrap();
+        let metadata: HashMap<String, String> = serde_json::from_str(&captures[1]).expect("parsing a JSON literal cannot fail");
 
         assert_eq!(metadata.get("title").map(String::as_str), Some("Welcome"));
         assert_eq!(

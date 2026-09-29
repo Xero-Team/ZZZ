@@ -83,7 +83,7 @@ pub const REMOTE_SERVER_BINARY_PREFIX: &str = "zzz-remote-server";
 /// Returns the relative path to the remote server directory on the SSH host.
 pub fn remote_server_dir_relative() -> &'static RelPath {
     static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(REMOTE_SERVER_DIR_NAME).unwrap());
+        LazyLock::new(|| RelPath::unix(REMOTE_SERVER_DIR_NAME).expect("path should be a valid relative path"));
     *CACHED
 }
 
@@ -91,7 +91,7 @@ pub fn remote_server_dir_relative() -> &'static RelPath {
 /// Returns the relative path to the legacy WSL server directory on the WSL host.
 pub fn remote_wsl_server_dir_relative() -> &'static RelPath {
     static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(REMOTE_WSL_SERVER_DIR_NAME).unwrap());
+        LazyLock::new(|| RelPath::unix(REMOTE_WSL_SERVER_DIR_NAME).expect("path should be a valid relative path"));
     *CACHED
 }
 
@@ -478,21 +478,21 @@ pub fn local_vscode_folder_name() -> &'static str {
 /// Returns the relative path to a `settings.json` file within a project.
 pub fn local_settings_file_relative_path() -> &'static RelPath {
     static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(".ZZZ/settings.json").unwrap());
+        LazyLock::new(|| RelPath::unix(".ZZZ/settings.json").expect("path should be a valid relative path"));
     *CACHED
 }
 
 /// Returns the relative path to a `tasks.json` file within a project.
 pub fn local_tasks_file_relative_path() -> &'static RelPath {
     static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(".ZZZ/tasks.json").unwrap());
+        LazyLock::new(|| RelPath::unix(".ZZZ/tasks.json").expect("path should be a valid relative path"));
     *CACHED
 }
 
 /// Returns the relative path to a `.vscode/tasks.json` file within a project.
 pub fn local_vscode_tasks_file_relative_path() -> &'static RelPath {
     static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(".vscode/tasks.json").unwrap());
+        LazyLock::new(|| RelPath::unix(".vscode/tasks.json").expect("path should be a valid relative path"));
     *CACHED
 }
 
@@ -508,14 +508,14 @@ pub fn task_file_name() -> &'static str {
 /// .ZZZ/debug.json
 pub fn local_debug_file_relative_path() -> &'static RelPath {
     static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(".ZZZ/debug.json").unwrap());
+        LazyLock::new(|| RelPath::unix(".ZZZ/debug.json").expect("path should be a valid relative path"));
     *CACHED
 }
 
 /// Returns the relative path to a `.vscode/launch.json` file within a project.
 pub fn local_vscode_launch_file_relative_path() -> &'static RelPath {
     static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(".vscode/launch.json").unwrap());
+        LazyLock::new(|| RelPath::unix(".vscode/launch.json").expect("path should be a valid relative path"));
     *CACHED
 }
 

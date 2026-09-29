@@ -49,7 +49,7 @@ impl Chunk {
     pub fn new(text: &str) -> Self {
         let text = {
             let mut buf = ArrayString::new();
-            buf.push_str(text).unwrap();
+            buf.push_str(text).expect("push_str should be present");
             buf
         };
 
@@ -122,7 +122,7 @@ impl Chunk {
         self.chars_utf16 |= slice.chars_utf16 << base_ix;
         self.newlines |= slice.newlines << base_ix;
         self.tabs |= slice.tabs << base_ix;
-        self.text.push_str(slice.text).unwrap();
+        self.text.push_str(slice.text).expect("push_str should be present");
     }
 
     #[inline(always)]
@@ -142,8 +142,8 @@ impl Chunk {
         self.tabs = slice.tabs | (self.tabs << shift);
 
         let mut new_text = ArrayString::<MAX_BASE, u8>::new();
-        new_text.push_str(slice.text).unwrap();
-        new_text.push_str(&self.text).unwrap();
+        new_text.push_str(slice.text).expect("push_str should be present");
+        new_text.push_str(&self.text).expect("push_str should be present");
         self.text = new_text;
     }
 
@@ -230,7 +230,7 @@ impl Into<Chunk> for ChunkSlice<'_> {
             chars_utf16: self.chars_utf16,
             newlines: self.newlines,
             tabs: self.tabs,
-            text: self.text.try_into().unwrap(),
+            text: self.text.try_into().expect("conversion should succeed"),
         }
     }
 }
@@ -745,7 +745,7 @@ fn panic_char_boundary(text: &str, offset: usize) -> ! {
     // find the character
     let char_start = text.floor_char_boundary(offset);
     // `char_start` must be less than len and a char boundary
-    let ch = text.get(char_start..).unwrap().chars().next().unwrap();
+    let ch = text.get(char_start..).expect("entry should be present").chars().next().expect("iterator should yield an item");
     let char_range = char_start..char_start + ch.len_utf8();
     panic!(
         "byte index {} is not a char boundary; it is inside {:?} (bytes {:?})",
@@ -769,7 +769,7 @@ fn log_err_char_boundary(text: &str, offset: usize) {
     // find the character
     let char_start = text.floor_char_boundary(offset);
     // `char_start` must be less than len and a char boundary
-    let ch = text.get(char_start..).unwrap().chars().next().unwrap();
+    let ch = text.get(char_start..).expect("entry should be present").chars().next().expect("iterator should yield an item");
     let char_range = char_start..char_start + ch.len_utf8();
     log::error!(
         "byte index {} is not a char boundary; it is inside {:?} (bytes {:?})",

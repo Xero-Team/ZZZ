@@ -555,7 +555,7 @@ impl RemoteImageStore {
                 loading.chunks.push(chunk.data);
 
                 if loading.received_size == loading.state.content_size {
-                    let loading = self.loading_remote_images_by_id.remove(&image_id).unwrap();
+                    let loading = self.loading_remote_images_by_id.remove(&image_id).expect("entry should be present");
 
                     let mut content = Vec::with_capacity(loading.received_size as usize);
                     for chunk_data in loading.chunks {

@@ -1164,7 +1164,7 @@ async fn open_new_agent_servers_entry_in_settings_editor(
         })?
         .await?
         .downcast::<Editor>()
-        .unwrap();
+        .expect("downcast should succeed");
 
     settings_editor
         .downgrade()

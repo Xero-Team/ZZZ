@@ -110,10 +110,10 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
             .list()
             .into_iter()
             .next()
-            .map(|m| themes.get(&m.name).unwrap())
-            .unwrap()
+            .map(|m| themes.get(&m.name).expect("entry should be present"))
+            .expect("entry should be present")
     });
-    let icon_theme = themes.default_icon_theme().unwrap();
+    let icon_theme = themes.default_icon_theme().expect("default_icon_theme should be present");
     cx.set_global(GlobalTheme { theme, icon_theme });
 }
 

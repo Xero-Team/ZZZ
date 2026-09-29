@@ -100,7 +100,7 @@ impl Vim {
                 });
             };
 
-            item.act_as::<Editor>(cx).unwrap().update(cx, |editor, cx| {
+            item.act_as::<Editor>(cx).expect("value should be present").update(cx, |editor, cx| {
                 let map = editor.snapshot(window, cx);
                 let mut ranges: Vec<Range<Anchor>> = Vec::new();
                 for mut anchor in anchors {

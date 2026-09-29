@@ -139,11 +139,11 @@ impl RelPath {
     }
 
     pub fn file_stem(&self) -> Option<&str> {
-        Some(self.as_std_path().file_stem()?.to_str().unwrap())
+        Some(self.as_std_path().file_stem()?.to_str().expect("path should be valid UTF-8"))
     }
 
     pub fn extension(&self) -> Option<&str> {
-        Some(self.as_std_path().extension()?.to_str().unwrap())
+        Some(self.as_std_path().extension()?.to_str().expect("path should be valid UTF-8"))
     }
 
     pub fn parent(&self) -> Option<&Self> {
@@ -339,7 +339,7 @@ impl RelPathBuf {
             let mut filename = PathBuf::from(filename);
             filename.set_extension(extension);
             self.pop();
-            self.0.push_str(filename.to_str().unwrap());
+            self.0.push_str(filename.to_str().expect("path should be valid UTF-8"));
             true
         } else {
             false

@@ -487,7 +487,7 @@ impl FoldMap {
                             break;
                         }
 
-                        let next_edit = inlay_edits_iter.next().unwrap();
+                        let next_edit = inlay_edits_iter.next().expect("iterator should yield an item");
                         delta += next_edit.new_len() as isize - next_edit.old_len() as isize;
 
                         if next_edit.old.end >= edit.old.end {
@@ -535,7 +535,7 @@ impl FoldMap {
                     .peek()
                     .is_some_and(|(_, fold_range)| fold_range.start < edit.new.end)
                 {
-                    let (fold, mut fold_range) = folds.next().unwrap();
+                    let (fold, mut fold_range) = folds.next().expect("iterator should yield an item");
                     let sum = new_transforms.summary();
 
                     assert!(fold_range.start.0 >= sum.input.len);
@@ -546,7 +546,7 @@ impl FoldMap {
                                 && fold.placeholder.merge_adjacent
                                 && next_fold.placeholder.merge_adjacent)
                     }) {
-                        let (_, next_fold_range) = folds.next().unwrap();
+                        let (_, next_fold_range) = folds.next().expect("iterator should yield an item");
                         if next_fold_range.end > fold_range.end {
                             fold_range.end = next_fold_range.end;
                         }

@@ -451,7 +451,7 @@ impl FromStr for GitStatus {
                 if path.ends_with('/') {
                     return None;
                 }
-                let status = entry.as_bytes()[0..2].try_into().unwrap();
+                let status = entry.as_bytes()[0..2].try_into().expect("conversion should succeed");
                 let status = FileStatus::from_bytes(status).log_err()?;
                 // git-status outputs `/`-delimited repo paths, even on Windows.
                 let path = RepoPath::from_rel_path(RelPath::unix(path).log_err()?);

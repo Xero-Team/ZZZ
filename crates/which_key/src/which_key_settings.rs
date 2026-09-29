@@ -8,11 +8,11 @@ pub struct WhichKeySettings {
 
 impl Settings for WhichKeySettings {
     fn from_settings(content: &SettingsContent) -> Self {
-        let which_key: &WhichKeySettingsContent = content.which_key.as_ref().unwrap();
+        let which_key: &WhichKeySettingsContent = content.which_key.as_ref().expect("value should have the expected type");
 
         Self {
-            enabled: which_key.enabled.unwrap(),
-            delay_ms: which_key.delay_ms.unwrap(),
+            enabled: which_key.enabled.expect("enabled should be present"),
+            delay_ms: which_key.delay_ms.expect("delay_ms should be present"),
         }
     }
 }

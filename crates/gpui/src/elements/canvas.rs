@@ -68,7 +68,7 @@ impl<T: 'static> Element for Canvas<T> {
         window: &mut Window,
         cx: &mut App,
     ) -> Option<T> {
-        Some(self.prepaint.take().unwrap()(bounds, window, cx))
+        Some(self.prepaint.take().expect("entry should be present")(bounds, window, cx))
     }
 
     fn paint(
@@ -81,9 +81,9 @@ impl<T: 'static> Element for Canvas<T> {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let prepaint = prepaint.take().unwrap();
+        let prepaint = prepaint.take().expect("entry should be present");
         style.paint(bounds, window, cx, |window, cx| {
-            (self.paint.take().unwrap())(bounds, prepaint, window, cx)
+            (self.paint.take().expect("entry should be present"))(bounds, prepaint, window, cx)
         });
     }
 }

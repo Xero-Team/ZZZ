@@ -399,7 +399,7 @@ impl WgpuRenderer {
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                         buffer: &globals_buffer,
                         offset: 0,
-                        size: Some(NonZeroU64::new(globals_size).unwrap()),
+                        size: Some(NonZeroU64::new(globals_size).expect("GlobalParams is non-zero sized")),
                     }),
                 },
                 wgpu::BindGroupEntry {
@@ -407,7 +407,7 @@ impl WgpuRenderer {
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                         buffer: &globals_buffer,
                         offset: gamma_offset,
-                        size: Some(NonZeroU64::new(gamma_size).unwrap()),
+                        size: Some(NonZeroU64::new(gamma_size).expect("GammaParams is non-zero sized")),
                     }),
                 },
             ],
@@ -422,7 +422,7 @@ impl WgpuRenderer {
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                         buffer: &globals_buffer,
                         offset: path_globals_offset,
-                        size: Some(NonZeroU64::new(globals_size).unwrap()),
+                        size: Some(NonZeroU64::new(globals_size).expect("GlobalParams is non-zero sized")),
                     }),
                 },
                 wgpu::BindGroupEntry {
@@ -430,7 +430,7 @@ impl WgpuRenderer {
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                         buffer: &globals_buffer,
                         offset: gamma_offset,
-                        size: Some(NonZeroU64::new(gamma_size).unwrap()),
+                        size: Some(NonZeroU64::new(gamma_size).expect("GammaParams is non-zero sized")),
                     }),
                 },
             ],
@@ -441,7 +441,7 @@ impl WgpuRenderer {
         let last_error: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
         let last_error_clone = Arc::clone(&last_error);
         device.on_uncaptured_error(Arc::new(move |error| {
-            let mut guard = last_error_clone.lock().unwrap();
+            let mut guard = last_error_clone.lock().expect("lock should not be poisoned");
             *guard = Some(error.to_string());
         }));
 
@@ -1090,7 +1090,7 @@ impl WgpuRenderer {
             return false;
         }
 
-        let last_error = self.last_error.lock().unwrap().take();
+        let last_error = self.last_error.lock().expect("lock should not be poisoned").take();
         if let Some(error) = last_error {
             self.failed_frame_count += 1;
             log::error!(
@@ -1140,7 +1140,7 @@ impl WgpuRenderer {
                 return false;
             }
             wgpu::CurrentSurfaceTexture::Validation => {
-                *self.last_error.lock().unwrap() =
+                *self.last_error.lock().expect("lock should not be poisoned") =
                     Some("Surface texture validation error".to_owned());
                 return false;
             }
@@ -1818,7 +1818,7 @@ impl WgpuRenderer {
             surface
         } else {
             let ctx_ref = gpu_context.borrow();
-            let instance = &ctx_ref.as_ref().unwrap().instance;
+            let instance = &ctx_ref.as_ref().expect("value should have the expected type").instance;
             create_surface(instance, window_handle.as_raw())?
         };
 

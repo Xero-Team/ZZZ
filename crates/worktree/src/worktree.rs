@@ -497,7 +497,7 @@ impl Worktree {
                     abs_path
                         .file_name()
                         .and_then(|f| f.to_str())
-                        .map_or(RelPath::empty_arc(), |f| RelPath::unix(f).unwrap().into()),
+                        .map_or(RelPath::empty_arc(), |f| RelPath::unix(f).expect("path should be a valid relative path").into()),
                     abs_path.clone(),
                     PathStyle::local(),
                 ),
@@ -647,7 +647,7 @@ impl Worktree {
             cx.spawn(async move |this, cx| {
                 while (snapshot_updated_rx.recv().await).is_some() {
                     this.update(cx, |this, cx| {
-                        let this = this.as_remote_mut().unwrap();
+                        let this = this.as_remote_mut().expect("should be a remote instance");
 
                         // The watch channel delivers an initial signal before
                         // any real updates arrive. Skip these spurious wakeups.
@@ -711,7 +711,7 @@ impl Worktree {
                         cx.notify();
                         while let Some((scan_id, _)) = this.snapshot_subscriptions.front() {
                             if this.observed_snapshot(*scan_id) {
-                                let (_, tx) = this.snapshot_subscriptions.pop_front().unwrap();
+                                let (_, tx) = this.snapshot_subscriptions.pop_front().expect("collection should not be empty");
                                 let _ = tx.send(());
                             } else {
                                 break;
@@ -938,7 +938,7 @@ impl Worktree {
                     let response = request.await?;
                     if let Some(entry) = response.entry {
                         this.update(cx, |worktree, cx| {
-                            worktree.as_remote_mut().unwrap().insert_entry(
+                            worktree.as_remote_mut().expect("should be a remote instance").insert_entry(
                                 entry,
                                 response.worktree_scan_id as usize,
                                 cx,
@@ -1046,7 +1046,7 @@ impl Worktree {
                     let response = response.await?;
                     this.update(cx, |this, _| {
                         this.as_remote_mut()
-                            .unwrap()
+                            .expect("should be a remote instance")
                             .wait_for_snapshot(response.worktree_scan_id as usize)
                     })?
                     .await?;
@@ -1072,7 +1072,7 @@ impl Worktree {
                     let response = response.await?;
                     this.update(cx, |this, _| {
                         this.as_remote_mut()
-                            .unwrap()
+                            .expect("should be a remote instance")
                             .wait_for_snapshot(response.worktree_scan_id as usize)
                     })?
                     .await?;
@@ -1184,7 +1184,7 @@ impl Worktree {
             {
                 self.path_style
                     .join("~", &*stripped.to_string_lossy())
-                    .unwrap()
+                    .expect("value should be present")
             } else {
                 full_path.to_string_lossy().into_owned()
             };
@@ -1300,7 +1300,7 @@ impl LocalWorktree {
         let scan_state_updater = cx.spawn(async move |this, cx| {
             while let Some((state, this)) = scan_states_rx.next().await.zip(this.upgrade()) {
                 this.update(cx, |this, cx| {
-                    let this = this.as_local_mut().unwrap();
+                    let this = this.as_local_mut().expect("should be a local instance");
                     match state {
                         ScanState::Started => {
                             *this.is_scanning.0.borrow_mut() = true;
@@ -1384,7 +1384,7 @@ impl LocalWorktree {
 
         while let Some((scan_id, _)) = self.snapshot_subscriptions.front() {
             if self.snapshot.completed_scan_id >= *scan_id {
-                let (_, tx) = self.snapshot_subscriptions.pop_front().unwrap();
+                let (_, tx) = self.snapshot_subscriptions.pop_front().expect("collection should not be empty");
                 tx.send(()).ok();
             } else {
                 break;
@@ -1701,21 +1701,21 @@ impl LocalWorktree {
 
             let (result, refreshes) = this.update(cx, |this, cx| {
                 let mut refreshes = Vec::new();
-                let refresh_paths = path.strip_prefix(&lowest_ancestor).unwrap();
+                let refresh_paths = path.strip_prefix(&lowest_ancestor).expect("strip_prefix should be present");
                 for refresh_path in refresh_paths.ancestors() {
                     if refresh_path == RelPath::empty() {
                         continue;
                     }
                     let refresh_full_path = lowest_ancestor.join(refresh_path);
 
-                    refreshes.push(this.as_local_mut().unwrap().refresh_entry(
+                    refreshes.push(this.as_local_mut().expect("should be a local instance").refresh_entry(
                         refresh_full_path,
                         None,
                         cx,
                     ));
                 }
                 (
-                    this.as_local_mut().unwrap().refresh_entry(path, None, cx),
+                    this.as_local_mut().expect("should be a local instance").refresh_entry(path, None, cx),
                     refreshes,
                 )
             })?;
@@ -1815,7 +1815,7 @@ impl LocalWorktree {
             let entry = this
                 .update(cx, |this, cx| {
                     this.as_local_mut()
-                        .unwrap()
+                        .expect("should be a local instance")
                         .refresh_entry(path.clone(), None, cx)
                 })?
                 .await?;
@@ -1894,7 +1894,7 @@ impl LocalWorktree {
             let (trashed_entry, path) = delete.await?;
             this.update(cx, |this, _| {
                 this.as_local_mut()
-                    .unwrap()
+                    .expect("should be a local instance")
                     .refresh_entries_for_paths(vec![path])
             })?
             .recv()
@@ -2036,7 +2036,7 @@ impl LocalWorktree {
         entry_id: ProjectEntryId,
         cx: &Context<Worktree>,
     ) -> Option<Task<Result<()>>> {
-        let path = self.entry_for_id(entry_id).unwrap().path.clone();
+        let path = self.entry_for_id(entry_id).expect("entry_for_id should be present").path.clone();
         let mut rx = self.add_path_prefix_to_scan(path);
         Some(cx.background_spawn(async move {
             rx.next().await;
@@ -2171,7 +2171,7 @@ impl LocalWorktree {
             .as_path()
             .file_name()
             .and_then(|f| f.to_str())
-            .map_or(RelPath::empty_arc(), |f| RelPath::unix(f).unwrap().into());
+            .map_or(RelPath::empty_arc(), |f| RelPath::unix(f).expect("path should be a valid relative path").into());
         self.snapshot.update_abs_path(new_path, root_name);
         self.restart_background_scanners(cx);
     }
@@ -2243,7 +2243,7 @@ impl RemoteWorktree {
                 }
             }
             this.update(cx, |this, _| {
-                let this = this.as_remote_mut().unwrap();
+                let this = this.as_remote_mut().expect("should be a remote instance");
                 this.update_observer.take();
             })
         })
@@ -2288,7 +2288,7 @@ impl RemoteWorktree {
         cx.spawn(async move |this, cx| {
             wait_for_snapshot.await?;
             this.update(cx, |worktree, _| {
-                let worktree = worktree.as_remote_mut().unwrap();
+                let worktree = worktree.as_remote_mut().expect("should be a remote instance");
                 let snapshot = &mut worktree.background_snapshot.lock().0;
                 let entry = snapshot.insert_entry(entry, &worktree.file_scan_inclusions);
                 worktree.snapshot = snapshot.clone();
@@ -2313,12 +2313,12 @@ impl RemoteWorktree {
             let scan_id = response.worktree_scan_id as usize;
 
             this.update(cx, move |this, _| {
-                this.as_remote_mut().unwrap().wait_for_snapshot(scan_id)
+                this.as_remote_mut().expect("should be a remote instance").wait_for_snapshot(scan_id)
             })?
             .await?;
 
             this.update(cx, |this, _| {
-                let this = this.as_remote_mut().unwrap();
+                let this = this.as_remote_mut().expect("should be a remote instance");
                 let snapshot = &mut this.background_snapshot.lock().0;
                 snapshot.delete_entry(entry_id);
                 this.snapshot = snapshot.clone();
@@ -2921,7 +2921,7 @@ impl LocalSnapshot {
             match build_gitignore(&abs_path, fs).await {
                 Ok(ignore) => {
                     self.ignores_by_parent_abs_path
-                        .insert(abs_path.parent().unwrap().into(), (Arc::new(ignore), true));
+                        .insert(abs_path.parent().expect("path should have the expected component").into(), (Arc::new(ignore), true));
                 }
                 Err(error) => {
                     log::error!(
@@ -3071,9 +3071,9 @@ impl LocalSnapshot {
         let mut visible_files = self.files(false, 0);
         for entry in self.entries_by_path.cursor::<()>(()) {
             if entry.is_file() {
-                assert_eq!(files.next().unwrap().inode, entry.inode);
+                assert_eq!(files.next().expect("iterator should yield an item").inode, entry.inode);
                 if !entry.is_ignored || entry.is_always_included {
-                    assert_eq!(visible_files.next().unwrap().inode, entry.inode);
+                    assert_eq!(visible_files.next().expect("iterator should yield an item").inode, entry.inode);
                 }
             }
         }
@@ -3114,14 +3114,14 @@ impl LocalSnapshot {
                 let ignore_parent_path = &RelPath::new(
                     ignore_parent_abs_path
                         .strip_prefix(self.abs_path.as_path())
-                        .unwrap(),
+                        .expect("value should be present"),
                     PathStyle::local(),
                 )
-                .unwrap();
+                .expect("value should be present");
                 assert!(self.entry_for_path(ignore_parent_path).is_some());
                 assert!(
                     self.entry_for_path(
-                        &ignore_parent_path.join(RelPath::unix(GITIGNORE).unwrap())
+                        &ignore_parent_path.join(RelPath::unix(GITIGNORE).expect("path should be a valid relative path"))
                     )
                     .is_some()
                 );
@@ -3184,7 +3184,7 @@ impl BackgroundScannerState {
                     ancestor_inodes,
                     is_external: entry.is_external,
                 })
-                .unwrap();
+                .expect("value should be present");
         }
     }
 
@@ -3389,7 +3389,7 @@ impl BackgroundScannerState {
             self.removed_entries.insert(entry);
 
             if entry.path.file_name() == Some(GITIGNORE) {
-                let abs_parent_path = self.snapshot.absolutize(&entry.path.parent().unwrap());
+                let abs_parent_path = self.snapshot.absolutize(&entry.path.parent().expect("path should have the expected component"));
                 if let Some((_, needs_update)) = self
                     .snapshot
                     .ignores_by_parent_abs_path
@@ -3758,14 +3758,14 @@ impl language::LocalFile for File {
     }
 
     fn load(&self, cx: &App) -> Task<Result<String>> {
-        let worktree = self.worktree.read(cx).as_local().unwrap();
+        let worktree = self.worktree.read(cx).as_local().expect("should be a local instance");
         let abs_path = worktree.absolutize(&self.path);
         let fs = worktree.fs.clone();
         cx.background_spawn(async move { fs.load(&abs_path).await })
     }
 
     fn load_bytes(&self, cx: &App) -> Task<Result<Vec<u8>>> {
-        let worktree = self.worktree.read(cx).as_local().unwrap();
+        let worktree = self.worktree.read(cx).as_local().expect("should be a local instance");
         let abs_path = worktree.absolutize(&self.path);
         let fs = worktree.fs.clone();
         cx.background_spawn(async move { fs.load_bytes(&abs_path).await })
@@ -5251,7 +5251,7 @@ impl BackgroundScanner {
 
         for child_abs_path in child_paths {
             let child_abs_path: Arc<Path> = child_abs_path.into();
-            let child_name = child_abs_path.file_name().unwrap();
+            let child_name = child_abs_path.file_name().expect("path should have the expected component");
             let Some(child_path) = child_name
                 .to_str()
                 .and_then(|name| Some(job.path.join(RelPath::unix(name).ok()?)))
@@ -5397,7 +5397,7 @@ impl BackgroundScanner {
             {
                 let relative_path = job
                     .path
-                    .join(RelPath::unix(child_name.to_str().unwrap()).unwrap());
+                    .join(RelPath::unix(child_name.to_str().expect("path should be valid UTF-8")).expect("value should be present"));
                 if self.is_path_private(&relative_path) {
                     log::debug!("detected private file: {relative_path:?}");
                     child_entry.is_private = true;
@@ -5653,7 +5653,7 @@ impl BackgroundScanner {
                         ignore_queue: ignore_queue_tx.clone(),
                         scan_queue: scan_job_tx.clone(),
                     })
-                    .unwrap();
+                    .expect("value should be present");
             }
         }
         drop(ignore_queue_tx);
@@ -5741,7 +5741,7 @@ impl BackgroundScanner {
                             }
                         }
 
-                        let ignore_path = parent_path.join(RelPath::unix(GITIGNORE).unwrap());
+                        let ignore_path = parent_path.join(RelPath::unix(GITIGNORE).expect("path should be a valid relative path"));
                         if snapshot.snapshot.entry_for_path(&ignore_path).is_none() {
                             return false;
                         }
@@ -5790,7 +5790,7 @@ impl BackgroundScanner {
                 .peek()
                 .is_some_and(|p| p.starts_with(&parent_abs_path))
             {
-                ignores_to_update.next().unwrap();
+                ignores_to_update.next().expect("iterator should yield an item");
             }
             let ignore_stack = snapshot
                 .ignore_stack_for_abs_path(&parent_abs_path, true, fs.as_ref())
@@ -5873,11 +5873,11 @@ impl BackgroundScanner {
                         scan_queue: job.scan_queue.clone(),
                     })
                     .await
-                    .unwrap();
+                    .expect("value should be present");
             }
 
             if entry.is_ignored != was_ignored {
-                let mut path_entry = snapshot.entries_by_id.get(&entry.id, ()).unwrap().clone();
+                let mut path_entry = snapshot.entries_by_id.get(&entry.id, ()).expect("entry should be present").clone();
                 path_entry.scan_id = snapshot.scan_id;
                 path_entry.is_ignored = entry.is_ignored;
                 entries_by_id_edits.push(Edit::Insert(path_entry));
@@ -5938,11 +5938,11 @@ impl BackgroundScanner {
                     // unregistered.
                     continue;
                 };
-                affected_repo_roots.push(dot_git_dir.parent().unwrap().into());
+                affected_repo_roots.push(dot_git_dir.parent().expect("path should have the expected component").into());
                 state
                     .insert_git_repository(
                         RelPath::new(relative, PathStyle::local())
-                            .unwrap()
+                            .expect("value should be present")
                             .into_arc(),
                         self.fs.as_ref(),
                         self.watcher.as_ref(),
@@ -5969,7 +5969,7 @@ impl BackgroundScanner {
                     .entry_for_id(work_directory_id)
                     .is_some_and(|entry| {
                         snapshot
-                            .entry_for_path(&entry.path.join(RelPath::unix(DOT_GIT).unwrap()))
+                            .entry_for_path(&entry.path.join(RelPath::unix(DOT_GIT).expect("path should be a valid relative path")))
                             .is_some()
                     });
 
@@ -5994,7 +5994,7 @@ impl BackgroundScanner {
             .retain(|work_directory_id, entry| {
                 let preserve = ids_to_preserve.contains(work_directory_id);
                 if !preserve {
-                    affected_repo_roots.push(entry.dot_git_abs_path.parent().unwrap().into());
+                    affected_repo_roots.push(entry.dot_git_abs_path.parent().expect("path should have the expected component").into());
                     snapshot
                         .repo_exclude_by_work_dir_abs_path
                         .remove(&entry.work_directory_abs_path);
@@ -6086,7 +6086,7 @@ async fn discover_ancestor_git_repo(
                 let location_in_repo = root_abs_path
                     .as_path()
                     .strip_prefix(ancestor)
-                    .unwrap()
+                    .expect("strip_prefix should be present")
                     .into();
                 log::info!("inserting parent git repo for this worktree: {location_in_repo:?}");
                 // We associate the external git repo with our root folder and
@@ -6252,7 +6252,7 @@ fn build_diff(
 fn swap_to_front(child_paths: &mut Vec<PathBuf>, file: &str) {
     let position = child_paths
         .iter()
-        .position(|path| path.file_name().unwrap() == file);
+        .position(|path| path.file_name().expect("path should have the expected component") == file);
     if let Some(position) = position {
         let temp = child_paths.remove(position);
         child_paths.insert(0, temp);
@@ -6312,7 +6312,7 @@ impl WorktreeModelHandle for Entity<Worktree> {
 
         let tree = self.clone();
         let (fs, root_path) = self.read_with(cx, |tree, _| {
-            let tree = tree.as_local().unwrap();
+            let tree = tree.as_local().expect("should be a local instance");
             (tree.fs.clone(), tree.abs_path.clone())
         });
 
@@ -6323,12 +6323,12 @@ impl WorktreeModelHandle for Entity<Worktree> {
 
             fs.create_file(&root_path.join(file_name), Default::default())
                 .await
-                .unwrap();
+                .expect("value should be present");
 
             // Check if condition is already met before waiting for events
             let file_exists = || {
                 tree.read_with(cx, |tree, _| {
-                    tree.entry_for_path(RelPath::unix(file_name).unwrap())
+                    tree.entry_for_path(RelPath::unix(file_name).expect("path should be a valid relative path"))
                         .is_some()
                 })
             };
@@ -6343,12 +6343,12 @@ impl WorktreeModelHandle for Entity<Worktree> {
 
             fs.remove_file(&root_path.join(file_name), Default::default())
                 .await
-                .unwrap();
+                .expect("value should be present");
 
             // Check if condition is already met before waiting for events
             let file_gone = || {
                 tree.read_with(cx, |tree, _| {
-                    tree.entry_for_path(RelPath::unix(file_name).unwrap())
+                    tree.entry_for_path(RelPath::unix(file_name).expect("path should be a valid relative path"))
                         .is_none()
                 })
             };
@@ -6361,7 +6361,7 @@ impl WorktreeModelHandle for Entity<Worktree> {
                 }
             }
 
-            cx.update(|cx| tree.read(cx).as_local().unwrap().scan_complete())
+            cx.update(|cx| tree.read(cx).as_local().expect("should be a local instance").scan_complete())
                 .await;
         }
         .boxed_local()
@@ -6382,12 +6382,12 @@ impl WorktreeModelHandle for Entity<Worktree> {
 
         let tree = self.clone();
         let (fs, root_path, mut git_dir_scan_id) = self.read_with(cx, |tree, _| {
-            let tree = tree.as_local().unwrap();
+            let tree = tree.as_local().expect("should be a local instance");
             let local_repo_entry = tree
                 .git_repositories
                 .values()
                 .min_by_key(|local_repo_entry| local_repo_entry.work_directory.clone())
-                .unwrap();
+                .expect("value should be present");
             (
                 tree.fs.clone(),
                 local_repo_entry.common_dir_abs_path.clone(),
@@ -6396,13 +6396,13 @@ impl WorktreeModelHandle for Entity<Worktree> {
         });
 
         let scan_id_increased = |tree: &mut Worktree, git_dir_scan_id: &mut usize| {
-            let tree = tree.as_local().unwrap();
+            let tree = tree.as_local().expect("should be a local instance");
             // let repository = tree.repositories.first().unwrap();
             let local_repo_entry = tree
                 .git_repositories
                 .values()
                 .min_by_key(|local_repo_entry| local_repo_entry.work_directory.clone())
-                .unwrap();
+                .expect("value should be present");
 
             if local_repo_entry.git_dir_scan_id > *git_dir_scan_id {
                 *git_dir_scan_id = local_repo_entry.git_dir_scan_id;
@@ -6419,7 +6419,7 @@ impl WorktreeModelHandle for Entity<Worktree> {
 
             fs.create_file(&root_path.join(file_name), Default::default())
                 .await
-                .unwrap();
+                .expect("value should be present");
 
             // Use select to avoid blocking indefinitely if events are delayed
             while !tree.update(cx, |tree, _| scan_id_increased(tree, &mut git_dir_scan_id)) {
@@ -6431,7 +6431,7 @@ impl WorktreeModelHandle for Entity<Worktree> {
 
             fs.remove_file(&root_path.join(file_name), Default::default())
                 .await
-                .unwrap();
+                .expect("value should be present");
 
             // Use select to avoid blocking indefinitely if events are delayed
             while !tree.update(cx, |tree, _| scan_id_increased(tree, &mut git_dir_scan_id)) {
@@ -6441,7 +6441,7 @@ impl WorktreeModelHandle for Entity<Worktree> {
                 }
             }
 
-            cx.update(|cx| tree.read(cx).as_local().unwrap().scan_complete())
+            cx.update(|cx| tree.read(cx).as_local().expect("should be a local instance").scan_complete())
                 .await;
         }
         .boxed_local()

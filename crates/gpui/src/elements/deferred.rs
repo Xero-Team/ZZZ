@@ -47,7 +47,7 @@ impl Element for Deferred {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, ()) {
-        let layout_id = self.child.as_mut().unwrap().request_layout(window, cx);
+        let layout_id = self.child.as_mut().expect("value should have the expected type").request_layout(window, cx);
         (layout_id, ())
     }
 
@@ -60,7 +60,7 @@ impl Element for Deferred {
         window: &mut Window,
         _cx: &mut App,
     ) {
-        let child = self.child.take().unwrap();
+        let child = self.child.take().expect("entry should be present");
         let element_offset = window.element_offset();
         window.defer_draw(child, element_offset, self.priority, None)
     }

@@ -183,13 +183,13 @@ impl UserMessage {
             .as_ref()
             .is_some_and(|checkpoint| checkpoint.show)
         {
-            writeln!(markdown, "## User (checkpoint)").unwrap();
+            writeln!(markdown, "## User (checkpoint)").expect("value should be present");
         } else {
-            writeln!(markdown, "## User").unwrap();
+            writeln!(markdown, "## User").expect("value should be present");
         }
-        writeln!(markdown).unwrap();
-        writeln!(markdown, "{}", self.content.to_markdown(cx)).unwrap();
-        writeln!(markdown).unwrap();
+        writeln!(markdown).expect("value should be present");
+        writeln!(markdown, "{}", self.content.to_markdown(cx)).expect("value should be present");
+        writeln!(markdown).expect("value should be present");
         markdown
     }
 }
@@ -1784,7 +1784,7 @@ impl TokenUsage {
         let warning_threshold: f32 = std::env::var("ZZZ_THREAD_WARNING_THRESHOLD")
             .unwrap_or(TOKEN_USAGE_WARNING_THRESHOLD.to_string())
             .parse()
-            .unwrap();
+            .expect("value should parse");
         #[cfg(not(debug_assertions))]
         let warning_threshold: f32 = TOKEN_USAGE_WARNING_THRESHOLD;
 

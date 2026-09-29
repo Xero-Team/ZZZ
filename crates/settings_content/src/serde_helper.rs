@@ -116,7 +116,7 @@ mod tests {
         ];
         for (value, expected) in cases {
             let value = TestOptional { value };
-            assert_eq!(serde_json::to_string(&value).unwrap(), expected);
+            assert_eq!(serde_json::to_string(&value).expect("serializing to JSON cannot fail"), expected);
         }
     }
 
@@ -129,7 +129,7 @@ mod tests {
         ];
         for (value, expected) in cases {
             let value = TestNonOptional { value };
-            assert_eq!(serde_json::to_string(&value).unwrap(), expected);
+            assert_eq!(serde_json::to_string(&value).expect("serializing to JSON cannot fail"), expected);
         }
     }
 }

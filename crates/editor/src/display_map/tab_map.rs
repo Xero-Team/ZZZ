@@ -12,7 +12,8 @@ const MAX_EXPANSION_COLUMN: u32 = 256;
 
 // Handles a tab width <= 128
 const SPACES: &[u8; rope::Chunk::MASK_BITS] = &[b' '; _];
-const MAX_TABS: NonZeroU32 = NonZeroU32::new(SPACES.len() as u32).unwrap();
+const MAX_TABS: NonZeroU32 =
+    NonZeroU32::new(SPACES.len() as u32).expect("SPACES is non-empty");
 
 /// Keeps track of hard tabs in a text buffer.
 ///
@@ -153,7 +154,7 @@ impl TabMap {
         let _old_alloc_ptr = fold_edits.as_ptr();
         // Combine any edits that overlap due to the expansion.
         let mut fold_edits = fold_edits.into_iter();
-        let mut first_edit = fold_edits.next().unwrap();
+        let mut first_edit = fold_edits.next().expect("iterator should yield an item");
         // This code relies on reusing allocations from the Vec<_> - at the time of writing .flatten() prevents them.
         #[allow(clippy::filter_map_identity)]
         let mut v: Vec<_> = fold_edits

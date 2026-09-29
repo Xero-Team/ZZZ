@@ -751,7 +751,7 @@ impl TextLayout {
         let element_state = element_state
             .as_mut()
             .with_context(|| format!("measurement has not been performed on {text}"))
-            .unwrap();
+            .expect("value should be present");
         element_state.bounds = Some(bounds);
     }
 
@@ -760,11 +760,11 @@ impl TextLayout {
         let element_state = element_state
             .as_ref()
             .with_context(|| format!("measurement has not been performed on {text}"))
-            .unwrap();
+            .expect("value should be present");
         let bounds = element_state
             .bounds
             .with_context(|| format!("prepaint has not been performed on {text}"))
-            .unwrap();
+            .expect("value should be present");
 
         let line_height = element_state.line_height;
         let mut line_origin = bounds.origin;
@@ -894,17 +894,17 @@ impl TextLayout {
 
     /// The bounds of this layout.
     pub fn bounds(&self) -> Bounds<Pixels> {
-        self.0.borrow().as_ref().unwrap().bounds.unwrap()
+        self.0.borrow().as_ref().expect("value should have the expected type").bounds.expect("bounds should be present")
     }
 
     /// The line height for this layout.
     pub fn line_height(&self) -> Pixels {
-        self.0.borrow().as_ref().unwrap().line_height
+        self.0.borrow().as_ref().expect("value should have the expected type").line_height
     }
 
     /// The UTF-8 length of the underlying text.
     pub fn len(&self) -> usize {
-        self.0.borrow().as_ref().unwrap().len
+        self.0.borrow().as_ref().expect("value should have the expected type").len
     }
 
     /// The text for this layout.
@@ -912,7 +912,7 @@ impl TextLayout {
         self.0
             .borrow()
             .as_ref()
-            .unwrap()
+            .expect("value should have the expected type")
             .lines
             .iter()
             .map(|s| &s.text)
@@ -923,7 +923,7 @@ impl TextLayout {
     pub fn wrapped_text(&self) -> String {
         let mut accumulator = String::new();
 
-        for wrapped in &self.0.borrow().as_ref().unwrap().lines {
+        for wrapped in &self.0.borrow().as_ref().expect("value should have the expected type").lines {
             let mut seen = 0;
             for boundary in &wrapped.layout.wrap_boundaries {
                 let index = wrapped.layout.unwrapped_layout.runs[boundary.run_ix].glyphs
@@ -1090,7 +1090,7 @@ impl Element for InteractiveText {
         let current_view = window.current_view();
         let text_layout = self.text.layout().clone();
         window.with_element_state::<InteractiveTextState, _>(
-            global_id.unwrap(),
+            global_id.expect("value should be present"),
             |interactive_state, window| {
                 let mut interactive_state = interactive_state.unwrap_or_default();
                 if let Some(click_listener) = self.click_listener.take() {

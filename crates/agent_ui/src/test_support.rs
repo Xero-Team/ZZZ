@@ -107,22 +107,22 @@ pub fn init_test(cx: &mut TestAppContext) {
         ));
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         editor::init(cx);
-        release_channel::init("0.0.0".parse().unwrap(), cx);
+        release_channel::init("0.0.0".parse().expect("value should parse"), cx);
         agent_panel::init(cx);
     });
 }
 
 pub async fn fake_worktree_created_at(fs: &dyn fs::Fs, worktree_path: &Path) -> SystemTime {
-    let git_file = fs.load(&worktree_path.join(".git")).await.unwrap();
-    let git_dir = worktree_path.join(git_file.strip_prefix("gitdir:").unwrap().trim());
+    let git_file = fs.load(&worktree_path.join(".git")).await.expect("value should be present");
+    let git_dir = worktree_path.join(git_file.strip_prefix("gitdir:").expect("strip_prefix should be present").trim());
     let (seconds, nanos) = fs
         .metadata(&git_dir)
         .await
-        .unwrap()
-        .unwrap()
+        .expect("value should be present")
+        .expect("value should be present")
         .mtime
         .to_seconds_and_nanos_for_persistence()
-        .unwrap();
+        .expect("to_seconds_and_nanos_for_persistence should be present");
     UNIX_EPOCH + Duration::new(seconds, nanos)
 }
 
@@ -137,7 +137,7 @@ pub async fn record_zzz_created_worktree(
         git_ui::created_worktrees::record_created_worktree(worktree_path, remote, created_at, cx)
     })
     .await
-    .unwrap();
+    .expect("value should be present");
 }
 
 pub fn open_thread_with_connection(
@@ -173,7 +173,7 @@ pub fn open_thread_with_custom_connection<C>(
 }
 
 pub fn send_message(panel: &Entity<AgentPanel>, cx: &mut VisualTestContext) {
-    let thread_view = panel.read_with(cx, |panel, cx| panel.active_thread_view(cx).unwrap());
+    let thread_view = panel.read_with(cx, |panel, cx| panel.active_thread_view(cx).expect("active_thread_view should be present"));
     let message_editor = thread_view.read_with(cx, |view, _cx| view.message_editor.clone());
     message_editor.update_in(cx, |editor, window, cx| {
         editor.set_text("Hello", window, cx);
@@ -184,7 +184,7 @@ pub fn send_message(panel: &Entity<AgentPanel>, cx: &mut VisualTestContext) {
 
 pub fn active_session_id(panel: &Entity<AgentPanel>, cx: &VisualTestContext) -> acp::SessionId {
     panel.read_with(cx, |panel, cx| {
-        let thread = panel.active_agent_thread(cx).unwrap();
+        let thread = panel.active_agent_thread(cx).expect("active_agent_thread should be present");
         thread.read(cx).session_id().clone()
     })
 }
@@ -193,5 +193,5 @@ pub fn active_thread_id(
     panel: &Entity<AgentPanel>,
     cx: &VisualTestContext,
 ) -> crate::thread_metadata_store::ThreadId {
-    panel.read_with(cx, |panel, cx| panel.active_thread_id(cx).unwrap())
+    panel.read_with(cx, |panel, cx| panel.active_thread_id(cx).expect("active_thread_id should be present"))
 }

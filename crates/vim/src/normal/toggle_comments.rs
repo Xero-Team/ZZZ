@@ -34,7 +34,7 @@ impl Vim {
                 editor.toggle_comments(&Default::default(), window, cx);
                 editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
                     s.move_with(&mut |map, selection| {
-                        let anchor = selection_starts.remove(&selection.id).unwrap();
+                        let anchor = selection_starts.remove(&selection.id).expect("entry should be present");
                         selection.collapse_to(anchor.to_display_point(map), SelectionGoal::None);
                     });
                 });
@@ -64,7 +64,7 @@ impl Vim {
                 editor.toggle_comments(&Default::default(), window, cx);
                 editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
                     s.move_with(&mut |map, selection| {
-                        let anchor = original_positions.remove(&selection.id).unwrap();
+                        let anchor = original_positions.remove(&selection.id).expect("entry should be present");
                         selection.collapse_to(anchor.to_display_point(map), SelectionGoal::None);
                     });
                 });
@@ -103,7 +103,7 @@ impl Vim {
                 editor.set_clip_at_line_ends(true, cx);
                 editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
                     s.move_with(&mut |map, selection| {
-                        let anchor = selection_starts.remove(&selection.id).unwrap();
+                        let anchor = selection_starts.remove(&selection.id).expect("entry should be present");
                         selection.collapse_to(anchor.to_display_point(map), SelectionGoal::None);
                     });
                 });
@@ -135,7 +135,7 @@ impl Vim {
                 editor.set_clip_at_line_ends(true, cx);
                 editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
                     s.move_with(&mut |map, selection| {
-                        let anchor = original_positions.remove(&selection.id).unwrap();
+                        let anchor = original_positions.remove(&selection.id).expect("entry should be present");
                         selection.collapse_to(anchor.to_display_point(map), SelectionGoal::None);
                     });
                 });

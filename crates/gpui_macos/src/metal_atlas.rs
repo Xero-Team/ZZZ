@@ -188,9 +188,9 @@ impl MetalAtlasTextures {
             texture_list.textures.push(Some(atlas_texture));
             texture_list.textures.last_mut()
         }
-        .unwrap()
+        .expect("value should be present")
         .as_mut()
-        .unwrap()
+        .expect("value should have the expected type")
     }
 
     fn texture(&self, id: AtlasTextureId) -> Option<&MetalAtlasTexture> {

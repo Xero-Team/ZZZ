@@ -88,10 +88,10 @@ struct PerformanceProfilerSettings {
 
 impl Settings for PerformanceProfilerSettings {
     fn from_settings(content: &SettingsContent) -> Self {
-        let instrumentation = content.instrumentation.as_ref().unwrap();
-        let profiler = instrumentation.performance_profiler.as_ref().unwrap();
+        let instrumentation = content.instrumentation.as_ref().expect("value should have the expected type");
+        let profiler = instrumentation.performance_profiler.as_ref().expect("value should have the expected type");
         Self {
-            enabled: profiler.enabled.unwrap(),
+            enabled: profiler.enabled.expect("enabled should be present"),
         }
     }
 }

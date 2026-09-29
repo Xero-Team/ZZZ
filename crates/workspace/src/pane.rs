@@ -4689,7 +4689,7 @@ impl Render for Pane {
                                         )
                                     }));
                                 }
-                                placeholder.child(self.welcome_page.clone().unwrap())
+                                placeholder.child(self.welcome_page.clone().expect("value should be present"))
                             }
                         }
                         .focus_follows_mouse(self.focus_follows_mouse, cx)

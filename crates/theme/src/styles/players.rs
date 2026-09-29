@@ -124,15 +124,15 @@ impl PlayerColors {
 
 impl PlayerColors {
     pub fn local(&self) -> PlayerColor {
-        *self.0.first().unwrap()
+        *self.0.first().expect("collection should not be empty")
     }
 
     pub fn agent(&self) -> PlayerColor {
-        *self.0.last().unwrap()
+        *self.0.last().expect("collection should not be empty")
     }
 
     pub fn absent(&self) -> PlayerColor {
-        *self.0.last().unwrap()
+        *self.0.last().expect("collection should not be empty")
     }
 
     pub fn read_only(&self) -> PlayerColor {

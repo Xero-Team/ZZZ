@@ -32,7 +32,7 @@ impl KeyBinding {
     /// Construct a new keybinding from the given data. Panics on parse error.
     pub fn new<A: Action>(keystrokes: &str, action: A, context: Option<&str>) -> Self {
         let context_predicate =
-            context.map(|context| KeyBindingContextPredicate::parse(context).unwrap().into());
+            context.map(|context| KeyBindingContextPredicate::parse(context).expect("parse should be present").into());
         Self::load(
             keystrokes,
             Box::new(action),
@@ -41,7 +41,7 @@ impl KeyBinding {
             None,
             &DummyKeyboardMapper,
         )
-        .unwrap()
+        .expect("value should be present")
     }
 
     /// Load a keybinding from the given raw data.

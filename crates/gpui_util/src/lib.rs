@@ -51,10 +51,7 @@ macro_rules! debug_panic {
 
 #[track_caller]
 pub fn some_or_debug_panic<T>(option: Option<T>) -> Option<T> {
-    #[cfg(debug_assertions)]
-    if option.is_none() {
-        panic!("Unexpected None");
-    }
+    debug_assert!(option.is_some(), "Unexpected None");
     option
 }
 
@@ -366,7 +363,7 @@ where
         let this = unsafe { self.get_unchecked_mut() };
         let inner = unsafe { Pin::new_unchecked(&mut this.0) };
         match inner.poll(cx) {
-            Poll::Ready(result) => Poll::Ready(result.unwrap()),
+            Poll::Ready(result) => Poll::Ready(result.expect("value should be present")),
             Poll::Pending => Poll::Pending,
         }
     }

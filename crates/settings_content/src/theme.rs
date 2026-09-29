@@ -68,7 +68,7 @@ impl<'de> Deserialize<'de> for FontFeaturesContent {
                             }
                             FeatureValue::Number(value) => {
                                 if value.is_u64() {
-                                    feature_map.insert(key, value.as_u64().unwrap() as u32);
+                                    feature_map.insert(key, value.as_u64().expect("as_u64 should be present") as u32);
                                 } else {
                                     log::error!(
                                         "Incorrect font feature value {} for feature tag {}",
@@ -1438,7 +1438,7 @@ mod tests {
         use schemars::schema_for;
 
         let schema = schema_for!(ThemeSettingsContent);
-        let schema_value = serde_json::to_value(&schema).unwrap();
+        let schema_value = serde_json::to_value(&schema).expect("converting to a JSON value cannot fail");
 
         let properties = &schema_value["properties"];
         let buffer_font_weight = &properties["buffer_font_weight"];

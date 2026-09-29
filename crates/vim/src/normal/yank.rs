@@ -50,7 +50,7 @@ impl Vim {
                 vim.yank_selections_content(editor, kind, window, cx);
                 editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
                     s.move_with(&mut |_, selection| {
-                        let (head, goal) = original_positions.remove(&selection.id).unwrap();
+                        let (head, goal) = original_positions.remove(&selection.id).expect("entry should be present");
                         selection.collapse_to(head, goal);
                     });
                 });
@@ -85,7 +85,7 @@ impl Vim {
                 vim.yank_selections_content(editor, kind, window, cx);
                 editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
                     s.move_with(&mut |_, selection| {
-                        let (head, goal) = start_positions.remove(&selection.id).unwrap();
+                        let (head, goal) = start_positions.remove(&selection.id).expect("entry should be present");
                         selection.collapse_to(head, goal);
                     });
                 });

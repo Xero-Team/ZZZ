@@ -120,7 +120,7 @@ unsafe fn build_classes() {
         WINDOW_CLASS = build_window_class("GPUIWindow", class!(NSWindow));
         PANEL_CLASS = build_window_class("GPUIPanel", class!(NSPanel));
         VIEW_CLASS = {
-            let mut decl = ClassDecl::new("GPUIView", class!(NSView)).unwrap();
+            let mut decl = ClassDecl::new("GPUIView", class!(NSView)).expect("value should be present");
             decl.add_ivar::<*mut c_void>(WINDOW_STATE_IVAR);
             decl.add_method(sel!(dealloc), dealloc_view as extern "C" fn(&Object, Sel));
 
@@ -210,7 +210,7 @@ unsafe fn build_classes() {
                 make_backing_layer as extern "C" fn(&Object, Sel) -> id,
             );
 
-            decl.add_protocol(Protocol::get("CALayerDelegate").unwrap());
+            decl.add_protocol(Protocol::get("CALayerDelegate").expect("get should be present"));
             decl.add_method(
                 sel!(viewDidChangeBackingProperties),
                 view_did_change_backing_properties as extern "C" fn(&Object, Sel),
@@ -224,7 +224,7 @@ unsafe fn build_classes() {
                 display_layer as extern "C" fn(&Object, Sel, id),
             );
 
-            decl.add_protocol(Protocol::get("NSTextInputClient").unwrap());
+            decl.add_protocol(Protocol::get("NSTextInputClient").expect("get should be present"));
             decl.add_method(
                 sel!(validAttributesForMarkedText),
                 valid_attributes_for_marked_text as extern "C" fn(&Object, Sel) -> id,
@@ -292,7 +292,7 @@ unsafe fn build_classes() {
             decl.register()
         };
         BLURRED_VIEW_CLASS = {
-            let mut decl = ClassDecl::new("BlurredView", class!(NSVisualEffectView)).unwrap();
+            let mut decl = ClassDecl::new("BlurredView", class!(NSVisualEffectView)).expect("value should be present");
             decl.add_method(
                 sel!(initWithFrame:),
                 blurred_view_init_with_frame as extern "C" fn(&Object, Sel, NSRect) -> id,
@@ -354,7 +354,7 @@ pub(crate) unsafe fn set_active_window_cursor_style(style: CursorStyle) {
 
 unsafe fn build_window_class(name: &'static str, superclass: &Class) -> *const Class {
     unsafe {
-        let mut decl = ClassDecl::new(name, superclass).unwrap();
+        let mut decl = ClassDecl::new(name, superclass).expect("value should be present");
         decl.add_ivar::<*mut c_void>(WINDOW_STATE_IVAR);
         decl.add_method(sel!(dealloc), dealloc_window as extern "C" fn(&Object, Sel));
 
@@ -1552,7 +1552,7 @@ impl PlatformWindow for MacWindow {
             let block = ConcreteBlock::new(move |answer: NSInteger| {
                 let _: () = msg_send![alert, release];
                 if let Some(done_tx) = done_tx.take() {
-                    let _ = done_tx.send(answer.try_into().unwrap());
+                    let _ = done_tx.send(answer.try_into().expect("channel receiver should be alive"));
                 }
             });
             let block = block.copy();

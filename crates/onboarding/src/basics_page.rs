@@ -124,7 +124,7 @@ fn render_theme_section(tab_index: &mut isize, cx: &mut App) -> impl IntoElement
             Appearance::Dark => DARK_THEMES,
         };
 
-        let themes = theme_names.map(|theme| theme_registry.get(theme).unwrap());
+        let themes = theme_names.map(|theme| theme_registry.get(theme).expect("entry should be present"));
 
         [0, 1, 2].map(|index| {
             let theme = &themes[index];
@@ -169,8 +169,8 @@ fn render_theme_section(tab_index: &mut isize, cx: &mut App) -> impl IntoElement
                         .map(|this| {
                             if theme_mode == ThemeAppearanceMode::System {
                                 let (light, dark) = (
-                                    theme_registry.get(LIGHT_THEMES[index]).unwrap(),
-                                    theme_registry.get(DARK_THEMES[index]).unwrap(),
+                                    theme_registry.get(LIGHT_THEMES[index]).expect("entry should be present"),
+                                    theme_registry.get(DARK_THEMES[index]).expect("entry should be present"),
                                 );
                                 this.child(
                                     ThemePreviewTile::new(light, theme_seed)

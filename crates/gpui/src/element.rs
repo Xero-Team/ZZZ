@@ -243,7 +243,7 @@ impl<C: RenderOnce> Element for Component<C> {
             let mut element = self
                 .component
                 .take()
-                .unwrap()
+                .expect("entry should be present")
                 .render(window, cx)
                 .into_any_element();
 
@@ -431,7 +431,7 @@ impl<E: Element> Drawable<E> {
             } => {
                 if let Some(element_id) = self.element.id() {
                     window.element_id_stack.push(element_id);
-                    debug_assert_eq!(&*global_id.as_ref().unwrap().0, &*window.element_id_stack);
+                    debug_assert_eq!(&*global_id.as_ref().expect("value should have the expected type").0, &*window.element_id_stack);
                 }
 
                 let bounds = window.layout_bounds(layout_id);
@@ -480,7 +480,7 @@ impl<E: Element> Drawable<E> {
             } => {
                 if let Some(element_id) = self.element.id() {
                     window.element_id_stack.push(element_id);
-                    debug_assert_eq!(&*global_id.as_ref().unwrap().0, &*window.element_id_stack);
+                    debug_assert_eq!(&*global_id.as_ref().expect("value should have the expected type").0, &*window.element_id_stack);
                 }
 
                 window.next_frame.dispatch_tree.set_active_node(node_id);

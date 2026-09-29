@@ -120,7 +120,7 @@ pub fn visual_test_settings() -> String {
         &mut value,
     );
     value.as_object_mut().unwrap().remove("languages");
-    serde_json::to_string(&value).unwrap()
+    serde_json::to_string(&value).expect("serializing to JSON cannot fail")
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -159,7 +159,7 @@ pub fn test_settings() -> String {
         &mut value,
     );
     value.as_object_mut().unwrap().remove("languages");
-    serde_json::to_string(&value).unwrap()
+    serde_json::to_string(&value).expect("serializing to JSON cannot fail")
 }
 
 pub fn watch_config_file(

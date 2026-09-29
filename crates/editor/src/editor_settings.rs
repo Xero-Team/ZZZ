@@ -212,134 +212,134 @@ impl EditorSettings {
 impl Settings for EditorSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let editor = content.editor.clone();
-        let cursor_animation = editor.cursor_animation.unwrap();
-        let smooth_scroll = editor.smooth_scroll.unwrap();
-        let scrollbar = editor.scrollbar.unwrap();
-        let minimap = editor.minimap.unwrap();
-        let gutter = editor.gutter.unwrap();
-        let axes = scrollbar.axes.unwrap();
-        let toolbar = editor.toolbar.unwrap();
-        let search = editor.search.unwrap();
-        let drag_and_drop_selection = editor.drag_and_drop_selection.unwrap();
-        let sticky_scroll = editor.sticky_scroll.unwrap();
+        let cursor_animation = editor.cursor_animation.expect("cursor_animation should be present");
+        let smooth_scroll = editor.smooth_scroll.expect("smooth_scroll should be present");
+        let scrollbar = editor.scrollbar.expect("scrollbar should be present");
+        let minimap = editor.minimap.expect("minimap should be present");
+        let gutter = editor.gutter.expect("gutter should be present");
+        let axes = scrollbar.axes.expect("axes should be present");
+        let toolbar = editor.toolbar.expect("toolbar should be present");
+        let search = editor.search.expect("search should be present");
+        let drag_and_drop_selection = editor.drag_and_drop_selection.expect("drag_and_drop_selection should be present");
+        let sticky_scroll = editor.sticky_scroll.expect("sticky_scroll should be present");
         Self {
-            cursor_blink: editor.cursor_blink.unwrap(),
+            cursor_blink: editor.cursor_blink.expect("cursor_blink should be present"),
             cursor_shape: editor.cursor_shape.map(Into::into),
             cursor_animation: CursorAnimationSettings {
-                enabled: cursor_animation.enabled.unwrap(),
+                enabled: cursor_animation.enabled.expect("enabled should be present"),
             },
             smooth_scroll: SmoothScrollSettings {
-                enabled: smooth_scroll.enabled.unwrap(),
-                duration: smooth_scroll.duration.unwrap(),
+                enabled: smooth_scroll.enabled.expect("enabled should be present"),
+                duration: smooth_scroll.duration.expect("duration should be present"),
             },
-            current_line_highlight: editor.current_line_highlight.unwrap(),
-            selection_highlight: editor.selection_highlight.unwrap(),
-            rounded_selection: editor.rounded_selection.unwrap(),
-            lsp_highlight_debounce: editor.lsp_highlight_debounce.unwrap(),
-            hover_popover_enabled: editor.hover_popover_enabled.unwrap(),
-            hover_popover_delay: editor.hover_popover_delay.unwrap(),
-            hover_popover_sticky: editor.hover_popover_sticky.unwrap(),
-            hover_popover_hiding_delay: editor.hover_popover_hiding_delay.unwrap(),
+            current_line_highlight: editor.current_line_highlight.expect("current_line_highlight should be present"),
+            selection_highlight: editor.selection_highlight.expect("selection_highlight should be present"),
+            rounded_selection: editor.rounded_selection.expect("rounded_selection should be present"),
+            lsp_highlight_debounce: editor.lsp_highlight_debounce.expect("lsp_highlight_debounce should be present"),
+            hover_popover_enabled: editor.hover_popover_enabled.expect("hover_popover_enabled should be present"),
+            hover_popover_delay: editor.hover_popover_delay.expect("hover_popover_delay should be present"),
+            hover_popover_sticky: editor.hover_popover_sticky.expect("hover_popover_sticky should be present"),
+            hover_popover_hiding_delay: editor.hover_popover_hiding_delay.expect("hover_popover_hiding_delay should be present"),
             toolbar: Toolbar {
-                breadcrumbs: toolbar.breadcrumbs.unwrap(),
-                quick_actions: toolbar.quick_actions.unwrap(),
-                selections_menu: toolbar.selections_menu.unwrap(),
-                agent_review: toolbar.agent_review.unwrap(),
-                code_actions: toolbar.code_actions.unwrap(),
+                breadcrumbs: toolbar.breadcrumbs.expect("breadcrumbs should be present"),
+                quick_actions: toolbar.quick_actions.expect("quick_actions should be present"),
+                selections_menu: toolbar.selections_menu.expect("selections_menu should be present"),
+                agent_review: toolbar.agent_review.expect("agent_review should be present"),
+                code_actions: toolbar.code_actions.expect("code_actions should be present"),
             },
             scrollbar: Scrollbar {
-                show: scrollbar.show.map(ui_scrollbar_settings_from_raw).unwrap(),
-                git_diff: scrollbar.git_diff.unwrap()
+                show: scrollbar.show.map(ui_scrollbar_settings_from_raw).expect("map should be present"),
+                git_diff: scrollbar.git_diff.expect("git_diff should be present")
                     && content
                         .git
                         .as_ref()
-                        .unwrap()
+                        .expect("value should have the expected type")
                         .enabled
-                        .unwrap()
+                        .expect("enabled should be present")
                         .is_git_diff_enabled(),
-                selected_text: scrollbar.selected_text.unwrap(),
-                selected_symbol: scrollbar.selected_symbol.unwrap(),
-                search_results: scrollbar.search_results.unwrap(),
-                diagnostics: scrollbar.diagnostics.unwrap(),
-                cursors: scrollbar.cursors.unwrap(),
+                selected_text: scrollbar.selected_text.expect("selected_text should be present"),
+                selected_symbol: scrollbar.selected_symbol.expect("selected_symbol should be present"),
+                search_results: scrollbar.search_results.expect("search_results should be present"),
+                diagnostics: scrollbar.diagnostics.expect("diagnostics should be present"),
+                cursors: scrollbar.cursors.expect("cursors should be present"),
                 axes: ScrollbarAxes {
-                    horizontal: axes.horizontal.unwrap(),
-                    vertical: axes.vertical.unwrap(),
+                    horizontal: axes.horizontal.expect("horizontal should be present"),
+                    vertical: axes.vertical.expect("vertical should be present"),
                 },
             },
             minimap: Minimap {
-                show: minimap.show.unwrap(),
-                display_in: minimap.display_in.unwrap(),
-                thumb: minimap.thumb.unwrap(),
-                thumb_border: minimap.thumb_border.unwrap(),
+                show: minimap.show.expect("show should be present"),
+                display_in: minimap.display_in.expect("display_in should be present"),
+                thumb: minimap.thumb.expect("thumb should be present"),
+                thumb_border: minimap.thumb_border.expect("thumb_border should be present"),
                 current_line_highlight: minimap.current_line_highlight,
-                max_width_columns: minimap.max_width_columns.unwrap(),
+                max_width_columns: minimap.max_width_columns.expect("max_width_columns should be present"),
             },
             gutter: Gutter {
-                min_line_number_digits: gutter.min_line_number_digits.unwrap(),
-                line_numbers: gutter.line_numbers.unwrap(),
-                runnables: gutter.runnables.unwrap(),
-                bookmarks: gutter.bookmarks.unwrap(),
-                breakpoints: gutter.breakpoints.unwrap(),
-                folds: gutter.folds.unwrap(),
+                min_line_number_digits: gutter.min_line_number_digits.expect("min_line_number_digits should be present"),
+                line_numbers: gutter.line_numbers.expect("line_numbers should be present"),
+                runnables: gutter.runnables.expect("runnables should be present"),
+                bookmarks: gutter.bookmarks.expect("bookmarks should be present"),
+                breakpoints: gutter.breakpoints.expect("breakpoints should be present"),
+                folds: gutter.folds.expect("folds should be present"),
                 git_gutter_width: gutter.git_gutter_width,
             },
-            scroll_beyond_last_line: editor.scroll_beyond_last_line.unwrap(),
-            vertical_scroll_margin: editor.vertical_scroll_margin.unwrap() as f64,
-            autoscroll_on_clicks: editor.autoscroll_on_clicks.unwrap(),
-            horizontal_scroll_margin: editor.horizontal_scroll_margin.unwrap(),
-            scroll_sensitivity: editor.scroll_sensitivity.unwrap(),
-            mouse_wheel_zoom: editor.mouse_wheel_zoom.unwrap(),
-            fast_scroll_sensitivity: editor.fast_scroll_sensitivity.unwrap(),
+            scroll_beyond_last_line: editor.scroll_beyond_last_line.expect("scroll_beyond_last_line should be present"),
+            vertical_scroll_margin: editor.vertical_scroll_margin.expect("vertical_scroll_margin should be present") as f64,
+            autoscroll_on_clicks: editor.autoscroll_on_clicks.expect("autoscroll_on_clicks should be present"),
+            horizontal_scroll_margin: editor.horizontal_scroll_margin.expect("horizontal_scroll_margin should be present"),
+            scroll_sensitivity: editor.scroll_sensitivity.expect("scroll_sensitivity should be present"),
+            mouse_wheel_zoom: editor.mouse_wheel_zoom.expect("mouse_wheel_zoom should be present"),
+            fast_scroll_sensitivity: editor.fast_scroll_sensitivity.expect("fast_scroll_sensitivity should be present"),
             sticky_scroll: StickyScroll {
-                enabled: sticky_scroll.enabled.unwrap(),
+                enabled: sticky_scroll.enabled.expect("enabled should be present"),
             },
-            relative_line_numbers: editor.relative_line_numbers.unwrap(),
-            seed_search_query_from_cursor: editor.seed_search_query_from_cursor.unwrap(),
-            use_smartcase_search: editor.use_smartcase_search.unwrap(),
-            multi_cursor_modifier: editor.multi_cursor_modifier.unwrap(),
-            redact_private_values: editor.redact_private_values.unwrap(),
-            expand_excerpt_lines: editor.expand_excerpt_lines.unwrap(),
-            excerpt_context_lines: editor.excerpt_context_lines.unwrap(),
-            middle_click_paste: editor.middle_click_paste.unwrap(),
-            double_click_in_multibuffer: editor.double_click_in_multibuffer.unwrap(),
-            search_wrap: editor.search_wrap.unwrap(),
+            relative_line_numbers: editor.relative_line_numbers.expect("relative_line_numbers should be present"),
+            seed_search_query_from_cursor: editor.seed_search_query_from_cursor.expect("seed_search_query_from_cursor should be present"),
+            use_smartcase_search: editor.use_smartcase_search.expect("use_smartcase_search should be present"),
+            multi_cursor_modifier: editor.multi_cursor_modifier.expect("multi_cursor_modifier should be present"),
+            redact_private_values: editor.redact_private_values.expect("redact_private_values should be present"),
+            expand_excerpt_lines: editor.expand_excerpt_lines.expect("expand_excerpt_lines should be present"),
+            excerpt_context_lines: editor.excerpt_context_lines.expect("excerpt_context_lines should be present"),
+            middle_click_paste: editor.middle_click_paste.expect("middle_click_paste should be present"),
+            double_click_in_multibuffer: editor.double_click_in_multibuffer.expect("double_click_in_multibuffer should be present"),
+            search_wrap: editor.search_wrap.expect("search_wrap should be present"),
             search: SearchSettings {
-                button: search.button.unwrap(),
-                whole_word: search.whole_word.unwrap(),
-                case_sensitive: search.case_sensitive.unwrap(),
-                include_ignored: search.include_ignored.unwrap(),
-                regex: search.regex.unwrap(),
-                center_on_match: search.center_on_match.unwrap(),
+                button: search.button.expect("button should be present"),
+                whole_word: search.whole_word.expect("whole_word should be present"),
+                case_sensitive: search.case_sensitive.expect("case_sensitive should be present"),
+                include_ignored: search.include_ignored.expect("include_ignored should be present"),
+                regex: search.regex.expect("regex should be present"),
+                center_on_match: search.center_on_match.expect("center_on_match should be present"),
             },
-            auto_signature_help: editor.auto_signature_help.unwrap(),
-            language_detection: editor.language_detection.unwrap(),
-            show_signature_help_after_edits: editor.show_signature_help_after_edits.unwrap(),
-            go_to_definition_fallback: editor.go_to_definition_fallback.unwrap(),
-            go_to_definition_scroll_strategy: editor.go_to_definition_scroll_strategy.unwrap(),
+            auto_signature_help: editor.auto_signature_help.expect("auto_signature_help should be present"),
+            language_detection: editor.language_detection.expect("language_detection should be present"),
+            show_signature_help_after_edits: editor.show_signature_help_after_edits.expect("show_signature_help_after_edits should be present"),
+            go_to_definition_fallback: editor.go_to_definition_fallback.expect("go_to_definition_fallback should be present"),
+            go_to_definition_scroll_strategy: editor.go_to_definition_scroll_strategy.expect("go_to_definition_scroll_strategy should be present"),
             jupyter: Jupyter {
-                enabled: editor.jupyter.unwrap().enabled.unwrap(),
+                enabled: editor.jupyter.expect("jupyter should be present").enabled.expect("enabled should be present"),
             },
-            snippet_sort_order: editor.snippet_sort_order.unwrap(),
+            snippet_sort_order: editor.snippet_sort_order.expect("snippet_sort_order should be present"),
             diagnostics_max_severity: editor.diagnostics_max_severity.map(Into::into),
-            inline_code_actions: editor.inline_code_actions.unwrap(),
+            inline_code_actions: editor.inline_code_actions.expect("inline_code_actions should be present"),
             drag_and_drop_selection: DragAndDropSelection {
-                enabled: drag_and_drop_selection.enabled.unwrap(),
-                delay: drag_and_drop_selection.delay.unwrap(),
+                enabled: drag_and_drop_selection.enabled.expect("enabled should be present"),
+                delay: drag_and_drop_selection.delay.expect("delay should be present"),
             },
-            code_lens: editor.code_lens.unwrap(),
-            lsp_document_colors: editor.lsp_document_colors.unwrap(),
-            lsp_document_links: editor.lsp_document_links.unwrap(),
-            minimum_contrast_for_highlights: editor.minimum_contrast_for_highlights.unwrap().0,
+            code_lens: editor.code_lens.expect("code_lens should be present"),
+            lsp_document_colors: editor.lsp_document_colors.expect("lsp_document_colors should be present"),
+            lsp_document_links: editor.lsp_document_links.expect("lsp_document_links should be present"),
+            minimum_contrast_for_highlights: editor.minimum_contrast_for_highlights.expect("minimum_contrast_for_highlights should be present").0,
             completion_menu_scrollbar: editor
                 .completion_menu_scrollbar
                 .map(ui_scrollbar_settings_from_raw)
-                .unwrap(),
-            completion_detail_alignment: editor.completion_detail_alignment.unwrap(),
-            completion_menu_item_kind: editor.completion_menu_item_kind.unwrap(),
-            diff_view_style: editor.diff_view_style.unwrap(),
-            minimum_split_diff_width: editor.minimum_split_diff_width.unwrap(),
-            line_number_scale: editor.line_number_scale.unwrap(),
+                .expect("map should be present"),
+            completion_detail_alignment: editor.completion_detail_alignment.expect("completion_detail_alignment should be present"),
+            completion_menu_item_kind: editor.completion_menu_item_kind.expect("completion_menu_item_kind should be present"),
+            diff_view_style: editor.diff_view_style.expect("diff_view_style should be present"),
+            minimum_split_diff_width: editor.minimum_split_diff_width.expect("minimum_split_diff_width should be present"),
+            line_number_scale: editor.line_number_scale.expect("line_number_scale should be present"),
         }
     }
 }

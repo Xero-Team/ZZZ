@@ -563,7 +563,7 @@ impl MentionSet {
             let crease_id = editor.update(cx, |editor, cx| {
                 let crease_ids = editor.insert_creases(vec![crease.clone()], cx);
                 editor.fold_creases(vec![crease], false, window, cx);
-                crease_ids.first().copied().unwrap()
+                crease_ids.first().copied().expect("copied should be present")
             });
 
             self.mentions.insert(
@@ -920,7 +920,7 @@ pub(crate) async fn insert_images_as_context(
                 let (cursor_anchor, buffer_snapshot) = snapshot
                     .buffer_snapshot()
                     .anchor_to_buffer_anchor(editor.selections.newest_anchor().start)
-                    .unwrap();
+                    .expect("value should be present");
                 let text_anchor = cursor_anchor.bias_left(buffer_snapshot);
                 let multibuffer_anchor = snapshot.buffer_snapshot().anchor_in_excerpt(text_anchor);
                 editor.insert(&format!("{replacement_text} "), window, cx);
@@ -1302,7 +1302,7 @@ fn render_directory_contents(entries: Vec<(Arc<RelPath>, String, String)>) -> St
     let mut output = String::new();
     for (_relative_path, full_path, content) in entries {
         let fence = codeblock_fence_for_path(Some(&full_path), None);
-        write!(output, "\n{fence}\n{content}\n```").unwrap();
+        write!(output, "\n{fence}\n{content}\n```").expect("value should be present");
     }
     output
 }

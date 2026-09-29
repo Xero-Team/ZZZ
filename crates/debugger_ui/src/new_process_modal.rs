@@ -961,8 +961,8 @@ impl ConfigureMode {
             .peekable();
         let mut env = FxHashMap::default();
         while args.peek().is_some_and(|arg| arg.contains('=')) {
-            let arg = args.next().unwrap();
-            let (lhs, rhs) = arg.split_once('=').unwrap();
+            let arg = args.next().expect("iterator should yield an item");
+            let (lhs, rhs) = arg.split_once('=').expect("split_once should be present");
             env.insert(lhs.to_owned(), rhs.to_owned());
         }
 
@@ -1165,10 +1165,10 @@ impl DebugDelegate {
 
                     match path.components().next_back() {
                         Some(".zzz") => {
-                            path.push(RelPath::unix("debug.json").unwrap());
+                            path.push(RelPath::unix("debug.json").expect("path should be a valid relative path"));
                         }
                         Some(".vscode") => {
-                            path.push(RelPath::unix("launch.json").unwrap());
+                            path.push(RelPath::unix("launch.json").expect("path should be a valid relative path"));
                         }
                         _ => {}
                     }
@@ -1261,7 +1261,7 @@ impl DebugDelegate {
                         id: _,
                         directory_in_worktree: dir,
                         id_base: _,
-                    } => dir.ends_with(RelPath::unix(".zzz").unwrap()),
+                    } => dir.ends_with(RelPath::unix(".zzz").expect("path should be a valid relative path")),
                     _ => false,
                 });
 
@@ -1282,7 +1282,7 @@ impl DebugDelegate {
                                     id_base: _,
                                 } => {
                                     !(hide_vscode
-                                        && dir.ends_with(RelPath::unix(".vscode").unwrap()))
+                                        && dir.ends_with(RelPath::unix(".vscode").expect("path should be a valid relative path")))
                                 }
                                 _ => true,
                             })
@@ -1410,8 +1410,8 @@ impl PickerDelegate for DebugDelegate {
             .peekable();
         let mut env = HashMap::default();
         while args.peek().is_some_and(|arg| arg.contains('=')) {
-            let arg = args.next().unwrap();
-            let (lhs, rhs) = arg.split_once('=').unwrap();
+            let arg = args.next().expect("iterator should yield an item");
+            let (lhs, rhs) = arg.split_once('=').expect("split_once should be present");
             env.insert(lhs.to_owned(), rhs.to_owned());
         }
 

@@ -108,9 +108,9 @@ fn handle_rpc_messages_over_child_process_stdio(
     mut connection_activity_tx: Sender<()>,
     cx: &AsyncApp,
 ) -> Task<Result<i32>> {
-    let mut child_stderr = remote_proxy_process.stderr.take().unwrap();
-    let mut child_stdout = remote_proxy_process.stdout.take().unwrap();
-    let mut child_stdin = remote_proxy_process.stdin.take().unwrap();
+    let mut child_stderr = remote_proxy_process.stderr.take().expect("entry should be present");
+    let mut child_stdout = remote_proxy_process.stdout.take().expect("entry should be present");
+    let mut child_stdin = remote_proxy_process.stdin.take().expect("entry should be present");
 
     let mut stdin_buffer = Vec::new();
     let mut stdout_buffer = Vec::new();

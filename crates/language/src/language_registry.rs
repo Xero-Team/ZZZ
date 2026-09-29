@@ -855,7 +855,7 @@ impl LanguageRegistry {
         // If the language is already loaded, resolve with it immediately.
         for loaded_language in &state.languages {
             if loaded_language.id == language.id {
-                tx.send(Ok(loaded_language.clone())).unwrap();
+                tx.send(Ok(loaded_language.clone())).expect("channel receiver should be alive");
                 return rx;
             }
         }
@@ -983,9 +983,9 @@ impl LanguageRegistry {
                                     .and_then(OsStr::to_str)
                                     .context("invalid grammar filename")?;
                                 anyhow::Ok(with_parser(|parser| {
-                                    let mut store = parser.take_wasm_store().unwrap();
+                                    let mut store = parser.take_wasm_store().expect("take_wasm_store should be present");
                                     let grammar = store.load_language(grammar_name, &wasm_bytes);
-                                    parser.set_wasm_store(store).unwrap();
+                                    parser.set_wasm_store(store).expect("set_wasm_store should be present");
                                     grammar
                                 })?)
                             })

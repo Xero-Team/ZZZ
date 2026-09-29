@@ -87,7 +87,7 @@ impl<'a> Statement<'a> {
     }
 
     fn current_statement(&self) -> *mut sqlite3_stmt {
-        *self.raw_statements.get(self.current_statement).unwrap()
+        *self.raw_statements.get(self.current_statement).expect("entry should be present")
     }
 
     pub fn reset(&mut self) {

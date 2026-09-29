@@ -1260,7 +1260,7 @@ impl<T: ScrollableHandle> Element for ScrollbarElement<T> {
                         current_delta,
                         animation_duration: delta_duration,
                         showing: should_invert,
-                    } => window.with_element_state(id.unwrap(), |state, window| {
+                    } => window.with_element_state(id.expect("value should be present"), |state, window| {
                         let state = state.unwrap_or_else(|| Instant::now());
                         let current = Instant::now();
 

@@ -12,7 +12,7 @@ pub struct VimModeSetting(pub bool);
 
 impl Settings for VimModeSetting {
     fn from_settings(content: &SettingsContent) -> Self {
-        Self(content.vim_mode.unwrap())
+        Self(content.vim_mode.expect("vim_mode should be present"))
     }
 }
 
@@ -33,7 +33,7 @@ impl HelixModeSetting {
 
 impl Settings for HelixModeSetting {
     fn from_settings(content: &SettingsContent) -> Self {
-        Self(content.helix_mode.unwrap())
+        Self(content.helix_mode.expect("helix_mode should be present"))
     }
 }
 

@@ -629,12 +629,12 @@ impl MacTextSystemState {
             let mut runs = <Vec<ShapedRun>>::with_capacity(glyph_runs.len() as usize);
             let mut ix_converter = StringIndexConverter::new(text);
             for run in glyph_runs.into_iter() {
-                let attributes = run.attributes().unwrap();
+                let attributes = run.attributes().expect("attributes should be present");
                 let font = unsafe {
                     attributes
                         .get(kCTFontAttributeName)
                         .downcast::<CTFont>()
-                        .unwrap()
+                        .expect("downcast should succeed")
                 };
                 let font_id = self.id_for_native_font(font.clone());
                 let run_start_utf16 = run
@@ -672,7 +672,7 @@ impl MacTextSystemState {
                             synthetic_bold,
                             glyphs: Vec::with_capacity(run.glyph_count().try_into().unwrap_or(0)),
                         });
-                        &mut runs.last_mut().unwrap().glyphs
+                        &mut runs.last_mut().expect("collection should not be empty").glyphs
                     }
                 };
                 for ((&glyph_id, position), &glyph_utf16_ix) in run
@@ -681,7 +681,7 @@ impl MacTextSystemState {
                     .zip(run.positions().iter())
                     .zip(run.string_indices().iter())
                 {
-                    let glyph_utf16_ix = usize::try_from(glyph_utf16_ix).unwrap();
+                    let glyph_utf16_ix = usize::try_from(glyph_utf16_ix).expect("conversion should succeed");
                     if ix_converter.utf16_ix > glyph_utf16_ix {
                         // We cannot reuse current index converter, as it can only seek forward. Restart the search.
                         ix_converter = StringIndexConverter::new(text);
