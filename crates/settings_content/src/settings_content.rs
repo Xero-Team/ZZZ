@@ -136,6 +136,12 @@ pub struct SettingsContent {
 
     pub git_panel: Option<GitPanelSettingsContent>,
 
+    /// Configuration of the Telegram panel.
+    pub telegram_panel: Option<TelegramPanelSettingsContent>,
+
+    /// Configuration for the Telegram connection.
+    pub telegram: Option<TelegramSettingsContent>,
+
     pub tabs: Option<ItemSettingsContent>,
     pub tab_bar: Option<TabBarSettingsContent>,
     pub status_bar: Option<StatusBarSettingsContent>,
@@ -680,6 +686,65 @@ pub struct GitPanelSettingsContent {
     ///
     /// Default: project_diff
     pub entry_primary_click_action: Option<GitPanelClickBehavior>,
+}
+
+/// Configuration for the Telegram panel.
+#[with_fallible_options]
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
+pub struct TelegramPanelSettingsContent {
+    /// Whether to show the Telegram panel button in the status bar.
+    ///
+    /// Default: true
+    pub button: Option<bool>,
+    /// Where to dock the Telegram panel.
+    ///
+    /// Default: bottom
+    pub dock: Option<DockPosition>,
+    /// Default width of the panel in pixels, used by the left and right docks.
+    ///
+    /// Default: 360
+    #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
+    pub default_width: Option<f32>,
+    /// Default height of the panel in pixels, used by the bottom dock.
+    ///
+    /// Default: 320
+    #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
+    pub default_height: Option<f32>,
+    /// Whether the panel can stretch to fill its dock.
+    ///
+    /// Default: false
+    pub flexible: Option<bool>,
+    /// Whether the panel should open on startup.
+    ///
+    /// Default: false
+    pub starts_open: Option<bool>,
+    /// Whether to show a badge on the Telegram panel icon with the number of unread chats.
+    ///
+    /// Default: true
+    pub show_unread_badge: Option<bool>,
+    /// Whether to limit the width of messages, the chat header, and the composer.
+    /// When enabled, content is constrained to `max_content_width` and centered
+    /// when the panel is wider than that value.
+    ///
+    /// Default: true
+    pub limit_content_width: Option<bool>,
+    /// Maximum content width in pixels. Content is centered when the panel is
+    /// wider than this value.
+    ///
+    /// Default: 760
+    #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
+    pub max_content_width: Option<f32>,
+}
+
+/// Configuration for the Telegram connection.
+#[with_fallible_options]
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
+pub struct TelegramSettingsContent {
+    /// A dedicated SOCKS5 proxy for Telegram, for example `socks5://127.0.0.1:1080`.
+    ///
+    /// Telegram cannot use HTTP or HTTPS proxies. When unset, ZZZ's global
+    /// proxy is reused if it is a SOCKS5 proxy.
+    pub proxy: Option<String>,
 }
 
 #[derive(

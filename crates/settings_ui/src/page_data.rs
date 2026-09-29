@@ -7433,6 +7433,278 @@ fn panels_page() -> SettingsPage {
         ]
     }
 
+    fn telegram_panel_section() -> [SettingsPageItem; 12] {
+        [
+            SettingsPageItem::SectionHeader(lt(
+                "settings_ui.page_data.section.telegram.panel",
+                "Telegram Panel",
+            )),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.telegram.panel.button",
+                    "Telegram Panel Button",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.show.the.telegram.panel.button.in.the.status.bar",
+                    "Show the Telegram panel button in the status bar.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("telegram_panel.button"),
+                    pick: |settings_content| {
+                        settings_content.telegram_panel.as_ref()?.button.as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .telegram_panel
+                            .get_or_insert_default()
+                            .button = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.telegram.panel.dock",
+                    "Telegram Panel Dock",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.where.to.dock.the.telegram.panel",
+                    "Where to dock the Telegram panel.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("telegram_panel.dock"),
+                    pick: |settings_content| {
+                        settings_content.telegram_panel.as_ref()?.dock.as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content.telegram_panel.get_or_insert_default().dock = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.telegram.panel.default.width",
+                    "Telegram Panel Default Width",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.default.width.of.the.telegram.panel.in.pixels",
+                    "Default width of the Telegram panel in pixels.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("telegram_panel.default_width"),
+                    pick: |settings_content| {
+                        settings_content
+                            .telegram_panel
+                            .as_ref()?
+                            .default_width
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .telegram_panel
+                            .get_or_insert_default()
+                            .default_width = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.telegram.panel.default.height",
+                    "Telegram Panel Default Height",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.default.height.of.the.telegram.panel.in.pixels",
+                    "Default height of the Telegram panel in pixels.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("telegram_panel.default_height"),
+                    pick: |settings_content| {
+                        settings_content
+                            .telegram_panel
+                            .as_ref()?
+                            .default_height
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .telegram_panel
+                            .get_or_insert_default()
+                            .default_height = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.telegram.panel.flexible",
+                    "Telegram Panel Flexible Sizing",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.allow.the.telegram.panel.to.stretch.to.fill.its.dock",
+                    "Allow the Telegram panel to stretch to fill its dock.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("telegram_panel.flexible"),
+                    pick: |settings_content| {
+                        settings_content.telegram_panel.as_ref()?.flexible.as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .telegram_panel
+                            .get_or_insert_default()
+                            .flexible = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.telegram.panel.starts.open",
+                    "Telegram Panel Opens on Startup",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.open.the.telegram.panel.on.startup",
+                    "Open the Telegram panel on startup.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("telegram_panel.starts_open"),
+                    pick: |settings_content| {
+                        settings_content
+                            .telegram_panel
+                            .as_ref()?
+                            .starts_open
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .telegram_panel
+                            .get_or_insert_default()
+                            .starts_open = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.telegram.panel.show.unread.badge",
+                    "Telegram Panel Unread Badge",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.show.a.badge.with.the.number.of.unread.chats",
+                    "Show a badge with the number of unread chats on the Telegram panel icon.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("telegram_panel.show_unread_badge"),
+                    pick: |settings_content| {
+                        settings_content
+                            .telegram_panel
+                            .as_ref()?
+                            .show_unread_badge
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .telegram_panel
+                            .get_or_insert_default()
+                            .show_unread_badge = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.telegram.panel.limit.content.width",
+                    "Telegram Panel Limit Content Width",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.limit.the.width.of.telegram.messages.the.chat.header.and.the.composer",
+                    "Limit the width of messages, the chat header, and the composer.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("telegram_panel.limit_content_width"),
+                    pick: |settings_content| {
+                        settings_content
+                            .telegram_panel
+                            .as_ref()?
+                            .limit_content_width
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .telegram_panel
+                            .get_or_insert_default()
+                            .limit_content_width = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.telegram.panel.max.content.width",
+                    "Telegram Panel Max Content Width",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.maximum.content.width.in.pixels.for.the.telegram.panel",
+                    "Maximum content width in pixels. Content is centered when the panel is wider than this value.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("telegram_panel.max_content_width"),
+                    pick: |settings_content| {
+                        settings_content
+                            .telegram_panel
+                            .as_ref()?
+                            .max_content_width
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .telegram_panel
+                            .get_or_insert_default()
+                            .max_content_width = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SectionHeader(lt(
+                "settings_ui.page_data.section.telegram",
+                "Telegram",
+            )),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.telegram.proxy",
+                    "Telegram Proxy",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.a.dedicated.socks5.proxy.for.telegram",
+                    "A dedicated SOCKS5 proxy for Telegram. Telegram cannot use HTTP or HTTPS proxies.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("telegram.proxy"),
+                    pick: |settings_content| settings_content.telegram.as_ref()?.proxy.as_ref(),
+                    write: |settings_content, value, _| {
+                        settings_content.telegram.get_or_insert_default().proxy = value;
+                    },
+                }),
+                metadata: Some(Box::new(SettingsFieldMetadata {
+                    placeholder: Some("socks5://127.0.0.1:1080"),
+                    ..Default::default()
+                })),
+                files: USER,
+            }),
+        ]
+    }
+
     SettingsPage {
         title: lt("settings_ui.page_data.title.panels", "Panels"),
         items: concat_sections![
@@ -7442,6 +7714,7 @@ fn panels_page() -> SettingsPage {
             git_panel_section(),
             debugger_panel_section(),
             agent_panel_section(),
+            telegram_panel_section(),
         ],
     }
 }

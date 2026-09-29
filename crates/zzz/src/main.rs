@@ -434,6 +434,8 @@ fn main() {
         }
         settings::init(cx);
         app_i18n::init(cx);
+        #[cfg(not(target_family = "wasm"))]
+        telegram_ui::init(cx);
         zlog_settings::init(cx);
         zzz::watch_settings_files(fs.clone(), cx);
         handle_keymap_file_changes(user_keymap_file_rx, user_keymap_watcher, cx);

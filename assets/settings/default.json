@@ -1076,6 +1076,36 @@
     // Default: project_diff
     "entry_primary_click_action": "project_diff",
   },
+  // Configuration for the Telegram panel.
+  "telegram_panel": {
+    // Whether to show the Telegram panel button in the status bar.
+    "button": true,
+    // Where to dock the Telegram panel. Can be 'left', 'bottom', or 'right'.
+    "dock": "bottom",
+    // Default width of the Telegram panel, used by the left and right docks.
+    "default_width": 360,
+    // Default height of the Telegram panel, used by the bottom dock.
+    "default_height": 320,
+    // Whether the Telegram panel can stretch to fill its dock.
+    "flexible": false,
+    // Whether the Telegram panel should open on startup.
+    "starts_open": false,
+    // Whether to show a badge on the Telegram panel icon with the number of unread chats.
+    "show_unread_badge": true,
+    // Whether to limit content width. When enabled, messages, the conversation
+    // header, and the composer are constrained to `max_content_width` and
+    // centered when the panel is wider than that value.
+    "limit_content_width": true,
+    // Maximum content width in pixels. Content is centered when the panel is
+    // wider than this value.
+    "max_content_width": 760,
+  },
+  // Configuration for the Telegram connection.
+  "telegram": {
+    // A dedicated SOCKS5 proxy for Telegram, for example "socks5://127.0.0.1:1080".
+    // Telegram cannot use HTTP or HTTPS proxies.
+    // "proxy": null
+  },
   "message_editor": {
     // Whether to automatically replace emoji shortcodes with emoji characters.
     // For example: typing `:wave:` gets replaced with `👋`.

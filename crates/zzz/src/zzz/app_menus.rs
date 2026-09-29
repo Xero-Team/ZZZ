@@ -2,6 +2,7 @@ use git_ui::git_panel;
 use gpui::{App, Menu, MenuItem, OsAction};
 use i18n::tr;
 use release_channel::ReleaseChannel;
+use telegram_ui;
 use terminal_view::terminal_panel;
 use zzz_actions::{debug_panel, dev};
 
@@ -84,6 +85,10 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
         MenuItem::action(
             tr(cx, "menu.view.git_panel", "Git Panel"),
             git_panel::ToggleFocus,
+        ),
+        MenuItem::action(
+            tr(cx, "menu.view.telegram_panel", "Telegram Panel"),
+            telegram_ui::ToggleFocus,
         ),
         MenuItem::separator(),
         MenuItem::action(

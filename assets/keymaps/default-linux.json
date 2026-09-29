@@ -686,6 +686,7 @@
       "ctrl-shift-b": "outline_panel::ToggleFocus",
       "ctrl-shift-g": "git_panel::ToggleFocus",
       "ctrl-shift-d": "debug_panel::ToggleFocus",
+      "ctrl-shift-8": "telegram_panel::ToggleFocus",
       "ctrl-?": "agent::ToggleFocus",
       "alt-save": "workspace::SaveAll",
       "ctrl-alt-s": "workspace::SaveAll",
@@ -1081,6 +1082,23 @@
       "ctrl-t": "debugger::ToggleThreadPicker",
       "ctrl-i": "debugger::ToggleSessionPicker",
       "shift-alt-escape": "debugger::ToggleExpandItem",
+    },
+  },
+  {
+    "context": "TelegramPanel",
+    "bindings": {
+      "escape": "telegram_panel::Back",
+      "ctrl-enter": "telegram_panel::Send",
+      "alt-up": "telegram_panel::PreviousChat",
+      "alt-down": "telegram_panel::NextChat",
+      "ctrl-r": "telegram_panel::Refresh",
+    },
+  },
+  {
+    "context": "TelegramComposer > Editor && mode == auto_height",
+    "bindings": {
+      "enter": "telegram_panel::Send",
+      "shift-enter": "editor::Newline",
     },
   },
   {
