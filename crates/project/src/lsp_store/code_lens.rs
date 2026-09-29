@@ -6,6 +6,7 @@ use clock::Global;
 use collections::HashMap;
 use futures::{
     FutureExt as _,
+    channel::oneshot,
     future::{Shared, join_all},
 };
 use gpui::{AppContext as _, AsyncApp, Context, Entity, Task};
@@ -30,6 +31,7 @@ pub(super) type CodeLensTask =
 pub(super) struct CodeLensData {
     pub(super) lens: HashMap<LanguageServerId, Vec<CodeAction>>,
     pub(super) update: Option<(Global, CodeLensTask)>,
+    update_cancel: Option<oneshot::Sender<()>>,
 }
 
 impl CodeLensData {
@@ -41,7 +43,11 @@ impl CodeLensData {
 impl LspStore {
     pub(super) fn refresh_code_lens(&mut self, cx: &mut Context<Self>) {
         for lsp_data in self.lsp_data.values_mut() {
-            lsp_data.code_lens = None;
+            if let Some(code_lens) = lsp_data.code_lens.take() {
+                if let Some(cancel) = code_lens.update_cancel {
+                    cancel.send(()).ok();
+                }
+            }
         }
 
         cx.emit(LspStoreEvent::RefreshCodeLens);
@@ -122,6 +128,10 @@ impl LspStore {
             .latest_lsp_data(buffer, cx)
             .code_lens
             .get_or_insert_default();
+        let (cancel_tx, cancel_rx) = oneshot::channel();
+        if let Some(previous_cancel) = lens_lsp_data.update_cancel.replace(cancel_tx) {
+            previous_cancel.send(()).ok();
+        }
         let buffer = buffer.clone();
         let query_version_queried_for = version_queried_for.clone();
         let new_task = cx
@@ -133,10 +143,15 @@ impl LspStore {
                     .update(cx, |lsp_store, cx| {
                         lsp_store.fetch_code_lens_for_buffer(&buffer, cx)
                     })
-                    .map_err(Arc::new)?
-                    .await
-                    .context("fetching code lens")
-                    .map_err(Arc::new);
+                    .map_err(Arc::new)?;
+                let fetched_lens = match super::race_superseded(fetched_lens, cancel_rx).await {
+                    Some(fetched_lens) => {
+                        fetched_lens.context("fetching code lens").map_err(Arc::new)
+                    }
+                    // Superseded by a newer request for this buffer; the fetch
+                    // future being dropped has already cancelled the LSP request.
+                    None => return Ok(None),
+                };
                 let fetched_lens = match fetched_lens {
                     Ok(fetched_lens) => fetched_lens,
                     Err(e) => {
@@ -146,6 +161,9 @@ impl LspStore {
                                     .lsp_data
                                     .get_mut(&buffer_id)
                                     .and_then(|lsp_data| lsp_data.code_lens.as_mut())
+                                    && lens_lsp_data.update.as_ref().is_some_and(|(version, _)| {
+                                        version == &query_version_queried_for
+                                    })
                                 {
                                     lens_lsp_data.update = None;
                                 }
@@ -159,6 +177,13 @@ impl LspStore {
                     .update(cx, |lsp_store, cx| {
                         let lsp_data = lsp_store.current_lsp_data(buffer_id)?;
                         let code_lens = lsp_data.code_lens.as_mut()?;
+                        if code_lens
+                            .update
+                            .as_ref()
+                            .is_some_and(|(version, _)| version == &query_version_queried_for)
+                        {
+                            code_lens.update = None;
+                        }
                         if let Some(fetched_lens) = fetched_lens {
                             if lsp_data.buffer_version == query_version_queried_for {
                                 code_lens.lens.extend(fetched_lens);
@@ -175,7 +200,6 @@ impl LspStore {
                                     .sort_by(|a, b| a.range.start.cmp(&b.range.start, &snapshot));
                             }
                         }
-                        code_lens.update = None;
                         Some(code_lens.lens.values().flatten().cloned().collect())
                     })
                     .map_err(Arc::new)

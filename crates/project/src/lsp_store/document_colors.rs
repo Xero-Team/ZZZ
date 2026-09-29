@@ -5,6 +5,7 @@ use clock::Global;
 use collections::{HashMap, HashSet};
 use futures::{
     FutureExt as _,
+    channel::oneshot,
     future::{Shared, join_all},
 };
 use gpui::{AppContext as _, AsyncApp, Context, Entity, SharedString, Task};
@@ -37,6 +38,7 @@ pub(super) type DocumentColorTask =
 pub(super) struct DocumentColorData {
     pub(super) colors: HashMap<LanguageServerId, HashSet<DocumentColor>>,
     pub(super) colors_update: Option<(Global, DocumentColorTask)>,
+    colors_update_cancel: Option<oneshot::Sender<()>>,
 }
 
 impl DocumentColorData {
@@ -91,19 +93,27 @@ impl LspStore {
         {
             return Some(running_update.clone());
         }
+        let (cancel_tx, cancel_rx) = oneshot::channel();
+        if let Some(previous_cancel) = color_lsp_data.colors_update_cancel.replace(cancel_tx) {
+            previous_cancel.send(()).ok();
+        }
         let buffer_version_queried_for = version_queried_for.clone();
         let new_task = cx
             .spawn(async move |lsp_store, cx| {
                 cx.background_executor()
                     .timer(Duration::from_millis(30))
                     .await;
-                let fetched_colors = lsp_store
-                    .update(cx, |lsp_store, cx| {
-                        lsp_store.fetch_document_colors_for_buffer(&buffer, cx)
-                    })?
-                    .await
-                    .context("fetching document colors")
-                    .map_err(Arc::new);
+                let fetched_colors = lsp_store.update(cx, |lsp_store, cx| {
+                    lsp_store.fetch_document_colors_for_buffer(&buffer, cx)
+                })?;
+                let fetched_colors = match super::race_superseded(fetched_colors, cancel_rx).await {
+                    Some(fetched_colors) => fetched_colors
+                        .context("fetching document colors")
+                        .map_err(Arc::new),
+                    // Superseded by a newer request for this buffer; the fetch
+                    // future being dropped has already cancelled the LSP request.
+                    None => return Ok(DocumentColors::default()),
+                };
                 let fetched_colors = match fetched_colors {
                     Ok(fetched_colors) => {
                         if buffer.update(cx, |buffer, _| {
@@ -116,10 +126,15 @@ impl LspStore {
                     Err(e) => {
                         lsp_store
                             .update(cx, |lsp_store, _| {
-                                if let Some(lsp_data) = lsp_store.lsp_data.get_mut(&buffer_id) {
-                                    if let Some(document_colors) = &mut lsp_data.document_colors {
-                                        document_colors.colors_update = None;
-                                    }
+                                if let Some(document_colors) = lsp_store
+                                    .lsp_data
+                                    .get_mut(&buffer_id)
+                                    .and_then(|lsp_data| lsp_data.document_colors.as_mut())
+                                    && document_colors.colors_update.as_ref().is_some_and(
+                                        |(version, _)| version == &buffer_version_queried_for,
+                                    )
+                                {
+                                    document_colors.colors_update = None;
                                 }
                             })
                             .ok();
@@ -131,6 +146,13 @@ impl LspStore {
                     .update(cx, |lsp_store, cx| {
                         let lsp_data = lsp_store.latest_lsp_data(&buffer, cx);
                         let lsp_colors = lsp_data.document_colors.get_or_insert_default();
+                        if lsp_colors
+                            .colors_update
+                            .as_ref()
+                            .is_some_and(|(version, _)| version == &buffer_version_queried_for)
+                        {
+                            lsp_colors.colors_update = None;
+                        }
 
                         if let Some(fetched_colors) = fetched_colors {
                             if lsp_data.buffer_version == buffer_version_queried_for {
@@ -143,7 +165,6 @@ impl LspStore {
                                 lsp_colors.colors = fetched_colors;
                             }
                         }
-                        lsp_colors.colors_update = None;
                         let colors = lsp_colors
                             .colors
                             .values()

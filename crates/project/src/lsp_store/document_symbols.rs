@@ -6,6 +6,7 @@ use anyhow::Context as _;
 use clock::Global;
 use collections::HashMap;
 use futures::FutureExt as _;
+use futures::channel::oneshot;
 use futures::future::{Shared, join_all};
 use gpui::{AppContext as _, Context, Entity, Task};
 use itertools::Itertools;
@@ -27,6 +28,7 @@ pub(super) type DocumentSymbolsTask =
 pub(super) struct DocumentSymbolsData {
     symbols: HashMap<LanguageServerId, Vec<OutlineItem<Anchor>>>,
     symbols_update: Option<(Global, DocumentSymbolsTask)>,
+    symbols_update_cancel: Option<oneshot::Sender<()>>,
 }
 
 impl DocumentSymbolsData {
@@ -97,6 +99,11 @@ impl LspStore {
             }
         }
 
+        let (cancel_tx, cancel_rx) = oneshot::channel();
+        if let Some(previous_cancel) = doc_symbols_data.symbols_update_cancel.replace(cancel_tx) {
+            previous_cancel.send(()).ok();
+        }
+
         let buffer = buffer.clone();
         let query_version = version_queried_for.clone();
         let new_task = cx
@@ -109,20 +116,31 @@ impl LspStore {
                     .update(cx, |lsp_store, cx| {
                         lsp_store.fetch_document_symbols_for_buffer(&buffer, cx)
                     })
-                    .map_err(Arc::new)?
-                    .await
-                    .context("fetching document symbols")
-                    .map_err(Arc::new);
+                    .map_err(Arc::new)?;
+                let fetched = match super::race_superseded(fetched, cancel_rx).await {
+                    Some(fetched) => fetched
+                        .context("fetching document symbols")
+                        .map_err(Arc::new),
+                    // Superseded by a newer request for this buffer; the fetch
+                    // future being dropped has already cancelled the LSP request.
+                    None => return Ok(Vec::new()),
+                };
 
                 let fetched = match fetched {
                     Ok(fetched) => fetched,
                     Err(e) => {
                         lsp_store
                             .update(cx, |lsp_store, _| {
-                                if let Some(lsp_data) = lsp_store.lsp_data.get_mut(&buffer_id) {
-                                    if let Some(document_symbols) = &mut lsp_data.document_symbols {
-                                        document_symbols.symbols_update = None;
-                                    }
+                                if let Some(document_symbols) = lsp_store
+                                    .lsp_data
+                                    .get_mut(&buffer_id)
+                                    .and_then(|lsp_data| lsp_data.document_symbols.as_mut())
+                                    && document_symbols
+                                        .symbols_update
+                                        .as_ref()
+                                        .is_some_and(|(version, _)| version == &query_version)
+                                {
+                                    document_symbols.symbols_update = None;
                                 }
                             })
                             .ok();
@@ -135,6 +153,13 @@ impl LspStore {
                         let snapshot = buffer.read(cx).snapshot();
                         let lsp_data = lsp_store.latest_lsp_data(&buffer, cx);
                         let doc_symbols = lsp_data.document_symbols.get_or_insert_default();
+                        if doc_symbols
+                            .symbols_update
+                            .as_ref()
+                            .is_some_and(|(version, _)| version == &query_version)
+                        {
+                            doc_symbols.symbols_update = None;
+                        }
 
                         if let Some(fetched_symbols) = fetched {
                             let converted = fetched_symbols
@@ -152,7 +177,6 @@ impl LspStore {
                                 doc_symbols.symbols = converted;
                             }
                         }
-                        doc_symbols.symbols_update = None;
                         doc_symbols
                             .symbols
                             .values()

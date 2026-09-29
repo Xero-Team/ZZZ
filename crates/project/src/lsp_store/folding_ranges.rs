@@ -6,6 +6,7 @@ use anyhow::Context as _;
 use clock::Global;
 use collections::HashMap;
 use futures::FutureExt as _;
+use futures::channel::oneshot;
 use futures::future::{Shared, join_all};
 use gpui::{AppContext as _, Context, Entity, SharedString, Task};
 use itertools::Itertools;
@@ -31,6 +32,7 @@ pub(super) type FoldingRangeTask =
 pub(super) struct FoldingRangeData {
     pub(super) ranges: HashMap<LanguageServerId, Vec<LspFoldingRange>>,
     ranges_update: Option<(Global, FoldingRangeTask)>,
+    ranges_update_cancel: Option<oneshot::Sender<()>>,
 }
 
 impl LspStore {
@@ -88,6 +90,11 @@ impl LspStore {
             }
         }
 
+        let (cancel_tx, cancel_rx) = oneshot::channel();
+        if let Some(previous_cancel) = folding_lsp_data.ranges_update_cancel.replace(cancel_tx) {
+            previous_cancel.send(()).ok();
+        }
+
         let buffer = buffer.clone();
         let query_version = version_queried_for.clone();
         let new_task = cx
@@ -100,20 +107,29 @@ impl LspStore {
                     .update(cx, |lsp_store, cx| {
                         lsp_store.fetch_folding_ranges_for_buffer(&buffer, cx)
                     })
-                    .map_err(Arc::new)?
-                    .await
-                    .context("fetching folding ranges")
-                    .map_err(Arc::new);
+                    .map_err(Arc::new)?;
+                let fetched = match super::race_superseded(fetched, cancel_rx).await {
+                    Some(fetched) => fetched.context("fetching folding ranges").map_err(Arc::new),
+                    // Superseded by a newer request for this buffer; the fetch
+                    // future being dropped has already cancelled the LSP request.
+                    None => return Ok(Vec::new()),
+                };
 
                 let fetched = match fetched {
                     Ok(fetched) => fetched,
                     Err(e) => {
                         lsp_store
                             .update(cx, |lsp_store, _| {
-                                if let Some(lsp_data) = lsp_store.lsp_data.get_mut(&buffer_id) {
-                                    if let Some(folding_ranges) = &mut lsp_data.folding_ranges {
-                                        folding_ranges.ranges_update = None;
-                                    }
+                                if let Some(folding_ranges) = lsp_store
+                                    .lsp_data
+                                    .get_mut(&buffer_id)
+                                    .and_then(|lsp_data| lsp_data.folding_ranges.as_mut())
+                                    && folding_ranges
+                                        .ranges_update
+                                        .as_ref()
+                                        .is_some_and(|(version, _)| version == &query_version)
+                                {
+                                    folding_ranges.ranges_update = None;
                                 }
                             })
                             .ok();
@@ -125,6 +141,13 @@ impl LspStore {
                     .update(cx, |lsp_store, cx| {
                         let lsp_data = lsp_store.latest_lsp_data(&buffer, cx);
                         let folding = lsp_data.folding_ranges.get_or_insert_default();
+                        if folding
+                            .ranges_update
+                            .as_ref()
+                            .is_some_and(|(version, _)| version == &query_version)
+                        {
+                            folding.ranges_update = None;
+                        }
 
                         if let Some(fetched_ranges) = fetched {
                             if lsp_data.buffer_version == query_version {
@@ -134,7 +157,6 @@ impl LspStore {
                                 folding.ranges = fetched_ranges;
                             }
                         }
-                        folding.ranges_update = None;
                         let snapshot = buffer.read(cx).snapshot();
                         folding
                             .ranges

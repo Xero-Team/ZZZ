@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context as _, Result, anyhow, bail};
 use collections::HashMap;
 use fs::Fs;
-use futures::{AsyncReadExt, future::join_all};
+use futures::{AsyncReadExt, StreamExt as _, stream};
 use gpui::{
     App, AppContext as _, BackgroundExecutor, Context, Entity, FutureExt as _, Global,
     SharedString, Task,
@@ -460,6 +460,12 @@ async fn build_registry_agents(
     Ok(agents)
 }
 
+/// Maximum number of registry icons downloaded concurrently.
+///
+/// The registry can list many agents; resolving every icon at once would open
+/// an unbounded number of simultaneous HTTP requests and file writes.
+const ICON_DOWNLOAD_CONCURRENCY: usize = 8;
+
 async fn resolve_icon_paths(
     entries: &[RegistryEntry],
     icons_dir: &Path,
@@ -468,7 +474,7 @@ async fn resolve_icon_paths(
     http_client: Arc<dyn HttpClient>,
     executor: &BackgroundExecutor,
 ) -> Vec<Option<SharedString>> {
-    join_all(entries.iter().map(|entry| {
+    stream::iter(entries.iter().map(|entry| {
         let fs = fs.clone();
         let http_client = http_client.clone();
         async move {
@@ -478,6 +484,8 @@ async fn resolve_icon_paths(
                 .flatten()
         }
     }))
+    .buffered(ICON_DOWNLOAD_CONCURRENCY)
+    .collect()
     .await
 }
 

@@ -176,6 +176,26 @@ const WORKSPACE_DIAGNOSTICS_TOKEN_START: &str = "id:";
 const SERVER_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(10);
 static NEXT_PROMPT_REQUEST_ID: AtomicUsize = AtomicUsize::new(0);
 
+/// Races an in-flight buffer-feature request against a supersede signal.
+///
+/// The submodule fetch functions store the sender half of a `oneshot` channel
+/// alongside their in-flight task and fire it when a newer request replaces
+/// them. Returning `None` here drops `fetch`, which propagates cancellation to
+/// the language server (an LSP `$/cancelRequest`), so superseded requests stop
+/// occupying the server instead of merely having their results discarded.
+pub(super) async fn race_superseded<T>(
+    fetch: impl Future<Output = T>,
+    superseded: oneshot::Receiver<()>,
+) -> Option<T> {
+    let fetch = fetch.fuse();
+    let superseded = superseded.fuse();
+    futures::pin_mut!(fetch, superseded);
+    select! {
+        result = fetch => Some(result),
+        _ = superseded => None,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub enum ProgressToken {
     Number(i32),

@@ -7,6 +7,7 @@ use anyhow::Context as _;
 use clock::Global;
 use collections::HashMap;
 use futures::FutureExt as _;
+use futures::channel::oneshot;
 use futures::future::{Shared, join_all};
 use gpui::{AppContext as _, AsyncApp, Context, Entity, SharedString, Task};
 use language::{Buffer, point_to_lsp};
@@ -45,6 +46,7 @@ pub(super) struct DocumentLinksData {
     pub(super) links: BufferDocumentLinks,
     pub(super) next_id: u64,
     links_update: Option<(Global, DocumentLinksTask)>,
+    links_update_cancel: Option<oneshot::Sender<()>>,
     pub(super) link_resolves: HashMap<(LanguageServerId, DocumentLinkId), DocumentLinkResolveTask>,
 }
 
@@ -109,6 +111,11 @@ impl LspStore {
             return cx.background_spawn(async move { running.await.ok().flatten() });
         }
 
+        let (cancel_tx, cancel_rx) = oneshot::channel();
+        if let Some(previous_cancel) = links_lsp_data.links_update_cancel.replace(cancel_tx) {
+            previous_cancel.send(()).ok();
+        }
+
         let buffer = buffer.clone();
         let query_version = version_queried_for.clone();
         let new_task = cx
@@ -121,18 +128,27 @@ impl LspStore {
                     .update(cx, |lsp_store, cx| {
                         lsp_store.fetch_document_links_for_buffer(&buffer, cx)
                     })
-                    .map_err(Arc::new)?
-                    .await
-                    .context("fetching document links")
-                    .map_err(Arc::new);
+                    .map_err(Arc::new)?;
+                let fetched = match super::race_superseded(fetched, cancel_rx).await {
+                    Some(fetched) => fetched.context("fetching document links").map_err(Arc::new),
+                    // Superseded by a newer request for this buffer; the fetch
+                    // future being dropped has already cancelled the LSP request.
+                    None => return Ok(None),
+                };
 
                 let fetched = match fetched {
                     Ok(fetched) => fetched,
                     Err(e) => {
                         lsp_store
                             .update(cx, |lsp_store, _| {
-                                if let Some(lsp_data) = lsp_store.lsp_data.get_mut(&buffer_id)
-                                    && let Some(document_links) = &mut lsp_data.document_links
+                                if let Some(document_links) = lsp_store
+                                    .lsp_data
+                                    .get_mut(&buffer_id)
+                                    .and_then(|lsp_data| lsp_data.document_links.as_mut())
+                                    && document_links
+                                        .links_update
+                                        .as_ref()
+                                        .is_some_and(|(version, _)| version == &query_version)
                                 {
                                     document_links.links_update = None;
                                 }
@@ -146,7 +162,13 @@ impl LspStore {
                     .update(cx, |lsp_store, cx| {
                         let lsp_data = lsp_store.latest_lsp_data(&buffer, cx);
                         let links_data = lsp_data.document_links.get_or_insert_default();
-                        links_data.links_update = None;
+                        if links_data
+                            .links_update
+                            .as_ref()
+                            .is_some_and(|(version, _)| version == &query_version)
+                        {
+                            links_data.links_update = None;
+                        }
 
                         let Some(fetched_links) = fetched else {
                             return None;

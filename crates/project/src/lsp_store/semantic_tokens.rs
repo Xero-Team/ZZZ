@@ -6,6 +6,7 @@ use clock::Global;
 use collections::HashMap;
 use futures::{
     FutureExt as _,
+    channel::oneshot,
     future::{Shared, join_all},
 };
 use gpui::{App, AppContext, AsyncApp, Context, Entity, ReadGlobal as _, SharedString, Task};
@@ -125,6 +126,11 @@ impl LspStore {
             return task.clone();
         }
 
+        let (cancel_tx, cancel_rx) = oneshot::channel();
+        if let Some(previous_cancel) = semantic_tokens_data.update_cancel.replace(cancel_tx) {
+            previous_cancel.send(()).ok();
+        }
+
         let for_server = refresh.map(|refresh| refresh.server_id);
         let new_tokens = self.fetch_semantic_tokens_for_buffer(&buffer, for_server, cx);
 
@@ -134,7 +140,13 @@ impl LspStore {
             .spawn(async move |lsp_store, cx| {
                 let buffer = task_buffer;
                 let version_queried_for = task_version_queried_for;
-                let res = if let Some(new_tokens) = new_tokens.await {
+                let new_tokens = match super::race_superseded(new_tokens, cancel_rx).await {
+                    Some(new_tokens) => new_tokens,
+                    // Superseded by a newer request for this buffer; the fetch
+                    // future being dropped has already cancelled the LSP request.
+                    None => return Ok(BufferSemanticTokens::default()),
+                };
+                let res = if let Some(new_tokens) = new_tokens {
                     let (raw_tokens, buffer_snapshot) = lsp_store
                         .update(cx, |lsp_store, cx| {
                             let lsp_data = lsp_store.latest_lsp_data(&buffer, cx);
@@ -643,15 +655,22 @@ pub struct SemanticTokensData {
     pub(super) raw_tokens: RawSemanticTokens,
     pub(super) latest_invalidation_requests: HashMap<LanguageServerId, Option<usize>>,
     update: Option<(Global, SemanticTokensTask)>,
+    update_cancel: Option<oneshot::Sender<()>>,
 }
 
 impl SemanticTokensData {
     fn invalidate_for_refresh(&mut self, server_id: LanguageServerId) {
+        if let Some(cancel) = self.update_cancel.take() {
+            cancel.send(()).ok();
+        }
         self.update = None;
         self.raw_tokens.servers.remove(&server_id);
     }
 
     pub(super) fn remove_server_data(&mut self, server_id: LanguageServerId) {
+        if let Some(cancel) = self.update_cancel.take() {
+            cancel.send(()).ok();
+        }
         self.raw_tokens.servers.remove(&server_id);
         self.latest_invalidation_requests.remove(&server_id);
         self.update = None;
