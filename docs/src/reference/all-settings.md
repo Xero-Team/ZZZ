@@ -4896,6 +4896,7 @@ Run the {#action theme_selector::Toggle} action in the command palette to see a 
     "show_project_items": true,
     "show_user_menu": true,
     "show_menus": false,
+    "open_menus_on_hover": false,
     "button_layout": "platform_default"
   }
 }
@@ -4908,6 +4909,7 @@ Run the {#action theme_selector::Toggle} action in the command palette to see a 
 - `show_project_items`: Whether to show the project host and name in the titlebar
 - `show_user_menu`: Whether to show the user menu button in the titlebar (the one that contains options like Settings, Keymap, Themes, etc.)
 - `show_menus`: Whether to show the menus in the titlebar
+- `open_menus_on_hover`: Whether to open title-bar menus on hover. Once a menu is open, hovering always switches between menus.
 - `button_layout`: The layout of window control buttons in the title bar (Linux only). Can be set to `"platform_default"` to follow the system setting, `"standard"` to use ZZZ's built-in layout, or a custom format like `"close:minimize,maximize"`
 
 ## Window Decorations

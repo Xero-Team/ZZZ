@@ -126,7 +126,8 @@ To disable this behavior use:
     "show_branch_name": true,       // Show/hide branch name
     "show_project_items": true,     // Show/hide project host and name
     "show_user_menu": true,         // Show/hide app user button
-    "show_menus": false             // Show/hide menus
+    "show_menus": false,            // Show/hide menus
+    "open_menus_on_hover": false    // Automatically open menus on hover
   },
 ```
 
