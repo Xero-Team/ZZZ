@@ -264,3 +264,209 @@ not refresh per-directory settings; the retained indent behavior is
 covered by the four passing tests. `InputPreference` was verified by type
 and borrow checking only; the GPUI interception runtime behavior has no
 local automated test after the divergent test module was dropped.
+
+## Continuation (batch 2)
+
+### Scope
+
+- Target branch: `sync/upstream-2026-09-30`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previously reviewed baseline for this run:
+  `986828d157135be95d999863dd1d618990173b8c`
+- Reviewed upstream head: `5d5963361f3080539f2d7034e92736167c53a04a`
+- Live upstream head queried: `decbf641b18f1982b3475c037e7c5c554471574f`
+- Query time: `2026-09-30T02:48:20+02:00`
+- Range continues after `986828d157135be95d999863dd1d618990173b8c`
+
+This is the second batch of the day. It covers the next twenty commits,
+ending at `5d5963361f`, and advances the reviewed baseline to
+`5d5963361f3080539f2d7034e92736167c53a04a`. Four commits remain queued
+for a later run: `017f9b89aa`, `0f9c923e67`, `263fb11177`, and
+`decbf641b1`.
+
+### Decisions
+
+| Upstream   | Class | Local commit | Disposition                                                                                                  |
+| ---------- | ----- | ------------ | ------------------------------------------------------------------------------------------------------------ |
+| 2280e5d95e | A     | f521eeb8cf   | Vim multi-selection paste crash; cherry-picked with `-x -s`.                                                 |
+| e773a56d6c | C     | --           | gpui_web iOS keyboard/browser-activity fix uses absent `touch_input`/`ime_mirror` infrastructure.            |
+| 408c713a35 | A     | 03b60caa4f   | Default `Typst.allow_rewrap`; cherry-picked with `-x -s`.                                                    |
+| c821538b57 | C     | --           | `agent.max_idle_retained_threads` subscribes to `AcpThreadEvent::StatusChanged`, which local never absorbed. |
+| 3135cdf8dc | C     | --           | Random element-tree benchmarks and leak fixes on an absent GPUI benchmark harness.                           |
+| 72d28c32c2 | C     | --           | Shared plan state built on the unabsorbed ACP v2 content-value model (`acp_v2`).                             |
+| dd510f99e0 | C     | --           | `language_models_cloud` provider crate is absent locally.                                                    |
+| bd747337d7 | B     | 44ead3d869   | Drops legacy TOML/Zig extension executable handling; local comment text had diverged.                        |
+| ead2d9eac0 | B     | 8f93e7484d   | Strips the GitHub `sha256:` prefix during deserialization.                                                   |
+| eb1ca9768b | C     | --           | GitHub workflow build-step plumbing.                                                                         |
+| c32938c34c | C     | --           | `open_ai` provider crate is absent locally.                                                                  |
+| 12f79c0aeb | C     | --           | `cloud_api_client` crate and cloud websocket path are absent.                                                |
+| 14dd03e896 | B     | 0f53bee90d   | Guards follow-up agent sends from stale send results.                                                        |
+| 9307bb7dc5 | C     | --           | macOS PR runner sizing in CI.                                                                                |
+| 7604aa3f19 | C     | --           | Removes the visual test binary CI build.                                                                     |
+| c87632ef44 | B     | be2c72286a   | Reads remote `terminal.shell` through a new `GetTerminalShell` RPC.                                          |
+| adfcaa122a | C     | --           | Documents Zed-hosted model pricing; a commercial account surface.                                            |
+| 1dc8844439 | B     | 23ff6cbd7d   | which-key shows task names for `task::Spawn::ByName` bindings.                                               |
+| 7232ba04ef | C     | --           | GPUI profiler `journal` module and its dependency are absent locally.                                        |
+| 5d5963361f | B     | a5a12fe3b7   | Diffs LSP format responses that replace the whole buffer.                                                    |
+
+Totals: two `A`, six `B`, twelve `C`.
+
+### Applied work
+
+`2280e5d95e` and `408c713a35` were clean `A` commits and used
+`git cherry-pick -x -s`. Every `B` was committed with `git commit -s` and
+a `sync:` subject carrying `Upstream:` / `Retained:` / `Omitted:`
+trailers. No remote, pull request, or named upstream remote was created.
+
+- `f521eeb8cf` adds `BufferSnapshot::summaries_for_anchors_unordered` and
+  uses it to serialize Vim paste marks in document order.
+- `03b60caa4f` allows rewrapping for Typst in the default settings.
+- `44ead3d869` stops chmod'ing language server binaries for the legacy
+  `toml@0.0.2` and `zig@0.0.1` extension versions.
+- `8f93e7484d` deserializes GitHub release assets through
+  `deserialize_sha256_digest`, so callers always see a bare digest.
+- `0f53bee90d` or turn generation guards the view update after a send
+  settles, and clears a stale error when a new turn starts.
+- `23ff6cbd7d` labels `zzz_actions::Spawn::ByName` bindings with their
+  task name in the which-key modal.
+- `c87632ef44` adds the `GetTerminalShell` request/response messages and a
+  headless-project handler, and uses the resulting shell for remote
+  terminals.
+- `a5a12fe3b7` diffs a whole-buffer formatting edit against the buffer and
+  applies minimal text edits instead.
+
+### Per-commit narrative
+
+#### e773a56d6c — C
+
+Rewrites touch-key handling and focus/blur activity tracking in
+`gpui_web`. The added keyboard path reads `this.touch_input` and
+`this.ime_mirror.virtual_keyboard_enabled()`, neither of which exists
+anywhere in local `crates/gpui_web`. The commit depends on unabsorbed
+touch and IME infrastructure; rule 6 applies.
+
+#### c821538b57 — C
+
+Adds `agent.max_idle_retained_threads` and re-runs retained-thread cleanup
+when a thread becomes idle by subscribing to
+`AcpThreadEvent::StatusChanged`. Local `AcpThreadEvent` has no
+`StatusChanged` variant; upstream had it by `bda9c0bd43`, but the local
+fork never absorbed it. The port would require importing the event and
+its emitters first. Rule 6 applies.
+
+#### 3135cdf8dc — C
+
+Adds a randomized element-tree benchmark, a `gpui_platform` bench
+harness, and Linux/WGPU benchmark leak fixes. ZZZ carries none of this
+benchmark plumbing and the change ships no editor behavior.
+
+#### 72d28c32c2 — C
+
+Gives structured agent plans retained keyed state. It is written against
+`acp_v2::PlanEntry`, `acp_v2::PlanId`, and `acp_v2::Meta`, while local
+`acp_thread` keeps `agent_client_protocol::schema::v1 as acp`. The shared
+v2 model was rejected in the previous batch (`ee43be113e`). Rule 6
+applies.
+
+#### dd510f99e0 — C
+
+Classifies token failures in `language_models_cloud` and adjusts
+`client.rs`. The `language_models_cloud` crate is absent locally; ZZZ
+removed the in-tree model providers.
+
+#### bd747337d7 — B, `44ead3d869`
+
+Removes the legacy `toml`/`zig` executable fixup from
+`extension_lsp_adapter.rs`. A dry-run cherry-pick conflicted only because
+the local TODO comment renamed `zed::` to `zzz::`. The port deletes the
+same block and its now-unused `make_file_executable` import; `with_context`
+still uses the retained `Context` import.
+
+#### ead2d9eac0 — B, `8f93e7484d`
+
+Moves the GitHub release digest normalization into a `serde`
+`deserialize_with` function so both `latest_github_release` and
+`get_release_by_tag_name` strip `sha256:`. A dry-run cherry-pick
+conflicted in the tests module because local `github.rs` never had the
+upstream request-deadline test. The port keeps the digest deserialization
+test and omits the deadline test.
+
+#### 14dd03e896 — B, `0f53bee90d`
+
+Ensures an older send's settled result cannot mutate the view of a newer
+turn. Local had already removed the `Agent Turn Completed` telemetry from
+this path, so the port keeps the generation guard and omits the telemetry
+event. `start_turn` now clears any displayed error, and
+`StubAgentConnection::defer_next_prompt_response` plus one regression test
+cover late success/error under deferred contents. The test uses the local
+`acp` v1 alias and the local 3-argument `send_content`.
+
+#### c87632ef44 — B, `be2c72286a`
+
+Makes `terminal.shell` configurable for remote sessions. Local proto
+envelopes live in `zzz.proto` with a different numbering than upstream
+`zed.proto` (local max was `461`), so the port adds `GetTerminalShell` and
+`GetTerminalShellResponse` at `462`/`463` and registers them in
+`messages!`, `request_messages!`, and `entity_messages!`. The client
+requests the remote shell in `create_terminal_shell_internal` and picks
+program, arguments, or system accordingly; `remote_server` gains a
+`terminal` dependency and a `handle_get_terminal_shell` handler that reads
+`TerminalSettings`. The `test_remote_settings` additions are adapted to
+the local raw-string shape. Its pre-existing final `override-rust-analyzer`
+assertion fails on the local baseline independently of this change.
+
+#### 1dc8844439 — B, `23ff6cbd7d`
+
+Labels which-key bindings that spawn a named task with the task name.
+Local `which_key` renders through `which_key_modal.rs`; the deleted
+`pending_keystrokes_indicator.rs` path does not exist, and `Spawn` lives
+in the renamed `zzz_actions` crate. The port adds `binding_label` to the
+modal, a `zzz_actions` dependency, and a unit test.
+
+#### 7232ba04ef — C
+
+Adds foreground-measurement drop logic to a GPUI profiler journal and a
+new dependency. Local `crates/gpui/src/profiler/` does not exist, so the
+target module is absent.
+
+#### adfcaa122a — C
+
+Documents Zed-hosted model pricing. Hosted models, pricing, and accounts
+are a commercial surface that is absent by design.
+
+#### 5d5963361f — B, `a5a12fe3b7`
+
+When a formatting response is one edit that replaces the whole buffer,
+local now diffs the formatted text against the buffer and applies minimal
+edits, preserving unchanged anchors instead of selecting the document and
+scrolling to the end. A dry-run cherry-pick conflicted because local
+`format_via_lsp` uses direct `matches!` provider guards rather than
+upstream's `formatting_supported` booleans. The port keeps the local
+guards, omits the upstream `test_range_formatting_prefers_range_capable_current_server`
+helper test (never absorbed locally), and ports the anchor-preservation
+test adapted to the local test module.
+
+### Verification
+
+| Check                                                                                                   | Result  |
+| ------------------------------------------------------------------------------------------------------- | ------- |
+| `git diff --check`                                                                                      | PASS    |
+| `cargo fmt --all -- --check`                                                                            | PASS    |
+| `cargo check -p proto`                                                                                  | PASS    |
+| `cargo check -p which_key -p http_client -p language_extension`                                         | PASS    |
+| `cargo check -p acp_thread -p agent_ui --tests`                                                         | PASS    |
+| `cargo check -p project -p remote_server --tests`                                                       | PASS    |
+| `cargo check -p zzz -p vim --tests`                                                                     | PASS    |
+| `cargo test -p text --lib test_summaries_for_unordered_anchors` (2 passed)                              | PASS    |
+| `cargo test -p vim --lib test_paste_multiple_clipboard_selections_at_end_of_file`                       | PASS    |
+| `cargo test -p agent_ui --lib test_stale_send_result_preserves_new_prompt`                              | PASS    |
+| `cargo test -p project --test integration test_full_buffer_formatting_edit_preserves_unchanged_anchors` | PASS    |
+| `cargo test -p which_key --lib test_binding_label_uses_task_name_for_spawn_by_name`                     | PASS    |
+| `cargo test -p http_client --lib test_asset_digest_deserialization`                                     | PASS    |
+| `test_remote_settings` (pre-existing `override-rust-analyzer` assertion)                                | FAIL    |
+| macOS / Windows runtime checks for platform hunks                                                       | NOT RUN |
+| `cargo test --workspace`                                                                                | NOT RUN |
+
+The remote shell assertion added to `test_remote_settings` passed before
+the pre-existing local `override-rust-analyzer` assertion failed; the
+failure reproduces on the clean baseline without this batch's changes.
