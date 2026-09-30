@@ -2707,7 +2707,7 @@ fn run_multi_workspace_sidebar_visual_tests(
                             "Refine thread view scrolling behavior",
                         ),
                         chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 6, 15, 10, 30, 0)
-                            .expect("with_ymd_and_hms should be present"),
+                            .unwrap(),
                     ),
                     1 => (
                         "visual-test-thread-1",
@@ -2717,7 +2717,7 @@ fn run_multi_workspace_sidebar_visual_tests(
                             "Add line numbers option to FileEditBlock",
                         ),
                         chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 6, 15, 11, 0, 0)
-                            .expect("with_ymd_and_hms should be present"),
+                            .unwrap(),
                     ),
                     _ => continue,
                 };
