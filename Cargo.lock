@@ -12998,6 +12998,7 @@ dependencies = [
  "sysinfo 0.39.6",
  "task",
  "tempfile",
+ "terminal",
  "theme",
  "theme_settings",
  "thiserror 2.0.21",
@@ -18378,6 +18379,7 @@ dependencies = [
  "ui",
  "util",
  "workspace",
+ "zzz_actions",
 ]
 
 [[package]]

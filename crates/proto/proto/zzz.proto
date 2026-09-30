@@ -390,7 +390,9 @@ message Envelope {
     GitWorktreeCreatedAtResponse git_worktree_created_at_response = 458;
     LanguageServerShowDocumentRequest language_server_show_document_request = 459;
     ExecuteLspCommand execute_lsp_command = 460;
-    ExecuteLspCommandResponse execute_lsp_command_response = 461; // current max
+    ExecuteLspCommandResponse execute_lsp_command_response = 461;
+    GetTerminalShell get_terminal_shell = 462;
+    GetTerminalShellResponse get_terminal_shell_response = 463; // current max
   }
 
   reserved 87 to 88;
