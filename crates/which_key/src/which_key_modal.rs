@@ -2,7 +2,7 @@
 
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    App, Context, DismissEvent, EventEmitter, FocusHandle, Focusable, FontWeight,
+    Action, App, Context, DismissEvent, EventEmitter, FocusHandle, Focusable, FontWeight,
     KeybindingKeystroke, ScrollHandle, Subscription, WeakEntity, Window,
 };
 use settings::Settings;
@@ -24,6 +24,13 @@ pub struct WhichKeyModal {
     pending_keys: SharedString,
     _pending_input_subscription: Subscription,
     _focus_out_subscription: Subscription,
+}
+
+fn binding_label(action: &dyn Action) -> SharedString {
+    match action.as_any().downcast_ref::<zzz_actions::Spawn>() {
+        Some(zzz_actions::Spawn::ByName { task_name, .. }) => task_name.clone().into(),
+        _ => command_palette::humanize_action_name(action.name()).into(),
+    }
 }
 
 impl WhichKeyModal {
@@ -82,8 +89,7 @@ impl WhichKeyModal {
             })
             .filter_map(|(keystrokes, action)| {
                 let remaining_keystrokes = keystrokes.get(pending_keys.len()..)?.to_vec();
-                let action_name: SharedString =
-                    command_palette::humanize_action_name(action.name()).into();
+                let action_name = binding_label(action);
                 Some((remaining_keystrokes, action_name))
             })
             .collect();
@@ -359,5 +365,15 @@ mod tests {
             vec![(vec![keystroke], SharedString::from("test action"))]
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_binding_label_uses_task_name_for_spawn_by_name() {
+        let action = zzz_actions::Spawn::ByName {
+            task_name: "lazygit".to_string(),
+            reveal_target: None,
+        };
+
+        assert_eq!(binding_label(&action), "lazygit");
     }
 }
