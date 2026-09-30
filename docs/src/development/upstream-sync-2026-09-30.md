@@ -635,7 +635,7 @@ tree was formatted with `cargo fmt --all`; the pre-merge tree was already
   commits, the requested `b29a593684` cleanup (via merge), and the
   post-merge clippy fix. Nothing else is present.
 
-### Post-merge fix
+### Post-merge fixes
 
 The merged `./script/clippy` CI gate exposed one sync-introduced violation:
 `crates/project/src/terminals.rs` used `map(..).unwrap_or(..)` on an
@@ -645,9 +645,11 @@ sync port `be2c72286a` (upstream `c87632ef44`) introduced it and the batch
 to `map_or`. This is the only sync-originated clippy finding.
 
 `cargo machete` reports `fs` as an unused dependency of `language_extension`
-after `44ead3d869` removed its last use. Upstream `bd747337d7` left the
-dependency in place, so the port matches upstream; it is an upstream
-leftover, not a sync miss or an extra local change.
+after `44ead3d869` removed its last direct use. Upstream `bd747337d7` left
+the dependency in place, so `51c8d7e5b8` removes the dead direct
+dependency to keep `./script/clippy` green; `util::fs::make_file_executable`
+still resolves through `util`, so this is a hygiene follow-up with no
+behavior change.
 
 ### Verification
 
@@ -656,7 +658,7 @@ leftover, not a sync miss or an extra local change.
 | `git diff --check`                                                                                      | PASS    |
 | `cargo fmt --all -- --check`                                                                            | PASS    |
 | `cargo check --workspace --all-targets`                                                                 | PASS    |
-| `./script/clippy` (workspace, three passes)                                                             | PASS    |
+| `./script/clippy` (three passes + `cargo machete`)                                                      | PASS    |
 | `cargo test -p text --lib test_summaries_for_unordered_anchors`                                         | PASS    |
 | `cargo test -p vim --lib test_paste_multiple_clipboard_selections_at_end_of_file`                       | PASS    |
 | `cargo test -p vim --lib test_jk_pending_input_at_end_of_read_only_buffer`                              | PASS    |
@@ -668,5 +670,4 @@ leftover, not a sync miss or an extra local change.
 | `./script/check-philosophy`                                                                             | PASS    |
 | `./script/check-todos`                                                                                  | PASS    |
 | `./script/check-upstream-ledger` (489 rows)                                                             | PASS    |
-| `cargo machete` (`fs` in `language_extension`, upstream-leftover)                                       | WARN    |
 | `cargo test --workspace`                                                                                | NOT RUN |
