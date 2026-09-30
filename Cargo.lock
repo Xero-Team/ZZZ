@@ -9579,6 +9579,8 @@ dependencies = [
  "serde",
  "serde_json",
  "smol",
+ "tempfile",
+ "thiserror 2.0.21",
  "util",
  "watch",
  "which",
