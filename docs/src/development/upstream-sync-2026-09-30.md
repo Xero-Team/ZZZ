@@ -470,3 +470,108 @@ test adapted to the local test module.
 The remote shell assertion added to `test_remote_settings` passed before
 the pre-existing local `override-rust-analyzer` assertion failed; the
 failure reproduces on the clean baseline without this batch's changes.
+
+## Continuation (batch 3)
+
+### Scope
+
+- Target branch: `sync/upstream-2026-09-30`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previously reviewed baseline for this run:
+  `5d5963361f3080539f2d7034e92736167c53a04a`
+- Reviewed upstream head: `decbf641b18f1982b3475c037e7c5c554471574f`
+- Live upstream head queried: `decbf641b18f1982b3475c037e7c5c554471574f`
+- Query time: `2026-09-30T03:05:00+02:00`
+- Range continues after `5d5963361f3080539f2d7034e92736167c53a04a`
+
+This is the third and final batch of the day. It covers the four queued
+commits and advances the reviewed baseline to
+`decbf641b18f1982b3475c037e7c5c554471574f`, the live upstream head at the
+time of the query. No commits remain queued.
+
+### Decisions
+
+| Upstream   | Class | Local commit | Disposition                                                                                                |
+| ---------- | ----- | ------------ | ---------------------------------------------------------------------------------------------------------- |
+| 017f9b89aa | A     | e3859f1b67   | Hide wrap guides in the agent message editor; cherry-picked with `-x -s`.                                  |
+| 0f9c923e67 | C     | --           | GPUI-owned hang monitor consumes absent `gpui::profiler`, `hang_telemetry`, and `zed` reliability modules. |
+| 263fb11177 | A     | 074ac41510   | UTF-8 code page for `rc.exe`; cherry-picked with `-x -s`.                                                  |
+| decbf641b1 | B     | 2df1cf6331   | Replaces embedded NULs in Windows clipboard text; local clipboard test hunk appended.                      |
+
+Totals: two `A`, one `B`, one `C`.
+
+### Applied work
+
+`017f9b89aa` and `263fb11177` were clean `A` commits and used
+`git cherry-pick -x -s`. `decbf641b1` conflicted only in its test module
+and was ported as a `B`. No remote, pull request, or named upstream
+remote was created.
+
+- `e3859f1b67` disables wrap guides on the agent message editor alongside
+  the existing indent-guide opt-out.
+- `074ac41510` prepends `#pragma code_page(65001)` to the generated `.rc`
+  source so `rc.exe` decodes non-ASCII checkout paths as UTF-8.
+- `2df1cf6331` replaces embedded `NUL` characters with spaces before
+  encoding `CF_UNICODETEXT`, and hashes the sanitized text.
+
+### Per-commit narrative
+
+#### 017f9b89aa — A, `e3859f1b67`
+
+When no conversation has started the agent panel's message editor runs in
+`EditorMode::Full`, so a user `wrap_guides` setting drew a vertical line
+across the empty panel. The commit adds
+`editor.set_show_wrap_guides(false, cx)` next to the existing
+`set_show_indent_guides(false, cx)`. The local `message_editor.rs` matched
+the pre-image context and the patch applied cleanly.
+
+#### 0f9c923e67 — C
+
+Extracts a GPUI-owned hang monitor and rewrites `hang_telemetry` as its
+consumer. The diff touches `crates/gpui/src/app.rs`, new
+`crates/gpui/src/profiler/hang.rs` and `profiler/hang/monitor.rs`, the
+`hang_telemetry` crate, and `crates/zed/src/reliability/hang_detection.rs`.
+None of those exist locally: `crates/gpui/src/profiler/`,
+`crates/hang_telemetry`, and `crates/zed/src/reliability/` are all absent,
+and the change is a follow-up to `1b572a2bd0`, which created
+`hang_telemetry` and was rejected in batch 1 as telemetry. Rules 1 and 6
+apply.
+
+#### 263fb11177 — A, `074ac41510`
+
+`rc.exe` decodes its `.rc` input using the ANSI code page by default, so a
+checkout path with non-ASCII characters failed to resolve the referenced
+icon and manifest. The commit adds `#pragma code_page(65001)` to the
+generated resource source. The local `windows_resources.rs` matched the
+pre-image and the patch applied cleanly.
+
+#### decbf641b1 — B, `2df1cf6331`
+
+The Windows clipboard stores `CF_UNICODETEXT` as a null-terminated string,
+so copying text with an embedded `NUL` truncated the pasted result. A
+dry-run cherry-pick applied the `clipboard.rs` production change cleanly
+but conflicted in `platform.rs`: upstream appends its embedded-NUL case at
+the end of `test_clipboard`, while local `test_clipboard` already carries
+an extra `new_string_with_html` assertion after the same anchor. The port
+keeps the production change and appends the embedded-NUL assertion after
+the local HTML case, so both remain covered.
+
+### Verification
+
+| Check                                                      | Result  |
+| ---------------------------------------------------------- | ------- |
+| `git diff --check`                                         | PASS    |
+| `cargo fmt --all -- --check`                               | PASS    |
+| `cargo check -p agent_ui --tests`                          | PASS    |
+| `cargo check -p windows_resources`                         | PASS    |
+| `cargo check -p gpui_windows` (empty crate off Windows)    | PASS    |
+| Windows `write_string` / `test_clipboard` runtime behavior | NOT RUN |
+| Windows `rc.exe` resource compilation                      | NOT RUN |
+| macOS runtime checks                                       | NOT RUN |
+| `cargo test --workspace`                                   | NOT RUN |
+
+`crates/gpui_windows/src/gpui_windows.rs` is `#![cfg(target_os = "windows")]`,
+so the Linux `cargo check` compiles an empty crate and does not type-check
+the clipboard edit; `windows_resources` compiles on Linux but its
+`#[cfg(windows)]` `rc.exe` path is not exercised. Both are recorded as
+`NOT RUN`, to be validated on the Windows CI runner.

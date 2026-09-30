@@ -34,6 +34,7 @@ sha	class	reason_code	note	source
 0e7972f3	C	untriaged	GitHub Actions merge-queue dependency check.	upstream-sync-2026-09-18.md
 0eda7703	C	absent-api	Accesskit adapter to drop is absent from ZZZ's `gpui_macos`.	upstream-sync-2026-09-24.md
 0f84a49e	C	philosophy	Native cloud websocket belongs to rejected account/collaboration paths.	upstream-sync-2026-08-27.md
+0f9c923e67	C	philosophy	GPUI-owned hang monitor consumes absent `gpui::profiler`, `hang_telemetry`, and `zed` reliability modules.	upstream-sync-2026-09-30.md
 0fb9a9da	C	philosophy	Copilot settings path.	upstream-sync-2026-08-07.md
 10676bad	C	philosophy	Collab peer search sharing of `private_files`.	upstream-sync-2026-09-18.md
 107ee1a6	C	unisolatable	Large terminal/dock restoration rewrite is unisolatable from ZZZ layout.	upstream-sync-2026-08-27.md
