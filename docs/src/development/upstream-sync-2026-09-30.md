@@ -575,3 +575,98 @@ so the Linux `cargo check` compiles an empty crate and does not type-check
 the clipboard edit; `windows_resources` compiles on Linux but its
 `#[cfg(windows)]` `rc.exe` path is not exercised. Both are recorded as
 `NOT RUN`, to be validated on the Windows CI runner.
+
+## Reconciliation (merge and re-audit)
+
+### Scope
+
+- Target branch: `sync/upstream-2026-09-30`
+- Merged commit: `b29a593684` from `chore/tech-debt-cleanup`, authored at
+  the fork, based on `6786796d34` (an ancestor of local `main`)
+- Merge commit: `e84ae78e66`
+- Post-merge clippy fix: `3f0364d92e`
+- Audited upstream range: `bda9c0bd43..decbf641b1`
+- Live upstream head queried: `decbf641b18f1982b3475c037e7c5c554471574f`
+
+`b29a593684` converts production `unwrap()` calls across the workspace to
+`expect(...)`, deletes the unused GPUI taffy instrumentation helpers, wires
+`script/check-todos` into CI, and fixes fork test fixtures that had been
+renamed from `zed` to `zzz` without updating their inputs. It is
+philosophy-safe and was merged as requested.
+
+### Merge conflict resolution
+
+The merge base was `6786796d34`; seven files conflicted. Resolutions kept
+the newer sync/main semantics and applied the cleanup's `expect(...)`
+convention:
+
+- `crates/git_hosting_providers/src/providers/{github,gitlab}.rs`: kept the
+  local case-insensitive markdown extension check, converted `.unwrap()` to
+  `.expect("value should be present")`.
+- `crates/language/src/language_settings.rs`: kept the sync-added
+  `soft_wrap_indent` field, converted the whole block to `expect(...)`.
+- `crates/text/src/text.rs`: kept the sync-added `ALLOW_BACKWARDS` locator
+  logic from `f521eeb8cf`, converted the fragment lookup to `expect(...)`.
+- `crates/title_bar/src/title_bar_settings.rs`: kept the sync-added
+  `open_menus_on_hover`, converted to `expect(...)`.
+- `crates/project/src/lsp_store/semantic_tokens.rs`: kept the `let ... else`
+  ordering from `main`.
+- `.github/workflows/ci.yaml`: kept the `main` clippy job and added the
+  cleanup's `check-todos` step to the `checks` job.
+
+The cleanup commit was not `cargo fmt`-clean at its own base, so the merged
+tree was formatted with `cargo fmt --all`; the pre-merge tree was already
+`cargo fmt`-clean, so formatting touched only the merge result.
+
+### Re-audit
+
+- Upstream commits in `bda9c0bd43..decbf641b1`: 44.
+- Decision rows in this report: 44, an exact one-to-one set match. No
+  upstream SHA is unclassified (no miss), and no report row is outside the
+  range (no extra).
+- Totals: five `A`, eleven `B`, twenty-eight `C`.
+- Each `A` was verified with `git range-diff` against its upstream parent:
+  `f8b0d52b3e`, `2280e5d95e`, `408c713a35`, `017f9b89aa`, and
+  `263fb11177` are identical apart from the added cherry-pick and DCO
+  trailers and, for `263fb11177`, pre-existing local context around the
+  `rc_content` literal.
+- Every `B` commit carries an `Upstream:` trailer matching its decision row.
+- Local commits since `main` are exactly five `A`, eleven `B`, three docs
+  commits, the requested `b29a593684` cleanup (via merge), and the
+  post-merge clippy fix. Nothing else is present.
+
+### Post-merge fix
+
+The merged `./script/clippy` CI gate exposed one sync-introduced violation:
+`crates/project/src/terminals.rs` used `map(..).unwrap_or(..)` on an
+`Option`, which the workspace `clippy::map_unwrap_or = "deny"` rejects. The
+sync port `be2c72286a` (upstream `c87632ef44`) introduced it and the batch
+2 verification did not run clippy, so it was missed. `3f0364d92e` switches
+to `map_or`. This is the only sync-originated clippy finding.
+
+`cargo machete` reports `fs` as an unused dependency of `language_extension`
+after `44ead3d869` removed its last use. Upstream `bd747337d7` left the
+dependency in place, so the port matches upstream; it is an upstream
+leftover, not a sync miss or an extra local change.
+
+### Verification
+
+| Check                                                                                                   | Result  |
+| ------------------------------------------------------------------------------------------------------- | ------- |
+| `git diff --check`                                                                                      | PASS    |
+| `cargo fmt --all -- --check`                                                                            | PASS    |
+| `cargo check --workspace --all-targets`                                                                 | PASS    |
+| `./script/clippy` (workspace, three passes)                                                             | PASS    |
+| `cargo test -p text --lib test_summaries_for_unordered_anchors`                                         | PASS    |
+| `cargo test -p vim --lib test_paste_multiple_clipboard_selections_at_end_of_file`                       | PASS    |
+| `cargo test -p vim --lib test_jk_pending_input_at_end_of_read_only_buffer`                              | PASS    |
+| `cargo test -p agent_ui --lib test_stale_send_result_preserves_new_prompt`                              | PASS    |
+| `cargo test -p which_key --lib test_binding_label_uses_task_name_for_spawn_by_name`                     | PASS    |
+| `cargo test -p http_client --lib test_asset_digest_deserialization`                                     | PASS    |
+| `cargo test -p project --test integration test_full_buffer_formatting_edit_preserves_unchanged_anchors` | PASS    |
+| `cargo test -p git_hosting_providers --lib` (119 passed)                                                | PASS    |
+| `./script/check-philosophy`                                                                             | PASS    |
+| `./script/check-todos`                                                                                  | PASS    |
+| `./script/check-upstream-ledger` (489 rows)                                                             | PASS    |
+| `cargo machete` (`fs` in `language_extension`, upstream-leftover)                                       | WARN    |
+| `cargo test --workspace`                                                                                | NOT RUN |
