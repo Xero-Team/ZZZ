@@ -425,7 +425,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "requires macOS main thread"]
     fn test_visual_test_smoke() {
         let mut cx = VisualTestAppContext::new(gpui_platform::current_platform(false));
 
@@ -437,7 +437,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "requires macOS main thread"]
     fn test_workspace_opens() {
         let mut cx = VisualTestAppContext::new(gpui_platform::current_platform(false));
         let app_state = init_visual_test(&mut cx);
@@ -478,7 +478,7 @@ mod tests {
     /// message rather than failing hard, to allow running in environments
     /// where screen capture isn't available.
     #[test]
-    #[ignore]
+    #[ignore = "requires macOS main thread and Screen Recording permission"]
     fn test_workspace_screenshot() {
         let mut cx = VisualTestAppContext::new(gpui_platform::current_platform(false));
         let app_state = init_visual_test(&mut cx);
