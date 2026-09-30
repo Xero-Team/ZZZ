@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use base64::Engine as _;
@@ -239,25 +239,44 @@ pub struct EngineConfig {
 pub struct EngineHandle {
     command_tx: mpsc::UnboundedSender<Command>,
     snapshot_rx: watch::Receiver<Arc<ViewModel>>,
+    engine: Mutex<EngineThread>,
+}
+
+/// The lazily-started state needed to run the engine thread. The thread is only
+/// spawned once a command is sent, so an unused engine never wakes the UI from
+/// its own thread.
+struct EngineThread {
+    config: Option<EngineConfig>,
+    command_rx: Option<mpsc::UnboundedReceiver<Command>>,
+    snapshot_tx: watch::Sender<Arc<ViewModel>>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
 impl EngineHandle {
-    /// Spawns the engine thread and returns a handle. The engine does not
-    /// connect until it receives [`Command::Start`].
+    /// Creates a handle without starting the engine thread. The engine is
+    /// spawned on the first call to [`EngineHandle::send`] and does not connect
+    /// until it receives [`Command::Start`].
     pub fn spawn(config: EngineConfig) -> Self {
         let (command_tx, command_rx) = mpsc::unbounded_channel();
         let (snapshot_tx, snapshot_rx) = watch::channel(Arc::new(ViewModel::default()));
-        let thread = spawn_engine_thread(config, command_rx, snapshot_tx);
         Self {
             command_tx,
             snapshot_rx,
-            thread,
+            engine: Mutex::new(EngineThread {
+                config: Some(config),
+                command_rx: Some(command_rx),
+                snapshot_tx,
+                thread: None,
+            }),
         }
     }
 
-    /// Sends a command to the engine. Returns `false` when the engine stopped.
+    /// Sends a command to the engine, starting the engine thread if needed.
+    /// Returns `false` when the engine stopped.
     pub fn send(&self, command: Command) -> bool {
+        if !matches!(command, Command::Shutdown) {
+            self.ensure_started();
+        }
         self.command_tx.send(command).is_ok()
     }
 
@@ -271,12 +290,25 @@ impl EngineHandle {
     pub fn snapshot(&self) -> Arc<ViewModel> {
         self.snapshot_rx.borrow().clone()
     }
+
+    fn ensure_started(&self) {
+        let mut engine = self.engine.lock().unwrap_or_else(|error| error.into_inner());
+        if engine.thread.is_some() {
+            return;
+        }
+        let (Some(config), Some(command_rx)) = (engine.config.take(), engine.command_rx.take())
+        else {
+            return;
+        };
+        engine.thread = spawn_engine_thread(config, command_rx, engine.snapshot_tx.clone());
+    }
 }
 
 impl Drop for EngineHandle {
     fn drop(&mut self) {
         self.command_tx.send(Command::Shutdown).ok();
-        if let Some(thread) = self.thread.take() {
+        let mut engine = self.engine.lock().unwrap_or_else(|error| error.into_inner());
+        if let Some(thread) = engine.thread.take() {
             if thread.join().is_err() {
                 log::warn!("telegram engine thread panicked during shutdown");
             }
