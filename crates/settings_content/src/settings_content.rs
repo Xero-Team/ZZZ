@@ -734,6 +734,11 @@ pub struct TelegramPanelSettingsContent {
     /// Default: 760
     #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
     pub max_content_width: Option<f32>,
+    /// The minimum height of the message composer, in lines. The composer grows
+    /// up to twice this value before scrolling.
+    ///
+    /// Default: 4
+    pub composer_min_lines: Option<u32>,
 }
 
 /// Configuration for the Telegram connection.

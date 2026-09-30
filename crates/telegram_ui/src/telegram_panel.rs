@@ -1,24 +1,37 @@
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ops::RangeInclusive;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use editor::{Editor, EditorEvent, EditorMode};
+use acp_thread::MentionUri;
+use editor::{
+    ClipboardSelection, Editor, EditorEvent, EditorMode, FoldPlaceholder, SelectionEffects,
+    actions::{Copy, Cut, Paste},
+    display_map::{Crease, CreaseId, FoldId},
+    scroll::Autoscroll,
+};
+use git::{BuildPermalinkParams, GitHostingProviderRegistry, parse_git_remote_url};
 use gpui::{
-    Action, AnyElement, App, ClickEvent, Context, ElementId, Entity, EventEmitter, FocusHandle,
-    Focusable, FollowMode, Global, IntoElement, ListAlignment, ListState, ParentElement, Render,
-    RenderImage, SharedString, Styled, Subscription, Task, TextStyleRefinement, WeakEntity, Window,
-    actions, div, img, list, px, relative,
+    Action, AnyElement, App, Bounds, ClickEvent, ClipboardEntry, ClipboardItem, Context, ElementId,
+    Entity, EventEmitter, ExternalPaths, FocusHandle, Focusable, FollowMode, Global, Hsla, Image,
+    IntoElement, ListAlignment, ListState, ParentElement, Pixels, Render, RenderImage,
+    SharedString, Styled, Subscription, Task, TextStyleRefinement, WeakEntity, Window, actions,
+    canvas, div, fill, img, list, point, px, relative, size,
 };
 use i18n::tr;
 use language::Buffer;
 use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownStyle};
-use multi_buffer::MultiBuffer;
+use multi_buffer::{MultiBuffer, MultiBufferOffset, ToOffset as _};
+use rope::Point;
 use settings::Settings as _;
 use telegram::{
-    AuthState, ChatSnapshot, Command, ConnectionState, DownloadState, EngineConfig, EngineError,
-    EngineHandle, MediaKind, MediaSnapshot, MessageSnapshot, TelegramCredentials, ViewModel,
+    AttachmentKind, AuthState, ChatSnapshot, Command, ComposerBlock, ConnectionState,
+    DownloadState, EngineConfig, EngineError, EngineHandle, MediaKind, MediaSnapshot,
+    MessageSnapshot, StagedAttachment, TelegramCredentials, ViewModel, code_reference_markdown,
+    outgoing_message_count, plan_outgoing,
 };
+use text::ToOffset as _;
 use time::UtcOffset;
 use time_format::{TimestampFormat, format_local_timestamp, format_time};
 use ui::prelude::*;
@@ -29,20 +42,54 @@ use ui::{
 use ui::{ContextMenu, ContextMenuEntry, right_click_menu};
 use workspace::dock::{DockPosition, Panel, PanelEvent};
 use workspace::notifications::NotificationId;
-use workspace::{HideStatusItem, Toast, Workspace};
+use workspace::{DraggedSelection, DraggedTab, HideStatusItem, OpenOptions, Toast, Workspace};
 
 use crate::telegram_panel_settings::{TelegramPanelSettings, TelegramSettings};
 
 actions!(
     telegram_panel,
-    [ToggleFocus, Send, NextChat, PreviousChat, Refresh, Back,]
+    [
+        ToggleFocus,
+        Send,
+        NextChat,
+        PreviousChat,
+        Refresh,
+        Back,
+        InsertCodeReference,
+        PastePlain,
+    ]
 );
 
 const PANEL_KEY: &str = "TelegramPanel";
-const COMPOSER_MIN_LINES: usize = 1;
-const COMPOSER_MAX_LINES: usize = 8;
 const SAME_SENDER_GROUP_SECONDS: i64 = 5 * 60;
 const SEARCH_DEBOUNCE: Duration = Duration::from_millis(150);
+const HISTORY_AUTOLOAD_THRESHOLD: usize = 3;
+/// Height cap for a photo or video preview before it is allowed to shrink the
+/// bubble; taller media is scaled down to this height.
+const MEDIA_MAX_HEIGHT: f32 = 320.;
+/// Stickers are small by nature and get a much shorter cap.
+const STICKER_MAX_HEIGHT: f32 = 120.;
+/// Very tall media is widened to this floor so a portrait photo never becomes
+/// a sliver.
+const MEDIA_MIN_WIDTH: f32 = 120.;
+/// Very wide media is capped at this aspect ratio so a panorama does not ask
+/// for an absurdly wide bubble.
+const MEDIA_MAX_ASPECT: f32 = 2.5;
+/// Horizontal space a media card adds around its preview (1px border each side
+/// plus `p_2` padding). The card width is the preview width plus this inset so
+/// the preview is not clipped.
+const MEDIA_CARD_HORIZONTAL_INSET: f32 = 18.;
+/// The voice bar keeps a fixed, Telegram-like width instead of sizing to its
+/// content. It is derived from the panel's content width when one is set.
+const VOICE_BAR_FALLBACK_WIDTH: f32 = 200.;
+const VOICE_BAR_MIN_WIDTH: f32 = 160.;
+const VOICE_BAR_MAX_WIDTH: f32 = 280.;
+/// How often the playing voice bar refreshes its playhead.
+const VOICE_TICK: Duration = Duration::from_millis(100);
+/// Telegram rejects uploads larger than this.
+const MAX_ATTACHMENT_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// The prefix used for inline composer tokens, e.g. `[#3]`.
+const COMPOSER_TOKEN_PREFIX: &str = "[#";
 
 /// The application-global Telegram engine.
 pub struct GlobalTelegramEngine(pub Arc<EngineHandle>);
@@ -82,6 +129,42 @@ struct MessageLayout {
     show_sender: bool,
 }
 
+/// Identifies a message's cached Markdown entity. Optimistic sends share id `0`,
+/// so they are keyed by their local id to keep concurrent sends apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum MessageKey {
+    Remote(i64, i32),
+    Local(i64, u64),
+}
+
+impl MessageKey {
+    fn for_message(message: &MessageSnapshot) -> Self {
+        match message.local_id {
+            Some(local_id) => Self::Local(message.chat_id, local_id),
+            None => Self::Remote(message.chat_id, message.id),
+        }
+    }
+}
+
+/// A code reference staged in the composer. Its [`target`](Self::target) is a
+/// remote permalink when the file belongs to a repository with a remote, or a
+/// worktree-relative path otherwise.
+#[derive(Clone, Debug)]
+struct CodeReference {
+    display_name: String,
+    language: Option<String>,
+    target: String,
+    text: String,
+}
+
+/// Something staged in the composer, positioned in the document by a `[#id]`
+/// token in the editor's text.
+#[derive(Clone, Debug)]
+enum ComposerItem {
+    Code(CodeReference),
+    Attachment(StagedAttachment),
+}
+
 /// The Telegram panel view.
 pub struct TelegramPanel {
     focus_handle: FocusHandle,
@@ -98,9 +181,15 @@ pub struct TelegramPanel {
     search_count: usize,
     history_ids: Vec<i32>,
     history_layout: Arc<Vec<MessageLayout>>,
-    markdown_cache: HashMap<(i64, i32), Entity<Markdown>>,
+    markdown_cache: HashMap<MessageKey, Entity<Markdown>>,
     composer: Entity<Editor>,
     composer_expanded: bool,
+    /// Code references and attachments staged in the composer, keyed by a
+    /// monotonic id that appears as a hidden `[#id]` token in the editor text.
+    composer_items: BTreeMap<u64, ComposerItem>,
+    /// The editor crease that renders each staged item's inline chip.
+    composer_creases: HashMap<u64, CreaseId>,
+    composer_next_id: u64,
     phone_editor: Entity<Editor>,
     code_editor: Entity<Editor>,
     password_editor: Entity<Editor>,
@@ -113,6 +202,14 @@ pub struct TelegramPanel {
     _snapshot_task: Task<()>,
     voice_playback: Option<audio::PlaybackHandle>,
     playing_voice: Option<i32>,
+    /// Drives playhead updates and resets the bar when playback ends.
+    _voice_task: Option<Task<()>>,
+    /// The moment the current flood-wait pause ends, when one is active.
+    flood_wait_deadline: Option<std::time::Instant>,
+    /// Ticks the flood-wait countdown and dismisses the error once it ends.
+    _flood_task: Option<Task<()>>,
+    /// A voice message the user asked to play before its file was downloaded.
+    pending_voice: Option<(i64, i32)>,
     /// Media attachments whose card is expanded, keyed by chat and message.
     expanded_media: HashSet<(i64, i32)>,
     last_unread_total: u32,
@@ -152,7 +249,10 @@ impl TelegramPanel {
         let engine = engine(cx);
         let mut snapshot_rx = engine.subscribe();
 
-        let composer = cx.new(|cx| build_composer(window, cx));
+        let composer_min_lines = TelegramPanelSettings::get_global(cx)
+            .composer_min_lines
+            .max(1);
+        let composer = cx.new(|cx| build_composer(composer_min_lines, window, cx));
         let phone_editor = cx.new(|cx| {
             single_line_editor(
                 tr(cx, "telegram_panel.auth.phone_placeholder", "Phone number"),
@@ -187,9 +287,14 @@ impl TelegramPanel {
             window,
             |this, _editor, event: &EditorEvent, _window, cx| {
                 if matches!(event, EditorEvent::BufferEdited) {
+                    this.prune_composer_items(cx);
                     if let Some(chat_id) = this.view_model.selected_chat {
                         let text = this.composer.read(cx).text(cx);
-                        this.engine.send(Command::SetDraft { chat_id, text });
+                        let draft = composer_draft_text(&text, &this.composer_items);
+                        this.engine.send(Command::SetDraft {
+                            chat_id,
+                            text: draft,
+                        });
                     }
                     cx.notify();
                 }
@@ -223,7 +328,7 @@ impl TelegramPanel {
             }
         });
 
-        Self {
+        let this = Self {
             focus_handle: cx.focus_handle(),
             workspace,
             fs,
@@ -241,6 +346,9 @@ impl TelegramPanel {
             markdown_cache: HashMap::new(),
             composer,
             composer_expanded: false,
+            composer_items: BTreeMap::new(),
+            composer_creases: HashMap::new(),
+            composer_next_id: 0,
             phone_editor,
             code_editor,
             password_editor,
@@ -253,11 +361,29 @@ impl TelegramPanel {
             _snapshot_task,
             voice_playback: None,
             playing_voice: None,
+            _voice_task: None,
+            flood_wait_deadline: None,
+            _flood_task: None,
+            pending_voice: None,
             expanded_media: HashSet::new(),
             last_unread_total: 0,
             selected_chat: None,
             pending_scroll: None,
-        }
+        };
+        let panel = cx.entity().downgrade();
+        this.history_list_state
+            .set_scroll_handler(move |event, _window, cx| {
+                if event.visible_range.start > HISTORY_AUTOLOAD_THRESHOLD {
+                    return;
+                }
+                let panel = panel.clone();
+                cx.defer(move |cx| {
+                    panel
+                        .update(cx, |panel, cx| panel.maybe_load_older(cx))
+                        .ok();
+                });
+            });
+        this
     }
 
     fn apply_snapshot(
@@ -275,6 +401,8 @@ impl TelegramPanel {
         self.prune_expanded_media();
         self.sync_draft(window, cx);
         self.reveal_pending_message();
+        self.maybe_autoplay_voice(cx);
+        self.sync_flood_wait(cx);
         cx.notify();
     }
 
@@ -286,10 +414,31 @@ impl TelegramPanel {
             return;
         }
         self.selected_chat = selected;
+        if self
+            .pending_scroll
+            .is_some_and(|(chat_id, _)| Some(chat_id) != selected)
+        {
+            self.pending_scroll = None;
+        }
+        self.clear_composer_items(cx);
         let draft = self.view_model.draft.clone();
         if self.composer.read(cx).text(cx) != draft {
             self.composer
                 .update(cx, |editor, cx| editor.set_text(draft, window, cx));
+        }
+    }
+
+    /// Drops every staged composer item and its inline chip crease.
+    fn clear_composer_items(&mut self, cx: &mut Context<Self>) {
+        if self.composer_items.is_empty() && self.composer_creases.is_empty() {
+            return;
+        }
+        self.composer_items.clear();
+        let crease_ids: Vec<CreaseId> = self.composer_creases.drain().map(|(_, id)| id).collect();
+        if !crease_ids.is_empty() {
+            self.composer.update(cx, |editor, cx| {
+                editor.remove_creases(crease_ids, cx);
+            });
         }
     }
 
@@ -413,11 +562,18 @@ impl TelegramPanel {
     /// Keeps the markdown entity for each formatted message in sync with its
     /// source, replacing the entity when a message is edited.
     fn rebuild_markdown(&mut self, cx: &mut Context<Self>) {
-        let mut sources: Vec<((i64, i32), SharedString)> = Vec::new();
+        // The language registry resolves fenced code block languages so the
+        // renderer can syntax-highlight them. Without it every code block is
+        // drawn as plain text.
+        let language_registry = self
+            .workspace
+            .upgrade()
+            .map(|workspace| workspace.read(cx).project().read(cx).languages().clone());
+        let mut sources: Vec<(MessageKey, SharedString)> = Vec::new();
         for message in &self.view_model.history {
             if let Some(markdown) = &message.markdown {
                 sources.push((
-                    (message.chat_id, message.id),
+                    MessageKey::for_message(message),
                     SharedString::from(markdown.clone()),
                 ));
             }
@@ -430,20 +586,21 @@ impl TelegramPanel {
         {
             if let Some(markdown) = &message.markdown {
                 sources.push((
-                    (message.chat_id, message.id),
+                    MessageKey::for_message(message),
                     SharedString::from(markdown.clone()),
                 ));
             }
         }
 
-        let live: HashSet<(i64, i32)> = sources.iter().map(|(key, _)| *key).collect();
+        let live: HashSet<MessageKey> = sources.iter().map(|(key, _)| *key).collect();
         for (key, source) in sources {
             let needs_replace = self
                 .markdown_cache
                 .get(&key)
                 .is_none_or(|entity| entity.read(cx).source() != source.as_str());
             if needs_replace {
-                let entity = cx.new(|cx| Markdown::new(source, None, None, cx));
+                let entity =
+                    cx.new(|cx| Markdown::new(source, language_registry.clone(), None, cx));
                 self.markdown_cache.insert(key, entity);
             }
         }
@@ -498,6 +655,17 @@ impl TelegramPanel {
         self.reveal_pending_message();
     }
 
+    fn maybe_load_older(&mut self, cx: &mut Context<Self>) {
+        if !self.view_model.has_more_history || self.view_model.loading_history {
+            return;
+        }
+        let Some(chat_id) = self.view_model.selected_chat else {
+            return;
+        };
+        self.engine.send(Command::LoadOlder { chat_id });
+        cx.notify();
+    }
+
     fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.mode == ViewMode::Conversation {
             self.mode = ViewMode::ChatList;
@@ -514,11 +682,17 @@ impl TelegramPanel {
             return;
         };
         let text = self.composer.read(cx).text(cx);
-        if text.trim().is_empty() {
+        if text.trim().is_empty() && self.composer_items.is_empty() {
+            return;
+        }
+        let blocks = composer_blocks(&text, &self.composer_items);
+        let items = plan_outgoing(blocks);
+        if items.is_empty() {
             return;
         }
         self.start_engine();
-        self.engine.send(Command::SendMessage { chat_id, text });
+        self.engine.send(Command::SendOutgoing { chat_id, items });
+        self.clear_composer_items(cx);
         self.composer
             .update(cx, |editor, cx| editor.set_text("", window, cx));
         self.history_list_state.set_follow_mode(FollowMode::Tail);
@@ -526,16 +700,454 @@ impl TelegramPanel {
         cx.notify();
     }
 
+    /// Stages an item, inserting a hidden token and an inline chip crease over
+    /// it at the cursor.
+    fn stage_composer_item(
+        &mut self,
+        item: ComposerItem,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let id = self.composer_next_id;
+        self.composer_next_id = self.composer_next_id.wrapping_add(1);
+        let token = format!("{COMPOSER_TOKEN_PREFIX}{id}]");
+        let (label, icon) = match &item {
+            ComposerItem::Code(reference) => (
+                SharedString::from(reference.display_name.clone()),
+                IconName::Code,
+            ),
+            ComposerItem::Attachment(attachment) => (
+                SharedString::from(attachment.file_name.clone()),
+                attachment_icon(attachment.kind),
+            ),
+        };
+        self.composer_items.insert(id, item);
+        let panel = cx.entity().downgrade();
+        let crease_id = self.composer.update(cx, |editor, cx| {
+            editor.insert(&format!("{token} "), window, cx);
+            let snapshot = editor.buffer().read(cx).snapshot(cx);
+            // Locate the token we just inserted from the cursor rather than the
+            // first textual match, which could be an older literal `[#id]`.
+            let head = editor
+                .selections
+                .newest::<MultiBufferOffset>(&editor.display_snapshot(cx))
+                .head();
+            let offset = head.0.checked_sub(token.len() + 1)?;
+            let start = snapshot.anchor_after(MultiBufferOffset(offset));
+            let end = snapshot.anchor_before(MultiBufferOffset(offset + token.len()));
+            let crease = Crease::Inline {
+                range: start..end,
+                placeholder: composer_chip_placeholder(id, label, icon, panel),
+                render_toggle: None,
+                render_trailer: None,
+                metadata: None,
+            };
+            let ids = editor.insert_creases(vec![crease.clone()], cx);
+            editor.fold_creases(vec![crease], false, window, cx);
+            ids.first().copied()
+        });
+        if let Some(crease_id) = crease_id {
+            self.composer_creases.insert(id, crease_id);
+        }
+        window.focus(&self.composer.focus_handle(cx), cx);
+        cx.notify();
+    }
+
+    /// Removes a staged item, its inline chip crease, and its hidden token.
+    fn remove_composer_item(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) {
+        self.composer_items.remove(&id);
+        let crease_id = self.composer_creases.remove(&id);
+        let token = format!("{COMPOSER_TOKEN_PREFIX}{id}]");
+        let text = self.composer.read(cx).text(cx);
+        self.composer.update(cx, |editor, cx| {
+            let mut range: Option<std::ops::Range<MultiBufferOffset>> = None;
+            if let Some(crease_id) = crease_id {
+                if let Some((_, removed)) =
+                    editor.remove_creases([crease_id], cx).into_iter().next()
+                {
+                    let snapshot = editor.buffer().read(cx).snapshot(cx);
+                    range =
+                        Some(removed.start.to_offset(&snapshot)..removed.end.to_offset(&snapshot));
+                }
+            }
+            if let Some(range) = range.or_else(|| {
+                text.find(&token)
+                    .map(|start| MultiBufferOffset(start)..MultiBufferOffset(start + token.len()))
+            }) {
+                editor.edit([(range, "")], cx);
+            }
+        });
+        window.focus(&self.composer.focus_handle(cx), cx);
+        cx.notify();
+    }
+
+    /// Drops staged items whose tokens the user has edited away.
+    fn prune_composer_items(&mut self, cx: &mut Context<Self>) {
+        if self.composer_items.is_empty() {
+            return;
+        }
+        let text = self.composer.read(cx).text(cx);
+        let stale: Vec<u64> = self
+            .composer_items
+            .keys()
+            .copied()
+            .filter(|id| !text.contains(&format!("{COMPOSER_TOKEN_PREFIX}{id}]")))
+            .collect();
+        if stale.is_empty() {
+            return;
+        }
+        let crease_ids: Vec<CreaseId> = stale
+            .iter()
+            .filter_map(|id| self.composer_creases.remove(id))
+            .collect();
+        for id in &stale {
+            self.composer_items.remove(id);
+        }
+        if !crease_ids.is_empty() {
+            self.composer.update(cx, |editor, cx| {
+                editor.remove_creases(crease_ids, cx);
+            });
+        }
+    }
+
+    /// Stages a code reference from the active editor's selection.
+    fn insert_code_reference(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(workspace) = self.workspace.upgrade() else {
+            return;
+        };
+        let Some(reference) = active_editor_code_reference(&workspace, cx) else {
+            self.notify_message(
+                tr(
+                    cx,
+                    "telegram_panel.composer.no_selection",
+                    "Select code in an editor first.",
+                ),
+                cx,
+            );
+            return;
+        };
+        self.stage_composer_item(ComposerItem::Code(reference), window, cx);
+    }
+
+    /// Handles a paste in the composer. A selection copied from a ZZZ editor is
+    /// staged as a code reference, pasted images and files become attachments,
+    /// and everything else falls through to the editor's normal paste.
+    fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(clipboard) = cx.read_from_clipboard() else {
+            return;
+        };
+        cx.stop_propagation();
+        self.paste_item(&clipboard, window, cx);
+    }
+
+    /// Pastes the clipboard as-is, without turning editor selections into code
+    /// references or images into attachments.
+    fn paste_plain(&mut self, _: &PastePlain, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(clipboard) = cx.read_from_clipboard() else {
+            return;
+        };
+        cx.stop_propagation();
+        self.composer.update(cx, |editor, cx| {
+            editor.paste_item(&clipboard, window, cx);
+        });
+    }
+
+    fn paste_item(
+        &mut self,
+        clipboard: &ClipboardItem,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // A single selection copied from a ZZZ editor carries its file and line
+        // range as metadata. Stage it as a code reference, matching the Agent
+        // panel's selection mentions, instead of pasting the raw text.
+        let editor_selection = clipboard.entries().iter().find_map(|entry| match entry {
+            ClipboardEntry::String(text) => {
+                let selections = text.metadata_json::<Vec<ClipboardSelection>>()?;
+                let [selection] = selections.as_slice() else {
+                    return None;
+                };
+                Some((selection.clone(), text.text().clone()))
+            }
+            _ => None,
+        });
+        if let Some((selection, text)) = editor_selection
+            && self.paste_code_reference(selection, text, window, cx)
+        {
+            return;
+        }
+
+        let images = clipboard
+            .entries()
+            .iter()
+            .filter_map(|entry| match entry {
+                ClipboardEntry::Image(image) if !image.bytes().is_empty() => Some(image.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        if !images.is_empty() {
+            self.stage_clipboard_images(images, window, cx);
+            return;
+        }
+
+        let external_paths = clipboard
+            .entries()
+            .iter()
+            .filter_map(|entry| match entry {
+                ClipboardEntry::ExternalPaths(paths) => Some(paths.paths().to_vec()),
+                _ => None,
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        if !external_paths.is_empty() {
+            let is_local = self
+                .workspace
+                .upgrade()
+                .is_some_and(|workspace| workspace.read(cx).project().read(cx).is_local());
+            if is_local {
+                self.stage_attachment_paths(external_paths, window, cx);
+            } else {
+                self.notify_message(
+                    tr(
+                        cx,
+                        "telegram_panel.composer.remote_attachment",
+                        "Only local files can be attached.",
+                    ),
+                    cx,
+                );
+            }
+            return;
+        }
+
+        self.composer.update(cx, |editor, cx| {
+            editor.paste_item(clipboard, window, cx);
+        });
+    }
+
+    /// Stages a selection copied from a ZZZ editor as a code reference.
+    /// Returns `true` when it was staged, `false` to fall back to a text paste.
+    fn paste_code_reference(
+        &mut self,
+        selection: ClipboardSelection,
+        text: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let (Some(absolute_path), Some(line_range)) = (selection.file_path, selection.line_range)
+        else {
+            return false;
+        };
+        let Some(workspace) = self.workspace.upgrade() else {
+            return false;
+        };
+        let project = workspace.read(cx).project().clone();
+        let language_registry = project.read(cx).languages().clone();
+        cx.spawn_in(window, async move |this, cx| {
+            let language = language_registry
+                .load_language_for_file_path(&absolute_path)
+                .await
+                .ok()
+                .map(|language| language.code_fence_block_name().to_string())
+                .or_else(|| extension_language(&absolute_path));
+            this.update_in(cx, |this, window, cx| {
+                let relative_path = project
+                    .read(cx)
+                    .project_path_for_absolute_path(&absolute_path, cx)
+                    .map_or_else(
+                        || absolute_path.to_string_lossy().into_owned(),
+                        |project_path| project_path.path.as_unix_str().to_owned(),
+                    );
+                let file_name = absolute_path.file_name().map_or_else(
+                    || relative_path.clone(),
+                    |name| name.to_string_lossy().into_owned(),
+                );
+                let start = line_range.start() + 1;
+                let end = line_range.end() + 1;
+                let display_name = if start == end {
+                    format!("{file_name}:{start}")
+                } else {
+                    format!("{file_name}:{start}-{end}")
+                };
+                let target = code_target(&project, &absolute_path, &relative_path, &line_range, cx);
+                this.stage_composer_item(
+                    ComposerItem::Code(CodeReference {
+                        display_name,
+                        language,
+                        target,
+                        text,
+                    }),
+                    window,
+                    cx,
+                );
+            })
+            .ok();
+        })
+        .detach();
+        true
+    }
+
+    /// Persists pasted clipboard images under the cache and stages them as
+    /// attachments, because the engine uploads from a path.
+    fn stage_clipboard_images(
+        &mut self,
+        images: Vec<Image>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let directory = paths::telegram_cache_dir().join("outgoing");
+        cx.spawn_in(window, async move |this, cx| {
+            let staged = cx
+                .background_spawn(async move {
+                    if let Err(error) = std::fs::create_dir_all(&directory) {
+                        log::warn!("failed to create the outgoing cache: {error}");
+                        return Vec::new();
+                    }
+                    let mut staged = Vec::with_capacity(images.len());
+                    for image in images {
+                        let path = directory.join(format!(
+                            "clipboard-{}.{}",
+                            unique_suffix(),
+                            image.format().extension()
+                        ));
+                        let bytes = image.bytes();
+                        match std::fs::write(&path, bytes) {
+                            Ok(()) => staged.push((path, bytes.len() as u64)),
+                            Err(error) => log::warn!("failed to stage a pasted image: {error}"),
+                        }
+                    }
+                    staged
+                })
+                .await;
+            this.update_in(cx, |this, window, cx| {
+                for (path, size) in staged {
+                    if this.is_attachment_staged(&path) {
+                        continue;
+                    }
+                    let Some(attachment) = StagedAttachment::from_path(path, size) else {
+                        continue;
+                    };
+                    this.stage_composer_item(ComposerItem::Attachment(attachment), window, cx);
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Stages a single file, reading its metadata through the workspace's
+    /// filesystem so remote files work too. Directories are ignored and
+    /// oversized files are rejected with a toast.
+    fn stage_attachment_path(
+        &mut self,
+        path: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.is_attachment_staged(&path) {
+            return;
+        }
+        let fs = self.fs.clone();
+        cx.spawn_in(window, async move |this, cx| {
+            let metadata = match fs.metadata(&path).await {
+                Ok(Some(metadata)) => metadata,
+                Ok(None) => return,
+                Err(error) => {
+                    log::warn!("failed to read attachment {}: {error}", path.display());
+                    return;
+                }
+            };
+            if metadata.is_dir {
+                return;
+            }
+            let size = metadata.len;
+            this.update_in(cx, |this, window, cx| {
+                if this.is_attachment_staged(&path) {
+                    return;
+                }
+                if size > MAX_ATTACHMENT_BYTES {
+                    this.notify_message(
+                        tr(
+                            cx,
+                            "telegram_panel.composer.attachment_too_large",
+                            "This file is too large to send.",
+                        ),
+                        cx,
+                    );
+                    return;
+                }
+                let Some(attachment) = StagedAttachment::from_path(path, size) else {
+                    return;
+                };
+                this.stage_composer_item(ComposerItem::Attachment(attachment), window, cx);
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn is_attachment_staged(&self, path: &Path) -> bool {
+        self.composer_items
+            .values()
+            .any(|item| matches!(item, ComposerItem::Attachment(existing) if existing.path == path))
+    }
+
+    fn stage_attachment_paths(
+        &mut self,
+        paths: Vec<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        for path in paths {
+            self.stage_attachment_path(path, window, cx);
+        }
+    }
+
+    /// Opens the platform file picker and stages the chosen files.
+    fn pick_attachments(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let receiver = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: Some(tr(cx, "telegram_panel.composer.attach", "Attach files").into()),
+        });
+        cx.spawn_in(window, async move |this, cx| match receiver.await {
+            Ok(Ok(Some(paths))) => {
+                this.update_in(cx, |this, window, cx| {
+                    this.stage_attachment_paths(paths, window, cx);
+                })
+                .ok();
+            }
+            Ok(Ok(None)) => {}
+            Ok(Err(error)) => log::warn!("failed to open the file picker: {error}"),
+            Err(error) => log::warn!("the file picker was cancelled: {error}"),
+        })
+        .detach();
+    }
+
+    /// Shows a transient toast in the workspace.
+    fn notify_message(&self, message: String, cx: &mut Context<Self>) {
+        let Some(workspace) = self.workspace.upgrade() else {
+            return;
+        };
+        workspace.update(cx, |workspace, cx| {
+            let toast = Toast::new(NotificationId::unique::<TelegramPanel>(), message).autohide();
+            workspace.show_toast(toast, cx);
+        });
+    }
+
     fn toggle_composer_expanded(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.composer_expanded = !self.composer_expanded;
+        let min_lines = TelegramPanelSettings::get_global(cx)
+            .composer_min_lines
+            .max(1);
         let max_lines = if self.composer_expanded {
             None
         } else {
-            Some(COMPOSER_MAX_LINES)
+            Some(min_lines * 2)
         };
         self.composer.update(cx, |editor, cx| {
             editor.set_mode(EditorMode::AutoHeight {
-                min_lines: COMPOSER_MIN_LINES,
+                min_lines,
                 max_lines,
             });
             cx.notify();
@@ -630,8 +1242,10 @@ impl TelegramPanel {
             .find(|message| message.chat_id == chat_id && message.id == message_id)
             .and_then(|message| message.media.as_ref())
             .is_some_and(|media| {
-                matches!(media.kind, MediaKind::Photo | MediaKind::Sticker)
-                    && media.downloaded_path.is_none()
+                matches!(
+                    media.kind,
+                    MediaKind::Photo | MediaKind::Sticker | MediaKind::Video
+                ) && media.downloaded_path.is_none()
                     && media.thumbnail_path.is_none()
                     && media.thumbnail_state != DownloadState::Downloading
             });
@@ -643,25 +1257,14 @@ impl TelegramPanel {
         }
     }
 
-    fn toggle_voice(&mut self, message_id: i32, path: PathBuf, cx: &mut Context<Self>) {
-        if self.playing_voice == Some(message_id) {
-            if let Some(playback) = self.voice_playback.take() {
-                playback.stop();
-            }
-            self.playing_voice = None;
-            cx.notify();
-            return;
-        }
-        if self.playing_voice.is_some() {
-            if let Some(playback) = self.voice_playback.take() {
-                playback.stop();
-            }
-            self.playing_voice = None;
-        }
-        let file = match std::fs::File::open(&path) {
+    /// Plays a downloaded voice message, replacing any current playback.
+    fn start_voice_playback(&mut self, message_id: i32, path: &Path, cx: &mut Context<Self>) {
+        self.stop_voice_playback();
+        let file = match std::fs::File::open(path) {
             Ok(file) => file,
             Err(error) => {
                 log::warn!("failed to open voice message {}: {error}", path.display());
+                cx.notify();
                 return;
             }
         };
@@ -669,6 +1272,7 @@ impl TelegramPanel {
             Ok(source) => source,
             Err(error) => {
                 log::warn!("failed to decode voice message {}: {error}", path.display());
+                cx.notify();
                 return;
             }
         };
@@ -676,10 +1280,146 @@ impl TelegramPanel {
             Ok(playback) => {
                 self.voice_playback = Some(playback);
                 self.playing_voice = Some(message_id);
+                self.spawn_voice_tick(message_id, cx);
             }
             Err(error) => log::warn!("failed to play voice message: {error}"),
         }
         cx.notify();
+    }
+
+    /// Stops the current voice playback, if any, without notifying. The tick
+    /// task ends on its own once `playing_voice` changes.
+    fn stop_voice_playback(&mut self) {
+        if let Some(playback) = self.voice_playback.take() {
+            playback.stop();
+        }
+        self.playing_voice = None;
+    }
+
+    /// Refreshes the voice playhead while playing and clears it once playback
+    /// finishes so the bar returns to its idle state.
+    fn spawn_voice_tick(&mut self, message_id: i32, cx: &mut Context<Self>) {
+        self._voice_task = Some(cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(VOICE_TICK).await;
+                let keep_going = this
+                    .update(cx, |panel, cx| {
+                        if panel.playing_voice != Some(message_id) {
+                            return false;
+                        }
+                        let (finished, paused) = match panel.voice_playback.as_ref() {
+                            Some(playback) => (playback.is_finished(), playback.is_paused()),
+                            None => (true, false),
+                        };
+                        if finished {
+                            panel.stop_voice_playback();
+                            cx.notify();
+                            return false;
+                        }
+                        if !paused {
+                            cx.notify();
+                        }
+                        true
+                    })
+                    .unwrap_or(false);
+                if !keep_going {
+                    break;
+                }
+            }
+        }));
+    }
+
+    /// Toggles playback of a voice message, downloading it first when needed.
+    fn toggle_voice(
+        &mut self,
+        chat_id: i64,
+        message_id: i32,
+        path: Option<PathBuf>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.playing_voice == Some(message_id) {
+            if let Some(playback) = &self.voice_playback {
+                if playback.is_paused() {
+                    playback.resume();
+                } else {
+                    playback.pause();
+                }
+            }
+            cx.notify();
+            return;
+        }
+        if let Some(path) = path {
+            self.start_voice_playback(message_id, &path, cx);
+        } else {
+            self.pending_voice = Some((chat_id, message_id));
+            self.engine.send(Command::DownloadMedia {
+                chat_id,
+                message_id,
+            });
+            cx.notify();
+        }
+    }
+
+    /// Plays a voice message whose download the user requested, once its file
+    /// arrives in a snapshot.
+    fn maybe_autoplay_voice(&mut self, cx: &mut Context<Self>) {
+        let Some((chat_id, message_id)) = self.pending_voice else {
+            return;
+        };
+        let media = self
+            .view_model
+            .history
+            .iter()
+            .find(|message| message.chat_id == chat_id && message.id == message_id)
+            .and_then(|message| message.media.as_ref());
+        let Some(media) = media else {
+            self.pending_voice = None;
+            return;
+        };
+        match (&media.downloaded_path, media.download_state) {
+            (Some(path), _) => {
+                let path = path.clone();
+                self.pending_voice = None;
+                self.start_voice_playback(message_id, &path, cx);
+            }
+            (None, DownloadState::Failed) => self.pending_voice = None,
+            _ => {}
+        }
+    }
+
+    fn sync_flood_wait(&mut self, cx: &mut Context<Self>) {
+        if !matches!(self.view_model.error, Some(EngineError::FloodWait { .. })) {
+            self.flood_wait_deadline = None;
+            return;
+        }
+        if self.flood_wait_deadline.is_some() {
+            return;
+        }
+        let seconds = self.view_model.flood_wait_seconds.unwrap_or(0).max(1);
+        self.flood_wait_deadline = Some(std::time::Instant::now() + Duration::from_secs(seconds));
+        self._flood_task = Some(cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(Duration::from_secs(1)).await;
+                let keep_going = this
+                    .update(cx, |panel, cx| {
+                        let Some(deadline) = panel.flood_wait_deadline else {
+                            return false;
+                        };
+                        if std::time::Instant::now() >= deadline {
+                            panel.flood_wait_deadline = None;
+                            panel.engine.send(Command::DismissError);
+                            cx.notify();
+                            return false;
+                        }
+                        cx.notify();
+                        true
+                    })
+                    .unwrap_or(false);
+                if !keep_going {
+                    break;
+                }
+            }
+        }));
     }
 
     /// Wraps content so it stays readable: full width when the panel is narrow,
@@ -735,6 +1475,13 @@ impl TelegramPanel {
                         this.search_open = !this.search_open;
                         if this.search_open {
                             window.focus(&this.search_editor.focus_handle(cx), cx);
+                            let query = this.search_editor.read(cx).text(cx);
+                            if !query.trim().is_empty() {
+                                this.engine.send(Command::Search {
+                                    query,
+                                    chat_id: None,
+                                });
+                            }
                         } else {
                             this.engine.send(Command::ClearSearch);
                         }
@@ -1035,7 +1782,7 @@ impl TelegramPanel {
 
         let composer = self.render_composer(window, cx);
 
-        v_flex()
+        let conversation = v_flex()
             .size_full()
             .min_h_0()
             .child(
@@ -1085,12 +1832,7 @@ impl TelegramPanel {
                                                 "Load older messages",
                                             )))
                                             .on_click(cx.listener(|this, _, _, cx| {
-                                                if let Some(chat_id) = this.view_model.selected_chat
-                                                {
-                                                    this.engine
-                                                        .send(Command::LoadOlder { chat_id });
-                                                    cx.notify();
-                                                }
+                                                this.maybe_load_older(cx)
                                             })),
                                     )
                                 })
@@ -1105,12 +1847,26 @@ impl TelegramPanel {
             )
             .child(div().flex_1().min_h_0().child(transcript))
             .child(composer)
+            .into_any_element();
+
+        div()
+            .relative()
+            .size_full()
+            .child(conversation)
+            .child(self.render_drop_target(cx))
             .into_any_element()
     }
 
     fn render_composer(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let expanded = self.composer_expanded;
-        let composer_empty = self.composer.read(cx).text(cx).trim().is_empty();
+        let text = self.composer.read(cx).text(cx);
+        let composer_empty = text.trim().is_empty() && self.composer_items.is_empty();
+        let message_count = if composer_empty {
+            0
+        } else {
+            outgoing_message_count(&plan_outgoing(composer_blocks(&text, &self.composer_items)))
+        };
+        let focused = self.composer.read(cx).focus_handle(cx).is_focused(window);
         let (expand_icon, expand_tooltip) = if expanded {
             (
                 IconName::Minimize,
@@ -1123,17 +1879,65 @@ impl TelegramPanel {
             )
         };
         let max_content_width = TelegramPanelSettings::get_global(cx).max_content_width;
+        let colors = cx.theme().colors();
+        let border = colors.border;
+        let editor_background = colors.editor_background;
+        let editor_border = if focused {
+            colors.border_focused
+        } else {
+            colors.border_variant
+        };
+
+        let mut editor_container = v_flex()
+            .relative()
+            .w_full()
+            .min_h_0()
+            .when(expanded, |this| this.flex_1())
+            .rounded_md()
+            .border_1()
+            .border_color(editor_border)
+            .bg(editor_background)
+            .overflow_hidden();
+
+        editor_container = editor_container
+            .child(
+                div()
+                    .w_full()
+                    .p_1()
+                    .key_context("TelegramComposer")
+                    .capture_action(cx.listener(Self::paste))
+                    .on_action(cx.listener(Self::paste_plain))
+                    .child(self.composer.clone()),
+            )
+            .child(
+                h_flex()
+                    .absolute()
+                    .top_0()
+                    .right_0()
+                    .opacity(0.5)
+                    .hover(|this| this.opacity(1.0))
+                    .child(
+                        IconButton::new("telegram-composer-height", expand_icon)
+                            .icon_size(IconSize::Small)
+                            .icon_color(Color::Muted)
+                            .tooltip(Tooltip::text(expand_tooltip))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.toggle_composer_expanded(window, cx)
+                            })),
+                    ),
+            );
 
         v_flex()
             .flex_none()
             .w_full()
             .when(expanded, |this| this.h(vh(0.6, window)))
             .border_t_1()
-            .border_color(cx.theme().colors().border)
+            .border_color(border)
             .child(
                 h_flex()
                     .w_full()
                     .justify_center()
+                    .p_2()
                     .when(expanded, |this| this.h_full())
                     .child(
                         div()
@@ -1146,70 +1950,123 @@ impl TelegramPanel {
                                     .w_full()
                                     .min_w_0()
                                     .when(expanded, |this| this.h_full())
-                                    .gap_1p5()
-                                    .px_2()
-                                    .py_1p5()
+                                    .gap_1()
+                                    .child(editor_container)
                                     .child(
-                                        v_flex()
-                                            .relative()
+                                        h_flex()
                                             .w_full()
-                                            .min_h_0()
-                                            .when(expanded, |this| this.flex_1())
+                                            .flex_none()
+                                            .items_center()
+                                            .gap_0p5()
                                             .child(
-                                                div()
-                                                    .w_full()
-                                                    .key_context("TelegramComposer")
-                                                    .child(self.composer.clone()),
-                                            )
-                                            .child(
-                                                h_flex()
-                                                    .absolute()
-                                                    .top_0()
-                                                    .right_0()
-                                                    .opacity(0.5)
-                                                    .hover(|this| this.opacity(1.0))
-                                                    .child(
-                                                        IconButton::new(
-                                                            "telegram-composer-height",
-                                                            expand_icon,
-                                                        )
-                                                        .icon_size(IconSize::Small)
-                                                        .icon_color(Color::Muted)
-                                                        .tooltip(Tooltip::text(expand_tooltip))
-                                                        .on_click(cx.listener(
-                                                            |this, _, window, cx| {
-                                                                this.toggle_composer_expanded(
-                                                                    window, cx,
-                                                                )
-                                                            },
-                                                        )),
-                                                    ),
-                                            ),
-                                    )
-                                    .child(
-                                        h_flex().w_full().flex_none().justify_end().child(
-                                            IconButton::new("telegram-send", IconName::Send)
-                                                .style(ButtonStyle::Filled)
-                                                .map(|this| {
-                                                    if composer_empty {
-                                                        this.disabled(true).icon_color(Color::Muted)
-                                                    } else {
-                                                        this.icon_color(Color::Accent)
-                                                    }
-                                                })
+                                                IconButton::new(
+                                                    "telegram-composer-attach",
+                                                    IconName::Attach,
+                                                )
+                                                .icon_size(IconSize::Small)
+                                                .icon_color(Color::Muted)
                                                 .tooltip(Tooltip::text(tr(
                                                     cx,
-                                                    "telegram_panel.composer.send",
-                                                    "Send",
+                                                    "telegram_panel.composer.attach",
+                                                    "Attach files",
                                                 )))
                                                 .on_click(cx.listener(|this, _, window, cx| {
-                                                    this.send(window, cx)
+                                                    this.pick_attachments(window, cx)
                                                 })),
-                                        ),
+                                            )
+                                            .child(div().flex_1())
+                                            .when(message_count > 1, |this| {
+                                                this.child(
+                                                    Label::new(
+                                                        tr(
+                                                            cx,
+                                                            "telegram_panel.composer.will_split",
+                                                            "Will send as {} messages",
+                                                        )
+                                                        .replacen(
+                                                            "{}",
+                                                            &message_count.to_string(),
+                                                            1,
+                                                        ),
+                                                    )
+                                                    .size(LabelSize::XSmall)
+                                                    .color(Color::Muted),
+                                                )
+                                            })
+                                            .child(
+                                                IconButton::new("telegram-send", IconName::Send)
+                                                    .style(ButtonStyle::Filled)
+                                                    .map(|this| {
+                                                        if composer_empty {
+                                                            this.disabled(true)
+                                                                .icon_color(Color::Muted)
+                                                        } else {
+                                                            this.icon_color(Color::Accent)
+                                                        }
+                                                    })
+                                                    .tooltip(Tooltip::text(tr(
+                                                        cx,
+                                                        "telegram_panel.composer.send",
+                                                        "Send",
+                                                    )))
+                                                    .on_click(cx.listener(
+                                                        |this, _, window, cx| this.send(window, cx),
+                                                    )),
+                                            ),
                                     ),
                             ),
                     ),
             )
+            .into_any_element()
+    }
+
+    /// An invisible full-panel overlay that stages dropped files as
+    /// attachments.
+    fn render_drop_target(&self, cx: &mut Context<Self>) -> AnyElement {
+        let project = self
+            .workspace
+            .upgrade()
+            .map(|workspace| workspace.read(cx).project().clone());
+        let is_local = project
+            .as_ref()
+            .is_some_and(|project| project.read(cx).is_local());
+        div()
+            .invisible()
+            .absolute()
+            .top_0()
+            .right_0()
+            .bottom_0()
+            .left_0()
+            .bg(cx.theme().colors().drop_target_background)
+            .drag_over::<DraggedTab>(|this, _, _, _| this.visible())
+            .drag_over::<DraggedSelection>(|this, _, _, _| this.visible())
+            .when(is_local, |this| {
+                this.drag_over::<ExternalPaths>(|this, _, _, _| this.visible())
+            })
+            .on_drop(cx.listener(|this, tab: &DraggedTab, window, cx| {
+                let path = tab.item.project_path(cx).and_then(|project_path| {
+                    let project = this.workspace.upgrade()?.read(cx).project().clone();
+                    project.read(cx).absolutize(&project_path, cx)
+                });
+                this.stage_attachment_paths(path.into_iter().collect(), window, cx);
+            }))
+            .on_drop(
+                cx.listener(|this, selection: &DraggedSelection, window, cx| {
+                    let paths = selection
+                        .items()
+                        .filter_map(|entry| {
+                            let project = this.workspace.upgrade()?.read(cx).project().clone();
+                            let project_path =
+                                project.read(cx).path_for_entry(entry.entry_id, cx)?;
+                            project.read(cx).absolutize(&project_path, cx)
+                        })
+                        .collect();
+                    this.stage_attachment_paths(paths, window, cx);
+                }),
+            )
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
+                this.stage_attachment_paths(paths.paths().to_vec(), window, cx);
+            }))
             .into_any_element()
     }
 
@@ -1344,7 +2201,17 @@ impl TelegramPanel {
 
     fn render_error_banner(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let error = self.view_model.error.as_ref()?;
-        let message = error_text(error, self.view_model.flood_wait_seconds, cx);
+        let flood_wait_seconds = match error {
+            EngineError::FloodWait { seconds } => {
+                Some(self.flood_wait_deadline.map_or(*seconds, |deadline| {
+                    deadline
+                        .saturating_duration_since(std::time::Instant::now())
+                        .as_secs()
+                }))
+            }
+            _ => self.view_model.flood_wait_seconds,
+        };
+        let message = error_text(error, flood_wait_seconds, cx);
         Some(
             Callout::new()
                 .severity(Severity::Error)
@@ -1432,6 +2299,7 @@ impl TelegramPanel {
                     let chat_id = hit.chat_id;
                     let message_id = hit.message.as_ref().map_or(0, |message| message.id);
                     let panel = panel.clone();
+                    let click_panel = panel.clone();
                     let markdown = markdown.clone();
                     ListItem::new(ElementId::Name(
                         format!("telegram-search-hit-{index}").into(),
@@ -1439,11 +2307,11 @@ impl TelegramPanel {
                     .spacing(ListItemSpacing::Sparse)
                     .on_click(move |_, _, cx| {
                         if message_id == 0 {
-                            panel
+                            click_panel
                                 .update(cx, |panel, cx| panel.open_chat(chat_id, cx))
                                 .ok();
                         } else {
-                            panel
+                            click_panel
                                 .update(cx, |panel, cx| panel.open_chat_at(chat_id, message_id, cx))
                                 .ok();
                         }
@@ -1458,7 +2326,7 @@ impl TelegramPanel {
                                     .color(Color::Muted),
                             )
                             .when_some(hit.message.as_ref(), |this, message| {
-                                this.child(render_body_text(message, &markdown, window, cx))
+                                this.child(render_body_text(message, &markdown, &panel, window, cx))
                             }),
                     )
                     .into_any_element()
@@ -1504,12 +2372,17 @@ fn telegram_markdown_style(window: &Window, cx: &App) -> MarkdownStyle {
 /// plain text.
 fn render_body_text(
     message: &MessageSnapshot,
-    markdown: &HashMap<(i64, i32), Entity<Markdown>>,
+    markdown: &HashMap<MessageKey, Entity<Markdown>>,
+    panel: &WeakEntity<TelegramPanel>,
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
-    if let Some(entity) = markdown.get(&(message.chat_id, message.id)) {
+    if let Some(entity) = markdown.get(&MessageKey::for_message(message)) {
+        let panel = panel.clone();
         return MarkdownElement::new(entity.clone(), telegram_markdown_style(window, cx))
+            .on_url_click(move |url, window, cx| {
+                open_message_link(url, &panel, window, cx);
+            })
             .into_any_element();
     }
     if message.text.is_empty() {
@@ -1554,7 +2427,7 @@ fn build_qr_image(url: &str) -> Option<Arc<RenderImage>> {
 fn render_message(
     message: &MessageSnapshot,
     layout: &MessageLayout,
-    markdown: &HashMap<(i64, i32), Entity<Markdown>>,
+    markdown: &HashMap<MessageKey, Entity<Markdown>>,
     panel: &WeakEntity<TelegramPanel>,
     outgoing_background: gpui::Hsla,
     incoming_background: gpui::Hsla,
@@ -1602,7 +2475,7 @@ fn render_message(
         bubble = bubble.child(render_media(message, media, panel, cx));
     }
 
-    let body = render_body_text(message, markdown, window, cx);
+    let body = render_body_text(message, markdown, panel, window, cx);
     bubble = bubble.child(body);
 
     bubble = bubble.child(
@@ -1828,64 +2701,69 @@ fn render_media(
     });
     let metadata = media_metadata(media);
     let toggle = media_toggle(panel, chat_id, message_id);
+    let display_size = media_display_size(media);
 
     let mut card = v_flex()
-        .w_full()
         .min_w_0()
         .rounded_md()
         .border_1()
         .border_color(cx.theme().colors().border)
-        .overflow_hidden()
-        .child(
-            h_flex()
-                .id(ElementId::Name(
-                    format!("telegram-media-header-{message_id}").into(),
-                ))
-                .w_full()
-                .min_w_0()
-                .px_2()
-                .py_1()
-                .gap_2()
-                .items_center()
-                .cursor_pointer()
-                .bg(cx.theme().colors().editor_background)
-                .hover(|this| this.bg(cx.theme().colors().element_hover))
-                .on_click({
-                    let toggle = toggle.clone();
-                    move |event, window, cx| toggle(event, window, cx)
-                })
-                .child(Icon::new(icon).size(IconSize::Small).color(Color::Muted))
-                .child(
-                    v_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .gap_0p5()
-                        .child(
-                            Label::new(media_display_name(media, cx))
-                                .size(LabelSize::Small)
+        .overflow_hidden();
+    // A collapsed card keeps the full width so its file name stays readable;
+    // an expanded preview shrinks to the media so the bubble hugs the image.
+    if let Some((width, _)) = display_size.filter(|_| is_expanded) {
+        card = card.w(width + px(MEDIA_CARD_HORIZONTAL_INSET)).max_w_full();
+    } else {
+        card = card.w_full();
+    }
+    card = card.child(
+        h_flex()
+            .id(ElementId::Name(
+                format!("telegram-media-header-{message_id}").into(),
+            ))
+            .w_full()
+            .min_w_0()
+            .px_2()
+            .py_1()
+            .gap_2()
+            .items_center()
+            .cursor_pointer()
+            .bg(cx.theme().colors().editor_background)
+            .hover(|this| this.bg(cx.theme().colors().element_hover))
+            .on_click({
+                let toggle = toggle.clone();
+                move |event, window, cx| toggle(event, window, cx)
+            })
+            .child(Icon::new(icon).size(IconSize::Small).color(Color::Muted))
+            .child(
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .gap_0p5()
+                    .child(
+                        Label::new(media_display_name(media, cx))
+                            .size(LabelSize::Small)
+                            .truncate(),
+                    )
+                    .when(!metadata.is_empty(), |this| {
+                        this.child(
+                            Label::new(metadata)
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted)
                                 .truncate(),
                         )
-                        .when(!metadata.is_empty(), |this| {
-                            this.child(
-                                Label::new(metadata)
-                                    .size(LabelSize::XSmall)
-                                    .color(Color::Muted)
-                                    .truncate(),
-                            )
-                        }),
-                )
-                .child(
-                    div().flex_none().child(
-                        Disclosure::new(
-                            ElementId::Name(
-                                format!("telegram-media-disclosure-{message_id}").into(),
-                            ),
-                            is_expanded,
-                        )
-                        .on_toggle_expanded(toggle),
-                    ),
+                    }),
+            )
+            .child(
+                div().flex_none().child(
+                    Disclosure::new(
+                        ElementId::Name(format!("telegram-media-disclosure-{message_id}").into()),
+                        is_expanded,
+                    )
+                    .on_toggle_expanded(toggle),
                 ),
-        );
+            ),
+    );
 
     if is_expanded {
         card = card.child(
@@ -1895,7 +2773,14 @@ fn render_media(
                 .p_2()
                 .border_t_1()
                 .border_color(cx.theme().colors().border)
-                .child(render_media_content(media, chat_id, message_id, panel, cx)),
+                .child(render_media_content(
+                    media,
+                    chat_id,
+                    message_id,
+                    display_size,
+                    panel,
+                    cx,
+                )),
         );
     }
 
@@ -1906,51 +2791,136 @@ fn render_media_content(
     media: &MediaSnapshot,
     chat_id: i64,
     message_id: i32,
+    display_size: Option<(Pixels, Pixels)>,
     panel: &WeakEntity<TelegramPanel>,
     cx: &mut App,
 ) -> AnyElement {
     match media.kind {
-        MediaKind::Photo | MediaKind::Sticker => {
-            let max_height = if media.kind == MediaKind::Sticker {
-                rems_from_px(120.)
-            } else {
-                rems_from_px(320.)
-            };
-            let mut column = v_flex().w_full().min_w_0().gap_1();
-            if let Some(path) = media
-                .downloaded_path
-                .as_ref()
-                .or(media.thumbnail_path.as_ref())
-            {
-                column = column.child(
-                    img(path.clone())
-                        .max_h(max_height)
-                        .max_w_full()
-                        .rounded_md(),
-                );
-            }
-            if media.downloaded_path.is_none() {
-                if media.thumbnail_state == DownloadState::Downloading {
-                    column = column.child(
-                        Label::new(tr(
-                            cx,
-                            "telegram_panel.media.loading_preview",
-                            "Loading preview…",
-                        ))
-                        .size(LabelSize::XSmall)
-                        .color(Color::Muted),
-                    );
-                } else {
-                    column =
-                        column.child(render_media_action(media, chat_id, message_id, panel, cx));
-                }
-            }
-            column.into_any_element()
+        MediaKind::Photo | MediaKind::Sticker | MediaKind::Video => {
+            render_media_preview(media, chat_id, message_id, display_size, panel, cx)
         }
         MediaKind::Voice => render_voice_action(media, chat_id, message_id, panel, cx),
         _ if media.is_downloadable() => render_media_action(media, chat_id, message_id, panel, cx),
         _ => div().into_any_element(),
     }
+}
+
+/// Renders a photo, sticker, or video poster, with a play overlay for videos.
+fn render_media_preview(
+    media: &MediaSnapshot,
+    chat_id: i64,
+    message_id: i32,
+    display_size: Option<(Pixels, Pixels)>,
+    panel: &WeakEntity<TelegramPanel>,
+    cx: &mut App,
+) -> AnyElement {
+    let max_height = if media.kind == MediaKind::Sticker {
+        rems_from_px(STICKER_MAX_HEIGHT)
+    } else {
+        rems_from_px(MEDIA_MAX_HEIGHT)
+    };
+    let mut column = v_flex().w_full().min_w_0().gap_1();
+    // A downloaded video is not an image, so only its thumbnail can be shown.
+    let preview_path = if media.kind == MediaKind::Video {
+        media.thumbnail_path.as_ref()
+    } else {
+        media
+            .downloaded_path
+            .as_ref()
+            .or(media.thumbnail_path.as_ref())
+    };
+    if let Some(path) = preview_path {
+        let image = img(path.clone()).rounded_md().max_w_full();
+        let image = if let Some((width, height)) = display_size {
+            image.w(width).h(height)
+        } else {
+            image.max_h(max_height)
+        };
+        let preview = if media.kind == MediaKind::Video {
+            let panel = panel.clone();
+            let open_path = media.downloaded_path.clone();
+            v_flex()
+                .id(ElementId::Name(
+                    format!("telegram-video-{message_id}").into(),
+                ))
+                .relative()
+                .cursor_pointer()
+                .child(image)
+                .child(video_play_overlay(media.duration_seconds))
+                .on_click(move |_, _, cx| {
+                    if let Some(path) = open_path.clone() {
+                        cx.open_with_system(&path);
+                    } else {
+                        panel
+                            .update(cx, |panel, cx| {
+                                panel.engine.send(Command::DownloadMedia {
+                                    chat_id,
+                                    message_id,
+                                });
+                                cx.notify();
+                            })
+                            .ok();
+                    }
+                })
+                .into_any_element()
+        } else {
+            image.into_any_element()
+        };
+        column = column.child(preview);
+    }
+    if media.downloaded_path.is_none() && media.thumbnail_state == DownloadState::Downloading {
+        column = column.child(
+            Label::new(tr(
+                cx,
+                "telegram_panel.media.loading_preview",
+                "Loading preview…",
+            ))
+            .size(LabelSize::XSmall)
+            .color(Color::Muted),
+        );
+    } else if media.downloaded_path.is_none() || media.kind == MediaKind::Video {
+        column = column.child(render_media_action(media, chat_id, message_id, panel, cx));
+    }
+    column.into_any_element()
+}
+
+/// A centered play badge, plus a duration chip on the bottom-right, shown over a
+/// video poster.
+fn video_play_overlay(duration: Option<f64>) -> AnyElement {
+    div()
+        .absolute()
+        .inset_0()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            div()
+                .p_1p5()
+                .rounded_full()
+                .bg(gpui::black().opacity(0.45))
+                .child(
+                    Icon::new(IconName::PlayFilled)
+                        .size(IconSize::Medium)
+                        .color(Color::Custom(gpui::white())),
+                ),
+        )
+        .when_some(duration, |this, duration| {
+            this.child(
+                div()
+                    .absolute()
+                    .bottom_1()
+                    .right_1()
+                    .px_1()
+                    .rounded_sm()
+                    .bg(gpui::black().opacity(0.45))
+                    .child(
+                        Label::new(duration_label(Some(duration)))
+                            .size(LabelSize::XSmall)
+                            .color(Color::Custom(gpui::white())),
+                    ),
+            )
+        })
+        .into_any_element()
 }
 
 fn render_media_action(
@@ -2002,47 +2972,186 @@ fn render_voice_action(
     cx: &mut App,
 ) -> AnyElement {
     let path = media.downloaded_path.clone();
+    let downloading = media.download_state == DownloadState::Downloading;
+    let (is_playing, is_paused, playhead_ratio) =
+        panel.upgrade().map_or((false, false, 0.0), |panel| {
+            panel.read_with(cx, |panel, _| {
+                let playing = panel.playing_voice == Some(message_id);
+                let playback = if playing {
+                    panel.voice_playback.as_ref()
+                } else {
+                    None
+                };
+                let paused = playback.is_some_and(|playback| playback.is_paused());
+                let ratio = playback.map_or(0.0, |playback| {
+                    let total = media.duration_seconds.unwrap_or(0.0);
+                    if total > 0.0 {
+                        (playback.position().as_secs_f64() / total).clamp(0.0, 1.0) as f32
+                    } else {
+                        0.0
+                    }
+                });
+                (playing, paused, ratio)
+            })
+        });
+    let samples = Arc::new(voice_waveform_samples(media.waveform.as_deref()));
+    let unplayed = cx.theme().colors().text.opacity(0.28);
+    let played = cx.theme().status().info;
     let panel_entity = panel.clone();
-    let is_playing = panel.upgrade().is_some_and(|panel| {
-        panel.read_with(cx, |panel, _| panel.playing_voice == Some(message_id))
-    });
+
     h_flex()
+        .w(voice_bar_width(cx))
+        .max_w_full()
         .gap_2()
         .items_center()
+        .child(
+            IconButton::new(
+                ElementId::Name(format!("telegram-voice-{message_id}").into()),
+                if downloading {
+                    IconName::LoadCircle
+                } else if is_playing && !is_paused {
+                    IconName::DebugPause
+                } else {
+                    IconName::PlayFilled
+                },
+            )
+            .icon_size(IconSize::Small)
+            .disabled(downloading)
+            .tooltip(Tooltip::text(if is_playing && !is_paused {
+                tr(cx, "telegram_panel.media.pause", "Pause")
+            } else {
+                tr(cx, "telegram_panel.media.play", "Play")
+            }))
+            .on_click(move |_, _, cx| {
+                let path = path.clone();
+                panel_entity
+                    .update(cx, |panel, cx| {
+                        panel.toggle_voice(chat_id, message_id, path, cx)
+                    })
+                    .ok();
+            }),
+        )
+        .child(
+            div().flex_1().min_w_0().h(px(24.)).child(
+                canvas(
+                    |_, _, _| {},
+                    move |bounds, _, window, _| {
+                        paint_voice_waveform(
+                            window,
+                            bounds,
+                            &samples,
+                            playhead_ratio,
+                            unplayed,
+                            played,
+                        );
+                    },
+                )
+                .size_full(),
+            ),
+        )
         .child(
             Label::new(duration_label(media.duration_seconds))
                 .size(LabelSize::XSmall)
                 .color(Color::Muted),
         )
-        .child(
-            Button::new(
-                ElementId::Name(format!("telegram-voice-{message_id}").into()),
-                if is_playing {
-                    tr(cx, "telegram_panel.media.stop", "Stop")
-                } else {
-                    tr(cx, "telegram_panel.media.play", "Play")
-                },
-            )
-            .label_size(LabelSize::XSmall)
-            .on_click(move |_, _, cx| {
-                if let Some(path) = path.clone() {
-                    panel_entity
-                        .update(cx, |panel, cx| panel.toggle_voice(message_id, path, cx))
-                        .ok();
-                } else {
-                    panel_entity
-                        .update(cx, |panel, cx| {
-                            panel.engine.send(Command::DownloadMedia {
-                                chat_id,
-                                message_id,
-                            });
-                            cx.notify();
-                        })
-                        .ok();
-                }
-            }),
-        )
         .into_any_element()
+}
+
+/// The fixed width of a voice bar: half the panel's content width when one is
+/// configured, constrained to a sensible range so it fits in narrow panels.
+fn voice_bar_width(cx: &App) -> Pixels {
+    let max_content_width = TelegramPanelSettings::get_global(cx).max_content_width;
+    let width = max_content_width.map_or(VOICE_BAR_FALLBACK_WIDTH, |max| f32::from(max) * 0.5);
+    px(width.clamp(VOICE_BAR_MIN_WIDTH, VOICE_BAR_MAX_WIDTH))
+}
+
+/// Unpacks Telegram's voice waveform into normalized amplitudes. Each byte
+/// holds two 4-bit levels, low nibble first.
+fn voice_waveform_samples(waveform: Option<&[u8]>) -> Vec<f32> {
+    let Some(waveform) = waveform else {
+        return Vec::new();
+    };
+    let mut samples = Vec::with_capacity(waveform.len() * 2);
+    for byte in waveform {
+        samples.push(f32::from(byte & 0x0F));
+        samples.push(f32::from((byte >> 4) & 0x0F));
+    }
+    let max = samples.iter().copied().fold(0.0_f32, f32::max).max(1.0);
+    for sample in &mut samples {
+        *sample /= max;
+    }
+    samples
+}
+
+/// Paints the voice waveform as centered bars, splitting the played portion
+/// from the rest at `playhead_ratio`.
+fn paint_voice_waveform(
+    window: &mut Window,
+    bounds: Bounds<Pixels>,
+    samples: &[f32],
+    playhead_ratio: f32,
+    unplayed: Hsla,
+    played: Hsla,
+) {
+    if samples.is_empty() {
+        return;
+    }
+    let width = f32::from(bounds.size.width);
+    let height = f32::from(bounds.size.height);
+    if width <= 0.0 || height <= 0.0 {
+        return;
+    }
+    let slot = width / samples.len() as f32;
+    let gap = (slot * 0.3).min(1.0);
+    let bar_width = (slot - gap).max(0.5);
+    let center_y = bounds.origin.y + bounds.size.height / 2.0;
+    let half_height = bounds.size.height / 2.0;
+    let playhead_index = (playhead_ratio.clamp(0.0, 1.0) * samples.len() as f32) as usize;
+    for (index, sample) in samples.iter().enumerate() {
+        let amplitude = half_height * sample.clamp(0.0, 1.0);
+        let bar_height = (amplitude * 2.0).max(px(1.0));
+        let x = bounds.origin.x + px(slot * index as f32 + gap / 2.0);
+        let color = if index < playhead_index {
+            played
+        } else {
+            unplayed
+        };
+        window.paint_quad(fill(
+            Bounds::new(
+                point(x, center_y - bar_height / 2.0),
+                size(px(bar_width), bar_height),
+            ),
+            color,
+        ));
+    }
+}
+
+/// The display size, in pixels, for a media preview. The media is scaled to fit
+/// within [`MEDIA_MAX_HEIGHT`], floored at [`MEDIA_MIN_WIDTH`] so a tall image
+/// stays visible, and capped at [`MEDIA_MAX_ASPECT`] so a panorama does not ask
+/// for an absurdly wide bubble. `None` when the dimensions are unknown.
+fn media_display_size(media: &MediaSnapshot) -> Option<(Pixels, Pixels)> {
+    let width = media.width?;
+    let height = media.height?;
+    if width <= 0 || height <= 0 {
+        return None;
+    }
+    let aspect = width as f32 / height as f32;
+    let max_height = if media.kind == MediaKind::Sticker {
+        STICKER_MAX_HEIGHT
+    } else {
+        MEDIA_MAX_HEIGHT
+    };
+    let mut display_height = max_height;
+    let mut display_width = max_height * aspect;
+    if display_width < MEDIA_MIN_WIDTH {
+        display_width = MEDIA_MIN_WIDTH;
+        display_height = display_width / aspect;
+    } else if aspect > MEDIA_MAX_ASPECT {
+        display_width = max_height * MEDIA_MAX_ASPECT;
+        display_height = max_height;
+    }
+    Some((px(display_width), px(display_height)))
 }
 
 fn render_webpage(media: &MediaSnapshot, message_id: i32, cx: &mut App) -> AnyElement {
@@ -2153,13 +3262,13 @@ fn connection_label(view_model: &ViewModel, cx: &App) -> String {
     }
 }
 
-fn build_composer(window: &mut Window, cx: &mut Context<Editor>) -> Editor {
+fn build_composer(min_lines: usize, window: &mut Window, cx: &mut Context<Editor>) -> Editor {
     let buffer = cx.new(|cx| Buffer::local("", cx));
     let buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx));
     let mut editor = Editor::new(
         EditorMode::AutoHeight {
-            min_lines: COMPOSER_MIN_LINES,
-            max_lines: Some(COMPOSER_MAX_LINES),
+            min_lines,
+            max_lines: Some(min_lines * 2),
         },
         buffer,
         None,
@@ -2172,6 +3281,34 @@ fn build_composer(window: &mut Window, cx: &mut Context<Editor>) -> Editor {
         cx,
     );
     editor.set_use_modal_editing(true);
+    // The default editor menu cannot offer the panel's code-reference action, so
+    // the composer keeps Cut/Copy/Paste and adds the reference and paste-as-text
+    // entries.
+    editor.set_custom_context_menu(|editor, _point, window, cx| {
+        let has_selection = editor.has_non_empty_selection(&editor.display_snapshot(cx));
+        let cut = tr(cx, "telegram_panel.composer.cut", "Cut");
+        let copy = tr(cx, "telegram_panel.composer.copy", "Copy");
+        let paste = tr(cx, "telegram_panel.composer.paste", "Paste");
+        let paste_plain = tr(
+            cx,
+            "telegram_panel.composer.paste_plain",
+            "Paste as Plain Text",
+        );
+        let insert_code = tr(
+            cx,
+            "telegram_panel.composer.code_block",
+            "Insert Code Reference from Selection",
+        );
+
+        Some(ContextMenu::build(window, cx, move |menu, _, _| {
+            menu.action_disabled_when(!has_selection, cut.clone(), Box::new(Cut))
+                .action_disabled_when(!has_selection, copy.clone(), Box::new(Copy))
+                .action(paste.clone(), Box::new(Paste))
+                .action(paste_plain.clone(), Box::new(PastePlain))
+                .separator()
+                .action(insert_code, Box::new(InsertCodeReference))
+        }))
+    });
     // `AutoHeight` editors default to `rems(0.875)` (14px at the default 16px
     // rem). Match the message text instead: `LabelSize::Small` is
     // `rems_from_px(12.)` (0.75rem), so both scale with the user's `ui_font_size`.
@@ -2192,6 +3329,494 @@ fn single_line_editor(
     editor.set_placeholder_text(&placeholder, window, cx);
     editor.set_use_modal_editing(true);
     editor
+}
+
+/// The icon shown in an attachment chip for the given kind.
+fn attachment_icon(kind: AttachmentKind) -> IconName {
+    match kind {
+        AttachmentKind::Photo => IconName::Image,
+        AttachmentKind::Video => IconName::File,
+        AttachmentKind::Document => IconName::FileDoc,
+    }
+}
+
+/// A process-unique suffix for a staged clipboard image's cache file.
+fn unique_suffix() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let count = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    format!("{nanos}-{count}")
+}
+
+/// Builds the fold placeholder that renders a staged item as an inline chip
+/// with a remove button.
+fn composer_chip_placeholder(
+    id: u64,
+    label: SharedString,
+    icon: IconName,
+    panel: WeakEntity<TelegramPanel>,
+) -> FoldPlaceholder {
+    FoldPlaceholder {
+        render: Arc::new(move |fold_id: FoldId, _range, cx| {
+            let remove_panel = panel.clone();
+            FoldPlaceholder::fold_element(fold_id, cx)
+                .flex()
+                .items_center()
+                .gap_1()
+                .px_1()
+                .child(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
+                .child(Label::new(label.clone()).size(LabelSize::XSmall))
+                .child(
+                    IconButton::new(("telegram-composer-chip-remove", id), IconName::Close)
+                        .icon_size(IconSize::XSmall)
+                        .icon_color(Color::Muted)
+                        .tooltip(Tooltip::text(tr(
+                            cx,
+                            "telegram_panel.composer.remove_attachment",
+                            "Remove",
+                        )))
+                        .on_click(move |_, window, cx| {
+                            remove_panel
+                                .update(cx, |panel, cx| panel.remove_composer_item(id, window, cx))
+                                .ok();
+                        }),
+                )
+                .into_any_element()
+        }),
+        constrain_width: false,
+        merge_adjacent: false,
+        type_tag: None,
+        collapsed_text: None,
+    }
+}
+
+/// Expands a staged code reference to its outgoing Markdown.
+fn expand_code_reference(reference: &CodeReference) -> String {
+    // The trailing newline keeps text typed after the code chip on the next
+    // line. Without it the closing fence fuses with that text (`\`\`\`测试`),
+    // which is not a valid fence, so the text is swallowed into the code block.
+    format!(
+        "{}\n",
+        code_reference_markdown(
+            &reference.display_name,
+            &reference.target,
+            reference.language.as_deref(),
+            &reference.text,
+        )
+    )
+}
+
+/// Splits the composer's text into ordered blocks, expanding staged code
+/// references and lifting out attachments at their inline token positions.
+fn composer_blocks(text: &str, items: &BTreeMap<u64, ComposerItem>) -> Vec<ComposerBlock> {
+    let mut blocks = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find(COMPOSER_TOKEN_PREFIX) {
+        if start > 0 {
+            blocks.push(ComposerBlock::Text(rest[..start].to_owned()));
+        }
+        let after = &rest[start + COMPOSER_TOKEN_PREFIX.len()..];
+        let Some(close) = after.find(']') else {
+            blocks.push(ComposerBlock::Text(rest[start..].to_owned()));
+            return blocks;
+        };
+        let token_end = start + COMPOSER_TOKEN_PREFIX.len() + close + 1;
+        let item = after[..close]
+            .parse::<u64>()
+            .ok()
+            .and_then(|id| items.get(&id));
+        match item {
+            Some(ComposerItem::Code(reference)) => {
+                blocks.push(ComposerBlock::Text(expand_code_reference(reference)));
+            }
+            Some(ComposerItem::Attachment(attachment)) => {
+                blocks.push(ComposerBlock::Attachment(attachment.clone()));
+            }
+            None => blocks.push(ComposerBlock::Text(rest[start..token_end].to_owned())),
+        }
+        rest = &rest[token_end..];
+    }
+    if !rest.is_empty() {
+        blocks.push(ComposerBlock::Text(rest.to_owned()));
+    }
+    blocks
+}
+
+/// Removes staged items' hidden tokens before storing the composer text as a
+/// draft. Drafts outlive the staged items (which are cleared when the selected
+/// chat changes), so leaving the tokens in would let a later restore send them
+/// verbatim as literal `[#id]` text.
+fn composer_draft_text(text: &str, items: &BTreeMap<u64, ComposerItem>) -> String {
+    if items.is_empty() || !text.contains(COMPOSER_TOKEN_PREFIX) {
+        return text.to_owned();
+    }
+    let mut result = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find(COMPOSER_TOKEN_PREFIX) {
+        result.push_str(&rest[..start]);
+        let after = &rest[start + COMPOSER_TOKEN_PREFIX.len()..];
+        let Some(close) = after.find(']') else {
+            result.push_str(&rest[start..]);
+            return result;
+        };
+        let token_end = start + COMPOSER_TOKEN_PREFIX.len() + close + 1;
+        let known = after[..close]
+            .parse::<u64>()
+            .is_ok_and(|id| items.contains_key(&id));
+        if !known {
+            result.push_str(&rest[start..token_end]);
+        }
+        rest = &rest[token_end..];
+    }
+    result.push_str(rest);
+    result
+}
+
+/// Builds a code reference from the active editor's non-empty selection.
+fn active_editor_code_reference(
+    workspace: &Entity<Workspace>,
+    cx: &mut App,
+) -> Option<CodeReference> {
+    let editor = workspace.read(cx).active_item_as::<Editor>(cx)?;
+    let (buffer, text, start_row, end_row) = editor.update(cx, |editor, cx| {
+        let selections = editor.selections.all_adjusted(&editor.display_snapshot(cx));
+        let selection = selections
+            .into_iter()
+            .find(|selection| !selection.is_empty())?;
+        let multi_buffer = editor.buffer().read(cx);
+        let multi_buffer_snapshot = multi_buffer.snapshot(cx);
+        let start_anchor = multi_buffer_snapshot.anchor_after(selection.start);
+        let end_anchor = multi_buffer_snapshot.anchor_before(selection.end);
+        let (start_buffer, start) = multi_buffer.text_anchor_for_position(start_anchor, cx)?;
+        let (end_buffer, end) = multi_buffer.text_anchor_for_position(end_anchor, cx)?;
+        if start_buffer != end_buffer {
+            return None;
+        }
+        let snapshot = start_buffer.read(cx).snapshot();
+        let start_offset = start.to_offset(&snapshot);
+        let end_offset = end.to_offset(&snapshot);
+        if start_offset >= end_offset {
+            return None;
+        }
+        let text = snapshot
+            .text_for_range(start_offset..end_offset)
+            .collect::<String>();
+        let start_point = snapshot.offset_to_point(start_offset);
+        let end_point = snapshot.offset_to_point(end_offset - 1);
+        Some((start_buffer, text, start_point.row, end_point.row))
+    })?;
+
+    let (file_name, language, absolute_path, relative_path) = {
+        let buffer = buffer.read(cx);
+        let file = buffer.file()?;
+        let absolute_path = file.full_path(cx);
+        let language = buffer
+            .language()
+            .map(|language| language.code_fence_block_name().to_string())
+            .or_else(|| extension_language(&absolute_path));
+        (
+            file.file_name(cx).to_owned(),
+            language,
+            absolute_path,
+            file.path().as_unix_str().to_owned(),
+        )
+    };
+    let line_range = start_row..=end_row;
+    let display_name = format!("{file_name}:{}-{}", start_row + 1, end_row + 1);
+    let project = workspace.read(cx).project().clone();
+    let target = code_target(&project, &absolute_path, &relative_path, &line_range, cx);
+    Some(CodeReference {
+        display_name,
+        language,
+        target,
+        text,
+    })
+}
+
+/// The lowercase file extension, used as a code fence language when a buffer
+/// has no language of its own.
+fn extension_language(path: &Path) -> Option<String> {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .filter(|extension| !extension.is_empty())
+}
+
+/// Builds the target for a code reference: a commit permalink when the file
+/// belongs to a repository with a remote, otherwise a worktree-relative path
+/// with a line fragment.
+fn code_target(
+    project: &Entity<project::Project>,
+    absolute_path: &Path,
+    relative_path: &str,
+    line_range: &RangeInclusive<u32>,
+    cx: &App,
+) -> String {
+    if let Some(project_path) = project.read(cx).find_project_path(absolute_path, cx) {
+        let git_store = project.read(cx).git_store().clone();
+        let resolved = git_store
+            .read(cx)
+            .repository_and_path_for_project_path(&project_path, cx);
+        if let Some((repository, repo_path)) = resolved {
+            let remote_url = repository.read(cx).default_remote_url();
+            let head_commit = repository.read(cx).snapshot().head_commit;
+            if let (Some(remote_url), Some(head_commit)) = (remote_url, head_commit)
+                && let Some(registry) = GitHostingProviderRegistry::try_global(cx)
+                && let Some((provider, parsed)) = parse_git_remote_url(registry, &remote_url)
+            {
+                let selection = Some(*line_range.start()..*line_range.end());
+                let params =
+                    BuildPermalinkParams::new(head_commit.sha.as_ref(), &repo_path, selection);
+                return provider.build_permalink(parsed, params).to_string();
+            }
+        }
+    }
+    let start = line_range.start() + 1;
+    let end = line_range.end() + 1;
+    if start == end {
+        format!("{relative_path}#L{start}")
+    } else {
+        format!("{relative_path}#L{start}-L{end}")
+    }
+}
+
+/// Splits a `path#Lx-Ly` reference into its path and (1-based) start line.
+fn split_line_fragment(target: &str) -> (&str, Option<u32>) {
+    let Some((path, fragment)) = target.split_once('#') else {
+        return (target, None);
+    };
+    let line = fragment
+        .strip_prefix('L')
+        .and_then(|rest| rest.split(['-', 'L']).next())
+        .and_then(|line| line.parse::<u32>().ok());
+    (path, line)
+}
+
+/// Opens a link from a Telegram message. Absolute file mentions and non-HTTP
+/// targets are opened in the workspace; anything unresolved falls back to the
+/// system URL handler.
+fn open_message_link(
+    url: SharedString,
+    panel: &WeakEntity<TelegramPanel>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        cx.open_url(&url);
+        return;
+    }
+    let Some(workspace) = panel
+        .upgrade()
+        .and_then(|panel| panel.read(cx).workspace.upgrade())
+    else {
+        cx.open_url(&url);
+        return;
+    };
+    if open_mention_link(&workspace, &url, window, cx)
+        || open_project_reference(&workspace, &url, window, cx)
+    {
+        return;
+    }
+    cx.open_url(&url);
+}
+
+/// Opens an absolute-path or `zzz://` mention link via [`MentionUri`]. Returns
+/// `false` when the target is not a recognized mention.
+fn open_mention_link(
+    workspace: &Entity<Workspace>,
+    url: &str,
+    window: &mut Window,
+    cx: &mut App,
+) -> bool {
+    let path_style = workspace.read(cx).path_style(cx);
+    let Ok(mention) = MentionUri::parse_hyperlink(url, path_style) else {
+        return false;
+    };
+    match mention {
+        MentionUri::File { abs_path } => {
+            open_abs_path_at_point(workspace, abs_path, None, window, cx)
+        }
+        MentionUri::Directory { abs_path } => {
+            reveal_in_project_panel(workspace, &abs_path, cx);
+        }
+        MentionUri::Symbol {
+            abs_path,
+            line_range,
+            ..
+        } => open_abs_path_at_point(
+            workspace,
+            abs_path,
+            Some(Point::new(*line_range.start(), 0)),
+            window,
+            cx,
+        ),
+        MentionUri::Selection {
+            abs_path: Some(abs_path),
+            line_range,
+            column,
+        } => open_abs_path_at_point(
+            workspace,
+            abs_path,
+            Some(Point::new(*line_range.start(), column.unwrap_or(0))),
+            window,
+            cx,
+        ),
+        MentionUri::Fetch { url } => cx.open_url(url.as_str()),
+        _ => return false,
+    }
+    true
+}
+
+/// Reveals a directory in the project panel.
+fn reveal_in_project_panel(workspace: &Entity<Workspace>, abs_path: &Path, cx: &mut App) {
+    let project = workspace.read(cx).project().clone();
+    let entry_id = project
+        .read(cx)
+        .find_project_path(abs_path, cx)
+        .and_then(|project_path| {
+            project
+                .read(cx)
+                .entry_for_path(&project_path, cx)
+                .map(|entry| entry.id)
+        });
+    if let Some(entry_id) = entry_id {
+        project.update(cx, |_, cx| {
+            cx.emit(project::Event::RevealInProjectPanel(entry_id))
+        });
+    }
+}
+
+/// Opens an absolute path, preferring its project path so the file opens in the
+/// existing buffer, then optionally places the cursor at `point`.
+fn open_abs_path_at_point(
+    workspace: &Entity<Workspace>,
+    abs_path: PathBuf,
+    point: Option<Point>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let project = workspace.read(cx).project().clone();
+    let project_path = project.read(cx).find_project_path(&abs_path, cx);
+    let fs = project.read(cx).fs().clone();
+    let workspace = workspace.downgrade();
+    window
+        .spawn(cx, async move |cx| {
+            let item = if let Some(project_path) = project_path {
+                workspace
+                    .update_in(cx, |workspace, window, cx| {
+                        workspace.open_path(project_path, None, true, window, cx)
+                    })?
+                    .await?
+            } else {
+                let metadata = fs.metadata(&abs_path).await?;
+                anyhow::ensure!(
+                    metadata.is_some_and(|metadata| !metadata.is_dir),
+                    "no file found at path {abs_path:?}"
+                );
+                workspace
+                    .update_in(cx, |workspace, window, cx| {
+                        workspace.open_abs_path(
+                            abs_path,
+                            OpenOptions {
+                                focus: Some(true),
+                                ..Default::default()
+                            },
+                            window,
+                            cx,
+                        )
+                    })?
+                    .await?
+            };
+            if let Some(point) = point
+                && let Some(editor) = item.downcast::<Editor>()
+            {
+                editor
+                    .update_in(cx, |editor, window, cx| {
+                        editor.change_selections(
+                            SelectionEffects::scroll(Autoscroll::center()),
+                            window,
+                            cx,
+                            |selections| selections.select_ranges([point..point]),
+                        );
+                    })
+                    .ok();
+            }
+            anyhow::Ok(())
+        })
+        .detach_and_log_err(cx);
+}
+
+/// Resolves a worktree-relative reference against the project's worktrees and
+/// opens it, returning `false` when it does not resolve.
+fn open_project_reference(
+    workspace: &Entity<Workspace>,
+    url: &str,
+    window: &mut Window,
+    cx: &mut App,
+) -> bool {
+    let (path_part, line) = split_line_fragment(url);
+    if path_part.is_empty() || Path::new(path_part).is_absolute() {
+        return false;
+    }
+    if path_part
+        .split(['/', '\\'])
+        .any(|component| component == "..")
+    {
+        return false;
+    }
+
+    let project = workspace.read(cx).project().clone();
+    let roots = project
+        .read(cx)
+        .worktrees(cx)
+        .map(|worktree| worktree.read(cx).abs_path().to_path_buf())
+        .collect::<Vec<_>>();
+    let Some(absolute_path) = roots
+        .into_iter()
+        .map(|root| root.join(path_part))
+        .find(|candidate| candidate.is_file())
+    else {
+        return false;
+    };
+
+    let Some(project_path) = project.update(cx, |project, cx| {
+        project.find_project_path(&absolute_path, cx)
+    }) else {
+        return false;
+    };
+
+    let point = line.map(|line| Point::new(line.saturating_sub(1), 0));
+    let workspace = workspace.downgrade();
+    window
+        .spawn(cx, async move |cx| {
+            let item = workspace
+                .update_in(cx, |workspace, window, cx| {
+                    workspace.open_path(project_path, None, true, window, cx)
+                })?
+                .await?;
+            if let Some(point) = point
+                && let Some(editor) = item.downcast::<Editor>()
+            {
+                editor
+                    .update_in(cx, |editor, window, cx| {
+                        editor.change_selections(
+                            SelectionEffects::scroll(Autoscroll::center()),
+                            window,
+                            cx,
+                            |selections| selections.select_ranges([point..point]),
+                        );
+                    })
+                    .ok();
+            }
+            anyhow::Ok(())
+        })
+        .detach_and_log_err(cx);
+    true
 }
 
 fn local_offset() -> UtcOffset {
@@ -2266,11 +3891,6 @@ fn media_kind_label(kind: MediaKind, cx: &App) -> String {
 
 fn error_text(error: &EngineError, flood_wait_seconds: Option<u64>, cx: &App) -> String {
     match error {
-        EngineError::NotConfigured => tr(
-            cx,
-            "telegram_panel.error.not_configured",
-            "This build has no embedded Telegram credentials.",
-        ),
         EngineError::NotConnected => tr(
             cx,
             "telegram_panel.error.not_connected",
@@ -2539,6 +4159,11 @@ pub fn register(workspace: &mut Workspace, _cx: &mut Context<Workspace>) {
             panel.back(window, cx)
         });
     });
+    workspace.register_action(|workspace, _: &InsertCodeReference, window, cx| {
+        with_panel(workspace, window, cx, |panel, window, cx| {
+            panel.insert_code_reference(window, cx)
+        });
+    });
 }
 
 fn with_panel(
@@ -2554,10 +4179,13 @@ fn with_panel(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_history_layout, duration_label, error_text, media_kind_label};
-    use gpui::TestAppContext;
+    use super::{
+        build_history_layout, duration_label, error_text, media_display_size, media_kind_label,
+        voice_waveform_samples,
+    };
+    use gpui::{TestAppContext, px};
     use settings::SettingsStore;
-    use telegram::{EngineError, MediaKind, MessageSnapshot, SendState};
+    use telegram::{EngineError, MediaKind, MediaSnapshot, MessageSnapshot, SendState};
 
     fn message(id: i32, sender: &str, timestamp_unix: i64) -> MessageSnapshot {
         MessageSnapshot {
@@ -2580,6 +4208,57 @@ mod tests {
         assert_eq!(duration_label(None), "0:00");
         assert_eq!(duration_label(Some(65.0)), "1:05");
         assert_eq!(duration_label(Some(3600.0)), "1:00:00");
+    }
+
+    fn media_snapshot(kind: MediaKind, width: i32, height: i32) -> MediaSnapshot {
+        MediaSnapshot {
+            kind,
+            width: Some(width),
+            height: Some(height),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn media_display_size_preserves_aspect_and_caps() {
+        assert_eq!(
+            media_display_size(&media_snapshot(MediaKind::Photo, 400, 200)),
+            Some((px(640.), px(320.)))
+        );
+        assert_eq!(
+            media_display_size(&media_snapshot(MediaKind::Photo, 200, 400)),
+            Some((px(160.), px(320.)))
+        );
+    }
+
+    #[test]
+    fn media_display_size_floors_tall_and_caps_wide_media() {
+        assert_eq!(
+            media_display_size(&media_snapshot(MediaKind::Photo, 100, 1000)),
+            Some((px(120.), px(1200.)))
+        );
+        assert_eq!(
+            media_display_size(&media_snapshot(MediaKind::Video, 1000, 200)),
+            Some((px(800.), px(320.)))
+        );
+    }
+
+    #[test]
+    fn media_display_size_is_none_without_dimensions() {
+        assert_eq!(media_display_size(&MediaSnapshot::default()), None);
+        assert_eq!(
+            media_display_size(&media_snapshot(MediaKind::Photo, 0, 100)),
+            None
+        );
+    }
+
+    #[test]
+    fn voice_waveform_unpacks_nibbles_and_normalizes() {
+        assert!(voice_waveform_samples(None).is_empty());
+        assert_eq!(
+            voice_waveform_samples(Some(&[0x0F, 0xF0])),
+            vec![1.0, 0.0, 0.0, 1.0]
+        );
     }
 
     #[test]
@@ -2646,5 +4325,148 @@ mod tests {
                 i18n::tr(cx, "telegram_panel.media.geo", "Location")
             );
         });
+    }
+
+    #[test]
+    fn composer_blocks_expand_code_and_lift_attachments() {
+        use std::collections::BTreeMap;
+
+        use super::{CodeReference, ComposerItem, composer_blocks};
+        use telegram::{AttachmentKind, ComposerBlock, StagedAttachment};
+
+        let mut items = BTreeMap::new();
+        items.insert(
+            0,
+            ComposerItem::Code(CodeReference {
+                display_name: "a.rs:1-2".into(),
+                language: Some("rust".into()),
+                target: "a.rs#L1-L2".into(),
+                text: "fn a() {}".into(),
+            }),
+        );
+        items.insert(
+            1,
+            ComposerItem::Attachment(StagedAttachment {
+                path: "/tmp/photo.png".into(),
+                kind: AttachmentKind::Photo,
+                file_name: "photo.png".into(),
+                size: 10,
+            }),
+        );
+
+        let blocks = composer_blocks("see [#0] then [#1] ok", &items);
+        assert_eq!(
+            blocks,
+            vec![
+                ComposerBlock::Text("see ".into()),
+                ComposerBlock::Text("[a.rs:1-2](a.rs#L1-L2)\n```rust\nfn a() {}\n```\n".into()),
+                ComposerBlock::Text(" then ".into()),
+                ComposerBlock::Attachment(StagedAttachment {
+                    path: "/tmp/photo.png".into(),
+                    kind: AttachmentKind::Photo,
+                    file_name: "photo.png".into(),
+                    size: 10,
+                }),
+                ComposerBlock::Text(" ok".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn composer_blocks_keep_unknown_tokens_literal() {
+        use std::collections::BTreeMap;
+
+        use super::composer_blocks;
+        use telegram::ComposerBlock;
+
+        let blocks = composer_blocks("x [#9] y", &BTreeMap::new());
+        assert_eq!(
+            blocks,
+            vec![
+                ComposerBlock::Text("x ".into()),
+                ComposerBlock::Text("[#9]".into()),
+                ComposerBlock::Text(" y".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn composer_draft_text_drops_known_tokens_only() {
+        use std::collections::BTreeMap;
+
+        use super::{ComposerItem, composer_draft_text};
+        use telegram::{AttachmentKind, StagedAttachment};
+
+        let mut items = BTreeMap::new();
+        items.insert(
+            3,
+            ComposerItem::Attachment(StagedAttachment {
+                path: "/tmp/photo.png".into(),
+                kind: AttachmentKind::Photo,
+                file_name: "photo.png".into(),
+                size: 10,
+            }),
+        );
+
+        assert_eq!(
+            composer_draft_text("hello [#3] world [#9]", &items),
+            "hello  world [#9]"
+        );
+        assert_eq!(
+            composer_draft_text("no items [#3]", &BTreeMap::new()),
+            "no items [#3]"
+        );
+    }
+
+    #[test]
+    fn split_line_fragment_parses_ranges() {
+        use super::split_line_fragment;
+
+        assert_eq!(split_line_fragment("a/b.rs#L9-L16"), ("a/b.rs", Some(9)));
+        assert_eq!(split_line_fragment("a/b.rs#L5"), ("a/b.rs", Some(5)));
+        assert_eq!(split_line_fragment("a/b.rs"), ("a/b.rs", None));
+    }
+
+    #[test]
+    fn markdown_keys_separate_optimistic_sends() {
+        use super::MessageKey;
+
+        let remote = message(7, "Ada", 0);
+        assert_eq!(MessageKey::for_message(&remote), MessageKey::Remote(1, 7));
+
+        let mut first = message(0, "", 0);
+        first.local_id = Some(1);
+        let mut second = message(0, "", 0);
+        second.local_id = Some(2);
+        assert_eq!(MessageKey::for_message(&first), MessageKey::Local(1, 1));
+        assert_eq!(MessageKey::for_message(&second), MessageKey::Local(1, 2));
+        assert_ne!(
+            MessageKey::for_message(&first),
+            MessageKey::for_message(&second)
+        );
+    }
+
+    #[test]
+    fn unique_suffix_is_unique_per_call() {
+        use super::unique_suffix;
+
+        assert_ne!(unique_suffix(), unique_suffix());
+    }
+
+    #[test]
+    fn extension_language_uses_lowercase_extension() {
+        use super::extension_language;
+        use std::path::Path;
+
+        assert_eq!(
+            extension_language(Path::new("/tmp/keymap.json")),
+            Some("json".to_owned())
+        );
+        assert_eq!(
+            extension_language(Path::new("/tmp/Script.PY")),
+            Some("py".to_owned())
+        );
+        assert_eq!(extension_language(Path::new("/tmp/README")), None);
+        assert_eq!(extension_language(Path::new("/tmp/.gitignore")), None);
     }
 }

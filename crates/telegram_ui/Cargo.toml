@@ -21,6 +21,7 @@ test-support = [
 ]
 
 [dependencies]
+acp_thread.workspace = true
 anyhow.workspace = true
 audio.workspace = true
 client.workspace = true
@@ -28,6 +29,7 @@ editor.workspace = true
 fs.workspace = true
 futures.workspace = true
 fuzzy.workspace = true
+git.workspace = true
 gpui.workspace = true
 i18n.workspace = true
 image.workspace = true
@@ -37,10 +39,13 @@ markdown.workspace = true
 multi_buffer.workspace = true
 paths.workspace = true
 picker.workspace = true
+project.workspace = true
 qrcodegen.workspace = true
 rodio.workspace = true
+rope.workspace = true
 settings.workspace = true
 telegram.workspace = true
+text.workspace = true
 time.workspace = true
 time_format.workspace = true
 ui.workspace = true

@@ -1101,6 +1101,9 @@
     // Maximum content width in pixels. Content is centered when the panel is
     // wider than this value.
     "max_content_width": 760,
+    // The minimum height of the message composer, in lines. The composer grows
+    // up to twice this value before scrolling.
+    "composer_min_lines": 4,
   },
   // Configuration for the Telegram connection.
   "telegram": {

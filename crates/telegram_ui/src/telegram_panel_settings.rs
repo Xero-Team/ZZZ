@@ -13,6 +13,8 @@ pub struct TelegramPanelSettings {
     pub starts_open: bool,
     pub show_unread_badge: bool,
     pub max_content_width: Option<Pixels>,
+    /// Minimum number of lines the composer shows before it grows.
+    pub composer_min_lines: usize,
 }
 
 impl Settings for TelegramPanelSettings {
@@ -34,6 +36,7 @@ impl Settings for TelegramPanelSettings {
             } else {
                 None
             },
+            composer_min_lines: panel.composer_min_lines.unwrap() as usize,
         }
     }
 }

@@ -15512,6 +15512,7 @@ dependencies = [
 name = "telegram_ui"
 version = "0.1.0"
 dependencies = [
+ "acp_thread",
  "anyhow",
  "audio",
  "client",
@@ -15519,6 +15520,7 @@ dependencies = [
  "fs",
  "futures 0.3.34",
  "fuzzy",
+ "git",
  "gpui",
  "i18n",
  "image",
@@ -15528,10 +15530,13 @@ dependencies = [
  "multi_buffer",
  "paths",
  "picker",
+ "project",
  "qrcodegen",
  "rodio",
+ "rope",
  "settings",
  "telegram",
+ "text",
  "time",
  "time_format",
  "ui",
