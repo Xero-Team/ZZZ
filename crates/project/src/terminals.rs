@@ -398,7 +398,7 @@ impl Project {
             } else {
                 None
             };
-            let shell_program = remote_shell.as_ref().map(Shell::program).unwrap_or(shell);
+            let shell_program = remote_shell.as_ref().map_or(shell, Shell::program);
             let shell_kind = ShellKind::new(&shell_program, path_style.is_windows());
             let mut env = env_task.await.unwrap_or_default();
             env.extend(settings.env);
