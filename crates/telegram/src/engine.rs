@@ -12,7 +12,7 @@ use std::time::{Duration, SystemTime};
 
 use base64::Engine as _;
 use grammers_client::client::{LoginToken, PasswordToken, UpdatesConfiguration};
-use grammers_client::media::{Media, PhotoSize};
+use grammers_client::media::{InputMedia, Media, PhotoSize};
 use grammers_client::message::{InputMessage, Message};
 use grammers_client::peer::{Dialog, Peer};
 use grammers_client::sender::{ConnectionParams, SenderPool};
@@ -23,6 +23,9 @@ use grammers_client::update::Update;
 use grammers_client::{Client, SignInError};
 use tokio::sync::{mpsc, watch};
 
+use crate::compose::{
+    AlbumItem, AttachmentKind, OutgoingItem, StagedAttachment, markdown_caption, markdown_message,
+};
 use crate::credentials::TelegramCredentials;
 use crate::error::EngineError;
 use crate::markdown::entities_to_markdown;
@@ -66,9 +69,10 @@ pub enum Command {
     LoadOlder {
         chat_id: i64,
     },
-    SendMessage {
+    /// Sends a planned sequence of text and media messages.
+    SendOutgoing {
         chat_id: i64,
-        text: String,
+        items: Vec<OutgoingItem>,
     },
     RetrySend {
         chat_id: i64,
@@ -134,10 +138,10 @@ impl fmt::Debug for Command {
                 .debug_struct("LoadOlder")
                 .field("chat_id", chat_id)
                 .finish(),
-            Self::SendMessage { chat_id, .. } => formatter
-                .debug_struct("SendMessage")
+            Self::SendOutgoing { chat_id, items } => formatter
+                .debug_struct("SendOutgoing")
                 .field("chat_id", chat_id)
-                .field("text", &"<redacted>")
+                .field("items", &items.len())
                 .finish(),
             Self::RetrySend { chat_id, local_id } => formatter
                 .debug_struct("RetrySend")
@@ -363,11 +367,10 @@ enum EngineEvent {
     ChatsLoaded {
         result: Result<Vec<(ChatSnapshot, PeerRef)>, EngineError>,
     },
-    /// A history page finished loading. `prepend` selects older-page behavior.
+    /// A history page finished loading.
     HistoryLoaded {
         chat_id: i64,
         epoch: u64,
-        prepend: bool,
         result: Result<(Vec<MessageSnapshot>, bool), EngineError>,
     },
     /// A gap-fill page finished loading.
@@ -432,6 +435,9 @@ struct EngineState {
     chats_refresh_scheduled: bool,
     reconnect_scheduled: bool,
     reconnect_attempts: u32,
+    /// The planned item for each optimistic message, so a failed send can be
+    /// retried with its attachment intact.
+    pending_outgoing: HashMap<u64, OutgoingItem>,
 }
 
 impl EngineState {
@@ -477,6 +483,7 @@ impl EngineState {
             chats_refresh_scheduled: false,
             reconnect_scheduled: false,
             reconnect_attempts: 0,
+            pending_outgoing: HashMap::new(),
         }
     }
 
@@ -525,7 +532,7 @@ impl EngineState {
             Command::Logout => self.logout().await,
             Command::SelectChat { chat_id } => self.select_chat(chat_id),
             Command::LoadOlder { chat_id } => self.load_older(chat_id),
-            Command::SendMessage { chat_id, text } => self.send_message(chat_id, text).await,
+            Command::SendOutgoing { chat_id, items } => self.send_outgoing(chat_id, items).await,
             Command::RetrySend { chat_id, local_id } => self.retry_send(chat_id, local_id).await,
             Command::SetDraft { chat_id, text } => {
                 self.drafts.insert(chat_id, text.clone());
@@ -662,7 +669,7 @@ impl EngineState {
             Err(error) => {
                 self.view.connection = ConnectionState::Offline;
                 log::warn!("failed to connect to Telegram: {error}");
-                self.set_error(EngineError::Other);
+                self.set_error(EngineError::NotConnected);
             }
         }
         self.publish();
@@ -912,10 +919,11 @@ impl EngineState {
         self.peer_refs.clear();
         self.drafts.clear();
         self.histories.clear();
+        self.pending_outgoing.clear();
         self.history_epoch = self.history_epoch.wrapping_add(1);
         self.reconnect_scheduled = false;
         self.reconnect_attempts = 0;
-        self.clear_cache();
+        self.clear_cache().await;
         self.view = ViewModel {
             configured: self.config.credentials.is_some(),
             connection: if self.client.is_some() {
@@ -931,16 +939,23 @@ impl EngineState {
 
     /// Removes the regenerable media cache. The encrypted session lives in a
     /// separate root and is never touched here.
-    fn clear_cache(&self) {
-        for directory in [&self.media_dir, &self.thumbnail_dir] {
-            match std::fs::remove_dir_all(directory) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => log::warn!(
-                    "failed to clear the Telegram cache at {}: {error}",
-                    directory.display()
-                ),
+    async fn clear_cache(&self) {
+        let directories = [self.media_dir.clone(), self.thumbnail_dir.clone()];
+        let cleared = tokio::task::spawn_blocking(move || {
+            for directory in &directories {
+                match std::fs::remove_dir_all(directory) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => log::warn!(
+                        "failed to clear the Telegram cache at {}: {error}",
+                        directory.display()
+                    ),
+                }
             }
+        })
+        .await;
+        if let Err(error) = cleared {
+            log::warn!("the Telegram cache cleanup task was cancelled: {error}");
         }
     }
 
@@ -1025,7 +1040,7 @@ impl EngineState {
         }
         self.publish();
 
-        self.spawn_history_page(peer_ref, chat_id, epoch, None, false);
+        self.spawn_history_page(peer_ref, chat_id, epoch, None);
         self.mark_read(chat_id);
     }
 
@@ -1037,7 +1052,6 @@ impl EngineState {
         chat_id: i64,
         epoch: u64,
         before_id: Option<i32>,
-        prepend: bool,
     ) {
         let Some(client) = self.client.clone() else {
             return;
@@ -1050,7 +1064,6 @@ impl EngineState {
             let _ = event_tx.send(EngineEvent::HistoryLoaded {
                 chat_id,
                 epoch,
-                prepend,
                 result,
             });
         });
@@ -1060,7 +1073,6 @@ impl EngineState {
         &mut self,
         chat_id: i64,
         epoch: u64,
-        prepend: bool,
         result: Result<(Vec<MessageSnapshot>, bool), EngineError>,
     ) {
         if epoch != self.history_epoch || self.view.selected_chat != Some(chat_id) {
@@ -1068,19 +1080,11 @@ impl EngineState {
         }
         self.view.loading_history = false;
         match result {
-            Ok((mut page, has_more)) => {
-                if prepend {
-                    if !has_more {
-                        self.view.has_more_history = false;
-                    }
-                    page.append(&mut self.view.history);
-                    self.view.history = page;
-                } else {
-                    self.view.history = merge_tail(&self.view.history, page);
-                    if !has_more {
-                        self.view.has_more_history = false;
-                    }
+            Ok((page, has_more)) => {
+                if !has_more {
+                    self.view.has_more_history = false;
                 }
+                self.view.history = merge_tail(&self.view.history, page);
                 self.cache_selected_history(chat_id);
                 self.publish();
             }
@@ -1091,7 +1095,10 @@ impl EngineState {
     /// Loads older messages and prepends them. History is stored oldest-first,
     /// so the first non-optimistic message is the oldest one.
     fn load_older(&mut self, chat_id: i64) {
-        if self.view.selected_chat != Some(chat_id) || !self.view.has_more_history {
+        if self.view.selected_chat != Some(chat_id)
+            || !self.view.has_more_history
+            || self.view.loading_history
+        {
             return;
         }
         let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
@@ -1107,7 +1114,7 @@ impl EngineState {
             return;
         };
         let epoch = self.history_epoch;
-        self.spawn_history_page(peer_ref, chat_id, epoch, Some(oldest), true);
+        self.spawn_history_page(peer_ref, chat_id, epoch, Some(oldest));
     }
 
     /// Fetches the messages between two known ids for the selected chat and
@@ -1217,11 +1224,40 @@ impl EngineState {
         self.ensure_connected().await;
     }
 
-    async fn send_message(&mut self, chat_id: i64, text: String) {
-        let text = text.trim_end().to_owned();
-        if text.is_empty() {
+    /// Sends a planned sequence of messages, clearing the stored draft once.
+    async fn send_outgoing(&mut self, chat_id: i64, items: Vec<OutgoingItem>) {
+        if items.is_empty() {
             return;
         }
+        self.view.draft.clear();
+        self.drafts.remove(&chat_id);
+        self.publish();
+        for item in items {
+            self.send_outgoing_item(chat_id, item).await;
+        }
+    }
+
+    async fn send_outgoing_item(&mut self, chat_id: i64, item: OutgoingItem) {
+        match item {
+            OutgoingItem::Text(text) => {
+                let text = text.trim_end().to_owned();
+                if !text.is_empty() {
+                    self.send_text_item(chat_id, text).await;
+                }
+            }
+            OutgoingItem::Media {
+                attachment,
+                caption,
+            } => {
+                self.send_media_item(chat_id, attachment, caption).await;
+            }
+            OutgoingItem::Album { items } => {
+                self.send_album_item(chat_id, items).await;
+            }
+        }
+    }
+
+    async fn send_text_item(&mut self, chat_id: i64, text: String) {
         let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
             self.set_error(EngineError::ChatUnavailable);
             return;
@@ -1232,60 +1268,222 @@ impl EngineState {
         };
 
         let local_id = rand::random::<u64>();
-        let snapshot = MessageSnapshot {
+        self.push_optimistic(chat_id, local_id, text.clone(), Some(text.clone()), None);
+        self.pending_outgoing
+            .insert(local_id, OutgoingItem::Text(text.clone()));
+
+        match client.send_message(peer_ref, markdown_message(&text)).await {
+            Ok(message) => self.finish_send(chat_id, local_id, &message),
+            Err(error) => self.fail_send(chat_id, local_id, error),
+        }
+    }
+
+    async fn send_media_item(
+        &mut self,
+        chat_id: i64,
+        attachment: StagedAttachment,
+        caption: Option<String>,
+    ) {
+        let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
+            self.set_error(EngineError::ChatUnavailable);
+            return;
+        };
+        let Some(client) = self.client.clone() else {
+            self.set_error(EngineError::NotConnected);
+            return;
+        };
+
+        let local_id = rand::random::<u64>();
+        let media = MediaSnapshot {
+            kind: attachment.kind.media_kind(),
+            file_name: Some(attachment.file_name.clone()),
+            size: Some(attachment.size),
+            downloaded_path: Some(attachment.path.clone()),
+            download_state: DownloadState::Downloaded,
+            ..Default::default()
+        };
+        self.push_optimistic(
+            chat_id,
+            local_id,
+            caption.clone().unwrap_or_default(),
+            caption.clone(),
+            Some(media),
+        );
+        self.pending_outgoing.insert(
+            local_id,
+            OutgoingItem::Media {
+                attachment: attachment.clone(),
+                caption: caption.clone(),
+            },
+        );
+
+        let uploaded = match client.upload_file(&attachment.path).await {
+            Ok(uploaded) => uploaded,
+            Err(error) => {
+                self.fail_send(chat_id, local_id, error);
+                return;
+            }
+        };
+
+        let mut message = match caption.as_deref() {
+            Some(caption) if !caption.is_empty() => markdown_message(caption),
+            _ => InputMessage::new(),
+        };
+        message = match attachment.kind {
+            AttachmentKind::Photo => message.photo(uploaded),
+            AttachmentKind::Video | AttachmentKind::Document => message.document(uploaded),
+        };
+
+        match client.send_message(peer_ref, message).await {
+            Ok(message) => self.finish_send(chat_id, local_id, &message),
+            Err(error) => self.fail_send(chat_id, local_id, error),
+        }
+    }
+
+    /// Sends a group of previewable attachments as a single Telegram album.
+    async fn send_album_item(&mut self, chat_id: i64, items: Vec<AlbumItem>) {
+        let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
+            self.set_error(EngineError::ChatUnavailable);
+            return;
+        };
+        let Some(client) = self.client.clone() else {
+            self.set_error(EngineError::NotConnected);
+            return;
+        };
+        let Some(first) = items.first() else {
+            return;
+        };
+
+        let local_id = rand::random::<u64>();
+        let media = MediaSnapshot {
+            kind: first.attachment.kind.media_kind(),
+            file_name: Some(first.attachment.file_name.clone()),
+            size: Some(first.attachment.size),
+            downloaded_path: Some(first.attachment.path.clone()),
+            download_state: DownloadState::Downloaded,
+            ..Default::default()
+        };
+        self.push_optimistic(
+            chat_id,
+            local_id,
+            first.caption.clone().unwrap_or_default(),
+            first.caption.clone(),
+            Some(media),
+        );
+        self.pending_outgoing.insert(
+            local_id,
+            OutgoingItem::Album {
+                items: items.clone(),
+            },
+        );
+
+        let mut medias = Vec::with_capacity(items.len());
+        for item in &items {
+            let uploaded = match client.upload_file(&item.attachment.path).await {
+                Ok(uploaded) => uploaded,
+                Err(error) => {
+                    self.fail_send(chat_id, local_id, error);
+                    return;
+                }
+            };
+            let mut input = match item.caption.as_deref() {
+                Some(caption) if !caption.is_empty() => markdown_caption(caption),
+                _ => InputMedia::new(),
+            };
+            input = match item.attachment.kind {
+                AttachmentKind::Photo => input.photo(uploaded),
+                AttachmentKind::Video | AttachmentKind::Document => input.document(uploaded),
+            };
+            medias.push(input);
+        }
+
+        match client.send_album(peer_ref, medias).await {
+            Ok(messages) => self.finish_album_send(chat_id, local_id, messages),
+            Err(error) => self.fail_send(chat_id, local_id, error),
+        }
+    }
+
+    /// Replaces the album's optimistic entry with the server messages.
+    fn finish_album_send(&mut self, chat_id: i64, local_id: u64, messages: Vec<Option<Message>>) {
+        self.pending_outgoing.remove(&local_id);
+        if let Some(index) = self.message_index(local_id) {
+            self.view.history.remove(index);
+        }
+        let mut last = None;
+        for message in messages.into_iter().flatten() {
+            self.upsert_history_message(message_to_snapshot(&message, chat_id));
+            last = Some(message);
+        }
+        self.dedupe_history();
+        self.sort_history();
+        self.cache_selected_history(chat_id);
+        if let Some(last) = last.as_ref() {
+            self.update_chat_preview(chat_id, last);
+        }
+        self.persist_session();
+        self.publish();
+    }
+
+    /// Pushes an optimistic history entry for a message being sent.
+    fn push_optimistic(
+        &mut self,
+        chat_id: i64,
+        local_id: u64,
+        text: String,
+        markdown: Option<String>,
+        media: Option<MediaSnapshot>,
+    ) {
+        self.view.history.push(MessageSnapshot {
             id: 0,
             chat_id,
             outgoing: true,
             sender_name: String::new(),
             timestamp_unix: current_unix_timestamp(),
-            text: text.clone(),
-            markdown: None,
-            media: None,
+            text,
+            markdown,
+            media,
             send_state: SendState::Sending,
             local_id: Some(local_id),
             edited: false,
-        };
-        self.view.history.push(snapshot);
-        self.view.draft.clear();
-        self.drafts.remove(&chat_id);
+        });
         self.publish();
+    }
 
-        match client
-            .send_message(peer_ref, InputMessage::new().markdown(text.clone()))
-            .await
-        {
-            Ok(message) => {
-                if let Some(index) = self.message_index(local_id) {
-                    self.view.history[index] = message_to_snapshot(&message, chat_id);
-                    self.view.history[index].local_id = None;
-                }
-                self.dedupe_history();
-                self.sort_history();
-                self.cache_selected_history(chat_id);
-                self.update_chat_preview(chat_id, &message);
-                self.persist_session();
-                self.publish();
-            }
-            Err(error) => {
-                if let Some(index) = self.message_index(local_id) {
-                    self.view.history[index].send_state = SendState::Failed;
-                }
-                self.cache_selected_history(chat_id);
-                log::warn!("failed to send the message: {error}");
-                self.set_error(EngineError::SendFailed);
-            }
+    fn finish_send(&mut self, chat_id: i64, local_id: u64, message: &Message) {
+        self.pending_outgoing.remove(&local_id);
+        if let Some(index) = self.message_index(local_id) {
+            self.view.history[index] = message_to_snapshot(message, chat_id);
+            self.view.history[index].local_id = None;
         }
+        self.dedupe_history();
+        self.sort_history();
+        self.cache_selected_history(chat_id);
+        self.update_chat_preview(chat_id, message);
+        self.persist_session();
+        self.publish();
+    }
+
+    fn fail_send(&mut self, chat_id: i64, local_id: u64, error: impl std::fmt::Display) {
+        if let Some(index) = self.message_index(local_id) {
+            self.view.history[index].send_state = SendState::Failed;
+        }
+        self.cache_selected_history(chat_id);
+        log::warn!("failed to send the message: {error}");
+        self.set_error(EngineError::SendFailed);
     }
 
     async fn retry_send(&mut self, chat_id: i64, local_id: u64) {
         let Some(index) = self.message_index(local_id) else {
             return;
         };
-        let text = self.view.history[index].text.clone();
+        let item = self
+            .pending_outgoing
+            .remove(&local_id)
+            .unwrap_or_else(|| OutgoingItem::Text(self.view.history[index].text.clone()));
         self.view.history.remove(index);
         self.cache_selected_history(chat_id);
         self.publish();
-        self.send_message(chat_id, text).await;
+        self.send_outgoing_item(chat_id, item).await;
     }
 
     fn message_index(&self, local_id: u64) -> Option<usize> {
@@ -1422,7 +1620,7 @@ impl EngineState {
     }
 
     fn download_media(&mut self, chat_id: i64, message_id: i32) {
-        let Some(index) = self.message_index_by_id(message_id) else {
+        let Some(index) = self.current_message_index(chat_id, message_id) else {
             return;
         };
         let Some(media) = self.view.history[index].media.as_ref() else {
@@ -1469,21 +1667,22 @@ impl EngineState {
         message_id: i32,
         result: Result<Option<PathBuf>, EngineError>,
     ) {
-        let _ = chat_id;
-        let Some(index) = self.message_index_by_id(message_id) else {
-            return;
-        };
-        let Some(media) = self.view.history[index].media.as_mut() else {
-            return;
-        };
         match result {
             Ok(Some(path)) => {
-                media.download_state = DownloadState::Downloaded;
-                media.downloaded_path = Some(path);
+                self.update_media_snapshot(chat_id, message_id, |media| {
+                    media.download_state = DownloadState::Downloaded;
+                    media.downloaded_path = Some(path.clone());
+                });
             }
-            Ok(None) => media.download_state = DownloadState::NotDownloaded,
+            Ok(None) => {
+                self.update_media_snapshot(chat_id, message_id, |media| {
+                    media.download_state = DownloadState::NotDownloaded;
+                });
+            }
             Err(error) => {
-                media.download_state = DownloadState::Failed;
+                self.update_media_snapshot(chat_id, message_id, |media| {
+                    media.download_state = DownloadState::Failed;
+                });
                 self.view.flood_wait_seconds = match &error {
                     EngineError::FloodWait { seconds } => Some(*seconds),
                     _ => None,
@@ -1505,13 +1704,16 @@ impl EngineState {
     /// Schedules a small preview fetch for an image-like attachment. The bytes
     /// are cached under the thumbnail cache root and re-fetched on a miss.
     fn download_thumbnail(&mut self, chat_id: i64, message_id: i32) {
-        let Some(index) = self.message_index_by_id(message_id) else {
+        let Some(index) = self.current_message_index(chat_id, message_id) else {
             return;
         };
         let Some(media) = self.view.history[index].media.as_ref() else {
             return;
         };
-        if !matches!(media.kind, MediaKind::Photo | MediaKind::Sticker) {
+        if !matches!(
+            media.kind,
+            MediaKind::Photo | MediaKind::Sticker | MediaKind::Video
+        ) {
             return;
         }
         if media.thumbnail_path.is_some() || media.thumbnail_state == DownloadState::Downloading {
@@ -1557,20 +1759,22 @@ impl EngineState {
         message_id: i32,
         result: Result<Option<PathBuf>, EngineError>,
     ) {
-        let Some(index) = self.message_index_by_id(message_id) else {
-            return;
-        };
-        let Some(media) = self.view.history[index].media.as_mut() else {
-            return;
-        };
         match result {
             Ok(Some(path)) => {
-                media.thumbnail_state = DownloadState::Downloaded;
-                media.thumbnail_path = Some(path);
+                self.update_media_snapshot(chat_id, message_id, |media| {
+                    media.thumbnail_state = DownloadState::Downloaded;
+                    media.thumbnail_path = Some(path.clone());
+                });
             }
-            Ok(None) => media.thumbnail_state = DownloadState::NotDownloaded,
+            Ok(None) => {
+                self.update_media_snapshot(chat_id, message_id, |media| {
+                    media.thumbnail_state = DownloadState::NotDownloaded;
+                });
+            }
             Err(error) => {
-                media.thumbnail_state = DownloadState::Failed;
+                self.update_media_snapshot(chat_id, message_id, |media| {
+                    media.thumbnail_state = DownloadState::Failed;
+                });
                 log::debug!(
                     "failed to download a Telegram thumbnail for {chat_id}/{message_id}: {error:?}"
                 );
@@ -1579,11 +1783,32 @@ impl EngineState {
         self.publish();
     }
 
-    fn message_index_by_id(&self, message_id: i32) -> Option<usize> {
-        self.view
-            .history
-            .iter()
-            .position(|message| message.id == message_id && message.id != 0)
+    fn update_media_snapshot(
+        &mut self,
+        chat_id: i64,
+        message_id: i32,
+        mut update: impl FnMut(&mut MediaSnapshot),
+    ) {
+        if let Some(message) = self.view.history.iter_mut().find(|message| {
+            message.chat_id == chat_id && message.id == message_id && message.id != 0
+        }) && let Some(media) = message.media.as_mut()
+        {
+            update(media);
+        }
+        if let Some(cached) = self.histories.get_mut(&chat_id)
+            && let Some(message) = cached.messages.iter_mut().find(|message| {
+                message.chat_id == chat_id && message.id == message_id && message.id != 0
+            })
+            && let Some(media) = message.media.as_mut()
+        {
+            update(media);
+        }
+    }
+
+    fn current_message_index(&self, chat_id: i64, message_id: i32) -> Option<usize> {
+        self.view.history.iter().position(|message| {
+            message.chat_id == chat_id && message.id == message_id && message.id != 0
+        })
     }
 
     async fn delete_message(&mut self, chat_id: i64, message_id: i32) {
@@ -1690,9 +1915,8 @@ impl EngineState {
             EngineEvent::HistoryLoaded {
                 chat_id,
                 epoch,
-                prepend,
                 result,
-            } => self.apply_history_loaded(chat_id, epoch, prepend, result),
+            } => self.apply_history_loaded(chat_id, epoch, result),
             EngineEvent::GapLoaded {
                 chat_id,
                 epoch,
@@ -1717,14 +1941,29 @@ impl EngineState {
             }
             EngineEvent::Update(Update::Raw(raw)) => self.handle_raw_update(&raw.raw).await,
             EngineEvent::Update(Update::MessageDeleted(deletion)) => {
-                let ids: HashSet<i32> = deletion.messages().iter().copied().collect();
-                self.view
-                    .history
-                    .retain(|message| !ids.contains(&message.id));
-                if let Some(chat_id) = self.view.selected_chat {
-                    self.cache_selected_history(chat_id);
+                if let Some(chat_id) = deletion.channel_id().and_then(|channel_id| {
+                    PeerId::channel(channel_id).and_then(PeerId::bot_api_dialog_id)
+                }) {
+                    let ids: HashSet<i32> = deletion.messages().iter().copied().collect();
+                    if let Some(cached) = self.histories.get_mut(&chat_id) {
+                        cached.messages.retain(|message| !ids.contains(&message.id));
+                    }
+                    if self.view.selected_chat == Some(chat_id) {
+                        self.view
+                            .history
+                            .retain(|message| !ids.contains(&message.id));
+                    }
+                    self.publish();
+                } else {
+                    let ids: HashSet<i32> = deletion.messages().iter().copied().collect();
+                    self.view
+                        .history
+                        .retain(|message| !ids.contains(&message.id));
+                    if let Some(chat_id) = self.view.selected_chat {
+                        self.cache_selected_history(chat_id);
+                    }
+                    self.publish();
                 }
-                self.publish();
             }
             EngineEvent::QrToken(result) => {
                 if matches!(result, tl::enums::auth::LoginToken::Success(_)) {
@@ -1738,7 +1977,10 @@ impl EngineState {
     }
 
     async fn handle_incoming_message(&mut self, message: Message) {
-        let chat_id = message.peer_id().bot_api_dialog_id().unwrap_or_default();
+        let Some(chat_id) = message.peer_id().bot_api_dialog_id() else {
+            log::debug!("ignoring a Telegram message with an unresolvable peer");
+            return;
+        };
         let snapshot = message_to_snapshot(&message, chat_id);
         let selected = self.view.selected_chat == Some(chat_id);
 
@@ -1783,7 +2025,10 @@ impl EngineState {
     }
 
     async fn handle_edited_message(&mut self, message: Message) {
-        let chat_id = message.peer_id().bot_api_dialog_id().unwrap_or_default();
+        let Some(chat_id) = message.peer_id().bot_api_dialog_id() else {
+            log::debug!("ignoring an edited Telegram message with an unresolvable peer");
+            return;
+        };
         if let Some(chat) = self.view.chats.iter_mut().find(|chat| chat.id == chat_id) {
             let (preview, preview_media) = chat_preview(&message);
             chat.preview = preview;
@@ -1856,7 +2101,10 @@ async fn fetch_history_page(
             Ok(None) => break,
             Err(error) => {
                 log::warn!("failed to load Telegram messages: {error}");
-                return Err(EngineError::from_invocation(&error));
+                return Err(EngineError::from_invocation_with(
+                    &error,
+                    EngineError::LoadMessagesFailed,
+                ));
             }
         }
     }
@@ -2003,6 +2251,7 @@ fn media_to_snapshot(media: &Media) -> MediaSnapshot {
                 snapshot.height = Some(height);
             }
             snapshot.kind = document_kind(document);
+            snapshot.waveform = document_waveform(document);
         }
         Media::Sticker(sticker) => {
             snapshot.kind = MediaKind::Sticker;
@@ -2038,6 +2287,21 @@ fn document_kind(document: &grammers_client::media::Document) -> MediaKind {
         }
     }
     MediaKind::Document
+}
+
+/// The packed voice waveform from a document's audio attribute, if any. The
+/// panel renders it directly, so no decoding or analysis is needed.
+fn document_waveform(document: &grammers_client::media::Document) -> Option<Vec<u8>> {
+    if let Some(tl::enums::Document::Document(raw)) = document.raw.document.as_ref() {
+        for attribute in &raw.attributes {
+            if let tl::enums::DocumentAttribute::Audio(audio) = attribute
+                && audio.voice
+            {
+                return audio.waveform.clone();
+            }
+        }
+    }
+    None
 }
 
 fn webpage_snapshot(page: &grammers_client::media::WebPage) -> Option<WebPageSnapshot> {
@@ -2091,7 +2355,10 @@ async fn fetch_dialogs(client: &Client) -> Result<Vec<(ChatSnapshot, PeerRef)>, 
             Ok(None) => break,
             Err(error) => {
                 log::warn!("failed to load Telegram chats: {error}");
-                return Err(EngineError::from_invocation(&error));
+                return Err(EngineError::from_invocation_with(
+                    &error,
+                    EngineError::LoadChatsFailed,
+                ));
             }
         }
     }
@@ -2117,7 +2384,10 @@ async fn fetch_search(
                 Ok(None) => break,
                 Err(error) => {
                     log::warn!("Telegram search failed: {error}");
-                    return Err(EngineError::from_invocation(&error));
+                    return Err(EngineError::from_invocation_with(
+                        &error,
+                        EngineError::SearchFailed,
+                    ));
                 }
             }
         }
@@ -2132,7 +2402,10 @@ async fn fetch_search(
                 Ok(None) => break,
                 Err(error) => {
                     log::warn!("Telegram search failed: {error}");
-                    return Err(EngineError::from_invocation(&error));
+                    return Err(EngineError::from_invocation_with(
+                        &error,
+                        EngineError::SearchFailed,
+                    ));
                 }
             }
         }
@@ -2140,17 +2413,17 @@ async fn fetch_search(
 
     Ok(found
         .into_iter()
-        .map(|message| {
-            let chat_id = message.peer_id().bot_api_dialog_id().unwrap_or_default();
+        .filter_map(|message| {
+            let chat_id = message.peer_id().bot_api_dialog_id()?;
             let chat_title = titles
                 .get(&chat_id)
                 .cloned()
                 .unwrap_or_else(|| chat_id.to_string());
-            SearchHit {
+            Some(SearchHit {
                 chat_id,
                 chat_title,
                 message: Some(message_to_snapshot(&message, chat_id)),
-            }
+            })
         })
         .collect())
 }
@@ -2214,7 +2487,7 @@ async fn download_media_file(
     };
     match message.download_media(&path).await {
         Ok(true) => {
-            evict_cache(path.parent().and_then(Path::parent));
+            evict_cache_async(path.parent().and_then(Path::parent)).await;
             Ok(Some(path))
         }
         Ok(false) => Ok(None),
@@ -2235,18 +2508,28 @@ async fn download_thumbnail_file(
     let Some(bytes) = fetch_thumbnail_bytes(client, peer_ref, message_id).await? else {
         return Ok(None);
     };
-    if let Some(parent) = path.parent() {
-        if let Err(error) = std::fs::create_dir_all(parent) {
-            log::warn!("failed to create the Telegram thumbnail directory: {error}");
+    let cached = tokio::task::spawn_blocking(move || {
+        if let Some(parent) = path.parent() {
+            if let Err(error) = std::fs::create_dir_all(parent) {
+                log::warn!("failed to create the Telegram thumbnail directory: {error}");
+                return Err(EngineError::Other);
+            }
+        }
+        if let Err(error) = std::fs::write(&path, &bytes) {
+            log::warn!("failed to cache a Telegram thumbnail: {error}");
             return Err(EngineError::Other);
         }
+        evict_cache(path.parent().and_then(Path::parent));
+        Ok(Some(path))
+    })
+    .await;
+    match cached {
+        Ok(result) => result,
+        Err(error) => {
+            log::warn!("the Telegram thumbnail cache task was cancelled: {error}");
+            Err(EngineError::Other)
+        }
     }
-    if let Err(error) = std::fs::write(&path, &bytes) {
-        log::warn!("failed to cache a Telegram thumbnail: {error}");
-        return Err(EngineError::Other);
-    }
-    evict_cache(path.parent().and_then(Path::parent));
-    Ok(Some(path))
 }
 
 /// Downloads the bytes of a message's thumbnail, either from the embedded data
@@ -2363,6 +2646,13 @@ fn mime_extension(mime: &str, kind: MediaKind) -> Option<String> {
 /// not an error. The session lives elsewhere and is never touched.
 fn evict_cache(root: Option<&Path>) {
     evict_cache_with(root, MEDIA_CACHE_MAX_BYTES, MEDIA_CACHE_MAX_AGE);
+}
+
+async fn evict_cache_async(root: Option<&Path>) {
+    let root = root.map(Path::to_path_buf);
+    if let Err(error) = tokio::task::spawn_blocking(move || evict_cache(root.as_deref())).await {
+        log::debug!("the Telegram cache eviction task was cancelled: {error}");
+    }
 }
 
 fn evict_cache_with(root: Option<&Path>, max_bytes: u64, max_age: Duration) {
@@ -2553,6 +2843,17 @@ mod tests {
             .map(|message| message.id)
             .collect();
         assert_eq!(ids, vec![1, 0]);
+    }
+
+    #[test]
+    fn merge_tail_deduplicates_an_overlapping_older_page() {
+        let existing = vec![message(3), message(4)];
+        let page = vec![message(2), message(3), message(4)];
+        let ids: Vec<i32> = merge_tail(&existing, page)
+            .into_iter()
+            .map(|message| message.id)
+            .collect();
+        assert_eq!(ids, vec![2, 3, 4]);
     }
 
     #[test]

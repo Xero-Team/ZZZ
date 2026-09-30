@@ -8,7 +8,6 @@ use grammers_client::InvocationError;
 /// A failure the engine can report to the panel.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EngineError {
-    NotConfigured,
     NotConnected,
     NoCredentials,
     InvalidPhone,
@@ -37,11 +36,28 @@ pub enum EngineError {
 }
 
 impl EngineError {
-    /// Maps a grammers invocation failure, preserving `FLOOD_WAIT` seconds.
+    /// Maps a grammers invocation failure, preserving `FLOOD_WAIT` seconds and
+    /// the recognizable account errors.
     pub fn from_invocation(error: &InvocationError) -> Self {
-        match flood_wait_seconds(error) {
-            Some(seconds) => Self::FloodWait { seconds },
-            None => Self::Other,
+        Self::from_invocation_with(error, Self::Other)
+    }
+
+    /// Maps a grammers invocation failure, falling back to `fallback` for RPC
+    /// errors that have no dedicated variant.
+    pub fn from_invocation_with(error: &InvocationError, fallback: Self) -> Self {
+        if let Some(seconds) = flood_wait_seconds(error) {
+            return Self::FloodWait { seconds };
+        }
+        match error {
+            InvocationError::Rpc(rpc) => match rpc.name.as_str() {
+                "PHONE_NUMBER_INVALID" => Self::InvalidPhone,
+                "PHONE_CODE_INVALID" | "PHONE_CODE_EMPTY" | "PHONE_CODE_EXPIRED" => {
+                    Self::InvalidCode
+                }
+                "PASSWORD_HASH_INVALID" => Self::InvalidPassword,
+                _ => fallback,
+            },
+            _ => fallback,
         }
     }
 }
@@ -78,10 +94,33 @@ mod tests {
     }
 
     #[test]
-    fn other_rpc_errors_are_generic() {
+    fn account_errors_map_to_specific_variants() {
+        assert_eq!(
+            EngineError::from_invocation(&rpc("PHONE_NUMBER_INVALID", None)),
+            EngineError::InvalidPhone
+        );
         assert_eq!(
             EngineError::from_invocation(&rpc("PHONE_CODE_INVALID", None)),
+            EngineError::InvalidCode
+        );
+        assert_eq!(
+            EngineError::from_invocation(&rpc("PASSWORD_HASH_INVALID", None)),
+            EngineError::InvalidPassword
+        );
+    }
+
+    #[test]
+    fn unknown_rpc_errors_use_the_fallback() {
+        assert_eq!(
+            EngineError::from_invocation(&rpc("PEER_ID_INVALID", None)),
             EngineError::Other
+        );
+        assert_eq!(
+            EngineError::from_invocation_with(
+                &rpc("PEER_ID_INVALID", None),
+                EngineError::SearchFailed
+            ),
+            EngineError::SearchFailed
         );
         assert_eq!(
             EngineError::from_invocation(&InvocationError::Io(io::Error::other("boom"))),

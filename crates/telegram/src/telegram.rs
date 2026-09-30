@@ -5,6 +5,7 @@
 //! immutable [`model::ViewModel`] snapshots, so none of the networking or file
 //! work touches the UI thread.
 
+pub mod compose;
 pub mod credentials;
 pub mod engine;
 pub mod error;
@@ -13,6 +14,11 @@ pub mod model;
 pub mod proxy;
 pub mod session;
 
+pub use compose::{
+    ALBUM_MAX_ITEMS, AlbumItem, AttachmentKind, CAPTION_LIMIT, ComposerBlock, MESSAGE_TEXT_LIMIT,
+    OutgoingItem, StagedAttachment, code_reference_markdown, format_code_fence,
+    outgoing_message_count, plan_outgoing,
+};
 pub use credentials::TelegramCredentials;
 pub use engine::{Command, EngineConfig, EngineHandle};
 pub use error::EngineError;

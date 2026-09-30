@@ -28,7 +28,9 @@ enum EntityKind {
 /// Converts a message body plus its Telegram entities into CommonMark.
 ///
 /// Returns `None` when an entity cannot be represented, when any entity offset
-/// is out of range, or when two formatting spans cross. Mentions, URLs, emails,
+/// is out of range, or when two formatting spans cross. A code block entity that
+/// ends one unit past the text is clamped, because clients strip a trailing
+/// code block's newline after measuring the entity. Mentions, URLs, emails,
 /// phone numbers, hashtags, bot commands, cashtags, and underlines are treated
 /// as plain text because CommonMark has no equivalent. Nested spans are kept.
 pub fn entities_to_markdown(text: &str, entities: &[tl::enums::MessageEntity]) -> Option<String> {
@@ -81,7 +83,20 @@ pub fn entities_to_markdown(text: &str, entities: &[tl::enums::MessageEntity]) -
         };
 
         let start_byte = utf16_offset_to_byte(text, offset)?;
-        let end_byte = utf16_offset_to_byte(text, offset.checked_add(length)?)?;
+        let end_utf16 = offset.checked_add(length)?;
+        let end_byte = match utf16_offset_to_byte(text, end_utf16) {
+            Some(end_byte) => end_byte,
+            // A code block's entity can end one unit past the text because the
+            // sending client stripped the block's trailing newline after
+            // measuring the entity. Clamp it so the code block survives instead
+            // of dropping every format in the message.
+            None if matches!(kind, EntityKind::Pre(_))
+                && end_utf16 > text.encode_utf16().count() as i32 =>
+            {
+                text.len()
+            }
+            None => return None,
+        };
         if start_byte > end_byte {
             return None;
         }
@@ -92,7 +107,13 @@ pub fn entities_to_markdown(text: &str, entities: &[tl::enums::MessageEntity]) -
             EntityKind::Markers(open, close) => (open.to_owned(), close.to_owned()),
             EntityKind::Link(url) => ("[".to_owned(), format!("]({url})")),
             EntityKind::Code => code_markers(content),
-            EntityKind::Pre(language) => pre_markers(content, language.as_deref()),
+            EntityKind::Pre(language) => {
+                let (open, close) = pre_markers(content, language.as_deref());
+                // A code block is a block, so its closing fence must be followed
+                // by a newline. Otherwise text after the block is glued to the
+                // fence (`\`\`\`text`) and no longer parses as a fence.
+                (open, format!("{close}\n"))
+            }
         };
         markers.push(Marker {
             start_byte,
@@ -122,7 +143,7 @@ fn code_markers(content: &str) -> (String, String) {
 }
 
 /// Chooses a fenced-code-block fence of at least three backticks.
-fn pre_markers(content: &str, language: Option<&str>) -> (String, String) {
+pub(crate) fn pre_markers(content: &str, language: Option<&str>) -> (String, String) {
     let fence = "`".repeat((longest_backtick_run(content) + 1).max(3));
     let open = match language {
         Some(language) => format!("{fence}{language}\n"),
@@ -173,17 +194,44 @@ fn utf16_offset_to_byte(text: &str, utf16_offset: i32) -> Option<usize> {
     (units == target).then_some(text.len())
 }
 
+/// Each event is `(position, is_open, span_start, span_end, text)`.
 fn render_markers(text: &str, markers: Vec<Marker>) -> String {
-    let mut events: Vec<(usize, u8, usize, String)> = Vec::with_capacity(markers.len() * 2);
-    for (index, marker) in markers.into_iter().enumerate() {
-        events.push((marker.start_byte, 1, index, marker.open));
-        events.push((marker.end_byte, 0, index, marker.close));
+    let mut events: Vec<(usize, bool, usize, usize, String)> =
+        Vec::with_capacity(markers.len() * 2);
+    for marker in markers {
+        events.push((
+            marker.start_byte,
+            true,
+            marker.start_byte,
+            marker.end_byte,
+            marker.open,
+        ));
+        events.push((
+            marker.end_byte,
+            false,
+            marker.start_byte,
+            marker.end_byte,
+            marker.close,
+        ));
     }
     events.sort_by(|left, right| {
         left.0
             .cmp(&right.0)
+            // A closing delimiter at a position is emitted before an opening
+            // one, so adjacent spans do not interfere.
             .then_with(|| left.1.cmp(&right.1))
-            .then_with(|| left.2.cmp(&right.2))
+            .then_with(|| {
+                // Nest markers that share a boundary: the outer span (larger
+                // end) opens first, and the inner span (later start) closes
+                // first. Emitting them by declaration order can produce
+                // crossing delimiters that render literally.
+                if left.1 {
+                    right.3.cmp(&left.3)
+                } else {
+                    right.2.cmp(&left.2)
+                }
+            })
+            .then_with(|| left.4.cmp(&right.4))
     });
 
     let mut output = String::with_capacity(text.len() + events.len() * 2);
@@ -196,7 +244,7 @@ fn render_markers(text: &str, markers: Vec<Marker>) -> String {
             cursor = position;
         }
         while event_index < events.len() && events[event_index].0 == position {
-            output.push_str(&events[event_index].3);
+            output.push_str(&events[event_index].4);
             event_index += 1;
         }
     }
@@ -323,12 +371,60 @@ mod tests {
     #[test]
     fn pre_uses_a_fence_and_language() {
         let result = entities_to_markdown("fn main() {}", &[pre(0, 12, "rust")]).expect("pre");
-        assert_eq!(result, "```rust\nfn main() {}\n```");
+        assert_eq!(result, "```rust\nfn main() {}\n```\n");
     }
 
     #[test]
     fn crossing_spans_fall_back() {
         // Bold 0..5 and italic 3..8 partially overlap.
         assert!(entities_to_markdown("abcdefgh", &[bold(0, 5), italic(3, 5)]).is_none());
+    }
+
+    #[test]
+    fn nested_spans_sharing_an_end_close_inner_first() {
+        // Bold wraps italic, and both end at the same offset. The inner italic
+        // must close first so the delimiters nest instead of crossing.
+        let result = entities_to_markdown("abcdef", &[bold(0, 6), italic(2, 4)]).unwrap();
+        assert_eq!(result, "**ab_cdef_**");
+    }
+
+    #[test]
+    fn link_then_code_block_round_trips() {
+        let text = "schema.py:21-30\n\nasync def apply() -> None:\n    pass";
+        let entities = vec![
+            text_url(0, 15, "https://example.com/schema.py#L21-L30"),
+            pre(17, 35, "python"),
+        ];
+        let result = entities_to_markdown(text, &entities);
+        assert_eq!(
+            result.as_deref(),
+            Some(
+                "[schema.py:21-30](https://example.com/schema.py#L21-L30)\n\n```python\nasync def apply() -> None:\n    pass\n```\n"
+            )
+        );
+    }
+
+    #[test]
+    fn code_block_entity_one_past_the_text_is_clamped() {
+        let text = "schema.py:21-30\n\nasync def apply() -> None:\n    pass";
+        // `grammers` reports the code block one unit past the text because it
+        // strips the block's trailing newline after measuring the entity.
+        let entities = vec![
+            text_url(0, 15, "https://example.com/schema.py#L21-L30"),
+            pre(17, 36, "python"),
+        ];
+        let result = entities_to_markdown(text, &entities).expect("clamped code block");
+        assert!(result.contains("```python"), "{result}");
+        assert!(
+            result.contains("async def apply() -> None:\n    pass"),
+            "{result}"
+        );
+    }
+
+    #[test]
+    fn nested_spans_sharing_a_start_open_outer_first() {
+        // Bold and italic start together; bold ends later so it must open first.
+        let result = entities_to_markdown("abcdef", &[italic(0, 2), bold(0, 6)]).unwrap();
+        assert_eq!(result, "**_ab_cdef**");
     }
 }

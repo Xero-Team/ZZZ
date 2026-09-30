@@ -86,6 +86,9 @@ pub struct MediaSnapshot {
     /// A small preview fetched on demand, cheaper than the original.
     pub thumbnail_path: Option<PathBuf>,
     pub thumbnail_state: DownloadState,
+    /// Telegram's pre-rendered voice waveform, packed as two 4-bit levels per
+    /// byte. Present only for voice messages that carry it.
+    pub waveform: Option<Vec<u8>>,
     pub webpage: Option<WebPageSnapshot>,
 }
 
@@ -186,12 +189,6 @@ impl ViewModel {
     pub fn selected_chat_snapshot(&self) -> Option<&ChatSnapshot> {
         let selected = self.selected_chat?;
         self.chats.iter().find(|chat| chat.id == selected)
-    }
-
-    pub fn find_message(&self, local_id: u64) -> Option<&MessageSnapshot> {
-        self.history
-            .iter()
-            .find(|message| message.local_id == Some(local_id))
     }
 }
 
