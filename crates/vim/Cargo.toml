@@ -33,7 +33,8 @@ itertools.workspace = true
 language.workspace = true
 log.workspace = true
 multi_buffer.workspace = true
-nvim-rs = { git = "https://github.com/KillTheMule/nvim-rs", rev = "764dd270c642f77f10f3e19d05cc178a6cbe69f3", features = ["use_tokio"], optional = true }
+# Vendored from https://github.com/KillTheMule/nvim-rs @ 764dd270c642f77f10f3e19d05cc178a6cbe69f3
+nvim-rs = { path = "../../vendor/nvim-rs", features = ["use_tokio"], optional = true }
 picker.workspace = true
 project.workspace = true
 regex.workspace = true

@@ -1,0 +1,24 @@
+[package]
+name = "tree-sitter-gomod"
+description = "gomod grammar for the tree-sitter parsing library"
+version = "1.1.1"
+keywords = ["incremental", "parsing", "gomod"]
+categories = ["parsing", "text-editors"]
+repository = "https://github.com/camdencheek/tree-sitter-go-mod"
+edition = "2018"
+license = "MIT"
+
+build = "bindings/rust/build.rs"
+include = ["bindings/rust/*", "grammar.js", "queries/*", "src/*"]
+
+[lib]
+path = "bindings/rust/lib.rs"
+
+[dependencies]
+tree-sitter-language = "0.1.8"
+
+[build-dependencies]
+cc = "1.5"
+
+[dev-dependencies]
+tree-sitter = { workspace = true }

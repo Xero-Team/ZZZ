@@ -1080,8 +1080,8 @@ impl Terminal {
                     .unwrap_or_else(|| to_alac_rgb(get_color_at_index(index, cx.theme().as_ref())));
                 self.write_to_pty(format(color).into_bytes());
             }
-            AlacTermEvent::ChildExit(exit_code) => {
-                self.register_task_finished(Some(exit_code), cx);
+            AlacTermEvent::ChildExit(exit_status) => {
+                self.register_task_finished(exit_status.code(), cx);
             }
         }
     }

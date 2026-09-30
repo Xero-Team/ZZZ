@@ -73,7 +73,7 @@ skip-tree = []
 unknown-registry = "warn"
 unknown-git = "warn"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-# ZZZ depends on several pinned Git revisions (tree-sitter grammars, wgpu,
-# reqwest, and other zed-industries forks). `unknown-git = "warn"` surfaces
-# new sources without failing the check.
+# ZZZ depends on a few pinned Git revisions from official upstream repos
+# (pinned to unreleased commits). `unknown-git = "warn"` surfaces new
+# sources without failing the check.
 allow-git = []

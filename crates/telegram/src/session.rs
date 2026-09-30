@@ -12,10 +12,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use anyhow::{Context as _, Result, anyhow};
-use chacha20poly1305::aead::{Aead, KeyInit, OsRng, rand_core::RngCore};
+use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use grammers_session::types::{DcOption, PeerId, PeerInfo, UpdateState, UpdatesState};
 use grammers_session::{BoxFuture, Session, SessionData};
+use rand::TryRng as _;
+use rand::rngs::SysRng;
 use serde::{Deserialize, Serialize};
 
 const KEY_FILE_NAME: &str = "master.key";
@@ -175,7 +177,9 @@ impl SessionStore {
         }
 
         let mut key = [0u8; KEY_LENGTH];
-        OsRng.fill_bytes(&mut key);
+        SysRng
+            .try_fill_bytes(&mut key)
+            .context("failed to generate a Telegram session key")?;
         let mut file = fs::File::create(&path)
             .with_context(|| format!("failed to create key at {}", path.display()))?;
         file.write_all(&key)
@@ -186,12 +190,14 @@ impl SessionStore {
 }
 
 fn encrypt(key: &[u8; KEY_LENGTH], plaintext: &[u8]) -> Result<Vec<u8>> {
-    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+    let cipher = ChaCha20Poly1305::new(&Key::from(*key));
     let mut nonce_bytes = [0u8; NONCE_LENGTH];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    SysRng
+        .try_fill_bytes(&mut nonce_bytes)
+        .context("failed to generate a Telegram session nonce")?;
+    let nonce = Nonce::from(nonce_bytes);
     let ciphertext = cipher
-        .encrypt(nonce, plaintext)
+        .encrypt(&nonce, plaintext)
         .map_err(|_| anyhow!("failed to encrypt the Telegram session"))?;
     let mut output = Vec::with_capacity(MAGIC.len() + NONCE_LENGTH + ciphertext.len());
     output.extend_from_slice(MAGIC);
@@ -205,10 +211,10 @@ fn decrypt(key: &[u8; KEY_LENGTH], data: &[u8]) -> Result<Vec<u8>> {
     if data.len() < header || &data[..MAGIC.len()] != MAGIC {
         return Err(anyhow!("unrecognized Telegram session file"));
     }
-    let nonce = Nonce::from_slice(&data[MAGIC.len()..header]);
-    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+    let nonce = Nonce::try_from(&data[MAGIC.len()..header])?;
+    let cipher = ChaCha20Poly1305::new(&Key::from(*key));
     cipher
-        .decrypt(nonce, &data[header..])
+        .decrypt(&nonce, &data[header..])
         .map_err(|_| anyhow!("failed to decrypt the Telegram session"))
 }
 

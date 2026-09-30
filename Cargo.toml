@@ -226,10 +226,17 @@ default-members = ["crates/zzz"]
 exclude = [
     "vendor/async-pipe",
     "vendor/dap-types",
+    "vendor/font-kit",
     "vendor/gh-workflow",
     "vendor/lsp-types",
     "vendor/mermaid-rs-renderer",
+    "vendor/notify",
+    "vendor/nvim-rs",
+    "vendor/reqwest",
+    "vendor/scap",
     "vendor/trash",
+    "vendor/wgpu",
+    "vendor/windows-capture",
     "vendor/wprcontrol",
     "vendor/xim-rs",
 ]
@@ -458,7 +465,7 @@ ztracing_macro = { path = "crates/ztracing_macro" }
 
 agent-client-protocol = { version = "=2.2.0", features = ["unstable"] }
 aho-corasick = "1.1"
-alacritty_terminal = "0.25.1"
+alacritty_terminal = "0.26.0"
 any_vec = "0.15"
 anyhow = "1.0.104"
 ashpd = { version = "0.13", default-features = false, features = [
@@ -496,7 +503,7 @@ cargo_metadata = "0.23"
 cargo_toml = "1.0"
 brush-parser = "0.4"
 cfg-if = "1.0.5"
-chacha20poly1305 = "0.10.1"
+chacha20poly1305 = "0.11.0"
 chardetng = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 ciborium = "0.2"
@@ -588,7 +595,7 @@ indoc = "2"
 inventory = "0.3.24"
 itertools = "0.15.0"
 json_dotpath = "1.1"
-jsonschema = "0.57.0"
+jsonschema = "0.58.3"
 jsonwebtoken = "11.1"
 jupyter-protocol = "2.0.2"
 jupyter-websocket-client = "2.0.0"
@@ -691,8 +698,8 @@ ratex-svg = { version = "0.1.14", features = ["embed-fonts"] }
 ratex-types = "0.1.14"
 rayon = "1.12"
 regex = "1.13"
-# WARNING: If you change this, you must also publish a new version of zed-reqwest to crates.io
-reqwest = { git = "https://github.com/zed-industries/reqwest.git", rev = "c15662463bda39148ba154100dd44d3fba5873a4", default-features = false, features = [
+# Vendored from https://github.com/zed-industries/reqwest @ c15662463bda39148ba154100dd44d3fba5873a4
+reqwest = { path = "vendor/reqwest", default-features = false, features = [
     "charset",
     "http2",
     "macos-system-configuration",
@@ -700,7 +707,7 @@ reqwest = { git = "https://github.com/zed-industries/reqwest.git", rev = "c15662
     "rustls-tls-native-roots",
     "socks",
     "stream",
-], package = "zed-reqwest", version = "0.12.15-zed" }
+], package = "zed-reqwest" }
 rsa = { version = "0.9.10", features = ["sha2"] }
 runtimelib = { version = "3.0.0", default-features = false, features = [
     "async-dispatcher-runtime", "aws-lc-rs"
@@ -709,9 +716,9 @@ rust-embed = { version = "8.12", features = ["include-exclude"] }
 rustc-hash = "2.1.3"
 rustix = { version = "1.1", features = ["fs"] }
 rustls = { version = "0.23.45" }
-rustls-platform-verifier = "0.7.0"
-# WARNING: If you change this, you must also publish a new version of zed-scap to crates.io
-scap = { git = "https://github.com/zed-industries/scap", rev = "4afea48c3b002197176fb19cd0f9b180dd36eaac", default-features = false, package = "zed-scap", version = "0.0.8-zed" }
+rustls-platform-verifier = "0.7.1"
+# Vendored from https://github.com/zed-industries/scap @ 4afea48c3b002197176fb19cd0f9b180dd36eaac
+scap = { path = "vendor/scap", default-features = false, package = "zed-scap" }
 schemars = { version = "1.2", features = ["indexmap2"] }
 semver = { version = "1.0", features = ["serde"] }
 serde = { version = "1.0.229", features = ["derive", "rc"] }
@@ -740,7 +747,7 @@ sys-locale = "0.3.2"
 sysinfo = "0.39.6"
 take-until = "0.3.0"
 tempfile = "3.27.0"
-thiserror = "2.0.20"
+thiserror = "2.0.21"
 time = { version = "0.3", features = [
     "macros",
     "parsing",
@@ -765,7 +772,8 @@ tower-http = "0.7.1"
 tree-sitter = { version = "0.27.0", features = ["wasm"] }
 tree-sitter-bash = "0.25.1"
 tree-sitter-c = "0.24.2"
-tree-sitter-cmake = { git = "https://github.com/uyha/tree-sitter-cmake", rev = "c7b2a71e7f8ecb167fad4c97227c838439280175" }
+# Vendored from https://github.com/uyha/tree-sitter-cmake @ c7b2a71e7f8ecb167fad4c97227c838439280175
+tree-sitter-cmake = { path = "crates/grammars/vendor/tree-sitter-cmake" }
 tree-sitter-cmd = { path = "crates/grammars/vendor/tree-sitter-cmd" }
 tree-sitter-cpp = { git = "https://github.com/tree-sitter/tree-sitter-cpp", rev = "5cb9b693cfd7bfacab1d9ff4acac1a4150700609" }
 tree-sitter-css = "0.25"
@@ -775,13 +783,16 @@ tree-sitter-dockerfile = { path = "crates/grammars/vendor/tree-sitter-dockerfile
 tree-sitter-elixir = "0.3"
 tree-sitter-embedded-template = "0.25.0"
 tree-sitter-git-config = { path = "crates/grammars/vendor/tree-sitter-git-config" }
-tree-sitter-gitattributes = { git = "https://github.com/tree-sitter-grammars/tree-sitter-gitattributes", rev = "1b7af09d45b579f9f288453b95ad555f1f431645" }
+# Vendored from https://github.com/tree-sitter-grammars/tree-sitter-gitattributes @ 1b7af09d45b579f9f288453b95ad555f1f431645
+tree-sitter-gitattributes = { path = "crates/grammars/vendor/tree-sitter-gitattributes" }
 # Vendored from https://github.com/zed-industries/tree-sitter-git-commit @ 88309716a69dd13ab83443721ba6e0b491d37ee9
 tree-sitter-gitcommit = { path = "crates/grammars/vendor/tree-sitter-gitcommit" }
-tree-sitter-git-rebase = { git = "https://github.com/the-mikedavis/tree-sitter-git-rebase", rev = "39bf3b7566c86ccffd70aaa5105c7c8b76788975" }
+# Vendored from https://github.com/the-mikedavis/tree-sitter-git-rebase @ 39bf3b7566c86ccffd70aaa5105c7c8b76788975
+tree-sitter-git-rebase = { path = "crates/grammars/vendor/tree-sitter-git-rebase" }
 tree-sitter-gitignore = { path = "crates/grammars/vendor/tree-sitter-gitignore", package = "tree-sitter-ignore" }
 tree-sitter-go = "0.25"
-tree-sitter-go-mod = { git = "https://github.com/camdencheek/tree-sitter-go-mod", rev = "2e886870578eeba1927a2dc4bd2e2b3f598c5f9a", package = "tree-sitter-gomod" }
+# Vendored from https://github.com/camdencheek/tree-sitter-go-mod @ 2e886870578eeba1927a2dc4bd2e2b3f598c5f9a
+tree-sitter-go-mod = { path = "crates/grammars/vendor/tree-sitter-go-mod", package = "tree-sitter-gomod" }
 # Vendored from https://github.com/zed-industries/tree-sitter-go-work @ acb0617bf7f4fda02c6217676cc64acb89536dc7
 tree-sitter-gowork = { path = "crates/grammars/vendor/tree-sitter-gowork" }
 tree-sitter-heex = "0.8"
@@ -813,8 +824,8 @@ idna = "1"
 urlencoding = "2.1.3"
 uuid = { version = "1.26.1", features = ["v4", "v5", "v7", "serde"] }
 walkdir = "2.5"
-wasm-encoder = "0.259"
-wasmparser = "0.259"
+wasm-encoder = "0.260"
+wasmparser = "0.260"
 wasmtime = { version = "49", default-features = false, features = [
     "async",
     "demangle",
@@ -827,12 +838,13 @@ wasmtime = { version = "49", default-features = false, features = [
 wasmtime-wasi = "49"
 wax = "0.7"
 which = "8.0.6"
-wasm-bindgen = "0.2.128"
+wasm-bindgen = "0.2.129"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 console_error_panic_hook = "0.1.7"
 web-time = "1.1.0"
-wgpu = { git = "https://github.com/zed-industries/wgpu.git", rev = "357a0c56e0070480ad9daea5d2eaa83150b79e88" }
+# Vendored from https://github.com/zed-industries/wgpu @ 357a0c56e0070480ad9daea5d2eaa83150b79e88
+wgpu = { path = "vendor/wgpu/wgpu" }
 windows-core = "0.62"
 yaml-rust2 = "0.13"
 zeroize = "1.9"
@@ -900,9 +912,11 @@ features = [
 
 [patch.crates-io]
 async-task = { git = "https://github.com/smol-rs/async-task.git", rev = "b4486cd71e4e94fbda54ce6302444de14f4d190e" }
-notify = { git = "https://github.com/zed-industries/notify.git", rev = "ce58c24cad542c28e04ced02e20325a4ec28a31d" }
-notify-types = { git = "https://github.com/zed-industries/notify.git", rev = "ce58c24cad542c28e04ced02e20325a4ec28a31d" }
-windows-capture = { git = "https://github.com/zed-industries/windows-capture.git", rev = "f0d6c1b6691db75461b732f6d5ff56eed002eeb9" }
+# Vendored from https://github.com/zed-industries/notify @ ce58c24cad542c28e04ced02e20325a4ec28a31d
+notify = { path = "vendor/notify/notify" }
+notify-types = { path = "vendor/notify/notify-types" }
+# Vendored from https://github.com/zed-industries/windows-capture @ f0d6c1b6691db75461b732f6d5ff56eed002eeb9
+windows-capture = { path = "vendor/windows-capture" }
 
 [profile.dev]
 split-debuginfo = "unpacked"

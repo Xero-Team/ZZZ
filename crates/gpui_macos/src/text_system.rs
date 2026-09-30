@@ -15,7 +15,6 @@ use core_graphics::{
     display::CGPoint,
     geometry::CGAffineTransform,
 };
-use core_graphics_24 as core_graphics;
 use core_text::{
     font::CTFont,
     font_collection::CTFontCollectionRef,

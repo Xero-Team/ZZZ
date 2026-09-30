@@ -115,9 +115,9 @@ wayland-protocols-wlr = { version = "0.3.12", features = [
 
 # X11
 as-raw-xcb-connection = { version = "1", optional = true }
-# Pinned to 0.13: the `xim` git fork (zed-xim) only implements its
-# `HasConnection` trait for x11rb 0.13 types.
-x11rb = { version = "0.13.2", features = [
+# Keep this in sync with the `x11rb` version used by the vendored `xim`
+# fork (zed-xim), which implements its `HasConnection` trait for these types.
+x11rb = { version = "0.14.0", features = [
     "allow-unsafe-code",
     "xkb",
     "randr",
