@@ -54,7 +54,9 @@ session. If no session exists, the engine reports the sign-in state.
 
 History is stored oldest-first. The engine keeps a per-chat `CachedHistory`
 keyed by chat id, so selecting a chat renders the cached messages immediately,
-then refreshes the tail in the background. Older pages are prepended on demand.
+then refreshes the tail in the background. Scrolling to the top of the
+conversation prepends the next older page automatically; the header's
+load-older button is a fallback.
 Two monotonic counters guard concurrency:
 
 - `history_epoch` is bumped whenever the displayed chat changes. A page load
@@ -113,8 +115,9 @@ card is expanded.
 - Voice messages play through the existing `audio` crate once downloaded.
 - Video, audio, document, photo, and sticker cards expose a Download button;
   once downloaded, the button becomes Open and hands the file to the system
-  player. Contacts, polls, geolocations, and link previews have no file content
-  and do not offer a Download.
+  player. Clicking a video poster does the same as its button: it starts the
+  download, then opens the file. Contacts, polls, geolocations, and link
+  previews have no file content and do not offer a Download.
 - Link previews render as a compact card that opens the URL.
 - Media-only messages show a localized attachment name in the chat list
   preview instead of a blank line.
@@ -182,6 +185,23 @@ keybindings avoid `cmd-`, `super-`, `win-`, and `fn-`, which
 `script/check-keymaps` rejects.
 
 There is no composer hint label; the placeholder is `Message`.
+
+### Paste behavior {#composer-paste}
+
+The composer intercepts `Paste` before the editor's default handler:
+
+- A single selection copied from a ZZZ editor carries its file and line range as
+  clipboard metadata. Pasting it stages a code reference chip that links to the
+  source instead of inserting the raw text.
+- An image on the clipboard is written under the Telegram cache and staged as an
+  attachment. External file paths on the clipboard are staged as attachments
+  too, but only when the project is local.
+- Anything else pastes as plain text.
+
+`Paste as Plain Text`, `Cut`, `Copy`, and `Insert Code Reference from
+Selection` are available from the composer's context menu. Code blocks in
+received and sending messages are syntax-highlighted using the project's
+language registry.
 
 ## Proxy {#proxy}
 
