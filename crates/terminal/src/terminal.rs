@@ -192,6 +192,7 @@ pub struct ZZZListener(pub UnboundedSender<AlacTermEvent>);
 
 impl EventListener for ZZZListener {
     fn send_event(&self, event: AlacTermEvent) {
+        eprintln!("DIAG listener send_event: {event:?}");
         self.0.unbounded_send(event).ok();
     }
 }
@@ -746,7 +747,9 @@ impl TerminalBuilder {
             self.terminal.pending_init_command_after_startup.is_some();
         //Event loop
         self.terminal.event_loop_task = cx.spawn(async move |terminal, cx| {
+            eprintln!("DIAG terminal event loop started");
             while let Some(event) = self.events_rx.next().await {
+                eprintln!("DIAG terminal event: {event:?}");
                 terminal.update(cx, |terminal, cx| {
                     //Process the first event immediately for lowered latency
                     terminal.process_event(event, cx);
