@@ -1576,13 +1576,11 @@ impl TelegramPanel {
                     "telegram_panel.states.not_configured",
                     "This build has no embedded Telegram credentials. Build from a checkout with ZZZ_TELEGRAM_API_ID and ZZZ_TELEGRAM_API_HASH set to sign in.",
                 ),
-                false,
-                cx,
             );
         }
 
         if !self.view_model.auth.is_signed_in() {
-            return self.render_auth(window, cx);
+            return self.render_auth(cx);
         }
 
         if self.search_open && !self.search_editor.read(cx).text(cx).is_empty() {
@@ -1621,15 +1619,11 @@ impl TelegramPanel {
 
     fn render_chat_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         if self.view_model.chats.is_empty() {
-            return self.render_message_state(
-                if self.view_model.loading_chats {
-                    tr(cx, "telegram_panel.states.loading_chats", "Loading chats…")
-                } else {
-                    tr(cx, "telegram_panel.states.no_chats", "No chats yet")
-                },
-                false,
-                cx,
-            );
+            return self.render_message_state(if self.view_model.loading_chats {
+                tr(cx, "telegram_panel.states.loading_chats", "Loading chats…")
+            } else {
+                tr(cx, "telegram_panel.states.no_chats", "No chats yet")
+            });
         }
 
         let chats = Arc::new(self.view_model.chats.clone());
@@ -1732,15 +1726,11 @@ impl TelegramPanel {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let Some(chat) = self.view_model.selected_chat_snapshot().cloned() else {
-            return self.render_message_state(
-                tr(
-                    cx,
-                    "telegram_panel.states.select_chat",
-                    "Select a chat to start messaging",
-                ),
-                false,
+            return self.render_message_state(tr(
                 cx,
-            );
+                "telegram_panel.states.select_chat",
+                "Select a chat to start messaging",
+            ));
         };
 
         let history = Arc::new(self.view_model.history.clone());
@@ -2081,7 +2071,7 @@ impl TelegramPanel {
         Some(image)
     }
 
-    fn render_auth(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    fn render_auth(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let auth = self.view_model.auth.clone();
         let mut column = v_flex().size_full().gap_3().p_4().justify_center().child(
             Label::new(tr(cx, "telegram_panel.auth.title", "Sign in to Telegram"))
@@ -2195,7 +2185,6 @@ impl TelegramPanel {
             AuthState::SignedIn { .. } => {}
         }
 
-        let _ = window;
         column.into_any_element()
     }
 
@@ -2234,13 +2223,7 @@ impl TelegramPanel {
         )
     }
 
-    fn render_message_state(
-        &self,
-        message: String,
-        _is_error: bool,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let _ = cx;
+    fn render_message_state(&self, message: String) -> AnyElement {
         v_flex()
             .size_full()
             .justify_center()

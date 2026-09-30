@@ -22,21 +22,35 @@ impl Settings for TelegramPanelSettings {
         let panel = content
             .telegram_panel
             .clone()
-            .expect("telegram_panel settings must be present in default.json");
+            .expect("telegram_panel should be present");
         Self {
-            button: panel.button.unwrap(),
-            dock: panel.dock.unwrap().into(),
-            default_width: px(panel.default_width.unwrap()),
-            default_height: px(panel.default_height.unwrap()),
-            flexible: panel.flexible.unwrap(),
-            starts_open: panel.starts_open.unwrap(),
-            show_unread_badge: panel.show_unread_badge.unwrap(),
-            max_content_width: if panel.limit_content_width.unwrap() {
-                Some(px(panel.max_content_width.unwrap()))
+            button: panel.button.expect("button should be present"),
+            dock: panel.dock.expect("dock should be present").into(),
+            default_width: px(panel
+                .default_width
+                .expect("default_width should be present")),
+            default_height: px(panel
+                .default_height
+                .expect("default_height should be present")),
+            flexible: panel.flexible.expect("flexible should be present"),
+            starts_open: panel.starts_open.expect("starts_open should be present"),
+            show_unread_badge: panel
+                .show_unread_badge
+                .expect("show_unread_badge should be present"),
+            max_content_width: if panel
+                .limit_content_width
+                .expect("limit_content_width should be present")
+            {
+                Some(px(panel
+                    .max_content_width
+                    .expect("max_content_width should be present")))
             } else {
                 None
             },
-            composer_min_lines: panel.composer_min_lines.unwrap() as usize,
+            composer_min_lines: panel
+                .composer_min_lines
+                .expect("composer_min_lines should be present")
+                as usize,
         }
     }
 }
@@ -53,7 +67,7 @@ impl Settings for TelegramSettings {
         let telegram = content
             .telegram
             .clone()
-            .expect("telegram settings must be present in default.json");
+            .expect("telegram should be present");
         Self {
             proxy: telegram
                 .proxy

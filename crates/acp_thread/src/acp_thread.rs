@@ -4502,12 +4502,11 @@ mod tests {
 
         // Create a real PTY terminal that runs a command which prints output then sleeps
         // We use printf instead of echo and chain with && sleep to ensure proper execution
-        let (completion_tx, completion_rx) = async_channel::unbounded();
+        let (completion_tx, _completion_rx) = async_channel::unbounded();
         let (program, args) = ShellBuilder::new(&Shell::System, false).build(
-            Some("touch /tmp/zsh_started; printf 'output_before_kill\\n' | tee /tmp/acp_diag_out.txt; sleep 60".to_owned()),
+            Some("printf 'output_before_kill\\n' && sleep 60".to_owned()),
             &[],
         );
-        eprintln!("DIAG2 program={program:?} args={args:?}");
 
         let builder = cx
             .update(|cx| {
@@ -4566,31 +4565,6 @@ mod tests {
             });
             if has_output {
                 break;
-            }
-            if let Ok(status) = completion_rx.try_recv() {
-                eprintln!("DIAG completion exited: {status:?}");
-            }
-            let pid = thread.read_with(cx, |thread, cx| {
-                thread
-                    .terminals
-                    .get(&terminal_id)
-                    .expect("terminal not found")
-                    .read(cx)
-                    .inner()
-                    .read(cx)
-                    .pid()
-            });
-            if let Some(pid) = pid {
-                let cmdline = std::fs::read_to_string(format!("/proc/{}/cmdline", pid.as_u32()))
-                    .unwrap_or_else(|e| format!("<err {e}>"));
-                let stat = std::fs::read_to_string(format!("/proc/{}/stat", pid.as_u32()))
-                    .unwrap_or_else(|e| format!("<err {e}>"));
-                eprintln!(
-                    "DIAG pid={pid:?} state={:?} cmdline={cmdline:?}",
-                    stat.split_whitespace().nth(2),
-                );
-            } else {
-                eprintln!("DIAG pid=None");
             }
             assert!(
                 std::time::Instant::now() < deadline,

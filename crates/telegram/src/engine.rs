@@ -292,7 +292,10 @@ impl EngineHandle {
     }
 
     fn ensure_started(&self) {
-        let mut engine = self.engine.lock().unwrap_or_else(|error| error.into_inner());
+        let mut engine = self
+            .engine
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if engine.thread.is_some() {
             return;
         }
@@ -307,7 +310,10 @@ impl EngineHandle {
 impl Drop for EngineHandle {
     fn drop(&mut self) {
         self.command_tx.send(Command::Shutdown).ok();
-        let mut engine = self.engine.lock().unwrap_or_else(|error| error.into_inner());
+        let mut engine = self
+            .engine
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if let Some(thread) = engine.thread.take() {
             if thread.join().is_err() {
                 log::warn!("telegram engine thread panicked during shutdown");
@@ -522,6 +528,12 @@ impl EngineState {
     fn publish(&self) {
         if self.snapshot_tx.send(Arc::new(self.view.clone())).is_err() {
             log::debug!("telegram snapshot receiver has been dropped");
+        }
+    }
+
+    fn send_event(&self, event: EngineEvent) {
+        if self.event_tx.send(event).is_err() {
+            log::debug!("telegram event receiver has been dropped");
         }
     }
 
@@ -758,7 +770,9 @@ impl EngineState {
                         }
                     }
                     Err(error) => {
-                        let _ = event_tx.send(EngineEvent::QrError(error));
+                        if event_tx.send(EngineEvent::QrError(error)).is_err() {
+                            break;
+                        }
                         break;
                     }
                 }
@@ -1005,7 +1019,9 @@ impl EngineState {
         let event_tx = self.event_tx.clone();
         tokio::spawn(async move {
             let result = fetch_dialogs(&client).await;
-            let _ = event_tx.send(EngineEvent::ChatsLoaded { result });
+            if event_tx.send(EngineEvent::ChatsLoaded { result }).is_err() {
+                log::debug!("telegram event receiver has been dropped");
+            }
         });
     }
 
@@ -1093,11 +1109,16 @@ impl EngineState {
         let event_tx = self.event_tx.clone();
         tokio::spawn(async move {
             let result = fetch_history_page(&client, peer_ref, chat_id, before_id).await;
-            let _ = event_tx.send(EngineEvent::HistoryLoaded {
-                chat_id,
-                epoch,
-                result,
-            });
+            if event_tx
+                .send(EngineEvent::HistoryLoaded {
+                    chat_id,
+                    epoch,
+                    result,
+                })
+                .is_err()
+            {
+                log::debug!("telegram event receiver has been dropped");
+            }
         });
     }
 
@@ -1165,11 +1186,16 @@ impl EngineState {
         let event_tx = self.event_tx.clone();
         tokio::spawn(async move {
             let messages = fetch_gap(&client, peer_ref, chat_id, after_id, before_id).await;
-            let _ = event_tx.send(EngineEvent::GapLoaded {
-                chat_id,
-                epoch,
-                messages,
-            });
+            if event_tx
+                .send(EngineEvent::GapLoaded {
+                    chat_id,
+                    epoch,
+                    messages,
+                })
+                .is_err()
+            {
+                log::debug!("telegram event receiver has been dropped");
+            }
         });
     }
 
@@ -1205,17 +1231,11 @@ impl EngineState {
     }
 
     fn schedule_gap_fill(&mut self, chat_id: i64, after_id: i32, before_id: i32) {
-        if self
-            .event_tx
-            .send(EngineEvent::FillGap {
-                chat_id,
-                after_id,
-                before_id,
-            })
-            .is_err()
-        {
-            log::debug!("telegram event receiver has been dropped");
-        }
+        self.send_event(EngineEvent::FillGap {
+            chat_id,
+            after_id,
+            before_id,
+        });
     }
 
     /// Reloads the chat list once, shortly after the first new-chat update,
@@ -1228,7 +1248,9 @@ impl EngineState {
         let event_tx = self.event_tx.clone();
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(500)).await;
-            let _ = event_tx.send(EngineEvent::RefreshChats);
+            if event_tx.send(EngineEvent::RefreshChats).is_err() {
+                log::debug!("telegram event receiver has been dropped");
+            }
         });
     }
 
@@ -1244,7 +1266,9 @@ impl EngineState {
         let event_tx = self.event_tx.clone();
         tokio::spawn(async move {
             tokio::time::sleep(delay).await;
-            let _ = event_tx.send(EngineEvent::Reconnect);
+            if event_tx.send(EngineEvent::Reconnect).is_err() {
+                log::debug!("telegram event receiver has been dropped");
+            }
         });
     }
 
@@ -1633,7 +1657,12 @@ impl EngineState {
         let event_tx = self.event_tx.clone();
         tokio::spawn(async move {
             let result = fetch_search(&client, scoped_peer, &query, &titles).await;
-            let _ = event_tx.send(EngineEvent::SearchLoaded { epoch, result });
+            if event_tx
+                .send(EngineEvent::SearchLoaded { epoch, result })
+                .is_err()
+            {
+                log::debug!("telegram event receiver has been dropped");
+            }
         });
     }
 
@@ -1685,11 +1714,16 @@ impl EngineState {
         let event_tx = self.event_tx.clone();
         tokio::spawn(async move {
             let result = download_media_file(&client, peer_ref, message_id, path).await;
-            let _ = event_tx.send(EngineEvent::MediaLoaded {
-                chat_id,
-                message_id,
-                result,
-            });
+            if event_tx
+                .send(EngineEvent::MediaLoaded {
+                    chat_id,
+                    message_id,
+                    result,
+                })
+                .is_err()
+            {
+                log::debug!("telegram event receiver has been dropped");
+            }
         });
     }
 
@@ -1777,11 +1811,16 @@ impl EngineState {
         let event_tx = self.event_tx.clone();
         tokio::spawn(async move {
             let result = download_thumbnail_file(&client, peer_ref, message_id, path).await;
-            let _ = event_tx.send(EngineEvent::ThumbnailLoaded {
-                chat_id,
-                message_id,
-                result,
-            });
+            if event_tx
+                .send(EngineEvent::ThumbnailLoaded {
+                    chat_id,
+                    message_id,
+                    result,
+                })
+                .is_err()
+            {
+                log::debug!("telegram event receiver has been dropped");
+            }
         });
     }
 

@@ -653,7 +653,9 @@ impl VideoView {
                     continue;
                 };
                 if front.pts() <= target {
-                    let frame = buffered.pop_front().expect("buffer is not empty");
+                    let Some(frame) = buffered.pop_front() else {
+                        continue;
+                    };
                     this.update(cx, |view, cx| view.present_frame(frame, cx))
                         .ok();
                     cx.background_executor().timer(tick).await;
