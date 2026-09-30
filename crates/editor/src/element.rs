@@ -1256,7 +1256,10 @@ impl EditorElement {
             let style = editor.style.clone().unwrap_or_default();
             let font_id = window.text_system().resolve_font(&style.text.font());
             let font_size = style.text.font_size.to_pixels(window.rem_size());
-            let em_width = window.text_system().em_width(font_id, font_size).unwrap();
+            let em_width = window
+                .text_system()
+                .em_width(font_id, font_size)
+                .expect("em_width should be present");
 
             let scroll_margin_x = EditorSettings::get_global(cx).horizontal_scroll_margin;
 
@@ -3600,7 +3603,7 @@ impl EditorElement {
                 }
 
                 let number = relative_number.unwrap_or(&non_relative_number);
-                write!(&mut line_number, "{number}").unwrap();
+                write!(&mut line_number, "{number}").expect("value should be present");
 
                 let spec = active_rows.get(&display_row);
                 let color = LineNumberStyle::new(
@@ -4031,7 +4034,7 @@ impl EditorElement {
                         ))
                     };
 
-                let anchor_x = x_position.unwrap().0;
+                let anchor_x = x_position.expect("value should be present").0;
 
                 let selected = selections
                     .binary_search_by(|selection| {
@@ -6019,7 +6022,7 @@ impl EditorElement {
                                 && has_selection.selection == contains_non_empty_selection.selection
                         })
                     {
-                        active_rows.next().unwrap();
+                        active_rows.next().expect("iterator should yield an item");
                         end_row += 1;
                     }
 
@@ -6884,7 +6887,11 @@ impl EditorElement {
 
         let text_bounds = layout.position_map.text_hitbox.bounds;
         let border_top = text_bounds.top()
-            + sticky_headers.lines.last().unwrap().offset
+            + sticky_headers
+                .lines
+                .last()
+                .expect("collection should not be empty")
+                .offset
             + layout.position_map.line_height;
         let separator_height = px(1.);
         let border_bounds = window.pixel_snap_bounds(Bounds::from_corners(
@@ -8286,7 +8293,10 @@ pub fn render_breadcrumb_text(
                         this.style(ButtonStyle::Transparent)
                     })
                     .when(!multibuffer_header, |this| {
-                        let focus_handle = editor.upgrade().unwrap().focus_handle(&cx);
+                        let focus_handle = editor
+                            .upgrade()
+                            .expect("entity should be alive")
+                            .focus_handle(&cx);
 
                         this.tooltip(Tooltip::element(move |_window, cx| {
                             v_flex()
@@ -10007,8 +10017,14 @@ impl Element for EditorElement {
                     let font_id = window.text_system().resolve_font(&style.text.font());
                     let font_size = style.text.font_size.to_pixels(rem_size);
                     let line_height = style.text.line_height_in_pixels(rem_size);
-                    let em_width = window.text_system().em_width(font_id, font_size).unwrap();
-                    let em_advance = window.text_system().em_advance(font_id, font_size).unwrap();
+                    let em_width = window
+                        .text_system()
+                        .em_width(font_id, font_size)
+                        .expect("em_width should be present");
+                    let em_advance = window
+                        .text_system()
+                        .em_advance(font_id, font_size)
+                        .expect("em_advance should be present");
                     let em_layout_width = window.text_system().em_layout_width(font_id, font_size);
                     let glyph_grid_cell = size(em_advance, line_height);
 
@@ -12441,7 +12457,7 @@ pub fn layout_line(
         cx,
     )
     .pop()
-    .unwrap()
+    .expect("collection should not be empty")
 }
 
 #[derive(Debug, Clone)]
@@ -12683,8 +12699,8 @@ impl HighlightedRange {
             return;
         }
 
-        let first_line = lines.first().unwrap();
-        let last_line = lines.last().unwrap();
+        let first_line = lines.first().expect("collection should not be empty");
+        let last_line = lines.last().expect("collection should not be empty");
 
         let first_top_left = point(first_line.start_x, start_y);
         let first_top_right = point(first_line.end_x, start_y);
@@ -12717,7 +12733,11 @@ impl HighlightedRange {
             if let Some((_, next_line)) = iter.peek() {
                 let next_top_right = point(next_line.end_x, bottom_right.y);
 
-                match next_top_right.x.partial_cmp(&bottom_right.x).unwrap() {
+                match next_top_right
+                    .x
+                    .partial_cmp(&bottom_right.x)
+                    .expect("partial_cmp should be present")
+                {
                     Ordering::Equal => {
                         builder.line_to(bottom_right);
                     }
@@ -12813,7 +12833,12 @@ pub fn register_action<T: Action>(
         window,
         TypeId::of::<T>(),
         Box::new(move |editor, action, window, cx| {
-            listener(editor, action.downcast_ref().unwrap(), window, cx)
+            listener(
+                editor,
+                action.downcast_ref().expect("downcast should succeed"),
+                window,
+                cx,
+            )
         }),
     )
 }
@@ -12871,11 +12896,17 @@ fn compute_auto_height_layout(
         return Some(size(width, height));
     }
 
-    let style = editor.style.as_ref().unwrap();
+    let style = editor
+        .style
+        .as_ref()
+        .expect("value should have the expected type");
     let font_id = window.text_system().resolve_font(&style.text.font());
     let font_size = style.text.font_size.to_pixels(window.rem_size());
     let line_height = style.text.line_height_in_pixels(window.rem_size());
-    let em_width = window.text_system().em_width(font_id, font_size).unwrap();
+    let em_width = window
+        .text_system()
+        .em_width(font_id, font_size)
+        .expect("em_width should be present");
 
     let mut snapshot = editor.snapshot(window, cx);
     let gutter_dimensions = snapshot.gutter_dimensions(font_id, font_size, style, window, cx);

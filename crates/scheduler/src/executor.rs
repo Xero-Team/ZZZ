@@ -301,7 +301,9 @@ impl<T> Future for Task<T> {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         match unsafe { self.get_unchecked_mut() } {
-            Task(TaskState::Ready(val)) => Poll::Ready(val.take().unwrap()),
+            Task(TaskState::Ready(val)) => {
+                Poll::Ready(val.take().expect("entry should be present"))
+            }
             Task(TaskState::Spawned(task)) => Pin::new(task).poll(cx),
         }
     }

@@ -3843,7 +3843,10 @@ impl Sidebar {
         }
 
         if !workspaces_to_remove.is_empty() {
-            let multi_workspace = self.multi_workspace.upgrade().unwrap();
+            let multi_workspace = self
+                .multi_workspace
+                .upgrade()
+                .expect("entity should be alive");
             let session_id = session_id.clone();
 
             let (fallback_paths, project_group_key) = neighbor.as_ref().map_or_else(

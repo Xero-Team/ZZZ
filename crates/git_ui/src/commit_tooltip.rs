@@ -345,7 +345,7 @@ impl Render for CommitTooltip {
                         .message
                         .split('\n')
                         .next()
-                        .unwrap()
+                        .expect("iterator should yield an item")
                         .trim_end()
                         .to_owned()
                         .into()

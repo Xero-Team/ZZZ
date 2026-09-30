@@ -431,7 +431,8 @@ impl TerminalElement {
                                 }
                             } else {
                                 // Flush current batch and start new one
-                                let old_batch = current_batch.take().unwrap();
+                                let old_batch =
+                                    current_batch.take().expect("entry should be present");
                                 batched_runs.push(old_batch);
                                 let mut new_batch = BatchedTextRun::new_from_char(
                                     cell_point,
@@ -896,7 +897,7 @@ impl Element for TerminalElement {
             window,
             cx,
             |_, _, hitbox, window, cx| {
-                let hitbox = hitbox.unwrap();
+                let hitbox = hitbox.expect("value should be present");
                 let settings = ThemeSettings::get_global(cx).clone();
 
                 let buffer_font_size = settings.buffer_font_size(cx);
@@ -979,7 +980,7 @@ impl Element for TerminalElement {
 
                     let cell_width = text_system
                         .advance(font_id, font_pixels, 'm')
-                        .unwrap()
+                        .expect("advance should be present")
                         .width;
                     gutter = cell_width;
 

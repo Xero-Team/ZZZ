@@ -131,7 +131,7 @@ mod conditional {
             let mut inspector_state = active_element
                 .states
                 .remove(&type_id)
-                .map(|state| *state.downcast().unwrap());
+                .map(|state| *state.downcast().expect("downcast should succeed"));
 
             let result = f(&mut inspector_state, window);
 

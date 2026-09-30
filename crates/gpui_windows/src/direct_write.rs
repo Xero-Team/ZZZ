@@ -110,7 +110,7 @@ impl GPUState {
                 ],
             };
             unsafe { device.CreateBlendState(&desc, Some(&mut blend_state)) }?;
-            blend_state.unwrap()
+            blend_state.expect("value should be present")
         };
 
         let sampler = {
@@ -138,7 +138,7 @@ impl GPUState {
             )?;
             let mut shader = None;
             unsafe { device.CreateVertexShader(source.as_bytes(), None, Some(&mut shader)) }?;
-            shader.unwrap()
+            shader.expect("value should be present")
         };
 
         let pixel_shader = {
@@ -148,7 +148,7 @@ impl GPUState {
             )?;
             let mut shader = None;
             unsafe { device.CreatePixelShader(source.as_bytes(), None, Some(&mut shader)) }?;
-            shader.unwrap()
+            shader.expect("value should be present")
         };
 
         Ok(Self {
@@ -320,7 +320,12 @@ impl DirectWriteState {
                 })?;
 
             let font_id = FontId(this.fonts.len());
-            let font_face_key = info.font_face.cast::<IUnknown>().unwrap().as_raw().addr();
+            let font_face_key = info
+                .font_face
+                .cast::<IUnknown>()
+                .expect("value should be present")
+                .as_raw()
+                .addr();
             this.fonts.push(info);
             this.font_info_cache.insert(font_face_key, font_id);
             Some(font_id)
@@ -1056,7 +1061,7 @@ impl DirectWriteState {
                     .device
                     .CreateTexture2D(&desc, None, Some(&mut texture))
             }?;
-            texture.unwrap()
+            texture.expect("value should be present")
         };
 
         let render_target_view = {
@@ -1135,7 +1140,7 @@ impl DirectWriteState {
                     .device
                     .CreateTexture2D(&desc, None, Some(&mut texture))
             }?;
-            texture.unwrap()
+            texture.expect("value should be present")
         };
 
         let device_context = &gpu_state.device_context;
@@ -1176,16 +1181,21 @@ impl DirectWriteState {
             unsafe {
                 let mut dest = std::mem::zeroed();
                 gpu_state.device_context.Map(
-                    params_buffer.as_ref().unwrap(),
+                    params_buffer
+                        .as_ref()
+                        .expect("value should have the expected type"),
                     0,
                     D3D11_MAP_WRITE_DISCARD,
                     0,
                     Some(&mut dest),
                 )?;
                 std::ptr::copy_nonoverlapping(&params as *const _, dest.pData as *mut _, 1);
-                gpu_state
-                    .device_context
-                    .Unmap(params_buffer.as_ref().unwrap(), 0);
+                gpu_state.device_context.Unmap(
+                    params_buffer
+                        .as_ref()
+                        .expect("value should have the expected type"),
+                    0,
+                );
             };
 
             let texture = [Some(layer.texture_view.clone())];
@@ -1363,7 +1373,7 @@ impl GlyphLayerTexture {
                     .device
                     .CreateTexture2D(&desc, None, Some(&mut texture))?
             };
-            texture.unwrap()
+            texture.expect("value should be present")
         };
         let texture_view = {
             let mut view: Option<ID3D11ShaderResourceView> = None;
@@ -1372,7 +1382,7 @@ impl GlyphLayerTexture {
                     .device
                     .CreateShaderResourceView(&texture, None, Some(&mut view))?
             };
-            view.unwrap()
+            view.expect("value should be present")
         };
 
         unsafe {
@@ -1555,7 +1565,11 @@ impl IDWriteTextRenderer_Impl for TextRenderer_Impl {
             ));
         };
 
-        let font_face_key = font_face.cast::<IUnknown>().unwrap().as_raw().addr();
+        let font_face_key = font_face
+            .cast::<IUnknown>()
+            .expect("value should be present")
+            .as_raw()
+            .addr();
         let font_id = context
             .text_system
             .font_info_cache

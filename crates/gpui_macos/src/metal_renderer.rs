@@ -325,7 +325,7 @@ impl MetalRenderer {
         let command_queue = device.new_command_queue();
         let sprite_atlas = Arc::new(MetalAtlas::new(device.clone(), is_apple_gpu));
         let core_video_texture_cache =
-            CVMetalTextureCache::new(None, device.clone(), None).unwrap();
+            CVMetalTextureCache::new(None, device.clone(), None).expect("value should be present");
 
         Self {
             device,
@@ -895,7 +895,7 @@ impl MetalRenderer {
         let color_attachment = render_pass_descriptor
             .color_attachments()
             .object_at(0)
-            .unwrap();
+            .expect("object_at should be present");
         color_attachment.set_load_action(metal::MTLLoadAction::Clear);
         color_attachment.set_clear_color(metal::MTLClearColor::new(0., 0., 0., 0.));
 
@@ -1140,7 +1140,7 @@ impl MetalRenderer {
         // batch combines different draw orders, we perform a single copy
         // for a minimal spanning rect.
         let sprites;
-        if paths.last().unwrap().order == first_path.order {
+        if paths.last().expect("collection should not be empty").order == first_path.order {
             sprites = paths
                 .iter()
                 .map(|path| PathSprite {
@@ -1466,7 +1466,7 @@ impl MetalRenderer {
                     surface.image_buffer.get_height_of_plane(0),
                     0,
                 )
-                .unwrap();
+                .expect("value should be present");
             let cb_cr_texture = self
                 .core_video_texture_cache
                 .create_texture_from_image(
@@ -1477,7 +1477,7 @@ impl MetalRenderer {
                     surface.image_buffer.get_height_of_plane(1),
                     1,
                 )
-                .unwrap();
+                .expect("value should be present");
 
             align_offset(instance_offset);
             let next_offset = *instance_offset + mem::size_of::<Surface>();
@@ -1538,7 +1538,7 @@ fn new_command_encoder_for_texture<'a>(
     let color_attachment = render_pass_descriptor
         .color_attachments()
         .object_at(0)
-        .unwrap();
+        .expect("object_at should be present");
     color_attachment.set_texture(Some(texture));
     color_attachment.set_store_action(metal::MTLStoreAction::Store);
     configure_color_attachment(color_attachment);
@@ -1574,7 +1574,10 @@ fn build_pipeline_state(
     descriptor.set_label(label);
     descriptor.set_vertex_function(Some(vertex_fn.as_ref()));
     descriptor.set_fragment_function(Some(fragment_fn.as_ref()));
-    let color_attachment = descriptor.color_attachments().object_at(0).unwrap();
+    let color_attachment = descriptor
+        .color_attachments()
+        .object_at(0)
+        .expect("object_at should be present");
     color_attachment.set_pixel_format(pixel_format);
     color_attachment.set_blending_enabled(true);
     color_attachment.set_rgb_blend_operation(metal::MTLBlendOperation::Add);
@@ -1608,7 +1611,10 @@ fn build_path_sprite_pipeline_state(
     descriptor.set_label(label);
     descriptor.set_vertex_function(Some(vertex_fn.as_ref()));
     descriptor.set_fragment_function(Some(fragment_fn.as_ref()));
-    let color_attachment = descriptor.color_attachments().object_at(0).unwrap();
+    let color_attachment = descriptor
+        .color_attachments()
+        .object_at(0)
+        .expect("object_at should be present");
     color_attachment.set_pixel_format(pixel_format);
     color_attachment.set_blending_enabled(true);
     color_attachment.set_rgb_blend_operation(metal::MTLBlendOperation::Add);
@@ -1647,7 +1653,10 @@ fn build_path_rasterization_pipeline_state(
         descriptor.set_raster_sample_count(path_sample_count as _);
         descriptor.set_alpha_to_coverage_enabled(false);
     }
-    let color_attachment = descriptor.color_attachments().object_at(0).unwrap();
+    let color_attachment = descriptor
+        .color_attachments()
+        .object_at(0)
+        .expect("object_at should be present");
     color_attachment.set_pixel_format(pixel_format);
     color_attachment.set_blending_enabled(true);
     color_attachment.set_rgb_blend_operation(metal::MTLBlendOperation::Add);

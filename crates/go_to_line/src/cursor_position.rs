@@ -178,11 +178,11 @@ impl CursorPosition {
             // Nothing to display.
             return;
         }
-        write!(text, " (").unwrap();
+        write!(text, " (").expect("value should be present");
         let mut wrote_once = false;
         for (count, name) in [selections, lines, characters].into_iter().flatten() {
             if wrote_once {
-                write!(text, ", ").unwrap();
+                write!(text, ", ").expect("value should be present");
             }
             let name = if is_short_format { &name[..1] } else { name };
             let plural_suffix = if count > 1 && !is_short_format {
@@ -190,7 +190,7 @@ impl CursorPosition {
             } else {
                 ""
             };
-            write!(text, "{count} {name}{plural_suffix}").unwrap();
+            write!(text, "{count} {name}{plural_suffix}").expect("value should be present");
             wrote_once = true;
         }
         text.push(')');
@@ -318,6 +318,9 @@ impl From<settings::LineIndicatorFormat> for LineIndicatorFormat {
 
 impl Settings for LineIndicatorFormat {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        content.line_indicator_format.unwrap().into()
+        content
+            .line_indicator_format
+            .expect("line_indicator_format should be present")
+            .into()
     }
 }

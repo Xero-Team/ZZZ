@@ -67,7 +67,7 @@ impl LinuxDispatcher {
                             );
                         }
                     })
-                    .unwrap()
+                    .expect("value should be present")
             })
             .collect::<Vec<_>>();
 
@@ -114,7 +114,7 @@ impl LinuxDispatcher {
 
                 event_loop.run(None, &mut (), |_| {}).log_err();
             })
-            .unwrap();
+            .expect("value should be present");
 
         background_threads.push(timer_thread);
 

@@ -532,8 +532,13 @@ pub(crate) fn parse_markdown_with_options(
                     last_len = next_len;
                 }
 
-                let mut merged_text =
-                    String::with_capacity(ranges.last().unwrap().merged_range.end);
+                let mut merged_text = String::with_capacity(
+                    ranges
+                        .last()
+                        .expect("collection should not be empty")
+                        .merged_range
+                        .end,
+                );
                 for range in &ranges {
                     merged_text.push_str(&range.parsed);
                 }
@@ -553,7 +558,7 @@ pub(crate) fn parse_markdown_with_options(
                             .peek()
                             .is_some_and(|range| range.merged_range.end <= link_start_in_merged)
                         {
-                            let range = ranges.next().unwrap();
+                            let range = ranges.next().expect("iterator should yield an item");
                             let (range, event) = event_for(text, range.source_range, &range.parsed);
                             state.push_event(range, event);
                         }
@@ -583,7 +588,7 @@ pub(crate) fn parse_markdown_with_options(
                             .peek()
                             .is_some_and(|range| range.merged_range.end <= link_end_in_merged)
                         {
-                            let range = ranges.next().unwrap();
+                            let range = ranges.next().expect("iterator should yield an item");
                             link_end_in_source = range.source_range.end;
                             link_events.push(event_for(text, range.source_range, &range.parsed));
                         }

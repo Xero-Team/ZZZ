@@ -1065,7 +1065,11 @@ pub struct DisableAiSettings {
 impl settings::Settings for DisableAiSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         Self {
-            disable_ai: content.project.disable_ai.unwrap().0,
+            disable_ai: content
+                .project
+                .disable_ai
+                .expect("disable_ai should be present")
+                .0,
         }
     }
 }
@@ -1671,9 +1675,13 @@ impl Project {
                     project.find_or_create_worktree(path, true, cx)
                 })
                 .await
-                .unwrap();
-            tree.read_with(cx, |tree, _| tree.as_local().unwrap().scan_complete())
-                .await;
+                .expect("value should be present");
+            tree.read_with(cx, |tree, _| {
+                tree.as_local()
+                    .expect("should be a local instance")
+                    .scan_complete()
+            })
+            .await;
         }
         project
     }
@@ -1731,10 +1739,14 @@ impl Project {
                     project.find_or_create_worktree(path, true, cx)
                 })
                 .await
-                .unwrap();
+                .expect("value should be present");
 
-            tree.read_with(cx, |tree, _| tree.as_local().unwrap().scan_complete())
-                .await;
+            tree.read_with(cx, |tree, _| {
+                tree.as_local()
+                    .expect("should be a local instance")
+                    .scan_complete()
+            })
+            .await;
         }
         project
     }
@@ -2225,7 +2237,7 @@ impl Project {
                 let new_abs_path = if is_root_entry {
                     root_path
                         .parent()
-                        .unwrap()
+                        .expect("path should have the expected component")
                         .join(new_path.path.as_std_path())
                 } else {
                     root_path.join(&new_path.path.as_std_path())
@@ -4663,7 +4675,9 @@ impl Project {
             let worktree_id = WorktreeId::from_proto(envelope.payload.worktree_id);
             if let Some(worktree) = project.worktree_for_id(worktree_id, cx) {
                 worktree.update(cx, |worktree, _| {
-                    let worktree = worktree.as_remote_mut().unwrap();
+                    let worktree = worktree
+                        .as_remote_mut()
+                        .expect("should be a remote instance");
                     worktree.update_from_remote(envelope.payload);
                 });
             }
@@ -5322,7 +5336,7 @@ impl Project {
                         .filter_map(|worktree| Some(worktree.read(cx).as_local()?.scan_complete()))
                         .collect::<Vec<_>>()
                 })
-                .unwrap();
+                .expect("value should be present");
             join_all(scans_complete).await;
             let barriers = this
                 .update(cx, |this, cx| {
@@ -5332,7 +5346,7 @@ impl Project {
                         .map(|repo| repo.update(cx, |repo, _| repo.barrier()))
                         .collect::<Vec<_>>()
                 })
-                .unwrap();
+                .expect("value should be present");
             join_all(barriers).await;
         })
     }

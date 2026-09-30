@@ -1772,8 +1772,12 @@ impl Vim {
 
     fn select_register(&mut self, register: Arc<str>, window: &mut Window, cx: &mut Context<Self>) {
         if register.chars().count() == 1 {
-            self.selected_register
-                .replace(register.chars().next().unwrap());
+            self.selected_register.replace(
+                register
+                    .chars()
+                    .next()
+                    .expect("iterator should yield an item"),
+            );
         }
         self.operator_stack.clear();
         self.sync_vim_settings(window, cx);
@@ -2048,7 +2052,7 @@ impl Vim {
             Some(Operator::FindForward { before, multiline }) => {
                 let find = Motion::FindForward {
                     before,
-                    char: text.chars().next().unwrap(),
+                    char: text.chars().next().expect("iterator should yield an item"),
                     mode: if multiline {
                         FindRange::MultiLine
                     } else {
@@ -2062,7 +2066,7 @@ impl Vim {
             Some(Operator::FindBackward { after, multiline }) => {
                 let find = Motion::FindBackward {
                     after,
-                    char: text.chars().next().unwrap(),
+                    char: text.chars().next().expect("iterator should yield an item"),
                     mode: if multiline {
                         FindRange::MultiLine
                     } else {
@@ -2222,12 +2226,16 @@ impl Vim {
                 _ => self.clear_operator(window, cx),
             },
             Some(Operator::Mark) => self.create_mark(text, window, cx),
-            Some(Operator::RecordRegister) => {
-                self.record_register(text.chars().next().unwrap(), window, cx)
-            }
-            Some(Operator::ReplayRegister) => {
-                self.replay_register(text.chars().next().unwrap(), window, cx)
-            }
+            Some(Operator::RecordRegister) => self.record_register(
+                text.chars().next().expect("iterator should yield an item"),
+                window,
+                cx,
+            ),
+            Some(Operator::ReplayRegister) => self.replay_register(
+                text.chars().next().expect("iterator should yield an item"),
+                window,
+                cx,
+            ),
             Some(Operator::Register) => match self.mode {
                 Mode::Insert => {
                     self.update_editor(cx, |_, editor, cx| {
@@ -2411,17 +2419,35 @@ impl From<settings::ModeContent> for Mode {
 
 impl Settings for VimSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let vim = content.vim.clone().unwrap();
+        let vim = content.vim.clone().expect("value should be present");
         Self {
-            default_mode: vim.default_mode.unwrap().into(),
-            toggle_relative_line_numbers: vim.toggle_relative_line_numbers.unwrap(),
-            use_system_clipboard: vim.use_system_clipboard.unwrap(),
-            use_smartcase_find: vim.use_smartcase_find.unwrap(),
-            use_regex_search: vim.use_regex_search.unwrap(),
-            gdefault: vim.gdefault.unwrap(),
-            custom_digraphs: vim.custom_digraphs.unwrap(),
-            highlight_on_yank_duration: vim.highlight_on_yank_duration.unwrap(),
-            cursor_shape: vim.cursor_shape.unwrap().into(),
+            default_mode: vim
+                .default_mode
+                .expect("default_mode should be present")
+                .into(),
+            toggle_relative_line_numbers: vim
+                .toggle_relative_line_numbers
+                .expect("toggle_relative_line_numbers should be present"),
+            use_system_clipboard: vim
+                .use_system_clipboard
+                .expect("use_system_clipboard should be present"),
+            use_smartcase_find: vim
+                .use_smartcase_find
+                .expect("use_smartcase_find should be present"),
+            use_regex_search: vim
+                .use_regex_search
+                .expect("use_regex_search should be present"),
+            gdefault: vim.gdefault.expect("gdefault should be present"),
+            custom_digraphs: vim
+                .custom_digraphs
+                .expect("custom_digraphs should be present"),
+            highlight_on_yank_duration: vim
+                .highlight_on_yank_duration
+                .expect("highlight_on_yank_duration should be present"),
+            cursor_shape: vim
+                .cursor_shape
+                .expect("cursor_shape should be present")
+                .into(),
         }
     }
 }

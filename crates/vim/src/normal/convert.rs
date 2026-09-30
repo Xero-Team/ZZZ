@@ -68,7 +68,9 @@ impl Vim {
                 }
                 editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
                     s.move_with(&mut |map, selection| {
-                        let anchor = selection_starts.remove(&selection.id).unwrap();
+                        let anchor = selection_starts
+                            .remove(&selection.id)
+                            .expect("entry should be present");
                         selection.collapse_to(anchor.to_display_point(map), SelectionGoal::None);
                     });
                 });
@@ -119,7 +121,9 @@ impl Vim {
                 }
                 editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
                     s.move_with(&mut |map, selection| {
-                        let anchor = original_positions.remove(&selection.id).unwrap();
+                        let anchor = original_positions
+                            .remove(&selection.id)
+                            .expect("entry should be present");
                         selection.collapse_to(anchor.to_display_point(map), SelectionGoal::None);
                     });
                 });
@@ -180,7 +184,9 @@ impl Vim {
         self.manipulate_text(window, cx, |c| {
             let code_point = c as u32;
             if (33..=126).contains(&code_point) {
-                return vec![char::from_u32(33 + ((code_point + 14) % 94)).unwrap()];
+                return vec![
+                    char::from_u32(33 + ((code_point + 14) % 94)).expect("value should be present"),
+                ];
             }
             vec![c]
         })

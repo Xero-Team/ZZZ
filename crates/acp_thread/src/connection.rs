@@ -875,24 +875,26 @@ mod test_support {
             self.sessions
                 .lock()
                 .get(&session_id)
-                .unwrap()
+                .expect("entry should be present")
                 .thread
                 .update(cx, |thread, cx| {
-                    thread.handle_session_update(update, cx).unwrap();
+                    thread
+                        .handle_session_update(update, cx)
+                        .expect("handle_session_update should be present");
                 })
-                .unwrap();
+                .expect("value should be present");
         }
 
         pub fn end_turn(&self, session_id: acp::SessionId, stop_reason: acp::StopReason) {
             self.sessions
                 .lock()
                 .get_mut(&session_id)
-                .unwrap()
+                .expect("entry should be present")
                 .response_tx
                 .take()
                 .expect("No pending turn")
                 .send(stop_reason)
-                .unwrap();
+                .expect("channel receiver should be alive");
         }
     }
 
@@ -969,7 +971,9 @@ mod test_support {
             let Session {
                 thread,
                 response_tx,
-            } = sessions.get_mut(&params.session_id).unwrap();
+            } = sessions
+                .get_mut(&params.session_id)
+                .expect("entry should be present");
             let mut tasks = vec![];
             if let Some(receiver) = self.next_prompt_response.lock().take() {
                 cx.spawn(async move |_| receiver.await?)
@@ -1005,7 +1009,9 @@ mod test_support {
                                 .await;
                         }
                         thread.update(cx, |thread, cx| {
-                            thread.handle_session_update(update.clone(), cx).unwrap();
+                            thread
+                                .handle_session_update(update.clone(), cx)
+                                .expect("value should be present");
                         })?;
                         anyhow::Ok(())
                     });
@@ -1024,11 +1030,13 @@ mod test_support {
                 .sessions
                 .lock()
                 .get_mut(session_id)
-                .unwrap()
+                .expect("entry should be present")
                 .response_tx
                 .take()
             {
-                end_turn_tx.send(acp::StopReason::Cancelled).unwrap();
+                end_turn_tx
+                    .send(acp::StopReason::Cancelled)
+                    .expect("channel receiver should be alive");
             }
         }
 

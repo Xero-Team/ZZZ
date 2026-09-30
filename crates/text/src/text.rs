@@ -269,7 +269,7 @@ impl History {
             if self
                 .undo_stack
                 .last()
-                .unwrap()
+                .expect("collection should not be empty")
                 .transaction
                 .edit_ids
                 .is_empty()
@@ -278,7 +278,10 @@ impl History {
                 None
             } else {
                 self.redo_stack.clear();
-                let entry = self.undo_stack.last_mut().unwrap();
+                let entry = self
+                    .undo_stack
+                    .last_mut()
+                    .expect("collection should not be empty");
                 entry.last_edit_at = now;
                 Some(entry)
             }
@@ -389,7 +392,10 @@ impl History {
     fn push_undo(&mut self, op_id: clock::Lamport) {
         assert_ne!(self.transaction_depth, 0);
         if let Some(Operation::Edit(_)) = self.operations.get(&op_id) {
-            let last_transaction = self.undo_stack.last_mut().unwrap();
+            let last_transaction = self
+                .undo_stack
+                .last_mut()
+                .expect("collection should not be empty");
             last_transaction.transaction.edit_ids.push(op_id);
         }
     }
@@ -911,8 +917,10 @@ impl Buffer {
         let mut new_ropes =
             RopeBuilder::new(self.visible_text.cursor(0), self.deleted_text.cursor(0));
         let mut old_fragments = self.fragments.cursor::<FragmentTextSummary>(&None);
-        let mut new_fragments =
-            FragmentBuilder::new(old_fragments.slice(&edits.peek().unwrap().0.start, Bias::Right));
+        let mut new_fragments = FragmentBuilder::new(old_fragments.slice(
+            &edits.peek().expect("peek should be present").0.start,
+            Bias::Right,
+        ));
         new_ropes.append(new_fragments.summary().text);
 
         let mut fragment_start = old_fragments.start().visible;
@@ -927,7 +935,10 @@ impl Buffer {
                 // and advance to the next fragment before slicing.
                 if fragment_start > old_fragments.start().visible {
                     if fragment_end > fragment_start {
-                        let mut suffix = old_fragments.item().unwrap().clone();
+                        let mut suffix = old_fragments
+                            .item()
+                            .expect("entry should be present")
+                            .clone();
                         suffix.len = (fragment_end - fragment_start) as u32;
                         suffix.insertion_offset +=
                             (fragment_start - old_fragments.start().visible) as u32;
@@ -948,7 +959,10 @@ impl Buffer {
 
             // Preserve any portion of the current fragment that precedes this range.
             if fragment_start < range.start {
-                let mut prefix = old_fragments.item().unwrap().clone();
+                let mut prefix = old_fragments
+                    .item()
+                    .expect("entry should be present")
+                    .clone();
                 prefix.len = (range.start - fragment_start) as u32;
                 prefix.insertion_offset += (fragment_start - old_fragments.start().visible) as u32;
                 prefix.id = Locator::between(&new_fragments.summary().max_id, &prefix.id);
@@ -985,7 +999,7 @@ impl Buffer {
             // Advance through every fragment that intersects this range, marking the intersecting
             // portions as deleted.
             while fragment_start < range.end {
-                let fragment = old_fragments.item().unwrap();
+                let fragment = old_fragments.item().expect("entry should be present");
                 let fragment_end = old_fragments.end().visible;
                 let mut intersection = fragment.clone();
                 let intersection_end = cmp::min(range.end, fragment_end);
@@ -1028,7 +1042,10 @@ impl Buffer {
         if fragment_start > old_fragments.start().visible {
             let fragment_end = old_fragments.end().visible;
             if fragment_end > fragment_start {
-                let mut suffix = old_fragments.item().unwrap().clone();
+                let mut suffix = old_fragments
+                    .item()
+                    .expect("entry should be present")
+                    .clone();
                 suffix.len = (fragment_end - fragment_start) as u32;
                 suffix.insertion_offset += (fragment_start - old_fragments.start().visible) as u32;
                 new_insertions.push(InsertionFragment::insert_new(&suffix));
@@ -1143,7 +1160,10 @@ impl Buffer {
                 // and advance to the next fragment before slicing.
                 if fragment_start > old_fragments.start().0.full_offset() {
                     if fragment_end > fragment_start {
-                        let mut suffix = old_fragments.item().unwrap().clone();
+                        let mut suffix = old_fragments
+                            .item()
+                            .expect("entry should be present")
+                            .clone();
                         suffix.len = (fragment_end.0 - fragment_start.0) as u32;
                         suffix.insertion_offset +=
                             (fragment_start - old_fragments.start().0.full_offset()) as u32;
@@ -1164,7 +1184,10 @@ impl Buffer {
             // If we are at the end of a non-concurrent fragment, advance to the next one.
             let fragment_end = old_fragments.end().0.full_offset();
             if fragment_end == range.start && fragment_end > fragment_start {
-                let mut fragment = old_fragments.item().unwrap().clone();
+                let mut fragment = old_fragments
+                    .item()
+                    .expect("entry should be present")
+                    .clone();
                 fragment.len = (fragment_end.0 - fragment_start.0) as u32;
                 fragment.insertion_offset +=
                     (fragment_start - old_fragments.start().0.full_offset()) as u32;
@@ -1191,7 +1214,10 @@ impl Buffer {
 
             // Preserve any portion of the current fragment that precedes this range.
             if fragment_start < range.start {
-                let mut prefix = old_fragments.item().unwrap().clone();
+                let mut prefix = old_fragments
+                    .item()
+                    .expect("entry should be present")
+                    .clone();
                 prefix.len = (range.start.0 - fragment_start.0) as u32;
                 prefix.insertion_offset +=
                     (fragment_start - old_fragments.start().0.full_offset()) as u32;
@@ -1232,7 +1258,7 @@ impl Buffer {
             // Advance through every fragment that intersects this range, marking the intersecting
             // portions as deleted.
             while fragment_start < range.end {
-                let fragment = old_fragments.item().unwrap();
+                let fragment = old_fragments.item().expect("entry should be present");
                 let fragment_end = old_fragments.end().0.full_offset();
                 let mut intersection = fragment.clone();
                 let intersection_end = cmp::min(range.end, fragment_end);
@@ -1275,7 +1301,10 @@ impl Buffer {
         if fragment_start > old_fragments.start().0.full_offset() {
             let fragment_end = old_fragments.end().0.full_offset();
             if fragment_end > fragment_start {
-                let mut suffix = old_fragments.item().unwrap().clone();
+                let mut suffix = old_fragments
+                    .item()
+                    .expect("entry should be present")
+                    .clone();
                 suffix.len = (fragment_end.0 - fragment_start.0) as u32;
                 suffix.insertion_offset +=
                     (fragment_start - old_fragments.start().0.full_offset()) as u32;
@@ -1520,7 +1549,7 @@ impl Buffer {
     pub fn end_transaction_at(&mut self, now: Instant) -> Option<(TransactionId, clock::Global)> {
         if let Some(entry) = self.history.end_transaction(now) {
             let since = entry.transaction.start.clone();
-            let id = self.history.group().unwrap();
+            let id = self.history.group().expect("group should be present");
             Some((id, since))
         } else {
             None
@@ -2471,7 +2500,7 @@ impl BufferSnapshot {
             } else {
                 fragment_cursor.seek_forward(&fragment_id, Bias::Left);
             }
-            let fragment = fragment_cursor.item().unwrap();
+            let fragment = fragment_cursor.item().expect("fragment should be present");
             let mut fragment_offset = fragment_cursor.start().1;
             if fragment.visible {
                 fragment_offset += (anchor.offset - insertion.split_offset) as usize;
@@ -2520,7 +2549,7 @@ impl BufferSnapshot {
                     &Some(&insertion.fragment_id),
                     Bias::Left,
                 );
-            let fragment = item.unwrap();
+            let fragment = item.expect("value should be present");
             let mut fragment_offset = start.1;
             if fragment.visible {
                 fragment_offset += (anchor.offset - insertion.split_offset) as usize;
@@ -2815,7 +2844,8 @@ impl BufferSnapshot {
 
     pub fn range_to_version(&self, range: Range<usize>, version: &clock::Global) -> Range<usize> {
         let mut offsets = self.offsets_to_version([range.start, range.end], version);
-        offsets.next().unwrap()..offsets.next().unwrap()
+        offsets.next().expect("iterator should yield an item")
+            ..offsets.next().expect("iterator should yield an item")
     }
 
     /// Converts the given sequence of offsets into their corresponding offsets
@@ -3330,7 +3360,7 @@ impl<'a> sum_tree::Dimension<'a, FragmentSummary> for VersionedFullOffset {
 
     fn add_summary(&mut self, summary: &'a FragmentSummary, cx: &Option<clock::Global>) {
         if let Self::Offset(offset) = self {
-            let version = cx.as_ref().unwrap();
+            let version = cx.as_ref().expect("value should have the expected type");
             if version.observed_all(&summary.max_insertion_version) {
                 *offset += summary.text.visible + summary.text.deleted;
             } else if version.observed_any(&summary.min_insertion_version) {

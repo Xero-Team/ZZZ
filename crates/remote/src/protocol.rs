@@ -10,7 +10,7 @@ pub type MessageLen = u32;
 pub const MESSAGE_LEN_SIZE: usize = size_of::<MessageLen>();
 
 pub fn message_len_from_buffer(buffer: &[u8]) -> MessageLen {
-    MessageLen::from_le_bytes(buffer.try_into().unwrap())
+    MessageLen::from_le_bytes(buffer.try_into().expect("conversion should succeed"))
 }
 
 pub async fn read_message_with_len<S: AsyncRead + Unpin>(

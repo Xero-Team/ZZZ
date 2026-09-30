@@ -20,7 +20,7 @@ use crate::get_host_from_git_remote_url;
 
 fn pull_request_number_regex() -> &'static Regex {
     static PULL_REQUEST_NUMBER_REGEX: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"\(#(\d+)\)$").unwrap());
+        LazyLock::new(|| Regex::new(r"\(#(\d+)\)$").expect("valid regex literal"));
     &PULL_REQUEST_NUMBER_REGEX
 }
 
@@ -99,7 +99,10 @@ impl Github {
     }
 
     pub fn public_instance() -> Self {
-        Self::new("GitHub", Url::parse("https://github.com").unwrap())
+        Self::new(
+            "GitHub",
+            Url::parse("https://github.com").expect("URL literal should be valid"),
+        )
     }
 
     pub fn from_remote_url(remote_url: &str) -> Result<Self> {
@@ -221,7 +224,7 @@ impl GitHostingProvider for Github {
 
         self.base_url()
             .join(&format!("{owner}/{repo}/commit/{sha}"))
-            .unwrap()
+            .expect("value should be present")
     }
 
     fn build_permalink(&self, remote: ParsedGitRemote, params: BuildPermalinkParams) -> Url {
@@ -235,7 +238,7 @@ impl GitHostingProvider for Github {
         let mut permalink = self
             .base_url()
             .join(&format!("{owner}/{repo}/blob/{sha}/{path}"))
-            .unwrap();
+            .expect("value should be present");
         if std::path::Path::new(&path)
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
@@ -322,7 +325,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -343,7 +346,7 @@ mod tests {
         assert_eq!(github.name, "GitHub Self-Hosted".to_string());
         assert_eq!(
             github.base_url,
-            Url::parse("https://github.my-enterprise.com").unwrap()
+            Url::parse("https://github.my-enterprise.com").expect("URL literal should be valid")
         );
     }
 
@@ -356,7 +359,7 @@ mod tests {
         assert_eq!(github.name, "GitHub Self-Hosted".to_string());
         assert_eq!(
             github.base_url,
-            Url::parse("https://github.my-enterprise.com").unwrap()
+            Url::parse("https://github.my-enterprise.com").expect("URL literal should be valid")
         );
     }
 
@@ -372,7 +375,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -389,7 +392,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -404,7 +407,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -419,7 +422,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -443,7 +446,7 @@ mod tests {
     fn test_build_github_permalink_from_ssh_url() {
         let remote = ParsedGitRemote {
             owner: "zed-industries".into(),
-            repo: "zzz".into(),
+            repo: "zed".into(),
         };
         let permalink = Github::public_instance().build_permalink(
             remote,
@@ -463,11 +466,11 @@ mod tests {
         let permalink = Github::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "b2efec9824c45fcc90c9a7eb107a50d1772a60aa",
-                &repo_path("crates/zzz/src/main.rs"),
+                &repo_path("crates/zed/src/main.rs"),
                 None,
             ),
         );
@@ -481,7 +484,7 @@ mod tests {
         let permalink = Github::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "e6ebe7974deb6bb6cc0e2595c8ec31f0c71084b7",
@@ -499,7 +502,7 @@ mod tests {
         let permalink = Github::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "e6ebe7974deb6bb6cc0e2595c8ec31f0c71084b7",
@@ -516,7 +519,7 @@ mod tests {
     fn test_build_github_create_pr_url() {
         let remote = ParsedGitRemote {
             owner: "zed-industries".into(),
-            repo: "zzz".into(),
+            repo: "zed".into(),
         };
 
         let provider = Github::public_instance();
@@ -535,7 +538,7 @@ mod tests {
     fn test_github_pull_requests() {
         let remote = ParsedGitRemote {
             owner: "zed-industries".into(),
-            repo: "zzz".into(),
+            repo: "zed".into(),
         };
 
         let github = Github::public_instance();
@@ -596,7 +599,7 @@ mod tests {
     fn test_build_create_pull_request_url() {
         let remote = ParsedGitRemote {
             owner: "zed-industries".into(),
-            repo: "zzz".into(),
+            repo: "zed".into(),
         };
 
         let github = Github::public_instance();
@@ -609,7 +612,7 @@ mod tests {
             "https://github.com/zed-industries/zed/pull/new/feature%2Fnew-feature"
         );
 
-        let base_url = Url::parse("https://github.zed.com").unwrap();
+        let base_url = Url::parse("https://github.zed.com").expect("URL literal should be valid");
         let github = Github::new("GitHub Self-Hosted", base_url);
         let url = github
             .build_create_pull_request_url(&remote, "feature/new-feature")

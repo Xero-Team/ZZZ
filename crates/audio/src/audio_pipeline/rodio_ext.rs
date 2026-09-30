@@ -195,9 +195,9 @@ pub struct ToMono<S> {
 }
 impl<S: Source> ToMono<S> {
     fn new(input: S) -> Self {
-        let channels = input
-            .channels()
-            .min(const { NonZero::<u16>::new(MAX_CHANNELS as u16).unwrap() });
+        let channels = input.channels().min(
+            const { NonZero::<u16>::new(MAX_CHANNELS as u16).expect("value should be present") },
+        );
         if channels < input.channels() {
             warn!("Ignoring input channels {}..", channels.get());
         }

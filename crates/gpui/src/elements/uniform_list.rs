@@ -367,7 +367,11 @@ impl Element for UniformList {
             height: longest_item_size.height * self.item_count,
         };
 
-        let shared_scroll_offset = self.interactivity.scroll_offset.clone().unwrap();
+        let shared_scroll_offset = self
+            .interactivity
+            .scroll_offset
+            .clone()
+            .expect("value should be present");
         let item_height = longest_item_size.height;
         let shared_scroll_to_item = self.scroll_handle.as_mut().and_then(|handle| {
             let mut handle = handle.0.borrow_mut();

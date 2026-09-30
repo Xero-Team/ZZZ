@@ -753,7 +753,8 @@ impl LspCommand for GetLspRunnables {
                 .map(|(location, task_template)| proto::LspRunnable {
                     location: location
                         .map(|location| location_link_to_proto(location, lsp_store, peer_id, cx)),
-                    task_template: serde_json::to_vec(&task_template).unwrap(),
+                    task_template: serde_json::to_vec(&task_template)
+                        .expect("serializing to JSON cannot fail"),
                 })
                 .collect(),
         }

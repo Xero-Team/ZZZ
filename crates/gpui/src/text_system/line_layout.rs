@@ -152,7 +152,10 @@ impl LineLayout {
             .enumerate()
             .flat_map(move |(run_ix, run)| {
                 run.glyphs.iter().enumerate().map(move |(glyph_ix, glyph)| {
-                    let character = text[glyph.index..].chars().next().unwrap();
+                    let character = text[glyph.index..]
+                        .chars()
+                        .next()
+                        .expect("iterator should yield an item");
                     (
                         WrapBoundary { run_ix, glyph_ix },
                         character,

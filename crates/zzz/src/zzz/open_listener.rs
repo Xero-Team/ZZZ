@@ -2363,7 +2363,10 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
 
-        let exit_status = cli_thread.join().unwrap().expect("CLI loop failed");
+        let exit_status = cli_thread
+            .join()
+            .expect("join should be present")
+            .expect("CLI loop failed");
 
         // Flush any remaining async work (e.g. settings file writes).
         cx.run_until_parked();

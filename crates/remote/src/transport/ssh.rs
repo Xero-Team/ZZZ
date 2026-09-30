@@ -687,7 +687,11 @@ impl SshRemoteConnection {
 
             if master_process.as_mut().try_status()?.is_some() {
                 let mut output = Vec::new();
-                let mut stderr = master_process.as_mut().stderr.take().unwrap();
+                let mut stderr = master_process
+                    .as_mut()
+                    .stderr
+                    .take()
+                    .expect("entry should be present");
                 stderr.read_to_end(&mut output).await?;
 
                 let error_message = format!(
@@ -744,7 +748,11 @@ impl SshRemoteConnection {
 
             if master_process.as_mut().try_status()?.is_some() {
                 let mut output = Vec::new();
-                let mut stderr = master_process.as_mut().stderr.take().unwrap();
+                let mut stderr = master_process
+                    .as_mut()
+                    .stderr
+                    .take()
+                    .expect("entry should be present");
                 stderr.read_to_end(&mut output).await?;
 
                 let error_message = format!(
@@ -822,8 +830,8 @@ impl SshRemoteConnection {
             &version_str,
             self.ssh_platform.os.is_windows(),
         );
-        let dst_path =
-            paths::remote_server_dir_relative().join(RelPath::unix(&binary_name).unwrap());
+        let dst_path = paths::remote_server_dir_relative()
+            .join(RelPath::unix(&binary_name).expect("path should be a valid relative path"));
 
         let binary_exists_on_server = self
             .socket
@@ -849,9 +857,12 @@ impl SshRemoteConnection {
                 RelPath::unix(&format!(
                     "download-{}-{}",
                     std::process::id(),
-                    remote_server_path.file_name().unwrap().to_string_lossy()
+                    remote_server_path
+                        .file_name()
+                        .expect("path should have the expected component")
+                        .to_string_lossy()
                 ))
-                .unwrap(),
+                .expect("value should be present"),
             );
             self.upload_local_server_binary(&remote_server_path, &tmp_path, delegate, cx)
                 .await?;
@@ -877,7 +888,7 @@ impl SshRemoteConnection {
                     binary_name,
                     std::process::id(),
                 ))
-                .unwrap(),
+                .expect("value should be present"),
             );
             self.upload_local_server_binary(embedded.path(), &tmp_path_compressed, delegate, cx)
                 .await
@@ -1496,7 +1507,11 @@ impl SshConnectionOptions {
                 let forward_spec = if arg == "-L" {
                     tokens.next()
                 } else {
-                    Some(arg.strip_prefix("-L").unwrap().to_owned())
+                    Some(
+                        arg.strip_prefix("-L")
+                            .expect("strip_prefix should be present")
+                            .to_owned(),
+                    )
                 };
 
                 if let Some(spec) = forward_spec {

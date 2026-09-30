@@ -146,7 +146,8 @@ impl SelectionsCollection {
                         next_selection.end,
                         false,
                     ) {
-                        let next_selection = disjoint.next().unwrap();
+                        let next_selection =
+                            disjoint.next().expect("iterator should yield an item");
                         if next_selection.start < pending.start {
                             pending.start = next_selection.start;
                         }
@@ -265,7 +266,8 @@ impl SelectionsCollection {
                         next_selection.end,
                         false,
                     ) {
-                        let next_selection = disjoint.next().unwrap();
+                        let next_selection =
+                            disjoint.next().expect("iterator should yield an item");
                         if next_selection.start < pending.start {
                             pending.start = next_selection.start;
                         }
@@ -292,7 +294,7 @@ impl SelectionsCollection {
             .as_ref()
             .map(|s| &s.selection)
             .or_else(|| self.disjoint.iter().max_by_key(|s| s.id))
-            .unwrap()
+            .expect("value should be present")
     }
 
     pub fn newest<D>(&self, snapshot: &DisplaySnapshot) -> Selection<D>
@@ -301,13 +303,13 @@ impl SelectionsCollection {
     {
         resolve_selections_wrapping_blocks([self.newest_anchor()], &snapshot)
             .next()
-            .unwrap()
+            .expect("iterator should yield an item")
     }
 
     pub fn newest_display(&self, snapshot: &DisplaySnapshot) -> Selection<DisplayPoint> {
         resolve_selections_display([self.newest_anchor()], &snapshot)
             .next()
-            .unwrap()
+            .expect("iterator should yield an item")
     }
 
     pub fn oldest_anchor(&self) -> &Selection<Anchor> {
@@ -315,7 +317,7 @@ impl SelectionsCollection {
             .iter()
             .min_by_key(|s| s.id)
             .or_else(|| self.pending.as_ref().map(|p| &p.selection))
-            .unwrap()
+            .expect("value should be present")
     }
 
     pub fn oldest<D>(&self, snapshot: &DisplaySnapshot) -> Selection<D>
@@ -324,12 +326,17 @@ impl SelectionsCollection {
     {
         resolve_selections_wrapping_blocks([self.oldest_anchor()], &snapshot)
             .next()
-            .unwrap()
+            .expect("iterator should yield an item")
     }
 
     pub fn first_anchor(&self) -> Selection<Anchor> {
         self.pending.as_ref().map_or_else(
-            || self.disjoint.first().cloned().unwrap(),
+            || {
+                self.disjoint
+                    .first()
+                    .cloned()
+                    .expect("cloned should be present")
+            },
             |pending| pending.selection.clone(),
         )
     }
@@ -345,9 +352,11 @@ impl SelectionsCollection {
         {
             return resolve_selections_wrapping_blocks([first], snapshot)
                 .next()
-                .unwrap();
+                .expect("iterator should yield an item");
         }
-        self.all_iter(snapshot).next().unwrap()
+        self.all_iter(snapshot)
+            .next()
+            .expect("iterator should yield an item")
     }
 
     pub fn last<D>(&self, snapshot: &DisplaySnapshot) -> Selection<D>
@@ -359,9 +368,11 @@ impl SelectionsCollection {
         {
             return resolve_selections_wrapping_blocks([last], snapshot)
                 .next()
-                .unwrap();
+                .expect("iterator should yield an item");
         }
-        self.all_iter(snapshot).last().unwrap()
+        self.all_iter(snapshot)
+            .last()
+            .expect("collection should not be empty")
     }
 
     /// Returns a list of (potentially backwards!) ranges representing the selections.
@@ -1146,8 +1157,8 @@ fn resolve_selections_point<'a>(
         .summaries_for_anchors::<Point, _>(to_summarize.flat_map(|s| [&s.start, &s.end]))
         .into_iter();
     selections.map(move |s| {
-        let start = summaries.next().unwrap();
-        let end = summaries.next().unwrap();
+        let start = summaries.next().expect("iterator should yield an item");
+        let end = summaries.next().expect("iterator should yield an item");
         assert!(
             start <= end,
             "anchors: start: {:?}, end: {:?}; resolved to: start: {:?}, end: {:?}",
@@ -1238,8 +1249,12 @@ where
         .buffer_snapshot()
         .dimensions_from_points::<D>(to_convert.flat_map(|s| [s.start, s.end]));
     selections.map(move |s| {
-        let start = converted_endpoints.next().unwrap();
-        let end = converted_endpoints.next().unwrap();
+        let start = converted_endpoints
+            .next()
+            .expect("iterator should yield an item");
+        let end = converted_endpoints
+            .next()
+            .expect("iterator should yield an item");
         Selection {
             id: s.id,
             start,
@@ -1270,8 +1285,12 @@ where
                 [start, end]
             }));
     selections.map(move |s| {
-        let start = converted_endpoints.next().unwrap();
-        let end = converted_endpoints.next().unwrap();
+        let start = converted_endpoints
+            .next()
+            .expect("iterator should yield an item");
+        let end = converted_endpoints
+            .next()
+            .expect("iterator should yield an item");
         assert!(start <= end, "start: {:?}, end: {:?}", start, end);
         Selection {
             id: s.id,

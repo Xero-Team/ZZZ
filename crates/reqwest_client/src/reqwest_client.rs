@@ -17,7 +17,8 @@ use reqwest::{
 
 const DEFAULT_CAPACITY: usize = 4096;
 static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-static REDACT_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"key=[^&]+").unwrap());
+static REDACT_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"key=[^&]+").expect("valid regex literal"));
 
 pub struct ReqwestClient {
     client: reqwest::Client,
@@ -347,7 +348,9 @@ impl http_client::HttpClient for ReqwestClient {
             let mut builder = http::Response::builder()
                 .status(response.status().as_u16())
                 .version(response.version());
-            *builder.headers_mut().unwrap() = headers;
+            *builder
+                .headers_mut()
+                .expect("headers_mut should be present") = headers;
 
             let (mut body_tx, body_rx) = futures::channel::mpsc::channel(1);
             drop(handle.spawn(async move {

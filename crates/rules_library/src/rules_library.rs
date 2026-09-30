@@ -445,7 +445,10 @@ impl PickerDelegate for RulePickerDelegate {
         _: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Div> {
-        let editor = editor.as_any().downcast_ref::<Entity<Editor>>().unwrap();
+        let editor = editor
+            .as_any()
+            .downcast_ref::<Entity<Editor>>()
+            .expect("downcast should succeed");
 
         Some(
             h_flex()
@@ -568,15 +571,22 @@ impl RulesLibrary {
             return;
         }
 
-        let rule_metadata = self.store.read(cx).metadata(prompt_id).unwrap();
-        let rule_editor = self.rule_editors.get_mut(&prompt_id).unwrap();
+        let rule_metadata = self
+            .store
+            .read(cx)
+            .metadata(prompt_id)
+            .expect("metadata should be present");
+        let rule_editor = self
+            .rule_editors
+            .get_mut(&prompt_id)
+            .expect("entry should be present");
         let title = rule_editor.title_editor.read(cx).text(cx);
         let body = rule_editor.body_editor.update(cx, |editor, cx| {
             editor
                 .buffer()
                 .read(cx)
                 .as_singleton()
-                .unwrap()
+                .expect("as_singleton should be present")
                 .read(cx)
                 .as_rope()
                 .clone()

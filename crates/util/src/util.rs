@@ -301,7 +301,11 @@ fn load_shell_from_passwd() -> Result<()> {
         uid,
     );
 
-    let shell = unsafe { std::ffi::CStr::from_ptr(entry.pw_shell).to_str().unwrap() };
+    let shell = unsafe {
+        std::ffi::CStr::from_ptr(entry.pw_shell)
+            .to_str()
+            .expect("path should be valid UTF-8")
+    };
     let should_set_shell = std::env::var("SHELL").map_or(true, |shell_env| {
         shell_env != shell && !std::path::Path::new(&shell_env).exists()
     });
@@ -519,7 +523,9 @@ pub fn merge_non_null_json_value_into(source: serde_json::Value, target: &mut se
             target
         } else {
             *target = Value::Object(Default::default());
-            target.as_object_mut().unwrap()
+            target
+                .as_object_mut()
+                .expect("value should have the expected type")
         };
         for (key, value) in source_object {
             if let Some(target) = target_object.get_mut(&key) {
@@ -657,8 +663,12 @@ pub use rng::RandomCharIter;
 /// Get an embedded file as a string.
 pub fn asset_str<A: rust_embed::RustEmbed>(path: &str) -> Cow<'static, str> {
     match A::get(path).expect(path).data {
-        Cow::Borrowed(bytes) => Cow::Borrowed(std::str::from_utf8(bytes).unwrap()),
-        Cow::Owned(bytes) => Cow::Owned(String::from_utf8(bytes).unwrap()),
+        Cow::Borrowed(bytes) => {
+            Cow::Borrowed(std::str::from_utf8(bytes).expect("from_utf8 should be present"))
+        }
+        Cow::Owned(bytes) => {
+            Cow::Owned(String::from_utf8(bytes).expect("from_utf8 should be present"))
+        }
     }
 }
 
@@ -750,7 +760,7 @@ impl PartialOrd for NumericPrefixWithSuffix<'_> {
 
 fn emoji_regex() -> &'static Regex {
     static EMOJI_REGEX: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new("(\\p{Emoji}|\u{200D})").unwrap());
+        LazyLock::new(|| Regex::new("(\\p{Emoji}|\u{200D})").expect("valid regex literal"));
     &EMOJI_REGEX
 }
 

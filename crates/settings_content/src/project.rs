@@ -1248,7 +1248,8 @@ mod tests {
         assert!(command.args.is_empty());
 
         let settings: ContextServerSettingsContent =
-            serde_json::from_str(r#"{ "command": "echo", "args": ["hello"] }"#).unwrap();
+            serde_json::from_str(r#"{ "command": "echo", "args": ["hello"] }"#)
+                .expect("parsing a JSON literal cannot fail");
         let ContextServerSettingsContent::Stdio { command, .. } = settings else {
             panic!("expected Stdio variant, got {settings:?}");
         };

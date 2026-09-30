@@ -1032,7 +1032,7 @@ fn surrounding_filename(
         // Skip escaped whitespace
         if ch == '\\' && forwards.peek().is_some_and(|ch| ch.is_whitespace()) {
             token_end += ch.len_utf8();
-            let whitespace = forwards.next().unwrap();
+            let whitespace = forwards.next().expect("iterator should yield an item");
             token_end += whitespace.len_utf8();
             filename.push(whitespace);
             continue;

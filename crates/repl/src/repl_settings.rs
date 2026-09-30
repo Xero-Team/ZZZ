@@ -31,11 +31,14 @@ pub struct ReplSettings {
 
 impl Settings for ReplSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let repl = content.repl.as_ref().unwrap();
+        let repl = content
+            .repl
+            .as_ref()
+            .expect("value should have the expected type");
 
         Self {
-            max_lines: repl.max_lines.unwrap(),
-            max_columns: repl.max_columns.unwrap(),
+            max_lines: repl.max_lines.expect("max_lines should be present"),
+            max_columns: repl.max_columns.expect("max_columns should be present"),
             inline_output: repl.inline_output.unwrap_or(true),
             inline_output_max_length: repl.inline_output_max_length.unwrap_or(50),
             output_max_height_lines: repl.output_max_height_lines.unwrap_or(0),

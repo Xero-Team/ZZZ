@@ -73,14 +73,16 @@ static mut APP_DELEGATE_CLASS: *const Class = ptr::null();
 unsafe fn build_classes() {
     unsafe {
         APP_CLASS = {
-            let mut decl = ClassDecl::new("GPUIApplication", class!(NSApplication)).unwrap();
+            let mut decl = ClassDecl::new("GPUIApplication", class!(NSApplication))
+                .expect("value should be present");
             decl.add_ivar::<*mut c_void>(MAC_PLATFORM_IVAR);
             decl.register()
         }
     };
     unsafe {
         APP_DELEGATE_CLASS = {
-            let mut decl = ClassDecl::new("GPUIApplicationDelegate", class!(NSResponder)).unwrap();
+            let mut decl = ClassDecl::new("GPUIApplicationDelegate", class!(NSResponder))
+                .expect("value should be present");
             decl.add_ivar::<*mut c_void>(MAC_PLATFORM_IVAR);
             decl.add_method(
                 sel!(applicationWillFinishLaunching:),
@@ -558,7 +560,7 @@ impl Platform for MacPlatform {
                     // and get the path to the executable itself.
                     .and_then(|path| (path.extension()?.to_str()? == "app").then_some(path))
             })
-            .unwrap_or_else(|| std::env::current_exe().unwrap());
+            .unwrap_or_else(|| std::env::current_exe().expect("current_exe should be present"));
 
         // Wait until this process has exited and then re-open this path.
         let script = r#"
@@ -1247,7 +1249,8 @@ unsafe fn apply_window_appearance(appearance: Option<WindowAppearance>) {
 unsafe fn path_from_objc(path: id) -> PathBuf {
     let len = msg_send![path, lengthOfBytesUsingEncoding: NSUTF8StringEncoding];
     let bytes = unsafe { path.UTF8String().cast::<u8>() };
-    let path = str::from_utf8(unsafe { slice::from_raw_parts(bytes, len) }).unwrap();
+    let path = str::from_utf8(unsafe { slice::from_raw_parts(bytes, len) })
+        .expect("value should be present");
     PathBuf::from(path)
 }
 

@@ -643,7 +643,7 @@ impl MessageEditor {
             let snapshot = editor.buffer().read(cx).snapshot(cx);
             snapshot
                 .anchor_to_buffer_anchor(snapshot.anchor_before(Point::zero()))
-                .unwrap()
+                .expect("value should be present")
                 .0
         });
 
@@ -986,7 +986,7 @@ impl MessageEditor {
             let snapshot = self.editor.read(cx).buffer().read(cx).snapshot(cx);
             let (insertion_target, _) = snapshot
                 .anchor_to_buffer_anchor(self.editor.read(cx).selections.newest_anchor().start)
-                .unwrap();
+                .expect("value should be present");
 
             let project = workspace.read(cx).project().clone();
             for selection in selections {
@@ -1006,7 +1006,9 @@ impl MessageEditor {
                     let (text_anchor, content_len) = self.editor.update(cx, |editor, cx| {
                         let buffer = editor.buffer().read(cx);
                         let snapshot = buffer.snapshot(cx);
-                        let buffer_snapshot = snapshot.as_singleton().unwrap();
+                        let buffer_snapshot = snapshot
+                            .as_singleton()
+                            .expect("as_singleton should be present");
                         let text_anchor = insertion_target.bias_left(&buffer_snapshot);
 
                         editor.insert(&mention_text, window, cx);
@@ -1127,7 +1129,10 @@ impl MessageEditor {
 
                     for (anchor, content_len, mention_uri) in all_mentions {
                         let Some((crease_id, tx)) = insert_crease_for_mention(
-                            snapshot.anchor_to_buffer_anchor(anchor).unwrap().0,
+                            snapshot
+                                .anchor_to_buffer_anchor(anchor)
+                                .expect("anchor_to_buffer_anchor should be present")
+                                .0,
                             content_len,
                             mention_uri.name().into(),
                             mention_uri.icon_path(cx),
@@ -1341,10 +1346,12 @@ impl MessageEditor {
                     let (text_anchor, content_len) = editor.update(cx, |editor, cx| {
                         let buffer = editor.buffer().read(cx);
                         let snapshot = buffer.snapshot(cx);
-                        let buffer_snapshot = snapshot.as_singleton().unwrap();
+                        let buffer_snapshot = snapshot
+                            .as_singleton()
+                            .expect("as_singleton should be present");
                         let text_anchor = snapshot
                             .anchor_to_buffer_anchor(editor.selections.newest_anchor().start)
-                            .unwrap()
+                            .expect("value should be present")
                             .0
                             .bias_left(&buffer_snapshot);
 
@@ -1648,7 +1655,10 @@ impl MessageEditor {
             let adjusted_start = insertion_start + range.start;
             let anchor = snapshot.anchor_before(MultiBufferOffset(adjusted_start));
             let Some((crease_id, tx)) = insert_crease_for_mention(
-                snapshot.anchor_to_buffer_anchor(anchor).unwrap().0,
+                snapshot
+                    .anchor_to_buffer_anchor(anchor)
+                    .expect("anchor_to_buffer_anchor should be present")
+                    .0,
                 range.end - range.start,
                 mention_uri.name().into(),
                 mention_uri.icon_path(cx),
@@ -1794,7 +1804,7 @@ impl MessageEditor {
                 if cursor < *start {
                     text.extend(snapshot.text_for_range(cursor..*start));
                 }
-                write!(text, "{}", uri.as_link()).unwrap();
+                write!(text, "{}", uri.as_link()).expect("value should be present");
                 cursor = *end;
                 has_mentions = true;
             }

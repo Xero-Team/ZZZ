@@ -333,9 +333,11 @@ impl Element for Img {
                                                         .checked_sub(
                                                             elapsed
                                                                 .checked_sub(frame_duration)
-                                                                .unwrap(),
+                                                                .expect(
+                                                                    "checked_sub should be present",
+                                                                ),
                                                         )
-                                                        .unwrap(),
+                                                        .expect("value should be present"),
                                                 );
                                             }
                                         } else {

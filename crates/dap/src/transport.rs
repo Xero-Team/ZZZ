@@ -613,9 +613,9 @@ impl Transport for TcpTransport {
 
                         let has_process = process.lock().is_some();
                         if has_process {
-                            let status = process.lock().as_mut().unwrap().try_status();
+                            let status = process.lock().as_mut().expect("value should have the expected type").try_status();
                             if let Ok(Some(_)) = status {
-                                let child = process.lock().take().unwrap();
+                                let child = process.lock().take().expect("entry should be present");
                                 let output = child.output().await?;
                                 let output = if output.stderr.is_empty() {
                                     String::from_utf8_lossy(&output.stdout).to_string()
@@ -774,7 +774,10 @@ impl FakeTransport {
                         request_seq: seq,
                         success: true,
                         command: R::COMMAND.into(),
-                        body: Some(serde_json::to_value(response).unwrap()),
+                        body: Some(
+                            serde_json::to_value(response)
+                                .expect("converting to a JSON value cannot fail"),
+                        ),
                         message: None,
                     },
                     Err(response) => Response {
@@ -782,7 +785,10 @@ impl FakeTransport {
                         request_seq: seq,
                         success: false,
                         command: R::COMMAND.into(),
-                        body: Some(serde_json::to_value(response).unwrap()),
+                        body: Some(
+                            serde_json::to_value(response)
+                                .expect("converting to a JSON value cannot fail"),
+                        ),
                         message: None,
                     },
                 };
@@ -842,8 +848,8 @@ impl FakeTransport {
                             if request.command == RunInTerminal::COMMAND
                                 || request.command == StartDebugging::COMMAND
                             {
-                                let message =
-                                    serde_json::to_string(&Message::Request(request)).unwrap();
+                                let message = serde_json::to_string(&Message::Request(request))
+                                    .expect("serializing to JSON cannot fail");
 
                                 let mut writer = stdout_writer.lock().await;
                                 writer
@@ -868,8 +874,8 @@ impl FakeTransport {
                                     }
                                 };
                                 let success = response.success;
-                                let message =
-                                    serde_json::to_string(&Message::Response(response)).unwrap();
+                                let message = serde_json::to_string(&Message::Response(response))
+                                    .expect("serializing to JSON cannot fail");
 
                                 let mut writer = stdout_writer.lock().await;
                                 writer
@@ -887,7 +893,7 @@ impl FakeTransport {
                                             Default::default(),
                                         )),
                                     )))
-                                    .unwrap();
+                                    .expect("serializing to JSON cannot fail");
                                     writer
                                         .write_all(
                                             TransportDelegate::build_rpc_message(message)
@@ -901,7 +907,8 @@ impl FakeTransport {
                             }
                         }
                         Message::Event(event) => {
-                            let message = serde_json::to_string(&Message::Event(event)).unwrap();
+                            let message = serde_json::to_string(&Message::Event(event))
+                                .expect("serializing to JSON cannot fail");
 
                             let mut writer = stdout_writer.lock().await;
                             writer

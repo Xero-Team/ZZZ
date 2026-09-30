@@ -829,7 +829,7 @@ impl ProjectItemRegistry {
         self.build_project_item_fns_by_type.insert(
             TypeId::of::<T::Item>(),
             |item, project, pane, window, cx| {
-                let item = item.downcast().unwrap();
+                let item = item.downcast().expect("downcast should succeed");
                 Box::new(cx.new(|cx| T::for_project_item(project, pane, item, window, cx)))
                     as Box<dyn ItemHandle>
             },
@@ -974,7 +974,13 @@ impl FollowableViewRegistry {
                             .spawn(async move { Ok(Box::new(task.await?) as Box<_>) })
                     })
                 },
-                to_followable_view: |view| Box::new(view.clone().downcast::<I>().unwrap()),
+                to_followable_view: |view| {
+                    Box::new(
+                        view.clone()
+                            .downcast::<I>()
+                            .expect("downcast should succeed"),
+                    )
+                },
             },
         );
     }
@@ -1091,7 +1097,9 @@ pub fn register_serializable_item<I: SerializableItem>(cx: &mut App) {
         cleanup: |workspace_id, loaded_items, window, cx| {
             I::cleanup(workspace_id, loaded_items, window, cx)
         },
-        view_to_serializable_item: |view| Box::new(view.downcast::<I>().unwrap()),
+        view_to_serializable_item: |view| {
+            Box::new(view.downcast::<I>().expect("downcast should succeed"))
+        },
     };
     registry
         .descriptors_by_kind
@@ -3038,7 +3046,10 @@ impl Workspace {
         // rather than gating on `use_system_path_prompts`. This would let tests
         // inject a mock without also having to disable the setting.
         if !lister.is_local(cx) || !WorkspaceSettings::get_global(cx).use_system_path_prompts {
-            let prompt = self.on_prompt_for_open_path.take().unwrap();
+            let prompt = self
+                .on_prompt_for_open_path
+                .take()
+                .expect("entry should be present");
             let rx = prompt(self, lister, window, cx);
             self.on_prompt_for_open_path = Some(prompt);
             rx
@@ -3058,7 +3069,10 @@ impl Workspace {
                     Err(err) => {
                         let rx = workspace.update_in(cx, |workspace, window, cx| {
                             workspace.show_portal_error(err.to_string(), cx);
-                            let prompt = workspace.on_prompt_for_open_path.take().unwrap();
+                            let prompt = workspace
+                                .on_prompt_for_open_path
+                                .take()
+                                .expect("entry should be present");
                             let rx = prompt(workspace, lister, window, cx);
                             workspace.on_prompt_for_open_path = Some(prompt);
                             rx
@@ -3086,7 +3100,10 @@ impl Workspace {
         if self.project.read(cx).is_via_remote_server()
             || !WorkspaceSettings::get_global(cx).use_system_path_prompts
         {
-            let prompt = self.on_prompt_for_new_path.take().unwrap();
+            let prompt = self
+                .on_prompt_for_new_path
+                .take()
+                .expect("entry should be present");
             let rx = prompt(self, lister, suggested_name, window, cx);
             self.on_prompt_for_new_path = Some(prompt);
             return rx;
@@ -3114,7 +3131,10 @@ impl Workspace {
                     let rx = workspace.update_in(cx, |workspace, window, cx| {
                         workspace.show_portal_error(err.to_string(), cx);
 
-                        let prompt = workspace.on_prompt_for_new_path.take().unwrap();
+                        let prompt = workspace
+                            .on_prompt_for_new_path
+                            .take()
+                            .expect("entry should be present");
                         let rx = prompt(workspace, lister, suggested_name, window, cx);
                         workspace.on_prompt_for_new_path = Some(prompt);
                         rx
@@ -3409,7 +3429,7 @@ impl Workspace {
         let mut state = self.dispatching_keystrokes.borrow_mut();
         if !state.dispatched.insert(keystrokes.clone()) {
             cx.propagate();
-            return state.task.clone().unwrap();
+            return state.task.clone().expect("value should be present");
         }
 
         state.queue.extend(keystrokes);
@@ -3459,7 +3479,7 @@ impl Workspace {
                     .shared(),
             );
         }
-        state.task.clone().unwrap()
+        state.task.clone().expect("value should be present")
     }
 
     /// Prompts the user to save or discard each dirty item, returning
@@ -5299,7 +5319,7 @@ impl Workspace {
         if self
             .center
             .move_to_border(&self.active_pane, direction, cx)
-            .unwrap()
+            .expect("move_to_border should be present")
         {
             cx.notify();
         }
@@ -5658,7 +5678,11 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.center.remove(&pane, cx).unwrap() {
+        if self
+            .center
+            .remove(&pane, cx)
+            .expect("entry should be present")
+        {
             if self
                 .maximized_pane
                 .as_ref()
@@ -6272,7 +6296,11 @@ impl Workspace {
             }
             focus_on.update(cx, |pane, cx| window.focus(&pane.focus_handle(cx), cx));
         } else if removing_active_pane {
-            let fallback_pane = self.panes.last().unwrap().clone();
+            let fallback_pane = self
+                .panes
+                .last()
+                .expect("collection should not be empty")
+                .clone();
             self.set_active_pane(&fallback_pane, window, cx);
             if !self.has_active_modal(window, cx) {
                 fallback_pane.update(cx, |pane, cx| window.focus(&pane.focus_handle(cx), cx));
@@ -9137,7 +9165,7 @@ pub fn open_paths(
                         });
                     });
                 })
-                .unwrap();
+                .expect("value should be present");
         };
         result
     })

@@ -1063,7 +1063,7 @@ impl StateInner {
                 }
             }
 
-            let size = size.unwrap();
+            let size = size.expect("value should be present");
             rendered_height += size.height;
             max_item_width = max_item_width.max(size.width);
             measured_items.push_back(ListItem::Measured {
@@ -1487,7 +1487,7 @@ impl Element for List {
                     state.logical_scroll_top = Some(autoscroll_request);
                     state
                         .prepaint_items(bounds, padding, false, &mut self.render_item, window, cx)
-                        .unwrap()
+                        .expect("prepaint_items should be present")
                 }
             };
 
@@ -1620,13 +1620,17 @@ impl<'a> sum_tree::Dimension<'a, ListItemSummary> for Height {
 
 impl sum_tree::SeekTarget<'_, ListItemSummary, ListItemSummary> for Count {
     fn cmp(&self, other: &ListItemSummary, _: ()) -> std::cmp::Ordering {
-        self.0.partial_cmp(&other.count).unwrap()
+        self.0
+            .partial_cmp(&other.count)
+            .expect("partial_cmp should be present")
     }
 }
 
 impl sum_tree::SeekTarget<'_, ListItemSummary, ListItemSummary> for Height {
     fn cmp(&self, other: &ListItemSummary, _: ()) -> std::cmp::Ordering {
-        self.0.partial_cmp(&other.height).unwrap()
+        self.0
+            .partial_cmp(&other.height)
+            .expect("partial_cmp should be present")
     }
 }
 

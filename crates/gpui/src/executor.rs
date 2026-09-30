@@ -239,7 +239,10 @@ impl BackgroundExecutor {
     /// In tests, run an arbitrary number of tasks (determined by the SEED environment variable)
     #[cfg(all(not(target_family = "wasm"), any(test, feature = "test-support")))]
     pub fn simulate_random_delay(&self) -> impl Future<Output = ()> + use<> {
-        self.dispatcher.as_test().unwrap().simulate_random_delay()
+        self.dispatcher
+            .as_test()
+            .expect("as_test should be present")
+            .simulate_random_delay()
     }
 
     /// In tests, move time forward. This does not run any tasks, but does make `timer`s ready.
@@ -477,7 +480,7 @@ impl<'a> Scope<'a> {
     where
         F: Future<Output = ()> + Send + 'a,
     {
-        let tx = self.tx.clone().unwrap();
+        let tx = self.tx.clone().expect("value should be present");
 
         // SAFETY: The 'a lifetime is guaranteed to outlive any of these futures because
         // dropping this `Scope` blocks until all of the futures have resolved.
@@ -497,7 +500,7 @@ impl<'a> Scope<'a> {
 #[cfg(not(target_family = "wasm"))]
 impl Drop for Scope<'_> {
     fn drop(&mut self) {
-        self.tx.take().unwrap();
+        self.tx.take().expect("entry should be present");
 
         // Wait until the channel is closed, which means that all of the spawned
         // futures have resolved.

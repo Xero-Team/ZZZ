@@ -695,8 +695,11 @@ impl Client {
         let prev_handler = state.message_handlers.insert(
             message_type_id,
             Arc::new(move |subscriber, envelope, client, cx| {
-                let subscriber = subscriber.downcast::<E>().unwrap();
-                let envelope = envelope.into_any().downcast::<TypedEnvelope<M>>().unwrap();
+                let subscriber = subscriber.downcast::<E>().expect("downcast should succeed");
+                let envelope = envelope
+                    .into_any()
+                    .downcast::<TypedEnvelope<M>>()
+                    .expect("downcast should succeed");
                 handler(subscriber, *envelope, client, cx).boxed_local()
             }),
         );
@@ -790,7 +793,7 @@ impl Client {
             }
         }
 
-        let credentials = credentials.unwrap();
+        let credentials = credentials.expect("value should be present");
         self.set_id(credentials.user_id);
         self.state.write().credentials = Some(credentials.clone());
         self.set_status(
@@ -1099,7 +1102,7 @@ impl Client {
                     Https => "wss",
                     Http => "ws",
                 })
-                .unwrap();
+                .expect("set_scheme should be present");
 
             // We call `into_client_request` to let `tungstenite` construct the WebSocket request
             // for us from the RPC URL.

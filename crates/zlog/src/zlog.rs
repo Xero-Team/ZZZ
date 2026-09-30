@@ -206,12 +206,10 @@ pub const fn scoped_logger(parent: Logger, name: &'static str) -> Logger {
     while index < scope.len() && !scope[index].is_empty() {
         index += 1;
     }
-    if index >= scope.len() {
-        #[cfg(debug_assertions)]
-        {
-            panic!("Scope overflow trying to add scope... ignoring scope");
-        }
-    }
+    debug_assert!(
+        index < scope.len(),
+        "Scope overflow trying to add scope... ignoring scope"
+    );
     scope[index] = name;
     Logger { scope }
 }

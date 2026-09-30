@@ -564,7 +564,7 @@ fn wasm_engine(executor: &BackgroundExecutor) -> wasmtime::Engine {
             config.wasm_component_model(true);
             config
                 .enable_incremental_compilation(cache_store())
-                .unwrap();
+                .expect("value should be present");
             // Async support introduces the issue that extension execution happens during `Future::poll`,
             // which could block an async thread.
             // https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#execution-in-poll
@@ -573,7 +573,7 @@ fn wasm_engine(executor: &BackgroundExecutor) -> wasmtime::Engine {
             // back to the executor at regular intervals.
             config.epoch_interruption(true);
 
-            let engine = wasmtime::Engine::new(&config).unwrap();
+            let engine = wasmtime::Engine::new(&config).expect("value should be present");
 
             // It might be safer to do this on a non-async thread to make sure it makes progress
             // regardless of if extensions are blocking.

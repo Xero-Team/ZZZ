@@ -69,7 +69,7 @@ impl GitJobDebugQueue {
             return;
         };
         // Safe to unwrap: `index` was just found by `position()`, so it's in bounds.
-        let pending = self.pending.remove(index).unwrap();
+        let pending = self.pending.remove(index).expect("entry should be present");
 
         self.running.push_back(RunningJob {
             id: pending.id,
@@ -95,7 +95,7 @@ impl GitJobDebugQueue {
     pub fn mark_complete(&mut self, id: JobId, status: CompletedJobStatus) {
         let (enqueued_at, started_at, description, key) =
             if let Some(index) = self.running.iter().position(|job| job.id == id) {
-                let running = self.running.remove(index).unwrap();
+                let running = self.running.remove(index).expect("entry should be present");
                 (
                     running.enqueued_at,
                     Some(running.started_at),
@@ -103,7 +103,7 @@ impl GitJobDebugQueue {
                     running.key,
                 )
             } else if let Some(index) = self.pending.iter().position(|job| job.id == id) {
-                let pending = self.pending.remove(index).unwrap();
+                let pending = self.pending.remove(index).expect("entry should be present");
                 (pending.enqueued_at, None, pending.description, pending.key)
             } else {
                 return;

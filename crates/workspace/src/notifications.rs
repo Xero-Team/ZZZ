@@ -1306,7 +1306,7 @@ where
                 }
                 return None;
             }
-            Some(result.unwrap())
+            Some(result.expect("value should be present"))
         })
     }
 

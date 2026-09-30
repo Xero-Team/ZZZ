@@ -249,7 +249,7 @@ impl PendingDiff {
                 let task1 = diff.set_snapshot(update.clone(), &text_snapshot, cx);
                 let task2 = diff
                     .secondary_diff()
-                    .unwrap()
+                    .expect("secondary_diff should be present")
                     .update(cx, |diff, cx| diff.set_snapshot(update, &text_snapshot, cx));
                 (task1, task2)
             });

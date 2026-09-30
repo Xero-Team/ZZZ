@@ -81,7 +81,8 @@ mod tests {
 
     #[test]
     fn generated_schema_includes_known_flags_and_unknown_string_fallback() {
-        let schema = serde_json::to_value(generate_feature_flags_schema()).unwrap();
+        let schema = serde_json::to_value(generate_feature_flags_schema())
+            .expect("converting to a JSON value cannot fail");
 
         assert_eq!(schema["type"], "object");
         assert_eq!(schema["additionalProperties"]["type"], "string");

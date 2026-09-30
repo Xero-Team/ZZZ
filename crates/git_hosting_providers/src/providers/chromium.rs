@@ -23,7 +23,7 @@ fn pull_request_regex() -> &'static Regex {
         Regex::new(&format!(
             r#"Reviewed-on: ({CHROMIUM_REVIEW_URL}/c/(.*)/\+/(\d+))"#
         ))
-        .unwrap()
+        .expect("valid regex literal")
     });
     &PULL_REQUEST_NUMBER_REGEX
 }
@@ -87,7 +87,7 @@ impl GitHostingProvider for Chromium {
     }
 
     fn base_url(&self) -> Url {
-        Url::parse("https://chromium.googlesource.com").unwrap()
+        Url::parse("https://chromium.googlesource.com").expect("URL literal should be valid")
     }
 
     fn supports_avatars(&self) -> bool {
@@ -128,7 +128,9 @@ impl GitHostingProvider for Chromium {
         let BuildCommitPermalinkParams { sha } = params;
         let ParsedGitRemote { owner: _, repo } = remote;
 
-        self.base_url().join(&format!("{repo}/+/{sha}")).unwrap()
+        self.base_url()
+            .join(&format!("{repo}/+/{sha}"))
+            .expect("value should be present")
     }
 
     fn build_permalink(&self, remote: ParsedGitRemote, params: BuildPermalinkParams) -> Url {
@@ -142,7 +144,7 @@ impl GitHostingProvider for Chromium {
         let mut permalink = self
             .base_url()
             .join(&format!("{repo}/+/{sha}/{path}"))
-            .unwrap();
+            .expect("value should be present");
         permalink.set_fragment(
             selection
                 .map(|selection| self.line_fragment(&selection))
@@ -153,7 +155,7 @@ impl GitHostingProvider for Chromium {
 
     fn extract_pull_request(&self, remote: &ParsedGitRemote, message: &str) -> Option<PullRequest> {
         let capture = pull_request_regex().captures(message)?;
-        let url = Url::parse(capture.get(1)?.as_str()).unwrap();
+        let url = Url::parse(capture.get(1)?.as_str()).expect("entry should be present");
         let repo = capture.get(2)?.as_str();
         if repo != remote.repo.as_ref() {
             return None;

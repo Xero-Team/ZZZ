@@ -165,7 +165,7 @@ impl McpServer {
                                     code: -32700,
                                 })),
                             })
-                            .unwrap(),
+                            .expect("serializing to JSON cannot fail"),
                         );
                     }
                 };
@@ -177,7 +177,7 @@ impl McpServer {
                             id: req_id,
                             value: CspResult::Ok(Some(result)),
                         })
-                        .unwrap(),
+                        .expect("serializing to JSON cannot fail"),
                         Err(e) => serde_json::to_string(&Response {
                             jsonrpc: "2.0",
                             id: req_id,
@@ -186,7 +186,7 @@ impl McpServer {
                                 code: -32603,
                             })),
                         })
-                        .unwrap(),
+                        .expect("serializing to JSON cannot fail"),
                     }
                 })
             }),
@@ -220,7 +220,11 @@ impl McpServer {
                     Self::handle_call_tool(request_id, request.params, &tools, &outgoing_tx, cx)
                         .await;
                 } else if request.method == ListTools::METHOD {
-                    Self::handle_list_tools(request.id.unwrap(), &tools, &outgoing_tx);
+                    Self::handle_list_tools(
+                        request.id.expect("id should be present"),
+                        &tools,
+                        &outgoing_tx,
+                    );
                 } else if let Some(handler) = handlers.borrow().get(&request.method.as_ref()) {
                     let outgoing_tx = outgoing_tx.clone();
 
@@ -346,7 +350,7 @@ impl McpServer {
                         code: -32601,
                     })),
                 })
-                .unwrap(),
+                .expect("serializing to JSON cannot fail"),
             )
             .ok();
     }

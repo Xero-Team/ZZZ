@@ -595,8 +595,10 @@ fn typescript_server_binary_arguments(server_path: &Path) -> Vec<OsString> {
 }
 
 fn replace_test_name_parameters(test_name: &str) -> String {
-    static PATTERN: LazyLock<regex::Regex> =
-        LazyLock::new(|| regex::Regex::new(r"(\$([A-Za-z0-9_\.]+|[\#])|%[psdifjo#\$%])").unwrap());
+    static PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"(\$([A-Za-z0-9_\.]+|[\#])|%[psdifjo#\$%])")
+            .expect("valid regex literal")
+    });
     PATTERN.split(test_name).map(regex::escape).join("(.+?)")
 }
 
@@ -624,7 +626,10 @@ impl TypeScriptLspAdapter {
 
     async fn tsdk_path(&self, adapter: &Arc<dyn LspAdapterDelegate>) -> Option<&'static str> {
         let is_yarn = adapter
-            .read_text_file(RelPath::unix(".yarn/sdks/typescript/lib/typescript.js").unwrap())
+            .read_text_file(
+                RelPath::unix(".yarn/sdks/typescript/lib/typescript.js")
+                    .expect("path should be a valid relative path"),
+            )
             .await
             .is_ok();
 

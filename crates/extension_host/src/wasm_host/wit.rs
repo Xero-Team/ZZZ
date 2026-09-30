@@ -59,8 +59,9 @@ pub fn new_linker(
     f: impl FnOnce(&mut Linker<WasmState>) -> Result<()>,
 ) -> Linker<WasmState> {
     let mut linker = Linker::new(&wasm_engine(executor));
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker).unwrap();
-    f(&mut linker).unwrap();
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
+        .expect("add_to_linker_async should be present");
+    f(&mut linker).expect("f should be present");
     linker
 }
 

@@ -1933,7 +1933,9 @@ pub fn handle_keymap_file_changes(
             old_helix_enabled = new_helix_enabled;
             old_disable_ai = new_disable_ai;
 
-            base_keymap_tx.unbounded_send(()).unwrap();
+            base_keymap_tx
+                .unbounded_send(())
+                .expect("value should be present");
         }
     })
     .detach();
@@ -2128,20 +2130,23 @@ pub fn load_default_keymap(cx: &mut App) {
     }
 
     cx.bind_keys(filter_disabled_ai_bindings(
-        KeymapFile::load_asset(DEFAULT_KEYMAP_PATH, Some(KeybindSource::Default), cx).unwrap(),
+        KeymapFile::load_asset(DEFAULT_KEYMAP_PATH, Some(KeybindSource::Default), cx)
+            .expect("value should be present"),
         cx,
     ));
 
     if let Some(asset_path) = base_keymap.asset_path() {
         cx.bind_keys(filter_disabled_ai_bindings(
-            KeymapFile::load_asset(asset_path, Some(KeybindSource::Base), cx).unwrap(),
+            KeymapFile::load_asset(asset_path, Some(KeybindSource::Base), cx)
+                .expect("value should be present"),
             cx,
         ));
     }
 
     if VimModeSetting::get_global(cx).0 || vim_mode_setting::HelixModeSetting::get_global(cx).0 {
         cx.bind_keys(filter_disabled_ai_bindings(
-            KeymapFile::load_asset(VIM_KEYMAP_PATH, Some(KeybindSource::Vim), cx).unwrap(),
+            KeymapFile::load_asset(VIM_KEYMAP_PATH, Some(KeybindSource::Vim), cx)
+                .expect("value should be present"),
             cx,
         ));
     }
@@ -2152,7 +2157,7 @@ pub fn load_default_keymap(cx: &mut App) {
             Some(KeybindSource::Base),
             cx,
         )
-        .unwrap(),
+        .expect("value should be present"),
     );
 }
 

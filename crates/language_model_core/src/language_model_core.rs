@@ -630,7 +630,8 @@ mod tests {
             thought_signature: Some("test_signature".to_string()),
         };
 
-        let serialized = serde_json::to_value(&tool_use).unwrap();
+        let serialized =
+            serde_json::to_value(&tool_use).expect("converting to a JSON value cannot fail");
 
         assert_eq!(serialized["id"], "test_id");
         assert_eq!(serialized["name"], "test_tool");
@@ -669,7 +670,8 @@ mod tests {
             thought_signature: Some("round_trip_sig".to_string()),
         };
 
-        let serialized = serde_json::to_value(&original).unwrap();
+        let serialized =
+            serde_json::to_value(&original).expect("converting to a JSON value cannot fail");
         let deserialized: LanguageModelToolUse = serde_json::from_value(serialized).unwrap();
 
         assert_eq!(deserialized.id, original.id);
@@ -690,7 +692,8 @@ mod tests {
             thought_signature: None,
         };
 
-        let serialized = serde_json::to_value(&original).unwrap();
+        let serialized =
+            serde_json::to_value(&original).expect("converting to a JSON value cannot fail");
         let deserialized: LanguageModelToolUse = serde_json::from_value(serialized).unwrap();
 
         assert_eq!(deserialized.id, original.id);

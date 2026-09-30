@@ -1387,7 +1387,9 @@ fn process_patch_hunk(
     buffer_row_divergence: &mut i64,
     diff_options: Option<&DiffOptions>,
 ) -> InternalDiffHunk {
-    let line_item_count = patch.num_lines_in_hunk(hunk_index).unwrap();
+    let line_item_count = patch
+        .num_lines_in_hunk(hunk_index)
+        .expect("num_lines_in_hunk should be present");
     assert!(line_item_count > 0);
 
     let mut first_deletion_buffer_row: Option<u32> = None;
@@ -1396,7 +1398,9 @@ fn process_patch_hunk(
     let mut first_addition_old_row: Option<u32> = None;
 
     for line_index in 0..line_item_count {
-        let line = patch.line_in_hunk(hunk_index, line_index).unwrap();
+        let line = patch
+            .line_in_hunk(hunk_index, line_index)
+            .expect("line_in_hunk should be present");
         let kind = line.origin_value();
         let content_offset = line.content_offset() as isize;
         let content_len = line.content().len() as isize;
@@ -1404,11 +1408,16 @@ fn process_patch_hunk(
             GitDiffLineType::Addition => {
                 if first_addition_old_row.is_none() {
                     first_addition_old_row = Some(
-                        (line.new_lineno().unwrap() as i64 - *buffer_row_divergence - 1) as u32,
+                        (line.new_lineno().expect("new_lineno should be present") as i64
+                            - *buffer_row_divergence
+                            - 1) as u32,
                     );
                 }
                 *buffer_row_divergence += 1;
-                let row = line.new_lineno().unwrap().saturating_sub(1);
+                let row = line
+                    .new_lineno()
+                    .expect("new_lineno should be present")
+                    .saturating_sub(1);
 
                 match &mut buffer_row_range {
                     Some(Range { end, .. }) => *end = row + 1,
@@ -1424,7 +1433,10 @@ fn process_patch_hunk(
                 }
 
                 if first_deletion_buffer_row.is_none() {
-                    let old_row = line.old_lineno().unwrap().saturating_sub(1);
+                    let old_row = line
+                        .old_lineno()
+                        .expect("old_lineno should be present")
+                        .saturating_sub(1);
                     let row = old_row as i64 + *buffer_row_divergence;
                     first_deletion_buffer_row = Some(row as u32);
                 }
@@ -1437,12 +1449,12 @@ fn process_patch_hunk(
 
     let buffer_row_range = buffer_row_range.unwrap_or_else(|| {
         // Pure deletion hunk without addition.
-        let row = first_deletion_buffer_row.unwrap();
+        let row = first_deletion_buffer_row.expect("value should be present");
         row..row
     });
     let diff_base_byte_range = diff_base_byte_range.unwrap_or_else(|| {
         // Pure addition hunk without deletion.
-        let row = first_addition_old_row.unwrap();
+        let row = first_addition_old_row.expect("value should be present");
         let offset = diff_base.point_to_offset(Point::new(row, 0));
         offset..offset
     });

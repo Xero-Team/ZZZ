@@ -968,7 +968,9 @@ impl Session {
             this.update(cx, |this, cx| {
                 match &mut this.state {
                     SessionState::Booting(task) if task.is_some() => {
-                        task.take().unwrap().detach_and_log_err(cx);
+                        task.take()
+                            .expect("entry should be present")
+                            .detach_and_log_err(cx);
                     }
                     SessionState::Booting(_) => {}
                     SessionState::Running(_) => {
@@ -1690,7 +1692,13 @@ impl Session {
             .or_default();
 
         if let Entry::Vacant(vacant) = request_map.entry(request.into()) {
-            let command = vacant.key().0.clone().as_any_arc().downcast::<T>().unwrap();
+            let command = vacant
+                .key()
+                .0
+                .clone()
+                .as_any_arc()
+                .downcast::<T>()
+                .expect("downcast should succeed");
 
             let task = Self::request_inner::<Arc<T>>(
                 &self.capabilities,

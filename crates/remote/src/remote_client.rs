@@ -556,7 +556,7 @@ impl RemoteClient {
             );
         }
 
-        let state = self.state.take().unwrap();
+        let state = self.state.take().expect("entry should be present");
         let (attempts, remote_connection, delegate) = match state {
             State::Connected {
                 remote_connection,
@@ -797,7 +797,7 @@ impl RemoteClient {
         missed_heartbeats: usize,
         cx: &mut Context<Self>,
     ) -> ControlFlow<()> {
-        let state = self.state.take().unwrap();
+        let state = self.state.take().expect("entry should be present");
         let next_state = if missed_heartbeats > 0 {
             state.heartbeat_missed()
         } else {
@@ -1137,7 +1137,7 @@ impl RemoteClient {
         let mut cx = client_cx.to_async();
         let connection = connect(opts, Arc::new(MockDelegate), &mut cx)
             .await
-            .unwrap();
+            .expect("value should be present");
         client_cx
             .update(|cx| {
                 Self::new(
@@ -1149,8 +1149,8 @@ impl RemoteClient {
                 )
             })
             .await
-            .unwrap()
-            .unwrap()
+            .expect("value should be present")
+            .expect("value should be present")
     }
 
     pub fn remote_connection(&self) -> Option<Arc<dyn RemoteConnection>> {

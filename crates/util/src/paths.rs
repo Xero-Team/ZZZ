@@ -900,7 +900,7 @@ impl PathWithPosition {
         // so far this code isn't called from multiple hot paths. Getting contention here
         // in the future seems unlikely.
         static SUFFIX_RE: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(ROW_COL_CAPTURE_REGEX).unwrap());
+            LazyLock::new(|| Regex::new(ROW_COL_CAPTURE_REGEX).expect("valid regex literal"));
         if let Some((_, [file_name, maybe_row, maybe_column])) = SUFFIX_RE
             .captures(maybe_file_name_with_row_col)
             .map(|caps| caps.extract())
@@ -908,7 +908,9 @@ impl PathWithPosition {
             let row = maybe_row.parse::<u32>().ok();
             let column = maybe_column.parse::<u32>().ok();
 
-            let (_, suffix) = trimmed.split_once(file_name).unwrap();
+            let (_, suffix) = trimmed
+                .split_once(file_name)
+                .expect("split_once should be present");
             let path_without_suffix = &trimmed[..trimmed.len() - suffix.len()];
 
             Self {

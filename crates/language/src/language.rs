@@ -132,8 +132,8 @@ where
     let mut parser = PARSERS.lock().pop().unwrap_or_else(|| {
         let mut parser = Parser::new();
         parser
-            .set_wasm_store(WasmStore::new(&WASM_ENGINE).unwrap())
-            .unwrap();
+            .set_wasm_store(WasmStore::new(&WASM_ENGINE).expect("value should be present"))
+            .expect("value should be present");
         parser
     });
     // Tree-sitter auto-resets the parser at the end of a successful parse,
@@ -142,7 +142,9 @@ where
     // call to `parse_with_options` would then *resume* that cancelled parse
     // instead of starting fresh.
     parser.reset();
-    parser.set_included_ranges(&[]).unwrap();
+    parser
+        .set_included_ranges(&[])
+        .expect("set_included_ranges should be present");
     let result = func(&mut parser);
     PARSERS.lock().push(parser);
     result
@@ -460,7 +462,7 @@ pub trait LspAdapter: 'static + Send + Sync + DynLspInstaller {
             let label = self.label_for_completion(completion, language).await;
             if let Some(label) = label {
                 labels.resize(ix + 1, None);
-                *labels.last_mut().unwrap() = Some(label);
+                *labels.last_mut().expect("collection should not be empty") = Some(label);
             }
         }
         Ok(labels)
@@ -484,7 +486,7 @@ pub trait LspAdapter: 'static + Send + Sync + DynLspInstaller {
             let label = self.label_for_symbol(symbol, language).await;
             if let Some(label) = label {
                 labels.resize(ix + 1, None);
-                *labels.last_mut().unwrap() = Some(label);
+                *labels.last_mut().expect("collection should not be empty") = Some(label);
             }
         }
         Ok(labels)
@@ -1306,7 +1308,7 @@ pub(crate) fn parse_text(grammar: &Grammar, text: &Rope, old_tree: Option<Tree>)
                 old_tree.as_ref(),
                 None,
             )
-            .unwrap()
+            .expect("value should be present")
     })
 }
 

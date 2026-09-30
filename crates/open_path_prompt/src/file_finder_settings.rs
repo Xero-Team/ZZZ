@@ -12,13 +12,26 @@ pub struct FileFinderSettings {
 
 impl Settings for FileFinderSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let file_finder = content.file_finder.as_ref().unwrap();
+        let file_finder = content
+            .file_finder
+            .as_ref()
+            .expect("value should have the expected type");
 
         Self {
-            file_icons: file_finder.file_icons.unwrap(),
-            modal_max_width: file_finder.modal_max_width.unwrap().into(),
-            skip_focus_for_active_in_search: file_finder.skip_focus_for_active_in_search.unwrap(),
-            include_ignored: match file_finder.include_ignored.unwrap() {
+            file_icons: file_finder
+                .file_icons
+                .expect("file_icons should be present"),
+            modal_max_width: file_finder
+                .modal_max_width
+                .expect("modal_max_width should be present")
+                .into(),
+            skip_focus_for_active_in_search: file_finder
+                .skip_focus_for_active_in_search
+                .expect("skip_focus_for_active_in_search should be present"),
+            include_ignored: match file_finder
+                .include_ignored
+                .expect("include_ignored should be present")
+            {
                 settings::IncludeIgnoredContent::All => Some(true),
                 settings::IncludeIgnoredContent::Indexed => Some(false),
                 settings::IncludeIgnoredContent::Smart => None,

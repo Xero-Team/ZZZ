@@ -1526,7 +1526,10 @@ impl From<settings::CustomAgentServerSettings> for CustomAgentServerSettings {
 
 impl settings::Settings for AllAgentServersSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let agent_settings = content.agent_servers.clone().unwrap();
+        let agent_settings = content
+            .agent_servers
+            .clone()
+            .expect("value should be present");
         Self(
             agent_settings
                 .0
@@ -1984,7 +1987,7 @@ mod tests {
                                 }
                             }]
                         }))
-                        .unwrap(),
+                        .expect("serializing to JSON cannot fail"),
                     ))
                     .unwrap())
             } else {
@@ -2036,7 +2039,7 @@ mod tests {
                                 }
                             }]
                         }))
-                        .unwrap(),
+                        .expect("serializing to JSON cannot fail"),
                     ))
                     .unwrap())
             } else {

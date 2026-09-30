@@ -1123,15 +1123,29 @@ impl ExtensionStore {
                 match (old_keys.peek(), new_keys.peek()) {
                     (None, None) => break,
                     (None, Some(_)) => {
-                        extensions_to_load.push(new_keys.next().unwrap().0.clone());
+                        extensions_to_load.push(
+                            new_keys
+                                .next()
+                                .expect("iterator should yield an item")
+                                .0
+                                .clone(),
+                        );
                     }
                     (Some(_), None) => {
-                        extensions_to_unload.push(old_keys.next().unwrap().0.clone());
+                        extensions_to_unload.push(
+                            old_keys
+                                .next()
+                                .expect("iterator should yield an item")
+                                .0
+                                .clone(),
+                        );
                     }
                     (Some((old_key, _)), Some((new_key, _))) => match old_key.cmp(new_key) {
                         Ordering::Equal => {
-                            let (old_key, old_value) = old_keys.next().unwrap();
-                            let (new_key, new_value) = new_keys.next().unwrap();
+                            let (old_key, old_value) =
+                                old_keys.next().expect("iterator should yield an item");
+                            let (new_key, new_value) =
+                                new_keys.next().expect("iterator should yield an item");
                             if old_value != new_value || self.modified_extensions.contains(old_key)
                             {
                                 extensions_to_unload.push(old_key.clone());
@@ -1139,10 +1153,22 @@ impl ExtensionStore {
                             }
                         }
                         Ordering::Less => {
-                            extensions_to_unload.push(old_keys.next().unwrap().0.clone());
+                            extensions_to_unload.push(
+                                old_keys
+                                    .next()
+                                    .expect("iterator should yield an item")
+                                    .0
+                                    .clone(),
+                            );
                         }
                         Ordering::Greater => {
-                            extensions_to_load.push(new_keys.next().unwrap().0.clone());
+                            extensions_to_load.push(
+                                new_keys
+                                    .next()
+                                    .expect("iterator should yield an item")
+                                    .0
+                                    .clone(),
+                            );
                         }
                     },
                 }

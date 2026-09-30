@@ -389,7 +389,11 @@ impl DebugPanel {
         let label = curr_session.read(cx).label();
         let quirks = curr_session.read(cx).quirks();
         let adapter = curr_session.read(cx).adapter();
-        let binary = curr_session.read(cx).binary().cloned().unwrap();
+        let binary = curr_session
+            .read(cx)
+            .binary()
+            .cloned()
+            .expect("cloned should be present");
         let task_context = curr_session.read(cx).task_context().clone();
 
         let curr_session_id = curr_session.read(cx).session_id();
@@ -1145,10 +1149,16 @@ impl DebugPanel {
                 directory_in_worktree: dir,
                 ..
             } => {
-                let relative_path = if dir.ends_with(RelPath::unix(".vscode").unwrap()) {
-                    dir.join(RelPath::unix("launch.json").unwrap())
+                let relative_path = if dir.ends_with(
+                    RelPath::unix(".vscode").expect("path should be a valid relative path"),
+                ) {
+                    dir.join(
+                        RelPath::unix("launch.json").expect("path should be a valid relative path"),
+                    )
                 } else {
-                    dir.join(RelPath::unix("debug.json").unwrap())
+                    dir.join(
+                        RelPath::unix("debug.json").expect("path should be a valid relative path"),
+                    )
                 };
                 ProjectPath {
                     worktree_id: id,

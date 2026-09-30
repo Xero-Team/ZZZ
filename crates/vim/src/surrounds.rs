@@ -1409,7 +1409,7 @@ mod test {
 
         cx.set_state(indoc! {"(<ˇZed>)"}, Mode::Normal);
         cx.simulate_keystrokes("c s b )");
-        cx.assert_state(indoc! {"(ˇ(ZZZ))"}, Mode::Normal);
+        cx.assert_state(indoc! {"(ˇ(Zed))"}, Mode::Normal);
 
         cx.set_state(
             indoc! {"
@@ -1421,7 +1421,7 @@ mod test {
         cx.simulate_keystrokes("c s b (");
         cx.assert_state(
             indoc! {"
-                (ˇ( ZZZ ))
+                (ˇ( Zed ))
                 (ˇ( DeltaDB ))
             "},
             Mode::Normal,

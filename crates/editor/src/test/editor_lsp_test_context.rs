@@ -99,7 +99,7 @@ impl EditorLspTestContext {
         let window =
             cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
 
-        let workspace = window.root(cx).unwrap();
+        let workspace = window.root(cx).expect("root should be present");
 
         let mut cx = VisualTestContext::from_window(*window, cx);
         project
@@ -107,7 +107,7 @@ impl EditorLspTestContext {
                 project.find_or_create_worktree(root, true, cx)
             })
             .await
-            .unwrap();
+            .expect("value should be present");
         cx.read(|cx| {
             workspace
                 .read(cx)
@@ -141,7 +141,7 @@ impl EditorLspTestContext {
             window.focus(&editor.focus_handle(cx), cx)
         });
 
-        let lsp = fake_servers.next().await.unwrap();
+        let lsp = fake_servers.next().await.expect("value should be present");
 
         // Ensure the language server is fully registered with the buffer
         cx.executor().run_until_parked();
@@ -157,7 +157,8 @@ impl EditorLspTestContext {
             },
             lsp,
             workspace,
-            buffer_lsp_url: lsp::Uri::from_file_path(root.join("dir").join(file_name)).unwrap(),
+            buffer_lsp_url: lsp::Uri::from_file_path(root.join("dir").join(file_name))
+                .expect("value should be present"),
         }
     }
 
@@ -165,7 +166,12 @@ impl EditorLspTestContext {
         capabilities: lsp::ServerCapabilities,
         cx: &mut gpui::TestAppContext,
     ) -> EditorLspTestContext {
-        Self::new(Arc::into_inner(rust_lang()).unwrap(), capabilities, cx).await
+        Self::new(
+            Arc::into_inner(rust_lang()).expect("value should be present"),
+            capabilities,
+            cx,
+        )
+        .await
     }
 
     pub async fn new_typescript(
@@ -420,7 +426,7 @@ impl EditorLspTestContext {
 
     pub async fn new_markdown_with_rust(cx: &mut gpui::TestAppContext) -> Self {
         let context = Self::new(
-            Arc::into_inner(markdown_lang()).unwrap(),
+            Arc::into_inner(markdown_lang()).expect("value should be present"),
             Default::default(),
             cx,
         )
@@ -450,10 +456,13 @@ impl EditorLspTestContext {
 
         self.editor(|editor, _, cx| {
             let buffer = editor.buffer().read(cx);
-            let (start_buffer, start_offset) =
-                buffer.point_to_buffer_offset(start_point, cx).unwrap();
+            let (start_buffer, start_offset) = buffer
+                .point_to_buffer_offset(start_point, cx)
+                .expect("point_to_buffer_offset should be present");
             let start = point_to_lsp(start_offset.to_point_utf16(&start_buffer.read(cx)));
-            let (end_buffer, end_offset) = buffer.point_to_buffer_offset(end_point, cx).unwrap();
+            let (end_buffer, end_offset) = buffer
+                .point_to_buffer_offset(end_point, cx)
+                .expect("point_to_buffer_offset should be present");
             let end = point_to_lsp(end_offset.to_point_utf16(&end_buffer.read(cx)));
             lsp::Range { start, end }
         })
@@ -468,7 +477,9 @@ impl EditorLspTestContext {
 
         self.editor(|editor, _, cx| {
             let buffer = editor.buffer().read(cx);
-            let (buffer, offset) = buffer.point_to_buffer_offset(point, cx).unwrap();
+            let (buffer, offset) = buffer
+                .point_to_buffer_offset(point, cx)
+                .expect("point_to_buffer_offset should be present");
             point_to_lsp(offset.to_point_utf16(&buffer.read(cx)))
         })
     }

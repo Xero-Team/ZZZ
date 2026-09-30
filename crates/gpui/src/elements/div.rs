@@ -401,7 +401,7 @@ impl Interactivity {
         self.action_listeners.push((
             TypeId::of::<A>(),
             Box::new(move |action, phase, window, cx| {
-                let action = action.downcast_ref().unwrap();
+                let action = action.downcast_ref().expect("downcast should succeed");
                 if phase == DispatchPhase::Capture {
                     (listener)(action, window, cx)
                 } else {
@@ -419,7 +419,7 @@ impl Interactivity {
         self.action_listeners.push((
             TypeId::of::<A>(),
             Box::new(move |action, phase, window, cx| {
-                let action = action.downcast_ref().unwrap();
+                let action = action.downcast_ref().expect("downcast should succeed");
                 if phase == DispatchPhase::Bubble {
                     (listener)(action, window, cx)
                 }
@@ -532,7 +532,13 @@ impl Interactivity {
         self.drop_listeners.push((
             TypeId::of::<T>(),
             Box::new(move |dragged_value, window, cx| {
-                listener(dragged_value.downcast_ref().unwrap(), window, cx);
+                listener(
+                    dragged_value
+                        .downcast_ref()
+                        .expect("downcast should succeed"),
+                    window,
+                    cx,
+                );
             }),
         ));
     }
@@ -595,7 +601,13 @@ impl Interactivity {
         self.drag_listener = Some((
             Arc::new(value),
             Box::new(move |value, offset, window, cx| {
-                constructor(value.downcast_ref().unwrap(), offset, window, cx).into()
+                constructor(
+                    value.downcast_ref().expect("downcast should succeed"),
+                    offset,
+                    window,
+                    cx,
+                )
+                .into()
             }),
         ));
     }
@@ -1080,7 +1092,9 @@ pub trait InteractiveElement: Sized {
             Box::new(move |currently_dragged: &dyn Any, window, cx| {
                 f(
                     StyleRefinement::default(),
-                    currently_dragged.downcast_ref::<S>().unwrap(),
+                    currently_dragged
+                        .downcast_ref::<S>()
+                        .expect("downcast should succeed"),
                     window,
                     cx,
                 )
@@ -3315,7 +3329,11 @@ impl GroupHitboxes {
     }
 
     pub fn pop(name: &SharedString, cx: &mut App) {
-        cx.default_global::<Self>().0.get_mut(name).unwrap().pop();
+        cx.default_global::<Self>()
+            .0
+            .get_mut(name)
+            .expect("entry should be present")
+            .pop();
     }
 }
 

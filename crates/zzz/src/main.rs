@@ -302,7 +302,7 @@ fn main() {
         .stack_size(10 * 1024 * 1024)
         .thread_name(|ix| format!("RayonWorker{}", ix))
         .build_global()
-        .unwrap();
+        .expect("entry should be present");
 
     log::info!(
         "========== starting zzz version {}, sha {} ==========",
@@ -650,7 +650,7 @@ fn main() {
         extensions_ui::init(cx);
         inspector_ui::init(app_state.clone(), cx);
         json_schema_store::init(cx);
-        miniprofiler_ui::init(*STARTUP_TIME.get().unwrap(), cx);
+        miniprofiler_ui::init(*STARTUP_TIME.get().expect("entry should be present"), cx);
         which_key::init(cx);
         #[cfg(target_os = "windows")]
         etw_tracing::init(cx);
@@ -1598,7 +1598,7 @@ mod tests {
 
 fn load_embedded_fonts(cx: &App) {
     let asset_source = cx.asset_source();
-    let font_paths = asset_source.list("fonts").unwrap();
+    let font_paths = asset_source.list("fonts").expect("list should be present");
     let embedded_fonts = Mutex::new(Vec::new());
     let executor = cx.background_executor();
 
@@ -1609,7 +1609,10 @@ fn load_embedded_fonts(cx: &App) {
             }
 
             scope.spawn(async {
-                let font_bytes = asset_source.load(font_path).unwrap().unwrap();
+                let font_bytes = asset_source
+                    .load(font_path)
+                    .expect("load should be present")
+                    .expect("expect should be present");
                 embedded_fonts.lock().push(font_bytes);
             });
         }
@@ -1617,7 +1620,7 @@ fn load_embedded_fonts(cx: &App) {
 
     cx.text_system()
         .add_fonts(embedded_fonts.into_inner())
-        .unwrap();
+        .expect("value should be present");
 }
 
 #[cfg(target_os = "linux")]
@@ -1814,9 +1817,11 @@ fn dump_all_gpui_actions() {
 
     io::Write::write(
         &mut std::io::stdout(),
-        serde_json::to_string_pretty(&output).unwrap().as_bytes(),
+        serde_json::to_string_pretty(&output)
+            .expect("serializing to JSON cannot fail")
+            .as_bytes(),
     )
-    .unwrap();
+    .expect("I/O should succeed");
 }
 
 #[cfg(target_os = "windows")]

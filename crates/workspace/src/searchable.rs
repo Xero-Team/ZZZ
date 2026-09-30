@@ -348,7 +348,7 @@ impl<T: SearchableItem> SearchableItemHandle for Entity<T> {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let matches = matches.downcast_ref().unwrap();
+        let matches = matches.downcast_ref().expect("downcast should succeed");
         self.update(cx, |this, cx| {
             this.update_matches(matches.as_slice(), active_match_index, token, window, cx)
         });
@@ -371,7 +371,7 @@ impl<T: SearchableItem> SearchableItemHandle for Entity<T> {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let matches = matches.downcast_ref().unwrap();
+        let matches = matches.downcast_ref().expect("downcast should succeed");
         self.update(cx, |this, cx| {
             this.activate_match(index, matches.as_slice(), token, window, cx)
         });
@@ -384,7 +384,7 @@ impl<T: SearchableItem> SearchableItemHandle for Entity<T> {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let matches = matches.downcast_ref().unwrap();
+        let matches = matches.downcast_ref().expect("downcast should succeed");
         self.update(cx, |this, cx| {
             this.select_matches(matches.as_slice(), token, window, cx)
         });
@@ -400,7 +400,7 @@ impl<T: SearchableItem> SearchableItemHandle for Entity<T> {
         window: &mut Window,
         cx: &mut App,
     ) -> usize {
-        let matches = matches.downcast_ref().unwrap();
+        let matches = matches.downcast_ref().expect("downcast should succeed");
         self.update(cx, |this, cx| {
             this.match_index_for_direction(
                 matches.as_slice(),
@@ -424,7 +424,9 @@ impl<T: SearchableItem> SearchableItemHandle for Entity<T> {
             let matches = matches.await;
             let mut any_matches = AnyVec::with_capacity::<T::Match>(matches.len());
             {
-                let mut any_matches = any_matches.downcast_mut::<T::Match>().unwrap();
+                let mut any_matches = any_matches
+                    .downcast_mut::<T::Match>()
+                    .expect("downcast should succeed");
                 for mat in matches {
                     any_matches.push(mat);
                 }
@@ -445,7 +447,9 @@ impl<T: SearchableItem> SearchableItemHandle for Entity<T> {
             let (matches, token) = matches_with_token.await;
             let mut any_matches = AnyVec::with_capacity::<T::Match>(matches.len());
             {
-                let mut any_matches = any_matches.downcast_mut::<T::Match>().unwrap();
+                let mut any_matches = any_matches
+                    .downcast_mut::<T::Match>()
+                    .expect("downcast should succeed");
                 for mat in matches {
                     any_matches.push(mat);
                 }
@@ -475,7 +479,7 @@ impl<T: SearchableItem> SearchableItemHandle for Entity<T> {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let mat = mat.downcast_ref().unwrap();
+        let mat = mat.downcast_ref().expect("downcast should succeed");
         self.update(cx, |this, cx| this.replace(mat, query, token, window, cx))
     }
 
@@ -489,7 +493,7 @@ impl<T: SearchableItem> SearchableItemHandle for Entity<T> {
     ) {
         self.update(cx, |this, cx| {
             this.replace_all(
-                &mut matches.map(|m| m.downcast_ref().unwrap()),
+                &mut matches.map(|m| m.downcast_ref().expect("downcast should succeed")),
                 query,
                 token,
                 window,

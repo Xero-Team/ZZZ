@@ -50,7 +50,7 @@ impl PathKey {
             Self {
                 sort_prefix: None,
                 path: RelPath::unix(&buffer.entity_id().to_string())
-                    .unwrap()
+                    .expect("value should be present")
                     .into_arc(),
             }
         }
@@ -466,7 +466,7 @@ impl MultiBuffer {
                 });
             } else {
                 // insert new excerpt
-                let next_excerpt = to_insert.next().unwrap();
+                let next_excerpt = to_insert.next().expect("iterator should yield an item");
                 added_new_excerpt = true;
                 let before = new_excerpts.summary().len();
                 new_excerpts.update_last(

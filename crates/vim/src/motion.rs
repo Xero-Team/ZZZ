@@ -2992,7 +2992,9 @@ fn find_backward(
     }
 
     let next = map.buffer_snapshot().chars_at(to.to_point(map)).next();
-    if next.is_some() && is_character_match(target, next.unwrap(), smartcase) {
+    if next.is_some()
+        && is_character_match(target, next.expect("value should be present"), smartcase)
+    {
         if after {
             *to.column_mut() += 1;
             map.clip_point(to, Bias::Right)

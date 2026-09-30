@@ -114,8 +114,8 @@ impl<'a> OffsetUnifiedDiffBuilder<'a> {
             self.after_hunk_start + 1 + self.new_line_offset,
             self.after_hunk_len,
         )
-        .unwrap();
-        write!(&mut self.dst, "{}", self.buffer).unwrap();
+        .expect("value should be present");
+        write!(&mut self.dst, "{}", self.buffer).expect("value should be present");
         self.buffer.clear();
         self.before_hunk_len = 0;
         self.after_hunk_len = 0;

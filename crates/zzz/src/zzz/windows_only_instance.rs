@@ -52,7 +52,7 @@ pub fn handle_single_instance(opener: OpenListener, args: &Args) -> bool {
                     })
                 })
             })
-            .unwrap();
+            .expect("value should be present");
     } else if !args.foreground {
         // We are not the first instance, send args to the first instance
         send_args_to_instance(args).log_err();
@@ -191,10 +191,10 @@ fn send_args_to_instance(args: &Args) -> anyhow::Result<()> {
                 Ok(())
             }
         })
-        .unwrap();
+        .expect("value should be present");
 
     write_message_to_instance_pipe(url.as_bytes())?;
-    sender.join().unwrap()?;
+    sender.join().expect("join should be present")?;
     if let Some(exit_status) = exit_status.lock().take() {
         std::process::exit(exit_status);
     }

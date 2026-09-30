@@ -157,7 +157,7 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
 
     // Load embedded fonts (IBM Plex Sans, Lilex, etc.) so UI renders with correct fonts
     cx.update(|cx| {
-        Assets.load_fonts(cx).unwrap();
+        Assets.load_fonts(cx).expect("load_fonts should be present");
     });
 
     // Initialize settings store with real default settings (not test settings)
@@ -2304,8 +2304,12 @@ fn run_tool_permissions_visual_tests(
             Arc::from("terminal"),
             ToolRules {
                 default: None,
-                always_allow: vec![CompiledRegex::new("hi", false).unwrap()],
-                always_deny: vec![CompiledRegex::new("hi", false).unwrap()],
+                always_allow: vec![
+                    CompiledRegex::new("hi", false).expect("value should be present"),
+                ],
+                always_deny: vec![
+                    CompiledRegex::new("hi", false).expect("value should be present"),
+                ],
                 always_confirm: vec![],
                 invalid_patterns: vec![],
             },
@@ -2603,7 +2607,10 @@ fn run_multi_workspace_sidebar_visual_tests(
     // Add worktree to workspace 1 (index 0) so it shows as "private-test-remote"
     let add_worktree1_task = multi_workspace_window
         .update(cx, |multi_workspace, _window, cx| {
-            let workspace1 = multi_workspace.workspaces().next().unwrap();
+            let workspace1 = multi_workspace
+                .workspaces()
+                .next()
+                .expect("iterator should yield an item");
             let project = workspace1.read(cx).project().clone();
             project.update(cx, |project, cx| {
                 project.find_or_create_worktree(&workspace1_dir, true, cx)
@@ -2622,7 +2629,10 @@ fn run_multi_workspace_sidebar_visual_tests(
     // Add worktree to workspace 2 (index 1) so it shows as "zzz"
     let add_worktree2_task = multi_workspace_window
         .update(cx, |multi_workspace, _window, cx| {
-            let workspace2 = multi_workspace.workspaces().nth(1).unwrap();
+            let workspace2 = multi_workspace
+                .workspaces()
+                .nth(1)
+                .expect("nth should be present");
             let project = workspace2.read(cx).project().clone();
             project.update(cx, |project, cx| {
                 project.find_or_create_worktree(&workspace2_dir, true, cx)
@@ -2641,7 +2651,11 @@ fn run_multi_workspace_sidebar_visual_tests(
     // Switch to workspace 1 so it's highlighted as active (index 0)
     multi_workspace_window
         .update(cx, |multi_workspace, window, cx| {
-            let workspace = multi_workspace.workspaces().next().unwrap().clone();
+            let workspace = multi_workspace
+                .workspaces()
+                .next()
+                .expect("iterator should yield an item")
+                .clone();
             multi_workspace.activate(workspace, None, window, cx);
         })
         .context("Failed to activate workspace 1")?;
@@ -2652,7 +2666,8 @@ fn run_multi_workspace_sidebar_visual_tests(
     // re-entrant read panic (Sidebar::new reads the MultiWorkspace).
     let sidebar = cx
         .update_window(multi_workspace_window.into(), |root_view, window, cx| {
-            let multi_workspace_handle: Entity<MultiWorkspace> = root_view.downcast().unwrap();
+            let multi_workspace_handle: Entity<MultiWorkspace> =
+                root_view.downcast().expect("downcast should succeed");
             cx.new(|cx| sidebar::Sidebar::new(multi_workspace_handle, window, cx))
         })
         .context("Failed to create sidebar")?;
@@ -2692,7 +2707,7 @@ fn run_multi_workspace_sidebar_visual_tests(
                             "Refine thread view scrolling behavior",
                         ),
                         chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 6, 15, 10, 30, 0)
-                            .unwrap(),
+                            .expect("with_ymd_and_hms should be present"),
                     ),
                     1 => (
                         "visual-test-thread-1",
@@ -2702,7 +2717,7 @@ fn run_multi_workspace_sidebar_visual_tests(
                             "Add line numbers option to FileEditBlock",
                         ),
                         chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 6, 15, 11, 0, 0)
-                            .unwrap(),
+                            .expect("with_ymd_and_hms should be present"),
                     ),
                     _ => continue,
                 };

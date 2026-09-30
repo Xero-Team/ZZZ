@@ -197,12 +197,12 @@ async fn open_zzz_source_location(
         .await
         .with_context(|| format!("running zzz to open {path_arg} failed"))?;
 
-    if !output.status.success() {
+    if output.status.success() {
+        Ok(())
+    } else {
         Err(anyhow!(
             "running zzz to open {path_arg} failed with stderr: {}",
             String::from_utf8_lossy(&output.stderr)
         ))
-    } else {
-        Ok(())
     }
 }

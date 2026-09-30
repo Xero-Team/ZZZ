@@ -452,8 +452,8 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
                     });
                 };
 
-                editor.project().unwrap().update(cx, |project, cx| {
-                    let worktree = project.visible_worktrees(cx).next().unwrap();
+                editor.project().expect("project should be present").update(cx, |project, cx| {
+                    let worktree = project.visible_worktrees(cx).next().expect("iterator should yield an item");
 
                     worktree.update(cx, |worktree, cx| {
                         let path_style = worktree.path_style();
@@ -1378,7 +1378,11 @@ impl VimCommand {
     fn parse_offset(chars: &mut Peekable<Chars>) -> i32 {
         let mut res: i32 = 0;
         while matches!(chars.peek(), Some('+' | '-')) {
-            let sign = if chars.next().unwrap() == '+' { 1 } else { -1 };
+            let sign = if chars.next().expect("iterator should yield an item") == '+' {
+                1
+            } else {
+                -1
+            };
             let amount = if matches!(chars.peek(), Some('0'..='9')) {
                 (Self::parse_u32(chars) as i32).saturating_mul(sign)
             } else {
@@ -1392,9 +1396,9 @@ impl VimCommand {
     fn parse_u32(chars: &mut Peekable<Chars>) -> u32 {
         let mut res: u32 = 0;
         while matches!(chars.peek(), Some('0'..='9')) {
-            res = res
-                .saturating_mul(10)
-                .saturating_add(chars.next().unwrap() as u32 - '0' as u32);
+            res = res.saturating_mul(10).saturating_add(
+                chars.next().expect("iterator should yield an item") as u32 - '0' as u32,
+            );
         }
         res
     }
@@ -1547,7 +1551,11 @@ fn generate_commands(_: &App) -> Vec<VimCommand> {
             )
         })
         .range(|action, range| {
-            let mut action: VimSave = action.as_any().downcast_ref::<VimSave>().unwrap().clone();
+            let mut action: VimSave = action
+                .as_any()
+                .downcast_ref::<VimSave>()
+                .expect("downcast should succeed")
+                .clone();
             action.range.replace(range.clone());
             Some(Box::new(action))
         }),
@@ -1571,7 +1579,11 @@ fn generate_commands(_: &App) -> Vec<VimCommand> {
             )
         })
         .range(|action, range| {
-            let mut action: VimRead = action.as_any().downcast_ref::<VimRead>().unwrap().clone();
+            let mut action: VimRead = action
+                .as_any()
+                .downcast_ref::<VimRead>()
+                .expect("downcast should succeed")
+                .clone();
             action.range.replace(range.clone());
             Some(Box::new(action))
         }),
@@ -1727,7 +1739,11 @@ fn generate_commands(_: &App) -> Vec<VimCommand> {
             )
         })
         .range(|action, range| {
-            let mut action: VimNorm = action.as_any().downcast_ref::<VimNorm>().unwrap().clone();
+            let mut action: VimNorm = action
+                .as_any()
+                .downcast_ref::<VimNorm>()
+                .expect("downcast should succeed")
+                .clone();
             action.range.replace(range.clone());
             Some(Box::new(action))
         }),
@@ -1938,7 +1954,7 @@ pub fn command_interceptor(
     let mut action = if range.is_some() && query.is_empty() {
         Some(
             GoToLine {
-                range: range.clone().unwrap(),
+                range: range.clone().expect("value should be present"),
             }
             .boxed_clone(),
         )
@@ -1951,7 +1967,7 @@ pub fn command_interceptor(
             .boxed_clone(),
         )
     } else if query.starts_with("se ") || query.starts_with("set ") {
-        let (prefix, option) = query.split_once(' ').unwrap();
+        let (prefix, option) = query.split_once(' ').expect("split_once should be present");
         let mut commands = VimOption::possible_commands(option);
         if !commands.is_empty() {
             let query = prefix.to_owned() + " " + option;
@@ -2617,7 +2633,7 @@ impl ShellExec {
                     Some(snapshot.anchor_before(range.start)..snapshot.anchor_after(range.end));
             }
             editor.highlight_rows::<ShellExec>(
-                input_range.clone().unwrap(),
+                input_range.clone().expect("value should be present"),
                 cx.theme().status().unreachable_background,
                 Default::default(),
                 cx,

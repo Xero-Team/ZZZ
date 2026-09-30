@@ -60,36 +60,54 @@ impl ScrollbarVisibility for GitPanelScrollbarAccessor {
 
 impl Settings for GitPanelSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let git_panel = content.git_panel.clone().unwrap();
-        let sort_by = git_panel.sort_by.unwrap();
-        let group_by = git_panel.group_by.unwrap();
+        let git_panel = content.git_panel.clone().expect("value should be present");
+        let sort_by = git_panel.sort_by.expect("sort_by should be present");
+        let group_by = git_panel.group_by.expect("group_by should be present");
         Self {
-            button: git_panel.button.unwrap(),
-            dock: git_panel.dock.unwrap().into(),
-            default_width: px(git_panel.default_width.unwrap()),
-            status_style: git_panel.status_style.unwrap(),
-            file_icons: git_panel.file_icons.unwrap(),
-            folder_icons: git_panel.folder_icons.unwrap(),
+            button: git_panel.button.expect("button should be present"),
+            dock: git_panel.dock.expect("dock should be present").into(),
+            default_width: px(git_panel
+                .default_width
+                .expect("default_width should be present")),
+            status_style: git_panel
+                .status_style
+                .expect("status_style should be present"),
+            file_icons: git_panel.file_icons.expect("file_icons should be present"),
+            folder_icons: git_panel
+                .folder_icons
+                .expect("folder_icons should be present"),
             scrollbar: ScrollbarSettings {
                 show: git_panel
                     .scrollbar
-                    .unwrap()
+                    .expect("scrollbar should be present")
                     .show
                     .map(ui_scrollbar_settings_from_raw),
             },
-            fallback_branch_name: git_panel.fallback_branch_name.unwrap(),
+            fallback_branch_name: git_panel
+                .fallback_branch_name
+                .expect("fallback_branch_name should be present"),
             sort_by_path: git_panel
                 .sort_by_path
                 .unwrap_or(sort_by == GitPanelSortBy::Path && group_by != GitPanelGroupBy::Status),
             sort_by,
             group_by,
-            collapse_untracked_diff: git_panel.collapse_untracked_diff.unwrap(),
-            tree_view: git_panel.tree_view.unwrap(),
-            diff_stats: git_panel.diff_stats.unwrap(),
-            show_count_badge: git_panel.show_count_badge.unwrap(),
-            starts_open: git_panel.starts_open.unwrap(),
-            commit_title_max_length: git_panel.commit_title_max_length.unwrap(),
-            entry_primary_click_action: git_panel.entry_primary_click_action.unwrap(),
+            collapse_untracked_diff: git_panel
+                .collapse_untracked_diff
+                .expect("collapse_untracked_diff should be present"),
+            tree_view: git_panel.tree_view.expect("tree_view should be present"),
+            diff_stats: git_panel.diff_stats.expect("diff_stats should be present"),
+            show_count_badge: git_panel
+                .show_count_badge
+                .expect("show_count_badge should be present"),
+            starts_open: git_panel
+                .starts_open
+                .expect("starts_open should be present"),
+            commit_title_max_length: git_panel
+                .commit_title_max_length
+                .expect("commit_title_max_length should be present"),
+            entry_primary_click_action: git_panel
+                .entry_primary_click_action
+                .expect("entry_primary_click_action should be present"),
         }
     }
 }

@@ -203,7 +203,7 @@ impl HighlightsTreeView {
         this.handle_item_updated(active_item, window, cx);
 
         cx.subscribe_in(
-            &workspace_handle.upgrade().unwrap(),
+            &workspace_handle.upgrade().expect("entity should be alive"),
             window,
             move |this, workspace, event, window, cx| match event {
                 WorkspaceEvent::ItemAdded { .. } | WorkspaceEvent::ActiveItemChanged => {

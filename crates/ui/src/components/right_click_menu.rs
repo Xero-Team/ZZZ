@@ -63,7 +63,9 @@ impl<M: ManagedView> RightClickMenu<M> {
         window.with_optional_element_state::<MenuHandleElementState<M>, _>(
             Some(global_id),
             |element_state, window| {
-                let mut element_state = element_state.unwrap().unwrap_or_default();
+                let mut element_state = element_state
+                    .expect("value should be present")
+                    .unwrap_or_default();
                 let result = f(self, &mut element_state, window, cx);
                 (result, Some(element_state))
             },
@@ -136,7 +138,7 @@ impl<M: ManagedView> Element for RightClickMenu<M> {
         cx: &mut App,
     ) -> (gpui::LayoutId, Self::RequestLayoutState) {
         self.with_element_state(
-            id.unwrap(),
+            id.expect("value should be present"),
             window,
             cx,
             |this, element_state, window, cx| {
@@ -221,7 +223,7 @@ impl<M: ManagedView> Element for RightClickMenu<M> {
         cx: &mut App,
     ) {
         self.with_element_state(
-            id.unwrap(),
+            id.expect("value should be present"),
             window,
             cx,
             |this, element_state, window, cx| {

@@ -567,8 +567,10 @@ mod tests {
         }
 
         // Round-tripping preserves multi-part content.
-        let roundtripped: LanguageModelToolResult =
-            serde_json::from_value(serde_json::to_value(&result).unwrap()).unwrap();
+        let roundtripped: LanguageModelToolResult = serde_json::from_value(
+            serde_json::to_value(&result).expect("converting to a JSON value cannot fail"),
+        )
+        .unwrap();
         assert_eq!(roundtripped, result);
     }
 

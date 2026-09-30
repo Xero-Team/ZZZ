@@ -231,7 +231,12 @@ pub(crate) fn generate_key_char(
         len if len > 0 => String::from_utf16(&buffer[..len as usize])
             .ok()
             .filter(|candidate| {
-                !candidate.is_empty() && !candidate.chars().next().unwrap().is_control()
+                !candidate.is_empty()
+                    && !candidate
+                        .chars()
+                        .next()
+                        .expect("iterator should yield an item")
+                        .is_control()
             }),
         len if len < 0 => String::from_utf16(&buffer[..(-len as usize)]).ok(),
         _ => None,

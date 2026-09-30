@@ -547,7 +547,7 @@ impl PickerDelegate for TasksModalDelegate {
                             MAX_TAGS_LINE_LEN,
                         )))
                         .flex_none()
-                        .child(history_run_icon.unwrap())
+                        .child(history_run_icon.expect("value should be present"))
                         .into_any_element(),
                 )
                 .spacing(ListItemSpacing::Sparse)

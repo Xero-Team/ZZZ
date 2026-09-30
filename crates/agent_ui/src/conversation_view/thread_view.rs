@@ -7774,7 +7774,9 @@ impl ThreadView {
                         return this;
                     }
 
-                    seen_kinds.push(option.kind).unwrap();
+                    seen_kinds
+                        .push(option.kind)
+                        .expect("push should be present");
 
                     this.key_binding(
                         KeyBinding::for_action_in(action, focus_handle, cx)

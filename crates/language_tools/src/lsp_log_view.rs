@@ -203,7 +203,12 @@ impl LspLogView {
                                 cx,
                             );
                             if text.len() > 1024 {
-                                let b = editor.buffer().read(cx).as_singleton().unwrap().read(cx);
+                                let b = editor
+                                    .buffer()
+                                    .read(cx)
+                                    .as_singleton()
+                                    .expect("as_singleton should be present")
+                                    .read(cx);
                                 let fold_offset =
                                     b.as_rope().ceil_char_boundary(last_offset.0 + 1024);
                                 editor.fold_ranges(

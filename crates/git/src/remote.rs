@@ -43,25 +43,25 @@ mod tests {
                 "https://github.com/octocat/zed.git",
                 "https",
                 "github.com",
-                "/octocat/zzz.git",
+                "/octocat/zed.git",
             ),
             (
                 "https://jlannister@github.com/octocat/zed.git",
                 "https",
                 "github.com",
-                "/octocat/zzz.git",
+                "/octocat/zed.git",
             ),
             (
                 "git@github.com:octocat/zed.git",
                 "ssh",
                 "github.com",
-                "/octocat/zzz.git",
+                "/octocat/zed.git",
             ),
             (
-                "org-000000@github.com:octocat/zzz.git",
+                "org-000000@github.com:octocat/zed.git",
                 "ssh",
                 "github.com",
-                "/octocat/zzz.git",
+                "/octocat/zed.git",
             ),
             (
                 "first.last@gitlab.example.com:group/repo.git",
@@ -73,13 +73,13 @@ mod tests {
                 "ssh://git@github.com/octocat/zed.git",
                 "ssh",
                 "github.com",
-                "/octocat/zzz.git",
+                "/octocat/zed.git",
             ),
             (
-                "file:///path/to/local/zzz",
+                "file:///path/to/local/zed",
                 "file",
                 "",
-                "/path/to/local/zzz",
+                "/path/to/local/zed",
             ),
         ];
 

@@ -100,28 +100,31 @@ impl Vim {
                 });
             };
 
-            item.act_as::<Editor>(cx).unwrap().update(cx, |editor, cx| {
-                let map = editor.snapshot(window, cx);
-                let mut ranges: Vec<Range<Anchor>> = Vec::new();
-                for mut anchor in anchors {
-                    if line {
-                        let mut point = anchor.to_display_point(&map.display_snapshot);
-                        point = motion::first_non_whitespace(&map.display_snapshot, false, point);
-                        anchor = map
-                            .display_snapshot
-                            .buffer_snapshot()
-                            .anchor_before(point.to_point(&map.display_snapshot));
+            item.act_as::<Editor>(cx)
+                .expect("value should be present")
+                .update(cx, |editor, cx| {
+                    let map = editor.snapshot(window, cx);
+                    let mut ranges: Vec<Range<Anchor>> = Vec::new();
+                    for mut anchor in anchors {
+                        if line {
+                            let mut point = anchor.to_display_point(&map.display_snapshot);
+                            point =
+                                motion::first_non_whitespace(&map.display_snapshot, false, point);
+                            anchor = map
+                                .display_snapshot
+                                .buffer_snapshot()
+                                .anchor_before(point.to_point(&map.display_snapshot));
+                        }
+
+                        if ranges.last() != Some(&(anchor..anchor)) {
+                            ranges.push(anchor..anchor);
+                        }
                     }
 
-                    if ranges.last() != Some(&(anchor..anchor)) {
-                        ranges.push(anchor..anchor);
-                    }
-                }
-
-                editor.change_selections(Default::default(), window, cx, |s| {
-                    s.select_anchor_ranges(ranges)
-                });
-            })
+                    editor.change_selections(Default::default(), window, cx, |s| {
+                        s.select_anchor_ranges(ranges)
+                    });
+                })
         });
     }
 

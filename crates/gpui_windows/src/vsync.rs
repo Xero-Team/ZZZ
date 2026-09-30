@@ -15,7 +15,10 @@ static QPC_TICKS_PER_SECOND: LazyLock<u64> = LazyLock::new(|| {
     let mut frequency = 0;
     // On systems that run Windows XP or later, the function will always succeed and
     // will thus never return zero.
-    unsafe { QueryPerformanceFrequency(&mut frequency).unwrap() };
+    unsafe {
+        QueryPerformanceFrequency(&mut frequency)
+            .expect("QueryPerformanceFrequency should be present")
+    };
     frequency as u64
 });
 

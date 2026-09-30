@@ -230,7 +230,7 @@ impl TestAppContext {
             },
             |window, cx| cx.new(|cx| build_window(window, cx)),
         )
-        .unwrap()
+        .expect("value should be present")
     }
 
     /// Opens a new window with a specific size.
@@ -257,7 +257,7 @@ impl TestAppContext {
             },
             |window, cx| cx.new(|cx| build_window(window, cx)),
         )
-        .unwrap()
+        .expect("value should be present")
     }
 
     /// Adds a new window with no content.
@@ -272,7 +272,7 @@ impl TestAppContext {
                 },
                 |_, cx| cx.new(|_| Empty),
             )
-            .unwrap();
+            .expect("value should be present");
         drop(cx);
         let cx = VisualTestContext::from_window(*window, self).into_mut();
         cx.run_until_parked();
@@ -300,9 +300,9 @@ impl TestAppContext {
                 },
                 |window, cx| cx.new(|cx| build_root_view(window, cx)),
             )
-            .unwrap();
+            .expect("value should be present");
         drop(cx);
-        let view = window.root(self).unwrap();
+        let view = window.root(self).expect("root should be present");
         let cx = VisualTestContext::from_window(*window, self).into_mut();
         cx.run_until_parked();
 
@@ -467,7 +467,7 @@ impl TestAppContext {
             .update(self, |_, window, cx| {
                 window.dispatch_action(action.boxed_clone(), cx)
             })
-            .unwrap();
+            .expect("value should be present");
 
         self.background_executor.run_until_parked()
     }
@@ -505,7 +505,7 @@ impl TestAppContext {
         self.update_window(window, |_, window, cx| {
             window.dispatch_keystroke(keystroke, cx)
         })
-        .unwrap();
+        .expect("value should be present");
     }
 
     /// Returns the `TestWindow` backing the given handle.
@@ -514,12 +514,12 @@ impl TestAppContext {
             .borrow_mut()
             .windows
             .get_mut(window.id)
-            .unwrap()
+            .expect("entry should be present")
             .as_deref_mut()
-            .unwrap()
+            .expect("entry should be present")
             .platform_window
             .as_test()
-            .unwrap()
+            .expect("as_test should be present")
             .clone()
     }
 
@@ -595,7 +595,7 @@ impl TestAppContext {
         )
             .race()
             .await
-            .unwrap();
+            .expect("value should be present");
     }
 
     /// Set a name for this App.
@@ -698,7 +698,7 @@ impl<V> Entity<V> {
             }),
         );
 
-        let cx = cx.this.upgrade().unwrap();
+        let cx = cx.this.upgrade().expect("entity should be alive");
         let handle = self.downgrade();
 
         async move {
@@ -745,7 +745,7 @@ impl VisualTestContext {
     pub fn update<R>(&mut self, f: impl FnOnce(&mut Window, &mut App) -> R) -> R {
         self.cx
             .update_window(self.window, |_, window, cx| f(window, cx))
-            .unwrap()
+            .expect("value should be present")
     }
 
     /// Creates a new VisualTestContext. You would typically shadow the passed in
@@ -947,20 +947,20 @@ impl VisualTestContext {
                 window
                     .platform_window
                     .as_test()
-                    .unwrap()
+                    .expect("as_test should be present")
                     .0
                     .lock()
                     .should_close_handler
                     .take()
             })
-            .unwrap();
+            .expect("entry should be present");
         if let Some(mut handler) = handler {
             let should_close = handler();
             self.cx
                 .update_window(self.window, |_, window, _| {
                     window.platform_window.on_should_close(handler);
                 })
-                .unwrap();
+                .expect("value should be present");
             should_close
         } else {
             false
@@ -1138,7 +1138,7 @@ impl AnyWindowHandle {
         build_view: impl FnOnce(&mut Window, &mut Context<V>) -> V,
     ) -> Entity<V> {
         self.update(cx, |_, window, cx| cx.new(|cx| build_view(window, cx)))
-            .unwrap()
+            .expect("value should be present")
     }
 }
 

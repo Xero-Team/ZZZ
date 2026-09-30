@@ -47,9 +47,9 @@ impl StdioTransport {
             std::process::Stdio::piped(),
         )?;
 
-        let stdin = server.stdin.take().unwrap();
-        let stdout = server.stdout.take().unwrap();
-        let stderr = server.stderr.take().unwrap();
+        let stdin = server.stdin.take().expect("entry should be present");
+        let stdout = server.stdout.take().expect("entry should be present");
+        let stderr = server.stderr.take().expect("entry should be present");
 
         let (stdin_sender, stdin_receiver) = async_channel::unbounded::<String>();
         let (stdout_sender, stdout_receiver) = async_channel::unbounded::<String>();

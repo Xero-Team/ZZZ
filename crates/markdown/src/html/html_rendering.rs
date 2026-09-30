@@ -511,14 +511,14 @@ fn html_list_item_prefix(order: usize, ordered: bool, depth: usize) -> String {
                 NUMBERED_PREFIXES_1
                     .chars()
                     .nth(index % NUMBERED_PREFIXES_1.len())
-                    .unwrap()
+                    .expect("value should be present")
             ),
             _ => format!(
                 "{}. ",
                 NUMBERED_PREFIXES_2
                     .chars()
                     .nth(index % NUMBERED_PREFIXES_2.len())
-                    .unwrap()
+                    .expect("value should be present")
             ),
         }
     } else {

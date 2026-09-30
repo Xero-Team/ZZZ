@@ -72,21 +72,32 @@ pub struct PreviewTabsSettings {
 
 impl Settings for ItemSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let tabs = content.tabs.as_ref().unwrap();
+        let tabs = content
+            .tabs
+            .as_ref()
+            .expect("value should have the expected type");
         Self {
-            git_status: tabs.git_status.unwrap()
+            git_status: tabs.git_status.expect("git_status should be present")
                 && content
                     .git
                     .as_ref()
-                    .unwrap()
+                    .expect("value should have the expected type")
                     .enabled
-                    .unwrap()
+                    .expect("enabled should be present")
                     .is_git_status_enabled(),
-            close_position: tabs.close_position.unwrap(),
-            activate_on_close: tabs.activate_on_close.unwrap(),
-            file_icons: tabs.file_icons.unwrap(),
-            show_diagnostics: tabs.show_diagnostics.unwrap(),
-            show_close_button: tabs.show_close_button.unwrap(),
+            close_position: tabs
+                .close_position
+                .expect("close_position should be present"),
+            activate_on_close: tabs
+                .activate_on_close
+                .expect("activate_on_close should be present"),
+            file_icons: tabs.file_icons.expect("file_icons should be present"),
+            show_diagnostics: tabs
+                .show_diagnostics
+                .expect("show_diagnostics should be present"),
+            show_close_button: tabs
+                .show_close_button
+                .expect("show_close_button should be present"),
             show_unsaved_indicator: tabs.show_unsaved_indicator.unwrap_or(true),
         }
     }
@@ -94,23 +105,30 @@ impl Settings for ItemSettings {
 
 impl Settings for PreviewTabsSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let preview_tabs = content.preview_tabs.as_ref().unwrap();
+        let preview_tabs = content
+            .preview_tabs
+            .as_ref()
+            .expect("value should have the expected type");
         Self {
-            enabled: preview_tabs.enabled.unwrap(),
+            enabled: preview_tabs.enabled.expect("enabled should be present"),
             enable_preview_from_project_panel: preview_tabs
                 .enable_preview_from_project_panel
-                .unwrap(),
-            enable_preview_from_file_finder: preview_tabs.enable_preview_from_file_finder.unwrap(),
-            enable_preview_from_multibuffer: preview_tabs.enable_preview_from_multibuffer.unwrap(),
+                .expect("enable_preview_from_project_panel should be present"),
+            enable_preview_from_file_finder: preview_tabs
+                .enable_preview_from_file_finder
+                .expect("enable_preview_from_file_finder should be present"),
+            enable_preview_from_multibuffer: preview_tabs
+                .enable_preview_from_multibuffer
+                .expect("enable_preview_from_multibuffer should be present"),
             enable_preview_multibuffer_from_code_navigation: preview_tabs
                 .enable_preview_multibuffer_from_code_navigation
-                .unwrap(),
+                .expect("enable_preview_multibuffer_from_code_navigation should be present"),
             enable_preview_file_from_code_navigation: preview_tabs
                 .enable_preview_file_from_code_navigation
-                .unwrap(),
+                .expect("enable_preview_file_from_code_navigation should be present"),
             enable_keep_preview_on_code_navigation: preview_tabs
                 .enable_keep_preview_on_code_navigation
-                .unwrap(),
+                .expect("enable_keep_preview_on_code_navigation should be present"),
         }
     }
 }

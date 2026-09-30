@@ -1461,7 +1461,7 @@ impl NotebookEditor {
         list(self.cell_list.clone(), move |index, window, cx| {
             view.update(cx, |this, cx| {
                 let cell_id = &this.cell_order[index];
-                let cell = this.cell_map.get(cell_id).unwrap();
+                let cell = this.cell_map.get(cell_id).expect("entry should be present");
                 this.render_cell(index, cell, window, cx).into_any_element()
             })
         })
@@ -1783,7 +1783,8 @@ impl project::ProjectItem for NotebookItem {
                         nbformat: 4,
                         nbformat_minor: 5,
                         cells: vec![],
-                        metadata: serde_json::from_str("{}").unwrap(),
+                        metadata: serde_json::from_str("{}")
+                            .expect("parsing a JSON literal cannot fail"),
                     }
                 } else {
                     let notebook = if let Ok(nb) = nbformat::parse_notebook(&file_content) {
@@ -2132,7 +2133,8 @@ impl KernelSession for NotebookEditor {
             self.kernel.set_kernel_info(reply);
 
             if let Ok(language_info) = serde_json::from_value::<nbformat::v4::LanguageInfo>(
-                serde_json::to_value(&reply.language_info).unwrap(),
+                serde_json::to_value(&reply.language_info)
+                    .expect("converting to a JSON value cannot fail"),
             ) {
                 self.notebook_item.update(cx, |item, cx| {
                     item.notebook.metadata.language_info = Some(language_info);

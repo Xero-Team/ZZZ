@@ -385,7 +385,12 @@ impl Iterator for BatchIterator<'_> {
                 Some(PrimitiveBatch::Underlines(underlines_start..underlines_end))
             }
             PrimitiveKind::MonochromeSprite => {
-                let texture_id = self.monochrome_sprites_iter.peek().unwrap().tile.texture_id;
+                let texture_id = self
+                    .monochrome_sprites_iter
+                    .peek()
+                    .expect("peek should be present")
+                    .tile
+                    .texture_id;
                 let sprites_start = self.monochrome_sprites_start;
                 let mut sprites_end = sprites_start + 1;
                 self.monochrome_sprites_iter.next();
@@ -406,7 +411,12 @@ impl Iterator for BatchIterator<'_> {
                 })
             }
             PrimitiveKind::SubpixelSprite => {
-                let texture_id = self.subpixel_sprites_iter.peek().unwrap().tile.texture_id;
+                let texture_id = self
+                    .subpixel_sprites_iter
+                    .peek()
+                    .expect("peek should be present")
+                    .tile
+                    .texture_id;
                 let sprites_start = self.subpixel_sprites_start;
                 let mut sprites_end = sprites_start + 1;
                 self.subpixel_sprites_iter.next();
@@ -427,7 +437,12 @@ impl Iterator for BatchIterator<'_> {
                 })
             }
             PrimitiveKind::PolychromeSprite => {
-                let texture_id = self.polychrome_sprites_iter.peek().unwrap().tile.texture_id;
+                let texture_id = self
+                    .polychrome_sprites_iter
+                    .peek()
+                    .expect("peek should be present")
+                    .tile
+                    .texture_id;
                 let sprites_start = self.polychrome_sprites_start;
                 let mut sprites_end = sprites_start + 1;
                 self.polychrome_sprites_iter.next();

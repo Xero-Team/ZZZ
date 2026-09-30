@@ -501,7 +501,10 @@ fn strip_macro_definitions(source: &str) -> String {
             index = end;
             continue;
         }
-        let character = source[index..].chars().next().unwrap();
+        let character = source[index..]
+            .chars()
+            .next()
+            .expect("iterator should yield an item");
         result.push(character);
         index += character.len_utf8();
     }
@@ -646,7 +649,10 @@ fn replace_braced_command(
                 continue;
             }
         }
-        let character = source[index..].chars().next().unwrap();
+        let character = source[index..]
+            .chars()
+            .next()
+            .expect("iterator should yield an item");
         result.push(character);
         index += character.len_utf8();
     }

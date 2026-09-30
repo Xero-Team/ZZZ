@@ -135,7 +135,12 @@ impl IgnoreStack {
                 abs_base_path,
                 ignore,
                 parent: prev,
-            } => match ignore.matched(abs_path.strip_prefix(abs_base_path).unwrap(), is_dir) {
+            } => match ignore.matched(
+                abs_path
+                    .strip_prefix(abs_base_path)
+                    .expect("strip_prefix should be present"),
+                is_dir,
+            ) {
                 ignore::Match::None => IgnoreStack {
                     repo_root: self.repo_root.clone(),
                     global_ignore_root: self.global_ignore_root.clone(),

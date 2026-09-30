@@ -167,7 +167,7 @@ impl<T> Outline<T> {
                 let similarity = strsim::normalized_levenshtein(&candidate.string, query);
                 (index, similarity)
             })
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())?;
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).expect("partial_cmp should be present"))?;
 
         if similarity >= SIMILARITY_THRESHOLD {
             self.path_candidates
@@ -224,7 +224,7 @@ impl<T> Outline<T> {
                 for position in &mut string_match.positions {
                     while *position >= preceding_ranges_len + name_range.len() {
                         preceding_ranges_len += name_range.len();
-                        name_range = name_ranges.next().unwrap();
+                        name_range = name_ranges.next().expect("iterator should yield an item");
                     }
                     *position = name_range.start + (*position - preceding_ranges_len);
                 }

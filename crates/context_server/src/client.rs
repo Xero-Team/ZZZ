@@ -400,7 +400,7 @@ impl Client {
             method,
             params,
         })
-        .unwrap();
+        .expect("serializing to JSON cannot fail");
 
         let (tx, rx) = oneshot::channel();
         let handle_response = self
@@ -478,7 +478,7 @@ impl Client {
                 anyhow::bail!(RequestCanceled)
             }
             _ = timeout_fut => {
-                log::error!("cancelled csp request task for {method:?} id {id} which took over {:?}", timeout.unwrap());
+                log::error!("cancelled csp request task for {method:?} id {id} which took over {:?}", timeout.expect("value should be present"));
                 anyhow::bail!("Context server request timeout");
             }
         }
@@ -492,7 +492,7 @@ impl Client {
             method,
             params,
         })
-        .unwrap();
+        .expect("serializing to JSON cannot fail");
         self.outbound_tx.try_send(notification)?;
         Ok(())
     }

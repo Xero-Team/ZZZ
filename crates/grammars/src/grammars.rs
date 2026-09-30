@@ -64,11 +64,11 @@ pub fn load_config(name: &str) -> LanguageConfig {
             .data
             .to_vec(),
     )
-    .unwrap();
+    .expect("value should be present");
 
     let config: LanguageConfig = ::toml::from_str(&config_toml)
         .with_context(|| format!("failed to load config.toml for language {name:?}"))
-        .unwrap();
+        .expect("value should parse");
 
     config
 }

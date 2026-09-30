@@ -177,6 +177,6 @@ fn main() {
                 )
                 .detach();
             })
-            .unwrap();
+            .expect("value should be present");
     });
 }

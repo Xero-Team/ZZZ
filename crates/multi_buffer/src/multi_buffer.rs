@@ -1335,7 +1335,14 @@ impl MultiBuffer {
 
     pub fn as_singleton(&self) -> Option<Entity<Buffer>> {
         if self.singleton {
-            Some(self.buffers.values().next().unwrap().buffer.clone())
+            Some(
+                self.buffers
+                    .values()
+                    .next()
+                    .expect("iterator should yield an item")
+                    .buffer
+                    .clone(),
+            )
         } else {
             None
         }
@@ -4326,12 +4333,16 @@ impl MultiBufferSnapshot {
         cursor.seek(&DimensionPair { key, value: None });
         if let Some(region) = cursor.region() {
             if key >= region.range.end.key {
-                return region.range.end.value.unwrap();
+                return region.range.end.value.expect("value should be present");
             }
             let start_key = region.range.start.key;
-            let start_value = region.range.start.value.unwrap();
+            let start_value = region.range.start.value.expect("value should be present");
             let buffer_start_key = region.buffer_range.start.key;
-            let buffer_start_value = region.buffer_range.start.value.unwrap();
+            let buffer_start_value = region
+                .buffer_range
+                .start
+                .value
+                .expect("value should be present");
             let mut buffer_key = buffer_start_key;
             buffer_key += key - start_key;
             let buffer_value = convert_buffer_dimension(region.buffer, buffer_key);
@@ -5155,7 +5166,7 @@ impl MultiBufferSnapshot {
             if let Some(region) = cursor.region() {
                 let overshoot = point - region.range.start.key;
                 let buffer_point = region.buffer_range.start + overshoot;
-                let mut position = region.range.start.value.unwrap();
+                let mut position = region.range.start.value.expect("value should be present");
                 position.add_text_dim(
                     &region
                         .buffer
@@ -5599,9 +5610,9 @@ impl MultiBufferSnapshot {
                     continue;
                 }
 
-                let next_region_start = next_range.start.value.unwrap();
+                let next_region_start = next_range.start.value.expect("value should be present");
                 let next_region_end = if let Some((_, range)) = cursor.fetch_excerpt_with_range() {
-                    range.start.value.unwrap()
+                    range.start.value.expect("value should be present")
                 } else {
                     self.max_point()
                 };
@@ -6200,7 +6211,8 @@ impl MultiBufferSnapshot {
             match depth.cmp(&current_depth) {
                 cmp::Ordering::Less => {
                     for _ in 0..(current_depth - depth) {
-                        let mut indent = indent_stack.pop().unwrap();
+                        let mut indent =
+                            indent_stack.pop().expect("collection should not be empty");
                         if last_row != first_row {
                             // In this case, we landed on an empty row, had to seek forward,
                             // and discovered that the indent we where on is ending.
@@ -8033,7 +8045,11 @@ impl<'a> Iterator for ReversedMultiBufferChunks<'a> {
             self.offset -= 1;
             Some("\n")
         } else {
-            let chunk = self.current_chunks.as_mut().unwrap().next()?;
+            let chunk = self
+                .current_chunks
+                .as_mut()
+                .expect("value should have the expected type")
+                .next()?;
             self.offset -= chunk.len();
             Some(chunk)
         }
@@ -8072,7 +8088,9 @@ impl<'a> Iterator for MultiBufferChunks<'a> {
                 let chunk = if let Some(chunk) = &mut self.buffer_chunk {
                     chunk
                 } else {
-                    let chunk = self.next_excerpt_chunk().unwrap();
+                    let chunk = self
+                        .next_excerpt_chunk()
+                        .expect("next_excerpt_chunk should be present");
                     self.buffer_chunk.insert(chunk)
                 };
 

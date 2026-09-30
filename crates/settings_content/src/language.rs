@@ -1003,19 +1003,22 @@ mod test {
     #[test]
     fn test_formatter_deserialization() {
         let raw_auto = "{\"formatter\": \"auto\"}";
-        let settings: LanguageSettingsContent = serde_json::from_str(raw_auto).unwrap();
+        let settings: LanguageSettingsContent =
+            serde_json::from_str(raw_auto).expect("parsing a JSON literal cannot fail");
         assert_eq!(
             settings.formatter,
             Some(FormatterList::Single(Formatter::Auto))
         );
         let raw_none = "{\"formatter\": \"none\"}";
-        let settings: LanguageSettingsContent = serde_json::from_str(raw_none).unwrap();
+        let settings: LanguageSettingsContent =
+            serde_json::from_str(raw_none).expect("parsing a JSON literal cannot fail");
         assert_eq!(
             settings.formatter,
             Some(FormatterList::Single(Formatter::None))
         );
         let raw = "{\"formatter\": \"language_server\"}";
-        let settings: LanguageSettingsContent = serde_json::from_str(raw).unwrap();
+        let settings: LanguageSettingsContent =
+            serde_json::from_str(raw).expect("parsing a JSON literal cannot fail");
         assert_eq!(
             settings.formatter,
             Some(FormatterList::Single(Formatter::LanguageServer(
@@ -1024,7 +1027,8 @@ mod test {
         );
 
         let raw = "{\"formatter\": [{\"language_server\": {\"name\": null}}]}";
-        let settings: LanguageSettingsContent = serde_json::from_str(raw).unwrap();
+        let settings: LanguageSettingsContent =
+            serde_json::from_str(raw).expect("parsing a JSON literal cannot fail");
         assert_eq!(
             settings.formatter,
             Some(FormatterList::Vec(vec![Formatter::LanguageServer(
@@ -1032,7 +1036,8 @@ mod test {
             )]))
         );
         let raw = "{\"formatter\": [{\"language_server\": {\"name\": null}}, \"language_server\", \"prettier\"]}";
-        let settings: LanguageSettingsContent = serde_json::from_str(raw).unwrap();
+        let settings: LanguageSettingsContent =
+            serde_json::from_str(raw).expect("parsing a JSON literal cannot fail");
         assert_eq!(
             settings.formatter,
             Some(FormatterList::Vec(vec![
@@ -1043,7 +1048,8 @@ mod test {
         );
 
         let raw = "{\"formatter\": [{\"language_server\": {\"name\": \"ruff\"}}, \"prettier\"]}";
-        let settings: LanguageSettingsContent = serde_json::from_str(raw).unwrap();
+        let settings: LanguageSettingsContent =
+            serde_json::from_str(raw).expect("parsing a JSON literal cannot fail");
         assert_eq!(
             settings.formatter,
             Some(FormatterList::Vec(vec![
@@ -1055,7 +1061,8 @@ mod test {
         );
 
         assert_eq!(
-            serde_json::to_string(&LanguageServerFormatterSpecifier::Current).unwrap(),
+            serde_json::to_string(&LanguageServerFormatterSpecifier::Current)
+                .expect("serializing to JSON cannot fail"),
             "\"language_server\"",
         );
     }

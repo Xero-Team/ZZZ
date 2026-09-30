@@ -1246,7 +1246,13 @@ impl RunningState {
 
         let cwd = (!request.cwd.is_empty())
             .then(|| PathBuf::from(&request.cwd))
-            .or_else(|| session.binary().unwrap().cwd.clone());
+            .or_else(|| {
+                session
+                    .binary()
+                    .expect("binary should be present")
+                    .cwd
+                    .clone()
+            });
 
         let mut envs: HashMap<String, String> =
             self.session.read(cx).task_context().project_env.clone();
@@ -1628,7 +1634,7 @@ impl RunningState {
                     .position(|view| view.read(cx).view_kind() == item)
                     .map(|view| (view, pane))
             })
-            .unwrap();
+            .expect("value should be present");
 
         pane.update(cx, |this, cx| {
             this.activate_item(variable_list_position, true, true, window, cx);

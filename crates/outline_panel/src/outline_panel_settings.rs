@@ -47,35 +47,51 @@ impl ScrollbarVisibility for OutlinePanelSettingsScrollbarProxy {
 
 impl Settings for OutlinePanelSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let panel = content.outline_panel.as_ref().unwrap();
+        let panel = content
+            .outline_panel
+            .as_ref()
+            .expect("value should have the expected type");
         Self {
-            button: panel.button.unwrap(),
-            default_width: panel.default_width.map(gpui::px).unwrap(),
-            dock: panel.dock.unwrap(),
-            file_icons: panel.file_icons.unwrap(),
-            folder_icons: panel.folder_icons.unwrap(),
-            git_status: panel.git_status.unwrap()
+            button: panel.button.expect("button should be present"),
+            default_width: panel
+                .default_width
+                .map(gpui::px)
+                .expect("map should be present"),
+            dock: panel.dock.expect("dock should be present"),
+            file_icons: panel.file_icons.expect("file_icons should be present"),
+            folder_icons: panel.folder_icons.expect("folder_icons should be present"),
+            git_status: panel.git_status.expect("git_status should be present")
                 && content
                     .git
                     .as_ref()
-                    .unwrap()
+                    .expect("value should have the expected type")
                     .enabled
-                    .unwrap()
+                    .expect("enabled should be present")
                     .is_git_status_enabled(),
-            indent_size: panel.indent_size.unwrap(),
+            indent_size: panel.indent_size.expect("indent_size should be present"),
             indent_guides: IndentGuidesSettings {
-                show: panel.indent_guides.unwrap().show.unwrap(),
+                show: panel
+                    .indent_guides
+                    .expect("indent_guides should be present")
+                    .show
+                    .expect("show should be present"),
             },
-            auto_reveal_entries: panel.auto_reveal_entries.unwrap(),
-            auto_fold_dirs: panel.auto_fold_dirs.unwrap(),
+            auto_reveal_entries: panel
+                .auto_reveal_entries
+                .expect("auto_reveal_entries should be present"),
+            auto_fold_dirs: panel
+                .auto_fold_dirs
+                .expect("auto_fold_dirs should be present"),
             scrollbar: ScrollbarSettings {
                 show: panel
                     .scrollbar
-                    .unwrap()
+                    .expect("scrollbar should be present")
                     .show
                     .map(ui_scrollbar_settings_from_raw),
             },
-            expand_outlines_with_depth: panel.expand_outlines_with_depth.unwrap(),
+            expand_outlines_with_depth: panel
+                .expand_outlines_with_depth
+                .expect("expand_outlines_with_depth should be present"),
         }
     }
 }

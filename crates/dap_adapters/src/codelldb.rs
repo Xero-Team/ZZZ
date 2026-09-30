@@ -96,7 +96,9 @@ impl DebugAdapter for CodeLldbDebugAdapter {
                 DebugRequest::Attach(_) => "attach",
             },
         });
-        let map = configuration.as_object_mut().unwrap();
+        let map = configuration
+            .as_object_mut()
+            .expect("value should have the expected type");
         // CodeLLDB uses `name` for a terminal label.
         map.insert(
             "name".into(),
@@ -425,7 +427,7 @@ impl DebugAdapter for CodeLldbDebugAdapter {
         }
 
         Ok(DebugAdapterBinary {
-            command: Some(command.unwrap()),
+            command: Some(command.expect("value should be present")),
             cwd: Some(delegate.worktree_root_path().to_path_buf()),
             arguments: user_args.unwrap_or_else(|| {
                 if let Some(config) = json_config.as_object_mut()

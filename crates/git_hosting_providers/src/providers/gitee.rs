@@ -70,7 +70,7 @@ impl GitHostingProvider for Gitee {
     }
 
     fn base_url(&self) -> Url {
-        Url::parse("https://gitee.com").unwrap()
+        Url::parse("https://gitee.com").expect("URL literal should be valid")
     }
 
     fn supports_avatars(&self) -> bool {
@@ -113,7 +113,7 @@ impl GitHostingProvider for Gitee {
 
         self.base_url()
             .join(&format!("{owner}/{repo}/commit/{sha}"))
-            .unwrap()
+            .expect("value should be present")
     }
 
     fn build_permalink(&self, remote: ParsedGitRemote, params: BuildPermalinkParams) -> Url {
@@ -127,7 +127,7 @@ impl GitHostingProvider for Gitee {
         let mut permalink = self
             .base_url()
             .join(&format!("{owner}/{repo}/blob/{sha}/{path}"))
-            .unwrap();
+            .expect("value should be present");
         permalink.set_fragment(
             selection
                 .map(|selection| self.line_fragment(&selection))
@@ -175,7 +175,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -190,7 +190,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -200,7 +200,7 @@ mod tests {
         let permalink = Gitee.build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "e5fe811d7ad0fc26934edd76f891d20bdc3bb194",
@@ -218,7 +218,7 @@ mod tests {
         let permalink = Gitee.build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "e5fe811d7ad0fc26934edd76f891d20bdc3bb194",
@@ -236,7 +236,7 @@ mod tests {
         let permalink = Gitee.build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "e5fe811d7ad0fc26934edd76f891d20bdc3bb194",

@@ -291,7 +291,7 @@ pub fn background_thread_queue() -> WriteQueueConstructor {
                     write()
                 }
             })
-            .unwrap();
+            .expect("channel should yield a value");
 
         let sender = UnboundedSyncSender::new(sender);
         Box::new(move |queued_write| {

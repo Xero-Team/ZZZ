@@ -21,7 +21,7 @@ fn merge_request_number_regex() -> &'static Regex {
         // Matches GitLab MR references:
         // - "(!123)" at the end of line (squash merge pattern)
         // - "See merge request group/project!123" (standard merge commit)
-        Regex::new(r"(?:\(!(\d+)\)$|See merge request [^\s]+!(\d+))").unwrap()
+        Regex::new(r"(?:\(!(\d+)\)$|See merge request [^\s]+!(\d+))").expect("valid regex literal")
     });
     &MERGE_REQUEST_NUMBER_REGEX
 }
@@ -53,7 +53,10 @@ impl Gitlab {
     }
 
     pub fn public_instance() -> Self {
-        Self::new("GitLab", Url::parse("https://gitlab.com").unwrap())
+        Self::new(
+            "GitLab",
+            Url::parse("https://gitlab.com").expect("URL literal should be valid"),
+        )
     }
 
     pub fn from_remote_url(remote_url: &str) -> Result<Self> {
@@ -196,7 +199,7 @@ impl GitHostingProvider for Gitlab {
 
         self.base_url()
             .join(&format!("{owner}/{repo}/-/commit/{sha}"))
-            .unwrap()
+            .expect("value should be present")
     }
 
     fn build_permalink(&self, remote: ParsedGitRemote, params: BuildPermalinkParams) -> Url {
@@ -210,7 +213,7 @@ impl GitHostingProvider for Gitlab {
         let mut permalink = self
             .base_url()
             .join(&format!("{owner}/{repo}/-/blob/{sha}/{path}"))
-            .unwrap();
+            .expect("value should be present");
         if std::path::Path::new(&path)
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
@@ -324,7 +327,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -339,7 +342,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -357,7 +360,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -374,7 +377,7 @@ mod tests {
             parsed_remote,
             ParsedGitRemote {
                 owner: "group/subgroup".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             }
         );
     }
@@ -384,7 +387,7 @@ mod tests {
         let permalink = Gitlab::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "e6ebe7974deb6bb6cc0e2595c8ec31f0c71084b7",
@@ -402,7 +405,7 @@ mod tests {
         let permalink = Gitlab::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "e6ebe7974deb6bb6cc0e2595c8ec31f0c71084b7",
@@ -420,7 +423,7 @@ mod tests {
         let permalink = Gitlab::public_instance().build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "e6ebe7974deb6bb6cc0e2595c8ec31f0c71084b7",
@@ -437,7 +440,7 @@ mod tests {
     fn test_build_gitlab_create_pr_url() {
         let remote = ParsedGitRemote {
             owner: "zed-industries".into(),
-            repo: "zzz".into(),
+            repo: "zed".into(),
         };
 
         let provider = Gitlab::public_instance();
@@ -460,7 +463,7 @@ mod tests {
         let permalink = gitlab.build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "e6ebe7974deb6bb6cc0e2595c8ec31f0c71084b7",
@@ -481,11 +484,11 @@ mod tests {
         let permalink = gitlab.build_permalink(
             ParsedGitRemote {
                 owner: "zed-industries".into(),
-                repo: "zzz".into(),
+                repo: "zed".into(),
             },
             BuildPermalinkParams::new(
                 "b2efec9824c45fcc90c9a7eb107a50d1772a60aa",
-                &repo_path("crates/zzz/src/main.rs"),
+                &repo_path("crates/zed/src/main.rs"),
                 None,
             ),
         );
@@ -498,7 +501,7 @@ mod tests {
     fn test_build_create_pull_request_url() {
         let remote = ParsedGitRemote {
             owner: "zed-industries".into(),
-            repo: "zzz".into(),
+            repo: "zed".into(),
         };
 
         let github = Gitlab::public_instance();
@@ -511,7 +514,7 @@ mod tests {
             "https://gitlab.com/zed-industries/zed/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature%2Fnew-feature"
         );
 
-        let base_url = Url::parse("https://gitlab.zed.com").unwrap();
+        let base_url = Url::parse("https://gitlab.zed.com").expect("URL literal should be valid");
         let github = Gitlab::new("GitLab Self-Hosted", base_url);
         let url = github
             .build_create_pull_request_url(&remote, "feature/new-feature")
@@ -527,7 +530,7 @@ mod tests {
     fn test_extract_merge_request_from_squash_commit() {
         let remote = ParsedGitRemote {
             owner: "zed-industries".into(),
-            repo: "zzz".into(),
+            repo: "zed".into(),
         };
 
         let provider = Gitlab::public_instance();
@@ -547,7 +550,7 @@ mod tests {
     fn test_extract_merge_request_from_merge_commit() {
         let remote = ParsedGitRemote {
             owner: "zed-industries".into(),
-            repo: "zzz".into(),
+            repo: "zed".into(),
         };
 
         let provider = Gitlab::public_instance();
@@ -566,7 +569,8 @@ mod tests {
 
     #[test]
     fn test_extract_merge_request_self_hosted() {
-        let base_url = Url::parse("https://gitlab.my-company.com").unwrap();
+        let base_url =
+            Url::parse("https://gitlab.my-company.com").expect("URL literal should be valid");
         let provider = Gitlab::new("GitLab Self-Hosted", base_url);
 
         let remote = ParsedGitRemote {
@@ -588,7 +592,7 @@ mod tests {
     fn test_extract_merge_request_no_match() {
         let remote = ParsedGitRemote {
             owner: "zed-industries".into(),
-            repo: "zzz".into(),
+            repo: "zed".into(),
         };
 
         let provider = Gitlab::public_instance();

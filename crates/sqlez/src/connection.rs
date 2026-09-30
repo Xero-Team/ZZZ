@@ -116,13 +116,16 @@ impl Connection {
     }
 
     pub fn sql_has_syntax_error(&self, sql: &str) -> Option<(String, usize)> {
-        let sql = CString::new(sql).unwrap();
+        let sql = CString::new(sql).expect("value should be present");
         let mut remaining_sql = sql.as_c_str();
         let sql_start = remaining_sql.as_ptr();
 
         let mut alter_table = None;
         while {
-            let remaining_sql_str = remaining_sql.to_str().unwrap().trim();
+            let remaining_sql_str = remaining_sql
+                .to_str()
+                .expect("path should be valid UTF-8")
+                .trim();
             let any_remaining_sql = remaining_sql_str != ";" && !remaining_sql_str.is_empty();
             if any_remaining_sql {
                 alter_table = parse_alter_table(remaining_sql_str);
@@ -144,8 +147,8 @@ impl Connection {
                 //This should always succeed, if it doesn't then you really should know about it
                 temp_connection
                     .exec(&format!("CREATE TABLE {table_to_alter}({column})"))
-                    .unwrap()()
-                .unwrap();
+                    .expect("value should be present")()
+                .expect("value should be present");
 
                 unsafe {
                     sqlite3_prepare_v2(

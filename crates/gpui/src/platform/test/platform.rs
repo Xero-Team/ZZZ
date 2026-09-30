@@ -298,7 +298,8 @@ impl Platform for TestPlatform {
 
     fn restart(&self, path: Option<PathBuf>, arguments: Vec<std::ffi::OsString>) {
         if let Some(tx) = self.expect_restart.take() {
-            tx.send((path, arguments)).unwrap();
+            tx.send((path, arguments))
+                .expect("channel receiver should be alive");
         }
     }
 

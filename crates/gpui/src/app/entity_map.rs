@@ -38,7 +38,7 @@ impl From<u64> for EntityId {
 impl EntityId {
     /// Converts this entity id to a [NonZeroU64]
     pub fn as_non_zero_u64(self) -> NonZeroU64 {
-        NonZeroU64::new(self.0.as_ffi()).unwrap()
+        NonZeroU64::new(self.0.as_ffi()).expect("entity ids are non-zero")
     }
 
     /// Converts this entity id to a [u64]
@@ -150,7 +150,10 @@ impl EntityMap {
 
     /// Returns an entity after moving it to the stack.
     pub fn end_lease<T>(&mut self, mut lease: Lease<T>) {
-        self.entities.insert(lease.id, lease.entity.take().unwrap());
+        self.entities.insert(
+            lease.id,
+            lease.entity.take().expect("entry should be present"),
+        );
     }
 
     pub fn read<T: 'static>(&self, entity: &Entity<T>) -> &T {
@@ -188,7 +191,10 @@ impl EntityMap {
 
         dropped_entity_ids
             .filter_map(|entity_id| {
-                let count = ref_counts.counts.remove(entity_id).unwrap();
+                let count = ref_counts
+                    .counts
+                    .remove(entity_id)
+                    .expect("entry should be present");
                 debug_assert_eq!(
                     count.load(SeqCst),
                     0,
@@ -221,13 +227,21 @@ impl<T: 'static> core::ops::Deref for Lease<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.entity.as_ref().unwrap().downcast_ref().unwrap()
+        self.entity
+            .as_ref()
+            .expect("value should have the expected type")
+            .downcast_ref()
+            .expect("downcast should succeed")
     }
 }
 
 impl<T: 'static> core::ops::DerefMut for Lease<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.entity.as_mut().unwrap().downcast_mut().unwrap()
+        self.entity
+            .as_mut()
+            .expect("value should have the expected type")
+            .downcast_mut()
+            .expect("downcast should succeed")
     }
 }
 
@@ -329,7 +343,7 @@ impl Clone for AnyEntity {
             handle_id: self
                 .entity_map
                 .upgrade()
-                .unwrap()
+                .expect("entity should be alive")
                 .write()
                 .leak_detector
                 .handle_created(self.entity_id, None),
@@ -610,7 +624,7 @@ impl AnyWeakEntity {
             handle_id: self
                 .entity_ref_counts
                 .upgrade()
-                .unwrap()
+                .expect("entity should be alive")
                 .write()
                 .leak_detector
                 .handle_created(self.entity_id, None),

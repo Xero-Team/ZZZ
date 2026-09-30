@@ -760,7 +760,10 @@ impl SplittableEditor {
             dm.set_companion(Some((lhs_display_map, companion.clone())), cx);
         });
 
-        let lhs = self.lhs.as_ref().unwrap();
+        let lhs = self
+            .lhs
+            .as_ref()
+            .expect("value should have the expected type");
 
         let shared_scroll_anchor = self
             .rhs_editor

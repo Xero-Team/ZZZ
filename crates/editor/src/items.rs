@@ -116,7 +116,10 @@ impl FollowableItem for Editor {
                 let multibuffer = cx.new(|cx| {
                     let mut multibuffer;
                     if state.singleton && buffers.len() == 1 {
-                        multibuffer = MultiBuffer::singleton(buffers.pop().unwrap(), cx)
+                        multibuffer = MultiBuffer::singleton(
+                            buffers.pop().expect("collection should not be empty"),
+                            cx,
+                        )
                     } else {
                         multibuffer = MultiBuffer::new(project.read(cx).capability());
                         for (path_key, buffer_id, ranges) in path_excerpts {

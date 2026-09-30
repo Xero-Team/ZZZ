@@ -151,7 +151,10 @@ impl RenderOnce for SplitEditorView {
             "`SplitEditorView` requires `SplittableEditor` to be in split mode"
         );
 
-        let lhs_editor = splittable_editor.lhs_editor().unwrap().clone();
+        let lhs_editor = splittable_editor
+            .lhs_editor()
+            .expect("lhs_editor should be present")
+            .clone();
         let rhs_editor = splittable_editor.rhs_editor().clone();
 
         let mut lhs = EditorElement::new(&lhs_editor, self.style.clone());

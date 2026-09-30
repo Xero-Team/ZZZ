@@ -169,15 +169,15 @@ macro_rules! impl_numeric_stepper_nonzero_int {
     ($nonzero:ty, $inner:ty) => {
         impl NumberFieldType for $nonzero {
             fn default_step() -> Self {
-                <$nonzero>::new(1).unwrap()
+                <$nonzero>::new(1).expect("value should be present")
             }
 
             fn large_step() -> Self {
-                <$nonzero>::new(10).unwrap()
+                <$nonzero>::new(10).expect("value should be present")
             }
 
             fn small_step() -> Self {
-                <$nonzero>::new(1).unwrap()
+                <$nonzero>::new(1).expect("value should be present")
             }
 
             fn min_value() -> Self {
@@ -190,12 +190,12 @@ macro_rules! impl_numeric_stepper_nonzero_int {
 
             fn saturating_add(self, rhs: Self) -> Self {
                 let result = self.get().saturating_add(rhs.get());
-                <$nonzero>::new(result.max(1)).unwrap()
+                <$nonzero>::new(result.max(1)).expect("value should be present")
             }
 
             fn saturating_sub(self, rhs: Self) -> Self {
                 let result = self.get().saturating_sub(rhs.get()).max(1);
-                <$nonzero>::new(result).unwrap()
+                <$nonzero>::new(result).expect("value should be present")
             }
         }
     };

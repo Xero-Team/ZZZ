@@ -1602,7 +1602,7 @@ fn dispatch_apply_templates(
             });
 
             let files = match apply_devcontainer_template(
-                worktree.unwrap(),
+                worktree.expect("value should be present"),
                 &template_entry.template,
                 &template_entry.options_selected,
                 &template_entry.features_selected,
@@ -1628,7 +1628,8 @@ fn dispatch_apply_templates(
             };
 
             if files.project_files.contains(&Arc::from(
-                RelPath::unix(".devcontainer/devcontainer.json").unwrap(),
+                RelPath::unix(".devcontainer/devcontainer.json")
+                    .expect("path should be a valid relative path"),
             )) {
                 let Some(workspace_task) = workspace
                     .update_in(cx, |workspace, window, cx| {

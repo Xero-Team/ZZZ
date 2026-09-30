@@ -242,10 +242,18 @@ impl ConflictSet {
                 let theirs_end = line_pos;
                 let conflict_end = (line_end + 1).min(buffer_len);
 
-                let range = buffer.anchor_after(conflict_start.unwrap())
+                let range = buffer.anchor_after(conflict_start.expect("value should be present"))
                     ..buffer.anchor_before(conflict_end);
-                let ours = side_range(buffer, ours_start.unwrap(), ours_end.unwrap());
-                let theirs = side_range(buffer, theirs_start.unwrap(), theirs_end);
+                let ours = side_range(
+                    buffer,
+                    ours_start.expect("value should be present"),
+                    ours_end.expect("value should be present"),
+                );
+                let theirs = side_range(
+                    buffer,
+                    theirs_start.expect("value should be present"),
+                    theirs_end,
+                );
                 let base = base_start
                     .zip(base_end)
                     .map(|(start, end)| side_range(buffer, start, end));

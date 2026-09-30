@@ -119,7 +119,10 @@ impl AskPassSession {
                     if let Some(password) = prompt.await {
                         #[cfg(target_os = "windows")]
                         {
-                            askpass_secret.lock().unwrap().replace(password.clone());
+                            askpass_secret
+                                .lock()
+                                .expect("lock should not be poisoned")
+                                .replace(password.clone());
                         }
                         ControlFlow::Continue(Ok(password))
                     } else {

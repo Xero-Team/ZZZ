@@ -368,7 +368,7 @@ impl<M: ManagedView> Element for PopoverMenu<M> {
         cx: &mut App,
     ) -> (gpui::LayoutId, Self::RequestLayoutState) {
         window.with_element_state(
-            global_id.unwrap(),
+            global_id.expect("value should be present"),
             |element_state: Option<PopoverMenuElementState<M>>, window| {
                 let element_state = element_state.unwrap_or_default();
                 let mut menu_layout_id = None;
@@ -455,11 +455,15 @@ impl<M: ManagedView> Element for PopoverMenu<M> {
 
         request_layout.child_layout_id.map(|layout_id| {
             let bounds = window.layout_bounds(layout_id);
-            window.with_element_state(global_id.unwrap(), |element_state, _cx| {
-                let mut element_state: PopoverMenuElementState<M> = element_state.unwrap();
-                element_state.child_bounds = Some(bounds);
-                ((), element_state)
-            });
+            window.with_element_state(
+                global_id.expect("value should be present"),
+                |element_state, _cx| {
+                    let mut element_state: PopoverMenuElementState<M> =
+                        element_state.expect("value should be present");
+                    element_state.child_bounds = Some(bounds);
+                    ((), element_state)
+                },
+            );
 
             window.insert_hitbox(bounds, HitboxBehavior::Normal).id
         })

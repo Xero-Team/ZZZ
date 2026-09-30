@@ -20,7 +20,11 @@ impl JupyterSettings {
 
 impl Settings for JupyterSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let jupyter = content.editor.jupyter.clone().unwrap();
+        let jupyter = content
+            .editor
+            .jupyter
+            .clone()
+            .expect("value should be present");
         Self {
             kernel_selections: jupyter.kernel_selections.unwrap_or_default(),
         }

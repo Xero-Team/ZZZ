@@ -148,7 +148,7 @@ impl SyntaxTreeView {
         this.handle_item_updated(active_item, window, cx);
 
         cx.subscribe_in(
-            &workspace_handle.upgrade().unwrap(),
+            &workspace_handle.upgrade().expect("entity should be alive"),
             window,
             move |this, workspace, event, window, cx| match event {
                 WorkspaceEvent::ItemAdded { .. } | WorkspaceEvent::ActiveItemChanged => {
@@ -262,7 +262,9 @@ impl SyntaxTreeView {
                 .buffer_snapshot()
                 .range_to_buffer_ranges(selection_range.start..selection_range.end)
                 .pop()?;
-            let buffer = multi_buffer.buffer(buffer.remote_id()).unwrap();
+            let buffer = multi_buffer
+                .buffer(buffer.remote_id())
+                .expect("value should be present");
             Some((buffer, range))
         })?;
 

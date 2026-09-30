@@ -26,9 +26,14 @@ pub struct AudioSettings {
 /// Configuration of audio in ZZZ
 impl Settings for AudioSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let audio = &content.audio.as_ref().unwrap();
+        let audio = &content
+            .audio
+            .as_ref()
+            .expect("value should have the expected type");
         AudioSettings {
-            auto_microphone_volume: audio.auto_microphone_volume.unwrap(),
+            auto_microphone_volume: audio
+                .auto_microphone_volume
+                .expect("auto_microphone_volume should be present"),
             output_audio_device: audio
                 .output_audio_device
                 .as_ref()

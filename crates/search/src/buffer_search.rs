@@ -1263,7 +1263,10 @@ impl BufferSearchBar {
                     .update(cx, |replacement_buffer, cx| {
                         let len = replacement_buffer.len(cx);
                         replacement_buffer.edit(
-                            [(MultiBufferOffset(0)..len, replacement.unwrap())],
+                            [(
+                                MultiBufferOffset(0)..len,
+                                replacement.expect("value should be present"),
+                            )],
                             None,
                             cx,
                         );
@@ -1733,7 +1736,7 @@ impl BufferSearchBar {
                                 let (matches, token) = this
                                     .searchable_items_with_matches
                                     .get(&active_searchable_item.downgrade())
-                                    .unwrap();
+                                    .expect("entry should be present");
                                 if matches.is_empty() {
                                     active_searchable_item.clear_matches(window, cx);
                                 } else {

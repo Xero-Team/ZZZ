@@ -167,7 +167,11 @@ fn configured_theme(cx: &mut App) -> Arc<Theme> {
             }
             themes
                 .get(default_theme(*system_appearance))
-                .unwrap_or_else(|_| themes.get(DEFAULT_DARK_THEME).unwrap())
+                .unwrap_or_else(|_| {
+                    themes
+                        .get(DEFAULT_DARK_THEME)
+                        .expect("entry should be present")
+                })
         }
     };
     theme_settings.apply_theme_overrides(theme)
@@ -186,7 +190,9 @@ fn configured_icon_theme(cx: &mut App) -> Arc<theme::IconTheme> {
             if themes.extensions_loaded() {
                 log::error!("{err}");
             }
-            themes.get_icon_theme(DEFAULT_ICON_THEME_NAME).unwrap()
+            themes
+                .get_icon_theme(DEFAULT_ICON_THEME_NAME)
+                .expect("get_icon_theme should be present")
         }
     }
 }

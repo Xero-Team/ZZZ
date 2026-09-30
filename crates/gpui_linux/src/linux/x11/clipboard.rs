@@ -959,7 +959,7 @@ impl Clipboard {
                     }
                 }
             })
-            .unwrap();
+            .expect("value should be present");
         *global_cb = Some(GlobalClipboard {
             inner: Arc::clone(&ctx),
             server_handle: join_handle,

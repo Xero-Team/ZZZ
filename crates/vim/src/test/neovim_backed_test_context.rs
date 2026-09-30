@@ -148,7 +148,7 @@ impl NeovimBackedTestContext {
             .expect("thread is not named")
             .split(':')
             .next_back()
-            .unwrap()
+            .expect("iterator should yield an item")
             .to_string();
         Self {
             cx: VimTestContext::new(cx, true).await,
@@ -172,7 +172,7 @@ impl NeovimBackedTestContext {
             .expect("thread is not named")
             .split(':')
             .next_back()
-            .unwrap()
+            .expect("iterator should yield an item")
             .to_string();
         Self {
             cx: VimTestContext::new_html(cx).await,
@@ -192,7 +192,7 @@ impl NeovimBackedTestContext {
             .expect("thread is not named")
             .split(':')
             .next_back()
-            .unwrap()
+            .expect("iterator should yield an item")
             .to_string();
         Self {
             cx: VimTestContext::new_markdown_with_rust(cx).await,
@@ -216,7 +216,7 @@ impl NeovimBackedTestContext {
             .expect("thread is not named")
             .split(':')
             .next_back()
-            .unwrap()
+            .expect("iterator should yield an item")
             .to_string();
         Self {
             cx: VimTestContext::new_typescript(cx).await,
@@ -236,7 +236,7 @@ impl NeovimBackedTestContext {
             .expect("thread is not named")
             .split(':')
             .next_back()
-            .unwrap()
+            .expect("iterator should yield an item")
             .to_string();
         Self {
             cx: VimTestContext::new_tsx(cx).await,
@@ -306,7 +306,9 @@ impl NeovimBackedTestContext {
                     .style(cx)
                     .text
                     .line_height_in_pixels(window.rem_size()),
-                editor.visible_line_count().unwrap(),
+                editor
+                    .visible_line_count()
+                    .expect("visible_line_count should be present"),
             )
         });
 
@@ -315,7 +317,7 @@ impl NeovimBackedTestContext {
             .update_window(window, |_, window, _cx| {
                 window.viewport_size().height - line_height * (visible_line_count as f32)
             })
-            .unwrap();
+            .expect("value should be present");
 
         self.simulate_window_resize(
             self.window,
@@ -333,7 +335,11 @@ impl NeovimBackedTestContext {
             register: '"',
             state: self.shared_state().await,
             neovim: self.neovim.read_register('"').await,
-            editor: self.read_from_clipboard().unwrap().text().unwrap(),
+            editor: self
+                .read_from_clipboard()
+                .expect("read_from_clipboard should be present")
+                .text()
+                .expect("text should be present"),
         }
     }
 

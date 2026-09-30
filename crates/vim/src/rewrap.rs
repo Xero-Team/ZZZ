@@ -83,7 +83,9 @@ impl Vim {
                 );
                 editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
                     s.move_with(&mut |map, selection| {
-                        let anchor = selection_starts.remove(&selection.id).unwrap();
+                        let anchor = selection_starts
+                            .remove(&selection.id)
+                            .expect("entry should be present");
                         let mut point = anchor.to_display_point(map);
                         *point.column_mut() = 0;
                         selection.collapse_to(point, SelectionGoal::None);
@@ -121,7 +123,9 @@ impl Vim {
                 );
                 editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
                     s.move_with(&mut |map, selection| {
-                        let anchor = original_positions.remove(&selection.id).unwrap();
+                        let anchor = original_positions
+                            .remove(&selection.id)
+                            .expect("entry should be present");
                         let mut point = anchor.to_display_point(map);
                         *point.column_mut() = 0;
                         selection.collapse_to(point, SelectionGoal::None);

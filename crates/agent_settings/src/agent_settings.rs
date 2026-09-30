@@ -537,39 +537,72 @@ pub fn normalize_path(raw: &str) -> String {
 
 impl Settings for AgentSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let agent = content.agent.clone().unwrap();
+        let agent = content.agent.clone().expect("value should be present");
         Self {
-            enabled: agent.enabled.unwrap(),
-            button: agent.button.unwrap(),
-            dock: agent.dock.unwrap(),
-            sidebar_side: agent.sidebar_side.unwrap(),
-            default_width: px(agent.default_width.unwrap()),
-            default_height: px(agent.default_height.unwrap()),
-            max_content_width: if agent.limit_content_width.unwrap() {
-                Some(px(agent.max_content_width.unwrap()))
+            enabled: agent.enabled.expect("enabled should be present"),
+            button: agent.button.expect("button should be present"),
+            dock: agent.dock.expect("dock should be present"),
+            sidebar_side: agent.sidebar_side.expect("sidebar_side should be present"),
+            default_width: px(agent
+                .default_width
+                .expect("default_width should be present")),
+            default_height: px(agent
+                .default_height
+                .expect("default_height should be present")),
+            max_content_width: if agent
+                .limit_content_width
+                .expect("limit_content_width should be present")
+            {
+                Some(px(agent
+                    .max_content_width
+                    .expect("max_content_width should be present")))
             } else {
                 None
             },
-            flexible: agent.flexible.unwrap(),
-            default_profile: AgentProfileId(agent.default_profile.unwrap()),
+            flexible: agent.flexible.expect("flexible should be present"),
+            default_profile: AgentProfileId(
+                agent
+                    .default_profile
+                    .expect("default_profile should be present"),
+            ),
             profiles: agent
                 .profiles
-                .unwrap()
+                .expect("profiles should be present")
                 .into_iter()
                 .map(|(key, val)| (AgentProfileId(key), val.into()))
                 .collect(),
 
-            notify_when_agent_waiting: agent.notify_when_agent_waiting.unwrap(),
+            notify_when_agent_waiting: agent
+                .notify_when_agent_waiting
+                .expect("notify_when_agent_waiting should be present"),
             play_sound_when_agent_done: agent.play_sound_when_agent_done.unwrap_or_default(),
-            single_file_review: agent.single_file_review.unwrap(),
-            expand_edit_card: agent.expand_edit_card.unwrap(),
-            expand_terminal_card: agent.expand_terminal_card.unwrap(),
-            thinking_display: agent.thinking_display.unwrap(),
-            cancel_generation_on_terminal_stop: agent.cancel_generation_on_terminal_stop.unwrap(),
-            use_modifier_to_send: agent.use_modifier_to_send.unwrap(),
-            message_editor_min_lines: agent.message_editor_min_lines.unwrap(),
-            show_turn_stats: agent.show_turn_stats.unwrap(),
-            show_merge_conflict_indicator: agent.show_merge_conflict_indicator.unwrap(),
+            single_file_review: agent
+                .single_file_review
+                .expect("single_file_review should be present"),
+            expand_edit_card: agent
+                .expand_edit_card
+                .expect("expand_edit_card should be present"),
+            expand_terminal_card: agent
+                .expand_terminal_card
+                .expect("expand_terminal_card should be present"),
+            thinking_display: agent
+                .thinking_display
+                .expect("thinking_display should be present"),
+            cancel_generation_on_terminal_stop: agent
+                .cancel_generation_on_terminal_stop
+                .expect("cancel_generation_on_terminal_stop should be present"),
+            use_modifier_to_send: agent
+                .use_modifier_to_send
+                .expect("use_modifier_to_send should be present"),
+            message_editor_min_lines: agent
+                .message_editor_min_lines
+                .expect("message_editor_min_lines should be present"),
+            show_turn_stats: agent
+                .show_turn_stats
+                .expect("show_turn_stats should be present"),
+            show_merge_conflict_indicator: agent
+                .show_merge_conflict_indicator
+                .expect("show_merge_conflict_indicator should be present"),
             tool_permissions: compile_tool_permissions(agent.tool_permissions),
         }
     }

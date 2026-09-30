@@ -2604,7 +2604,7 @@ impl KeybindingEditorModal {
             let editor_entity = editor_entity
                 .as_any()
                 .downcast_ref::<Entity<Editor>>()
-                .unwrap()
+                .expect("downcast should succeed")
                 .clone();
             let workspace = workspace.clone();
             cx.spawn(async move |_input_handle, cx| {
@@ -2658,7 +2658,7 @@ impl KeybindingEditorModal {
                 let editor_entity = editor_entity
                     .as_any()
                     .downcast_ref::<Entity<Editor>>()
-                    .unwrap();
+                    .expect("downcast should succeed");
                 editor_entity.update(cx, |editor, _cx| {
                     editor.set_completion_provider(Some(std::rc::Rc::new(
                         ActionCompletionProvider::new(actions, humanized_names),
@@ -3041,7 +3041,7 @@ impl KeybindingEditorModal {
             let editor_entity = editor_entity
                 .as_any()
                 .downcast_ref::<Entity<Editor>>()
-                .unwrap();
+                .expect("downcast should succeed");
             is_editor_showing_completions(&focus_handle, editor_entity)
         }) || {
             let focus_handle = self.context_editor.read(cx).focus_handle(cx);
@@ -3049,7 +3049,7 @@ impl KeybindingEditorModal {
             let editor_entity = editor_entity
                 .as_any()
                 .downcast_ref::<Entity<Editor>>()
-                .unwrap();
+                .expect("downcast should succeed");
             is_editor_showing_completions(&focus_handle, editor_entity)
         } || self
             .action_arguments_editor

@@ -30,7 +30,10 @@ impl<T: Clone, R: rand::Rng> Network<T, R> {
 
     pub fn disconnect_peer(&mut self, id: ReplicaId) {
         self.disconnected_peers.insert(id);
-        self.inboxes.get_mut(&id).unwrap().clear();
+        self.inboxes
+            .get_mut(&id)
+            .expect("entry should be present")
+            .clear();
     }
 
     pub fn reconnect_peer(&mut self, id: ReplicaId, replicate_from: ReplicaId) {
@@ -85,7 +88,10 @@ impl<T: Clone, R: rand::Rng> Network<T, R> {
     }
 
     pub fn receive(&mut self, receiver: ReplicaId) -> Vec<T> {
-        let inbox = self.inboxes.get_mut(&receiver).unwrap();
+        let inbox = self
+            .inboxes
+            .get_mut(&receiver)
+            .expect("entry should be present");
         let count = self.rng.random_range(0..inbox.len() + 1);
         inbox
             .drain(0..count)

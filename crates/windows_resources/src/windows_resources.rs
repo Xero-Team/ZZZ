@@ -163,7 +163,7 @@ END
 
     embed_resource::compile(&rc_path, embed_resource::NONE)
         .manifest_optional()
-        .unwrap();
+        .expect("manifest_optional should be present");
 
     Ok(())
 }
