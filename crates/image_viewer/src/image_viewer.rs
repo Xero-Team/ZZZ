@@ -660,7 +660,10 @@ impl SerializableItem for ImageView {
         cx: &mut Context<Self>,
     ) -> Option<Task<anyhow::Result<()>>> {
         let workspace_id = workspace.database_id()?;
-        let image_path = self.image_item.read(cx).abs_path(cx)?;
+        let image_path = self
+            .project
+            .read(cx)
+            .absolutize(&self.image_item.read(cx).project_path(cx), cx)?;
 
         let db = ImageViewerDb::global(cx);
         Some(cx.background_spawn({

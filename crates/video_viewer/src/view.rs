@@ -61,6 +61,8 @@ pub(crate) struct LoadedVideo {
     pub extension: String,
     pub metadata: VideoMetadata,
     pub frame_interval: Duration,
+    /// Keeps a downloaded remote file alive for as long as it is being played.
+    _staged_file: Option<tempfile::TempPath>,
 }
 
 /// Media-time playback clock.
@@ -287,51 +289,60 @@ impl VideoView {
     fn start_load(cx: &mut Context<Self>) -> Task<()> {
         cx.spawn(async move |this, cx| {
             let prepared = this.update(cx, |view, cx| {
-                let extension = view
-                    .video_item
-                    .read(cx)
-                    .path
-                    .extension()
-                    .map(ToOwned::to_owned);
-                (view.abs_path(cx), extension)
+                let item = view.video_item.read(cx);
+                let extension = item.path.extension().map(ToOwned::to_owned);
+                (
+                    extension,
+                    item.project_path(),
+                    view.abs_path(cx),
+                    view.project.clone(),
+                )
             });
 
-            let (path, extension) = match prepared {
-                Ok((Some(path), Some(extension))) => (path, extension),
-                Ok((None, _)) => {
-                    this.update(cx, |view, cx| {
-                        view.load_state = LoadState::Error(
-                            tr(
-                                cx,
-                                "video_viewer.error.not_local",
-                                "Video file is not available locally",
-                            )
-                            .into(),
-                        );
-                        cx.notify();
-                    })
-                    .ok();
-                    return;
-                }
-                Ok((_, None)) => {
-                    this.update(cx, |view, cx| {
-                        view.load_state = LoadState::Error(
-                            tr(
-                                cx,
-                                "video_viewer.error.missing_extension",
-                                "Video file has no extension",
-                            )
-                            .into(),
-                        );
-                        cx.notify();
-                    })
-                    .ok();
-                    return;
-                }
+            let (extension, project_path, local_path, project) = match prepared {
+                Ok(prepared) => prepared,
                 Err(error) => {
                     Self::set_error(&this, error.to_string(), cx);
                     return;
                 }
+            };
+
+            let Some(extension) = extension else {
+                this.update(cx, |view, cx| {
+                    view.load_state = LoadState::Error(
+                        tr(
+                            cx,
+                            "video_viewer.error.missing_extension",
+                            "Video file has no extension",
+                        )
+                        .into(),
+                    );
+                    cx.notify();
+                })
+                .ok();
+                return;
+            };
+
+            let (path, staged_file) = if let Some(local_path) = local_path {
+                (local_path, None)
+            } else if !project.read_with(cx, |project, _cx| project.is_local()) {
+                match stage_remote_file(project.clone(), project_path, cx).await {
+                    Ok(staged) => staged,
+                    Err(error) => {
+                        Self::set_error(&this, error.to_string(), cx);
+                        return;
+                    }
+                }
+            } else {
+                let message = cx.update(|cx| {
+                    tr(
+                        cx,
+                        "video_viewer.error.not_local",
+                        "Video file is not available locally",
+                    )
+                });
+                Self::set_error(&this, message, cx);
+                return;
             };
 
             let opened = cx
@@ -352,6 +363,7 @@ impl VideoView {
                             extension,
                             metadata,
                             frame_interval,
+                            _staged_file: staged_file,
                         }));
                         view.playback = PlaybackStatus::Stopped;
                         view.position = Duration::ZERO;
@@ -1027,6 +1039,32 @@ async fn refill_frames(
         }
     }
     true
+}
+
+/// Fetch a remote worktree file and materialize it as a temporary local file
+/// so the video decoder can read it. The returned `TempPath` keeps the file
+/// alive and deletes it on drop.
+async fn stage_remote_file(
+    project: gpui::Entity<Project>,
+    project_path: ProjectPath,
+    cx: &mut gpui::AsyncApp,
+) -> anyhow::Result<(PathBuf, Option<tempfile::TempPath>)> {
+    let bytes = project
+        .update(cx, |project, cx| {
+            project.read_file_bytes(project_path.worktree_id, project_path.path.clone(), cx)
+        })
+        .await?;
+
+    cx.background_spawn(async move {
+        use std::io::Write as _;
+        let mut file = tempfile::NamedTempFile::new()?;
+        file.write_all(&bytes)?;
+        let temp_path = file.into_temp_path();
+        let path = temp_path.to_path_buf();
+        anyhow::Ok((path, temp_path))
+    })
+    .await
+    .map(|(path, temp_path)| (path, Some(temp_path)))
 }
 
 fn next_decoder_frame(decoder: &Arc<Mutex<VideoDecoder>>) -> anyhow::Result<Option<VideoFrame>> {

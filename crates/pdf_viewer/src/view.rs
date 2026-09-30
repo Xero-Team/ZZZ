@@ -331,49 +331,50 @@ impl PdfView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<()> {
-        let relative_path = pdf_item.read(cx).path.clone();
-        let worktree_id = pdf_item.read(cx).worktree_id;
-        let project = project.clone();
+        let (relative_path, worktree_id) = {
+            let item = pdf_item.read(cx);
+            (item.path.clone(), item.worktree_id)
+        };
+        let local_abs_path =
+            project
+                .read(cx)
+                .worktree_for_id(worktree_id, cx)
+                .and_then(|worktree| {
+                    worktree
+                        .read(cx)
+                        .as_local()
+                        .map(|local| local.abs_path().join(relative_path.as_std_path()))
+                });
+        // Remote and SSH worktrees have no local absolute path; fetch the file
+        // through the project's remote file-transfer RPC instead.
+        let remote_read_task = (!project.read(cx).is_local()).then(|| {
+            project.update(cx, |project, cx| {
+                project.read_file_bytes(worktree_id, relative_path.clone(), cx)
+            })
+        });
+        let resolve_path_error = tr(
+            cx,
+            "pdf_viewer.error.resolve_path",
+            "Could not resolve PDF path",
+        );
 
         cx.spawn_in(window, async move |this, cx| {
-            let abs_path = cx
-                .update(|_window, cx| {
-                    project
-                        .read(cx)
-                        .worktree_for_id(worktree_id, cx)
-                        .and_then(|worktree| {
-                            worktree
-                                .read(cx)
-                                .as_local()
-                                .map(|local| local.abs_path().join(relative_path.as_std_path()))
-                        })
-                })
-                .ok()
-                .flatten();
-
-            let Some(abs_path) = abs_path else {
-                this.update(cx, |view, cx| {
-                    view.load_state = LoadState::Error(
-                        tr(
-                            cx,
-                            "pdf_viewer.error.resolve_path",
-                            "Could not resolve PDF path",
-                        )
-                        .into(),
-                    );
-                    cx.notify();
-                })
-                .ok();
-                return;
-            };
-
-            let load_result = cx
-                .background_spawn(async move {
+            let load_result = if let Some(abs_path) = local_abs_path {
+                cx.background_spawn(async move {
                     let data = std::fs::read(&abs_path)
                         .with_context(|| format!("reading {abs_path:?}"))?;
                     anyhow::Ok((abs_path, Arc::<[u8]>::from(data)))
                 })
-                .await;
+                .await
+            } else {
+                let display_path = PathBuf::from(relative_path.as_std_path());
+                match remote_read_task {
+                    Some(task) => task
+                        .await
+                        .map(|data| (display_path, Arc::<[u8]>::from(data))),
+                    None => Err(anyhow::anyhow!(resolve_path_error)),
+                }
+            };
 
             let (abs_path, data) = match load_result {
                 Ok(loaded) => loaded,
@@ -719,14 +720,10 @@ impl PdfView {
         )
     }
 
+    /// The PDF's absolute path in the project's native path style. Used to
+    /// persist a restorable location; resolves for remote worktrees too.
     pub(crate) fn abs_path(&self, cx: &App) -> Option<PathBuf> {
-        let item = self.pdf_item.read(cx);
-        let worktree = self
-            .project
-            .read(cx)
-            .worktree_for_id(item.worktree_id, cx)?;
-        let local = worktree.read(cx).as_local()?;
-        Some(local.abs_path().join(item.path.as_std_path()))
+        self.project.read(cx).absolutize(&self.project_path(cx), cx)
     }
 
     pub(crate) fn project_path(&self, cx: &App) -> ProjectPath {

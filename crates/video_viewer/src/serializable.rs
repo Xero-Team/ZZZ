@@ -72,7 +72,10 @@ impl SerializableItem for VideoView {
         cx: &mut Context<Self>,
     ) -> Option<Task<anyhow::Result<()>>> {
         let workspace_id = workspace.database_id()?;
-        let path = self.abs_path(cx)?;
+        let path = self
+            .project
+            .read(cx)
+            .absolutize(&self.project_path(cx), cx)?;
         let db = VideoViewerDb::global(cx);
 
         Some(
