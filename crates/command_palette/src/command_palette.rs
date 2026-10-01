@@ -622,7 +622,15 @@ impl PickerDelegate for CommandPaletteDelegate {
             self.query_history.reset_cursor();
         }
 
-        let action_ix = self.matches[self.selected_ix].candidate_id;
+        let Some(action_ix) = self
+            .matches
+            .get(self.selected_ix)
+            .map(|command_match| command_match.candidate_id)
+            .filter(|action_ix| *action_ix < self.commands.len())
+        else {
+            self.dismissed(window, cx);
+            return;
+        };
         let command = self.commands.swap_remove(action_ix);
         self.matches.clear();
         self.commands.clear();
