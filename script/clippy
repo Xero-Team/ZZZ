@@ -52,12 +52,14 @@ set -x
 # `future_not_send` is high-signal for background or thread-safe utility crates,
 # but much noisier in GPUI crates that intentionally await on main-thread local
 # state, and in test futures. Restrict it to library/binary targets: enforce it
-# for the curated utility packages, and keep it advisory for an explicit `-p`
-# selection so a targeted run on a GPUI crate is not blocked.
+# for the curated utility packages, and allow it for an explicit `-p` selection
+# so a targeted run on a GPUI crate is not blocked. `--allow` is required rather
+# than `--warn`: `--deny warnings` promotes any warning to an error, so `--warn`
+# here would still fail the run.
 if [[ "$has_package_selection" == true ]]; then
     "${CARGO:-cargo}" clippy "$@" --release --all-features -- \
         --deny warnings \
-        --warn clippy::future_not_send
+        --allow clippy::future_not_send
 else
     "${CARGO:-cargo}" clippy \
         --release \
