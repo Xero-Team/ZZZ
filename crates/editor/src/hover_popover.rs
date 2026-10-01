@@ -475,8 +475,12 @@ fn show_hover(
                 Vec::with_capacity(hovers_response.len() + usize::from(invisible_char.is_some()));
 
             if let Some((invisible, range)) = invisible_char {
+                let unicode_character_label = this.update(cx, |_, cx| {
+                    tr(cx, "editor.hover.unicode_character", "Unicode character {}")
+                })?;
                 let blocks = vec![HoverBlock {
-                    text: format!("Unicode character U+{:02X}", invisible as u32),
+                    text: unicode_character_label
+                        .replace("{}", &format!("U+{:02X}", invisible as u32)),
                     kind: HoverBlockKind::PlainText,
                 }];
                 let parsed_content = parse_blocks(&blocks, language_registry.as_ref(), None, cx);

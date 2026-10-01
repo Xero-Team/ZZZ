@@ -3061,12 +3061,27 @@ impl ProjectPanel {
         failed_count: usize,
         cx: &mut Context<Self>,
     ) {
-        let message = match (trash, total_count) {
-            (true, 1) => format!("Failed to trash {failed_count} of {total_count} file."),
-            (true, _) => format!("Failed to trash {failed_count} of {total_count} files."),
-            (false, 1) => format!("Failed to delete {failed_count} of {total_count} file."),
-            (false, _) => format!("Failed to delete {failed_count} of {total_count} files."),
+        let (key, fallback) = match (trash, total_count) {
+            (true, 1) => (
+                "project_panel.remove_failure.trash_single",
+                "Failed to trash {} of {} file.",
+            ),
+            (true, _) => (
+                "project_panel.remove_failure.trash_multiple",
+                "Failed to trash {} of {} files.",
+            ),
+            (false, 1) => (
+                "project_panel.remove_failure.delete_single",
+                "Failed to delete {} of {} file.",
+            ),
+            (false, _) => (
+                "project_panel.remove_failure.delete_multiple",
+                "Failed to delete {} of {} files.",
+            ),
         };
+        let message = tr(cx, key, fallback)
+            .replacen("{}", &failed_count.to_string(), 1)
+            .replacen("{}", &total_count.to_string(), 1);
 
         let toast = StatusToast::new(message, cx, |this, _| {
             this.icon(

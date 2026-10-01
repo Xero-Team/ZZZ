@@ -1161,6 +1161,7 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             cx.bind_keys([gpui::KeyBinding::new(
                 binding,

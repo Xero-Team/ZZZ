@@ -119,14 +119,16 @@ fn format_installed_extensions_for_clipboard(cx: &mut App) -> String {
     lines.sort();
 
     if lines.is_empty() {
-        return "No extensions installed.".to_owned();
+        return i18n::tr(cx, "feedback.installed_extensions.none", "No extensions installed.");
     }
 
-    format!(
+    i18n::tr(
+        cx,
+        "feedback.installed_extensions.header",
         "Installed extensions ({}):\n{}",
-        lines.len(),
-        lines.join("\n")
     )
+    .replacen("{}", &lines.len().to_string(), 1)
+    .replacen("{}", &lines.join("\n"), 1)
 }
 
 #[cfg(test)]

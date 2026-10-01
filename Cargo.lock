@@ -18365,6 +18365,7 @@ version = "0.1.0"
 dependencies = [
  "command_palette",
  "gpui",
+ "i18n",
  "serde",
  "settings",
  "theme_settings",

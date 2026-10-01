@@ -5,6 +5,7 @@ use gpui::{
     Action, App, Context, DismissEvent, EventEmitter, FocusHandle, Focusable, FontWeight,
     KeybindingKeystroke, ScrollHandle, Subscription, WeakEntity, Window,
 };
+use i18n::tr;
 use settings::Settings;
 use std::collections::{HashMap, HashSet};
 use theme_settings::ThemeSettings;
@@ -94,7 +95,8 @@ impl WhichKeyModal {
             })
             .collect();
 
-        binding_data = group_bindings(binding_data);
+        let group_label = tr(cx, "which_key.group_keybinds", "+{} keybinds");
+        binding_data = group_bindings(binding_data, &group_label);
 
         // Sort bindings from shortest to longest, with groups last
         // Using stable sort to preserve relative order of equal elements
@@ -275,6 +277,7 @@ impl ModalView for WhichKeyModal {
 
 fn group_bindings(
     binding_data: Vec<(Vec<KeybindingKeystroke>, SharedString)>,
+    group_label: &str,
 ) -> Vec<(Vec<KeybindingKeystroke>, SharedString)> {
     let mut groups: HashMap<
         Option<KeybindingKeystroke>,
@@ -303,7 +306,10 @@ fn group_bindings(
             // This is a group - create a single entry with just the first keystroke
             let first_keystroke = vec![first_key];
             let count = group_bindings.len();
-            result.push((first_keystroke, format!("+{} keybinds", count).into()));
+            result.push((
+                first_keystroke,
+                group_label.replace("{}", &count.to_string()).into(),
+            ));
         } else {
             // Not a group or empty keystrokes - add all bindings as-is
             result.append(&mut group_bindings);
@@ -330,12 +336,15 @@ mod tests {
 
     #[test]
     fn group_bindings_collapses_shared_prefixes_and_deduplicates() {
-        let grouped = group_bindings(vec![
-            (parse_keystrokes("a b"), "Action One".into()),
-            (parse_keystrokes("a c"), "Action Two".into()),
-            (parse_keystrokes("a b"), "Duplicate Action".into()),
-            (parse_keystrokes("z"), "Standalone".into()),
-        ]);
+        let grouped = group_bindings(
+            vec![
+                (parse_keystrokes("a b"), "Action One".into()),
+                (parse_keystrokes("a c"), "Action Two".into()),
+                (parse_keystrokes("a b"), "Duplicate Action".into()),
+                (parse_keystrokes("z"), "Standalone".into()),
+            ],
+            "+{} keybinds",
+        );
 
         assert!(grouped.contains(&(parse_keystrokes("a"), "+2 keybinds".into())));
         assert!(grouped.contains(&(parse_keystrokes("z"), "Standalone".into())));
@@ -358,7 +367,7 @@ mod tests {
         let keystroke = KeybindingKeystroke::from_keystroke(Keystroke::parse("ctrl-x")?);
         let binding_data = vec![(vec![keystroke.clone()], SharedString::from("test action"))];
 
-        let grouped_bindings = group_bindings(binding_data);
+        let grouped_bindings = group_bindings(binding_data, "+{} keybinds");
 
         assert_eq!(
             grouped_bindings,

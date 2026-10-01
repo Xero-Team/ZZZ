@@ -1805,10 +1805,10 @@ enum GutterButtonIntent {
 }
 
 impl GutterButtonIntent {
-    fn as_str(&self) -> &'static str {
+    fn localized_title(&self, cx: &App) -> String {
         match self {
-            Self::SetBookmark => "Set Bookmark",
-            Self::SetBreakpoint => "Set Breakpoint",
+            Self::SetBookmark => tr(cx, "editor.gutter.set_bookmark", "Set Bookmark"),
+            Self::SetBreakpoint => tr(cx, "editor.gutter.set_breakpoint", "Set Breakpoint"),
         }
     }
 
@@ -1851,21 +1851,30 @@ impl GutterButtonTooltip {
         }
     }
 
-    fn meta_text(&self) -> String {
-        const RIGHT_CLICK_HINT: &str = "right-click for more options";
-
+    fn meta_text(&self, cx: &App) -> String {
         if self.primary == self.secondary {
-            return RIGHT_CLICK_HINT.to_owned();
+            return tr(
+                cx,
+                "editor.gutter.right_click_for_more_options",
+                "Right-click for more options",
+            );
         }
         let modifier_as_text = gpui::Keystroke {
             modifiers: Modifiers::secondary_key(),
             ..Default::default()
+        }
+        .to_string();
+        let (key, fallback) = match self.secondary {
+            GutterButtonIntent::SetBookmark => (
+                "editor.gutter.alt_click_add_bookmark",
+                "{}-click to add a bookmark\nRight-click for more options",
+            ),
+            GutterButtonIntent::SetBreakpoint => (
+                "editor.gutter.alt_click_add_breakpoint",
+                "{}-click to add a breakpoint\nRight-click for more options",
+            ),
         };
-        let secondary = match self.secondary {
-            GutterButtonIntent::SetBookmark => "bookmark",
-            GutterButtonIntent::SetBreakpoint => "breakpoint",
-        };
-        format!("{modifier_as_text}-click to add a {secondary}\n{RIGHT_CLICK_HINT}")
+        tr(cx, key, fallback).replace("{}", &modifier_as_text)
     }
 }
 
@@ -1873,22 +1882,18 @@ impl Render for GutterButtonTooltip {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let intent = self.active_intent(window.modifiers());
         let key_binding = KeyBinding::for_action_in(intent.action(), &self.focus_handle, cx);
-        let meta_text = self.meta_text();
+        let meta_text = self.meta_text(cx);
+        let title = intent.localized_title(cx);
 
         #[cfg(test)]
         if let Some(on_render) = &self.on_render {
             on_render
                 .borrow_mut()
-                .push((intent.as_str().to_owned(), meta_text.clone()));
+                .push((title.clone(), meta_text.clone()));
         }
 
         tooltip_container(cx, move |this, _| {
-            this.child(
-                h_flex()
-                    .justify_between()
-                    .child(intent.as_str())
-                    .child(key_binding),
-            )
+            this.child(h_flex().justify_between().child(title).child(key_binding))
             .child(
                 Label::new(meta_text)
                     .size(LabelSize::Small)

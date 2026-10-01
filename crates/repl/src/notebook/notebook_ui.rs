@@ -1265,8 +1265,12 @@ impl NotebookEditor {
                                 cx,
                             )
                             .disabled(self.cell_order.is_empty())
-                            .tooltip(move |window, cx| {
-                                Tooltip::for_action("Delete cell", &DeleteCell, cx)
+                            .tooltip(move |_window, cx| {
+                                Tooltip::for_action(
+                                    tr(cx, "repl.notebook.delete_cell", "Delete cell"),
+                                    &DeleteCell,
+                                    cx,
+                                )
                             })
                             .on_click(|_, window, cx| {
                                 window.dispatch_action(Box::new(DeleteCell), cx);

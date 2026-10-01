@@ -129,11 +129,23 @@ pub fn install_cli_binary(window: &mut Window, cx: &mut Context<Workspace>) {
                         |cx| {
                             cx.new(|cx| {
                                 MessageNotification::new(
-                                    "You can add `zzz` to your PATH manually.",
+                                    i18n::tr(
+                                        cx,
+                                        "install_cli.install_failed.message",
+                                        "You can add `zzz` to your PATH manually.",
+                                    ),
                                     cx,
                                 )
-                                .with_title("Couldn't install the ZZZ CLI")
-                                .more_info_message("Show me how")
+                                .with_title(i18n::tr(
+                                    cx,
+                                    "install_cli.install_failed.title",
+                                    "Couldn't install the ZZZ CLI",
+                                ))
+                                .more_info_message(i18n::tr(
+                                    cx,
+                                    "install_cli.install_failed.more_info",
+                                    "Show me how",
+                                ))
                                 .more_info_url(CANT_INSTALL_DOCS_URL)
                             })
                         },

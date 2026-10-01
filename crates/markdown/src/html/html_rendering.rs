@@ -2,7 +2,9 @@ use std::ops::Range;
 
 use gpui::{
     App, FontStyle, FontWeight, StrikethroughStyle, TextAlign, TextStyleRefinement, UnderlineStyle,
+    SharedString,
 };
+use i18n::tr;
 use pulldown_cmark::Alignment;
 use ui::prelude::*;
 
@@ -136,7 +138,7 @@ impl MarkdownElement {
                 self.render_html_table(table, source_allocator, builder, markdown_end, cx);
             }
             ParsedHtmlElement::Image(image) => {
-                self.render_html_image(image, builder);
+                self.render_html_image(image, builder, cx);
             }
         }
     }
@@ -358,7 +360,7 @@ impl MarkdownElement {
                     self.render_html_text(text, source_allocator, builder, cx);
                 }
                 HtmlParagraphChunk::Image(image) => {
-                    self.render_html_image(image, builder);
+                    self.render_html_image(image, builder, cx);
                 }
             }
         }
@@ -449,7 +451,12 @@ impl MarkdownElement {
         }
     }
 
-    fn render_html_image(&self, image: &HtmlImage, builder: &mut MarkdownElementBuilder) {
+    fn render_html_image(
+        &self,
+        image: &HtmlImage,
+        builder: &mut MarkdownElementBuilder,
+        cx: &mut App,
+    ) {
         let Some(source) = self
             .image_resolver
             .as_ref()
@@ -457,6 +464,15 @@ impl MarkdownElement {
         else {
             return;
         };
+
+        let failed_to_load_label: SharedString =
+            tr(cx, "markdown.image.failed_to_load", "Failed to Load: {}").into();
+        let failed_to_load_tooltip: SharedString = tr(
+            cx,
+            "markdown.image.failed_to_load_tooltip",
+            "Image failed to load. Open `zzz: log` for more details.",
+        )
+        .into();
 
         self.push_markdown_image(
             builder,
@@ -466,6 +482,8 @@ impl MarkdownElement {
             image.alt_text.clone(),
             image.width,
             image.height,
+            failed_to_load_label,
+            failed_to_load_tooltip,
         );
     }
 }

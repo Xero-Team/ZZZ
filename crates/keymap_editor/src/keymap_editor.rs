@@ -1232,13 +1232,18 @@ impl KeymapEditor {
                 base_button_style(index, IconName::Info)
                     .tooltip(|_window, cx| {
                         Tooltip::with_meta(
-                            "Show matching keybinds",
-                            Some(&ShowMatchingKeybinds),
-                            concat!(
-                                "This binding is overridden by other bindings.\nUse ",
-                                ui::alt_key_name!(),
-                                "+click to edit this binding"
+                            tr(
+                                cx,
+                                "keymap_editor.tooltip.show_matching_keybinds",
+                                "Show matching keybinds",
                             ),
+                            Some(&ShowMatchingKeybinds),
+                            tr(
+                                cx,
+                                "keymap_editor.tooltip.binding_overridden_meta",
+                                "This binding is overridden by other bindings.\nUse {}+click to edit this binding",
+                            )
+                            .replace("{}", ui::alt_key_name!()),
                             cx,
                         )
                     })
@@ -2907,20 +2912,32 @@ impl KeybindingEditorModal {
                 .map(|keybind| keybind.action().name);
 
             let warning_message = if let Some(name) = conflicting_action_name {
-                 if remaining_conflict_amount > 0 {
-                    format!(
+                if remaining_conflict_amount > 0 {
+                    tr(
+                        cx,
+                        "keymap_editor.warning.conflict_with_action_and_bindings",
                         "Your keybind would conflict with the \"{}\" action and {} other bindings",
-                        name, remaining_conflict_amount
                     )
+                    .replacen("{}", &name, 1)
+                    .replacen("{}", &remaining_conflict_amount.to_string(), 1)
                 } else {
-                    format!("Your keybind would conflict with the \"{}\" action", name)
+                    tr(
+                        cx,
+                        "keymap_editor.warning.conflict_with_action",
+                        "Your keybind would conflict with the \"{}\" action",
+                    )
+                    .replacen("{}", &name, 1)
                 }
             } else {
                 log::info!(
                     "Could not find action in keybindings with index {}",
                     first_conflict_index
                 );
-                "Your keybind would conflict with other actions".to_owned()
+                tr(
+                    cx,
+                    "keymap_editor.warning.conflict_with_other_actions",
+                    "Your keybind would conflict with other actions",
+                )
             };
 
             let warning = InputError::warning(warning_message);
@@ -4178,6 +4195,7 @@ mod tests {
     ) -> (Arc<FakeFs>, Entity<KeymapEditor>, VisualTestContext) {
         cx.update(|cx| {
             let _state = AppState::test(cx);
+            i18n::init(cx);
             editor::init(cx);
             cx.set_global(KeymapEventChannel::new());
         });

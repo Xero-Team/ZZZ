@@ -11,6 +11,7 @@ use gpui::EdgesRefinement;
 use gpui::HitboxBehavior;
 use gpui::TextLineBreaking;
 use gpui::UnderlineStyle;
+use i18n::tr;
 use language::LanguageName;
 
 use log::Level;
@@ -1621,6 +1622,8 @@ impl MarkdownElement {
         alt_text: Option<SharedString>,
         width: Option<DefiniteLength>,
         height: Option<DefiniteLength>,
+        failed_to_load_label: SharedString,
+        failed_to_load_tooltip: SharedString,
     ) {
         let align = builder.text_style().text_align;
         let enclosing_link_url = (builder.link_depth > 0)
@@ -1687,6 +1690,8 @@ impl MarkdownElement {
                                 dest_url.clone(),
                                 alt_text.clone(),
                                 fallback_opens_image_url,
+                                failed_to_load_label.clone(),
+                                failed_to_load_tooltip.clone(),
                             )
                         }),
                 )
@@ -2450,6 +2455,18 @@ impl Element for MarkdownElement {
                                 &parsed_markdown.events[index..],
                                 parsed_markdown.source.as_ref(),
                             );
+                            let failed_to_load_label: SharedString = tr(
+                                cx,
+                                "markdown.image.failed_to_load",
+                                "Failed to Load: {}",
+                            )
+                            .into();
+                            let failed_to_load_tooltip: SharedString = tr(
+                                cx,
+                                "markdown.image.failed_to_load_tooltip",
+                                "Image failed to load. Open `zzz: log` for more details.",
+                            )
+                            .into();
                             if let Some(image) = images.get(&range.start) {
                                 current_img_block_range = Some(range.clone());
                                 self.push_markdown_image(
@@ -2460,6 +2477,8 @@ impl Element for MarkdownElement {
                                     alt_text.clone(),
                                     None,
                                     None,
+                                    failed_to_load_label,
+                                    failed_to_load_tooltip,
                                 );
                             } else if let Some(source) = self
                                 .image_resolver
@@ -2475,6 +2494,8 @@ impl Element for MarkdownElement {
                                     alt_text,
                                     None,
                                     None,
+                                    failed_to_load_label,
+                                    failed_to_load_tooltip,
                                 );
                             }
                         }
@@ -3211,20 +3232,20 @@ fn image_fallback_element(
     dest_url: SharedString,
     alt_text: Option<SharedString>,
     open_image_url_on_click: bool,
+    failed_to_load_label: SharedString,
+    failed_to_load_tooltip: SharedString,
 ) -> AnyElement {
     let link_label = alt_text
         .filter(|alt| !alt.is_empty())
         .unwrap_or_else(|| dest_url.clone());
 
-    let label = format!("Failed to Load: {link_label}");
+    let label = failed_to_load_label.replace("{}", link_label.as_str());
 
     div()
         .id("image-fallback")
         .min_w_0()
         .child(Label::new(label).color(Color::Warning).underline())
-        .tooltip(Tooltip::text(
-            "Image failed to load. Open `zzz: log` for more details.",
-        ))
+        .tooltip(Tooltip::text(failed_to_load_tooltip))
         .when(open_image_url_on_click, |this| {
             this.cursor_pointer().on_click(move |_, _, cx| {
                 cx.stop_propagation();
@@ -4512,6 +4533,9 @@ mod tests {
         cx.update(|cx| {
             if !cx.has_global::<settings::SettingsStore>() {
                 settings::init(cx);
+            }
+            if !i18n::is_initialized(cx) {
+                i18n::init(cx);
             }
             if !cx.has_global::<theme::GlobalTheme>() {
                 theme_settings::init(theme::LoadThemes::JustBase, cx);

@@ -1,6 +1,7 @@
 use gpui::{
     App, Context, Element, Entity, FontWeight, Render, Subscription, WeakEntity, Window, div,
 };
+use i18n::tr;
 use ui::text_for_keystrokes;
 use workspace::{HideStatusItem, StatusItemView, item::ItemHandle, ui::prelude::*};
 
@@ -65,7 +66,10 @@ impl ModeIndicator {
     fn current_operators_description(&self, vim: Entity<Vim>, cx: &mut Context<Self>) -> String {
         let recording = Vim::globals(cx)
             .recording_register
-            .map(|reg| format!("recording @{reg} "))
+            .map(|reg| {
+                tr(cx, "vim.mode_indicator.recording", "recording @{} ")
+                    .replace("{}", &reg.to_string())
+            })
             .into_iter();
 
         let vim = vim.read(cx);

@@ -115,6 +115,11 @@ pub fn active_locale(cx: &App) -> ActiveLocale {
     cx.global::<GlobalI18nService>().0.read().active_locale
 }
 
+/// Returns whether [`init`] has already run for this [`App`].
+pub fn is_initialized(cx: &App) -> bool {
+    cx.try_global::<GlobalI18nService>().is_some()
+}
+
 pub fn t(cx: &App, key: &str) -> String {
     let service = cx.global::<GlobalI18nService>().0.read();
     service
