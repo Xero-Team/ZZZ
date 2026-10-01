@@ -13,16 +13,15 @@
 sha	class	reason_code	note	source
 00382632	C	absent-api	Manage-skills command filtering targets an action surface absent from ZZZ's ACP-only agent UI.	upstream-sync-2026-09-02.md
 00c0e96e	C	diverged	`LoadedFile` Rope rewrite conflicts on local worktree decode.	upstream-sync-2026-08-27.md
-00cba838	C	untriaged	Large Mermaid/GPUI dependency and excluded agent-panel integration.	upstream-sync-2026-08-07.md
 00def035de	C	absent-api	`which_key::ShowPendingBindings` depends on the deleted `pending_keystrokes_indicator.rs`.	upstream-sync-2026-09-30.md
 0307288d	C	upstream-infra	Unused benchmark/threaded-dispatcher API.	upstream-sync-2026-08-18.md
 037f32aef0	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
-03c9c4e7	C	absent-api	`ParsedSvg` / `render_parsed` APIs are absent.	upstream-sync-2026-08-27.md
 05473ed8	C	diverged	`csv_preview` rename; local crate already diverged.	upstream-sync-2026-08-27.md
 05c2c9ab	C	diverged	ACP terminal-streaming scaffolding; `write_output` diverged and the raw primitive has no production caller.	upstream-sync-2026-09-24.md
 069449ab	C	upstream-infra	mdBook smart-punctuation docs infra.	upstream-sync-2026-08-18.md
 06e889c4	C	untriaged	Native-agent subagent compaction; follows unabsorbed ACP compaction.	upstream-sync-2026-09-18.md
 07a0bd12	C	untriaged	Unused frame-time debug overlay.	upstream-sync-2026-08-18.md
+07df438626	C	upstream-infra	Upstream-only GPUI tracing cleanup; the Mermaid migration has no dependency on this change.	upstream-sync-2026-10-02.md
 0812d210	C	untriaged	GPT-5.6 Sol default mixed with subscribed provider.	upstream-sync-2026-08-18.md
 0855410c	C	untriaged	Long-press gesture recognition is coupled to the unabsorbed touch/IME gesture architecture.	upstream-sync-2026-09-02.md
 098e4407	C	untriaged	OpenAI subscribed ungated catalog.	upstream-sync-2026-08-18.md
@@ -83,7 +82,7 @@ sha	class	reason_code	note	source
 2551721a	C	absent-api	Follow-up `fs_embed!` debug embedding depends on the absent upstream macro surface.	upstream-sync-2026-09-02.md
 26b6a267	C	untriaged	Upstream GitHub Actions / xtask Miri pin.	upstream-sync-2026-09-18.md
 279da638	C	diverged	Broad persistence shutdown rewrite conflicts with local lifecycle APIs.	upstream-sync-2026-08-27.md
-282f47a5	C	upstream-infra	cargo-shear, lockfile, and CI cleanup only.	upstream-sync-2026-08-27.md
+282f47a544	C	upstream-infra	Repository-wide cargo-shear migration is unrelated product infrastructure; the new crate carries both local and upstream ignore metadata.	upstream-sync-2026-10-02.md
 284c7240	C	untriaged	Document-highlight dynamic registration needs upstream `dynamic_registration.rs`.	upstream-sync-2026-09-18.md
 2890c340	C	untriaged	Upstream `.rules` instruction is repository scaffolding, not ZZZ product behavior.	upstream-sync-2026-09-02.md
 2936989f	C	absent-api	New GPUI `LineLayout` APIs have no ZZZ caller.	upstream-sync-2026-08-27.md
@@ -143,7 +142,6 @@ sha	class	reason_code	note	source
 4aa8ad9742	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 4aad57fd	C	unisolatable	Broad remote workspace lifetime/recent-project flow rewrite.	upstream-sync-2026-08-07.md
 4b47ceb9	C	untriaged	Screen-capture objc2 migration depends on rejected `86b2cf96`.	upstream-sync-2026-09-18.md
-4bd19937	C	diverged	Mermaid `~~~` fences; local markdown diverged.	upstream-sync-2026-08-18.md
 4bdf188c	C	diverged	Stash tracked/staged options; git_panel and git.proto conflict.	upstream-sync-2026-08-27.md
 4c841aaf1c	C	absent-api	Dependency and CI plumbing; feature removals span the absent `livekit_client`.	upstream-sync-2026-09-30.md
 4ca90055	C	upstream-infra	Broad tree-sitter/Wasmtime and lockfile/toolchain update.	upstream-sync-2026-08-27.md
@@ -208,7 +206,7 @@ sha	class	reason_code	note	source
 6ad3c7f2	C	absent-api	gpui_web keyboard-focus rewrite; `ime_mirror.rs` and related GPUI APIs are absent.	upstream-sync-2026-09-18.md
 6ae52316	C	upstream-infra	Extension proto version/lockfile only.	upstream-sync-2026-08-18.md
 6b2aa1c9	C	absent-api	Reveal-policy API has no ZZZ caller; no independent behavior to retain.	upstream-sync-2026-08-07.md
-6b5e15ed	C	upstream-infra	Dependency, lockfile, and build compatibility churn without an independent ZZZ behavior.	upstream-sync-2026-09-02.md
+6b5e15ed46	C	upstream-infra	Broad dependency and lockfile churn with no independent Mermaid behavior required by ZZZ.	upstream-sync-2026-10-02.md
 6bd93fc3	C	untriaged	OpenAI subscribed context windows.	upstream-sync-2026-08-18.md
 6bf539cd	C	absent-api	Depends on absent blame-revision actions in ZZZ.	upstream-sync-2026-08-27.md
 6c9d10cb	C	absent-api	WebGL texel loading; WebGL backend is absent.	upstream-sync-2026-09-18.md
@@ -376,10 +374,9 @@ c0979ee0	C	untriaged	OpenAI subscribed default model.	upstream-sync-2026-08-18.m
 c1eda3e8	C	diverged	Markdown preview settings grouping and auto-open rewrite on a already-diverged preview path.	upstream-sync-2026-09-06.md
 c24358d9	C	upstream-infra	Dependency/lockfile bump and broad warning-only churn.	upstream-sync-2026-08-07.md
 c2451489	C	upstream-infra	xtask GPUI crate-graph walker plus lockfile churn.	upstream-sync-2026-09-18.md
-c305d68c	C	upstream-infra	Dependency/lockfile-only Mermaid bump with no independent ZZZ behavior.	upstream-sync-2026-08-07.md
+c305d68c01	C	upstream-infra	Intermediate dependency and lockfile-only bump to `merman` 0.7; superseded by `ec18126b1d`.	upstream-sync-2026-10-02.md
 c32938c34c	C	absent-api	`open_ai` provider crate is absent locally.	upstream-sync-2026-09-30.md
 c3b365d2	C	philosophy	Native Agent inline assistant is outside ZZZ's ACP-only boundary.	upstream-sync-2026-08-27.md
-c49a29f461	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 c4bc69e5	C	upstream-infra	Corgi sandbox/glob and bootstrap configuration is upstream build infrastructure without independent ZZZ product behavior.	upstream-sync-2026-09-02.md
 c55693876e	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 c595091b	C	upstream-infra	Dependency, lockfile, and crate-graph churn without independent behavior.	upstream-sync-2026-08-27.md
@@ -387,6 +384,7 @@ c6e0868c	C	absent-api	Vim indentation change spans language/multibuffer APIs not
 c7537bdf	C	upstream-infra	Brand-writer marketing skill rename.	upstream-sync-2026-08-18.md
 c821538b57	C	untriaged	`agent.max_idle_retained_threads` subscribes to `AcpThreadEvent::StatusChanged`, which local never absorbed.	upstream-sync-2026-09-30.md
 c83adb3d	C	diverged	`SymbolKind` RPC; `language_core` conflict.	upstream-sync-2026-08-18.md
+c88c83d619	C	upstream-infra	Intermediate `merman` dependency and lockfile-only revision update; superseded by the final crates.io `0.8.0-alpha.5` dependency.	upstream-sync-2026-10-02.md
 c8c07aea	C	philosophy	Native Agent Panel `disable_ai` menu wiring.	upstream-sync-2026-09-06.md
 c95e0c51	C	untriaged	Community PR automation mapping.	upstream-sync-2026-08-07.md
 c9827338	C	untriaged	GitHub Actions Wezel Linux deps.	upstream-sync-2026-09-18.md
@@ -461,7 +459,6 @@ eb2f43d982	C	unisolatable	`*Map` randomized-test fix depends on an unabsorbed `p
 eb354c8d	C	unisolatable	Unisolatable Wayland/GPUI render-loop architecture rewrite.	upstream-sync-2026-08-27.md
 eb38ea55	C	untriaged	Community champions list.	upstream-sync-2026-08-18.md
 eb548352	C	diverged	Markdown highlight overflow; markdown conflict.	upstream-sync-2026-08-18.md
-ec18126b	C	absent-api	Requires the absent `mermaid_render` crate and merman dependency.	upstream-sync-2026-08-27.md
 ec312b27	C	absent-api	Large call-hierarchy crate and deleted keymap/protocol surfaces are not localizable.	upstream-sync-2026-08-27.md
 ecc2353d	C	untriaged	Corgi patches license softlink; follows unabsorbed `31971937`.	upstream-sync-2026-09-18.md
 ee1c6f8c	C	upstream-infra	GPUI release-notes Dangerfile and draft-release-notes automation.	upstream-sync-2026-09-18.md
