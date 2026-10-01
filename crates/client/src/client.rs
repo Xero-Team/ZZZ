@@ -327,6 +327,14 @@ impl Credentials {
     pub fn authorization_header(&self) -> String {
         format!("{} {}", self.user_id, self.access_token)
     }
+
+    fn from_stored(user_id: String, access_token: Vec<u8>) -> Result<Self> {
+        Ok(Self {
+            user_id: user_id.parse().context("parsing stored user id")?,
+            access_token: String::from_utf8(access_token)
+                .context("decoding stored access token")?,
+        })
+    }
 }
 
 pub struct ClientCredentialsProvider {
@@ -364,10 +372,7 @@ impl ClientCredentialsProvider {
                 .log_err()
                 .flatten()?;
 
-            Some(Credentials {
-                user_id: user_id.parse().ok()?,
-                access_token: String::from_utf8(access_token).ok()?,
-            })
+            Credentials::from_stored(user_id, access_token).log_err()
         }
         .boxed_local()
     }
@@ -1433,6 +1438,21 @@ mod tests {
             credentials_url: None,
         };
         assert!(localhost_subdomain.remote_server_enabled());
+    }
+
+    #[test]
+    fn stored_credentials_validate_serialized_values() {
+        let invalid_user = Credentials::from_stored("not-a-number".to_owned(), b"token".to_vec())
+            .expect_err("invalid stored user ids should be rejected");
+        assert!(invalid_user.to_string().contains("parsing stored user id"));
+
+        let invalid_token = Credentials::from_stored("42".to_owned(), vec![0xff])
+            .expect_err("non-UTF-8 stored tokens should be rejected");
+        assert!(
+            invalid_token
+                .to_string()
+                .contains("decoding stored access token")
+        );
     }
 
     #[gpui::test(iterations = 10)]
